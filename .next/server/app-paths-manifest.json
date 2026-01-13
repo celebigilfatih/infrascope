@@ -1,0 +1,9 @@
+{
+  "/devices/page": "app/devices/page.js",
+  "/network/page": "app/network/page.js",
+  "/api/devices/route": "app/api/devices/route.js",
+  "/api/services/route": "app/api/services/route.js",
+  "/api/network-connections/route": "app/api/network-connections/route.js",
+  "/api/organizations/route": "app/api/organizations/route.js",
+  "/api/building-connections/route": "app/api/building-connections/route.js"
+}

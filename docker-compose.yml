@@ -1,0 +1,108 @@
+# ============================================================================
+# InfraScope - Docker Compose Configuration (Development)
+# ============================================================================
+
+version: '3.9'
+
+services:
+  # PostgreSQL Database Service
+  db:
+    image: postgres:15-alpine
+    container_name: infrascope-db-dev
+    environment:
+      POSTGRES_USER: ${DB_USER:-infrascope}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-infrascope-dev}
+      POSTGRES_DB: ${DB_NAME:-infrascope}
+    volumes:
+      # Named volume for persistent data
+      - postgres_data_dev:/var/lib/postgresql/data
+      # Optional: SQL init scripts
+      - ./docker/postgres-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5433:5432"
+    networks:
+      - infrascope-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-infrascope}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    command: -c log_statement=all
+
+  # Next.js Web Application
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NODE_ENV: development
+    container_name: infrascope-web-dev
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://${DB_USER:-infrascope}:${DB_PASSWORD:-infrascope-dev}@db:5432/${DB_NAME:-infrascope}
+      NEXTAUTH_URL: http://localhost:3170
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-dev-secret-change-in-production}
+      NEXT_PUBLIC_API_URL: http://localhost:3170
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+      DB_HOST: db
+      DB_PORT: 5432
+    ports:
+      - "3170:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - infrascope-network
+    # volumes:
+    #   # Source code for development with hot reload
+    #   - .:/app
+    #   - /app/node_modules
+    #   - /app/.next
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    # Development: Show logs
+    stdin_open: true
+    tty: true
+
+  # Optional: Redis for caching and WebSocket support (future)
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: infrascope-redis-dev
+  #   ports:
+  #     - "6379:6379"
+  #   networks:
+  #     - infrascope-network
+  #   volumes:
+  #     - redis_data_dev:/data
+  #   restart: unless-stopped
+
+# Networks
+networks:
+  infrascope-network:
+    driver: bridge
+    name: infrascope-network
+
+# Volumes
+volumes:
+  postgres_data_dev:
+    name: infrascope-postgres-data-dev
+    driver: local
+  # redis_data_dev:
+  #   name: infrascope-redis-data-dev
+  #   driver: local
+
+# ============================================================================
+# Usage:
+# docker compose up -d              # Start all services
+# docker compose down               # Stop all services
+# docker compose logs -f            # View logs
+# docker compose exec db psql       # Access PostgreSQL
+# docker compose exec web bash      # Access container shell
+# ============================================================================
