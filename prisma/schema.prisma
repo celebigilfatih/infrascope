@@ -76,6 +76,9 @@ model Room {
   description String?
   floorId     String
   capacity    Int?
+  width       Float? // 3D Room width (meters)
+  depth       Float? // 3D Room depth (meters)
+  height      Float? // 3D Room height (meters)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -105,6 +108,10 @@ model Rack {
   maxUnits          Int        @default(42)
   roomId            String
   position          String? // Physical position in room
+  coordX            Float? // 3D X coordinate
+  coordY            Float? // 3D Y coordinate
+  coordZ            Float? // 3D Z coordinate
+  rotation          Float      @default(0) // Rotation in degrees
   operationalStatus RackStatus @default(OPERATIONAL)
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt

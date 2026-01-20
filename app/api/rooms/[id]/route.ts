@@ -105,7 +105,7 @@ export async function PUT(
   try {
     const { id } = params;
     const body = await request.json();
-    const { name, description, capacity } = body;
+    const { name, description, capacity, width, depth, height } = body;
 
     if (!id) {
       return NextResponse.json(
@@ -119,11 +119,12 @@ export async function PUT(
     }
 
     // Validate at least one field is provided
-    if (name === undefined && description === undefined && capacity === undefined) {
+    if (name === undefined && description === undefined && capacity === undefined && 
+        width === undefined && depth === undefined && height === undefined) {
       return NextResponse.json(
         {
           success: false,
-          error: 'At least one field (name, description, or capacity) must be provided for update',
+          error: 'At least one field (name, description, capacity, width, depth, or height) must be provided for update',
           timestamp: new Date(),
         },
         { status: 400 }
@@ -170,6 +171,37 @@ export async function PUT(
       }
     }
 
+    // Validate 3D dimensions if provided
+    if (width !== undefined && width !== null) {
+      if (typeof width !== 'number' || width < 0) {
+        return NextResponse.json({
+          success: false,
+          error: 'Width must be a positive number',
+          timestamp: new Date()
+        }, { status: 400 });
+      }
+    }
+
+    if (depth !== undefined && depth !== null) {
+      if (typeof depth !== 'number' || depth < 0) {
+        return NextResponse.json({
+          success: false,
+          error: 'Depth must be a positive number',
+          timestamp: new Date()
+        }, { status: 400 });
+      }
+    }
+
+    if (height !== undefined && height !== null) {
+      if (typeof height !== 'number' || height < 0) {
+        return NextResponse.json({
+          success: false,
+          error: 'Height must be a positive number',
+          timestamp: new Date()
+        }, { status: 400 });
+      }
+    }
+
     // Check room exists and get floor context
     const existing = await prisma.room.findUnique({
       where: { id },
@@ -212,6 +244,9 @@ export async function PUT(
     if (name !== undefined) updateData.name = name;
     if (description !== undefined) updateData.description = description;
     if (capacity !== undefined) updateData.capacity = capacity;
+    if (width !== undefined) updateData.width = width !== null ? parseFloat(width.toString()) : null;
+    if (depth !== undefined) updateData.depth = depth !== null ? parseFloat(depth.toString()) : null;
+    if (height !== undefined) updateData.height = height !== null ? parseFloat(height.toString()) : null;
 
     // Update room
     const updated = await prisma.room.update({

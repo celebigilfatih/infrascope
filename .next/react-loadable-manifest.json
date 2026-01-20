@@ -1,1 +1,20 @@
-{}
+{
+  "app\\locations\\page.tsx -> @/components/3d/Room3D": {
+    "id": 2378,
+    "files": [
+      "static/chunks/b536a0f1.d0770a4217ca1042.js",
+      "static/chunks/bd904a5c.07df6d49ef19d630.js",
+      "static/chunks/51749ec1.1908a74a23e7ac08.js",
+      "static/chunks/805.c1cdc13ee4ab49b8.js",
+      "static/chunks/378.956836e7b3f8b06c.js"
+    ]
+  },
+  "node_modules\\@react-three\\drei\\core\\VideoTexture.js -> hls.js": {
+    "id": null,
+    "files": []
+  },
+  "node_modules\\@react-three\\drei\\web\\FaceLandmarker.js -> @mediapipe/tasks-vision": {
+    "id": null,
+    "files": []
+  }
+}

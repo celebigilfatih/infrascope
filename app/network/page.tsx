@@ -18,6 +18,8 @@ import ReactFlow, {
   ReactFlowProvider,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
+import { toPng } from 'html-to-image';
+import download from 'downloadjs';
 import { BuildingNode } from '../../components/topology/BuildingNode';
 import { DeviceNode } from '../../components/topology/DeviceNode';
 import { CustomEdge, BuildingConnectionEdge } from '../../components/topology/CustomEdge';
@@ -174,9 +176,43 @@ const NetworkTopologyPage = () => {
   
   // Building view state - for new building-centric topology
   const [semanticZoom, setSemanticZoom] = useState(1);
+  const [selectedBuildingForPopup, setSelectedBuildingForPopup] = useState<Building | null>(null);
   const [expandedBuildings, setExpandedBuildings] = useState<Set<string>>(new Set());
   // const [focusedBuildingId, setFocusedBuildingId] = useState<string | null>(null);
   const [showConnectionWizard, setShowConnectionWizard] = useState(false);
+
+  const onExport = useCallback(() => {
+    const element = document.querySelector('.react-flow__viewport') as HTMLElement;
+    if (element) {
+      toPng(element, {
+        backgroundColor: '#000022',
+        style: {
+          transform: 'none',
+        },
+      }).then((dataUrl) => {
+        download(dataUrl, 'infrascope-topology.png');
+      });
+    }
+  }, []);
+
+  const applyAutoLayout = useCallback(() => {
+    // Basic grid layout for devices in non-building views
+    if (viewMode !== 'building' && viewMode !== 'logical') {
+      const spacing = 250;
+      const cols = Math.ceil(Math.sqrt(nodes.length));
+      
+      const newNodes = nodes.map((node, index) => {
+        if (node.data.isGroup) return node;
+        const row = Math.floor(index / cols);
+        const col = index % cols;
+        return {
+          ...node,
+          position: { x: col * spacing, y: row * spacing },
+        };
+      });
+      setNodes(newNodes);
+    }
+  }, [nodes, viewMode, setNodes]);
 
   useEffect(() => {
     loadData();
@@ -227,7 +263,7 @@ const NetworkTopologyPage = () => {
       }
       setConnections(mockConnections);
     } catch (err: any) {
-      setError(err.message || 'Failed to load data');
+      setError(err.message || 'Veriler yüklenirken bir hata oluştu');
     } finally {
       setLoading(false);
     }
@@ -283,6 +319,14 @@ const NetworkTopologyPage = () => {
   const handleNodeClick = (node: Node) => {
     setSelectedNode(node);
     
+    // Handle building popup for Building View
+    if (viewMode === 'building' && node.type === 'building') {
+      const building = buildings.find(b => `building-${b.id}` === node.id);
+      if (building) {
+        setSelectedBuildingForPopup(building);
+      }
+    }
+    
     // Handle hierarchical navigation for group nodes
     if (node.data.isGroup && viewMode === 'logical') {
       const hierarchyLevel = node.data.hierarchyLevel;
@@ -327,7 +371,7 @@ const NetworkTopologyPage = () => {
         id: edge.id,
         position: { x: 0, y: 0 },
         data: {
-          label: 'Building Connection',
+          label: 'Bina Bağlantısı',
           isBuildingConnection: true,
           buildingConnection: edge.data.buildingConnection,
         },
@@ -512,19 +556,19 @@ const NetworkTopologyPage = () => {
     
     // Connection type styling for all views
     const connectionStyles: Record<string, { color: string; dash: string; width: number; label: string; icon: string }> = {
-      'FIBER_SINGLE_MODE': { color: '#DC2626', dash: '0', width: 5, label: 'Fiber Single-Mode', icon: '🔴' },
-      'FIBER_MULTI_MODE': { color: '#EA580C', dash: '0', width: 5, label: 'Fiber Multi-Mode', icon: '🟠' },
-      'CAT5E': { color: '#16A34A', dash: '5,5', width: 4, label: 'Cat5e Cable', icon: '📡' },
-      'CAT6': { color: '#16A34A', dash: '5,5', width: 4, label: 'Cat6 Cable', icon: '📡' },
-      'CAT6A': { color: '#059669', dash: '5,5', width: 4, label: 'Cat6a Cable', icon: '📡' },
-      'CAT7': { color: '#047857', dash: '5,5', width: 4, label: 'Cat7 Cable', icon: '📡' },
-      'CAT8': { color: '#065F46', dash: '5,5', width: 4, label: 'Cat8 Cable', icon: '📡' },
-      'WIRELESS': { color: '#2563EB', dash: '10,5', width: 3, label: 'Wireless Link', icon: '📶' },
-      'MICROWAVE': { color: '#7C3AED', dash: '10,5', width: 3, label: 'Microwave Link', icon: '📡' },
-      'LEASED_LINE': { color: '#CA8A04', dash: '15,5,5,5', width: 4, label: 'Leased Line', icon: '🔗' },
-      'MPLS': { color: '#0891B2', dash: '15,5,5,5', width: 4, label: 'MPLS Network', icon: '🌐' },
-      'VPN': { color: '#9333EA', dash: '20,5', width: 3, label: 'VPN Tunnel', icon: '🔒' },
-      'OTHER': { color: '#6B7280', dash: '5,5', width: 3, label: 'Other Connection', icon: '❓' },
+      'FIBER_SINGLE_MODE': { color: '#DC2626', dash: '0', width: 5, label: 'Fiber Single-Mode (Tekli)', icon: '🔴' },
+      'FIBER_MULTI_MODE': { color: '#EA580C', dash: '0', width: 5, label: 'Fiber Multi-Mode (Çoklu)', icon: '🟠' },
+      'CAT5E': { color: '#16A34A', dash: '5,5', width: 4, label: 'Cat5e Kablo', icon: '📡' },
+      'CAT6': { color: '#16A34A', dash: '5,5', width: 4, label: 'Cat6 Kablo', icon: '📡' },
+      'CAT6A': { color: '#059669', dash: '5,5', width: 4, label: 'Cat6a Kablo', icon: '📡' },
+      'CAT7': { color: '#047857', dash: '5,5', width: 4, label: 'Cat7 Kablo', icon: '📡' },
+      'CAT8': { color: '#065F46', dash: '5,5', width: 4, label: 'Cat8 Kablo', icon: '📡' },
+      'WIRELESS': { color: '#2563EB', dash: '10,5', width: 3, label: 'Kablosuz Bağlantı', icon: '📶' },
+      'MICROWAVE': { color: '#7C3AED', dash: '10,5', width: 3, label: 'Mikrodalga Link', icon: '📡' },
+      'LEASED_LINE': { color: '#CA8A04', dash: '15,5,5,5', width: 4, label: 'Kiralık Hat', icon: '🔗' },
+      'MPLS': { color: '#0891B2', dash: '15,5,5,5', width: 4, label: 'MPLS Ağ', icon: '🌐' },
+      'VPN': { color: '#9333EA', dash: '20,5', width: 3, label: 'VPN Tünel', icon: '🔒' },
+      'OTHER': { color: '#6B7280', dash: '5,5', width: 3, label: 'Diğer Bağlantı', icon: '❓' },
     };
 
     // Use filtered devices for topology generation
@@ -653,7 +697,7 @@ const NetworkTopologyPage = () => {
             parentNode: buildingNodeId,
             extent: 'parent',
             data: {
-              label: 'No devices assigned yet',
+              label: 'Henüz cihaz atanmamış',
               isEmpty: true,
             },
             style: {
@@ -880,7 +924,7 @@ const NetworkTopologyPage = () => {
           if (sourceInterface && targetInterface) {
             edgeLabel = `${sourceInterface.name} → ${targetInterface.name}`;
           } else if (sourceInterface || targetInterface) {
-            edgeLabel = `${sourceInterface?.name || 'iface'} → ${targetInterface?.name || 'iface'}`;
+            edgeLabel = `${sourceInterface?.name || 'arayüz'} → ${targetInterface?.name || 'arayüz'}`;
           }
 
           newEdges.push({
@@ -969,7 +1013,8 @@ const NetworkTopologyPage = () => {
             coreDevices: coreCount,
             distributionDevices: distCount,
             accessDevices: accessCount,
-            isExpanded: expandedBuildings.has(building.id),
+            isExpanded: expandedBuildings.has(building.id) || semanticZoom > 0.8,
+            zoom: semanticZoom,
             onExpand: () => {
               const newExpanded = new Set(expandedBuildings);
               if (newExpanded.has(building.id)) {
@@ -987,8 +1032,8 @@ const NetworkTopologyPage = () => {
         
         newNodes.push(buildingNode);
         
-        // If building is expanded, show devices
-        if (expandedBuildings.has(building.id)) {
+        // If building is expanded or zoomed in enough, show devices
+        if (expandedBuildings.has(building.id) || semanticZoom > 0.8) {
           // Calculate device positions based on role
           const buildingX = col * spacing;
           const buildingY = row * spacing;
@@ -1023,6 +1068,7 @@ const NetworkTopologyPage = () => {
                 ).length,
                 buildingName: building.name,
                 location: `${device.rack?.room?.name || ''} - ${device.rack?.name || ''}`.trim().replace(/^- /, ''),
+                zoom: semanticZoom,
               },
             };
             
@@ -1301,16 +1347,16 @@ const NetworkTopologyPage = () => {
   */
 
   return (
-    <div className="h-screen flex flex-col">
+    <div className="h-screen flex flex-col bg-[#000033] text-white">
       <Header />
       
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top Controls */}
-        <div className="bg-white border-b border-gray-200 p-4" style={{ position: 'relative', zIndex: 1010 }}>
+        <div className="bg-[#000044] border-b border-blue-900 p-4 shadow-lg" style={{ position: 'relative', zIndex: 1010 }}>
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Network Topology</h1>
-              <p className="text-gray-600">Manage infrastructure topology and network connections</p>
+              <h1 className="text-2xl font-bold text-white">Ağ Topolojisi</h1>
+              <p className="text-blue-300">Altyapı topolojisini ve ağ bağlantılarını yönetin</p>
             </div>
             <div className="flex space-x-3">
               <div className="flex space-x-2">
@@ -1319,53 +1365,53 @@ const NetworkTopologyPage = () => {
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2 ${
                     viewMode === 'building'
                       ? 'bg-blue-600 text-white shadow-lg ring-2 ring-blue-300'
-                      : 'bg-white text-gray-700 border-2 border-gray-200 hover:border-blue-400 hover:bg-blue-50'
+                      : 'bg-blue-900/50 text-blue-200 border-2 border-blue-800 hover:border-blue-400 hover:bg-blue-800'
                   }`}
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                   </svg>
-                  Building View
+                  Bina Görünümü
                 </button>
                 <button
                   onClick={() => setViewMode('logical')}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
                     viewMode === 'logical'
-                      ? 'bg-blue-100 text-blue-700 shadow-md'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      ? 'bg-blue-600 text-white shadow-md'
+                      : 'bg-blue-900/50 text-blue-200 hover:bg-blue-800'
                   }`}
                 >
-                  Logical View
+                  Mantıksal
                 </button>
                 <button
                   onClick={() => setViewMode('physical')}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
                     viewMode === 'physical'
-                      ? 'bg-blue-100 text-blue-700 shadow-md'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      ? 'bg-blue-600 text-white shadow-md'
+                      : 'bg-blue-900/50 text-blue-200 hover:bg-blue-800'
                   }`}
                 >
-                  Physical View
+                  Fiziksel
                 </button>
                 <button
                   onClick={() => setViewMode('services')}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
                     viewMode === 'services'
-                      ? 'bg-blue-100 text-blue-700 shadow-md'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      ? 'bg-blue-600 text-white shadow-md'
+                      : 'bg-blue-900/50 text-blue-200 hover:bg-blue-800'
                   }`}
                 >
-                  Services View
+                  Servisler
                 </button>
                 <button
                   onClick={() => setViewMode('hierarchy')}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
                     viewMode === 'hierarchy'
-                      ? 'bg-blue-100 text-blue-700 shadow-md'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      ? 'bg-blue-600 text-white shadow-md'
+                      : 'bg-blue-900/50 text-blue-200 hover:bg-blue-800'
                   }`}
                 >
-                  Hierarchy View
+                  Hiyerarşi
                 </button>
                 <button
                   onClick={() => {
@@ -1375,11 +1421,11 @@ const NetworkTopologyPage = () => {
                   }}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
                     viewMode === 'zoom'
-                      ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg'
-                      : 'bg-gradient-to-r from-purple-100 to-blue-100 text-purple-700 hover:from-purple-200 hover:to-blue-200'
+                      ? 'bg-purple-600 text-white shadow-lg'
+                      : 'bg-purple-900/50 text-purple-200 hover:bg-purple-800'
                   }`}
                 >
-                  🔍 Zoom View
+                  🔍 Yakınlaştır
                 </button>
               </div>
               <div className="flex items-center space-x-3" style={{ position: 'relative', zIndex: 1020 }}>
@@ -1390,35 +1436,35 @@ const NetworkTopologyPage = () => {
                     <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                     </svg>
-                    <span>Building Connections</span>
+                    <span>Bina Bağlantıları</span>
                     <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                     </svg>
                   </button>
                   <div className="absolute right-0 top-full w-56 pt-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-[1050]">
-                    <div className="bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden">
+                    <div className="bg-[#000055] rounded-lg shadow-xl border border-blue-900 overflow-hidden">
                       <button
                         onClick={() => setShowBuildingConnectionModal(true)}
-                        className="w-full px-4 py-3 text-left hover:bg-purple-50 flex items-center space-x-3 border-b border-gray-100 transition"
+                        className="w-full px-4 py-3 text-left hover:bg-blue-900 flex items-center space-x-3 border-b border-blue-800 transition"
                       >
-                        <svg className="h-5 w-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="h-5 w-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                         </svg>
                         <div>
-                          <p className="font-semibold text-gray-900">Add New</p>
-                          <p className="text-xs text-gray-600">Inter-building link</p>
+                          <p className="font-semibold text-white">Yeni Ekle</p>
+                          <p className="text-xs text-blue-300">Binalar arası link</p>
                         </div>
                       </button>
                       <button
                         onClick={() => setShowManagementModal(true)}
-                        className="w-full px-4 py-3 text-left hover:bg-purple-50 flex items-center space-x-3 transition"
+                        className="w-full px-4 py-3 text-left hover:bg-blue-900 flex items-center space-x-3 transition"
                       >
-                        <svg className="h-5 w-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="h-5 w-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
                         </svg>
                         <div>
-                          <p className="font-semibold text-gray-900">Manage All</p>
-                          <p className="text-xs text-gray-600">{buildingConnections.length} connection(s)</p>
+                          <p className="font-semibold text-white">Tümünü Yönet</p>
+                          <p className="text-xs text-blue-300">{buildingConnections.length} bağlantı</p>
                         </div>
                       </button>
                     </div>
@@ -1432,14 +1478,34 @@ const NetworkTopologyPage = () => {
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                     </svg>
-                    Create Connection
+                    Bağlantı Oluştur
                   </button>
                 )}
+                <button
+                  onClick={applyAutoLayout}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium transition flex items-center gap-2 shadow-lg"
+                  title="Otomatik Yerleşim Uygula"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
+                  </svg>
+                  Düzenle
+                </button>
+                <button
+                  onClick={onExport}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium transition flex items-center gap-2 shadow-lg"
+                  title="PNG Dışa Aktar"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  Dışa Aktar
+                </button>
                 <button
                   onClick={loadData}
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium transition"
                 >
-                  Refresh
+                  Yenile
                 </button>
               </div>
             </div>
@@ -1447,25 +1513,25 @@ const NetworkTopologyPage = () => {
           
           {/* Enhanced Toolbar with Filters and Search */}
           {viewMode !== 'hierarchy' && (
-            <div className="mt-4 bg-gray-50 rounded-lg p-4 border border-gray-200">
+            <div className="mt-4 bg-[#000055] rounded-lg p-4 border border-blue-900">
               <div className="flex items-center space-x-3 flex-wrap gap-3">
                 {/* Search Input */}
                 <div className="flex-1 min-w-[250px]">
                   <div className="relative">
-                    <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
                     <input
                       type="text"
-                      placeholder="Search devices..."
+                      placeholder="Cihaz ara..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                      className="w-full pl-10 pr-4 py-2 bg-blue-950 border border-blue-800 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm text-white placeholder-blue-400 outline-none"
                     />
                     {searchQuery && (
                       <button
                         onClick={() => setSearchQuery('')}
-                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-blue-400 hover:text-white"
                       >
                         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1477,15 +1543,15 @@ const NetworkTopologyPage = () => {
 
                 {/* Device Type Filter */}
                 <div className="flex items-center space-x-2">
-                  <svg className="h-5 w-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="h-5 w-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
                   </svg>
                   <select
                     value={filterDeviceType}
                     onChange={(e) => setFilterDeviceType(e.target.value)}
-                    className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="px-3 py-2 bg-blue-950 border border-blue-800 text-white rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                   >
-                    <option value="all">All Types</option>
+                    <option value="all">Tüm Tipler</option>
                     {deviceTypes.filter(t => t !== 'all').map(type => (
                       <option key={type} value={type}>{type.replace(/_/g, ' ')}</option>
                     ))}
@@ -1494,37 +1560,37 @@ const NetworkTopologyPage = () => {
 
                 {/* Status Filter */}
                 <div className="flex items-center space-x-2">
-                  <svg className="h-5 w-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="h-5 w-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                   </svg>
                   <select
                     value={filterStatus}
                     onChange={(e) => setFilterStatus(e.target.value)}
-                    className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="px-3 py-2 bg-blue-950 border border-blue-800 text-white rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                   >
-                    <option value="all">All Status</option>
-                    <option value="ACTIVE">Active</option>
-                    <option value="INACTIVE">Inactive</option>
-                    <option value="MAINTENANCE">Maintenance</option>
-                    <option value="DECOMMISSIONED">Decommissioned</option>
+                    <option value="all">Tüm Durumlar</option>
+                    <option value="ACTIVE">Aktif</option>
+                    <option value="INACTIVE">Pasif</option>
+                    <option value="MAINTENANCE">Bakımda</option>
+                    <option value="DECOMMISSIONED">Devre Dışı</option>
                   </select>
                 </div>
 
                 {/* Criticality Filter */}
                 <div className="flex items-center space-x-2">
-                  <svg className="h-5 w-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="h-5 w-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                   </svg>
                   <select
                     value={filterCriticality}
                     onChange={(e) => setFilterCriticality(e.target.value)}
-                    className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="px-3 py-2 bg-blue-950 border border-blue-800 text-white rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                   >
-                    <option value="all">All Priority</option>
-                    <option value="CRITICAL">Critical</option>
-                    <option value="HIGH">High</option>
-                    <option value="MEDIUM">Medium</option>
-                    <option value="LOW">Low</option>
+                    <option value="all">Tüm Öncelikler</option>
+                    <option value="CRITICAL">Kritik</option>
+                    <option value="HIGH">Yüksek</option>
+                    <option value="MEDIUM">Orta</option>
+                    <option value="LOW">Düşük</option>
                   </select>
                 </div>
 
@@ -1532,22 +1598,22 @@ const NetworkTopologyPage = () => {
                 {(searchQuery || filterDeviceType !== 'all' || filterStatus !== 'all' || filterCriticality !== 'all') && (
                   <button
                     onClick={clearFilters}
-                    className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm font-medium transition flex items-center space-x-2"
+                    className="px-4 py-2 bg-blue-900 text-blue-100 rounded-lg hover:bg-blue-800 text-sm font-medium transition flex items-center space-x-2"
                   >
                     <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                     </svg>
-                    <span>Clear Filters</span>
+                    <span>Filtreleri Temizle</span>
                   </button>
                 )}
                 
                 {/* Results Count */}
-                <div className="ml-auto flex items-center space-x-2 bg-white px-4 py-2 rounded-lg border border-gray-300">
-                  <svg className="h-5 w-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="ml-auto flex items-center space-x-2 bg-blue-950 px-4 py-2 rounded-lg border border-blue-800">
+                  <svg className="h-5 w-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
                   </svg>
-                  <span className="text-sm font-semibold text-gray-700">
-                    {filteredDevices.length} / {devices.length} devices
+                  <span className="text-sm font-semibold text-blue-100">
+                    {filteredDevices.length} / {devices.length} cihaz
                   </span>
                 </div>
               </div>
@@ -1557,23 +1623,23 @@ const NetworkTopologyPage = () => {
 
         {/* Loading/Error States */}
         {loading && (
-          <div className="flex-1 flex items-center justify-center">
+          <div className="flex-1 flex items-center justify-center bg-[#000033]">
             <div className="text-center">
-              <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-              <p className="mt-4 text-gray-600">Loading network topology...</p>
+              <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
+              <p className="mt-4 text-blue-200 font-medium">Ağ topolojisi yükleniyor...</p>
             </div>
           </div>
         )}
 
         {error && (
-          <div className="flex-1 flex items-center justify-center">
-            <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md w-full mx-4">
-              <p className="text-red-800">{error}</p>
+          <div className="flex-1 flex items-center justify-center bg-[#000033]">
+            <div className="bg-red-900/50 border border-red-700 rounded-lg p-6 max-w-md w-full mx-4 shadow-2xl">
+              <p className="text-red-200 font-bold">{error}</p>
               <button
                 onClick={loadData}
-                className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                className="mt-4 w-full px-4 py-2 bg-red-700 text-white rounded-lg hover:bg-red-600 font-bold transition-colors"
               >
-                Retry
+                Tekrar Dene
               </button>
             </div>
           </div>
@@ -1584,24 +1650,24 @@ const NetworkTopologyPage = () => {
           <>
             {viewMode === 'hierarchy' ? (
               // HIERARCHY VIEW
-              <div className="flex-1 overflow-auto p-6 bg-gray-50">
+              <div className="flex-1 overflow-auto p-6 bg-[#000033]">
                 <div className="max-w-6xl mx-auto">
-                  <h2 className="text-xl font-bold text-gray-900 mb-6">Infrastructure Hierarchy</h2>
+                  <h2 className="text-xl font-bold text-white mb-6">Altyapı Hiyerarşisi</h2>
                   <div className="space-y-4">
                     {organizations.length === 0 ? (
                       <div className="text-center py-12">
-                        <p className="text-gray-500">No organizations found. Create one from the Locations page.</p>
+                        <p className="text-blue-300">Organizasyon bulunamadı. Konumlar sayfasından bir tane oluşturun.</p>
                       </div>
                     ) : (
                       organizations.map(org => (
-                        <div key={org.id} className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
+                        <div key={org.id} className="bg-[#000044] rounded-lg shadow border border-blue-900 overflow-hidden">
                           <button
                             onClick={() => toggleExpand(org.id)}
-                            className="w-full p-4 flex items-center justify-between hover:bg-gray-50 transition"
+                            className="w-full p-4 flex items-center justify-between hover:bg-blue-900 transition"
                           >
                             <div className="flex items-center space-x-3">
                               <svg
-                                className={`h-5 w-5 text-blue-600 transition ${
+                                className={`h-5 w-5 text-blue-400 transition ${
                                   expandedItems.has(org.id) ? 'rotate-90' : ''
                                 }`}
                                 fill="none"
@@ -1616,23 +1682,23 @@ const NetworkTopologyPage = () => {
                                 />
                               </svg>
                               <div className="text-left">
-                                <p className="font-bold text-gray-900 text-lg">{org.name}</p>
-                                <p className="text-sm text-gray-500">{org.buildings?.length || 0} buildings</p>
+                                <p className="font-bold text-white text-lg">{org.name}</p>
+                                <p className="text-sm text-blue-300">{org.buildings?.length || 0} bina</p>
                               </div>
                             </div>
                           </button>
 
                           {expandedItems.has(org.id) && org.buildings && (
-                            <div className="border-t border-gray-200 p-4 bg-gray-50 space-y-3">
+                            <div className="border-t border-blue-900 p-4 bg-blue-950/50 space-y-3">
                               {org.buildings.map(building => (
-                                <div key={building.id} className="bg-white rounded-lg p-4 border border-gray-100 shadow-sm">
+                                <div key={building.id} className="bg-[#000044] rounded-lg p-4 border border-blue-800 shadow-sm">
                                   <button
                                     onClick={() => toggleExpand(building.id)}
-                                    className="w-full flex items-center justify-between hover:bg-gray-50 transition"
+                                    className="w-full flex items-center justify-between hover:bg-blue-900 transition"
                                   >
                                     <div className="flex items-center space-x-3">
                                       <svg
-                                        className={`h-4 w-4 text-purple-600 transition ${
+                                        className={`h-4 w-4 text-purple-400 transition ${
                                           expandedItems.has(building.id) ? 'rotate-90' : ''
                                         }`}
                                         fill="none"
@@ -1647,23 +1713,23 @@ const NetworkTopologyPage = () => {
                                         />
                                       </svg>
                                       <div className="text-left">
-                                        <p className="font-semibold text-gray-900">{building.name}</p>
-                                        <p className="text-xs text-gray-500">{building.city || 'Location not set'}</p>
+                                        <p className="font-semibold text-white">{building.name}</p>
+                                        <p className="text-xs text-blue-300">{building.city || 'Konum ayarlanmadı'}</p>
                                       </div>
                                     </div>
                                   </button>
 
                                   {expandedItems.has(building.id) && building.floors && (
-                                    <div className="mt-4 ml-6 space-y-3 border-l-2 border-gray-300 pl-4">
+                                    <div className="mt-4 ml-6 space-y-3 border-l-2 border-blue-700 pl-4">
                                       {building.floors.map(floor => (
                                         <div key={floor.id}>
                                           <button
                                             onClick={() => toggleExpand(floor.id)}
-                                            className="w-full flex items-center justify-between hover:bg-gray-50 transition py-2 px-2 rounded"
+                                            className="w-full flex items-center justify-between hover:bg-blue-900 transition py-2 px-2 rounded"
                                           >
                                             <div className="flex items-center space-x-2">
                                               <svg
-                                                className={`h-4 w-4 text-orange-600 transition ${
+                                                className={`h-4 w-4 text-orange-400 transition ${
                                                   expandedItems.has(floor.id) ? 'rotate-90' : ''
                                                 }`}
                                                 fill="none"
@@ -1677,35 +1743,35 @@ const NetworkTopologyPage = () => {
                                                   d="M9 5l7 7-7 7"
                                                 />
                                               </svg>
-                                              <span className="font-semibold text-gray-800">{floor.name}</span>
+                                              <span className="font-semibold text-blue-100">{floor.name}</span>
                                             </div>
-                                            <span className="text-xs text-gray-400 font-medium">Floor {floor.floorNumber}</span>
+                                            <span className="text-xs text-blue-400 font-medium">Kat {floor.floorNumber}</span>
                                           </button>
 
                                           {expandedItems.has(floor.id) && floor.rooms && (
                                             <div className="mt-3 ml-6 space-y-2">
                                               {floor.rooms.map(room => (
-                                                <div key={room.id} className="bg-gray-50 rounded p-3 border border-gray-100">
-                                                  <p className="font-semibold text-gray-800 mb-2">{room.name}</p>
+                                                <div key={room.id} className="bg-blue-950 rounded p-3 border border-blue-900">
+                                                  <p className="font-semibold text-white mb-2">{room.name}</p>
                                                   {room.racks && room.racks.length > 0 ? (
-                                                    <div className="space-y-1 ml-3 border-l border-gray-300 pl-3">
+                                                    <div className="space-y-1 ml-3 border-l border-blue-800 pl-3">
                                                       {room.racks.map(rack => {
                                                         const rackDevices = devices.filter(d => d.rackId === rack.id);
                                                         return (
                                                           <div key={rack.id} className="flex justify-between text-sm">
                                                             <div>
-                                                              <span className="font-medium text-gray-700">{rack.name}</span>
-                                                              <span className="text-xs text-gray-500 ml-2">({rack.maxUnits}U)</span>
+                                                              <span className="font-medium text-blue-200">{rack.name}</span>
+                                                              <span className="text-xs text-blue-400 ml-2">({rack.maxUnits}U)</span>
                                                             </div>
-                                                            <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded">
-                                                              {rackDevices.length} devices
+                                                            <span className="text-xs bg-blue-900 text-blue-100 px-2 py-0.5 rounded">
+                                                              {rackDevices.length} cihaz
                                                             </span>
                                                           </div>
                                                         );
                                                       })}
                                                     </div>
                                                   ) : (
-                                                    <p className="text-xs text-gray-400 italic">No racks</p>
+                                                    <p className="text-xs text-blue-500 italic">Kabinet yok</p>
                                                   )}
                                                 </div>
                                               ))}
@@ -1727,10 +1793,10 @@ const NetworkTopologyPage = () => {
               </div>
             ) : viewMode === 'zoom' ? (
               // ZOOM VIEW - Modern Hierarchical Zoom Interface
-              <div className="flex-1 overflow-auto bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50">
+              <div className="flex-1 overflow-auto bg-[#000033]">
                 {/* Breadcrumb Navigation */}
                 {breadcrumbs.length > 0 && (
-                  <div className="sticky top-0 z-20 bg-white/90 backdrop-blur-md border-b border-gray-200 px-6 py-4 shadow-sm">
+                  <div className="sticky top-0 z-20 bg-[#000044]/90 backdrop-blur-md border-b border-blue-900 px-6 py-4 shadow-sm">
                     <div className="flex items-center space-x-3">
                       <button
                         onClick={() => {
@@ -1741,21 +1807,21 @@ const NetworkTopologyPage = () => {
                           setSelectedRack(null);
                           setBreadcrumbs([]);
                         }}
-                        className="px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 transition shadow-md flex items-center space-x-2 font-medium"
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition shadow-md flex items-center space-x-2 font-medium"
                       >
                         <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
                         </svg>
-                        <span>All Buildings</span>
+                        <span>Tüm Binalar</span>
                       </button>
                       {breadcrumbs.map((crumb, index) => (
                         <React.Fragment key={crumb.id}>
-                          <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="h-5 w-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                           </svg>
                           <button
                             onClick={() => handleBreadcrumbClick(index)}
-                            className="px-4 py-2 bg-white text-gray-700 rounded-lg hover:bg-gray-100 transition border border-gray-200 font-medium"
+                            className="px-4 py-2 bg-blue-950 text-white rounded-lg hover:bg-blue-900 transition border border-blue-800 font-medium"
                           >
                             {crumb.level === 'building' && '🏢'}
                             {crumb.level === 'floor' && '📋'}
@@ -1768,12 +1834,12 @@ const NetworkTopologyPage = () => {
                       {zoomLevel !== 'building' && (
                         <button
                           onClick={handleZoomOut}
-                          className="ml-auto px-4 py-2 bg-white text-gray-700 rounded-lg hover:bg-gray-100 transition border border-gray-200 font-medium flex items-center space-x-2"
+                          className="ml-auto px-4 py-2 bg-blue-950 text-white rounded-lg hover:bg-blue-900 transition border border-blue-800 font-medium flex items-center space-x-2"
                         >
                           <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                           </svg>
-                          <span>Zoom Out</span>
+                          <span>Uzaklaştır</span>
                         </button>
                       )}
                     </div>
@@ -1785,18 +1851,18 @@ const NetworkTopologyPage = () => {
                   {zoomLevel === 'building' && (
                     <div className="max-w-7xl mx-auto">
                       <div className="mb-8">
-                        <h2 className="text-4xl font-bold text-gray-900 mb-2">Infrastructure Overview</h2>
-                        <p className="text-lg text-gray-600">Select a building to explore its infrastructure</p>
+                        <h2 className="text-4xl font-bold text-white mb-2">Altyapıya Genel Bakış</h2>
+                        <p className="text-lg text-blue-300">İncelemek istediğiniz binayı seçin</p>
                       </div>
                       
                       {buildings.length === 0 ? (
                         <div className="text-center py-20">
-                          <div className="inline-block p-8 bg-white rounded-2xl shadow-lg border border-gray-200">
-                            <svg className="h-24 w-24 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <div className="inline-block p-8 bg-[#000044] rounded-2xl shadow-lg border border-blue-900">
+                            <svg className="h-24 w-24 text-blue-800 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                             </svg>
-                            <p className="text-xl font-semibold text-gray-700">No buildings found</p>
-                            <p className="text-gray-500 mt-2">Create buildings from the Locations page</p>
+                            <p className="text-xl font-semibold text-white">Bina bulunamadı</p>
+                            <p className="text-blue-300 mt-2">Konumlar sayfasından bina ekleyin</p>
                           </div>
                         </div>
                       ) : (
@@ -1812,43 +1878,43 @@ const NetworkTopologyPage = () => {
                               <button
                                 key={building.id}
                                 onClick={() => handleZoomToBuilding(building)}
-                                className="group relative bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden border-2 border-transparent hover:border-blue-500 p-6 text-left transform hover:scale-105"
+                                className="group relative bg-[#000044] rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden border-2 border-blue-900 hover:border-blue-500 p-6 text-left transform hover:scale-105"
                               >
-                                <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-500/10 to-purple-500/10 rounded-bl-full"></div>
+                                <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-500/20 to-purple-500/20 rounded-bl-full"></div>
                                 
                                 <div className="relative">
                                   <div className="flex items-center justify-between mb-4">
-                                    <div className="p-3 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl shadow-md">
+                                    <div className="p-3 bg-blue-600 rounded-xl shadow-md">
                                       <svg className="h-8 w-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                                       </svg>
                                     </div>
-                                    <svg className="h-6 w-6 text-gray-400 group-hover:text-blue-600 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <svg className="h-6 w-6 text-blue-400 group-hover:text-white transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                                     </svg>
                                   </div>
                                   
-                                  <h3 className="text-2xl font-bold text-gray-900 mb-2 group-hover:text-blue-600 transition">{building.name}</h3>
-                                  <p className="text-sm text-gray-500 mb-4 flex items-center space-x-1">
+                                  <h3 className="text-2xl font-bold text-white mb-2 group-hover:text-blue-400 transition">{building.name}</h3>
+                                  <p className="text-sm text-blue-300 mb-4 flex items-center space-x-1">
                                     <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                                     </svg>
-                                    <span>{building.city || 'Location not set'}</span>
+                                    <span>{building.city || 'Konum ayarlanmadı'}</span>
                                   </p>
                                   
                                   <div className="grid grid-cols-3 gap-3">
-                                    <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-3 border border-blue-200">
-                                      <p className="text-xs text-blue-600 font-medium mb-1">Floors</p>
-                                      <p className="text-2xl font-bold text-blue-700">{floorCount}</p>
+                                    <div className="bg-blue-900/50 rounded-lg p-3 border border-blue-800">
+                                      <p className="text-xs text-blue-300 font-medium mb-1">Katlar</p>
+                                      <p className="text-2xl font-bold text-white">{floorCount}</p>
                                     </div>
-                                    <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-3 border border-green-200">
-                                      <p className="text-xs text-green-600 font-medium mb-1">Devices</p>
-                                      <p className="text-2xl font-bold text-green-700">{buildingDevices.length}</p>
+                                    <div className="bg-blue-900/50 rounded-lg p-3 border border-blue-800">
+                                      <p className="text-xs text-blue-300 font-medium mb-1">Cihazlar</p>
+                                      <p className="text-2xl font-bold text-white">{buildingDevices.length}</p>
                                     </div>
-                                    <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-3 border border-purple-200">
-                                      <p className="text-xs text-purple-600 font-medium mb-1">Active</p>
-                                      <p className="text-2xl font-bold text-purple-700">{activeDevices}</p>
+                                    <div className="bg-blue-900/50 rounded-lg p-3 border border-blue-800">
+                                      <p className="text-xs text-blue-300 font-medium mb-1">Aktif</p>
+                                      <p className="text-2xl font-bold text-white">{activeDevices}</p>
                                     </div>
                                   </div>
                                 </div>
@@ -1864,18 +1930,18 @@ const NetworkTopologyPage = () => {
                   {zoomLevel === 'floor' && selectedBuilding && (
                     <div className="max-w-7xl mx-auto">
                       <div className="mb-8">
-                        <h2 className="text-4xl font-bold text-gray-900 mb-2">{selectedBuilding.name}</h2>
-                        <p className="text-lg text-gray-600">Select a floor to explore rooms and racks</p>
+                        <h2 className="text-4xl font-bold text-white mb-2">{selectedBuilding.name}</h2>
+                        <p className="text-lg text-blue-300">Odaları ve kabinetleri keşfetmek için bir kat seçin</p>
                       </div>
                       
                       {(!selectedBuilding.floors || selectedBuilding.floors.length === 0) ? (
                         <div className="text-center py-20">
-                          <div className="inline-block p-8 bg-white rounded-2xl shadow-lg border border-gray-200">
-                            <svg className="h-24 w-24 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <div className="inline-block p-8 bg-[#000044] rounded-2xl shadow-lg border border-blue-900">
+                            <svg className="h-24 w-24 text-blue-800 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                             </svg>
-                            <p className="text-xl font-semibold text-gray-700">No floors found</p>
-                            <p className="text-gray-500 mt-2">Add floors to this building from the Locations page</p>
+                            <p className="text-xl font-semibold text-white">Kat bulunamadı</p>
+                            <p className="text-blue-300 mt-2">Konumlar sayfasından bu binaya kat ekleyin</p>
                           </div>
                         </div>
                       ) : (
@@ -1890,27 +1956,27 @@ const NetworkTopologyPage = () => {
                               <button
                                 key={floor.id}
                                 onClick={() => handleZoomToFloor(floor)}
-                                className="group bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 p-6 text-left border-2 border-transparent hover:border-orange-500 transform hover:scale-105"
+                                className="group bg-[#000044] rounded-xl shadow-md hover:shadow-xl transition-all duration-300 p-6 text-left border-2 border-blue-900 hover:border-orange-500 transform hover:scale-105"
                               >
                                 <div className="flex items-center justify-between mb-4">
-                                  <div className="p-2 bg-gradient-to-br from-orange-500 to-red-500 rounded-lg">
+                                  <div className="p-2 bg-orange-600 rounded-lg">
                                     <svg className="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                     </svg>
                                   </div>
-                                  <span className="text-sm font-bold text-gray-400">Floor {floor.floorNumber}</span>
+                                  <span className="text-sm font-bold text-blue-400">Kat {floor.floorNumber}</span>
                                 </div>
                                 
-                                <h3 className="text-xl font-bold text-gray-900 mb-3 group-hover:text-orange-600 transition">{floor.name}</h3>
+                                <h3 className="text-xl font-bold text-white mb-3 group-hover:text-orange-400 transition">{floor.name}</h3>
                                 
                                 <div className="space-y-2">
                                   <div className="flex items-center justify-between text-sm">
-                                    <span className="text-gray-600">Rooms</span>
-                                    <span className="font-bold text-orange-600">{roomCount}</span>
+                                    <span className="text-blue-300">Odalar</span>
+                                    <span className="font-bold text-orange-400">{roomCount}</span>
                                   </div>
                                   <div className="flex items-center justify-between text-sm">
-                                    <span className="text-gray-600">Devices</span>
-                                    <span className="font-bold text-orange-600">{floorDevices.length}</span>
+                                    <span className="text-blue-300">Cihazlar</span>
+                                    <span className="font-bold text-orange-400">{floorDevices.length}</span>
                                   </div>
                                 </div>
                               </button>
@@ -1925,18 +1991,18 @@ const NetworkTopologyPage = () => {
                   {zoomLevel === 'room' && selectedFloor && (
                     <div className="max-w-7xl mx-auto">
                       <div className="mb-8">
-                        <h2 className="text-4xl font-bold text-gray-900 mb-2">{selectedFloor.name}</h2>
-                        <p className="text-lg text-gray-600">Select a room to view racks</p>
+                        <h2 className="text-4xl font-bold text-white mb-2">{selectedFloor.name}</h2>
+                        <p className="text-lg text-blue-300">Kabinetleri görüntülemek için bir oda seçin</p>
                       </div>
                       
                       {(!selectedFloor.rooms || selectedFloor.rooms.length === 0) ? (
                         <div className="text-center py-20">
-                          <div className="inline-block p-8 bg-white rounded-2xl shadow-lg border border-gray-200">
-                            <svg className="h-24 w-24 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <div className="inline-block p-8 bg-[#000044] rounded-2xl shadow-lg border border-blue-900">
+                            <svg className="h-24 w-24 text-blue-800 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z" />
                             </svg>
-                            <p className="text-xl font-semibold text-gray-700">No rooms found</p>
-                            <p className="text-gray-500 mt-2">Add rooms to this floor from the Locations page</p>
+                            <p className="text-xl font-semibold text-white">Oda bulunamadı</p>
+                            <p className="text-blue-300 mt-2">Konumlar sayfasından bu kata oda ekleyin</p>
                           </div>
                         </div>
                       ) : (
@@ -1951,26 +2017,26 @@ const NetworkTopologyPage = () => {
                               <button
                                 key={room.id}
                                 onClick={() => handleZoomToRoom(room)}
-                                className="group bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 p-6 text-left border-2 border-transparent hover:border-purple-500 transform hover:scale-105"
+                                className="group bg-[#000044] rounded-xl shadow-md hover:shadow-xl transition-all duration-300 p-6 text-left border-2 border-blue-900 hover:border-purple-500 transform hover:scale-105"
                               >
                                 <div className="flex items-center justify-between mb-4">
-                                  <div className="p-2 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg">
+                                  <div className="p-2 bg-purple-600 rounded-lg">
                                     <svg className="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z" />
                                     </svg>
                                   </div>
                                 </div>
                                 
-                                <h3 className="text-xl font-bold text-gray-900 mb-3 group-hover:text-purple-600 transition">{room.name}</h3>
+                                <h3 className="text-xl font-bold text-white mb-3 group-hover:text-purple-400 transition">{room.name}</h3>
                                 
                                 <div className="space-y-2">
                                   <div className="flex items-center justify-between text-sm">
-                                    <span className="text-gray-600">Racks</span>
-                                    <span className="font-bold text-purple-600">{rackCount}</span>
+                                    <span className="text-blue-300">Kabinetler</span>
+                                    <span className="font-bold text-purple-400">{rackCount}</span>
                                   </div>
                                   <div className="flex items-center justify-between text-sm">
-                                    <span className="text-gray-600">Devices</span>
-                                    <span className="font-bold text-purple-600">{roomDevices.length}</span>
+                                    <span className="text-blue-300">Cihazlar</span>
+                                    <span className="font-bold text-purple-400">{roomDevices.length}</span>
                                   </div>
                                 </div>
                               </button>
@@ -1985,18 +2051,18 @@ const NetworkTopologyPage = () => {
                   {zoomLevel === 'rack' && selectedRoom && (
                     <div className="max-w-7xl mx-auto">
                       <div className="mb-8">
-                        <h2 className="text-4xl font-bold text-gray-900 mb-2">{selectedRoom.name}</h2>
-                        <p className="text-lg text-gray-600">Select a rack to view devices</p>
+                        <h2 className="text-4xl font-bold text-white mb-2">{selectedRoom.name}</h2>
+                        <p className="text-lg text-blue-300">Cihazları görüntülemek için bir kabinet seçin</p>
                       </div>
                       
                       {(!selectedRoom.racks || selectedRoom.racks.length === 0) ? (
                         <div className="text-center py-20">
-                          <div className="inline-block p-8 bg-white rounded-2xl shadow-lg border border-gray-200">
-                            <svg className="h-24 w-24 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <div className="inline-block p-8 bg-[#000044] rounded-2xl shadow-lg border border-blue-900">
+                            <svg className="h-24 w-24 text-blue-800 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
                             </svg>
-                            <p className="text-xl font-semibold text-gray-700">No racks found</p>
-                            <p className="text-gray-500 mt-2">Add racks to this room from the Locations page</p>
+                            <p className="text-xl font-semibold text-white">Kabinet bulunamadı</p>
+                            <p className="text-blue-300 mt-2">Konumlar sayfasından bu odaya kabinet ekleyin</p>
                           </div>
                         </div>
                       ) : (
@@ -2009,28 +2075,28 @@ const NetworkTopologyPage = () => {
                               <button
                                 key={rack.id}
                                 onClick={() => handleZoomToRack(rack)}
-                                className="group bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 p-6 text-left border-2 border-transparent hover:border-green-500 transform hover:scale-105"
+                                className="group bg-[#000044] rounded-xl shadow-md hover:shadow-xl transition-all duration-300 p-6 text-left border-2 border-blue-900 hover:border-green-500 transform hover:scale-105"
                               >
                                 <div className="flex items-center justify-between mb-4">
-                                  <div className="p-2 bg-gradient-to-br from-green-500 to-teal-500 rounded-lg">
+                                  <div className="p-2 bg-green-600 rounded-lg">
                                     <svg className="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
                                     </svg>
                                   </div>
-                                  <span className="text-sm font-bold text-gray-400">{rack.maxUnits}U</span>
+                                  <span className="text-sm font-bold text-blue-400">{rack.maxUnits}U</span>
                                 </div>
                                 
-                                <h3 className="text-xl font-bold text-gray-900 mb-1 group-hover:text-green-600 transition">{rack.name}</h3>
-                                <p className="text-sm text-gray-500 mb-3">{rack.type.replace(/_/g, ' ')}</p>
+                                <h3 className="text-xl font-bold text-white mb-1 group-hover:text-green-400 transition">{rack.name}</h3>
+                                <p className="text-sm text-blue-300 mb-3">{rack.type.replace(/_/g, ' ')}</p>
                                 
                                 <div className="space-y-2">
                                   <div className="flex items-center justify-between text-sm">
-                                    <span className="text-gray-600">Total Devices</span>
-                                    <span className="font-bold text-green-600">{rackDevices.length}</span>
+                                    <span className="text-blue-200">Toplam Cihaz</span>
+                                    <span className="font-bold text-green-400">{rackDevices.length}</span>
                                   </div>
                                   <div className="flex items-center justify-between text-sm">
-                                    <span className="text-gray-600">Active</span>
-                                    <span className="font-bold text-green-600">{activeDevices}</span>
+                                    <span className="text-blue-200">Aktif</span>
+                                    <span className="font-bold text-green-400">{activeDevices}</span>
                                   </div>
                                 </div>
                               </button>
@@ -2045,8 +2111,8 @@ const NetworkTopologyPage = () => {
                   {zoomLevel === 'device' && selectedRack && (
                     <div className="max-w-7xl mx-auto">
                       <div className="mb-8">
-                        <h2 className="text-4xl font-bold text-gray-900 mb-2">{selectedRack.name}</h2>
-                        <p className="text-lg text-gray-600">Devices in this rack</p>
+                        <h2 className="text-4xl font-bold text-white mb-2">{selectedRack.name}</h2>
+                        <p className="text-lg text-blue-300">Kabinet içindeki cihazlar</p>
                       </div>
                       
                       {(() => {
@@ -2055,12 +2121,12 @@ const NetworkTopologyPage = () => {
                         if (rackDevices.length === 0) {
                           return (
                             <div className="text-center py-20">
-                              <div className="inline-block p-8 bg-white rounded-2xl shadow-lg border border-gray-200">
-                                <svg className="h-24 w-24 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <div className="inline-block p-8 bg-[#000044] rounded-2xl shadow-lg border border-blue-900">
+                                <svg className="h-24 w-24 text-blue-800 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
                                 </svg>
-                                <p className="text-xl font-semibold text-gray-700">No devices found</p>
-                                <p className="text-gray-500 mt-2">Add devices to this rack from the Locations page</p>
+                                <p className="text-xl font-semibold text-white">Cihaz bulunamadı</p>
+                                <p className="text-blue-300 mt-2">Konumlar sayfasından bu kabinete cihaz ekleyin</p>
                               </div>
                             </div>
                           );
@@ -2070,59 +2136,64 @@ const NetworkTopologyPage = () => {
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             {rackDevices.map(device => {
                               const deviceServices = services.filter(s => s.deviceId === device.id);
-                              const statusColor = device.status === 'ACTIVE' ? 'green' : 
-                                                 device.status === 'MAINTENANCE' ? 'yellow' : 
-                                                 device.status === 'INACTIVE' ? 'gray' : 'red';
                               
+                              const statusBg = device.status === 'ACTIVE' ? 'bg-emerald-900/30' : 
+                                              device.status === 'MAINTENANCE' ? 'bg-amber-900/30' : 
+                                              device.status === 'INACTIVE' ? 'bg-slate-900/30' : 'bg-red-900/30';
+                              
+                              const statusText = device.status === 'ACTIVE' ? 'text-emerald-400' : 
+                                                device.status === 'MAINTENANCE' ? 'text-amber-400' : 
+                                                device.status === 'INACTIVE' ? 'text-slate-400' : 'text-red-400';
+
                               return (
                                 <div
                                   key={device.id}
-                                  className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 p-6 border-2 border-gray-100 hover:border-blue-500"
+                                  className="bg-[#000044] rounded-xl shadow-md hover:shadow-xl transition-all duration-300 p-6 border-2 border-blue-900 hover:border-blue-500"
                                 >
                                   <div className="flex items-center justify-between mb-4">
-                                    <div className={`p-2 bg-gradient-to-br from-${statusColor}-500 to-${statusColor}-600 rounded-lg`}>
+                                    <div className={`p-2 bg-blue-600 rounded-lg`}>
                                       <svg className="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
                                       </svg>
                                     </div>
-                                    <span className={`px-3 py-1 rounded-full text-xs font-bold bg-${statusColor}-100 text-${statusColor}-700`}>
+                                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${statusBg} ${statusText}`}>
                                       {device.status}
                                     </span>
                                   </div>
                                   
-                                  <h3 className="text-xl font-bold text-gray-900 mb-2">{device.name}</h3>
-                                  <p className="text-sm text-gray-500 mb-4">{device.type.replace(/_/g, ' ')}</p>
+                                  <h3 className="text-xl font-bold text-white mb-2">{device.name}</h3>
+                                  <p className="text-sm text-blue-300 mb-4">{device.type.replace(/_/g, ' ')}</p>
                                   
                                   <div className="space-y-2 mb-4">
                                     <div className="flex items-center justify-between text-sm">
-                                      <span className="text-gray-600">Criticality</span>
+                                      <span className="text-blue-300">Kritiklik</span>
                                       <span className={`px-2 py-1 rounded text-xs font-bold ${
-                                        device.criticality === 'CRITICAL' ? 'bg-red-100 text-red-700' :
-                                        device.criticality === 'HIGH' ? 'bg-orange-100 text-orange-700' :
-                                        device.criticality === 'MEDIUM' ? 'bg-yellow-100 text-yellow-700' :
-                                        'bg-blue-100 text-blue-700'
+                                        device.criticality === 'CRITICAL' ? 'bg-red-900/30 text-red-400' :
+                                        device.criticality === 'HIGH' ? 'bg-orange-900/30 text-orange-400' :
+                                        device.criticality === 'MEDIUM' ? 'bg-amber-900/30 text-amber-400' :
+                                        'bg-blue-900/30 text-blue-400'
                                       }`}>
                                         {device.criticality}
                                       </span>
                                     </div>
                                     <div className="flex items-center justify-between text-sm">
-                                      <span className="text-gray-600">Services</span>
-                                      <span className="font-bold text-blue-600">{deviceServices.length}</span>
+                                      <span className="text-blue-300">Servisler</span>
+                                      <span className="font-bold text-blue-400">{deviceServices.length}</span>
                                     </div>
                                     <div className="flex items-center justify-between text-sm">
-                                      <span className="text-gray-600">Interfaces</span>
-                                      <span className="font-bold text-blue-600">{device.networkInterfaces?.length || 0}</span>
+                                      <span className="text-blue-300">Arayüzler</span>
+                                      <span className="font-bold text-blue-400">{device.networkInterfaces?.length || 0}</span>
                                     </div>
                                   </div>
                                   
                                   {device.networkInterfaces && device.networkInterfaces.length > 0 && (
-                                    <div className="border-t pt-3 mt-3">
-                                      <p className="text-xs font-semibold text-gray-500 mb-2">Network Interfaces</p>
+                                    <div className="border-t border-blue-900 pt-3 mt-3">
+                                      <p className="text-xs font-semibold text-blue-500 mb-2">Ağ Arayüzleri</p>
                                       <div className="space-y-1">
                                         {device.networkInterfaces.slice(0, 3).map(iface => (
-                                          <div key={iface.id} className="text-xs bg-gray-50 rounded px-2 py-1">
-                                            <span className="font-medium text-gray-700">{iface.name}</span>
-                                            {iface.ipv4 && <span className="text-gray-500 ml-1">• {iface.ipv4}</span>}
+                                          <div key={iface.id} className="text-xs bg-blue-950 rounded px-2 py-1">
+                                            <span className="font-medium text-blue-200">{iface.name}</span>
+                                            {iface.ipv4 && <span className="text-blue-400 ml-1">• {iface.ipv4}</span>}
                                           </div>
                                         ))}
                                       </div>
@@ -2144,25 +2215,25 @@ const NetworkTopologyPage = () => {
                 <div className="flex-1 relative">
                   {/* Breadcrumb Navigation */}
                   {viewMode === 'logical' && navigationPath.length > 0 && (
-                    <div className="absolute top-4 left-4 z-10 bg-white rounded-lg shadow-lg border border-gray-200 p-3">
+                    <div className="absolute top-4 left-4 z-10 bg-[#000044] rounded-lg shadow-lg border border-blue-800 p-3">
                       <div className="flex items-center space-x-2">
                         <button
                           onClick={handleNavigateToRoot}
-                          className="px-3 py-1 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded transition"
-                          title="Back to all buildings"
+                          className="px-3 py-1 text-sm font-bold text-blue-400 hover:text-white hover:bg-blue-900/50 rounded transition"
+                          title="Tüm binalara dön"
                         >
-                          🏘️ All Buildings
+                          🏘️ Tüm Binalar
                         </button>
                         {navigationPath.map((item, index) => (
                           <React.Fragment key={item.id}>
-                            <span className="text-gray-400">/</span>
+                            <span className="text-blue-800">/</span>
                             <button
                               onClick={() => {
                                 const newPath = navigationPath.slice(0, index + 1);
                                 setNavigationPath(newPath);
                                 // setFocusedContainer(item);
                               }}
-                              className="px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded transition"
+                              className="px-3 py-1 text-sm font-bold text-blue-200 hover:text-white hover:bg-blue-900/50 rounded transition"
                             >
                               {item.type === 'building' && '🏢'}
                               {item.type === 'floor' && '📋'}
@@ -2175,10 +2246,10 @@ const NetworkTopologyPage = () => {
                         {navigationPath.length > 0 && (
                           <button
                             onClick={handleNavigateUp}
-                            className="ml-2 px-3 py-1 text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 rounded transition"
-                            title="Go up one level"
+                            className="ml-2 px-3 py-1 text-sm font-bold bg-blue-900 text-blue-100 hover:bg-blue-800 rounded transition border border-blue-700"
+                            title="Bir üst seviyeye çık"
                           >
-                            ← Back
+                            ← Geri
                           </button>
                         )}
                       </div>
@@ -2205,59 +2276,59 @@ const NetworkTopologyPage = () => {
                     fitView
                     attributionPosition="bottom-left"
                   >
-                    <Background color="#aaa" gap={16} />
-                    <Controls />
-                    <MiniMap />
+                    <Background color="#1e3a8a" gap={16} />
+                    <Controls className="bg-blue-900 border-blue-800 fill-white" />
+                    <MiniMap className="bg-[#000022] border-blue-900 shadow-2xl" maskColor="rgba(0, 0, 51, 0.7)" nodeColor="#3b82f6" />
                     
                     {/* Zoom Level Indicator for Logical View */}
                     {viewMode === 'logical' && (
-                      <Panel position="top-left" className="bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg shadow-lg p-4 min-w-[250px]">
+                      <Panel position="top-left" className="bg-[#000044] text-white rounded-lg shadow-lg p-4 min-w-[250px] border border-blue-900">
                         <div className="space-y-2">
                           <div className="flex items-center justify-between">
                             <h3 className="font-bold text-sm flex items-center space-x-2">
-                              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <svg className="h-5 w-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
                               </svg>
-                              <span>Progressive Zoom</span>
+                              <span>Kademeli Yakınlaştırma</span>
                             </h3>
-                            <span className="text-xs bg-white/20 px-2 py-1 rounded font-mono">{currentZoom.toFixed(2)}x</span>
+                            <span className="text-xs bg-blue-900 px-2 py-1 rounded font-mono border border-blue-800">{currentZoom.toFixed(2)}x</span>
                           </div>
                           
                           <div className="space-y-1 text-xs">
                             <div className={`flex items-center space-x-2 px-2 py-1 rounded transition ${
-                              currentZoom >= 0 && currentZoom < 0.4 ? 'bg-white/30 font-bold' : 'bg-white/10'
+                              currentZoom >= 0 && currentZoom < 0.4 ? 'bg-blue-600 font-bold' : 'bg-blue-900/30'
                             }`}>
                               <span className="w-2 h-2 rounded-full bg-white"></span>
-                              <span>🏢 Buildings (Always visible)</span>
+                              <span>🏢 Binalar (Her zaman görünür)</span>
                             </div>
                             <div className={`flex items-center space-x-2 px-2 py-1 rounded transition ${
-                              currentZoom >= 0.4 && currentZoom < 0.7 ? 'bg-white/30 font-bold' : shouldShowLevel('floor') ? 'bg-white/20' : 'bg-white/5 opacity-50'
+                              currentZoom >= 0.4 && currentZoom < 0.7 ? 'bg-blue-600 font-bold' : shouldShowLevel('floor') ? 'bg-blue-900/50' : 'bg-blue-900/10 opacity-50'
                             }`}>
                               <span className={`w-2 h-2 rounded-full ${shouldShowLevel('floor') ? 'bg-white' : 'bg-white/30'}`}></span>
-                              <span>📋 Floors (Zoom ≥ 0.4x)</span>
+                              <span>📋 Katlar (Zoom ≥ 0.4x)</span>
                             </div>
                             <div className={`flex items-center space-x-2 px-2 py-1 rounded transition ${
-                              currentZoom >= 0.7 && currentZoom < 1.0 ? 'bg-white/30 font-bold' : shouldShowLevel('room') ? 'bg-white/20' : 'bg-white/5 opacity-50'
+                              currentZoom >= 0.7 && currentZoom < 1.0 ? 'bg-blue-600 font-bold' : shouldShowLevel('room') ? 'bg-blue-900/50' : 'bg-blue-900/10 opacity-50'
                             }`}>
                               <span className={`w-2 h-2 rounded-full ${shouldShowLevel('room') ? 'bg-white' : 'bg-white/30'}`}></span>
-                              <span>🚪 Rooms (Zoom ≥ 0.7x)</span>
+                              <span>🚪 Odalar (Zoom ≥ 0.7x)</span>
                             </div>
                             <div className={`flex items-center space-x-2 px-2 py-1 rounded transition ${
-                              currentZoom >= 1.0 && currentZoom < 1.3 ? 'bg-white/30 font-bold' : shouldShowLevel('rack') ? 'bg-white/20' : 'bg-white/5 opacity-50'
+                              currentZoom >= 1.0 && currentZoom < 1.3 ? 'bg-blue-600 font-bold' : shouldShowLevel('rack') ? 'bg-blue-900/50' : 'bg-blue-900/10 opacity-50'
                             }`}>
                               <span className={`w-2 h-2 rounded-full ${shouldShowLevel('rack') ? 'bg-white' : 'bg-white/30'}`}></span>
-                              <span>📦 Racks (Zoom ≥ 1.0x)</span>
+                              <span>📦 Kabinetler (Zoom ≥ 1.0x)</span>
                             </div>
                             <div className={`flex items-center space-x-2 px-2 py-1 rounded transition ${
-                              currentZoom >= 1.3 ? 'bg-white/30 font-bold' : 'bg-white/5 opacity-50'
+                              currentZoom >= 1.3 ? 'bg-blue-600 font-bold' : 'bg-blue-900/10 opacity-50'
                             }`}>
                               <span className={`w-2 h-2 rounded-full ${shouldShowLevel('device') ? 'bg-white' : 'bg-white/30'}`}></span>
-                              <span>🔌 Devices (Zoom ≥ 1.3x)</span>
+                              <span>🔌 Cihazlar (Zoom ≥ 1.3x)</span>
                             </div>
                           </div>
                           
-                          <div className="text-xs mt-3 pt-2 border-t border-white/20">
-                            <p className="opacity-80">💡 Use mouse wheel to zoom in/out</p>
+                          <div className="text-xs mt-3 pt-2 border-t border-blue-800">
+                            <p className="opacity-80">💡 Yakınlaştırmak için fare tekerleğini kullanın</p>
                           </div>
                         </div>
                       </Panel>
@@ -2273,46 +2344,46 @@ const NetworkTopologyPage = () => {
                       </Panel>
                     )}
                     
-                    <Panel position="top-right" className="bg-white rounded-lg shadow-md p-4 max-h-80 overflow-y-auto">
+                    <Panel position="top-right" className="bg-[#000044] text-white rounded-lg shadow-md p-4 max-h-80 overflow-y-auto border border-blue-900">
                       <div className="space-y-3">
-                        <h3 className="font-bold text-gray-900 text-sm">Legend</h3>
+                        <h3 className="font-bold text-white text-sm">Gösterge</h3>
                         <div className="space-y-2 text-xs">
                           <div className="flex items-center space-x-2">
                             <div className="w-4 h-4 rounded border-2 border-blue-500"></div>
-                            <span className="text-gray-700">Physical Server</span>
+                            <span className="text-blue-200">Fiziksel Sunucu</span>
                           </div>
                           <div className="flex items-center space-x-2">
                             <div className="w-4 h-4 rounded border-2 border-green-500"></div>
-                            <span className="text-gray-700">Virtual Host</span>
+                            <span className="text-blue-200">Sanal Host</span>
                           </div>
                           <div className="flex items-center space-x-2">
                             <div className="w-4 h-4 rounded border-2 border-purple-500"></div>
-                            <span className="text-gray-700">VM/Router</span>
+                            <span className="text-blue-200">VM/Router</span>
                           </div>
                           <div className="flex items-center space-x-2">
                             <div className="w-4 h-4 rounded border-2 border-red-500"></div>
-                            <span className="text-gray-700">Firewall</span>
+                            <span className="text-blue-200">Güvenlik Duvarı</span>
                           </div>
                           <div className="flex items-center space-x-2">
                             <div className="w-4 h-4 rounded border-2 border-amber-500"></div>
-                            <span className="text-gray-700">Switch</span>
+                            <span className="text-blue-200">Switch</span>
                           </div>
                           <div className="flex items-center space-x-2">
                             <div className="w-4 h-4 rounded border-2 border-gray-500"></div>
-                            <span className="text-gray-700">Storage</span>
+                            <span className="text-blue-200">Depolama</span>
                           </div>
                           <div className="flex items-center space-x-2">
                             <div className="w-4 h-4 rounded border-2 border-cyan-500"></div>
-                            <span className="text-gray-700">Printer/Camera</span>
+                            <span className="text-blue-200">Yazıcı/Kamera</span>
                           </div>
-                          <hr className="my-2" />
+                          <hr className="my-2 border-blue-800" />
                           <div className="flex items-center space-x-2">
                             <div className="w-6 h-0.5 bg-green-500"></div>
-                            <span className="text-gray-700">UP</span>
+                            <span className="text-blue-200">AKTİF</span>
                           </div>
                           <div className="flex items-center space-x-2">
                             <div className="w-6 h-0.5 bg-red-500"></div>
-                            <span className="text-gray-700">DOWN</span>
+                            <span className="text-blue-200">PASİF</span>
                           </div>
                         </div>
                       </div>
@@ -2321,185 +2392,177 @@ const NetworkTopologyPage = () => {
                 </div>
 
                 {/* Sidebar */}
-                <div className="w-80 bg-white border-l border-gray-200 p-4 overflow-y-auto shadow-lg">
+                <div className="w-80 bg-[#000033] border-l border-blue-900 p-4 overflow-y-auto shadow-2xl">
                   {selectedNode ? (
                   selectedNode.data.isBuildingConnection ? (
                     // Building Connection details
                     <div>
-                      <div className="bg-gradient-to-r from-purple-600 to-purple-700 -m-4 mb-4 p-6 rounded-t-lg">
+                      <div className="bg-blue-900 -m-4 mb-4 p-6 border-b border-blue-800">
                         <div className="flex items-center space-x-3">
-                          <div className="bg-white bg-opacity-20 rounded-lg p-2 backdrop-blur-sm">
+                          <div className="bg-white/10 rounded-lg p-2">
                             <svg className="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                             </svg>
                           </div>
                           <div>
-                            <h2 className="text-xl font-bold text-white">Building Connection</h2>
-                            <p className="text-purple-100 text-sm">Inter-building connectivity</p>
+                            <h2 className="text-xl font-bold text-white">Bina Bağlantısı</h2>
+                            <p className="text-blue-300 text-sm">Binalar arası bağlantı detayı</p>
                           </div>
                         </div>
                       </div>
-
+                
                       {(() => {
                         const conn = selectedNode.data.buildingConnection;
-                        
+                                        
                         // Connection type visual metadata
                         const typeInfo: Record<string, { label: string; icon: string; color: string; bgColor: string; borderColor: string }> = {
-                          'FIBER_SINGLE_MODE': { label: 'Fiber Single-Mode', icon: '🔴', color: 'text-red-700', bgColor: 'bg-red-50', borderColor: 'border-red-200' },
-                          'FIBER_MULTI_MODE': { label: 'Fiber Multi-Mode', icon: '🟠', color: 'text-orange-700', bgColor: 'bg-orange-50', borderColor: 'border-orange-200' },
-                          'CAT5E': { label: 'Cat 5e Cable', icon: '📡', color: 'text-green-700', bgColor: 'bg-green-50', borderColor: 'border-green-200' },
-                          'CAT6': { label: 'Cat 6 Cable', icon: '📡', color: 'text-green-700', bgColor: 'bg-green-50', borderColor: 'border-green-200' },
-                          'CAT6A': { label: 'Cat 6a Cable', icon: '📡', color: 'text-green-800', bgColor: 'bg-green-50', borderColor: 'border-green-200' },
-                          'CAT7': { label: 'Cat 7 Cable', icon: '📡', color: 'text-green-800', bgColor: 'bg-green-50', borderColor: 'border-green-200' },
-                          'CAT8': { label: 'Cat 8 Cable', icon: '📡', color: 'text-green-900', bgColor: 'bg-green-50', borderColor: 'border-green-200' },
-                          'WIRELESS': { label: 'Wireless Link', icon: '📶', color: 'text-blue-700', bgColor: 'bg-blue-50', borderColor: 'border-blue-200' },
-                          'MICROWAVE': { label: 'Microwave Link', icon: '📡', color: 'text-purple-700', bgColor: 'bg-purple-50', borderColor: 'border-purple-200' },
-                          'LEASED_LINE': { label: 'Leased Line', icon: '🔗', color: 'text-yellow-700', bgColor: 'bg-yellow-50', borderColor: 'border-yellow-200' },
-                          'MPLS': { label: 'MPLS Network', icon: '🌐', color: 'text-cyan-700', bgColor: 'bg-cyan-50', borderColor: 'border-cyan-200' },
-                          'VPN': { label: 'VPN Tunnel', icon: '🔒', color: 'text-purple-700', bgColor: 'bg-purple-50', borderColor: 'border-purple-200' },
-                          'OTHER': { label: 'Other', icon: '❓', color: 'text-gray-700', bgColor: 'bg-gray-50', borderColor: 'border-gray-200' },
+                          'FIBER_SINGLE_MODE': { label: 'Tek Modlu Fiber', icon: '🔴', color: 'text-red-400', bgColor: 'bg-red-900/20', borderColor: 'border-red-800' },
+                          'FIBER_MULTI_MODE': { label: 'Çok Modlu Fiber', icon: '🟠', color: 'text-orange-400', bgColor: 'bg-orange-900/20', borderColor: 'border-orange-800' },
+                          'CAT5E': { label: 'Cat 5e Kablo', icon: '📡', color: 'text-green-400', bgColor: 'bg-green-900/20', borderColor: 'border-green-800' },
+                          'CAT6': { label: 'Cat 6 Kablo', icon: '📡', color: 'text-green-400', bgColor: 'bg-green-900/20', borderColor: 'border-green-800' },
+                          'CAT6A': { label: 'Cat 6a Kablo', icon: '📡', color: 'text-green-400', bgColor: 'bg-green-900/20', borderColor: 'border-green-800' },
+                          'CAT7': { label: 'Cat 7 Kablo', icon: '📡', color: 'text-green-400', bgColor: 'bg-green-900/20', borderColor: 'border-green-800' },
+                          'CAT8': { label: 'Cat 8 Kablo', icon: '📡', color: 'text-green-400', bgColor: 'bg-green-900/20', borderColor: 'border-green-800' },
+                          'WIRELESS': { label: 'Kablosuz Link', icon: '📶', color: 'text-blue-400', bgColor: 'bg-blue-900/20', borderColor: 'border-blue-800' },
+                          'MICROWAVE': { label: 'Radyolink', icon: '📡', color: 'text-purple-400', bgColor: 'bg-purple-900/20', borderColor: 'border-purple-800' },
+                          'LEASED_LINE': { label: 'Kiralık Hat', icon: '🔗', color: 'text-yellow-400', bgColor: 'bg-yellow-900/20', borderColor: 'border-yellow-800' },
+                          'MPLS': { label: 'MPLS Ağı', icon: '🌐', color: 'text-cyan-400', bgColor: 'bg-cyan-900/20', borderColor: 'border-cyan-800' },
+                          'VPN': { label: 'VPN Tüneli', icon: '🔒', color: 'text-purple-400', bgColor: 'bg-purple-900/20', borderColor: 'border-purple-800' },
+                          'OTHER': { label: 'Diğer', icon: '❓', color: 'text-gray-400', bgColor: 'bg-blue-900/20', borderColor: 'border-blue-800' },
                         };
-
+                
                         const info = typeInfo[conn.connectionType] || typeInfo['OTHER'];
-
+                
                         return (
                           <div className="space-y-5">
                             {/* Connection Path */}
-                            <div className="bg-white rounded-xl p-5 border-2 border-purple-100 shadow-sm">
+                            <div className="bg-blue-950 rounded-xl p-5 border border-blue-800 shadow-sm">
                               <div className="flex items-center justify-between">
                                 <div className="flex-1">
-                                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Source</p>
-                                  <p className="font-extrabold text-gray-900 text-lg">{conn.sourceBuilding?.name || 'Unknown'}</p>
-                                  <p className="text-sm text-gray-500 font-medium">{conn.sourceBuilding?.city || ''}</p>
+                                  <p className="text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-1">Kaynak</p>
+                                  <p className="font-extrabold text-white text-lg">{conn.sourceBuilding?.name || 'Bilinmiyor'}</p>
+                                  <p className="text-sm text-blue-300 font-medium">{conn.sourceBuilding?.city || ''}</p>
                                 </div>
                                 <div className="px-4">
-                                  <div className="bg-purple-100 rounded-full p-2">
-                                    <svg className="h-6 w-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <div className="bg-blue-900 rounded-full p-2">
+                                    <svg className="h-6 w-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M17 8l4 4m0 0l-4 4m4-4H3" />
                                     </svg>
                                   </div>
                                 </div>
                                 <div className="flex-1 text-right">
-                                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Destination</p>
-                                  <p className="font-extrabold text-gray-900 text-lg">{conn.destBuilding?.name || 'Unknown'}</p>
-                                  <p className="text-sm text-gray-500 font-medium">{conn.destBuilding?.city || ''}</p>
+                                  <p className="text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-1">Hedef</p>
+                                  <p className="font-extrabold text-white text-lg">{conn.destBuilding?.name || 'Bilinmiyor'}</p>
+                                  <p className="text-sm text-blue-300 font-medium">{conn.destBuilding?.city || ''}</p>
                                 </div>
                               </div>
                             </div>
-
+                
                             {/* Connection Type - High Visibility */}
-                            <div className={`${info.bgColor} ${info.borderColor} border-2 rounded-xl p-5 shadow-sm relative overflow-hidden`}>
-                              <div className="absolute right-[-10px] top-[-10px] opacity-10 text-6xl rotate-12">
-                                {info.icon}
-                              </div>
-                              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Primary Connection Type</p>
+                            <div className={`${info.bgColor} ${info.borderColor} border rounded-xl p-5 shadow-sm relative overflow-hidden`}>
+                              <p className="text-[10px] font-bold text-blue-300 uppercase tracking-wider mb-2">Bağlantı Tipi</p>
                               <div className="flex items-center space-x-3">
                                 <span className="text-4xl">{info.icon}</span>
                                 <div>
                                   <p className={`text-2xl font-black ${info.color}`}>{info.label}</p>
-                                  <p className="text-sm font-bold text-gray-500">{conn.status} Connection</p>
+                                  <p className="text-sm font-bold text-blue-300">{conn.status === 'ACTIVE' ? 'Aktif' : 'Pasif'} Bağlantı</p>
                                 </div>
                               </div>
                             </div>
-
+                
                             {/* Key Features Grid */}
                             <div className="grid grid-cols-2 gap-4">
                               {/* Bandwidth */}
-                              <div className="bg-blue-50 border-2 border-blue-100 rounded-xl p-4 shadow-sm">
+                              <div className="bg-blue-950 border border-blue-800 rounded-xl p-4 shadow-sm">
                                 <div className="flex items-center space-x-2 mb-1">
-                                  <svg className="h-5 w-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <svg className="h-5 w-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                                   </svg>
-                                  <p className="text-xs font-bold text-blue-700 uppercase tracking-wider">Speed</p>
+                                  <p className="text-xs font-bold text-blue-300 uppercase tracking-wider">Hız</p>
                                 </div>
-                                <p className="text-xl font-black text-blue-900">{conn.bandwidth || 'N/A'}</p>
+                                <p className="text-xl font-black text-white">{conn.bandwidth || 'Yok'}</p>
                               </div>
-
+                
                               {/* Distance */}
-                              <div className="bg-orange-50 border-2 border-orange-100 rounded-xl p-4 shadow-sm">
+                              <div className="bg-blue-950 border border-blue-800 rounded-xl p-4 shadow-sm">
                                 <div className="flex items-center space-x-2 mb-1">
-                                  <svg className="h-5 w-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <svg className="h-5 w-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                                   </svg>
-                                  <p className="text-xs font-bold text-orange-700 uppercase tracking-wider">Distance</p>
+                                  <p className="text-xs font-bold text-blue-300 uppercase tracking-wider">Mesafe</p>
                                 </div>
-                                <p className="text-xl font-black text-orange-900">{conn.distance ? `${conn.distance} km` : 'N/A'}</p>
+                                <p className="text-xl font-black text-white">{conn.distance ? `${conn.distance} km` : 'Yok'}</p>
                               </div>
                             </div>
-
+                
                             {/* Detailed Specs */}
                             <div className="space-y-3">
                               {conn.fiberType && (
-                                <div className="flex items-center justify-between bg-white border border-gray-200 rounded-lg px-4 py-3">
+                                <div className="flex items-center justify-between bg-blue-950 border border-blue-800 rounded-lg px-4 py-3">
                                   <div className="flex items-center space-x-2">
-                                    <span className="text-xl">🧵</span>
-                                    <span className="text-sm font-bold text-gray-600">Fiber Type</span>
+                                    <span className="text-sm font-bold text-blue-300">Fiber Tipi</span>
                                   </div>
-                                  <span className="text-sm font-black text-red-600 bg-red-50 px-3 py-1 rounded-full">{conn.fiberType}</span>
+                                  <span className="text-sm font-black text-white bg-blue-900 px-3 py-1 rounded-full">{conn.fiberType}</span>
                                 </div>
                               )}
-
+                
                               {conn.recordingMethod && (
-                                <div className="flex items-center justify-between bg-white border border-gray-200 rounded-lg px-4 py-3">
+                                <div className="flex items-center justify-between bg-blue-950 border border-blue-800 rounded-lg px-4 py-3">
                                   <div className="flex items-center space-x-2">
-                                    <span className="text-xl">{conn.recordingMethod === 'AUTO' ? '🤖' : '✍️'}</span>
-                                    <span className="text-sm font-bold text-gray-600">Recorded By</span>
+                                    <span className="text-sm font-bold text-blue-300">Kayıt Yöntemi</span>
                                   </div>
                                   <span className={`text-sm font-black px-3 py-1 rounded-full ${
-                                    conn.recordingMethod === 'AUTO' ? 'text-blue-700 bg-blue-50' : 'text-green-700 bg-green-50'
+                                    conn.recordingMethod === 'AUTO' ? 'text-blue-200 bg-blue-800' : 'text-emerald-200 bg-emerald-900/40'
                                   }`}>
-                                    {conn.recordingMethod === 'AUTO' ? 'Automatic' : 'Manual'}
+                                    {conn.recordingMethod === 'AUTO' ? 'Otomatik' : 'Manuel'}
                                   </span>
                                 </div>
                               )}
                             </div>
-
+                
                             {/* Provider Information */}
                             {(conn.provider || conn.circuitId) && (
-                              <div className="bg-gradient-to-br from-indigo-600 to-blue-700 rounded-xl p-5 text-white shadow-md relative overflow-hidden">
-                                <div className="absolute right-[-10px] bottom-[-10px] opacity-10 text-6xl">
-                                  🏢
-                                </div>
-                                <p className="text-xs font-bold text-indigo-100 uppercase tracking-wider mb-3">Service Provider Details</p>
+                              <div className="bg-blue-900 rounded-xl p-5 text-white border border-blue-700 relative overflow-hidden">
+                                <p className="text-xs font-bold text-blue-200 uppercase tracking-wider mb-3">Servis Sağlayıcı Detayları</p>
                                 <div className="space-y-3">
                                   {conn.provider && (
                                     <div>
-                                      <p className="text-xs text-indigo-200 font-medium">Provider Name</p>
+                                      <p className="text-xs text-blue-300 font-medium">Sağlayıcı Adı</p>
                                       <p className="text-lg font-black">{conn.provider}</p>
                                     </div>
                                   )}
                                   {conn.circuitId && (
                                     <div>
-                                      <p className="text-xs text-indigo-200 font-medium">Circuit / ID</p>
-                                      <p className="text-sm font-mono bg-white bg-opacity-10 rounded px-2 py-1 inline-block mt-1">{conn.circuitId}</p>
+                                      <p className="text-xs text-blue-300 font-medium">Devre / ID</p>
+                                      <p className="text-sm font-mono bg-blue-950 rounded px-2 py-1 inline-block mt-1">{conn.circuitId}</p>
                                     </div>
                                   )}
                                 </div>
                               </div>
                             )}
-
+                
                             {/* Additional Metadata */}
-                            <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 space-y-4">
+                            <div className="bg-blue-950 rounded-xl p-4 border border-blue-800 space-y-4">
                               {conn.cableSpecs && (
                                 <div>
-                                  <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Cable Specifications</p>
-                                  <p className="text-sm text-gray-800 font-medium leading-relaxed">{conn.cableSpecs}</p>
+                                  <p className="text-xs font-bold text-blue-400 uppercase tracking-wider mb-1">Kablo Özellikleri</p>
+                                  <p className="text-sm text-blue-100 font-medium leading-relaxed">{conn.cableSpecs}</p>
                                 </div>
                               )}
                               {conn.notes && (
                                 <div>
-                                  <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Administrator Notes</p>
-                                  <p className="text-sm text-gray-800 font-medium italic leading-relaxed">"{conn.notes}"</p>
+                                  <p className="text-xs font-bold text-blue-400 uppercase tracking-wider mb-1">Yönetici Notları</p>
+                                  <p className="text-sm text-blue-100 font-medium italic leading-relaxed">"{conn.notes}"</p>
                                 </div>
                               )}
                             </div>
-
+                
                             {/* Action Footer */}
-                            <div className="flex items-center justify-between pt-4 border-t border-gray-200">
-                              <div className="text-[10px] text-gray-400 font-medium">
-                                <p>Created: {new Date(conn.createdAt).toLocaleDateString()}</p>
+                            <div className="flex items-center justify-between pt-4 border-t border-blue-900">
+                              <div className="text-[10px] text-blue-400 font-medium">
+                                <p>Oluşturma: {new Date(conn.createdAt).toLocaleDateString('tr-TR')}</p>
                                 {conn.updatedAt && (
-                                  <p>Last Update: {new Date(conn.updatedAt).toLocaleDateString()}</p>
+                                  <p>Güncelleme: {new Date(conn.updatedAt).toLocaleDateString('tr-TR')}</p>
                                 )}
                               </div>
                               <button
@@ -2507,12 +2570,12 @@ const NetworkTopologyPage = () => {
                                   setBuildingConnectionToEdit(conn);
                                   setShowBuildingConnectionModal(true);
                                 }}
-                                className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg shadow-sm transition-all text-sm font-black flex items-center space-x-2"
+                                className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg shadow-sm transition-all text-sm font-bold flex items-center space-x-2"
                               >
                                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                 </svg>
-                                <span>Edit Connection</span>
+                                <span>Düzenle</span>
                               </button>
                             </div>
                           </div>
@@ -2522,131 +2585,108 @@ const NetworkTopologyPage = () => {
                   ) : selectedNode.data.isGroup ? (
                     // Group node details (Building, Floor, Room, Rack)
                     <div>
-                      <h2 className="text-xl font-bold text-gray-900 mb-4 pb-3 border-b border-gray-200">
-                        {selectedNode.data.hierarchyLevel === 'building' ? 'Building' :
-                         selectedNode.data.hierarchyLevel === 'floor' ? 'Floor' :
-                         selectedNode.data.hierarchyLevel === 'room' ? 'Room' :
-                         selectedNode.data.hierarchyLevel === 'rack' ? 'Rack' : 'Details'}
+                      <h2 className="text-xl font-bold text-white mb-4 pb-3 border-b border-blue-800">
+                        {selectedNode.data.hierarchyLevel === 'building' ? 'Bina' :
+                         selectedNode.data.hierarchyLevel === 'floor' ? 'Kat' :
+                         selectedNode.data.hierarchyLevel === 'room' ? 'Oda' :
+                         selectedNode.data.hierarchyLevel === 'rack' ? 'Kabinet' : 'Detaylar'}
                       </h2>
                       <div className="space-y-4">
                         <div>
-                          <p className="text-sm font-semibold text-gray-600 uppercase">Name</p>
-                          <p className="font-bold text-gray-900 text-lg mt-1">{selectedNode.data.label}</p>
+                          <p className="text-sm font-semibold text-blue-400 uppercase">Ad</p>
+                          <p className="font-bold text-white text-lg mt-1">{selectedNode.data.label}</p>
                         </div>
                         {selectedNode.data.deviceCount !== undefined && (
                           <div>
-                            <p className="text-sm font-semibold text-gray-600 uppercase">Devices</p>
-                            <p className="font-medium text-gray-800 mt-1">{selectedNode.data.deviceCount} device(s)</p>
+                            <p className="text-sm font-semibold text-blue-400 uppercase">Cihazlar</p>
+                            <p className="font-medium text-blue-100 mt-1">{selectedNode.data.deviceCount} cihaz</p>
                           </div>
                         )}
                         {selectedNode.data.isEmpty && (
-                          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                            <p className="text-sm text-yellow-800">No devices assigned to this location yet.</p>
+                          <div className="bg-blue-900/30 border border-blue-800 rounded-lg p-3">
+                            <p className="text-sm text-blue-200">Bu konuma henüz cihaz atanmamış.</p>
                           </div>
                         )}
                       </div>
                     </div>
                   ) : (
-                    // Device details - Modern design with icons
+                    // Device details
                     <div>
-                      {/* Header with gradient */}
-                      <div className="bg-gradient-to-r from-blue-600 to-blue-700 -m-4 mb-4 p-6 rounded-t-lg">
+                      <div className="bg-blue-900 -m-4 mb-4 p-6 border-b border-blue-800">
                         <div className="flex items-center space-x-3">
-                          <div className="bg-white bg-opacity-20 rounded-lg p-2 backdrop-blur-sm">
+                          <div className="bg-white/10 rounded-lg p-2">
                             <svg className="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
                             </svg>
                           </div>
                           <div>
                             <h2 className="text-xl font-bold text-white">{selectedNode.data.label}</h2>
-                            <p className="text-blue-100 text-sm">{selectedNode.data.type?.replace(/_/g, ' ') || 'Device'}</p>
+                            <p className="text-blue-300 text-sm">{selectedNode.data.type?.replace(/_/g, ' ') || 'Cihaz'}</p>
                           </div>
                         </div>
                       </div>
-
-                      {/* Key metrics cards */}
+                
                       <div className="grid grid-cols-2 gap-3 mb-4">
                         {/* Status Card */}
-                        <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-3 border border-green-200">
+                        <div className="bg-blue-950 rounded-lg p-3 border border-blue-800">
                           <div className="flex items-center space-x-2 mb-1">
-                            <svg className="h-4 w-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                            </svg>
-                            <p className="text-xs font-semibold text-green-700 uppercase">Status</p>
+                            <p className="text-xs font-semibold text-blue-400 uppercase">Durum</p>
                           </div>
-                          <p className={`text-sm font-bold ${selectedNode.data.status === 'ACTIVE' ? 'text-green-700' : 'text-gray-600'}`}>
-                            {selectedNode.data.status || 'N/A'}
+                          <p className={`text-sm font-bold ${selectedNode.data.status === 'ACTIVE' ? 'text-emerald-400' : 'text-blue-200'}`}>
+                            {selectedNode.data.status === 'ACTIVE' ? 'AKTİF' : selectedNode.data.status || 'YOK'}
                           </p>
                         </div>
-
+                
                         {/* Criticality Card */}
-                        <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-lg p-3 border border-red-200">
+                        <div className="bg-blue-950 rounded-lg p-3 border border-blue-800">
                           <div className="flex items-center space-x-2 mb-1">
-                            <svg className="h-4 w-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                            </svg>
-                            <p className="text-xs font-semibold text-red-700 uppercase">Priority</p>
+                            <p className="text-xs font-semibold text-blue-400 uppercase">Öncelik</p>
                           </div>
-                          <p className="text-sm font-bold text-red-700">{selectedNode.data.criticality || 'N/A'}</p>
+                          <p className="text-sm font-bold text-white">{selectedNode.data.criticality || 'YOK'}</p>
                         </div>
-
+                
                         {/* Services Card */}
-                        <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-3 border border-blue-200">
+                        <div className="bg-blue-950 rounded-lg p-3 border border-blue-800">
                           <div className="flex items-center space-x-2 mb-1">
-                            <svg className="h-4 w-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
-                            </svg>
-                            <p className="text-xs font-semibold text-blue-700 uppercase">Services</p>
+                            <p className="text-xs font-semibold text-blue-400 uppercase">Servisler</p>
                           </div>
-                          <p className="text-sm font-bold text-blue-700">{selectedNode.data.serviceCount || 0} running</p>
+                          <p className="text-sm font-bold text-white">{selectedNode.data.serviceCount || 0} aktif</p>
                         </div>
-
+                
                         {/* Interfaces Card */}
-                        <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-3 border border-purple-200">
+                        <div className="bg-blue-950 rounded-lg p-3 border border-blue-800">
                           <div className="flex items-center space-x-2 mb-1">
-                            <svg className="h-4 w-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                            </svg>
-                            <p className="text-xs font-semibold text-purple-700 uppercase">Interfaces</p>
+                            <p className="text-xs font-semibold text-blue-400 uppercase">Arayüzler</p>
                           </div>
-                          <p className="text-sm font-bold text-purple-700">{selectedNode.data.interfaceCount || 0} ports</p>
+                          <p className="text-sm font-bold text-white">{selectedNode.data.interfaceCount || 0} port</p>
                         </div>
                       </div>
-
-                      {/* Network Interfaces Section */}
+                
                       {selectedNode.data.interfaceCount > 0 && (
                         <div className="mb-4">
                           <div className="flex items-center space-x-2 mb-3">
-                            <svg className="h-5 w-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
-                            </svg>
-                            <h3 className="text-sm font-bold text-gray-900 uppercase">Network Interfaces</h3>
+                            <h3 className="text-sm font-bold text-white uppercase">Ağ Arayüzleri</h3>
                           </div>
                           {selectedNode.data.interfaces && selectedNode.data.interfaces.length > 0 && (
                             <div className="space-y-2">
                               {selectedNode.data.interfaces.map((iface: any, idx: number) => (
-                                <div key={idx} className="bg-white border border-gray-200 rounded-lg p-3 hover:shadow-md transition">
+                                <div key={idx} className="bg-blue-950 border border-blue-800 rounded-lg p-3 hover:bg-blue-900 transition">
                                   <div className="flex items-center justify-between">
-                                    <div className="flex items-center space-x-2">
-                                      <svg className="h-4 w-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                                      </svg>
-                                      <span className="font-semibold text-sm text-gray-900">{iface.name}</span>
-                                    </div>
-                                    <span className={`px-2 py-1 rounded-full text-xs font-bold ${
-                                      iface.status === 'UP' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
+                                    <span className="font-semibold text-sm text-white">{iface.name}</span>
+                                    <span className={`px-2 py-1 rounded-full text-[10px] font-bold ${
+                                      iface.status === 'UP' ? 'bg-emerald-900 text-emerald-300' : 'bg-red-900 text-red-300'
                                     }`}>
                                       {iface.status}
                                     </span>
                                   </div>
                                   {iface.ipv4 && (
-                                    <p className="text-xs text-gray-600 mt-1 ml-6">
-                                      <span className="font-medium">IP:</span> {iface.ipv4}
+                                    <p className="text-xs text-blue-300 mt-1">
+                                      <span className="font-medium text-blue-400">IP:</span> {iface.ipv4}
                                     </p>
                                   )}
                                   {iface.macAddress && (
-                                    <p className="text-xs text-gray-600 ml-6">
-                                      <span className="font-medium">MAC:</span> {iface.macAddress}
+                                    <p className="text-xs text-blue-300">
+                                      <span className="font-medium text-blue-400">MAC:</span> {iface.macAddress}
                                     </p>
                                   )}
                                 </div>
@@ -2655,58 +2695,43 @@ const NetworkTopologyPage = () => {
                           )}
                         </div>
                       )}
-
-                      {/* Location Section */}
+                
                       {(selectedNode.data.building || selectedNode.data.rack) && (
-                        <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                        <div className="bg-blue-950 rounded-lg p-4 border border-blue-800">
                           <div className="flex items-center space-x-2 mb-3">
-                            <svg className="h-5 w-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                            </svg>
-                            <h3 className="text-sm font-bold text-gray-900 uppercase">Physical Location</h3>
+                            <h3 className="text-sm font-bold text-white uppercase">Fiziksel Konum</h3>
                           </div>
-                          {selectedNode.data.building && (
-                            <div className="space-y-2">
-                              <div className="flex items-center space-x-2">
-                                <svg className="h-4 w-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                                </svg>
-                                <span className="text-sm"><span className="font-semibold text-gray-700">Building:</span> <span className="text-gray-600">{selectedNode.data.building}</span></span>
-                              </div>
-                              <div className="flex items-center space-x-2">
-                                <svg className="h-4 w-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 11l5-5m0 0l5 5m-5-5v12" />
-                                </svg>
-                                <span className="text-sm"><span className="font-semibold text-gray-700">Floor:</span> <span className="text-gray-600">{selectedNode.data.floor}</span></span>
-                              </div>
-                              <div className="flex items-center space-x-2">
-                                <svg className="h-4 w-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-                                </svg>
-                                <span className="text-sm"><span className="font-semibold text-gray-700">Room:</span> <span className="text-gray-600">{selectedNode.data.room}</span></span>
-                              </div>
-                              <div className="flex items-center space-x-2">
-                                <svg className="h-4 w-4 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-                                </svg>
-                                <span className="text-sm"><span className="font-semibold text-gray-700">Rack:</span> <span className="text-gray-600">{selectedNode.data.rack}</span></span>
-                              </div>
+                          <div className="space-y-2 text-sm">
+                            <div className="flex justify-between">
+                              <span className="text-blue-400">Bina:</span>
+                              <span className="text-white">{selectedNode.data.building || '-'}</span>
                             </div>
-                          )}
+                            <div className="flex justify-between">
+                              <span className="text-blue-400">Kat:</span>
+                              <span className="text-white">{selectedNode.data.floor || '-'}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-blue-400">Oda:</span>
+                              <span className="text-white">{selectedNode.data.room || '-'}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-blue-400">Kabinet:</span>
+                              <span className="text-white">{selectedNode.data.rack || '-'}</span>
+                            </div>
+                          </div>
                         </div>
                       )}
                     </div>
                   )
                   ) : (
                     <div className="text-center mt-12">
-                      <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-full p-6 w-24 h-24 mx-auto mb-4 flex items-center justify-center">
-                        <svg className="h-12 w-12 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <div className="bg-blue-950 rounded-full p-6 w-24 h-24 mx-auto mb-4 flex items-center justify-center border border-blue-800">
+                        <svg className="h-12 w-12 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
                         </svg>
                       </div>
-                      <h3 className="text-lg font-bold text-gray-900 mb-2">No Selection</h3>
-                      <p className="text-sm text-gray-600 max-w-xs mx-auto">Click on any device or container in the topology view to see detailed information</p>
+                      <h3 className="text-lg font-bold text-white mb-2">Seçim Yapılmadı</h3>
+                      <p className="text-sm text-blue-300 max-w-xs mx-auto">Detaylı bilgileri görmek için topolojideki bir cihaza veya konuma tıklayın.</p>
                     </div>
                   )}
                 </div>
@@ -2764,6 +2789,101 @@ const NetworkTopologyPage = () => {
           }))}
           onCreateConnection={handleCreateConnection}
         />
+
+        {/* Building Detail Popup */}
+        {selectedBuildingForPopup && (
+          <BuildingDetailPopup
+            building={selectedBuildingForPopup}
+            devices={devices.filter(d => d.rack?.room?.floor?.building?.id === selectedBuildingForPopup.id)}
+            onClose={() => setSelectedBuildingForPopup(null)}
+          />
+        )}
+      </div>
+    </div>
+  );
+};
+
+// Building Detail Popup Component
+interface BuildingDetailPopupProps {
+  building: Building;
+  devices: Device[];
+  onClose: () => void;
+}
+
+const BuildingDetailPopup: React.FC<BuildingDetailPopupProps> = ({ building, devices, onClose }) => {
+  return (
+    <div className="fixed inset-0 bg-[#000033]/80 backdrop-blur-md flex items-center justify-center z-[10001] p-4">
+      <div className="bg-[#000044] rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col border border-blue-900">
+        <div className="bg-blue-900 p-6 flex items-center justify-between border-b border-blue-800">
+          <div>
+            <h2 className="text-2xl font-bold text-white mb-1">{building.name}</h2>
+            <p className="text-blue-200 text-sm flex items-center gap-2">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              {building.city || 'Konum Bilinmiyor'}
+            </p>
+          </div>
+          <button onClick={onClose} className="text-white hover:bg-blue-800 p-2 rounded-xl transition border border-blue-700">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+            <div className="bg-blue-950 p-4 rounded-xl border border-blue-800">
+              <div className="text-sm text-blue-400 font-bold uppercase tracking-wider mb-1">Cihazlar</div>
+              <div className="text-3xl font-black text-white">{devices.length}</div>
+            </div>
+            <div className="bg-emerald-900/20 p-4 rounded-xl border border-emerald-900/50">
+              <div className="text-sm text-emerald-400 font-bold uppercase tracking-wider mb-1">Aktif</div>
+              <div className="text-3xl font-black text-emerald-400">
+                {devices.filter(d => d.status === 'ACTIVE').length}
+              </div>
+            </div>
+            <div className="bg-amber-900/20 p-4 rounded-xl border border-amber-900/50">
+              <div className="text-sm text-amber-400 font-bold uppercase tracking-wider mb-1">Sorunlu</div>
+              <div className="text-3xl font-black text-amber-400">
+                {devices.filter(d => d.status !== 'ACTIVE').length}
+              </div>
+            </div>
+          </div>
+
+          <h3 className="text-lg font-bold text-white mb-4 px-1">Cihaz Envanteri</h3>
+          <div className="space-y-3">
+            {devices.length === 0 ? (
+              <div className="text-center py-12 text-blue-400 bg-blue-950/50 rounded-xl border-2 border-dashed border-blue-900">
+                Bu binada henüz cihaz bulunamadı
+              </div>
+            ) : (
+              devices.map(device => (
+                <div key={device.id} className="flex items-center justify-between p-4 rounded-xl bg-blue-950 border border-blue-800 hover:border-blue-500 transition">
+                  <div className="flex items-center gap-4">
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                      device.status === 'ACTIVE' ? 'bg-emerald-900/40 text-emerald-400' : 'bg-red-900/40 text-red-400'
+                    }`}>
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <div className="font-bold text-white">{device.name}</div>
+                      <div className="text-xs text-blue-400 font-medium uppercase tracking-tighter">{device.type} • {device.rack?.room?.name || 'Oda Yok'}</div>
+                    </div>
+                  </div>
+                  <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${
+                    device.status === 'ACTIVE' ? 'bg-emerald-900 text-emerald-300' : 'bg-red-900 text-red-300'
+                  }`}>
+                    {device.status}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -2821,19 +2941,19 @@ const BuildingConnectionModal: React.FC<BuildingConnectionModalProps> = ({
   const [error, setError] = useState<string | null>(null);
 
   const connectionTypes = [
-    { value: 'FIBER_SINGLE_MODE', label: 'Fiber Single-Mode', icon: '🔴' },
-    { value: 'FIBER_MULTI_MODE', label: 'Fiber Multi-Mode', icon: '🟠' },
-    { value: 'CAT5E', label: 'Cat 5e Cable', icon: '📡' },
-    { value: 'CAT6', label: 'Cat 6 Cable', icon: '📡' },
-    { value: 'CAT6A', label: 'Cat 6a Cable', icon: '📡' },
-    { value: 'CAT7', label: 'Cat 7 Cable', icon: '📡' },
-    { value: 'CAT8', label: 'Cat 8 Cable', icon: '📡' },
-    { value: 'WIRELESS', label: 'Wireless', icon: '📶' },
-    { value: 'MICROWAVE', label: 'Microwave Link', icon: '📡' },
-    { value: 'LEASED_LINE', label: 'Leased Line', icon: '🔗' },
-    { value: 'MPLS', label: 'MPLS Network', icon: '🌐' },
-    { value: 'VPN', label: 'VPN Tunnel', icon: '🔒' },
-    { value: 'OTHER', label: 'Other', icon: '❓' },
+    { value: 'FIBER_SINGLE_MODE', label: 'Tek Modlu Fiber', icon: '🔴' },
+    { value: 'FIBER_MULTI_MODE', label: 'Çok Modlu Fiber', icon: '🟠' },
+    { value: 'CAT5E', label: 'Cat 5e Kablo', icon: '📡' },
+    { value: 'CAT6', label: 'Cat 6 Kablo', icon: '📡' },
+    { value: 'CAT6A', label: 'Cat 6a Kablo', icon: '📡' },
+    { value: 'CAT7', label: 'Cat 7 Kablo', icon: '📡' },
+    { value: 'CAT8', label: 'Cat 8 Kablo', icon: '📡' },
+    { value: 'WIRELESS', label: 'Kablosuz', icon: '📶' },
+    { value: 'MICROWAVE', label: 'Radyolink', icon: '📡' },
+    { value: 'LEASED_LINE', label: 'Kiralık Hat', icon: '🔗' },
+    { value: 'MPLS', label: 'MPLS Ağı', icon: '🌐' },
+    { value: 'VPN', label: 'VPN Tüneli', icon: '🔒' },
+    { value: 'OTHER', label: 'Diğer', icon: '❓' },
   ];
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -2858,35 +2978,35 @@ const BuildingConnectionModal: React.FC<BuildingConnectionModalProps> = ({
       if (response.success) {
         onSuccess();
       } else {
-        setError(response.error || `Failed to ${connection?.id ? 'update' : 'create'} connection`);
+        setError(response.error || `Bağlantı ${connection?.id ? 'güncellenemedi' : 'oluşturulamadı'}`);
       }
     } catch (err: any) {
-      setError(err.response?.data?.error || err.message || `Failed to ${connection?.id ? 'update' : 'create'} connection`);
+      setError(err.response?.data?.error || err.message || `Bağlantı ${connection?.id ? 'güncellenemedi' : 'oluşturulamadı'}`);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[10001] p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-[#000033]/80 backdrop-blur-md flex items-center justify-center z-[10001] p-4">
+      <div className="bg-[#000044] rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto border border-blue-900">
         {/* Header */}
-        <div className="bg-gradient-to-r from-purple-600 to-purple-700 p-6 rounded-t-lg">
+        <div className="bg-blue-900 p-6 rounded-t-lg border-b border-blue-800">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <div className="bg-white bg-opacity-20 rounded-lg p-2 backdrop-blur-sm">
+              <div className="bg-white/10 rounded-lg p-2">
                 <svg className="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
               </div>
               <div>
-                <h2 className="text-xl font-bold text-white">{connection?.id ? 'Edit' : 'Add'} Building Connection</h2>
-                <p className="text-purple-100 text-sm">{connection?.id ? 'Update existing' : 'Create new'} inter-building connectivity</p>
+                <h2 className="text-xl font-bold text-white">Bina Bağlantısı {connection?.id ? 'Düzenle' : 'Ekle'}</h2>
+                <p className="text-blue-300 text-sm">Binalar arası fiziksel veya mantıksal bağlantı</p>
               </div>
             </div>
             <button
               onClick={onClose}
-              className="text-white hover:bg-white hover:bg-opacity-20 rounded-lg p-2 transition"
+              className="text-white hover:bg-blue-800 rounded-lg p-2 transition border border-blue-700"
             >
               <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -2898,24 +3018,24 @@ const BuildingConnectionModal: React.FC<BuildingConnectionModalProps> = ({
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6">
           {error && (
-            <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-4">
-              <p className="text-red-800 text-sm">{error}</p>
+            <div className="mb-4 bg-red-900/20 border border-red-800 rounded-lg p-4">
+              <p className="text-red-400 text-sm">{error}</p>
             </div>
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Source Building */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Source Building *
+              <label className="block text-sm font-semibold text-blue-300 mb-2">
+                Kaynak Bina *
               </label>
               <select
                 required
                 value={formData.sourceBuildingId}
                 onChange={(e) => setFormData({ ...formData, sourceBuildingId: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                className="w-full px-4 py-2 bg-blue-950 border border-blue-800 rounded-lg text-white focus:ring-2 focus:ring-blue-500 outline-none"
               >
-                <option value="">Select source building</option>
+                <option value="">Kaynak bina seçin</option>
                 {buildings.map((building) => (
                   <option key={building.id} value={building.id}>
                     {building.name} {building.city ? `(${building.city})` : ''}
@@ -2926,16 +3046,16 @@ const BuildingConnectionModal: React.FC<BuildingConnectionModalProps> = ({
 
             {/* Destination Building */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Destination Building *
+              <label className="block text-sm font-semibold text-blue-300 mb-2">
+                Hedef Bina *
               </label>
               <select
                 required
                 value={formData.destBuildingId}
                 onChange={(e) => setFormData({ ...formData, destBuildingId: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                className="w-full px-4 py-2 bg-blue-950 border border-blue-800 rounded-lg text-white focus:ring-2 focus:ring-blue-500 outline-none"
               >
-                <option value="">Select destination building</option>
+                <option value="">Hedef bina seçin</option>
                 {buildings
                   .filter((b) => b.id !== formData.sourceBuildingId)
                   .map((building) => (
@@ -2948,8 +3068,8 @@ const BuildingConnectionModal: React.FC<BuildingConnectionModalProps> = ({
 
             {/* Connection Type */}
             <div className="md:col-span-2">
-              <label className="block text-sm font-semibold text-gray-700 mb-3">
-                Connection Type *
+              <label className="block text-sm font-semibold text-blue-300 mb-3">
+                Bağlantı Tipi *
               </label>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 {connectionTypes.map((type) => (
@@ -2959,13 +3079,13 @@ const BuildingConnectionModal: React.FC<BuildingConnectionModalProps> = ({
                     onClick={() => setFormData({ ...formData, connectionType: type.value })}
                     className={`p-3 border-2 rounded-lg text-left transition ${
                       formData.connectionType === type.value
-                        ? 'border-purple-500 bg-purple-50'
-                        : 'border-gray-200 hover:border-purple-300'
+                        ? 'border-blue-500 bg-blue-900/40'
+                        : 'border-blue-800 bg-blue-950/20 hover:border-blue-600'
                     }`}
                   >
                     <div className="flex items-center space-x-2">
                       <span className="text-2xl">{type.icon}</span>
-                      <span className="text-sm font-medium text-gray-900">{type.label}</span>
+                      <span className="text-sm font-medium text-white">{type.label}</span>
                     </div>
                   </button>
                 ))}
@@ -2974,137 +3094,137 @@ const BuildingConnectionModal: React.FC<BuildingConnectionModalProps> = ({
 
             {/* Bandwidth */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Bandwidth
+              <label className="block text-sm font-semibold text-blue-300 mb-2">
+                Bant Genişliği
               </label>
               <input
                 type="text"
-                placeholder="e.g., 10Gbps, 1Gbps"
+                placeholder="Örn: 10Gbps, 1Gbps"
                 value={formData.bandwidth}
                 onChange={(e) => setFormData({ ...formData, bandwidth: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                className="w-full px-4 py-2 bg-blue-950 border border-blue-800 rounded-lg text-white placeholder-blue-700 focus:ring-2 focus:ring-blue-500 outline-none"
               />
             </div>
 
             {/* Distance */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Distance (km)
+              <label className="block text-sm font-semibold text-blue-300 mb-2">
+                Mesafe (km)
               </label>
               <input
                 type="number"
                 step="0.01"
-                placeholder="Distance in kilometers"
+                placeholder="Kilometre cinsinden"
                 value={formData.distance}
                 onChange={(e) => setFormData({ ...formData, distance: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                className="w-full px-4 py-2 bg-blue-950 border border-blue-800 rounded-lg text-white placeholder-blue-700 focus:ring-2 focus:ring-blue-500 outline-none"
               />
             </div>
 
             {/* Fiber Type */}
             {(formData.connectionType === 'FIBER_SINGLE_MODE' || formData.connectionType === 'FIBER_MULTI_MODE') && (
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Fiber Type
+                <label className="block text-sm font-semibold text-blue-300 mb-2">
+                  Fiber Tipi
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g., OS2, OM3, OM4"
+                  placeholder="Örn: OS2, OM3, OM4"
                   value={formData.fiberType}
                   onChange={(e) => setFormData({ ...formData, fiberType: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  className="w-full px-4 py-2 bg-blue-950 border border-blue-800 rounded-lg text-white placeholder-blue-700 focus:ring-2 focus:ring-blue-500 outline-none"
                 />
               </div>
             )}
 
             {/* Cable Specs */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Cable Specifications
+              <label className="block text-sm font-semibold text-blue-300 mb-2">
+                Kablo Özellikleri
               </label>
               <input
                 type="text"
-                placeholder="Additional cable specs"
+                placeholder="Ek kablo detayları"
                 value={formData.cableSpecs}
                 onChange={(e) => setFormData({ ...formData, cableSpecs: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                className="w-full px-4 py-2 bg-blue-950 border border-blue-800 rounded-lg text-white placeholder-blue-700 focus:ring-2 focus:ring-blue-500 outline-none"
               />
             </div>
 
             {/* Provider */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Provider
+              <label className="block text-sm font-semibold text-blue-300 mb-2">
+                Sağlayıcı
               </label>
               <input
                 type="text"
-                placeholder="ISP or provider name"
+                placeholder="ISS veya sağlayıcı adı"
                 value={formData.provider}
                 onChange={(e) => setFormData({ ...formData, provider: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                className="w-full px-4 py-2 bg-blue-950 border border-blue-800 rounded-lg text-white placeholder-blue-700 focus:ring-2 focus:ring-blue-500 outline-none"
               />
             </div>
 
             {/* Circuit ID */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Circuit ID
+              <label className="block text-sm font-semibold text-blue-300 mb-2">
+                Devre ID
               </label>
               <input
                 type="text"
-                placeholder="Circuit/Service ID"
+                placeholder="Devre / Servis ID"
                 value={formData.circuitId}
                 onChange={(e) => setFormData({ ...formData, circuitId: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                className="w-full px-4 py-2 bg-blue-950 border border-blue-800 rounded-lg text-white placeholder-blue-700 focus:ring-2 focus:ring-blue-500 outline-none"
               />
             </div>
 
             {/* Status */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Status
+              <label className="block text-sm font-semibold text-blue-300 mb-2">
+                Durum
               </label>
               <select
                 value={formData.status}
                 onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                className="w-full px-4 py-2 bg-blue-950 border border-blue-800 rounded-lg text-white focus:ring-2 focus:ring-blue-500 outline-none"
               >
-                <option value="ACTIVE">Active</option>
-                <option value="INACTIVE">Inactive</option>
-                <option value="MAINTENANCE">Maintenance</option>
-                <option value="PLANNED">Planned</option>
-                <option value="DECOMMISSIONED">Decommissioned</option>
+                <option value="ACTIVE">Aktif</option>
+                <option value="INACTIVE">Pasif</option>
+                <option value="MAINTENANCE">Bakımda</option>
+                <option value="PLANNED">Planlandı</option>
+                <option value="DECOMMISSIONED">İptal Edildi</option>
               </select>
             </div>
 
             {/* Notes */}
             <div className="md:col-span-2">
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Notes
+              <label className="block text-sm font-semibold text-blue-300 mb-2">
+                Notlar
               </label>
               <textarea
                 rows={3}
-                placeholder="Additional notes about this connection"
+                placeholder="Bu bağlantı hakkında ek notlar"
                 value={formData.notes}
                 onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                className="w-full px-4 py-2 bg-blue-950 border border-blue-800 rounded-lg text-white placeholder-blue-700 focus:ring-2 focus:ring-blue-500 outline-none"
               />
             </div>
           </div>
 
           {/* Existing Connections Info */}
           {existingConnections.length > 0 && (
-            <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="mt-6 bg-blue-900/20 border border-blue-800 rounded-lg p-4">
               <div className="flex items-start space-x-3">
-                <svg className="h-5 w-5 text-blue-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="h-5 w-5 text-blue-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <div>
-                  <p className="text-sm font-semibold text-blue-900 mb-1">
-                    {existingConnections.length} existing connection(s)
+                  <p className="text-sm font-semibold text-blue-200 mb-1">
+                    {existingConnections.length} mevcut bağlantı bulundu
                   </p>
-                  <p className="text-xs text-blue-700">
-                    Make sure you're not creating a duplicate connection
+                  <p className="text-xs text-blue-400">
+                    Mükerrer bağlantı oluşturmadığınızdan emin olun.
                   </p>
                 </div>
               </div>
@@ -3116,14 +3236,14 @@ const BuildingConnectionModal: React.FC<BuildingConnectionModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
+              className="px-6 py-2 bg-blue-900 text-white rounded-lg hover:bg-blue-800 transition border border-blue-700 font-bold"
             >
-              Cancel
+              İptal
             </button>
             <button
               type="submit"
               disabled={loading || !formData.sourceBuildingId || !formData.destBuildingId}
-              className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center space-x-2"
+              className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center space-x-2 font-bold"
             >
               {loading && (
                 <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
@@ -3131,7 +3251,7 @@ const BuildingConnectionModal: React.FC<BuildingConnectionModalProps> = ({
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
               )}
-              <span>{loading ? (connection?.id ? 'Updating...' : 'Creating...') : (connection?.id ? 'Update Connection' : 'Create Connection')}</span>
+              <span>{loading ? (connection?.id ? 'Güncelleniyor...' : 'Oluşturuluyor...') : (connection?.id ? 'Bağlantıyı Güncelle' : 'Bağlantı Oluştur')}</span>
             </button>
           </div>
         </form>
@@ -3194,43 +3314,43 @@ const BuildingConnectionsManagementModal: React.FC<BuildingConnectionsManagement
 
   const getConnectionTypeColor = (type: string) => {
     const colors: Record<string, string> = {
-      'FIBER_SINGLE_MODE': 'text-red-600 bg-red-50',
-      'FIBER_MULTI_MODE': 'text-orange-600 bg-orange-50',
-      'CAT5E': 'text-green-600 bg-green-50',
-      'CAT6': 'text-green-600 bg-green-50',
-      'CAT6A': 'text-green-700 bg-green-50',
-      'CAT7': 'text-green-700 bg-green-50',
-      'CAT8': 'text-green-800 bg-green-50',
-      'WIRELESS': 'text-blue-600 bg-blue-50',
-      'MICROWAVE': 'text-purple-600 bg-purple-50',
-      'LEASED_LINE': 'text-yellow-600 bg-yellow-50',
-      'MPLS': 'text-cyan-600 bg-cyan-50',
-      'VPN': 'text-purple-600 bg-purple-50',
-      'OTHER': 'text-gray-600 bg-gray-50',
+      'FIBER_SINGLE_MODE': 'text-red-400 bg-red-900/20 border-red-800',
+      'FIBER_MULTI_MODE': 'text-orange-400 bg-orange-900/20 border-orange-800',
+      'CAT5E': 'text-green-400 bg-green-900/20 border-green-800',
+      'CAT6': 'text-green-400 bg-green-900/20 border-green-800',
+      'CAT6A': 'text-green-400 bg-green-900/20 border-green-800',
+      'CAT7': 'text-green-400 bg-green-900/20 border-green-800',
+      'CAT8': 'text-green-400 bg-green-900/20 border-green-800',
+      'WIRELESS': 'text-blue-400 bg-blue-900/20 border-blue-800',
+      'MICROWAVE': 'text-purple-400 bg-purple-900/20 border-purple-800',
+      'LEASED_LINE': 'text-yellow-400 bg-yellow-900/20 border-yellow-800',
+      'MPLS': 'text-cyan-400 bg-cyan-900/20 border-cyan-800',
+      'VPN': 'text-purple-400 bg-purple-900/20 border-purple-800',
+      'OTHER': 'text-gray-400 bg-gray-900/20 border-gray-800',
     };
-    return colors[type] || 'text-gray-600 bg-gray-50';
+    return colors[type] || 'text-gray-400 bg-gray-900/20 border-gray-800';
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[10000] p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 bg-[#000033]/80 backdrop-blur-md flex items-center justify-center z-[10000] p-4">
+      <div className="bg-[#000044] rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col border border-blue-900">
         {/* Header */}
-        <div className="bg-gradient-to-r from-purple-600 to-purple-700 p-6">
+        <div className="bg-blue-900 p-6 border-b border-blue-800">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <div className="bg-white bg-opacity-20 rounded-lg p-2 backdrop-blur-sm">
+              <div className="bg-white/10 rounded-lg p-2">
                 <svg className="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
                 </svg>
               </div>
               <div>
-                <h2 className="text-xl font-bold text-white">Building Connections</h2>
-                <p className="text-purple-100 text-sm">{connections.length} connection(s) total</p>
+                <h2 className="text-xl font-bold text-white">Bina Bağlantılarını Yönet</h2>
+                <p className="text-blue-300 text-sm">Toplam {connections.length} bağlantı listeleniyor</p>
               </div>
             </div>
             <button
               onClick={onClose}
-              className="text-white hover:bg-white hover:bg-opacity-20 rounded-lg p-2 transition"
+              className="text-white hover:bg-blue-800 rounded-lg p-2 transition border border-blue-700"
             >
               <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -3243,39 +3363,39 @@ const BuildingConnectionsManagementModal: React.FC<BuildingConnectionsManagement
         <div className="flex-1 overflow-y-auto p-6">
           {connections.length === 0 ? (
             <div className="text-center py-12">
-              <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-full p-6 w-24 h-24 mx-auto mb-4 flex items-center justify-center">
-                <svg className="h-12 w-12 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="bg-blue-950 rounded-full p-6 w-24 h-24 mx-auto mb-4 flex items-center justify-center border border-blue-800">
+                <svg className="h-12 w-12 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
               </div>
-              <h3 className="text-lg font-bold text-gray-900 mb-2">No Building Connections</h3>
-              <p className="text-sm text-gray-600">Create your first inter-building connection to get started</p>
+              <h3 className="text-lg font-bold text-white mb-2">Bina Bağlantısı Yok</h3>
+              <p className="text-sm text-blue-300">Henüz bir bağlantı oluşturulmamış.</p>
             </div>
           ) : (
             <div className="space-y-3">
               {connections.map((conn) => (
                 <div
                   key={conn.id}
-                  className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition"
+                  className="bg-blue-950 border border-blue-800 rounded-lg p-4 hover:border-blue-500 transition"
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       {/* Connection Path */}
                       <div className="flex items-center space-x-3 mb-3">
                         <div className="flex items-center space-x-2">
-                          <svg className="h-5 w-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="h-5 w-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                           </svg>
-                          <span className="font-semibold text-gray-900">{conn.sourceBuilding?.name || 'Unknown'}</span>
+                          <span className="font-semibold text-white">{conn.sourceBuilding?.name || 'Bilinmiyor'}</span>
                         </div>
-                        <svg className="h-5 w-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="h-5 w-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
                         </svg>
                         <div className="flex items-center space-x-2">
-                          <svg className="h-5 w-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="h-5 w-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                           </svg>
-                          <span className="font-semibold text-gray-900">{conn.destBuilding?.name || 'Unknown'}</span>
+                          <span className="font-semibold text-white">{conn.destBuilding?.name || 'Bilinmiyor'}</span>
                         </div>
                       </div>
 
@@ -3283,7 +3403,7 @@ const BuildingConnectionsManagementModal: React.FC<BuildingConnectionsManagement
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                         {/* Connection Type */}
                         <div className="col-span-2">
-                          <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Primary Type</p>
+                          <p className="text-xs font-bold text-blue-400 uppercase tracking-wider mb-2">Tip</p>
                           <div className={`inline-flex items-center space-x-2 px-4 py-2 rounded-xl border-2 ${getConnectionTypeColor(conn.connectionType)} shadow-sm`}>
                             <span className="text-2xl">{getConnectionTypeIcon(conn.connectionType)}</span>
                             <span className="font-black text-lg tracking-tight">{conn.connectionType?.replace(/_/g, ' ')}</span>
@@ -3292,9 +3412,9 @@ const BuildingConnectionsManagementModal: React.FC<BuildingConnectionsManagement
 
                         {/* Status */}
                         <div>
-                          <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Status</p>
+                          <p className="text-xs font-bold text-blue-400 uppercase tracking-wider mb-2">Durum</p>
                           <span className={`inline-flex px-3 py-1.5 rounded-lg font-black text-sm border-2 ${
-                            conn.status === 'ACTIVE' ? 'text-green-700 bg-green-50 border-green-200' : 'text-gray-700 bg-gray-50 border-gray-200'
+                            conn.status === 'ACTIVE' ? 'text-emerald-400 bg-emerald-900/20 border-emerald-800' : 'text-blue-300 bg-blue-900/20 border-blue-800'
                           }`}>
                             {conn.status}
                           </span>
@@ -3303,12 +3423,12 @@ const BuildingConnectionsManagementModal: React.FC<BuildingConnectionsManagement
                         {/* Bandwidth */}
                         {conn.bandwidth && (
                           <div>
-                            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Speed</p>
+                            <p className="text-xs font-bold text-blue-400 uppercase tracking-wider mb-2">Hız</p>
                             <div className="flex items-center space-x-1.5">
-                              <svg className="h-4 w-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <svg className="h-4 w-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                               </svg>
-                              <span className="text-gray-900 font-black text-base">{conn.bandwidth}</span>
+                              <span className="text-white font-black text-base">{conn.bandwidth}</span>
                             </div>
                           </div>
                         )}
@@ -3319,8 +3439,8 @@ const BuildingConnectionsManagementModal: React.FC<BuildingConnectionsManagement
                     <div className="flex items-center space-x-2 ml-4">
                       <button
                         onClick={() => setSelectedConnection(conn)}
-                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
-                        title="View Details"
+                        className="p-2 text-blue-400 hover:bg-blue-900 rounded-lg transition border border-transparent hover:border-blue-700"
+                        title="Detayları Gör"
                       >
                         <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -3329,8 +3449,8 @@ const BuildingConnectionsManagementModal: React.FC<BuildingConnectionsManagement
                       </button>
                       <button
                         onClick={() => onEdit(conn)}
-                        className="p-2 text-amber-600 hover:bg-amber-50 rounded-lg transition"
-                        title="Edit Connection"
+                        className="p-2 text-amber-400 hover:bg-amber-900/40 rounded-lg transition border border-transparent hover:border-amber-700"
+                        title="Düzenle"
                       >
                         <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -3339,8 +3459,8 @@ const BuildingConnectionsManagementModal: React.FC<BuildingConnectionsManagement
                       {conn.recordingMethod === 'MANUAL' && (
                         <button
                           onClick={() => setDeleteConfirm(conn.id)}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
-                          title="Delete Connection"
+                          className="p-2 text-red-400 hover:bg-red-900/40 rounded-lg transition border border-transparent hover:border-red-700"
+                          title="Sil"
                         >
                           <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -3352,23 +3472,23 @@ const BuildingConnectionsManagementModal: React.FC<BuildingConnectionsManagement
 
                   {/* Delete Confirmation */}
                   {deleteConfirm === conn.id && (
-                    <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-4">
-                      <p className="text-sm text-red-800 font-semibold mb-3">
-                        Are you sure you want to delete this connection?
+                    <div className="mt-4 bg-red-900/20 border border-red-800 rounded-lg p-4">
+                      <p className="text-sm text-red-200 font-semibold mb-3">
+                        Bu bağlantıyı silmek istediğinizden emin misiniz?
                       </p>
                       <div className="flex items-center space-x-3">
                         <button
                           onClick={() => handleDelete(conn.id)}
                           disabled={loading}
-                          className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 text-sm font-medium transition"
+                          className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 text-sm font-bold transition"
                         >
-                          {loading ? 'Deleting...' : 'Yes, Delete'}
+                          {loading ? 'Siliniyor...' : 'Evet, Sil'}
                         </button>
                         <button
                           onClick={() => setDeleteConfirm(null)}
-                          className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-sm font-medium transition"
+                          className="px-4 py-2 bg-blue-900 text-white border border-blue-700 rounded-lg hover:bg-blue-800 text-sm font-bold transition"
                         >
-                          Cancel
+                          İptal
                         </button>
                       </div>
                     </div>
@@ -3381,12 +3501,12 @@ const BuildingConnectionsManagementModal: React.FC<BuildingConnectionsManagement
 
         {/* Details Sidebar */}
         {selectedConnection && (
-          <div className="absolute right-0 top-0 bottom-0 w-96 bg-white border-l border-gray-200 shadow-2xl overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-purple-600 to-purple-700 p-4 flex items-center justify-between z-10">
-              <h3 className="text-lg font-bold text-white">Connection Details</h3>
+          <div className="absolute right-0 top-0 bottom-0 w-96 bg-[#000033] border-l border-blue-800 shadow-2xl overflow-y-auto z-20">
+            <div className="sticky top-0 bg-blue-900 p-4 flex items-center justify-between z-10 border-b border-blue-800">
+              <h3 className="text-lg font-bold text-white">Bağlantı Detayları</h3>
               <button
                 onClick={() => setSelectedConnection(null)}
-                className="text-white hover:bg-white hover:bg-opacity-20 rounded-lg p-1 transition"
+                className="text-white hover:bg-blue-800 rounded-lg p-1 transition border border-blue-700"
               >
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -3394,38 +3514,37 @@ const BuildingConnectionsManagementModal: React.FC<BuildingConnectionsManagement
               </button>
             </div>
             <div className="p-4 space-y-4">
-              {/* All connection details - same as sidebar in main view */}
-              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+              <div className="bg-blue-950 rounded-lg p-4 border border-blue-800">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex-1">
-                    <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Source</p>
-                    <p className="font-bold text-gray-900">{selectedConnection.sourceBuilding?.name || 'Unknown'}</p>
-                    <p className="text-xs text-gray-600">{selectedConnection.sourceBuilding?.city || ''}</p>
+                    <p className="text-xs font-semibold text-blue-400 uppercase mb-1">Kaynak</p>
+                    <p className="font-bold text-white">{selectedConnection.sourceBuilding?.name || 'Bilinmiyor'}</p>
+                    <p className="text-xs text-blue-300">{selectedConnection.sourceBuilding?.city || ''}</p>
                   </div>
-                  <svg className="h-6 w-6 text-purple-600 mx-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="h-6 w-6 text-blue-600 mx-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
                   </svg>
                   <div className="flex-1 text-right">
-                    <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Destination</p>
-                    <p className="font-bold text-gray-900">{selectedConnection.destBuilding?.name || 'Unknown'}</p>
-                    <p className="text-xs text-gray-600">{selectedConnection.destBuilding?.city || ''}</p>
+                    <p className="text-xs font-semibold text-blue-400 uppercase mb-1">Hedef</p>
+                    <p className="font-bold text-white">{selectedConnection.destBuilding?.name || 'Bilinmiyor'}</p>
+                    <p className="text-xs text-blue-300">{selectedConnection.destBuilding?.city || ''}</p>
                   </div>
                 </div>
               </div>
 
               {selectedConnection.notes && (
                 <div>
-                  <p className="text-sm font-semibold text-gray-600 uppercase mb-2">Notes</p>
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                    <p className="text-sm text-gray-800">{selectedConnection.notes}</p>
+                  <p className="text-sm font-semibold text-blue-400 uppercase mb-2">Notlar</p>
+                  <div className="bg-blue-950 border border-blue-800 rounded-lg p-3">
+                    <p className="text-sm text-blue-100">{selectedConnection.notes}</p>
                   </div>
                 </div>
               )}
 
-              <div className="text-xs text-gray-500 pt-3 border-t border-gray-200">
-                <p>Created: {new Date(selectedConnection.createdAt).toLocaleString()}</p>
+              <div className="text-xs text-blue-400 pt-3 border-t border-blue-800">
+                <p>Oluşturma: {new Date(selectedConnection.createdAt).toLocaleString('tr-TR')}</p>
                 {selectedConnection.updatedAt && (
-                  <p>Updated: {new Date(selectedConnection.updatedAt).toLocaleString()}</p>
+                  <p>Güncelleme: {new Date(selectedConnection.updatedAt).toLocaleString('tr-TR')}</p>
                 )}
               </div>
             </div>

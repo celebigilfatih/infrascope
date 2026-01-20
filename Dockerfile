@@ -8,6 +8,9 @@
 # ============================================================================
 FROM node:20 AS builder
 
+# Disable lockfile patching bug in Next.js 14.2.35
+ENV NEXT_DISABLE_LOCKFILE_PATCH=1
+
 # Set working directory
 WORKDIR /app
 
@@ -17,8 +20,8 @@ RUN apt-get update && apt-get install -y python3 make g++ libc6 && rm -rf /var/l
 # Copy package files
 COPY package.json ./
 
-# Install dependencies (ignoring lockfile to avoid SWC platform issues)
-RUN npm install && npm cache clean --force
+# Install dependencies
+RUN npm install --legacy-peer-deps && npm cache clean --force
 
 # Copy Prisma schema
 COPY prisma ./prisma/
@@ -28,6 +31,10 @@ RUN npx prisma generate
 
 # Copy application source
 COPY . .
+
+# Set build-time environment variables
+ARG NEXT_PUBLIC_API_URL=http://localhost:8170
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
 # Build Next.js application
 RUN npm run build
@@ -43,7 +50,7 @@ WORKDIR /app
 COPY package.json ./
 
 # Install production dependencies only
-RUN npm install --omit=dev && npm cache clean --force
+RUN npm install --omit=dev --legacy-peer-deps && npm cache clean --force
 
 # ============================================================================
 # STAGE 3: RUNTIME
@@ -56,7 +63,7 @@ LABEL version="1.0.0"
 LABEL description="Enterprise Infrastructure Management Platform"
 
 # Install runtime dependencies
-RUN apt-get update && apt-get install -y netcat-openbsd curl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y netcat-openbsd curl openssl && rm -rf /var/lib/apt/lists/*
 
 # Security: Create non-root user
 RUN groupadd -g 1001 nodejs && \

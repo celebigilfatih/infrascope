@@ -32,7 +32,7 @@ export async function GET(_request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, description, floorId, capacity } = body;
+    const { name, description, floorId, capacity, width, depth, height } = body;
 
     if (!name || !floorId) {
       return NextResponse.json({
@@ -47,7 +47,10 @@ export async function POST(request: NextRequest) {
         name,
         description,
         floorId,
-        capacity
+        capacity,
+        width: width !== undefined ? parseFloat(width) : null,
+        depth: depth !== undefined ? parseFloat(depth) : null,
+        height: height !== undefined ? parseFloat(height) : null,
       }
     });
 

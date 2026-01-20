@@ -10,7 +10,7 @@
   }
 
   body {
-    @apply bg-gray-50 text-gray-900;
+    @apply bg-[#000033] text-white;
   }
 
   a {
@@ -26,11 +26,11 @@
 @layer components {
   /* Card styles */
   .card {
-    @apply bg-white rounded-lg shadow-sm border border-gray-200 p-6;
+    @apply bg-[#000044] rounded-xl shadow-lg border border-blue-800 p-6;
   }
 
   .card-hover {
-    @apply card hover:shadow-md hover:border-gray-300 transition-all;
+    @apply card hover:border-blue-500 transition-all;
   }
 
   /* Button styles */
@@ -43,7 +43,7 @@
   }
 
   .btn-secondary {
-    @apply btn bg-gray-200 text-gray-900 hover:bg-gray-300 focus:ring-gray-500;
+    @apply btn bg-blue-900/50 text-blue-100 hover:bg-blue-800 focus:ring-blue-700;
   }
 
   .btn-danger {
@@ -94,19 +94,19 @@
 
   /* Typography */
   .h1 {
-    @apply text-4xl font-bold text-gray-900;
+    @apply text-4xl font-bold text-white;
   }
 
   .h2 {
-    @apply text-3xl font-bold text-gray-900;
+    @apply text-3xl font-bold text-white;
   }
 
   .h3 {
-    @apply text-2xl font-bold text-gray-900;
+    @apply text-2xl font-bold text-white;
   }
 
   .text-muted {
-    @apply text-gray-500;
+    @apply text-blue-300;
   }
 
   /* Table styles */
@@ -119,15 +119,15 @@
   }
 
   .table th {
-    @apply bg-gray-100 px-6 py-3 text-left text-sm font-semibold text-gray-900 border-b border-gray-200;
+    @apply bg-blue-900/30 px-6 py-3 text-left text-sm font-bold text-blue-400 border-b border-blue-800 uppercase tracking-wider;
   }
 
   .table td {
-    @apply px-6 py-3 border-b border-gray-200;
+    @apply px-6 py-3 border-b border-blue-800 text-blue-100;
   }
 
   .table tbody tr {
-    @apply hover:bg-gray-50 transition-colors;
+    @apply hover:bg-blue-800/20 transition-colors;
   }
 }
 
@@ -137,9 +137,9 @@
 }
 
 ::-webkit-scrollbar-track {
-  @apply bg-gray-100;
+  @apply bg-[#000022];
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-gray-400 rounded hover:bg-gray-500;
+  @apply bg-blue-900 rounded hover:bg-blue-800;
 }

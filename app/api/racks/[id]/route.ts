@@ -124,7 +124,17 @@ export async function PUT(
   try {
     const { id } = params;
     const body = await request.json();
-    const { name, type, maxUnits, position, operationalStatus } = body;
+    const { 
+      name, 
+      type, 
+      maxUnits, 
+      position, 
+      operationalStatus,
+      coordX,
+      coordY,
+      coordZ,
+      rotation
+    } = body;
 
     if (!id) {
       return NextResponse.json(
@@ -143,7 +153,11 @@ export async function PUT(
       type === undefined &&
       maxUnits === undefined &&
       position === undefined &&
-      operationalStatus === undefined
+      operationalStatus === undefined &&
+      coordX === undefined &&
+      coordY === undefined &&
+      coordZ === undefined &&
+      rotation === undefined
     ) {
       return NextResponse.json(
         {
@@ -282,6 +296,10 @@ export async function PUT(
     if (maxUnits !== undefined) updateData.maxUnits = maxUnits;
     if (position !== undefined) updateData.position = position;
     if (operationalStatus !== undefined) updateData.operationalStatus = operationalStatus;
+    if (coordX !== undefined) updateData.coordX = coordX !== null ? parseFloat(coordX) : null;
+    if (coordY !== undefined) updateData.coordY = coordY !== null ? parseFloat(coordY) : null;
+    if (coordZ !== undefined) updateData.coordZ = coordZ !== null ? parseFloat(coordZ) : null;
+    if (rotation !== undefined) updateData.rotation = rotation !== null ? parseFloat(rotation) : 0;
 
     // Update rack
     const updated = await prisma.rack.update({

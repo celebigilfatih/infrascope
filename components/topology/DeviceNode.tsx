@@ -14,49 +14,82 @@ interface DeviceNodeData {
   activeConnections?: number;
   buildingName?: string;
   location?: string;
+  zoom?: number;
 }
 
 export const DeviceNode = memo(({ data, selected }: NodeProps<DeviceNodeData>) => {
   const statusColors = {
     active: 'bg-emerald-500',
-    inactive: 'bg-gray-400',
+    inactive: 'bg-slate-500',
     maintenance: 'bg-amber-500',
     error: 'bg-red-500',
   };
 
+  const roleIcons = {
+    core: '🌐',
+    distribution: '🔌',
+    access: '📶',
+    endpoint: '💻',
+    server: '🖥️',
+    firewall: '🛡️',
+    unknown: '❓',
+  };
+
+  const zoom = data.zoom || 1;
+  const scale = Math.max(0.7, Math.min(2.0, zoom));
+  
+  // Calculate dynamic dimensions based on zoom
+  const width = 240 * scale;
+  const padding = 16 * scale;
+  const fontSize = 14 * scale;
+  const subFontSize = 12 * scale;
+  const iconSize = 12 * scale;
+
   return (
-    <div className={`
-      relative p-4 rounded-xl bg-white border-2 transition-all duration-200 w-[240px]
-      ${selected ? 'border-blue-500 ring-4 ring-blue-100 shadow-xl scale-105' : 'border-gray-200 shadow-md'}
-      hover:border-blue-400 hover:shadow-lg
-    `}>
-      <Handle type="target" position={Position.Top} className="!w-3 !h-3 !bg-blue-400 !border-2 !border-white" />
-      <Handle type="source" position={Position.Bottom} className="!w-3 !h-3 !bg-blue-600 !border-2 !border-white" />
+    <div 
+      className={`
+        relative rounded-xl border-2 transition-all duration-200
+        ${selected ? 'border-blue-500 ring-4 ring-blue-900/50 shadow-xl scale-105' : 'border-blue-800 shadow-md'}
+        bg-[#000044] text-white hover:border-blue-400
+      `}
+      style={{ 
+        width: `${width}px`, 
+        padding: `${padding}px`,
+        transform: `scale(${1/zoom < 1 ? 1 : 1/zoom})`, 
+        transformOrigin: 'center'
+      }}
+    >
+      <Handle type="target" position={Position.Top} className="!w-3 !h-3 !bg-blue-400 !border-2 !border-blue-950" />
+      <Handle type="source" position={Position.Bottom} className="!w-3 !h-3 !bg-blue-600 !border-2 !border-blue-950" />
       
       <div className="flex items-center gap-3 mb-3">
-        <div className={`w-3 h-3 rounded-full ${statusColors[data.status]}`} />
-        <h3 className="font-bold text-gray-900 truncate flex-1">{data.name}</h3>
+        <div className={`rounded-full ${statusColors[data?.status] || 'bg-slate-500'}`} style={{ width: `${iconSize}px`, height: `${iconSize}px` }} />
+        <div className="text-lg" title={data?.role}>{roleIcons[data?.role as keyof typeof roleIcons] || roleIcons.unknown}</div>
+        <h3 className="font-bold truncate flex-1" style={{ fontSize: `${fontSize}px` }}>{data?.name || 'Bilinmeyen Cihaz'}</h3>
       </div>
 
-      <div className="space-y-2 text-xs">
-        <div className="flex justify-between text-gray-500">
-          <span>Type</span>
-          <span className="font-medium text-gray-700">{data.type}</span>
+      <div className="space-y-2" style={{ fontSize: `${subFontSize}px` }}>
+        <div className="flex justify-between text-blue-300">
+          <span>Tip</span>
+          <span className="font-medium text-white">{data.type}</span>
         </div>
-        <div className="flex justify-between text-gray-500">
-          <span>IP Address</span>
-          <span className="font-medium text-gray-700 font-mono">{data.ipAddress || 'N/A'}</span>
+        <div className="flex justify-between text-blue-300">
+          <span>IP Adresi</span>
+          <span className="font-medium text-white font-mono">{data.ipAddress || 'Yok'}</span>
         </div>
-        <div className="flex justify-between text-gray-500">
-          <span>Location</span>
-          <span className="font-medium text-gray-700 truncate max-w-[120px]">{data.location || 'N/A'}</span>
+        <div className="flex justify-between text-blue-300">
+          <span>Konum</span>
+          <span className="font-medium text-white truncate max-w-[120px]">{data.location || 'Yok'}</span>
         </div>
       </div>
 
       {data.ports !== undefined && (
-        <div className="mt-3 pt-3 border-t border-gray-100 flex justify-between items-center text-[10px] font-bold uppercase tracking-wider text-gray-400">
-          <span>{data.ports} Ports</span>
-          <span className="text-blue-600">{data.activeConnections || 0} Active</span>
+        <div 
+          className="mt-3 pt-3 border-t border-blue-800 flex justify-between items-center font-bold uppercase tracking-wider text-blue-400"
+          style={{ fontSize: `${10 * scale}px` }}
+        >
+          <span>{data.ports} Port</span>
+          <span className="text-blue-300">{data.activeConnections || 0} Aktif</span>
         </div>
       )}
     </div>

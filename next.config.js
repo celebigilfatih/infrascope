@@ -2,12 +2,13 @@
 const nextConfig = {
   output: 'standalone',
   reactStrictMode: true,
-  swcMinify: true,
+  swcMinify: false,
   compiler: {
-    removeConsole: process.env.NODE_ENV === 'production',
+    removeConsole: false,
   },
+  transpilePackages: ['three', '@react-three/fiber', '@react-three/drei'],
   experimental: {
-    esmExternals: true,
+    esmExternals: 'loose',
   },
 };
 

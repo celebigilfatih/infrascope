@@ -36,7 +36,18 @@ export async function GET(_request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, type, maxUnits, roomId, position, operationalStatus } = body;
+    const { 
+      name, 
+      type, 
+      maxUnits, 
+      roomId, 
+      position, 
+      operationalStatus,
+      coordX,
+      coordY,
+      coordZ,
+      rotation
+    } = body;
 
     if (!name || !roomId) {
       return NextResponse.json({
@@ -53,6 +64,10 @@ export async function POST(request: NextRequest) {
         maxUnits: maxUnits || 42,
         roomId,
         position,
+        coordX: coordX !== undefined ? parseFloat(coordX) : null,
+        coordY: coordY !== undefined ? parseFloat(coordY) : null,
+        coordZ: coordZ !== undefined ? parseFloat(coordZ) : null,
+        rotation: rotation !== undefined ? parseFloat(rotation) : 0,
         operationalStatus: operationalStatus || 'OPERATIONAL'
       }
     });
