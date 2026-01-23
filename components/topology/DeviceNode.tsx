@@ -50,7 +50,7 @@ export const DeviceNode = memo(({ data, selected }: NodeProps<DeviceNodeData>) =
       className={`
         relative rounded-xl border-2 transition-all duration-200
         ${selected ? 'border-blue-500 ring-4 ring-blue-900/50 shadow-xl scale-105' : 'border-blue-800 shadow-md'}
-        bg-[#000044] text-white hover:border-blue-400
+        bg-card text-foreground hover:border-primary border border-border shadow-sm
       `}
       style={{ 
         width: `${width}px`, 

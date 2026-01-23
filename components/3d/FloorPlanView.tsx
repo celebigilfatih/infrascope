@@ -1,6 +1,10 @@
 'use client';
 
 import React, { useRef, useEffect, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { RotateCcw, RotateCw, FlipVertical2, Loader2, X, Plus } from 'lucide-react';
 
 interface Rack {
   id: string;
@@ -117,10 +121,10 @@ export function FloorPlanView({ room, onUpdate }: FloorPlanViewProps) {
   // Stock cabinet image URLs (we'll use colored rectangles for now, can be replaced with real images)
   const getCabinetColor = (type: string) => {
     switch (type) {
-      case 'RACK_42U': return '#1e40af'; // Blue
-      case 'RACK_45U': return '#7c3aed'; // Purple
-      case 'CUSTOM': return '#059669'; // Green
-      default: return '#374151'; // Gray
+      case 'RACK_42U': return '#3b82f6'; // Theme Primary
+      case 'RACK_45U': return '#60a5fa'; // Theme Primary Lighter
+      case 'CUSTOM': return '#a855f7'; // Theme Purple
+      default: return '#6b7280'; // Muted foreground
     }
   };
 
@@ -134,15 +138,12 @@ export function FloorPlanView({ room, onUpdate }: FloorPlanViewProps) {
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Draw data center floor with gradient
-    const floorGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-    floorGradient.addColorStop(0, '#0a0a1a');
-    floorGradient.addColorStop(1, '#000033');
-    ctx.fillStyle = floorGradient;
+    // Background color matching theme
+    ctx.fillStyle = '#0a0a0a';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Draw grid floor pattern (perspective grid)
-    ctx.strokeStyle = 'rgba(59, 130, 246, 0.15)';
+    // Draw grid floor pattern
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
     ctx.lineWidth = 1;
     
     const gridSize = scale;
@@ -171,9 +172,9 @@ export function FloorPlanView({ room, onUpdate }: FloorPlanViewProps) {
     
     // Glow effect
     ctx.shadowColor = '#3b82f6';
-    ctx.shadowBlur = 20;
+    ctx.shadowBlur = 15;
     ctx.strokeStyle = '#3b82f6';
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 2;
     ctx.strokeRect(offset.x, offset.y, roomPixelWidth, roomPixelDepth);
     ctx.shadowBlur = 0;
 
@@ -427,77 +428,82 @@ export function FloorPlanView({ room, onUpdate }: FloorPlanViewProps) {
     await saveRackPosition(selectedRack);
   };
 
-  const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
-    e.preventDefault();
-    const delta = e.deltaY > 0 ? -5 : 5;
-    setScale(prev => Math.max(20, Math.min(150, prev + delta)));
-  };
+  // Handle wheel events with non-passive listener to prevent browser warnings
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const handleWheelNative = (e: WheelEvent) => {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? -5 : 5;
+      setScale(prev => Math.max(20, Math.min(150, prev + delta)));
+    };
+
+    canvas.addEventListener('wheel', handleWheelNative, { passive: false });
+    return () => {
+      canvas.removeEventListener('wheel', handleWheelNative);
+    };
+  }, []);
 
   return (
-    <div ref={containerRef} className="w-full h-full bg-gradient-to-b from-[#000022] to-[#000044] relative overflow-hidden">
+    <div ref={containerRef} className="w-full h-full bg-background relative overflow-hidden">
       {/* Edit Mode Indicator */}
       {editMode && (
-        <div className="absolute top-4 left-4 z-20 bg-yellow-500/90 backdrop-blur-md px-4 py-2 rounded-lg border border-yellow-600 shadow-xl">
+        <div className="absolute top-4 left-4 z-20 bg-primary/10 backdrop-blur-md px-4 py-2 rounded-lg border border-primary/20 shadow-xl">
           <div className="flex items-center gap-2">
             <span className="text-xl">✏️</span>
-            <span className="text-black font-bold text-sm">Düzenleme Modu</span>
+            <span className="text-primary font-bold text-sm">Düzenleme Modu</span>
           </div>
         </div>
       )}
 
       {/* Saving Indicator */}
       {saving && (
-        <div className="absolute top-20 left-4 z-20 bg-blue-500/90 backdrop-blur-md px-4 py-2 rounded-lg border border-blue-600 shadow-xl">
+        <div className="absolute top-20 left-4 z-20 bg-primary/20 backdrop-blur-md px-4 py-2 rounded-lg border border-primary/30 shadow-xl">
           <div className="flex items-center gap-2">
-            <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
-            <span className="text-white font-bold text-sm">Kaydediliyor...</span>
+            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+            <span className="text-foreground font-bold text-sm">Kaydediliyor...</span>
           </div>
         </div>
       )}
 
-      {/* Header */}
-      <div className="absolute top-4 left-4 z-10 bg-gradient-to-r from-blue-950/95 to-blue-900/95 backdrop-blur-md p-4 rounded-lg border border-blue-700/50 shadow-2xl">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
-            <span className="text-2xl">🏢</span>
-          </div>
-          <div>
-            <h3 className="text-white font-bold text-lg">{room.name}</h3>
-            <p className="text-blue-300 text-sm">Data Center Görünümü</p>
-          </div>
+      {/* Header Info Overlay */}
+      <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 bg-card/80 backdrop-blur-md px-6 py-3 rounded-full border border-border shadow-2xl flex items-center gap-6">
+        <div className="flex items-center gap-2">
+          <span className="text-primary">📐</span>
+          <span className="text-sm font-medium">{roomWidth}m × {roomDepth}m</span>
         </div>
-        <div className="mt-3 pt-3 border-t border-blue-700/50 flex items-center justify-between">
-          <div className="flex items-center gap-4 text-xs">
-            <div className="flex items-center gap-1">
-              <span className="text-blue-400">📐</span>
-              <span className="text-white">{roomWidth}m × {roomDepth}m</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="text-blue-400">🖥️</span>
-              <span className="text-white">{room.racks?.length || 0} Kabinet</span>
-            </div>
-          </div>
+        <div className="w-px h-4 bg-border" />
+        <div className="flex items-center gap-2">
+          <span className="text-primary">🖥️</span>
+          <span className="text-sm font-medium">{room.racks?.length || 0} Kabinet</span>
         </div>
       </div>
 
       {/* Controls */}
-      <div className="absolute top-4 right-4 z-10 bg-blue-950/90 backdrop-blur-md p-3 rounded-lg border border-blue-800/50 space-y-2">
-        <button
+      <div className="absolute top-4 right-4 z-10 flex flex-col gap-2">
+        <Button
+          variant="secondary"
+          size="icon"
           onClick={() => setScale(prev => Math.min(150, prev + 10))}
-          className="w-full px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
+          className="rounded-lg shadow-lg"
         >
-          + Yakınlaştır
-        </button>
-        <button
+          <Plus className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="secondary"
+          size="icon"
           onClick={() => setScale(prev => Math.max(20, prev - 10))}
-          className="w-full px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
+          className="rounded-lg shadow-lg"
         >
-          - Uzaklaştır
-        </button>
-        <button
+          <X className="h-4 w-4 rotate-45" />
+        </Button>
+        <Button
+          variant="secondary"
+          size="icon"
           onClick={() => {
-            const canvasWidth = 1200;
-            const canvasHeight = 600;
+            const canvasWidth = containerRef.current?.clientWidth || 1200;
+            const canvasHeight = containerRef.current?.clientHeight || 600;
             const scaleX = (canvasWidth * 0.8) / roomWidth;
             const scaleY = (canvasHeight * 0.8) / roomDepth;
             const newScale = Math.min(scaleX, scaleY);
@@ -506,10 +512,10 @@ export function FloorPlanView({ room, onUpdate }: FloorPlanViewProps) {
             setScale(newScale);
             setOffset({ x: newOffsetX, y: newOffsetY });
           }}
-          className="w-full px-3 py-1 bg-blue-700 text-white rounded hover:bg-blue-800 text-sm"
+          className="rounded-lg shadow-lg"
         >
-          Sıfırla
-        </button>
+          <RotateCcw className="h-4 w-4" />
+        </Button>
       </div>
 
       {/* Canvas */}
@@ -522,169 +528,196 @@ export function FloorPlanView({ room, onUpdate }: FloorPlanViewProps) {
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
-        onWheel={handleWheel}
       />
 
-      {/* Rack Details Panel */}
+      {/* Rack Details Panel with Shadcn UI */}
       {selectedRack && (
-        <div className="absolute bottom-4 right-4 z-10 bg-blue-950/95 backdrop-blur-md p-4 rounded-xl border border-blue-800 shadow-2xl min-w-[300px]">
-          <div className="flex justify-between items-start mb-3">
-            <div>
-              <h4 className="text-white font-bold text-lg">{selectedRack.name}</h4>
-              <p className="text-blue-300 text-xs mt-1">{editMode ? 'Sürükleyerek taşıyın' : 'Salt okunur'}</p>
-            </div>
-            <button
-              onClick={() => setSelectedRack(null)}
-              className="text-blue-300 hover:text-white transition-colors"
-            >
-              ✕
-            </button>
-          </div>
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-blue-300">Tip:</span>
-              <span className="text-white font-medium">{selectedRack.type}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-blue-300">Birim:</span>
-              <span className="text-white font-medium">{selectedRack.maxUnits}U</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-blue-300">Pozisyon:</span>
-              <span className="text-white font-mono text-xs">
-                X: {selectedRack.coordX?.toFixed(1) || '0.0'}m, 
-                Z: {selectedRack.coordZ?.toFixed(1) || '0.0'}m
-              </span>
-            </div>
-            {selectedRack.rotation !== null && selectedRack.rotation !== 0 && (
-              <div className="flex justify-between">
-                <span className="text-blue-300">Dönüş:</span>
-                <span className="text-white font-medium">{selectedRack.rotation}°</span>
+        <Card className="absolute bottom-4 right-4 w-96 z-20 bg-card/95 backdrop-blur-md border-border shadow-2xl">
+          <CardHeader className="pb-3">
+            <div className="flex items-start justify-between">
+              <div className="space-y-1">
+                <CardTitle className="text-lg">{selectedRack.name}</CardTitle>
+                <CardDescription className="flex items-center gap-2 flex-wrap">
+                  <Badge variant="outline" className="text-xs">
+                    {selectedRack.type}
+                  </Badge>
+                  <Badge variant="secondary" className="text-xs">
+                    {selectedRack.maxUnits}U
+                  </Badge>
+                </CardDescription>
               </div>
-            )}
-          </div>
-          
-          {/* Devices List */}
-          <div className="mt-4 pt-4 border-t border-blue-800">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-blue-300 text-xs font-bold flex items-center gap-1">
-                <span>🖥️</span>
-                <span>Cihazlar ({rackDevices.length})</span>
-              </p>
-              {loadingDevices && (
-                <div className="animate-spin h-3 w-3 border-2 border-blue-400 border-t-transparent rounded-full"></div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 -mt-2 -mr-2"
+                onClick={() => setSelectedRack(null)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </CardHeader>
+
+          <CardContent className="space-y-4">
+            {/* Position Info */}
+            <div className="space-y-2">
+              <div className="flex justify-between items-center py-1.5">
+                <span className="text-sm text-muted-foreground">Pozisyon X:</span>
+                <span className="text-sm font-mono font-medium">
+                  {selectedRack.coordX?.toFixed(1) || '0.0'}m
+                </span>
+              </div>
+              <div className="flex justify-between items-center py-1.5">
+                <span className="text-sm text-muted-foreground">Pozisyon Z:</span>
+                <span className="text-sm font-mono font-medium">
+                  {selectedRack.coordZ?.toFixed(1) || '0.0'}m
+                </span>
+              </div>
+              {selectedRack.rotation !== null && selectedRack.rotation !== 0 && (
+                <div className="flex justify-between items-center py-1.5">
+                  <span className="text-sm text-muted-foreground">Dönüş:</span>
+                  <Badge variant="secondary" className="text-xs">
+                    {selectedRack.rotation}°
+                  </Badge>
+                </div>
               )}
             </div>
-            
-            {rackDevices.length > 0 ? (
-              <div className="space-y-2 max-h-48 overflow-y-auto">
-                {rackDevices.map((device) => (
-                  <div
-                    key={device.id}
-                    className="bg-blue-900/30 rounded p-2 border border-blue-800/50 hover:border-blue-600/50 transition-colors"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <p className="text-white text-xs font-medium">{device.name}</p>
-                        <p className="text-blue-400 text-[10px] mt-0.5">{device.type}</p>
-                      </div>
-                      <div className="flex flex-col items-end gap-1">
-                        <span
-                          className={`text-[10px] px-1.5 py-0.5 rounded ${
-                            device.status === 'ACTIVE'
-                              ? 'bg-green-500/20 text-green-400'
-                              : device.status === 'INACTIVE'
-                              ? 'bg-gray-500/20 text-gray-400'
-                              : device.status === 'MAINTENANCE'
-                              ? 'bg-yellow-500/20 text-yellow-400'
-                              : 'bg-red-500/20 text-red-400'
-                          }`}
-                        >
-                          {device.status === 'ACTIVE' ? 'Aktif' :
-                           device.status === 'INACTIVE' ? 'Pasif' :
-                           device.status === 'MAINTENANCE' ? 'Bakım' : 'Hata'}
-                        </span>
-                        {device.rackUnit && (
-                          <span className="text-blue-300 text-[10px]">
-                            {device.rackUnit}U
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    {device.ipAddress && (
-                      <p className="text-blue-300 text-[10px] mt-1 font-mono">
-                        {device.ipAddress}
-                      </p>
-                    )}
-                  </div>
-                ))}
+
+            {/* Devices List */}
+            <div className="space-y-3 pt-3 border-t">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-semibold flex items-center gap-2">
+                  🖥️ Cihazlar
+                  <Badge variant="outline" className="text-xs">
+                    {rackDevices.length}
+                  </Badge>
+                </h4>
+                {loadingDevices && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
               </div>
-            ) : (
-              <p className="text-blue-400 text-xs italic">Cihaz bulunamadı</p>
-            )}
-          </div>
-          
-          {editMode && (
-            <div className="mt-4 pt-4 border-t border-blue-800">
-              <p className="text-blue-300 text-xs mb-2 font-bold">Döndürme</p>
-              <div className="grid grid-cols-4 gap-2">
-                <button
-                  onClick={() => rotateSelectedRack(-90)}
-                  className="px-2 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs font-bold transition-colors"
-                  title="90° sola döndür"
-                >
-                  ↺ 90°
-                </button>
-                <button
-                  onClick={() => rotateSelectedRack(-45)}
-                  className="px-2 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs font-bold transition-colors"
-                  title="45° sola döndür"
-                >
-                  ↺ 45°
-                </button>
-                <button
-                  onClick={() => rotateSelectedRack(45)}
-                  className="px-2 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs font-bold transition-colors"
-                  title="45° sağa döndür"
-                >
-                  ↻ 45°
-                </button>
-                <button
-                  onClick={() => rotateSelectedRack(90)}
-                  className="px-2 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs font-bold transition-colors"
-                  title="90° sağa döndür"
-                >
-                  ↻ 90°
-                </button>
-              </div>
-              <button
-                onClick={() => rotateSelectedRack(180)}
-                className="w-full mt-2 px-2 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 text-xs font-bold transition-colors"
-                title="180° döndür"
-              >
-                ⇄ 180° Çevir
-              </button>
+
+              {rackDevices.length > 0 ? (
+                <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                  {rackDevices.map((device) => (
+                    <Card key={device.id} className="p-3 hover:border-primary/50 transition-colors">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{device.name}</p>
+                          <p className="text-xs text-muted-foreground mt-1">{device.type}</p>
+                        </div>
+                        <div className="flex flex-col items-end gap-1.5">
+                          <Badge
+                            variant={
+                              device.status === 'ACTIVE'
+                                ? 'success'
+                                : device.status === 'INACTIVE'
+                                ? 'outline'
+                                : device.status === 'MAINTENANCE'
+                                ? 'warning'
+                                : 'destructive'
+                            }
+                            className="text-xs"
+                          >
+                            {device.status === 'ACTIVE' ? 'Aktif' :
+                             device.status === 'INACTIVE' ? 'Pasif' :
+                             device.status === 'MAINTENANCE' ? 'Bakım' : 'Hata'}
+                          </Badge>
+                          {device.rackUnit && (
+                            <span className="text-xs text-muted-foreground font-mono">
+                              {device.rackUnit}U
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      {device.ipAddress && (
+                        <p className="text-xs text-muted-foreground font-mono mt-2">
+                          {device.ipAddress}
+                        </p>
+                      )}
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground italic text-center py-4">
+                  Cihaz bulunamadı
+                </p>
+              )}
             </div>
-          )}
-        </div>
+
+            {/* Rotation Controls */}
+            {editMode && (
+              <div className="space-y-3 pt-3 border-t">
+                <h4 className="text-sm font-semibold">Döndürme</h4>
+                <div className="grid grid-cols-4 gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => rotateSelectedRack(-90)}
+                    title="90° sola döndür"
+                    className="h-9"
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => rotateSelectedRack(-45)}
+                    title="45° sola döndür"
+                    className="h-9 text-xs"
+                  >
+                    ↺ 45°
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => rotateSelectedRack(45)}
+                    title="45° sağa döndür"
+                    className="h-9 text-xs"
+                  >
+                    ↻ 45°
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => rotateSelectedRack(90)}
+                    title="90° sağa döndür"
+                    className="h-9"
+                  >
+                    <RotateCw className="h-4 w-4" />
+                  </Button>
+                </div>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => rotateSelectedRack(180)}
+                  title="180° döndür"
+                  className="w-full"
+                >
+                  <FlipVertical2 className="h-4 w-4 mr-2" />
+                  180° Çevir
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       )}
 
-      {/* Help Text */}
-      <div className="absolute bottom-4 left-4 z-10 bg-blue-950/80 backdrop-blur-md px-4 py-2 rounded-lg border border-blue-800/50">
-        <p className="text-blue-200 text-xs">
-          {editMode ? (
-            <>
-              <span className="font-bold text-yellow-400">✏️ Sürükle:</span> Kabineti taşı | 
-              <span className="font-bold text-blue-300 ml-2">🔄 Fare Tekerleği:</span> Yakınlaştır/Uzaklaştır
-            </>
-          ) : (
-            <>
-              <span className="font-bold text-blue-300">🔄 Fare Tekerleği:</span> Yakınlaştır/Uzaklaştır | 
-              <span className="font-bold text-blue-300 ml-2">👆 Sürükle:</span> Hareket ettir
-            </>
-          )}
-        </p>
-      </div>
+      {/* Help Text with Shadcn Card */}
+      <Card className="absolute bottom-4 left-4 z-10 bg-card/80 backdrop-blur-md border-border">
+        <CardContent className="p-3">
+          <p className="text-sm text-muted-foreground">
+            {editMode ? (
+              <>
+                <span className="font-semibold text-primary">✏️ Sürükle:</span> Kabineti taşı | 
+                <span className="font-semibold text-primary ml-2">🔄 Fare Tekerleği:</span> Yakınlaştır/Uzaklaştır
+              </>
+            ) : (
+              <>
+                <span className="font-semibold text-primary">🔄 Fare Tekerleği:</span> Yakınlaştır/Uzaklaştır | 
+                <span className="font-semibold text-primary ml-2">👆 Sürükle:</span> Hareket ettir
+              </>
+            )}
+          </p>
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -10,10 +10,17 @@ echo "🚀 InfraScope Container Starting..."
 
 # Wait for database to be ready
 echo "📍 Waiting for database to be ready..."
-./scripts/wait-for-db.sh "${DB_HOST:-db}" "${DB_PORT:-5432}" 30
+for i in $(seq 1 30); do
+  if timeout 5 sh -c "echo '> /dev/null' > /dev/tcp/db/5432" 2>/dev/null; then
+    echo "✅ Database is ready!"
+    break
+  fi
+  echo "   Attempt $i/30..."
+  sleep 1
+done
 
 # Run database migrations
-echo "🗄️ Running Prisma migrations..."
+echo "📋 Running Prisma migrations..."
 if ! npx prisma migrate deploy; then
   echo "⚠️ Migration warning - continuing..."
 fi

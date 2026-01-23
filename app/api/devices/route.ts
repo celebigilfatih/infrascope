@@ -29,7 +29,11 @@ export async function GET(_request: NextRequest) {
       timestamp: new Date()
     });
   } catch (error: any) {
-    console.error('Error fetching devices:', error);
+    console.error('Error fetching devices details:', {
+      message: error.message,
+      stack: error.stack,
+      code: error.code
+    });
     return NextResponse.json({
       success: false,
       error: 'Failed to fetch devices',

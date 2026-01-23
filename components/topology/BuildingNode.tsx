@@ -66,7 +66,7 @@ export const BuildingNode = memo(({ data, selected }: NodeProps<BuildingNodeData
       {/* Building Card */}
       <div 
         className={`
-          relative bg-[#000044] rounded-2xl shadow-lg 
+          relative bg-card rounded-2xl shadow-sm border border-border
           border-2 ${selected ? 'border-blue-500 ring-4 ring-blue-900/50' : 'border-blue-800'}
           hover:border-blue-400 hover:shadow-2xl
           transition-all duration-300 cursor-pointer

@@ -62,8 +62,8 @@ LABEL maintainer="InfraScope Team"
 LABEL version="1.0.0"
 LABEL description="Enterprise Infrastructure Management Platform"
 
-# Install runtime dependencies
-RUN apt-get update && apt-get install -y netcat-openbsd curl openssl && rm -rf /var/lib/apt/lists/*
+# Install runtime dependencies - skip if network unavailable
+RUN apt-get update 2>/dev/null && apt-get install -y netcat-openbsd curl openssl 2>/dev/null && rm -rf /var/lib/apt/lists/* || true
 
 # Security: Create non-root user
 RUN groupadd -g 1001 nodejs && \

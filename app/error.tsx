@@ -15,8 +15,8 @@ export default function Error({
   }, [error]);
 
   return (
-    <div className="min-h-screen bg-[#000033] flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-[#000044] border border-red-900 rounded-2xl p-8 text-center shadow-2xl">
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <div className="max-w-md w-full bg-card border border-destructive/50 rounded-2xl p-8 text-center shadow-2xl">
         <div className="w-20 h-20 bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-6 border border-red-800">
           <span className="text-4xl">⚠️</span>
         </div>

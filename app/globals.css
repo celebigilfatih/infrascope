@@ -3,6 +3,80 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Shadcn UI Theme Variables */
+@layer base {
+  :root {
+    --background: 1 0 0;
+    --foreground: 0.141 0.005 285.823;
+    --card: 1 0 0;
+    --card-foreground: 0.141 0.005 285.823;
+    --popover: 1 0 0;
+    --popover-foreground: 0.141 0.005 285.823;
+    --primary: 0.723 0.219 149.579;
+    --primary-foreground: 0.982 0.018 155.826;
+    --secondary: 0.967 0.001 286.375;
+    --secondary-foreground: 0.21 0.006 285.885;
+    --muted: 0.967 0.001 286.375;
+    --muted-foreground: 0.552 0.016 285.938;
+    --accent: 0.967 0.001 286.375;
+    --accent-foreground: 0.21 0.006 285.885;
+    --destructive: 0.577 0.245 27.325;
+    --destructive-foreground: 0.982 0.018 155.826;
+    --border: 0.92 0.004 286.32;
+    --input: 0.92 0.004 286.32;
+    --ring: 0.723 0.219 149.579;
+    --chart-1: 0.646 0.222 41.116;
+    --chart-2: 0.6 0.118 184.704;
+    --chart-3: 0.398 0.07 227.392;
+    --chart-4: 0.828 0.189 84.429;
+    --chart-5: 0.769 0.188 70.08;
+    --radius: 0.5rem;
+    --sidebar: 0.985 0 0;
+    --sidebar-foreground: 0.141 0.005 285.823;
+    --sidebar-primary: 0.723 0.219 149.579;
+    --sidebar-primary-foreground: 0.982 0.018 155.826;
+    --sidebar-accent: 0.967 0.001 286.375;
+    --sidebar-accent-foreground: 0.21 0.006 285.885;
+    --sidebar-border: 0.92 0.004 286.32;
+    --sidebar-ring: 0.723 0.219 149.579;
+  }
+
+  .dark {
+    --background: 0.141 0.005 285.823;
+    --foreground: 0.985 0 0;
+    --card: 0.21 0.006 285.885;
+    --card-foreground: 0.985 0 0;
+    --popover: 0.21 0.006 285.885;
+    --popover-foreground: 0.985 0 0;
+    --primary: 0.696 0.17 162.48;
+    --primary-foreground: 0.393 0.095 152.535;
+    --secondary: 0.274 0.006 286.033;
+    --secondary-foreground: 0.985 0 0;
+    --muted: 0.274 0.006 286.033;
+    --muted-foreground: 0.705 0.015 286.067;
+    --accent: 0.274 0.006 286.033;
+    --accent-foreground: 0.985 0 0;
+    --destructive: 0.704 0.191 22.216;
+    --destructive-foreground: 0.985 0 0;
+    --border: 1 0 0 / 10%;
+    --input: 1 0 0 / 15%;
+    --ring: 0.527 0.154 150.069;
+    --chart-1: 0.488 0.243 264.376;
+    --chart-2: 0.696 0.17 162.48;
+    --chart-3: 0.769 0.188 70.08;
+    --chart-4: 0.627 0.265 303.9;
+    --chart-5: 0.645 0.246 16.439;
+    --sidebar: 0.21 0.006 285.885;
+    --sidebar-foreground: 0.985 0 0;
+    --sidebar-primary: 0.696 0.17 162.48;
+    --sidebar-primary-foreground: 0.393 0.095 152.535;
+    --sidebar-accent: 0.274 0.006 286.033;
+    --sidebar-accent-foreground: 0.985 0 0;
+    --sidebar-border: 1 0 0 / 10%;
+    --sidebar-ring: 0.527 0.154 150.069;
+  }
+}
+
 /* Custom base styles */
 @layer base {
   html {
@@ -10,7 +84,7 @@
   }
 
   body {
-    @apply bg-[#000033] text-white;
+    @apply bg-background text-foreground;
   }
 
   a {
@@ -26,28 +100,28 @@
 @layer components {
   /* Card styles */
   .card {
-    @apply bg-[#000044] rounded-xl shadow-lg border border-blue-800 p-6;
+    @apply bg-card text-card-foreground rounded-xl shadow-sm border border-border p-6;
   }
 
   .card-hover {
-    @apply card hover:border-blue-500 transition-all;
+    @apply card hover:border-primary/50 transition-all;
   }
 
   /* Button styles */
   .btn {
-    @apply px-4 py-2 rounded-lg font-medium focus:outline-none focus:ring-2 focus:ring-offset-2;
+    @apply px-4 py-2 rounded-lg font-medium focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2;
   }
 
   .btn-primary {
-    @apply btn bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500;
+    @apply btn bg-primary text-primary-foreground hover:bg-primary/90;
   }
 
   .btn-secondary {
-    @apply btn bg-blue-900/50 text-blue-100 hover:bg-blue-800 focus:ring-blue-700;
+    @apply btn bg-secondary text-secondary-foreground hover:bg-secondary/80;
   }
 
   .btn-danger {
-    @apply btn bg-red-600 text-white hover:bg-red-700 focus:ring-red-500;
+    @apply btn bg-destructive text-destructive-foreground hover:bg-destructive/90;
   }
 
   .btn-sm {
@@ -56,57 +130,57 @@
 
   /* Badge styles */
   .badge {
-    @apply inline-flex items-center px-3 py-1 rounded-full text-sm font-medium;
+    @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold;
   }
 
   .badge-success {
-    @apply badge bg-green-100 text-green-800;
+    @apply badge bg-primary/10 text-primary;
   }
 
   .badge-danger {
-    @apply badge bg-red-100 text-red-800;
+    @apply badge bg-destructive/10 text-destructive;
   }
 
   .badge-warning {
-    @apply badge bg-yellow-100 text-yellow-800;
+    @apply badge bg-orange-100 text-orange-800;
   }
 
   .badge-info {
-    @apply badge bg-blue-100 text-blue-800;
+    @apply badge bg-accent/10 text-accent-foreground;
   }
 
   /* Status indicator */
   .status-indicator {
-    @apply inline-block w-3 h-3 rounded-full;
+    @apply inline-block w-2.5 h-2.5 rounded-full;
   }
 
   .status-active {
-    @apply status-indicator bg-green-500;
+    @apply status-indicator bg-primary;
   }
 
   .status-inactive {
-    @apply status-indicator bg-gray-400;
+    @apply status-indicator bg-muted-foreground;
   }
 
   .status-error {
-    @apply status-indicator bg-red-500;
+    @apply status-indicator bg-destructive;
   }
 
   /* Typography */
   .h1 {
-    @apply text-4xl font-bold text-white;
+    @apply text-4xl font-bold text-foreground;
   }
 
   .h2 {
-    @apply text-3xl font-bold text-white;
+    @apply text-3xl font-bold text-foreground;
   }
 
   .h3 {
-    @apply text-2xl font-bold text-white;
+    @apply text-2xl font-bold text-foreground;
   }
 
   .text-muted {
-    @apply text-blue-300;
+    @apply text-muted-foreground;
   }
 
   /* Table styles */
@@ -119,27 +193,33 @@
   }
 
   .table th {
-    @apply bg-blue-900/30 px-6 py-3 text-left text-sm font-bold text-blue-400 border-b border-blue-800 uppercase tracking-wider;
+    @apply bg-muted/50 px-6 py-3 text-left text-xs font-bold text-muted-foreground border-b border-border uppercase tracking-wider;
   }
 
   .table td {
-    @apply px-6 py-3 border-b border-blue-800 text-blue-100;
+    @apply px-6 py-3 border-b border-border text-foreground text-sm;
   }
 
   .table tbody tr {
-    @apply hover:bg-blue-800/20 transition-colors;
+    @apply hover:bg-muted/30 transition-colors;
+  }
+
+  /* Prevent passive listener issues for canvas and React Flow */
+  .react-flow__viewport,
+  canvas {
+    touch-action: none;
   }
 }
 
 /* Scrollbar styles */
 ::-webkit-scrollbar {
-  @apply w-2 h-2;
+  @apply w-1.5 h-1.5;
 }
 
 ::-webkit-scrollbar-track {
-  @apply bg-[#000022];
+  @apply bg-background;
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-blue-900 rounded hover:bg-blue-800;
+  @apply bg-border rounded-full hover:bg-muted-foreground/50;
 }

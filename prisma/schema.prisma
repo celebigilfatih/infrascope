@@ -1,53 +1,42 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+generator client {
+  provider = "prisma-client-js"
+}
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-generator client {
-  provider = "prisma-client-js"
-}
-
-// ============================================================================
-// 1. ORGANIZATIONAL STRUCTURE
-// ============================================================================
-
 /// Represents the top-level organization entity
 model Organization {
-  id          String   @id @default(cuid())
-  name        String   @unique
-  code        String   @unique
+  id          String     @id @default(cuid())
+  name        String     @unique
+  code        String     @unique
   description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  buildings Building[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  buildings   Building[]
 
   @@map("organizations")
 }
 
 /// Physical building location
 model Building {
-  id             String   @id @default(cuid())
-  name           String
-  address        String
-  city           String
-  country        String
-  postalCode     String?
-  latitude       Float?
-  longitude      Float?
-  organizationId String
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  floors       Floor[]
-
-  // Inter-building connections
-  sourceConnections BuildingConnection[] @relation("SourceBuildingConnections")
+  id                String               @id @default(cuid())
+  name              String
+  address           String
+  city              String
+  country           String
+  postalCode        String?
+  latitude          Float?
+  longitude         Float?
+  organizationId    String
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
   destConnections   BuildingConnection[] @relation("DestBuildingConnections")
+  sourceConnections BuildingConnection[] @relation("SourceBuildingConnections")
+  organization      Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  floors            Floor[]
 
   @@unique([organizationId, name])
   @@map("buildings")
@@ -61,9 +50,8 @@ model Floor {
   buildingId  String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-
-  building Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
-  rooms    Room[]
+  building    Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  rooms       Room[]
 
   @@unique([buildingId, floorNumber])
   @@map("floors")
@@ -76,28 +64,16 @@ model Room {
   description String?
   floorId     String
   capacity    Int?
-  width       Float? // 3D Room width (meters)
-  depth       Float? // 3D Room depth (meters)
-  height      Float? // 3D Room height (meters)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-
-  floor Floor  @relation(fields: [floorId], references: [id], onDelete: Cascade)
-  racks Rack[]
+  depth       Float?
+  height      Float?
+  width       Float?
+  racks       Rack[]
+  floor       Floor    @relation(fields: [floorId], references: [id], onDelete: Cascade)
 
   @@unique([floorId, name])
   @@map("rooms")
-}
-
-// ============================================================================
-// 2. RACK & UNIT MANAGEMENT
-// ============================================================================
-
-/// Rack cabinet types
-enum RackType {
-  RACK_42U
-  RACK_45U
-  CUSTOM
 }
 
 /// Rack cabinet for equipment
@@ -107,18 +83,17 @@ model Rack {
   type              RackType   @default(RACK_42U)
   maxUnits          Int        @default(42)
   roomId            String
-  position          String? // Physical position in room
-  coordX            Float? // 3D X coordinate
-  coordY            Float? // 3D Y coordinate
-  coordZ            Float? // 3D Z coordinate
-  rotation          Float      @default(0) // Rotation in degrees
+  position          String?
   operationalStatus RackStatus @default(OPERATIONAL)
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
-
-  room    Room       @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  units   RackUnit[]
-  devices Device[]
+  coordX            Float?
+  coordY            Float?
+  coordZ            Float?
+  rotation          Float      @default(0)
+  devices           Device[]
+  units             RackUnit[]
+  room              Room       @relation(fields: [roomId], references: [id], onDelete: Cascade)
 
   @@unique([roomId, name])
   @@map("racks")
@@ -127,18 +102,244 @@ model Rack {
 /// Individual U-height position in a rack
 model RackUnit {
   id        String   @id @default(cuid())
-  position  Int // 1-42 or 1-45
+  position  Int
   rackId    String
-  deviceId  String? // Device occupying this unit
+  deviceId  String?
   side      UnitSide @default(FRONT)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  rack   Rack    @relation(fields: [rackId], references: [id], onDelete: Cascade)
-  device Device? @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+  device    Device?  @relation(fields: [deviceId], references: [id])
+  rack      Rack     @relation(fields: [rackId], references: [id], onDelete: Cascade)
 
   @@unique([rackId, position, side])
   @@map("rack_units")
+}
+
+/// Physical or virtual device
+model Device {
+  id                String             @id @default(cuid())
+  name              String
+  type              DeviceType
+  vendor            String?
+  model             String?
+  serialNumber      String?
+  assetTag          String?
+  firmwareVersion   String?
+  operatingSystem   String?
+  criticality       DeviceCriticality  @default(MEDIUM)
+  status            DeviceStatus       @default(UNKNOWN)
+  rackId            String?
+  rackUnitPosition  Int?
+  parentDeviceId    String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  metadata          Json?
+  dependencies      Dependency[]
+  parentDevice      Device?            @relation("ChildDevices", fields: [parentDeviceId], references: [id])
+  childDevices      Device[]           @relation("ChildDevices")
+  rack              Rack?              @relation(fields: [rackId], references: [id])
+  networkInterfaces NetworkInterface[]
+  rackUnits         RackUnit[]
+  services          Service[]
+  switchPorts       SwitchPort[]
+
+  @@index([rackId])
+  @@index([parentDeviceId])
+  @@map("devices")
+}
+
+/// Network interface on a device
+model NetworkInterface {
+  id          String        @id @default(cuid())
+  name        String
+  type        InterfaceType @default(ETHERNET)
+  ipv4        String?
+  ipv6        String?
+  macAddress  String?
+  deviceId    String
+  status      NetworkStatus @default(UP)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  connections Connection[]
+  device      Device        @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  switchPorts SwitchPort[]
+
+  @@unique([deviceId, name])
+  @@index([deviceId])
+  @@map("network_interfaces")
+}
+
+/// Switch port management
+model SwitchPort {
+  id               String            @id @default(cuid())
+  name             String
+  portType         PortType          @default(ACCESS)
+  vlanId           Int?
+  nativeVlan       Int?
+  allowedVlans     String?
+  status           NetworkStatus     @default(DOWN)
+  speed            String?
+  duplex           Duplex?
+  switchDeviceId   String
+  connectedToId    String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  connections      Connection[]
+  switchDevice     Device            @relation(fields: [switchDeviceId], references: [id], onDelete: Cascade, map: "switchPorts")
+  networkInterface NetworkInterface? @relation(fields: [connectedToId], references: [id])
+
+  @@unique([switchDeviceId, name])
+  @@index([switchDeviceId])
+  @@map("switch_ports")
+}
+
+/// Network connections between devices
+model Connection {
+  id                String            @id @default(cuid())
+  name              String?
+  type              ConnectionType    @default(ETHERNET)
+  sourcePortId      String
+  sourceInterfaceId String?
+  destPortId        String?
+  destInterfaceId   String?
+  status            NetworkStatus     @default(DOWN)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  sourceInterface   NetworkInterface? @relation(fields: [sourceInterfaceId], references: [id], onDelete: Cascade)
+  sourcePort        SwitchPort        @relation(fields: [sourcePortId], references: [id], onDelete: Cascade)
+
+  @@index([sourcePortId])
+  @@index([sourceInterfaceId])
+  @@map("connections")
+}
+
+/// Physical connection between two buildings
+model BuildingConnection {
+  id               String                   @id @default(cuid())
+  name             String?
+  connectionType   BuildingConnectionType
+  recordingMethod  RecordingMethod          @default(MANUAL)
+  sourceBuildingId String
+  destBuildingId   String
+  status           BuildingConnectionStatus @default(ACTIVE)
+  bandwidth        String?
+  distance         Float?
+  fiberType        String?
+  cableSpecs       String?
+  provider         String?
+  circuitId        String?
+  installDate      DateTime?
+  notes            String?
+  metadata         Json?
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+  destBuilding     Building                 @relation("DestBuildingConnections", fields: [destBuildingId], references: [id], onDelete: Cascade)
+  sourceBuilding   Building                 @relation("SourceBuildingConnections", fields: [sourceBuildingId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceBuildingId, destBuildingId, connectionType])
+  @@index([sourceBuildingId])
+  @@index([destBuildingId])
+  @@index([connectionType])
+  @@index([status])
+  @@map("building_connections")
+}
+
+/// Installed application on a device
+model Application {
+  id          String    @id @default(cuid())
+  name        String
+  vendor      String?
+  version     String?
+  installPath String?
+  licenseKey  String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  services    Service[]
+
+  @@unique([name, version])
+  @@map("applications")
+}
+
+/// Service running on a device
+model Service {
+  id            String            @id @default(cuid())
+  name          String
+  type          ServiceType
+  displayName   String?
+  description   String?
+  status        ServiceStatus     @default(UNKNOWN)
+  port          Int
+  protocol      Protocol          @default(TCP)
+  deviceId      String
+  applicationId String?
+  criticality   DeviceCriticality @default(MEDIUM)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  metadata      Json?
+  dependencies  Dependency[]
+  application   Application?      @relation(fields: [applicationId], references: [id])
+  device        Device            @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@unique([deviceId, port, protocol])
+  @@index([deviceId])
+  @@index([applicationId])
+  @@map("services")
+}
+
+/// Dependency relationship between services
+model Dependency {
+  id              String            @id @default(cuid())
+  sourceServiceId String
+  targetDeviceId  String
+  type            DependencyType    @default(DEPENDS_ON)
+  criticality     DeviceCriticality @default(MEDIUM)
+  description     String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  sourceService   Service           @relation(fields: [sourceServiceId], references: [id], onDelete: Cascade)
+  targetDevice    Device            @relation(fields: [targetDeviceId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceServiceId, targetDeviceId, type])
+  @@index([sourceServiceId])
+  @@index([targetDeviceId])
+  @@map("dependencies")
+}
+
+/// Audit trail for changes
+model AuditLog {
+  id        String   @id @default(cuid())
+  entity    String
+  entityId  String
+  action    String
+  changes   Json?
+  userId    String?
+  timestamp DateTime @default(now())
+
+  @@index([entityId])
+  @@index([timestamp])
+  @@map("audit_logs")
+}
+
+/// Device health status snapshot
+model DeviceHealthSnapshot {
+  id             String       @id @default(cuid())
+  deviceId       String
+  status         DeviceStatus
+  cpuUsage       Float?
+  memoryUsage    Float?
+  diskUsage      Float?
+  networkLatency Float?
+  timestamp      DateTime     @default(now())
+
+  @@index([deviceId, timestamp])
+  @@map("device_health_snapshots")
+}
+
+/// Rack cabinet types
+enum RackType {
+  RACK_42U
+  RACK_45U
+  CUSTOM
 }
 
 enum UnitSide {
@@ -152,10 +353,6 @@ enum RackStatus {
   DECOMMISSIONED
 }
 
-// ============================================================================
-// 3. DEVICE INVENTORY
-// ============================================================================
-
 enum DeviceType {
   PHYSICAL_SERVER
   VIRTUAL_HOST
@@ -168,9 +365,9 @@ enum DeviceType {
   STORAGE
   PDU
   PATCH_PANEL
+  OTHER
   PRINTER
   CAMERA
-  OTHER
 }
 
 enum DeviceCriticality {
@@ -189,66 +386,6 @@ enum DeviceStatus {
   UNKNOWN
 }
 
-/// Physical or virtual device
-model Device {
-  id               String            @id @default(cuid())
-  name             String
-  type             DeviceType
-  vendor           String?
-  model            String?
-  serialNumber     String?
-  assetTag         String?
-  firmwareVersion  String?
-  operatingSystem  String?
-  criticality      DeviceCriticality @default(MEDIUM)
-  status           DeviceStatus      @default(UNKNOWN)
-  rackId           String?
-  rackUnitPosition Int? // Starting U position
-  parentDeviceId   String? // For VMs: host server
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  metadata         Json? // JSONB for extensibility
-
-  rack              Rack?              @relation(fields: [rackId], references: [id], onDelete: SetNull)
-  rackUnits         RackUnit[]
-  parentDevice      Device?            @relation("ChildDevices", fields: [parentDeviceId], references: [id], onDelete: SetNull)
-  childDevices      Device[]           @relation("ChildDevices")
-  networkInterfaces NetworkInterface[]
-  switchPorts       SwitchPort[]
-  services          Service[]
-  dependencies      Dependency[]
-
-  @@index([rackId])
-  @@index([parentDeviceId])
-  @@map("devices")
-}
-
-// ============================================================================
-// 4. NETWORK CONFIGURATION
-// ============================================================================
-
-/// Network interface on a device
-model NetworkInterface {
-  id         String        @id @default(cuid())
-  name       String
-  type       InterfaceType @default(ETHERNET)
-  ipv4       String?
-  ipv6       String?
-  macAddress String?
-  deviceId   String
-  status     NetworkStatus @default(UP)
-  createdAt  DateTime      @default(now())
-  updatedAt  DateTime      @updatedAt
-
-  device      Device       @relation(fields: [deviceId], references: [id], onDelete: Cascade)
-  switchPorts SwitchPort[]
-  connections Connection[]
-
-  @@unique([deviceId, name])
-  @@index([deviceId])
-  @@map("network_interfaces")
-}
-
 enum InterfaceType {
   ETHERNET
   FIBER
@@ -265,31 +402,6 @@ enum NetworkStatus {
   UNKNOWN
 }
 
-/// Switch port management
-model SwitchPort {
-  id             String        @id @default(cuid())
-  name           String
-  portType       PortType      @default(ACCESS)
-  vlanId         Int?
-  nativeVlan     Int?
-  allowedVlans   String? // JSONB serialized as string for simplicity
-  status         NetworkStatus @default(DOWN)
-  speed          String? // e.g., "1Gbps", "10Gbps"
-  duplex         Duplex?
-  switchDeviceId String
-  connectedToId  String? // Connected port/interface
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-
-  switchDevice     Device            @relation(fields: [switchDeviceId], references: [id], onDelete: Cascade, map: "switchPorts")
-  networkInterface NetworkInterface? @relation(fields: [connectedToId], references: [id])
-  connections      Connection[]
-
-  @@unique([switchDeviceId, name])
-  @@index([switchDeviceId])
-  @@map("switch_ports")
-}
-
 enum PortType {
   ACCESS
   TRUNK
@@ -304,27 +416,6 @@ enum Duplex {
   AUTO
 }
 
-/// Network connections between devices
-model Connection {
-  id                String         @id @default(cuid())
-  name              String?
-  type              ConnectionType @default(ETHERNET)
-  sourcePortId      String
-  sourceInterfaceId String?
-  destPortId        String?
-  destInterfaceId   String?
-  status            NetworkStatus  @default(DOWN)
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
-
-  sourcePort      SwitchPort?       @relation(fields: [sourcePortId], references: [id], onDelete: Cascade)
-  sourceInterface NetworkInterface? @relation(fields: [sourceInterfaceId], references: [id], onDelete: Cascade)
-
-  @@index([sourcePortId])
-  @@index([sourceInterfaceId])
-  @@map("connections")
-}
-
 enum ConnectionType {
   ETHERNET
   FIBER
@@ -333,31 +424,27 @@ enum ConnectionType {
   WAN
 }
 
-// ============================================================================
-// 4.1. INTER-BUILDING CONNECTIVITY
-// ============================================================================
-
 /// Types of physical connections between buildings
 enum BuildingConnectionType {
-  FIBER_SINGLE_MODE // Long distance fiber (up to 100km+)
-  FIBER_MULTI_MODE // Short distance fiber (up to 2km)
-  CAT5E // Category 5e copper cable
-  CAT6 // Category 6 copper cable  
-  CAT6A // Category 6a copper cable
-  CAT7 // Category 7 copper cable
-  CAT8 // Category 8 copper cable
-  WIRELESS // Wireless connection
-  MICROWAVE // Microwave link
-  LEASED_LINE // Carrier leased line
-  MPLS // MPLS network
-  VPN // VPN tunnel
-  OTHER // Other connection type
+  FIBER_SINGLE_MODE
+  FIBER_MULTI_MODE
+  CAT5E
+  CAT6
+  CAT6A
+  CAT7
+  CAT8
+  WIRELESS
+  MICROWAVE
+  LEASED_LINE
+  MPLS
+  VPN
+  OTHER
 }
 
 /// Recording method for the connection
 enum RecordingMethod {
-  AUTO // Automatically detected from device connections
-  MANUAL // Manually created by user
+  AUTO
+  MANUAL
 }
 
 /// Status of the building connection
@@ -367,67 +454,6 @@ enum BuildingConnectionStatus {
   MAINTENANCE
   PLANNED
   DECOMMISSIONED
-}
-
-/// Physical connection between two buildings
-model BuildingConnection {
-  id              String                 @id @default(cuid())
-  name            String? // Optional friendly name
-  connectionType  BuildingConnectionType
-  recordingMethod RecordingMethod        @default(MANUAL)
-
-  // Source building
-  sourceBuildingId String
-  sourceBuilding   Building @relation("SourceBuildingConnections", fields: [sourceBuildingId], references: [id], onDelete: Cascade)
-
-  // Destination building
-  destBuildingId String
-  destBuilding   Building @relation("DestBuildingConnections", fields: [destBuildingId], references: [id], onDelete: Cascade)
-
-  // Connection details
-  status      BuildingConnectionStatus @default(ACTIVE)
-  bandwidth   String? // e.g., "10Gbps", "1Gbps"
-  distance    Float? // Distance in kilometers
-  fiberType   String? // e.g., "OS2", "OM3", "OM4" for fiber
-  cableSpecs  String? // Additional cable specifications
-  provider    String? // ISP or provider name for leased lines
-  circuitId   String? // Circuit/Service ID from provider
-  installDate DateTime?
-
-  // Metadata
-  notes    String? // Additional notes
-  metadata Json? // JSONB for extensibility
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([sourceBuildingId, destBuildingId, connectionType])
-  @@index([sourceBuildingId])
-  @@index([destBuildingId])
-  @@index([connectionType])
-  @@index([status])
-  @@map("building_connections")
-}
-
-// ============================================================================
-// 5. SERVICES & APPLICATIONS
-// ============================================================================
-
-/// Installed application on a device
-model Application {
-  id          String   @id @default(cuid())
-  name        String
-  vendor      String?
-  version     String?
-  installPath String?
-  licenseKey  String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  services Service[]
-
-  @@unique([name, version])
-  @@map("applications")
 }
 
 enum ServiceType {
@@ -456,61 +482,10 @@ enum ServiceStatus {
   UNKNOWN
 }
 
-/// Service running on a device
-model Service {
-  id            String            @id @default(cuid())
-  name          String
-  type          ServiceType
-  displayName   String?
-  description   String?
-  status        ServiceStatus     @default(UNKNOWN)
-  port          Int
-  protocol      Protocol          @default(TCP)
-  deviceId      String
-  applicationId String?
-  criticality   DeviceCriticality @default(MEDIUM)
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
-  metadata      Json?
-
-  device       Device       @relation(fields: [deviceId], references: [id], onDelete: Cascade)
-  application  Application? @relation(fields: [applicationId], references: [id], onDelete: SetNull)
-  dependencies Dependency[]
-
-  @@unique([deviceId, port, protocol])
-  @@index([deviceId])
-  @@index([applicationId])
-  @@map("services")
-}
-
 enum Protocol {
   TCP
   UDP
   BOTH
-}
-
-// ============================================================================
-// 6. DEPENDENCY & IMPACT ANALYSIS (CMDB)
-// ============================================================================
-
-/// Dependency relationship between services
-model Dependency {
-  id              String            @id @default(cuid())
-  sourceServiceId String
-  targetDeviceId  String
-  type            DependencyType    @default(DEPENDS_ON)
-  criticality     DeviceCriticality @default(MEDIUM)
-  description     String?
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
-
-  sourceService Service @relation(fields: [sourceServiceId], references: [id], onDelete: Cascade)
-  targetDevice  Device  @relation(fields: [targetDeviceId], references: [id], onDelete: Cascade)
-
-  @@unique([sourceServiceId, targetDeviceId, type])
-  @@index([sourceServiceId])
-  @@index([targetDeviceId])
-  @@map("dependencies")
 }
 
 enum DependencyType {
@@ -522,38 +497,4 @@ enum DependencyType {
   DEPLOYED_ON
   HOSTED_ON
   CONNECTED_TO
-}
-
-// ============================================================================
-// 7. AUDIT & MONITORING
-// ============================================================================
-
-/// Audit trail for changes
-model AuditLog {
-  id        String   @id @default(cuid())
-  entity    String // Entity type (e.g., "Device", "Service")
-  entityId  String // ID of the entity
-  action    String // CREATE, UPDATE, DELETE
-  changes   Json? // JSONB of what changed
-  userId    String? // User who made the change
-  timestamp DateTime @default(now())
-
-  @@index([entityId])
-  @@index([timestamp])
-  @@map("audit_logs")
-}
-
-/// Device health status snapshot
-model DeviceHealthSnapshot {
-  id             String       @id @default(cuid())
-  deviceId       String
-  status         DeviceStatus
-  cpuUsage       Float?
-  memoryUsage    Float?
-  diskUsage      Float?
-  networkLatency Float?
-  timestamp      DateTime     @default(now())
-
-  @@index([deviceId, timestamp])
-  @@map("device_health_snapshots")
 }

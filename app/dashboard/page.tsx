@@ -1,10 +1,29 @@
 'use client';
 
-import { Header } from '../../components/layout/Header';
 import React, { useState, useEffect } from 'react';
 import { apiGet } from '../../lib/api';
 import { Device, Service, ApiResponse } from '../../types';
-import Link from 'next/link';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { 
+  Activity, 
+  ArrowUpRight,
+  Search,
+  Download,
+  Calendar,
+  PanelLeft,
+  Bell,
+  Sun,
+  Monitor,
+  Settings,
+  Building2,
+  RefreshCcw,
+  CheckCircle2,
+  AlertCircle
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 export default function DashboardPage() {
   const [stats, setStats] = useState({
@@ -22,6 +41,16 @@ export default function DashboardPage() {
     loadDashboardData();
   }, []);
 
+  const [data, setData] = useState<{
+    devices: Device[];
+    services: Service[];
+    buildings: any[];
+  }>({
+    devices: [],
+    services: [],
+    buildings: [],
+  });
+
   const loadDashboardData = async () => {
     try {
       setLoading(true);
@@ -38,6 +67,8 @@ export default function DashboardPage() {
         const services = servicesRes.data || [];
         const buildings = buildingsRes.data || [];
 
+        setData({ devices, services, buildings });
+        
         setStats({
           totalDevices: devices.length,
           activeDevices: devices.filter(d => d.status === 'ACTIVE').length,
@@ -57,120 +88,335 @@ export default function DashboardPage() {
   };
 
   const statCards = [
-    { label: 'Toplam Cihaz', value: stats.totalDevices, subValue: `${stats.activeDevices} Aktif`, icon: '🖥️', color: 'bg-blue-600', link: '/devices' },
-    { label: 'Servisler', value: stats.totalServices, subValue: `${stats.runningServices} Çalışıyor`, icon: '⚙️', color: 'bg-purple-600', link: '/services' },
-    { label: 'Binalar', value: stats.totalBuildings, subValue: 'Tüm organizasyonlarda', icon: '🏢', color: 'bg-emerald-600', link: '/locations' },
-    { label: 'Kritik Sorunlar', value: stats.criticalIssues, subValue: 'Müdahale gerekiyor', icon: '⚠️', color: 'bg-red-600', link: '/network' },
+    { 
+      label: 'Altyapı Düğümleri', 
+      value: stats.totalDevices.toLocaleString(), 
+      subValue: 'Toplam fiziksel/sanal', 
+      trend: `%${((stats.activeDevices / (stats.totalDevices || 1)) * 100).toFixed(1)}`, 
+      trendType: 'up', 
+      icon: Monitor 
+    },
+    { 
+      label: 'Çalışan Servisler', 
+      value: stats.runningServices.toLocaleString(), 
+      subValue: `${stats.totalServices} servis arasından aktif`, 
+      trend: stats.runningServices > 0 ? '+%100' : '%0', 
+      trendType: 'up', 
+      icon: Settings 
+    },
+    { 
+      label: 'Yönetilen Binalar', 
+      value: stats.totalBuildings.toLocaleString(), 
+      subValue: 'Organizasyonlardaki sahalar', 
+      trend: 'Aktif', 
+      trendType: 'up', 
+      icon: Building2 
+    }
   ];
 
   return (
-    <div className="min-h-screen bg-[#000033]">
-      <Header />
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white tracking-tight">Altyapı Paneli</h1>
-          <p className="mt-2 text-blue-300">Kurumsal altyapınızın gerçek zamanlı görünümü</p>
-        </div>
+    <>
+      {/* Top Header */}
+      <header className="h-14 border-b border-border flex items-center justify-between px-6 bg-card/50 backdrop-blur-sm sticky top-0 z-10">
+          <div className="flex items-center gap-4 flex-1">
+            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground">
+              <PanelLeft className="h-4 w-4" />
+            </Button>
+            <div className="relative max-w-md w-full hidden md:block">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input 
+                placeholder="Ara..." 
+                className="pl-9 h-8 bg-muted/30 border-none focus-visible:ring-1 focus-visible:ring-primary/50 text-xs w-64"
+              />
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-50">
+                <span className="text-[10px] font-bold border rounded px-1">⌘</span>
+                <span className="text-[10px] font-bold border rounded px-1">K</span>
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground">
+              <Sun className="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground">
+              <Bell className="h-4 w-4" />
+            </Button>
+          </div>
+        </header>
 
-        {loading ? (
-          <div className="flex justify-center items-center h-64">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
+        {/* Main Content Area */}
+        <main className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+          <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight">Kontrol Paneli</h1>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button size="sm" className="bg-foreground text-background hover:bg-foreground/90 font-bold px-4 h-9">
+                <Download className="mr-2 h-4 w-4" />
+                İndir
+              </Button>
+              <Button variant="outline" size="sm" className="bg-card font-bold px-4 h-9 border-border">
+                <Calendar className="mr-2 h-4 w-4" />
+                Tarih Seç
+              </Button>
+            </div>
           </div>
-        ) : error ? (
-          <div className="bg-red-900/20 border border-red-800 rounded-lg p-4 text-red-400">
-            {error}
-            <button onClick={loadDashboardData} className="ml-4 font-bold underline hover:text-red-300 transition-colors">Tekrar Dene</button>
-          </div>
-        ) : (
-          <>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-              {statCards.map((card) => (
-                <Link href={card.link} key={card.label} className="bg-[#000044] rounded-xl shadow-lg border border-blue-800 p-6 hover:border-blue-500 transition-all group">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className={`${card.color} w-12 h-12 rounded-lg flex items-center justify-center text-2xl shadow-lg group-hover:scale-110 transition-transform`}>
-                      {card.icon}
-                    </div>
-                    <span className="text-3xl font-black text-white">{card.value}</span>
-                  </div>
-                  <h3 className="text-blue-400 font-bold uppercase tracking-wider text-xs">{card.label}</h3>
-                  <p className="text-sm text-blue-200 mt-1 font-medium">{card.subValue}</p>
-                </Link>
-              ))}
+
+          <div className="flex flex-col gap-6">
+            {error && (
+              <Card className="border-destructive/20 bg-destructive/5 shadow-none">
+                <CardContent className="p-4 flex items-center gap-3 text-destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <span className="text-xs font-bold">{error}</span>
+                </CardContent>
+              </Card>
+            )}
+            {/* Navigation Tabs Mock */}
+            <div className="flex items-center gap-1 border-b border-border/50 pb-0 mb-2">
+              <Button variant="ghost" size="sm" className="h-8 px-4 rounded-none border-b-2 border-primary text-xs font-bold bg-muted/30 flex items-center gap-2">
+                <Activity className="h-3.5 w-3.5" /> Genel Bakış
+              </Button>
+              <Button variant="ghost" size="sm" className="h-8 px-4 rounded-none border-b-2 border-transparent text-xs font-bold text-muted-foreground hover:text-foreground flex items-center gap-2">
+                <Activity className="h-3.5 w-3.5" /> Analitik
+              </Button>
+              <Button variant="ghost" size="sm" className="h-8 px-4 rounded-none border-b-2 border-transparent text-xs font-bold text-muted-foreground hover:text-foreground flex items-center gap-2">
+                <Activity className="h-3.5 w-3.5" /> Raporlar
+              </Button>
+              <Button variant="ghost" size="sm" className="h-8 px-4 rounded-none border-b-2 border-transparent text-xs font-bold text-muted-foreground hover:text-foreground flex items-center gap-2">
+                <Activity className="h-3.5 w-3.5" /> Bildirimler
+              </Button>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              <div className="lg:col-span-2 bg-[#000044] rounded-xl shadow-lg border border-blue-800 overflow-hidden">
-                <div className="px-6 py-4 border-b border-blue-800 flex items-center justify-between bg-blue-900/20">
-                  <h2 className="font-bold text-white">Son Altyapı Hareketleri</h2>
-                  <button className="text-blue-400 text-sm font-bold hover:text-blue-300 transition-colors">Tümünü Gör</button>
-                </div>
-                <div className="divide-y divide-blue-800/50">
-                  {[
-                    { type: 'Cihaz Eklendi', name: 'CORE-SW-01', time: '2 saat önce', status: 'Başarılı' },
-                    { type: 'Servis Uyarısı', name: 'LDAP-Primary', time: '5 saat önce', status: 'Uyarı' },
-                    { type: 'Bağlantı Oluşturuldu', name: 'Bina A ↔ Bina B', time: '1 gün önce', status: 'Başarılı' },
-                    { type: 'Bakım', name: 'DB-Cluster-01', time: '2 gün önce', status: 'Planlandı' },
-                  ].map((activity, i) => (
-                    <div key={i} className="px-6 py-4 flex items-center justify-between hover:bg-blue-800/20 transition-colors">
-                      <div className="flex items-center space-x-4">
-                        <div className={`w-2 h-2 rounded-full ${activity.status === 'Başarılı' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]' : activity.status === 'Uyarı' ? 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.6)]' : 'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)]'}`}></div>
-                        <div>
-                          <p className="text-sm font-bold text-white">{activity.type}: {activity.name}</p>
-                          <p className="text-xs text-blue-400 font-medium">{activity.time}</p>
+            {/* Stats Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+              {statCards.map((card) => (
+                <Card key={card.label} className="border-border/50 shadow-sm overflow-hidden bg-card">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2">
+                        <card.icon className="h-3.5 w-3.5 text-muted-foreground" />
+                        <h3 className="text-xs font-bold text-foreground">{card.label}</h3>
+                      </div>
+                      <Activity className="h-3 w-3 text-muted-foreground/30" />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-3xl font-black tracking-tighter">{card.value}</span>
+                      <p className="text-[11px] text-muted-foreground font-medium">{card.subValue}</p>
+                    </div>
+                    
+                    <div className="mt-6 flex items-end justify-between">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Detaylar</span>
+                        <div className={cn(
+                          "text-[10px] font-bold flex items-center gap-1 mt-0.5",
+                          card.trendType === 'up' ? 'text-emerald-500' : 'text-rose-500'
+                        )}>
+                          {card.trend}
+                          <ArrowUpRight className={cn("h-3 w-3", card.trendType === 'down' && "rotate-90")} />
                         </div>
                       </div>
-                      <span className={`text-[10px] px-2 py-1 rounded-md font-black uppercase tracking-wider ${
-                        activity.status === 'Başarılı' ? 'bg-emerald-900/40 text-emerald-400 border border-emerald-800/50' : 
-                        activity.status === 'Uyarı' ? 'bg-amber-900/40 text-amber-400 border border-amber-800/50' : 
-                        'bg-blue-900/40 text-blue-400 border border-blue-800/50'
-                      }`}>
-                        {activity.status}
-                      </span>
+                      {/* Simple Sparkline Mock */}
+                      <div className="flex items-end gap-1 h-8">
+                        {[40, 70, 45, 90, 65, 80].map((h, i) => (
+                          <div 
+                            key={i} 
+                            className={cn(
+                              "w-1.5 rounded-t-sm",
+                              card.trendType === 'up' ? "bg-primary/20" : "bg-rose-500/20"
+                            )} 
+                            style={{ height: `${h}%` }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+
+              {/* Total Revenue Card -> Infrastructure Health */}
+              <Card className="border-border/50 shadow-sm bg-card lg:col-span-1">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Altyapı Sağlığı</CardTitle>
+                </CardHeader>
+                <CardContent className="p-6 pt-0">
+                  <div className="flex flex-col gap-1 mb-6">
+                    <span className="text-2xl font-black tracking-tighter">{stats.criticalIssues} Kritik</span>
+                    <p className="text-[10px] text-rose-500 font-bold">Acil müdahale gerektiren sorunlar</p>
+                  </div>
+                  {/* Revenue Curve Mock -> Health Chart */}
+                  <div className="h-24 w-full relative mt-4">
+                    <svg className="w-full h-full" viewBox="0 0 200 60">
+                      <path 
+                        d="M0,30 Q40,32 60,28 T100,35 T140,30 T180,33 T200,30" 
+                        fill="none" 
+                        stroke="currentColor" 
+                        strokeWidth="2"
+                        className={cn(stats.criticalIssues > 0 ? "text-rose-500" : "text-emerald-500")}
+                      />
+                      <circle cx="10" cy="30" r="1.5" fill="currentColor" />
+                      <circle cx="50" cy="32" r="1.5" fill="currentColor" />
+                      <circle cx="90" cy="28" r="1.5" fill="currentColor" />
+                      <circle cx="130" cy="35" r="1.5" fill="currentColor" />
+                      <circle cx="170" cy="30" r="1.5" fill="currentColor" />
+                      <circle cx="195" cy="30" r="1.5" fill="currentColor" />
+                    </svg>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Sale Activity Large Card -> Inventory Distribution */}
+              <Card className="lg:col-span-2 border-border/50 shadow-sm bg-card overflow-hidden">
+                <CardHeader className="border-b border-border/50">
+                  <CardTitle className="text-sm font-bold">Envanter Hareketliliği - Cihazlar & Servisler</CardTitle>
+                  <CardDescription className="text-xs">Veri merkezleri genelinde çalışma süresi ve dağıtım büyümesi</CardDescription>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="h-64 w-full relative bg-muted/10">
+                    {/* Activity Area Chart Mock */}
+                    <svg className="w-full h-full" viewBox="0 0 500 200" preserveAspectRatio="none">
+                      <defs>
+                        <linearGradient id="grad1" x1="0%" y1="0%" x2="0%" y2="100%">
+                          <stop offset="0%" style={{ stopColor: 'oklch(0.646 0.222 41.116)', stopOpacity: 0.2 }} />
+                          <stop offset="100%" style={{ stopColor: 'oklch(0.646 0.222 41.116)', stopOpacity: 0 }} />
+                        </linearGradient>
+                        <linearGradient id="grad2" x1="0%" y1="0%" x2="0%" y2="100%">
+                          <stop offset="0%" style={{ stopColor: 'oklch(0.6 0.118 184.704)', stopOpacity: 0.2 }} />
+                          <stop offset="100%" style={{ stopColor: 'oklch(0.6 0.118 184.704)', stopOpacity: 0 }} />
+                        </linearGradient>
+                      </defs>
+                      <path d="M0,150 Q100,100 200,120 T400,110 T500,115 V200 H0 Z" fill="url(#grad1)" />
+                      <path d="M0,150 Q100,100 200,120 T400,110 T500,115" fill="none" stroke="oklch(0.646 0.222 41.116)" strokeWidth="2" />
+                      
+                      <path d="M0,180 Q100,160 200,170 T400,140 T500,145 V200 H0 Z" fill="url(#grad2)" />
+                      <path d="M0,180 Q100,160 200,170 T400,140 T500,145" fill="none" stroke="oklch(0.6 0.118 184.704)" strokeWidth="2" />
+                    </svg>
+                    <div className="absolute bottom-4 left-0 right-0 px-8 flex justify-between text-[10px] text-muted-foreground font-bold">
+                      <span>Oca</span>
+                      <span>Şub</span>
+                      <span>Mar</span>
+                      <span>Nis</span>
+                      <span>May</span>
+                      <span>Haz</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Subscriptions Bar Chart -> Location Breakdown */}
+              <Card className="border-border/50 shadow-sm bg-card">
+                <CardHeader>
+                  <CardTitle className="text-sm font-bold">Altyapı Yükü</CardTitle>
+                  <div className="text-2xl font-black mt-2">{(stats.totalDevices + stats.totalServices).toLocaleString()}</div>
+                  <CardDescription className="text-[10px] font-bold text-emerald-500">Toplam takip edilen varlık</CardDescription>
+                </CardHeader>
+                <CardContent className="h-48 flex items-end justify-between gap-2 px-6">
+                  {[30, 60, 45, 90, 70, 50, 80, 100, 60, 40, 75, 55].map((h, i) => (
+                    <div 
+                      key={i} 
+                      className={cn(
+                        "flex-1 rounded-sm transition-all hover:opacity-80",
+                        i % 2 === 0 ? "bg-chart-1" : "bg-chart-2"
+                      )} 
+                      style={{ height: `${h}%` }}
+                    />
+                  ))}
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Inventory Table */}
+              <Card className="lg:col-span-2 border-border/50 shadow-sm bg-card overflow-hidden">
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle className="text-sm font-bold">Son Envanter Hareketleri</CardTitle>
+                    <CardDescription className="text-xs">Sisteme en son eklenen cihazlar.</CardDescription>
+                  </div>
+                  <Button variant="outline" size="sm" className="h-8 text-xs font-bold" onClick={loadDashboardData}>Yenile <RefreshCcw className={cn("ml-1 h-3 w-3", loading && "animate-spin")} /></Button>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="px-6 pb-4">
+                    <Input placeholder="Envanterde ara..." className="h-8 bg-muted/20 border-border text-xs max-w-sm" />
+                  </div>
+                  <div className="table-responsive">
+                    <table className="table">
+                      <thead>
+                        <tr>
+                          <th className="w-12"><div className="w-4 h-4 border border-border rounded" /></th>
+                          <th>Cihaz Adı</th>
+                          <th>Tip</th>
+                          <th className="text-right">Durum</th>
+                          <th className="w-12"></th>
+                        </tr>
+                      </thead>
+                      <tbody className="text-xs font-medium">
+                        {data.devices
+                          .slice()
+                          .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
+                          .slice(0, 5)
+                          .map((device) => (
+                          <tr key={device.id}>
+                            <td><div className="w-4 h-4 border border-border rounded" /></td>
+                            <td className="font-bold">{device.name}</td>
+                            <td><Badge variant="outline" className="text-[10px]">{device.type.replace(/_/g, ' ')}</Badge></td>
+                            <td className="text-right">
+                              <Badge 
+                                variant={device.status === 'ACTIVE' ? 'success' : 'secondary'}
+                                className="text-[9px]"
+                              >
+                                {device.status}
+                              </Badge>
+                            </td>
+                            <td><Activity className="h-3 w-3 text-muted-foreground opacity-30" /></td>
+                          </tr>
+                        ))}
+                        {data.devices.length === 0 && (
+                          <tr>
+                            <td colSpan={5} className="text-center py-8 text-muted-foreground">Cihaz bulunamadı</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Running Services List */}
+              <Card className="border-border/50 shadow-sm bg-card">
+                <CardHeader>
+                  <CardTitle className="text-sm font-bold">Aktif Servisler</CardTitle>
+                  <CardDescription className="text-xs">Kritik servislerin durumunu izleyin.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {data.services.slice(0, 5).map((service) => (
+                    <div key={service.id} className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className={cn(
+                          "w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold",
+                          service.status === 'RUNNING' ? "bg-emerald-500/10 text-emerald-600" : "bg-muted text-muted-foreground"
+                        )}>
+                          {service.status === 'RUNNING' ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-xs font-bold">{service.name}</span>
+                          <span className="text-[10px] text-muted-foreground font-medium uppercase">{service.type.replace(/_/g, ' ')}</span>
+                        </div>
+                      </div>
+                      <Badge variant={service.status === 'RUNNING' ? 'success' : 'secondary'} className="text-[9px]">
+                        {service.status === 'RUNNING' ? 'ÇALIŞIYOR' : 'DURDU'}
+                      </Badge>
                     </div>
                   ))}
-                </div>
-              </div>
-
-              <div className="space-y-8">
-                <div className="bg-[#000044] rounded-xl shadow-lg border border-blue-800 p-6">
-                  <h2 className="font-bold text-white mb-6 border-b border-blue-800 pb-2">Hızlı İşlemler</h2>
-                  <div className="grid grid-cols-1 gap-4">
-                    <Link href="/devices" className="flex items-center space-x-4 p-4 rounded-xl border border-blue-800 bg-blue-900/20 hover:bg-blue-800/40 hover:border-blue-500 transition-all group">
-                      <span className="text-2xl group-hover:scale-110 transition-transform">➕</span>
-                      <span className="text-sm font-bold text-blue-100">Yeni Cihaz Ekle</span>
-                    </Link>
-                    <Link href="/network" className="flex items-center space-x-4 p-4 rounded-xl border border-blue-800 bg-purple-900/20 hover:bg-purple-800/40 hover:border-purple-500 transition-all group">
-                      <span className="text-2xl group-hover:scale-110 transition-transform">🔗</span>
-                      <span className="text-sm font-bold text-blue-100">Bağlantı Oluştur</span>
-                    </Link>
-                    <Link href="/locations" className="flex items-center space-x-4 p-4 rounded-xl border border-blue-800 bg-emerald-900/20 hover:bg-emerald-800/40 hover:border-emerald-500 transition-all group">
-                      <span className="text-2xl group-hover:scale-110 transition-transform">📍</span>
-                      <span className="text-sm font-bold text-blue-100">Konumları Yönet</span>
-                    </Link>
-                  </div>
-                </div>
-
-                <div className="bg-gradient-to-br from-blue-700 to-indigo-900 rounded-xl shadow-2xl p-6 text-white border border-blue-600/30">
-                  <h2 className="font-bold text-lg mb-4 flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                    Sistem Sağlığı
-                  </h2>
-                  <div className="flex items-center space-x-6 mb-6">
-                    <div className="text-5xl drop-shadow-lg">🛡️</div>
-                    <div>
-                      <p className="text-4xl font-black tracking-tighter text-white">98.2%</p>
-                      <p className="text-blue-200 text-xs font-bold uppercase tracking-widest">Genel Çalışma Süresi</p>
-                    </div>
-                  </div>
-                  <div className="w-full bg-black/30 rounded-full h-3 p-0.5 border border-white/10 shadow-inner">
-                    <div className="bg-gradient-to-r from-emerald-500 to-blue-400 h-2 rounded-full shadow-[0_0_10px_rgba(52,211,153,0.5)]" style={{ width: '98.2%' }}></div>
-                  </div>
-                </div>
-              </div>
+                  {data.services.length === 0 && (
+                    <div className="text-center py-8 text-muted-foreground text-xs">Takip edilen servis yok</div>
+                  )}
+                </CardContent>
+              </Card>
             </div>
-          </>
-        )}
-      </main>
-    </div>
+          </div>
+        </main>
+    </>
   );
 }

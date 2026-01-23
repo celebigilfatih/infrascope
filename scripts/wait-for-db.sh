@@ -13,7 +13,9 @@ echo "⏳ Waiting for PostgreSQL at $HOST:$PORT..."
 
 counter=0
 while [ $counter -lt $TIMEOUT ]; do
-  if nc -z "$HOST" "$PORT" 2>/dev/null; then
+  # Try using /dev/tcp if netcat is not available
+  if (exec 3<>/dev/tcp/"$HOST"/"$PORT") 2>/dev/null; then
+    exec 3>&-
     echo "✅ PostgreSQL is ready!"
     exit 0
   fi

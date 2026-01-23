@@ -1,16 +1,27 @@
 'use client';
 
-import { Header } from '../../components/layout/Header';
 import React, { useState, useEffect } from 'react';
 import { apiGet, apiDelete } from '../../lib/api';
 import { Service, ApiResponse } from '../../types';
-import { toast } from 'react-toastify';
+import { useToast } from '@/components/ui/use-toast';
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Search, Plus, Trash2, Settings2, RefreshCcw } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 export default function ServicesPage() {
+  const { toast } = useToast();
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Delete dialog state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [serviceToDelete, setServiceToDelete] = useState<{id: string, name: string} | null>(null);
 
   useEffect(() => {
     loadServices();
@@ -33,19 +44,38 @@ export default function ServicesPage() {
     }
   };
 
-  const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`${name} servisini silmek istediğinizden emin misiniz?`)) return;
+  const handleDelete = (id: string, name: string) => {
+    setServiceToDelete({ id, name });
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!serviceToDelete) return;
 
     try {
-      const response: any = await apiDelete(`/api/services/${id}`);
+      const response: any = await apiDelete(`/api/services/${serviceToDelete.id}`);
       if (response.success) {
-        toast.success('Servis başarıyla silindi');
+        toast({
+          title: "Başarılı",
+          description: `${serviceToDelete.name} servisi silindi.`,
+        });
         loadServices();
       } else {
-        toast.error(response.error || 'Servis silinemedi');
+        toast({
+          title: "Hata",
+          description: response.error || 'Servis silinemedi',
+          variant: "destructive",
+        });
       }
     } catch (err: any) {
-      toast.error('Servis silinirken hata oluştu');
+      toast({
+        title: "Hata",
+        description: 'Servis silinirken hata oluştu',
+        variant: "destructive",
+      });
+    } finally {
+      setDeleteDialogOpen(false);
+      setServiceToDelete(null);
     }
   };
 
@@ -54,102 +84,139 @@ export default function ServicesPage() {
            service.displayName?.toLowerCase().includes(searchQuery.toLowerCase());
   });
 
-  const getStatusColor = (status: string) => {
+  const getStatusVariant = (status: string): "default" | "secondary" | "destructive" | "outline" | "success" | "warning" => {
     switch (status) {
-      case 'RUNNING': return 'bg-emerald-900/40 text-emerald-400 border-emerald-800/50';
-      case 'STOPPED': return 'bg-red-900/40 text-red-400 border-red-800/50';
-      case 'DEGRADED': return 'bg-amber-900/40 text-amber-400 border-amber-800/50';
-      default: return 'bg-slate-900/40 text-slate-400 border-slate-800/50';
+      case 'RUNNING': return 'success';
+      case 'STOPPED': return 'destructive';
+      case 'DEGRADED': return 'warning';
+      default: return 'secondary';
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#000033]">
-      <Header />
+    <>
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-white tracking-tight">Servisler ve Uygulamalar</h1>
-            <p className="mt-2 text-blue-300">Ağ servislerini ve yazılım yığınlarını izleyin ve yönetin</p>
+            <h1 className="text-3xl font-bold tracking-tight">Servisler ve Uygulamalar</h1>
+            <p className="mt-2 text-muted-foreground">Ağ servislerini ve yazılım yığınlarını izleyin ve yönetin</p>
           </div>
-          <button className="px-6 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-500 font-bold shadow-lg shadow-purple-900/20 transition-all">
-            + Servis Kaydet
-          </button>
+          <Button size="lg" className="font-bold shadow-lg shadow-primary/20">
+            <Plus className="mr-2 h-5 w-5" />
+            Yeni Servis Kaydet
+          </Button>
         </div>
 
         {/* Search */}
-        <div className="bg-[#000044] p-4 rounded-xl shadow-lg border border-blue-800 mb-6 flex gap-4">
-          <div className="flex-1 relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-400">🔍</span>
-            <input 
-              type="text" 
-              placeholder="Servisleri isme göre ara..." 
-              className="w-full pl-10 pr-4 py-2 bg-blue-950 border border-blue-800 rounded-lg text-white placeholder-blue-500 focus:ring-2 focus:ring-purple-600 outline-none transition-all"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-        </div>
+        <Card className="mb-6">
+          <CardContent className="p-4 flex gap-4">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input 
+                placeholder="Servisleri isme göre ara..." 
+                className="pl-10"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+            <Button variant="outline" size="icon" onClick={loadServices} title="Yenile">
+              <RefreshCcw className="h-4 w-4" />
+            </Button>
+          </CardContent>
+        </Card>
 
         {loading ? (
           <div className="flex justify-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
+            <RefreshCcw className="h-12 w-12 animate-spin text-primary" />
           </div>
         ) : error ? (
-          <div className="bg-red-900/20 border border-red-800 rounded-lg p-4 text-red-400">
-            {error}
-            <button onClick={loadServices} className="ml-4 font-bold underline hover:text-red-300 transition-colors">Tekrar Dene</button>
-          </div>
+          <Card className="border-destructive bg-destructive/10">
+            <CardContent className="p-6 flex items-center justify-between">
+              <p className="text-destructive font-medium">{error}</p>
+              <Button variant="outline" size="sm" onClick={loadServices}>Tekrar Dene</Button>
+            </CardContent>
+          </Card>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredServices.length === 0 ? (
-              <div className="col-span-full py-12 text-center text-blue-400 bg-[#000044] rounded-xl border border-blue-800 shadow-xl">
-                Henüz kayıtlı servis yok.
-              </div>
+              <Card className="col-span-full">
+                <CardContent className="py-12 text-center text-muted-foreground">
+                  Henüz kayıtlı servis bulunamadı.
+                </CardContent>
+              </Card>
             ) : (
               filteredServices.map((service) => (
-                <div key={service.id} className="bg-[#000044] rounded-xl shadow-xl border border-blue-800 p-6 hover:border-blue-500 transition-all group">
-                  <div className="flex justify-between items-start mb-4">
-                    <div>
-                      <h3 className="font-bold text-white text-lg group-hover:text-purple-400 transition-colors">{service.displayName || service.name}</h3>
-                      <p className="text-xs text-blue-400 uppercase tracking-widest font-black mt-1">{service.type.replace(/_/g, ' ')}</p>
+                <Card key={service.id} className="hover:border-primary/50 transition-colors group overflow-hidden shadow-md">
+                  <CardHeader className="pb-3">
+                    <div className="flex justify-between items-start">
+                      <div className="space-y-1">
+                        <CardTitle className="text-lg group-hover:text-primary transition-colors">
+                          {service.displayName || service.name}
+                        </CardTitle>
+                        <CardDescription className="text-[10px] uppercase tracking-widest font-bold">
+                          {service.type.replace(/_/g, ' ')}
+                        </CardDescription>
+                      </div>
+                      <Badge variant={getStatusVariant(service.status)}>
+                        {service.status === 'RUNNING' ? 'ÇALIŞIYOR' : 
+                         service.status === 'STOPPED' ? 'DURDURULDU' : 
+                         service.status === 'DEGRADED' ? 'SORUNLU' : service.status}
+                      </Badge>
                     </div>
-                    <span className={`px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border ${getStatusColor(service.status)}`}>
-                      {service.status === 'RUNNING' ? 'ÇALIŞIYOR' : 
-                       service.status === 'STOPPED' ? 'DURDURULDU' : 
-                       service.status === 'DEGRADED' ? 'SORUNLU' : service.status}
-                    </span>
-                  </div>
+                  </CardHeader>
                   
-                  <div className="space-y-4 mb-8">
-                    <div className="flex items-center text-sm">
-                      <span className="w-24 text-blue-400 font-bold uppercase text-xs tracking-wider">Port:</span>
-                      <span className="bg-blue-950 px-3 py-1 rounded-lg border border-blue-800 font-mono text-xs text-white shadow-inner">{service.port} / {service.protocol}</span>
+                  <CardContent className="pb-4">
+                    <div className="space-y-3">
+                      <div className="flex items-center text-sm">
+                        <span className="w-20 text-muted-foreground font-semibold text-xs uppercase tracking-wider">Port/Prot:</span>
+                        <Badge variant="secondary" className="font-mono text-[11px]">
+                          {service.port} / {service.protocol}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center text-sm">
+                        <span className="w-20 text-muted-foreground font-semibold text-xs uppercase tracking-wider">Kritiklik:</span>
+                        <span className={cn(
+                          "text-xs font-black uppercase tracking-tight",
+                          service.criticality === 'CRITICAL' ? 'text-destructive' : 
+                          service.criticality === 'HIGH' ? 'text-orange-500' : 'text-primary'
+                        )}>
+                          {service.criticality}
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex items-center text-sm">
-                      <span className="w-24 text-blue-400 font-bold uppercase text-xs tracking-wider">Kritiklik:</span>
-                      <span className={`text-xs font-black uppercase tracking-tight ${
-                        service.criticality === 'CRITICAL' ? 'text-red-400' : 
-                        service.criticality === 'HIGH' ? 'text-amber-400' : 'text-blue-200'
-                      }`}>{service.criticality}</span>
-                    </div>
-                  </div>
+                  </CardContent>
 
-                  <div className="flex justify-between items-center pt-4 border-t border-blue-800/50">
-                    <button className="text-purple-400 hover:text-purple-300 text-sm font-bold transition-colors">Detaylar</button>
-                    <button 
+                  <div className="flex justify-between items-center p-4 bg-muted/30 border-t border-border/50">
+                    <Button variant="ghost" size="sm" className="h-8 text-primary hover:text-primary hover:bg-primary/10">
+                      <Settings2 className="h-3.5 w-3.5 mr-1.5" />
+                      Detaylar
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                       onClick={() => handleDelete(service.id, service.name)}
-                      className="text-blue-500 hover:text-red-400 text-sm font-medium transition-colors"
                     >
+                      <Trash2 className="h-3.5 w-3.5 mr-1.5" />
                       Sil
-                    </button>
+                    </Button>
                   </div>
-                </div>
+                </Card>
               ))
             )}
           </div>
         )}
+
+        <ConfirmDialog
+          open={deleteDialogOpen}
+          onOpenChange={setDeleteDialogOpen}
+          title="Servisi Sil"
+          description={`${serviceToDelete?.name} servisini silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.`}
+          onConfirm={confirmDelete}
+          variant="destructive"
+          confirmText="Sil"
+        />
       </main>
-    </div>
+    </>
   );
 }

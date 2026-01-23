@@ -1,15 +1,15 @@
 import './globals.css';
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
-import { ToastContainer } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+import { Toaster } from "@/components/ui/toaster";
+import { Sidebar } from '../components/layout/Sidebar';
 
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'InfraScope - Enterprise Infrastructure Management',
-  description: 'Centralized platform for managing IT operations and infrastructure',
-  keywords: ['infrastructure', 'DCIM', 'network topology', 'inventory', 'management'],
+  title: 'InfraScope - Kurumsal Altyapı Yönetimi',
+  description: 'BT operasyonları ve altyapı yönetimi için merkezi platform',
+  keywords: ['altyapı', 'DCIM', 'ağ topolojisi', 'envanter', 'yönetim'],
 };
 
 export default function RootLayout({
@@ -19,14 +19,31 @@ export default function RootLayout({
 }) {
   return (
     <html lang="tr" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              try {
+                const theme = localStorage.getItem('theme') || 'light';
+                if (theme === 'dark') {
+                  document.documentElement.classList.add('dark');
+                } else {
+                  document.documentElement.classList.remove('dark');
+                }
+              } catch (e) {}
+            `,
+          }}
+        />
+      </head>
       <body className={inter.className} suppressHydrationWarning>
-        <div className="min-h-screen bg-[#000033]">
+        <div className="flex min-h-screen bg-background text-foreground transition-colors duration-300">
+          <Sidebar />
           {/* Main content wrapper */}
-          <main className="w-full">
+          <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
             {children}
           </main>
         </div>
-        <ToastContainer position="bottom-right" theme="dark" />
+        <Toaster />
       </body>
     </html>
   );

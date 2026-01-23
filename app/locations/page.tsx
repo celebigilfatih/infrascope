@@ -1,10 +1,27 @@
 'use client';
 
-import { Header } from '../../components/layout/Header';
 import React, { useState, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import { apiGet, apiPost, apiPut, apiDelete } from '../../lib/api';
-import { toast } from 'react-toastify';
-import { FloorPlanView } from '@/components/3d/FloorPlanView';
+import { useToast } from '@/components/ui/use-toast';
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
+
+// Dynamically import 3D components with SSR disabled to prevent build errors
+const FloorPlanView = dynamic(() => import('@/components/3d/FloorPlanView').then(mod => mod.FloorPlanView), { 
+  ssr: false,
+  loading: () => <div className="flex-1 flex items-center justify-center bg-muted/20 text-muted-foreground italic">Görünüm yükleniyor...</div>
+});
+
+const Room3D = dynamic(() => import('@/components/3d/Room3D').then(mod => mod.Room3D), { 
+  ssr: false,
+  loading: () => <div className="flex-1 flex items-center justify-center bg-muted/20 text-muted-foreground italic">3D Modül yükleniyor...</div>
+});
+
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Building2, ChevronRight, ChevronDown, Circle, Edit, Trash2, Plus, Eye, X } from 'lucide-react';
 
 // Simple Error Boundary Component
 class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean, error: Error | null}> {
@@ -89,6 +106,7 @@ interface Rack {
 type ModalType = 'org' | 'building' | 'floor' | 'room' | 'rack' | 'device';
 
 export default function LocationsPage() {
+  const { toast } = useToast();
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -101,6 +119,11 @@ export default function LocationsPage() {
   const [selectedRackId, setSelectedRackId] = useState<string | null>(null);
   const [editingItem, setEditingItem] = useState<any>(null);
   const [viewing3DRoom, setViewing3DRoom] = useState<Room | null>(null);
+  const [viewMode, setViewMode] = useState<'2d' | '3d'>('2d');
+
+  // Delete dialog state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<{type: string, id: string, name: string} | null>(null);
 
   // Load data
   useEffect(() => {
@@ -153,6 +176,23 @@ export default function LocationsPage() {
     setShowDeviceModal(true);
   };
 
+  const handleView3DRoom = async (room: Room) => {
+    try {
+      // Fetch the full room with racks
+      const response: any = await apiGet(`/api/rooms/${room.id}`);
+      if (response.success && response.data) {
+        setViewing3DRoom(response.data);
+      } else {
+        // Fallback to the room as-is if fetch fails
+        setViewing3DRoom(room);
+      }
+    } catch (err) {
+      console.error('Error fetching room:', err);
+      // Fallback to the room as-is if fetch fails
+      setViewing3DRoom(room);
+    }
+  };
+
   const handleAdd = async (formData: any) => {
     try {
       let endpoint = '';
@@ -189,12 +229,23 @@ export default function LocationsPage() {
         setShowAddModal(false);
         setShowDeviceModal(false);
         loadData();
-        toast.success(`${modalType.charAt(0).toUpperCase() + modalType.slice(1)} başarıyla eklendi!`);
+        toast({
+          title: "Başarılı",
+          description: `${modalType.charAt(0).toUpperCase() + modalType.slice(1)} başarıyla eklendi!`,
+        });
       } else {
-        toast.error(`Error: ${response.error || 'Failed to add item'}`);
+        toast({
+          title: "Hata",
+          description: response.error || 'İşlem başarısız',
+          variant: "destructive",
+        });
       }
     } catch (err: any) {
-      toast.error(`Error: ${err.message || 'Failed to add item'}`);
+      toast({
+        title: "Hata",
+        description: err.message || 'Bir hata oluştu',
+        variant: "destructive",
+      });
     }
   };
 
@@ -228,49 +279,70 @@ export default function LocationsPage() {
       if (response.success) {
         setShowEditModal(false);
         loadData();
-        toast.success(`${modalType.charAt(0).toUpperCase() + modalType.slice(1)} updated successfully!`);
+        toast({
+          title: "Başarılı",
+          description: `${modalType.charAt(0).toUpperCase() + modalType.slice(1)} başarıyla güncellendi!`,
+        });
       } else {
-        toast.error(`Error: ${response.error || 'Failed to update item'}`);
+        toast({
+          title: "Hata",
+          description: response.error || 'Güncelleme başarısız',
+          variant: "destructive",
+        });
       }
     } catch (err: any) {
-      toast.error(`Error: ${err.message || 'Failed to update item'}`);
+      toast({
+        title: "Hata",
+        description: err.message || 'Bir hata oluştu',
+        variant: "destructive",
+      });
     }
   };
 
-  const handleDelete = async (type: string, id: string, name: string) => {
-    if (!confirm(`Are you sure you want to delete ${name}?`)) return;
+  const handleDelete = (type: string, id: string, name: string) => {
+    setItemToDelete({ type, id, name });
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!itemToDelete) return;
 
     try {
       let endpoint = '';
+      const { type, id, name } = itemToDelete;
 
       switch (type) {
-        case 'org':
-          endpoint = `/api/organizations/${id}`;
-          break;
-        case 'building':
-          endpoint = `/api/buildings/${id}`;
-          break;
-        case 'floor':
-          endpoint = `/api/floors/${id}`;
-          break;
-        case 'room':
-          endpoint = `/api/rooms/${id}`;
-          break;
-        case 'rack':
-          endpoint = `/api/racks/${id}`;
-          break;
-        case 'device':
-          endpoint = `/api/devices/${id}`;
-          break;
+        case 'org': endpoint = `/api/organizations/${id}`; break;
+        case 'building': endpoint = `/api/buildings/${id}`; break;
+        case 'floor': endpoint = `/api/floors/${id}`; break;
+        case 'room': endpoint = `/api/rooms/${id}`; break;
+        case 'rack': endpoint = `/api/racks/${id}`; break;
+        case 'device': endpoint = `/api/devices/${id}`; break;
       }
 
       const response: any = await apiDelete(endpoint);
       if (response.success) {
         loadData();
-        toast.success(`${type.charAt(0).toUpperCase() + type.slice(1)} deleted successfully!`);
+        toast({
+          title: "Başarılı",
+          description: `${name} başarıyla silindi.`,
+        });
+      } else {
+        toast({
+          title: "Hata",
+          description: response.error || 'Silme işlemi başarısız',
+          variant: "destructive",
+        });
       }
     } catch (err: any) {
-      toast.error(`Error: ${err.message || 'Failed to delete item'}`);
+      toast({
+        title: "Hata",
+        description: err.message || 'Silme işlemi sırasında hata oluştu',
+        variant: "destructive",
+      });
+    } finally {
+      setDeleteDialogOpen(false);
+      setItemToDelete(null);
     }
   };
 
@@ -279,43 +351,68 @@ export default function LocationsPage() {
     const hasChildren = org.buildings && org.buildings.length > 0;
 
     return (
-      <div key={org.id} className="border-b border-blue-900 last:border-b-0">
-        <div className="py-4 px-4 hover:bg-blue-800/30 flex items-center justify-between bg-[#000044] transition-colors">
-          <div className="flex items-center space-x-3 flex-1">
-            <button
-              onClick={() => hasChildren && toggleExpand(org.id)}
-              className="text-blue-300 hover:text-white w-6 h-6 flex items-center justify-center transition-colors"
-            >
-              {hasChildren ? (isExpanded ? '▼' : '▶') : '○'}
-            </button>
-            <div>
-              <p className="font-bold text-lg text-white">{org.name}</p>
-              <p className="text-sm text-blue-300">Organizasyon • {org.code}</p>
+      <Card key={org.id} className="mb-4">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3 flex-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => hasChildren && toggleExpand(org.id)}
+                className="h-8 w-8"
+              >
+                {hasChildren ? (
+                  isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />
+                ) : (
+                  <Circle className="h-3 w-3" />
+                )}
+              </Button>
+              <div className="flex-1">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Building2 className="h-5 w-5 text-primary" />
+                  {org.name}
+                </CardTitle>
+                <CardDescription className="mt-1">
+                  Organizasyon • {org.code}
+                </CardDescription>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => openEditModal('org', org)}
+              >
+                <Edit className="h-4 w-4 mr-1" />
+                Düzenle
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => handleDelete('org', org.id, org.name)}
+              >
+                <Trash2 className="h-4 w-4 mr-1" />
+                Sil
+              </Button>
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => openAddModal('building', org.id)}
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                Bina
+              </Button>
             </div>
           </div>
-          <div className="flex space-x-2">
-            <button
-              onClick={() => openEditModal('org', org)}
-              className="px-3 py-1 text-sm bg-blue-800 text-white rounded hover:bg-blue-700 transition-colors"
-            >
-              Düzenle
-            </button>
-            <button
-              onClick={() => handleDelete('org', org.id, org.name)}
-              className="px-3 py-1 text-sm bg-red-800 text-white rounded hover:bg-red-700 transition-colors"
-            >
-              Sil
-            </button>
-            <button
-              onClick={() => openAddModal('building', org.id)}
-              className="px-3 py-1 text-sm bg-green-700 text-white rounded hover:bg-green-600 transition-colors"
-            >
-              + Bina
-            </button>
-          </div>
-        </div>
-        {isExpanded && org.buildings && org.buildings.map(building => renderBuilding(building))}
-      </div>
+        </CardHeader>
+        {isExpanded && org.buildings && org.buildings.length > 0 && (
+          <CardContent className="pt-0">
+            <div className="space-y-2">
+              {org.buildings.map(building => renderBuilding(building))}
+            </div>
+          </CardContent>
+        )}
+      </Card>
     );
   };
 
@@ -324,45 +421,68 @@ export default function LocationsPage() {
     const hasChildren = building.floors && building.floors.length > 0;
 
     return (
-      <div key={building.id} className="pl-6 bg-[#000033]/30">
-        <div className="py-4 px-4 hover:bg-blue-800/30 flex items-center justify-between border-l border-blue-800 transition-colors">
-          <div className="flex items-center space-x-3 flex-1">
-            <button
-              onClick={() => hasChildren && toggleExpand(building.id)}
-              className="text-blue-300 hover:text-white w-6 h-6 flex items-center justify-center transition-colors"
-            >
-              {hasChildren ? (isExpanded ? '▼' : '▶') : '○'}
-            </button>
-            <div>
-              <p className="font-semibold text-white">{building.name}</p>
-              <p className="text-sm text-blue-300">
-                Bina {building.city && ` • ${building.city}`}
-              </p>
+      <Card key={building.id} className="ml-4">
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 flex-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => hasChildren && toggleExpand(building.id)}
+                className="h-7 w-7"
+              >
+                {hasChildren ? (
+                  isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />
+                ) : (
+                  <Circle className="h-2 w-2" />
+                )}
+              </Button>
+              <div className="flex-1">
+                <p className="font-semibold text-sm">{building.name}</p>
+                <p className="text-xs text-muted-foreground">
+                  Bina{building.city && ` • ${building.city}`}
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-1.5">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => openEditModal('building', building)}
+                className="h-8 text-xs"
+              >
+                <Edit className="h-3 w-3 mr-1" />
+                Düzenle
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => handleDelete('building', building.id, building.name)}
+                className="h-8 text-xs"
+              >
+                <Trash2 className="h-3 w-3 mr-1" />
+                Sil
+              </Button>
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => openAddModal('floor', building.id)}
+                className="h-8 text-xs"
+              >
+                <Plus className="h-3 w-3 mr-1" />
+                Kat
+              </Button>
             </div>
           </div>
-          <div className="flex space-x-2">
-            <button
-              onClick={() => openEditModal('building', building)}
-              className="px-3 py-1 text-sm bg-blue-800 text-white rounded hover:bg-blue-700 transition-colors"
-            >
-              Düzenle
-            </button>
-            <button
-              onClick={() => handleDelete('building', building.id, building.name)}
-              className="px-3 py-1 text-sm bg-red-800 text-white rounded hover:bg-red-700 transition-colors"
-            >
-              Sil
-            </button>
-            <button
-              onClick={() => openAddModal('floor', building.id)}
-              className="px-3 py-1 text-sm bg-green-700 text-white rounded hover:bg-green-600 transition-colors"
-            >
-              + Kat
-            </button>
-          </div>
-        </div>
-        {isExpanded && building.floors && building.floors.map(floor => renderFloor(floor))}
-      </div>
+        </CardHeader>
+        {isExpanded && building.floors && building.floors.length > 0 && (
+          <CardContent className="pt-0 pb-3">
+            <div className="space-y-2">
+              {building.floors.map(floor => renderFloor(floor))}
+            </div>
+          </CardContent>
+        )}
+      </Card>
     );
   };
 
@@ -371,43 +491,66 @@ export default function LocationsPage() {
     const hasChildren = floor.rooms && floor.rooms.length > 0;
 
     return (
-      <div key={floor.id} className="pl-6 bg-[#000033]/30">
-        <div className="py-4 px-4 hover:bg-blue-800/30 flex items-center justify-between border-l border-blue-800 transition-colors">
-          <div className="flex items-center space-x-3 flex-1">
-            <button
-              onClick={() => hasChildren && toggleExpand(floor.id)}
-              className="text-blue-300 hover:text-white w-6 h-6 flex items-center justify-center transition-colors"
-            >
-              {hasChildren ? (isExpanded ? '▼' : '▶') : '○'}
-            </button>
-            <div>
-              <p className="font-medium text-white">{floor.name}</p>
-              <p className="text-sm text-blue-300">Kat {floor.floorNumber}</p>
+      <Card key={floor.id} className="ml-4">
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 flex-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => hasChildren && toggleExpand(floor.id)}
+                className="h-6 w-6"
+              >
+                {hasChildren ? (
+                  isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />
+                ) : (
+                  <Circle className="h-2 w-2" />
+                )}
+              </Button>
+              <div className="flex-1">
+                <p className="font-medium text-sm">{floor.name}</p>
+                <p className="text-xs text-muted-foreground">Kat {floor.floorNumber}</p>
+              </div>
+            </div>
+            <div className="flex gap-1.5">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => openEditModal('floor', floor)}
+                className="h-7 text-xs"
+              >
+                <Edit className="h-3 w-3 mr-1" />
+                Düzenle
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => handleDelete('floor', floor.id, floor.name)}
+                className="h-7 text-xs"
+              >
+                <Trash2 className="h-3 w-3 mr-1" />
+                Sil
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => openAddModal('room', floor.id)}
+                className="h-7 text-xs"
+              >
+                <Plus className="h-3 w-3 mr-1" />
+                Oda
+              </Button>
             </div>
           </div>
-          <div className="flex space-x-2">
-            <button
-              onClick={() => openEditModal('floor', floor)}
-              className="px-3 py-1 text-sm bg-blue-800 text-white rounded hover:bg-blue-700 transition-colors"
-            >
-              Düzenle
-            </button>
-            <button
-              onClick={() => handleDelete('floor', floor.id, floor.name)}
-              className="px-3 py-1 text-sm bg-red-800 text-white rounded hover:bg-red-700 transition-colors"
-            >
-              Sil
-            </button>
-            <button
-              onClick={() => openAddModal('room', floor.id)}
-              className="px-3 py-1 text-sm bg-purple-700 text-white rounded hover:bg-purple-600 transition-colors"
-            >
-              + Oda
-            </button>
-          </div>
-        </div>
-        {isExpanded && floor.rooms && floor.rooms.map(room => renderRoom(room))}
-      </div>
+        </CardHeader>
+        {isExpanded && floor.rooms && floor.rooms.length > 0 && (
+          <CardContent className="pt-0 pb-2">
+            <div className="space-y-2">
+              {floor.rooms.map(room => renderRoom(room))}
+            </div>
+          </CardContent>
+        )}
+      </Card>
     );
   };
 
@@ -416,103 +559,143 @@ export default function LocationsPage() {
     const hasChildren = room.racks && room.racks.length > 0;
 
     return (
-      <div key={room.id} className="pl-6 bg-[#000033]/30">
-        <div className="py-4 px-4 hover:bg-blue-800/30 flex items-center justify-between border-l border-blue-800 transition-colors">
-          <div className="flex items-center space-x-3 flex-1">
-            <button
-              onClick={() => hasChildren && toggleExpand(room.id)}
-              className="text-blue-300 hover:text-white w-6 h-6 flex items-center justify-center transition-colors"
-            >
-              {hasChildren ? (isExpanded ? '▼' : '▶') : '○'}
-            </button>
-            <div>
-              <p className="font-medium text-white">{room.name}</p>
-              <p className="text-sm text-blue-300">Oda</p>
+      <Card key={room.id} className="ml-4">
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 flex-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => hasChildren && toggleExpand(room.id)}
+                className="h-6 w-6"
+              >
+                {hasChildren ? (
+                  isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />
+                ) : (
+                  <Circle className="h-2 w-2" />
+                )}
+              </Button>
+              <div className="flex-1">
+                <p className="font-medium text-sm">{room.name}</p>
+                <p className="text-xs text-muted-foreground">Oda</p>
+              </div>
+            </div>
+            <div className="flex gap-1.5">
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => handleView3DRoom(room)}
+                className="h-7 text-xs"
+              >
+                <Eye className="h-3 w-3 mr-1" />
+                3D Görünüm
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => openEditModal('room', room)}
+                className="h-7 text-xs"
+              >
+                <Edit className="h-3 w-3 mr-1" />
+                Düzenle
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => handleDelete('room', room.id, room.name)}
+                className="h-7 text-xs"
+              >
+                <Trash2 className="h-3 w-3 mr-1" />
+                Sil
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => openAddModal('rack', room.id)}
+                className="h-7 text-xs"
+              >
+                <Plus className="h-3 w-3 mr-1" />
+                Kabinet
+              </Button>
             </div>
           </div>
-          <div className="flex space-x-2">
-            <button
-              onClick={() => setViewing3DRoom(room)}
-              className="px-3 py-1 text-sm bg-indigo-700 text-white rounded hover:bg-indigo-600 transition-colors"
-            >
-              3D Görünüm
-            </button>
-            <button
-              onClick={() => openEditModal('room', room)}
-              className="px-3 py-1 text-sm bg-blue-800 text-white rounded hover:bg-blue-700 transition-colors"
-            >
-              Düzenle
-            </button>
-            <button
-              onClick={() => handleDelete('room', room.id, room.name)}
-              className="px-3 py-1 text-sm bg-red-800 text-white rounded hover:bg-red-700 transition-colors"
-            >
-              Sil
-            </button>
-            <button
-              onClick={() => openAddModal('rack', room.id)}
-              className="px-3 py-1 text-sm bg-orange-700 text-white rounded hover:bg-orange-600 transition-colors"
-            >
-              + Kabinet
-            </button>
-          </div>
-        </div>
-        {isExpanded && room.racks && room.racks.map(rack => renderRack(rack))}
-      </div>
+        </CardHeader>
+        {isExpanded && room.racks && room.racks.length > 0 && (
+          <CardContent className="pt-0 pb-2">
+            <div className="space-y-2">
+              {room.racks.map(rack => renderRack(rack))}
+            </div>
+          </CardContent>
+        )}
+      </Card>
     );
   };
 
   const renderRack = (rack: Rack) => {
     return (
-      <div key={rack.id} className="pl-6 bg-[#000033]/30">
-        <div className="py-4 px-4 hover:bg-blue-800/30 flex items-center justify-between border-l border-blue-800 transition-colors">
-          <div className="flex items-center space-x-3 flex-1">
-            <span className="w-6 h-6 flex items-center justify-center text-orange-500">📦</span>
-            <div>
-              <p className="font-medium text-white">{rack.name}</p>
-              <p className="text-sm text-blue-300">{rack.type} • {rack.maxUnits}U</p>
+      <Card key={rack.id} className="ml-4">
+        <CardHeader className="py-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 flex-1">
+              <span className="text-lg">📦</span>
+              <div className="flex-1">
+                <p className="font-medium text-sm">{rack.name}</p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <Badge variant="outline" className="text-xs">{rack.type}</Badge>
+                  <Badge variant="secondary" className="text-xs">{rack.maxUnits}U</Badge>
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-1.5">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => openEditModal('rack', rack)}
+                className="h-7 text-xs"
+              >
+                <Edit className="h-3 w-3 mr-1" />
+                Düzenle
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => handleDelete('rack', rack.id, rack.name)}
+                className="h-7 text-xs"
+              >
+                <Trash2 className="h-3 w-3 mr-1" />
+                Sil
+              </Button>
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => openDeviceModal(rack.id)}
+                className="h-7 text-xs"
+              >
+                <Plus className="h-3 w-3 mr-1" />
+                Cihaz
+              </Button>
             </div>
           </div>
-          <div className="flex space-x-2">
-            <button
-              onClick={() => openEditModal('rack', rack)}
-              className="px-3 py-1 text-sm bg-blue-800 text-white rounded hover:bg-blue-700 transition-colors"
-            >
-              Düzenle
-            </button>
-            <button
-              onClick={() => handleDelete('rack', rack.id, rack.name)}
-              className="px-3 py-1 text-sm bg-red-800 text-white rounded hover:bg-red-700 transition-colors"
-            >
-              Sil
-            </button>
-            <button
-              onClick={() => openDeviceModal(rack.id)}
-              className="px-3 py-1 text-sm bg-indigo-700 text-white rounded hover:bg-indigo-600 transition-colors"
-            >
-              + Cihaz
-            </button>
-          </div>
-        </div>
-      </div>
+        </CardHeader>
+      </Card>
     );
   };
 
   return (
-    <div className="min-h-screen bg-[#000033] text-white">
-      <Header />
+    <>
       <main className="w-full px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8 flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-white">Altyapı Konumları</h1>
-            <p className="mt-2 text-blue-200">Fiziksel altyapı hiyerarşinizi yönetin</p>
+            <h1 className="text-3xl font-bold">Altyapı Konumları</h1>
+            <p className="mt-2 text-muted-foreground">Fiziksel altyapı hiyerarşinizi yönetin</p>
           </div>
-          <button
+          <Button
             onClick={() => openAddModal('org')}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors"
+            size="default"
           >
-            + Organizasyon Ekle
-          </button>
+            <Plus className="h-4 w-4 mr-2" />
+            Organizasyon Ekle
+          </Button>
         </div>
 
         {loading && (
@@ -523,44 +706,57 @@ export default function LocationsPage() {
         )}
 
         {error && (
-          <div className="bg-red-900/50 border border-red-700 rounded-lg p-4 mb-6">
-            <p className="text-red-200">{error}</p>
-            <button onClick={loadData} className="mt-2 text-red-300 hover:text-red-100 font-medium underline">
-              Tekrar Dene
-            </button>
-          </div>
+          <Card className="mb-6 border-destructive">
+            <CardContent className="pt-6">
+              <p className="text-destructive">{error}</p>
+              <Button 
+                variant="outline" 
+                onClick={loadData} 
+                className="mt-3"
+                size="sm"
+              >
+                Tekrar Dene
+              </Button>
+            </CardContent>
+          </Card>
         )}
 
         {!loading && !error && (
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-            <div className="lg:col-span-3 bg-[#000044] rounded-lg border border-blue-900 overflow-hidden shadow-xl">
+            <div className="lg:col-span-3 space-y-4">
               {organizations.length === 0 ? (
-                <div className="text-center py-12 text-blue-300">
-                  <p className="text-lg font-medium">Henüz organizasyon yok</p>
-                  <p className="mt-2">Başlamak için "+ Organizasyon Ekle"ye tıklayın</p>
-                </div>
+                <Card>
+                  <CardContent className="py-12 text-center">
+                    <p className="text-lg font-medium text-muted-foreground">Henüz organizasyon yok</p>
+                    <p className="mt-2 text-sm text-muted-foreground">Başlamak için "Organizasyon Ekle"ye tıklayın</p>
+                  </CardContent>
+                </Card>
               ) : (
-                <div className="divide-y divide-blue-900">
-                  {organizations.map(org => renderOrganization(org))}
-                </div>
+                organizations.map(org => renderOrganization(org))
               )}
             </div>
 
-            <div className="bg-[#000044] rounded-lg border border-blue-900 p-6 shadow-xl h-fit">
-              <h2 className="text-lg font-bold text-white mb-4">Özet</h2>
-              <div className="space-y-3">
-                <div className="p-4 bg-blue-900/50 rounded-lg border border-blue-800">
-                  <p className="text-sm text-blue-200">Organizasyonlar</p>
-                  <p className="text-2xl font-bold text-white">{organizations.length}</p>
-                </div>
-                <div className="p-4 bg-blue-900/50 rounded-lg border border-blue-800">
-                  <p className="text-sm text-blue-200">Binalar</p>
-                  <p className="text-2xl font-bold text-white">
-                    {organizations.reduce((sum, org) => sum + (org.buildings?.length || 0), 0)}
-                  </p>
-                </div>
-              </div>
-            </div>
+            <Card className="h-fit">
+              <CardHeader>
+                <CardTitle>Özet</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Card>
+                  <CardContent className="pt-4">
+                    <p className="text-sm text-muted-foreground">Organizasyonlar</p>
+                    <p className="text-2xl font-bold">{organizations.length}</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-4">
+                    <p className="text-sm text-muted-foreground">Binalar</p>
+                    <p className="text-2xl font-bold">
+                      {organizations.reduce((sum, org) => sum + (org.buildings?.length || 0), 0)}
+                    </p>
+                  </CardContent>
+                </Card>
+              </CardContent>
+            </Card>
           </div>
         )}
 
@@ -593,37 +789,59 @@ export default function LocationsPage() {
 
         {/* 3D Room View Modal */}
         {viewing3DRoom && (
-          <div className="fixed inset-0 bg-black/95 flex items-center justify-center z-[5000] backdrop-blur-sm">
-            <div className="bg-[#000033] w-full h-full flex flex-col">
-              <div className="p-4 border-b border-blue-900 flex justify-between items-center bg-gradient-to-r from-[#000044] to-[#000055]">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center">
-                    <span className="text-2xl">🏢</span>
+          <div className="fixed inset-0 bg-background/95 flex items-center justify-center z-[5000] backdrop-blur-sm">
+            <div className="bg-background w-full h-full flex flex-col">
+              <div className="p-4 border-b border-border flex justify-between items-center bg-muted/30">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+                    <Building2 className="h-6 w-6 text-primary" />
                   </div>
                   <div>
-                    <h2 className="text-xl font-bold text-white">{viewing3DRoom.name}</h2>
-                    <p className="text-sm text-blue-300">Data Center Görselleştirme - Düzenleme Modu</p>
+                    <h2 className="text-xl font-bold">{viewing3DRoom.name}</h2>
+                    <p className="text-sm text-muted-foreground">Veri Merkezi Görselleştirme</p>
                   </div>
                 </div>
-                <button 
-                  onClick={() => setViewing3DRoom(null)}
-                  className="p-2 hover:bg-blue-800 rounded-full text-blue-300 hover:text-white transition-colors"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
+                <div className="flex items-center gap-4">
+                  <Tabs defaultValue="2d" className="w-[200px]" onValueChange={(v: string) => setViewMode(v as '2d' | '3d')}>
+                    <TabsList className="grid w-full grid-cols-2">
+                      <TabsTrigger value="2d">Plan</TabsTrigger>
+                      <TabsTrigger value="3d">3D</TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                  <Button 
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setViewing3DRoom(null)}
+                    className="rounded-full"
+                  >
+                    <X className="h-6 w-6" />
+                  </Button>
+                </div>
               </div>
-              <div className="flex-1 overflow-hidden">
+              <div className="flex-1 overflow-hidden relative">
                 <ErrorBoundary>
-                  {viewing3DRoom && <FloorPlanView room={viewing3DRoom} onUpdate={loadData} />}
+                  {viewMode === '2d' ? (
+                    <FloorPlanView room={viewing3DRoom} onUpdate={loadData} />
+                  ) : (
+                    <Room3D room={viewing3DRoom} onRackClick={(rackId) => console.log('Rack clicked:', rackId)} />
+                  )}
                 </ErrorBoundary>
               </div>
             </div>
           </div>
         )}
+
+        <ConfirmDialog
+          open={deleteDialogOpen}
+          onOpenChange={setDeleteDialogOpen}
+          title="Silme İşlemini Onayla"
+          description={`${itemToDelete?.name} ögesini silmek istediğinizden emin misiniz? Bu işlem bağlı tüm alt ögeleri de silebilir.`}
+          onConfirm={confirmDelete}
+          variant="destructive"
+          confirmText="Sil"
+        />
       </main>
-    </div>
+    </>
   );
 }
 
@@ -640,7 +858,7 @@ function UniversalAddModal({ type, onClose, onSubmit }: {
     onSubmit(formData);
   };
 
-  const inputClass = "w-full px-4 py-2 bg-blue-950 border border-blue-800 rounded-lg text-white placeholder-blue-400 focus:ring-2 focus:ring-blue-600 outline-none transition-all";
+  const inputClass = "w-full px-4 py-2 bg-muted border border-border rounded-lg text-foreground placeholder-muted-foreground focus:ring-2 focus:ring-primary outline-none transition-all";
 
   const renderFields = () => {
     switch (type) {
@@ -714,14 +932,14 @@ function UniversalAddModal({ type, onClose, onSubmit }: {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[6000] p-4 backdrop-blur-sm">
-      <div className="bg-[#000044] rounded-xl p-6 max-w-md w-full border border-blue-900 shadow-2xl">
-        <h2 className="text-2xl font-bold text-white mb-6">{titles[type]}</h2>
+    <div className="fixed inset-0 bg-background/80 flex items-center justify-center z-[6000] p-4 backdrop-blur-sm">
+      <div className="bg-card rounded-xl p-6 max-w-md w-full border border-border shadow-2xl">
+        <h2 className="text-2xl font-bold mb-6">{titles[type]}</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           {renderFields()}
           <div className="flex space-x-3 pt-6">
-            <button type="button" onClick={onClose} className="flex-1 px-4 py-2 border border-blue-800 text-blue-200 rounded-lg hover:bg-blue-900 transition-colors">İptal</button>
-            <button type="submit" className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold transition-colors shadow-lg">Oluştur</button>
+            <Button type="button" variant="outline" onClick={onClose} className="flex-1">İptal</Button>
+            <Button type="submit" className="flex-1 font-bold shadow-lg">Oluştur</Button>
           </div>
         </form>
       </div>
@@ -743,8 +961,8 @@ function UniversalEditModal({ type, item, onClose, onSubmit }: {
     onSubmit(formData);
   };
 
-  const inputClass = "w-full px-4 py-2 bg-blue-950 border border-blue-800 rounded-lg text-white placeholder-blue-400 focus:ring-2 focus:ring-blue-600 outline-none transition-all";
-  const labelClass = "text-[10px] text-blue-300 ml-1 font-bold uppercase tracking-wider";
+  const inputClass = "w-full px-4 py-2 bg-muted border border-border rounded-lg text-foreground placeholder-muted-foreground focus:ring-2 focus:ring-primary outline-none transition-all";
+  const labelClass = "text-[10px] text-muted-foreground ml-1 font-bold uppercase tracking-wider";
 
   const renderFields = () => {
     switch (type) {
@@ -881,14 +1099,14 @@ function UniversalEditModal({ type, item, onClose, onSubmit }: {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[6000] p-4 backdrop-blur-sm">
-      <div className="bg-[#000044] rounded-xl p-6 max-w-md w-full border border-blue-900 shadow-2xl overflow-y-auto max-h-[90vh]">
-        <h2 className="text-2xl font-bold text-white mb-6">{titles[type]}</h2>
+    <div className="fixed inset-0 bg-background/80 flex items-center justify-center z-[6000] p-4 backdrop-blur-sm">
+      <div className="bg-card rounded-xl p-6 max-w-md w-full border border-border shadow-2xl overflow-y-auto max-h-[90vh]">
+        <h2 className="text-2xl font-bold mb-6">{titles[type]}</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           {renderFields()}
           <div className="flex space-x-3 pt-6">
-            <button type="button" onClick={onClose} className="flex-1 px-4 py-2 border border-blue-800 text-blue-200 rounded-lg hover:bg-blue-900 transition-colors">İptal</button>
-            <button type="submit" className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold transition-colors shadow-lg">Güncelle</button>
+            <Button type="button" variant="outline" onClick={onClose} className="flex-1">İptal</Button>
+            <Button type="submit" className="flex-1 font-bold shadow-lg">Güncelle</Button>
           </div>
         </form>
       </div>
@@ -908,13 +1126,13 @@ function DeviceModal({ onClose, onSubmit }: {
     onSubmit(formData);
   };
 
-  const inputClass = "w-full px-4 py-2 bg-blue-950 border border-blue-800 rounded-lg text-white placeholder-blue-400 focus:ring-2 focus:ring-blue-600 outline-none transition-all";
-  const labelClass = "text-[10px] text-blue-300 ml-1 font-bold uppercase tracking-wider";
+  const inputClass = "w-full px-4 py-2 bg-muted border border-border rounded-lg text-foreground placeholder-muted-foreground focus:ring-2 focus:ring-primary outline-none transition-all";
+  const labelClass = "text-[10px] text-muted-foreground ml-1 font-bold uppercase tracking-wider";
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[6000] p-4 backdrop-blur-sm">
-      <div className="bg-[#000044] rounded-xl p-6 max-w-md w-full border border-blue-900 shadow-2xl">
-        <h2 className="text-2xl font-bold text-white mb-6">Cihaz Ekle</h2>
+    <div className="fixed inset-0 bg-background/80 flex items-center justify-center z-[6000] p-4 backdrop-blur-sm">
+      <div className="bg-card rounded-xl p-6 max-w-md w-full border border-border shadow-2xl">
+        <h2 className="text-2xl font-bold mb-6">Cihaz Ekle</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1">
             <label className={labelClass}>Cihaz Adı</label>
@@ -959,8 +1177,8 @@ function DeviceModal({ onClose, onSubmit }: {
             </select>
           </div>
           <div className="flex space-x-3 pt-6">
-            <button type="button" onClick={onClose} className="flex-1 px-4 py-2 border border-blue-800 text-blue-200 rounded-lg hover:bg-blue-900 transition-colors">İptal</button>
-            <button type="submit" className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold transition-colors shadow-lg">Cihaz Oluştur</button>
+            <Button type="button" variant="outline" onClick={onClose} className="flex-1">İptal</Button>
+            <Button type="submit" className="flex-1 font-bold shadow-lg">Cihaz Oluştur</Button>
           </div>
         </form>
       </div>

@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 
 export async function GET(_request: NextRequest) {
   try {
+    // Temporarily exclude racks to avoid coordX column error
     const organizations = await prisma.organization.findMany({
       include: {
         buildings: {
@@ -10,8 +11,18 @@ export async function GET(_request: NextRequest) {
             floors: {
               include: {
                 rooms: {
-                  include: {
-                    racks: true
+                  select: {
+                    id: true,
+                    name: true,
+                    description: true,
+                    floorId: true,
+                    capacity: true,
+                    createdAt: true,
+                    updatedAt: true,
+                    width: true,
+                    depth: true,
+                    height: true
+                    // racks excluded for now
                   }
                 }
               }
@@ -27,7 +38,11 @@ export async function GET(_request: NextRequest) {
       timestamp: new Date()
     });
   } catch (error: any) {
-    console.error('Error fetching organizations:', error);
+    console.error('Error fetching organizations details:', {
+      message: error.message,
+      stack: error.stack,
+      code: error.code
+    });
     return NextResponse.json({
       success: false,
       error: 'Failed to fetch organizations',

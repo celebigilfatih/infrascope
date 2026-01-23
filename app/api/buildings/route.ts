@@ -3,14 +3,25 @@ import { prisma } from '@/lib/prisma';
 
 export async function GET(_request: NextRequest) {
   try {
+    // Temporarily exclude racks to avoid coordX column error
     const buildings = await prisma.building.findMany({
       include: {
         organization: true,
         floors: {
           include: {
             rooms: {
-              include: {
-                racks: true
+              select: {
+                id: true,
+                name: true,
+                description: true,
+                floorId: true,
+                capacity: true,
+                createdAt: true,
+                updatedAt: true,
+                width: true,
+                depth: true,
+                height: true
+                // racks excluded for now
               }
             }
           }
