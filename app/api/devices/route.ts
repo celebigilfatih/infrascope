@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { 
       name, type, vendor, model, serialNumber, assetTag, 
-      criticality, status, rackId, rackUnitPosition 
+      criticality, status, rackId, rackUnitPosition, supportDate 
     } = body;
 
     if (!name || !type) {
@@ -69,7 +69,8 @@ export async function POST(request: NextRequest) {
         criticality: criticality || 'MEDIUM',
         status: status || 'UNKNOWN',
         rackId,
-        rackUnitPosition: rackUnitPosition ? parseInt(rackUnitPosition) : null
+        rackUnitPosition: rackUnitPosition ? parseInt(rackUnitPosition) : null,
+        supportDate: supportDate ? new Date(supportDate) : null
       }
     });
 

@@ -1,0 +1,43 @@
+# ============================================================================
+# InfraScope - Docker Development Build
+# Lightweight configuration with hot reload support
+# ============================================================================
+
+FROM node:20
+
+# Metadata
+LABEL maintainer="InfraScope Team"
+LABEL version="1.0.0-dev"
+LABEL description="InfraScope Development Container"
+
+# Set working directory
+WORKDIR /app
+
+# Environment variables
+ENV NODE_ENV=development
+ENV PORT=3000
+
+# Install dependencies (production and dev)
+COPY package.json ./
+RUN [ -f package-lock.json ] || echo "package-lock.json not found, will use package.json"
+COPY package-lock.json* ./
+RUN npm install
+
+# Copy Prisma schema
+COPY prisma ./prisma/
+
+# Generate Prisma client
+RUN npx prisma generate
+
+# Copy application source (rest will be mounted as volume)
+COPY . .
+
+# Expose port
+EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
+    CMD node -e "require('http').get('http://localhost:3000/api/health', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})" || exit 1
+
+# Start Next.js development server
+CMD ["npm", "run", "dev"]

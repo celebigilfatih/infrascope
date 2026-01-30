@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { apiGet } from '../../lib/api';
 import { Device, Service, ApiResponse } from '../../types';
+import { getVendorLogo } from '../../lib/formatting';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -21,7 +22,9 @@ import {
   Building2,
   RefreshCcw,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Clock,
+  AlertTriangle
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -87,7 +90,40 @@ export default function DashboardPage() {
     }
   };
 
-  const statCards = [
+  const getExpiringDevices = () => {
+    const today = new Date();
+    const thirtyDaysFromNow = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const ninetyDaysAgo = new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000);
+    
+    return data.devices
+      .filter(device => {
+        if (!device.supportDate) return false;
+        const supportDate = new Date(device.supportDate);
+        // Show devices that are expired or expiring within 30 days (or have already been expired for less than 90 days)
+        return (supportDate >= ninetyDaysAgo && supportDate <= thirtyDaysFromNow);
+      })
+      .sort((a, b) => new Date(a.supportDate || 0).getTime() - new Date(b.supportDate || 0).getTime())
+      .slice(0, 4);
+  };
+
+  const getDaysUntilExpiration = (supportDate: string | Date | null | undefined) => {
+    if (!supportDate) return null;
+    const today = new Date();
+    const expDate = supportDate instanceof Date ? supportDate : new Date(supportDate);
+    const diffTime = expDate.getTime() - today.getTime();
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  };
+
+  const getExpirationColor = (days: number | null) => {
+    if (!days) return 'text-muted-foreground';
+    if (days <= 7) return 'text-rose-500';
+    if (days <= 14) return 'text-amber-500';
+    return 'text-yellow-500';
+  };
+
+  const expiringDevices = getExpiringDevices();
+
+  const statCards = [ 
     { 
       label: 'Altyapı Düğümleri', 
       value: stats.totalDevices.toLocaleString(), 
@@ -264,6 +300,94 @@ export default function DashboardPage() {
                 </CardContent>
               </Card>
             </div>
+
+            {/* Support Expiration Alert Section */}
+            {expiringDevices.length > 0 && (
+              <Card className="border-border/50 shadow-sm overflow-hidden">
+                <CardHeader className="border-b border-border/50">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <AlertTriangle className="h-5 w-5 text-rose-500" />
+                      <div>
+                        <CardTitle className="text-sm font-bold">Support Tarihi Uyarısı</CardTitle>
+                        <CardDescription className="text-xs mt-1">30 gün içinde sonu çalan destekler</CardDescription>
+                      </div>
+                    </div>
+                    <Badge className="bg-rose-500/20 text-rose-700 border-rose-500/50">{expiringDevices.length}</Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {expiringDevices.map((device) => {
+                      const daysLeft = getDaysUntilExpiration(device.supportDate);
+                      return (
+                        <div key={device.id} className="border border-border/50 rounded-lg p-4 bg-white hover:bg-slate-50 transition-colors">
+                          {/* Header with Icon and Status */}
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <Clock className={cn("h-4 w-4", getExpirationColor(daysLeft))} />
+                              <Badge 
+                                variant="destructive"
+                                className="text-[9px] font-bold"
+                              >
+                                {daysLeft} gün
+                              </Badge>
+                            </div>
+                          </div>
+
+                          {/* Device Name */}
+                          <div className="flex items-center gap-2 mb-2">
+                            {getVendorLogo(device.vendor) && (
+                              <img 
+                                src={getVendorLogo(device.vendor)!} 
+                                alt={device.vendor} 
+                                className="h-5 w-5 object-contain"
+                              />
+                            )}
+                            <h4 className="font-bold text-sm line-clamp-2">{device.name}</h4>
+                          </div>
+
+                          {/* Device Details */}
+                          <div className="space-y-2 mb-3">
+                            <div className="flex items-center justify-between text-[11px]">
+                              <span className="text-muted-foreground">Tip:</span>
+                              <span className="font-medium">{device.type.replace(/_/g, ' ')}</span>
+                            </div>
+                            <div className="flex items-center justify-between text-[11px]">
+                              <span className="text-muted-foreground">Durum:</span>
+                              <Badge 
+                                variant={device.status === 'ACTIVE' ? 'success' : 'secondary'} 
+                                className="text-[8px]"
+                              >
+                                {device.status}
+                              </Badge>
+                            </div>
+                            <div className="flex items-center justify-between text-[11px]">
+                              <span className="text-muted-foreground">Bitiş Tarihi:</span>
+                              <span className={cn("font-bold", getExpirationColor(daysLeft))}>
+                                {device.supportDate ? new Date(device.supportDate).toLocaleDateString('tr-TR') : 'N/A'}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Criticality */}
+                          {device.criticality && (
+                            <div className="pt-3 border-t border-border/30">
+                              <Badge variant="destructive" className="text-[8px] w-full justify-center">
+                                {device.criticality === 'CRITICAL' && '🔴 Kritik'}
+                                {device.criticality === 'HIGH' && '🔴 Yüksek'}
+                                {device.criticality === 'MEDIUM' && '🔴 Orta'}
+                                {device.criticality === 'LOW' && '🔴 Düşük'}
+                              </Badge>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Sale Activity Large Card -> Inventory Distribution */}

@@ -164,6 +164,7 @@ export async function PUT(
       rackId,
       rackUnitPosition,
       parentDeviceId,
+      supportDate,
       metadata,
     } = body;
 
@@ -183,7 +184,8 @@ export async function PUT(
       model !== undefined || serialNumber !== undefined || assetTag !== undefined ||
       firmwareVersion !== undefined || operatingSystem !== undefined ||
       criticality !== undefined || status !== undefined || rackId !== undefined ||
-      rackUnitPosition !== undefined || parentDeviceId !== undefined || metadata !== undefined;
+      rackUnitPosition !== undefined || parentDeviceId !== undefined || 
+      supportDate !== undefined || metadata !== undefined;
 
     if (!hasUpdate) {
       return NextResponse.json(
@@ -362,6 +364,7 @@ export async function PUT(
     if (rackId !== undefined) updateData.rackId = rackId;
     if (rackUnitPosition !== undefined) updateData.rackUnitPosition = rackUnitPosition;
     if (parentDeviceId !== undefined) updateData.parentDeviceId = parentDeviceId;
+    if (supportDate !== undefined) updateData.supportDate = supportDate ? new Date(supportDate) : null;
     if (metadata !== undefined) updateData.metadata = metadata;
 
     // Update device

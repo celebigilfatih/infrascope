@@ -2,8 +2,6 @@
 # InfraScope - Docker Compose Configuration (Development)
 # ============================================================================
 
-version: '3.9'
-
 services:
   # PostgreSQL Database Service
   db:
@@ -34,12 +32,10 @@ services:
   web:
     build:
       context: .
-      dockerfile: Dockerfile
-      args:
-        NODE_ENV: development
+      dockerfile: Dockerfile.dev
     container_name: infrascope-web-dev
     environment:
-      NODE_ENV: production
+      NODE_ENV: development
       DATABASE_URL: postgresql://${DB_USER:-infrascope}:${DB_PASSWORD:-infrascope-dev}@db:5432/${DB_NAME:-infrascope}
       NEXTAUTH_URL: http://localhost:3170
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-dev-secret-change-in-production}
@@ -55,9 +51,13 @@ services:
         condition: service_healthy
     networks:
       - infrascope-network
-    # volumes:
-    #   # Source code for development with hot reload
-    #   - .:/app
+    volumes:
+      # Source code for development with hot reload
+      - .:/app
+      # Exclude node_modules to prevent conflicts
+      - /app/node_modules
+      # Exclude .next to prevent build conflicts
+      - /app/.next
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
       interval: 30s
@@ -65,7 +65,7 @@ services:
       retries: 3
       start_period: 40s
     restart: unless-stopped
-    command: node server.js
+    command: npm run dev
 
   # Optional: Redis for caching and WebSocket support (future)
   #   image: redis:7-alpine

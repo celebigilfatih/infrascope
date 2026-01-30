@@ -122,6 +122,7 @@ export interface Device {
   rackId?: string;
   rack?: Rack;
   rackUnitPosition?: number;
+  supportDate?: string | Date;
   parentDeviceId?: string;
   parentDevice?: Device;
   childDevices?: Device[];

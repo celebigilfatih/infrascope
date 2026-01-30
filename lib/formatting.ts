@@ -59,6 +59,36 @@ export function getCriticalityColor(level: string): string {
 }
 
 /**
+ * Get vendor logo path
+ */
+export function getVendorLogo(vendor?: string): string | null {
+  if (!vendor) return null;
+  
+  const v = vendor.toLowerCase();
+  
+  if (v.includes('aruba')) return '/images/aruba-networks.svg';
+  if (v.includes('cisco')) return '/images/cisco-2.svg';
+  if (v.includes('dell')) return '/images/dell-technologies-logo.svg';
+  if (v.includes('hp') || v.includes('hewlett')) return '/images/hp-proliant-servers.svg';
+  if (v.includes('fortinet')) return '/images/fortinet-logo.svg';
+  if (v.includes('ibm')) return '/images/ibm.svg';
+  if (v.includes('juniper')) return '/images/juniper-networks.svg';
+  if (v.includes('microsoft')) {
+    if (v.includes('sql')) return '/images/microsoft-sql-server-1.svg';
+    return '/images/microsoft-windows-22-1.svg';
+  }
+  if (v.includes('windows')) {
+    if (v.includes('server')) return '/images/windows-server.svg';
+    return '/images/microsoft-windows-22-1.svg';
+  }
+  if (v.includes('oracle')) return '/images/oracle-6.svg';
+  if (v.includes('postgres')) return '/images/postgresql-inc.svg';
+  if (v.includes('vmware')) return '/images/vmware.svg';
+  
+  return null;
+}
+
+/**
  * Format IP address with null safety
  */
 export function formatIp(ip?: string): string {

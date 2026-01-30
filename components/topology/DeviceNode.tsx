@@ -2,11 +2,13 @@
 
 import React, { memo } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
+import { getVendorLogo } from '../../lib/formatting';
 
 interface DeviceNodeData {
   deviceId: string;
   name: string;
   type: string;
+  vendor?: string;
   role: string;
   status: 'active' | 'inactive' | 'maintenance' | 'error';
   ipAddress?: string;
@@ -64,7 +66,17 @@ export const DeviceNode = memo(({ data, selected }: NodeProps<DeviceNodeData>) =
       
       <div className="flex items-center gap-3 mb-3">
         <div className={`rounded-full ${statusColors[data?.status] || 'bg-slate-500'}`} style={{ width: `${iconSize}px`, height: `${iconSize}px` }} />
-        <div className="text-lg" title={data?.role}>{roleIcons[data?.role as keyof typeof roleIcons] || roleIcons.unknown}</div>
+        <div className="flex items-center gap-2">
+          <div className="text-lg" title={data?.role}>{roleIcons[data?.role as keyof typeof roleIcons] || roleIcons.unknown}</div>
+          {getVendorLogo(data?.vendor) && (
+            <img 
+              src={getVendorLogo(data?.vendor)!} 
+              alt={data?.vendor} 
+              className="h-7 w-7 object-contain"
+              title={data?.vendor}
+            />
+          )}
+        </div>
         <h3 className="font-bold truncate flex-1" style={{ fontSize: `${fontSize}px` }}>{data?.name || 'Bilinmeyen Cihaz'}</h3>
       </div>
 

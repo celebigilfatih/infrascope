@@ -90,6 +90,15 @@ interface Room {
   racks?: Rack[];
 }
 
+interface Device {
+  id: string;
+  name: string;
+  type: string;
+  status: string;
+  rackUnitPosition: number | null;
+  metadata?: any;
+}
+
 interface Rack {
   id: string;
   name: string;
@@ -100,6 +109,7 @@ interface Rack {
   coordY?: number | null;
   coordZ?: number | null;
   rotation?: number | null;
+  devices?: Device[];
 }
 
 // Device interface removed because it was unused
@@ -789,8 +799,8 @@ export default function LocationsPage() {
 
         {/* 3D Room View Modal */}
         {viewing3DRoom && (
-          <div className="fixed inset-0 bg-background/95 flex items-center justify-center z-[5000] backdrop-blur-sm">
-            <div className="bg-background w-full h-full flex flex-col">
+          <div className="fixed inset-0 bg-gray-200 flex items-center justify-center z-[5000] backdrop-blur-sm">
+            <div className="bg-gray-100 w-full h-full flex flex-col">
               <div className="p-4 border-b border-border flex justify-between items-center bg-muted/30">
                 <div className="flex items-center gap-4">
                   <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
@@ -1084,6 +1094,24 @@ function UniversalEditModal({ type, item, onClose, onSubmit }: {
             </div>
           </>
         );
+      case 'device':
+        return (
+          <>
+            <div className="space-y-1">
+              <label className={labelClass}>Cihaz Adı</label>
+              <input type="text" className={inputClass} value={formData.name || ''} onChange={e => setFormData({ ...formData, name: e.target.value })} required />
+            </div>
+            <div className="space-y-1">
+              <label className={labelClass}>Support Tarihi</label>
+              <input 
+                type="date" 
+                className={inputClass} 
+                value={formData.supportDate ? new Date(formData.supportDate).toISOString().split('T')[0] : ''} 
+                onChange={e => setFormData({ ...formData, supportDate: e.target.value })} 
+              />
+            </div>
+          </>
+        );
       default:
         return null;
     }
@@ -1165,6 +1193,14 @@ function DeviceModal({ onClose, onSubmit }: {
               <option value="DECOMMISSIONED">Devre Dışı</option>
               <option value="UNKNOWN">Bilinmiyor</option>
             </select>
+          </div>
+          <div className="space-y-1">
+            <label className={labelClass}>Support Tarihi</label>
+            <input 
+              type="date" 
+              className={inputClass} 
+              onChange={e => setFormData({ ...formData, supportDate: e.target.value })} 
+            />
           </div>
           <div className="space-y-1">
             <label className={labelClass}>Kritiklik</label>

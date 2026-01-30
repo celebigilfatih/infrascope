@@ -47,14 +47,7 @@ export async function GET(
         },
         racks: {
           include: {
-            devices: {
-              select: {
-                id: true,
-                name: true,
-                type: true,
-                status: true,
-              },
-            },
+            devices: true,
           },
           orderBy: {
             name: 'asc',

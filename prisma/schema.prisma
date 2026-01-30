@@ -131,6 +131,7 @@ model Device {
   rackId            String?
   rackUnitPosition  Int?
   parentDeviceId    String?
+  supportDate       DateTime?
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
   metadata          Json?

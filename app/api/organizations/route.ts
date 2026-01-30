@@ -11,18 +11,12 @@ export async function GET(_request: NextRequest) {
             floors: {
               include: {
                 rooms: {
-                  select: {
-                    id: true,
-                    name: true,
-                    description: true,
-                    floorId: true,
-                    capacity: true,
-                    createdAt: true,
-                    updatedAt: true,
-                    width: true,
-                    depth: true,
-                    height: true
-                    // racks excluded for now
+                  include: {
+                    racks: {
+                      include: {
+                        devices: true
+                      }
+                    }
                   }
                 }
               }

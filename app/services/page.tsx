@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { apiGet, apiDelete } from '../../lib/api';
 import { Service, ApiResponse } from '../../types';
+import { getVendorLogo } from '../../lib/formatting';
 import { useToast } from '@/components/ui/use-toast';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { Button } from '@/components/ui/button';
@@ -150,7 +151,14 @@ export default function ServicesPage() {
                   <CardHeader className="pb-3">
                     <div className="flex justify-between items-start">
                       <div className="space-y-1">
-                        <CardTitle className="text-lg group-hover:text-primary transition-colors">
+                        <CardTitle className="text-lg group-hover:text-primary transition-colors flex items-center gap-2">
+                          {service.application?.vendor && getVendorLogo(service.application.vendor) && (
+                            <img 
+                              src={getVendorLogo(service.application.vendor)!} 
+                              alt={service.application.vendor} 
+                              className="h-6 w-6 object-contain"
+                            />
+                          )}
                           {service.displayName || service.name}
                         </CardTitle>
                         <CardDescription className="text-[10px] uppercase tracking-widest font-bold">

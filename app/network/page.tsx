@@ -26,6 +26,7 @@ import { SemanticZoomController } from '../../components/topology/SemanticZoomCo
 import { ConnectionWizard } from '../../components/topology/ConnectionWizard';
 import { getZoomConfig, filterNodesByZoom, filterEdgesByZoom } from '../../lib/semanticZoom';
 import { getDeviceRole, getDevicePositionWeight } from '../../lib/deviceRoleMapper';
+import { getVendorLogo } from '../../lib/formatting';
 import { Label } from '@/components/ui/label';
 import { 
   Dialog, 
@@ -64,6 +65,7 @@ import {
   Box,
   LayoutDashboard,
   ChevronRight,
+  ChevronLeft,
   Undo2,
   MapPin,
   Building2,
@@ -71,7 +73,8 @@ import {
   DoorOpen,
   BoxSelect,
   Server,
-  Network
+  Network,
+  RefreshCw
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -79,6 +82,7 @@ interface Device {
   id: string;
   name: string;
   type: string;
+  vendor?: string;
   status: string;
   criticality: string;
   rackId?: string;
@@ -210,6 +214,7 @@ const NetworkTopologyPage = () => {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [viewMode, setViewMode] = useState<'physical' | 'services' | 'hierarchy' | 'zoom' | 'building'>('building');
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   
@@ -382,6 +387,7 @@ const NetworkTopologyPage = () => {
 
   const handleNodeClick = (node: Node) => {
     setSelectedNode(node);
+    setIsSidebarOpen(true);
     
     // Handle building popup for Building View
     if (viewMode === 'building' && node.type === 'building') {
@@ -408,6 +414,7 @@ const NetworkTopologyPage = () => {
           buildingConnection: edge.data.buildingConnection,
         },
       } as Node);
+      setIsSidebarOpen(true);
     }
   };
   
@@ -1025,6 +1032,9 @@ const NetworkTopologyPage = () => {
             onDoubleClick: () => {
               // setFocusedBuildingId(building.id);
             },
+            onShowDetails: () => {
+              setSelectedBuildingForPopup(building);
+            },
           },
         };
         
@@ -1057,6 +1067,7 @@ const NetworkTopologyPage = () => {
                 deviceId: device.id,
                 name: device.name,
                 type: device.type,
+                vendor: device.vendor,
                 role: role,
                 status: device.status.toLowerCase() as 'active' | 'inactive' | 'maintenance' | 'error',
                 ipAddress: device.networkInterfaces?.[0]?.ipv4,
@@ -1216,6 +1227,7 @@ const NetworkTopologyPage = () => {
             deviceId: device.id,
             name: device.name,
             type: device.type,
+            vendor: device.vendor,
             role: role,
             status: device.status.toLowerCase() as 'active' | 'inactive' | 'maintenance' | 'error',
             ipAddress: device.networkInterfaces?.[0]?.ipv4,
@@ -1266,6 +1278,7 @@ const NetworkTopologyPage = () => {
             deviceId: device.id,
             name: device.name,
             type: device.type,
+            vendor: device.vendor,
             role: role,
             status: device.status.toLowerCase() as 'active' | 'inactive' | 'maintenance' | 'error',
             ipAddress: device.networkInterfaces?.[0]?.ipv4,
@@ -1320,27 +1333,7 @@ const NetworkTopologyPage = () => {
     setEdges(topologyEdges);
   }, [topologyNodes, topologyEdges, setNodes, setEdges]);
 
-  /*
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'ACTIVE': return 'text-green-600 bg-green-50';
-      case 'INACTIVE': return 'text-gray-600 bg-gray-50';
-      case 'MAINTENANCE': return 'text-yellow-600 bg-yellow-50';
-      case 'DECOMMISSIONED': return 'text-red-600 bg-red-50';
-      default: return 'text-gray-600 bg-gray-50';
-    }
-  };
 
-  const getCriticalityColor = (criticality: string) => {
-    switch (criticality) {
-      case 'CRITICAL': return 'text-red-600 bg-red-50';
-      case 'HIGH': return 'text-orange-600 bg-orange-50';
-      case 'MEDIUM': return 'text-yellow-600 bg-yellow-50';
-      case 'LOW': return 'text-blue-600 bg-blue-50';
-      default: return 'text-gray-600 bg-gray-50';
-    }
-  };
-  */
 
   return (
     <>
@@ -1349,8 +1342,7 @@ const NetworkTopologyPage = () => {
         <div className="bg-card border-b border-border p-4 shadow-sm" style={{ position: 'relative', zIndex: 1010 }}>
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h1 className="text-3xl font-bold tracking-tight text-white">Ağ Topolojisi</h1>
-              <p className="text-muted-foreground">Altyapı topolojisini ve ağ bağlantılarını yönetin</p>
+              <h1 className="text-2xl font-bold tracking-tight">Ağ Topolojisi</h1>
             </div>
             <div className="flex items-center gap-3">
               <div className="flex items-center bg-muted/50 p-1 rounded-lg border border-border">
@@ -1361,27 +1353,33 @@ const NetworkTopologyPage = () => {
                   className="gap-2"
                 >
                   <Box className="h-4 w-4" />
-                  Bina Görünümü
+                  Bina
                 </Button>
                 <Button
                   variant={viewMode === 'physical' ? 'default' : 'ghost'}
                   size="sm"
                   onClick={() => setViewMode('physical')}
+                  className="gap-2"
                 >
+                  <Network className="h-4 w-4" />
                   Fiziksel
                 </Button>
                 <Button
                   variant={viewMode === 'services' ? 'default' : 'ghost'}
                   size="sm"
                   onClick={() => setViewMode('services')}
+                  className="gap-2"
                 >
+                  <Server className="h-4 w-4" />
                   Servisler
                 </Button>
                 <Button
                   variant={viewMode === 'hierarchy' ? 'default' : 'ghost'}
                   size="sm"
                   onClick={() => setViewMode('hierarchy')}
+                  className="gap-2"
                 >
+                  <Layers className="h-4 w-4" />
                   Hiyerarşi
                 </Button>
                 <Button
@@ -1432,22 +1430,9 @@ const NetworkTopologyPage = () => {
                   </div>
                 </div>
 
-                {viewMode === 'building' && (
-                  <Button onClick={() => setShowConnectionWizard(true)} className="gap-2">
-                    <Activity className="h-4 w-4" />
-                    Bağlantı Oluştur
-                  </Button>
-                )}
-                <Button variant="outline" onClick={applyAutoLayout} className="gap-2" title="Otomatik Yerleşim Uygula">
-                  <Layout className="h-4 w-4" />
-                  Düzenle
-                </Button>
                 <Button variant="outline" onClick={onExport} className="gap-2" title="PNG Dışa Aktar">
                   <Download className="h-4 w-4" />
                   Dışa Aktar
-                </Button>
-                <Button variant="secondary" onClick={loadData}>
-                  Yenile
                 </Button>
               </div>
             </div>
@@ -2189,8 +2174,8 @@ const NetworkTopologyPage = () => {
               </div>
             ) : (
               // TOPOLOGY VIEWS
-              <div className="flex-1 flex">
-                <div className="flex-1 relative">
+              <div className="flex-1 flex overflow-hidden">
+                <div className="flex-1 relative min-w-0">
                   <ReactFlow
                     nodes={nodes}
                     edges={edges}
@@ -2257,9 +2242,35 @@ const NetworkTopologyPage = () => {
                   </ReactFlow>
                 </div>
 
-                {/* Sidebar */}
-                <aside className="w-96 bg-card/80 backdrop-blur-md border-l border-border flex flex-col shadow-2xl overflow-hidden">
-                  {selectedNode ? (
+                {/* Sidebar Container */}
+                <div className="relative flex shrink-0">
+                  {selectedNode && (
+                    <Button
+                      variant="secondary"
+                      size="icon"
+                      className={cn(
+                        "absolute top-1/2 -translate-y-1/2 rounded-full h-10 w-10 shadow-xl z-[1060] border-2 border-primary/20 bg-card hover:bg-accent transition-all duration-300 flex items-center justify-center",
+                        isSidebarOpen ? "left-[-20px]" : "left-[-20px]"
+                      )}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        console.log('Sidebar toggle clicked, current state:', isSidebarOpen);
+                        setIsSidebarOpen(!isSidebarOpen);
+                      }}
+                    >
+                      {isSidebarOpen ? <ChevronRight className="h-6 w-6 text-primary" /> : <ChevronLeft className="h-6 w-6 text-primary" />}
+                    </Button>
+                  )}
+                  
+                  <aside 
+                    className={cn(
+                      "bg-card/80 backdrop-blur-md border-l border-border flex flex-col shadow-2xl transition-all duration-300 overflow-hidden",
+                      isSidebarOpen && selectedNode ? "w-96" : "w-0"
+                    )}
+                    style={{ display: selectedNode ? 'flex' : 'none' }}
+                  >
+                    {selectedNode ? (
                     <div className="flex-1 overflow-y-auto">
                       {selectedNode.data.isBuildingConnection ? (
                         <div className="animate-in slide-in-from-right duration-300">
@@ -2402,7 +2413,16 @@ const NetworkTopologyPage = () => {
                                 <Box className="h-6 w-6 text-primary-foreground" />
                               </div>
                               <div>
-                                <h2 className="text-xl font-bold tracking-tight truncate max-w-[200px]">{selectedNode.data.label}</h2>
+                                <div className="flex items-center gap-2">
+                                  {getVendorLogo(selectedNode.data.vendor) && (
+                                    <img 
+                                      src={getVendorLogo(selectedNode.data.vendor)!} 
+                                      alt={selectedNode.data.vendor} 
+                                      className="h-7 w-7 object-contain"
+                                    />
+                                  )}
+                                  <h2 className="text-xl font-bold tracking-tight truncate max-w-[200px]">{selectedNode.data.label}</h2>
+                                </div>
                                 <Badge variant="secondary" className="mt-1">{selectedNode.data.type?.replace(/_/g, ' ')}</Badge>
                               </div>
                             </div>
@@ -2504,7 +2524,8 @@ const NetworkTopologyPage = () => {
                   )}
                 </aside>
               </div>
-            )}  
+            </div>
+          )}  
           </>
         )}
         
@@ -2581,7 +2602,7 @@ interface BuildingDetailPopupProps {
 const BuildingDetailPopup: React.FC<BuildingDetailPopupProps> = ({ building, devices, onClose }) => {
   return (
     <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-2xl bg-card border-border shadow-2xl">
+      <DialogContent className="max-w-2xl bg-card border-border shadow-2xl z-[1011] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center gap-3">
             <div className="bg-primary/10 p-2.5 rounded-xl">
@@ -2760,7 +2781,7 @@ const BuildingConnectionModal: React.FC<BuildingConnectionModalProps> = ({
 
   return (
     <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-3xl bg-card border-border shadow-2xl overflow-hidden flex flex-col p-0">
+      <DialogContent className="max-w-3xl bg-card border-border shadow-2xl overflow-hidden flex flex-col p-0 z-[1011] max-h-[90vh]">
         <DialogHeader className="p-6 bg-primary/10 border-b border-primary/20">
           <div className="flex items-center gap-3">
             <div className="bg-primary rounded-xl p-2.5 shadow-lg shadow-primary/20">
@@ -3052,7 +3073,7 @@ const BuildingConnectionsManagementModal: React.FC<BuildingConnectionsManagement
 
   return (
     <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-5xl bg-card border-border shadow-2xl overflow-hidden flex flex-col p-0 h-[80vh]">
+      <DialogContent className="max-w-5xl bg-card border-border shadow-2xl overflow-hidden flex flex-col p-0 z-[1011] max-h-[90vh]">
         <DialogHeader className="p-6 bg-primary/10 border-b border-primary/20">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">

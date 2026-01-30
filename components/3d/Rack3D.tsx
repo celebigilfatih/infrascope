@@ -4,6 +4,14 @@ import React, { useRef, useState } from 'react';
 import * as THREE from 'three';
 import { Text, Edges } from '@react-three/drei';
 
+interface Device3D {
+  id: string;
+  name: string;
+  type: string;
+  rackUnitPosition: number | null;
+  metadata?: any;
+}
+
 interface Rack3DProps {
   position: [number, number, number];
   rotation?: [number, number, number];
@@ -12,6 +20,7 @@ interface Rack3DProps {
   maxUnits: number;
   isSelected?: boolean;
   onClick?: () => void;
+  devices?: Device3D[];
 }
 
 export function Rack3D({ 
@@ -21,15 +30,26 @@ export function Rack3D({
   type: _type, 
   maxUnits, 
   isSelected, 
-  onClick 
+  onClick,
+  devices = []
 }: Rack3DProps) {
   const [hovered, setHovered] = useState(false);
 
   // Standard rack dimensions
   const validMaxUnits = maxUnits || 42;
-  const rackHeight = validMaxUnits * 0.04445;
+  const unitHeight = 0.04445; // 1U = 1.75 inches = 44.45mm
+  const rackHeight = validMaxUnits * unitHeight;
   const rackWidth = 0.6; // 600mm
   const rackDepth = 1.0; // 1000mm
+  
+  const innerWidth = rackWidth * 0.85;
+  const innerDepth = rackDepth * 0.9;
+
+  // Process devices and their heights
+  const processedDevices = devices.map(d => ({
+    ...d,
+    uHeight: (d.metadata as any)?.unitHeight || 1
+  }));
 
   return (
     <group position={position} rotation={rotation}>
@@ -40,11 +60,13 @@ export function Rack3D({
         color="white"
         anchorX="center"
         anchorY="middle"
+        outlineWidth={0.01}
+        outlineColor="#000000"
       >
         {name}
       </Text>
 
-      {/* Main Rack Body */}
+      {/* Main Rack Frame */}
       <mesh
         onPointerOver={(e) => { e.stopPropagation(); setHovered(true); }}
         onPointerOut={() => setHovered(false)}
@@ -57,42 +79,82 @@ export function Rack3D({
       >
         <boxGeometry args={[rackWidth, rackHeight, rackDepth]} />
         <meshStandardMaterial 
-          color={isSelected ? '#1e3a8a' : hovered ? '#2d2d2d' : '#1a1a1a'} 
-          metalness={0.9}
-          roughness={0.1}
+          color={isSelected ? '#1e3a8a' : hovered ? '#2d2d2d' : '#111111'} 
+          metalness={0.8}
+          roughness={0.2}
+          transparent={true}
+          opacity={0.6}
         />
         
-        {/* Outline when hovered or selected */}
-        {(isSelected || hovered) && (
-          <Edges 
-            scale={1.01} 
-            threshold={15} 
-            color={isSelected ? '#3b82f6' : '#60a5fa'} 
-          />
-        )}
+        {/* Wireframe edges */}
+        <Edges 
+          scale={1.0} 
+          threshold={15} 
+          color={isSelected ? '#3b82f6' : '#444444'} 
+        />
       </mesh>
 
-      {/* Front Panel (Door) */}
-      <mesh position={[0, 0, rackDepth / 2 + 0.01]} castShadow>
-        <boxGeometry args={[rackWidth * 0.9, rackHeight * 0.95, 0.02]} />
+      {/* Internal Devices Rendering */}
+      <group position={[0, -rackHeight / 2, 0]}>
+        {processedDevices.map((device, idx) => {
+          if (!device.rackUnitPosition) return null;
+          
+          const pos = device.rackUnitPosition;
+          const h = device.uHeight * unitHeight;
+          const yPos = (pos - 1) * unitHeight + h / 2;
+          
+          const isNetwork = device.type.includes('SWITCH') || device.type.includes('FIREWALL');
+          
+          return (
+            <group key={device.id} position={[0, yPos, 0]}>
+              <mesh castShadow receiveShadow>
+                <boxGeometry args={[innerWidth, h * 0.95, innerDepth]} />
+                <meshStandardMaterial 
+                  color={isNetwork ? '#0ea5e9' : '#334155'} 
+                  metalness={0.5}
+                  roughness={0.5}
+                />
+              </mesh>
+              
+              {/* Device Label */}
+              <Text
+                position={[0, 0, innerDepth / 2 + 0.01]}
+                fontSize={0.05}
+                color="white"
+                anchorX="center"
+              >
+                {device.name}
+              </Text>
+
+              {/* Status LED on device */}
+              <mesh position={[innerWidth / 2 - 0.03, 0, innerDepth / 2 + 0.01]}>
+                <sphereGeometry args={[0.01, 8, 8]} />
+                <meshStandardMaterial color="#10b981" emissive="#10b981" emissiveIntensity={1} />
+              </mesh>
+            </group>
+          );
+        })}
+      </group>
+
+      {/* Front Mesh Door (Semi-transparent) */}
+      <mesh position={[0, 0, rackDepth / 2 + 0.01]}>
+        <boxGeometry args={[rackWidth * 0.95, rackHeight * 0.98, 0.01]} />
         <meshStandardMaterial 
-          color="#0f172a" 
-          metalness={0.8} 
-          roughness={0.2} 
+          color="#000000" 
           transparent 
-          opacity={0.8}
+          opacity={0.3} 
+          metalness={0.9} 
+          roughness={0.1}
         />
       </mesh>
 
-      {/* LED Status Light */}
-      <mesh position={[rackWidth / 2 - 0.05, rackHeight / 2 - 0.1, rackDepth / 2 + 0.02]}>
-        <sphereGeometry args={[0.02, 16, 16]} />
-        <meshStandardMaterial 
-          color={isSelected ? '#fbbf24' : '#10b981'} 
-          emissive={isSelected ? '#fbbf24' : '#10b981'} 
-          emissiveIntensity={2} 
-        />
-      </mesh>
+      {/* Selected Indicator */}
+      {isSelected && (
+        <mesh position={[0, -rackHeight / 2 - 0.05, 0]}>
+          <boxGeometry args={[rackWidth * 1.2, 0.02, rackDepth * 1.2]} />
+          <meshStandardMaterial color="#3b82f6" emissive="#3b82f6" emissiveIntensity={0.5} />
+        </mesh>
+      )}
     </group>
   );
 }

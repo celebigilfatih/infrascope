@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { RotateCcw, RotateCw, FlipVertical2, Loader2, X, Plus } from 'lucide-react';
+import { getVendorLogo } from '@/lib/formatting';
 
 interface Rack {
   id: string;
@@ -22,6 +23,7 @@ interface Device {
   name: string;
   type: string;
   status: string;
+  vendor?: string;
   ipAddress?: string | null;
   rackUnit?: number | null;
 }
@@ -138,12 +140,12 @@ export function FloorPlanView({ room, onUpdate }: FloorPlanViewProps) {
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Background color matching theme
-    ctx.fillStyle = '#0a0a0a';
+    // Background color - light gray
+    ctx.fillStyle = '#f3f4f6';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     // Draw grid floor pattern
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.05)';
     ctx.lineWidth = 1;
     
     const gridSize = scale;
@@ -272,22 +274,22 @@ export function FloorPlanView({ room, onUpdate }: FloorPlanViewProps) {
     }
 
     // Draw data center info overlay
-    ctx.fillStyle = 'rgba(0, 0, 50, 0.7)';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
     ctx.fillRect(10, 10, 200, 80);
     ctx.strokeStyle = '#3b82f6';
     ctx.lineWidth = 2;
     ctx.strokeRect(10, 10, 200, 80);
     
-    ctx.fillStyle = '#ffffff';
+    ctx.fillStyle = '#1f2937';
     ctx.font = 'bold 14px Arial';
     ctx.fillText(`${room.name}`, 110, 30);
     ctx.font = '12px Arial';
-    ctx.fillStyle = '#60a5fa';
+    ctx.fillStyle = '#3b82f6';
     ctx.fillText(`Boyut: ${roomWidth}m x ${roomDepth}m`, 110, 50);
     ctx.fillText(`Kabinet: ${room.racks?.length || 0}`, 110, 70);
 
     // Draw scale indicator with modern style
-    ctx.fillStyle = 'rgba(0, 0, 50, 0.7)';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
     ctx.fillRect(20, canvas.height - 50, scale + 40, 30);
     ctx.strokeStyle = '#3b82f6';
     ctx.lineWidth = 2;
@@ -295,7 +297,7 @@ export function FloorPlanView({ room, onUpdate }: FloorPlanViewProps) {
     
     ctx.fillStyle = '#3b82f6';
     ctx.fillRect(30, canvas.height - 35, scale, 4);
-    ctx.fillStyle = '#ffffff';
+    ctx.fillStyle = '#1f2937';
     ctx.font = '12px Arial';
     ctx.textAlign = 'center';
     ctx.fillText('1 metre', 30 + scale / 2, canvas.height - 23);
@@ -446,7 +448,7 @@ export function FloorPlanView({ room, onUpdate }: FloorPlanViewProps) {
   }, []);
 
   return (
-    <div ref={containerRef} className="w-full h-full bg-background relative overflow-hidden">
+    <div ref={containerRef} className="w-full h-full bg-gray-50 relative overflow-hidden">
       {/* Edit Mode Indicator */}
       {editMode && (
         <div className="absolute top-4 left-4 z-20 bg-primary/10 backdrop-blur-md px-4 py-2 rounded-lg border border-primary/20 shadow-xl">
@@ -600,7 +602,16 @@ export function FloorPlanView({ room, onUpdate }: FloorPlanViewProps) {
                     <Card key={device.id} className="p-3 hover:border-primary/50 transition-colors">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{device.name}</p>
+                          <div className="flex items-center gap-1.5">
+                            {getVendorLogo(device.vendor) && (
+                              <img 
+                                src={getVendorLogo(device.vendor)!} 
+                                alt={device.vendor} 
+                                className="h-5 w-5 object-contain"
+                              />
+                            )}
+                            <p className="text-sm font-medium truncate">{device.name}</p>
+                          </div>
                           <p className="text-xs text-muted-foreground mt-1">{device.type}</p>
                         </div>
                         <div className="flex flex-col items-end gap-1.5">

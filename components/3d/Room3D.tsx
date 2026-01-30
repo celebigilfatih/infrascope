@@ -9,6 +9,15 @@ import {
 } from '@react-three/drei';
 import { Rack3D } from './Rack3D';
 
+interface Device {
+  id: string;
+  name: string;
+  type: string;
+  status: string;
+  rackUnitPosition: number | null;
+  metadata?: any;
+}
+
 interface Rack {
   id: string;
   name: string;
@@ -18,6 +27,7 @@ interface Rack {
   coordY?: number | null;
   coordZ?: number | null;
   rotation?: number | null;
+  devices?: Device[];
 }
 
 interface Room {
@@ -77,7 +87,7 @@ export function Room3D({ room, onRackClick }: Room3DProps) {
       </div>
 
       <Canvas shadows>
-        <color attach="background" args={["#0f172a"]} />
+        <color attach="background" args={["#f3f4f6"]} />
         <Suspense fallback={null}>
           <PerspectiveCamera makeDefault position={[width, height * 2, depth]} fov={50} />
           <OrbitControls 
@@ -100,10 +110,10 @@ export function Room3D({ room, onRackClick }: Room3DProps) {
             shadow-mapSize={[1024, 1024]}
           />
 
-          {/* Room Floor - Gray Metallic */}
+          {/* Room Floor - Light Gray */}
           <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]} receiveShadow>
             <planeGeometry args={[width * 3, depth * 3]} />
-            <meshStandardMaterial color="#222222" metalness={0.8} roughness={0.2} />
+            <meshStandardMaterial color="#d1d5db" metalness={0.1} roughness={0.5} />
           </mesh>
 
           {/* Walls */}
@@ -118,8 +128,8 @@ export function Room3D({ room, onRackClick }: Room3DProps) {
             <meshStandardMaterial color="#1e293b" metalness={0.2} roughness={0.8} transparent opacity={0.3} />
           </mesh>
 
-          {/* Grid Helper - Adjusted for Gray Floor */}
-          <gridHelper args={[Math.max(width, depth) * 3, 20, "#4f46e5", "#444444"]} position={[0, 0, 0]} />
+          {/* Grid Helper - Adjusted for Light Floor */}
+          <gridHelper args={[Math.max(width, depth) * 3, 20, "#9ca3af", "#d1d5db"]} position={[0, 0, 0]} />
 
           {/* Racks */}
           {room.racks && Array.isArray(room.racks) && room.racks.length > 0 ? (
@@ -150,6 +160,7 @@ export function Room3D({ room, onRackClick }: Room3DProps) {
                     setSelectedRackId(rack.id);
                     onRackClick?.(rack.id);
                   }}
+                  devices={rack.devices}
                 />
               );
             })
