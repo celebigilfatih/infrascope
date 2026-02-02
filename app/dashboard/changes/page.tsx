@@ -4,9 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
 import { History, GitCommit, User, Clock, Filter, RefreshCw, ChevronRight } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
 interface Change {
   id: string;

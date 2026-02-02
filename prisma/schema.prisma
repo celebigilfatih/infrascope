@@ -16,6 +16,10 @@ model Organization {
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
   buildings   Building[]
+  vlans       Vlan[]
+  subnets     Subnet[]
+  vmwareClusters VMwareCluster[]
+  vmwareDatastores VMwareDatastore[]
 
   @@map("organizations")
 }
@@ -132,9 +136,20 @@ model Device {
   rackUnitPosition  Int?
   parentDeviceId    String?
   supportDate       DateTime?
+  healthScore       Int?
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
   metadata          Json?
+  tags              String[]
+  
+  // Integration links
+  zabbixHostId      String?
+  vmwareMoref       String?  // VMware Managed Object Reference
+  fortiDeviceId     String?
+  
+  // Relationships
+  vmHostId          String?  // For VMs: which ESXi host
+  
   dependencies      Dependency[]
   parentDevice      Device?            @relation("ChildDevices", fields: [parentDeviceId], references: [id])
   childDevices      Device[]           @relation("ChildDevices")
@@ -143,9 +158,24 @@ model Device {
   rackUnits         RackUnit[]
   services          Service[]
   switchPorts       SwitchPort[]
+  
+  // VMware relationships
+  vmwareCluster     VMwareCluster?     @relation("ClusterHosts", fields: [vmwareClusterId], references: [id])
+  vmwareClusterId   String?
+  
+  // Firewall relationships
+  firewallPolicies  FirewallPolicy[]   @relation("FirewallDevice")
+  firewallAddresses FirewallAddress[] @relation("FirewallDevice")
+  
+  // Topology relationships
+  sourceRelationships Relationship[]   @relation("SourceDevice")
+  targetRelationships Relationship[]   @relation("TargetDevice")
 
   @@index([rackId])
   @@index([parentDeviceId])
+  @@index([zabbixHostId])
+  @@index([vmwareMoref])
+  @@index([vmwareClusterId])
   @@map("devices")
 }
 
@@ -161,6 +191,8 @@ model NetworkInterface {
   status      NetworkStatus @default(UP)
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
+  vlanId      String?
+  vlan        Vlan?         @relation(fields: [vlanId], references: [id])
   connections Connection[]
   device      Device        @relation(fields: [deviceId], references: [id], onDelete: Cascade)
   switchPorts SwitchPort[]
@@ -369,6 +401,9 @@ enum DeviceType {
   OTHER
   PRINTER
   CAMERA
+  VLAN
+  VMWARE_CLUSTER
+  VMWARE_DATASTORE
 }
 
 enum DeviceCriticality {
@@ -498,4 +533,339 @@ enum DependencyType {
   DEPLOYED_ON
   HOSTED_ON
   CONNECTED_TO
+}
+
+// ============================================================================
+// ENTERPRISE EXTENSIONS - VLANs, Subnets, Firewall, VMware, Relationships
+// ============================================================================
+
+/// VLAN configuration
+model Vlan {
+  id              String   @id @default(cuid())
+  organizationId  String
+  vlanId          Int
+  name            String
+  subnet          String?  // CIDR notation
+  gateway         String?
+  vrf             String?
+  description     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  interfaces      NetworkInterface[]
+  subnets         Subnet[]
+
+  @@unique([organizationId, vlanId])
+  @@map("vlans")
+}
+
+/// IP Subnet allocation
+model Subnet {
+  id              String     @id @default(cuid())
+  organizationId  String
+  cidr            String     // CIDR notation
+  name            String?
+  type            SubnetType @default(MANAGEMENT)
+  description     String?
+  vlanId          String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  vlan            Vlan?      @relation(fields: [vlanId], references: [id])
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, cidr])
+  @@map("subnets")
+}
+
+/// Firewall Policy
+model FirewallPolicy {
+  id              String   @id @default(cuid())
+  deviceId        String   // FortiGate device
+  policyId        Int
+  name            String?
+  action          String   // accept, deny
+  srcInterface    String?
+  dstInterface    String?
+  srcAddresses    Json?    // Array of address names/IPs
+  dstAddresses    Json?
+  services        Json?    // Array of service names/ports
+  schedule        String?
+  hitCount        BigInt   @default(0)
+  lastHit         DateTime?
+  metadata        Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  device          Device   @relation("FirewallDevice", fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@unique([deviceId, policyId])
+  @@index([deviceId])
+  @@map("firewall_policies")
+}
+
+/// Firewall Address Object
+model FirewallAddress {
+  id              String   @id @default(cuid())
+  deviceId        String   // FortiGate device
+  name            String
+  type            String   // ipmask, fqdn, geoip, group
+  value           String   // IP, subnet, FQDN
+  associatedInterface String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  device          Device   @relation("FirewallDevice", fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([deviceId])
+  @@map("firewall_addresses")
+}
+
+/// VMware Cluster
+model VMwareCluster {
+  id              String   @id @default(cuid())
+  organizationId  String
+  vcenterId       String   // External vCenter identifier
+  datacenterName  String
+  name            String
+  cpuTotal        BigInt?
+  cpuUsed         BigInt?
+  memoryTotal     BigInt?
+  memoryUsed      BigInt?
+  hostCount       Int      @default(0)
+  vmCount         Int      @default(0)
+  status          String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  hosts           Device[]  @relation("ClusterHosts")
+  datastores      VMwareDatastore[]
+
+  @@index([organizationId])
+  @@map("vmware_clusters")
+}
+
+/// VMware Datastore
+model VMwareDatastore {
+  id              String   @id @default(cuid())
+  organizationId  String
+  vcenterId       String
+  name            String
+  type            String?  // VMFS, NFS, VVTD
+  capacity        BigInt?
+  freeSpace       BigInt?
+  datacenter      String?
+  clusterId       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  cluster         VMwareCluster? @relation(fields: [clusterId], references: [id])
+
+  @@index([organizationId])
+  @@index([clusterId])
+  @@map("vmware_datastores")
+}
+
+/// VM Snapshot
+model VmSnapshot {
+  id          String   @id @default(cuid())
+  vmId        String   // Reference to Device (VM)
+  snapshotId  String   // VMware snapshot ID
+  name        String?
+  description String?
+  createdAt   DateTime @default(now())
+  size        BigInt?
+  isCurrent   Boolean  @default(false)
+
+  @@index([vmId])
+  @@map("vm_snapshots")
+}
+
+/// Topology Relationship (edges between devices)
+model Relationship {
+  id                  String            @id @default(cuid())
+  sourceDeviceId      String
+  targetDeviceId      String
+  relationshipType    RelationshipType
+  properties          Json?             // Additional data (VLAN, policy ID, etc.)
+  source              String            // 'zabbix', 'vmware', 'snmp', 'manual'
+  confidence          Float             @default(1.0)  // 0.00-1.00
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  sourceDevice        Device            @relation("SourceDevice", fields: [sourceDeviceId], references: [id], onDelete: Cascade)
+  targetDevice        Device            @relation("TargetDevice", fields: [targetDeviceId], references: [id], onDelete: Cascade)
+
+  @@index([sourceDeviceId])
+  @@index([targetDeviceId])
+  @@index([relationshipType])
+  @@map("relationships")
+}
+
+/// Integration Configuration
+model IntegrationConfig {
+  id              String             @id @default(cuid())
+  type            IntegrationType
+  name            String
+  description     String?
+  config          Json               // Encrypted credentials
+  enabled         Boolean            @default(true)
+  lastSyncAt      DateTime?
+  lastSyncStatus  String?
+  syncInterval    Int                @default(5)  // minutes
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  syncLogs        IntegrationSyncLog[]
+
+  @@unique([type, name])
+  @@map("integration_configs")
+}
+
+/// Integration Sync Log
+model IntegrationSyncLog {
+  id              String            @id @default(cuid())
+  configId        String
+  status          String            // success, partial, failed
+  message         String?
+  itemsProcessed  Int               @default(0)
+  itemsCreated    Int               @default(0)
+  itemsUpdated    Int               @default(0)
+  itemsDeleted    Int               @default(0)
+  errorDetails    Json?
+  startedAt       DateTime          @default(now())
+  completedAt     DateTime?
+  config          IntegrationConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+
+  @@index([configId])
+  @@index([startedAt])
+  @@map("integration_sync_logs")
+}
+
+/// Zabbix Trigger / Alert
+model ZabbixTrigger {
+  id              String   @id @default(cuid())
+  triggerId       String   // Zabbix internal ID
+  hostId          String
+  description     String
+  expression      String?
+  priority        Int      @default(0)
+  status          String   // OK, PROBLEM
+  value           Int      @default(0)
+  lastChange      DateTime?
+  comments        String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([triggerId])
+  @@index([hostId])
+  @@index([status])
+  @@map("zabbix_triggers")
+}
+
+/// Alert Event
+model AlertEvent {
+  id              String      @id @default(cuid())
+  source          String      // zabbix, vmware, fortigate, manual
+  sourceId        String
+  type            String      // trigger, threshold, discovery
+  severity        AlertSeverity
+  title           String
+  message         String?
+  deviceId        String?
+  acknowledged    Boolean     @default(false)
+  acknowledgedBy  String?
+  acknowledgedAt  DateTime?
+  resolvedAt      DateTime?
+  metadata        Json?
+  createdAt       DateTime    @default(now())
+
+  @@index([source])
+  @@index([severity])
+  @@index([deviceId])
+  @@index([createdAt])
+  @@map("alert_events")
+}
+
+/// Scheduled Task / Automation Job
+model ScheduledTask {
+  id              String           @id @default(cuid())
+  name            String
+  description     String?
+  type            TaskType
+  cronExpression  String
+  config          Json             // Task-specific configuration
+  enabled         Boolean          @default(true)
+  lastRunAt       DateTime?
+  lastRunStatus   String?
+  nextRunAt       DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  taskLogs        TaskLog[]
+
+  @@map("scheduled_tasks")
+}
+
+/// Task Execution Log
+model TaskLog {
+  id              String        @id @default(cuid())
+  taskId          String
+  status          String        // running, success, failed
+  message         String?
+  output          Json?
+  startedAt       DateTime      @default(now())
+  completedAt     DateTime?
+  task            ScheduledTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@index([startedAt])
+  @@map("task_logs")
+}
+
+// ============================================================================
+// ENUMS - Enterprise Extensions
+// ============================================================================
+
+enum SubnetType {
+  MANAGEMENT
+  PRODUCTION
+  DEVELOPMENT
+  DMZ
+  GUEST
+  RESERVED
+}
+
+enum RelationshipType {
+  CONTAINS           // Parent-child (rack contains device)
+  CONNECTS_TO        // Physical connection
+  VIRTUAL_RUNS_ON    // VM on host
+  CLUSTER_CONTAINS   // Cluster has host
+  VLAN_MEMBER        // Interface in VLAN
+  FIREWALL_POLICY    // Policy allows traffic
+  SERVICE_DEPENDENCY // App depends on service
+  HA_PAIR            // HA redundant pair
+  UPLINK             // Access to core
+  SPANNING_TREE      // STP blocking
+}
+
+enum IntegrationType {
+  ZABBIX
+  VMWARE_VCENTER
+  FORTIGATE
+  SNMP
+  AWS
+  AZURE
+  API
+}
+
+enum AlertSeverity {
+  INFO
+  WARNING
+  AVERAGE
+  HIGH
+  DISASTER
+}
+
+enum TaskType {
+  DISCOVERY
+  SYNC
+  BACKUP
+  REPORT
+  CLEANUP
+  CUSTOM
 }

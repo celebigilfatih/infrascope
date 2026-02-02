@@ -1,7 +1,6 @@
 'use client';
 
-import React, { useRef, useState } from 'react';
-import * as THREE from 'three';
+import React, { useState } from 'react';
 import { Text, Edges } from '@react-three/drei';
 
 interface Device3D {
@@ -96,7 +95,7 @@ export function Rack3D({
 
       {/* Internal Devices Rendering */}
       <group position={[0, -rackHeight / 2, 0]}>
-        {processedDevices.map((device, idx) => {
+        {processedDevices.map((device) => {
           if (!device.rackUnitPosition) return null;
           
           const pos = device.rackUnitPosition;

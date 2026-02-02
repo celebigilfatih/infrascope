@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Search, Layers, Server, HardDrive, RefreshCw, MoreHorizontal } from 'lucide-react';
+import { Plus, Layers, Server, HardDrive, RefreshCw, MoreHorizontal } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface Cluster {

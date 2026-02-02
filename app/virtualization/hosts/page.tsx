@@ -5,7 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Server, Cpu, HardDrive, RefreshCw, Power, MoreHorizontal } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
 interface Host {
   id: string;

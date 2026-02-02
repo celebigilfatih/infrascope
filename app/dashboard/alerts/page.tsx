@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
 import { AlertTriangle, AlertCircle, AlertOctagon, CheckCircle, Clock, Filter, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 

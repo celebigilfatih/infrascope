@@ -55,7 +55,6 @@ import {
   Download, 
   Maximize2, 
   Filter, 
-  Layout, 
   Plus, 
   X, 
   ArrowLeft,
@@ -74,7 +73,9 @@ import {
   BoxSelect,
   Server,
   Network,
-  RefreshCw
+  Terminal,
+  Eye,
+  RotateCcw
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -174,18 +175,6 @@ interface Rack {
   devices?: Device[];
 }
 
-// Custom node types for Building View
-const nodeTypes = {
-  building: BuildingNode,
-  device: DeviceNode,
-};
-
-// Custom edge types
-const edgeTypes = {
-  custom: CustomEdge,
-  building: BuildingConnectionEdge,
-};
-
 // Connection type styling for all views
 const connectionStyles: Record<string, { color: string; dash: string; width: number; label: string; icon: string }> = {
   'FIBER_SINGLE_MODE': { color: '#DC2626', dash: '0', width: 5, label: 'Fiber Single-Mode (Tekli)', icon: '🔴' },
@@ -247,45 +236,128 @@ const NetworkTopologyPage = () => {
   const [semanticZoom, setSemanticZoom] = useState(1);
   const [selectedBuildingForPopup, setSelectedBuildingForPopup] = useState<Building | null>(null);
   const [expandedBuildings, setExpandedBuildings] = useState<Set<string>>(new Set());
-  // const [focusedBuildingId, setFocusedBuildingId] = useState<string | null>(null);
+  
+  // Connection wizard state
   const [showConnectionWizard, setShowConnectionWizard] = useState(false);
-
+  
+  // Context menu state for right-click on nodes
+  const [contextMenuVisible, setContextMenuVisible] = useState(false);
+  const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
+  const [contextMenuNode, setContextMenuNode] = useState<Node | null>(null);
+  
+  // Memoized node types to prevent re-creation on every render
+  const nodeTypes = useMemo(() => ({
+    building: BuildingNode,
+    device: DeviceNode,
+  }), []);
+  
+  // Memoized edge types to prevent re-creation on every render
+  const edgeTypes = useMemo(() => ({
+    custom: CustomEdge,
+    building: BuildingConnectionEdge,
+  }), []);
+  
+  // Export topology as PNG
   const onExport = useCallback(() => {
-    const element = document.querySelector('.react-flow__viewport') as HTMLElement;
+    const element = document.querySelector('.react-flow') as HTMLElement;
     if (element) {
       toPng(element, {
-        backgroundColor: 'var(--background)',
+        backgroundColor: '#0f172a',
         style: {
           transform: 'none',
+          width: element.scrollWidth + 'px',
+          height: element.scrollHeight + 'px',
+        },
+        filter: (node) => {
+          // Exclude controls and minimap from export
+          return !node.classList?.contains('react-flow__controls') && 
+                 !node.classList?.contains('react-flow__minimap');
         },
       }).then((dataUrl) => {
-        download(dataUrl, 'infrascope-topology.png');
+        download(dataUrl, `infrascope-topology-${new Date().toISOString().slice(0,10)}.png`);
       });
     }
   }, []);
 
+  // Auto-layout function for better node positioning
   const applyAutoLayout = useCallback(() => {
-    // Basic grid layout for devices in non-building views
-    if (viewMode !== 'building') {
-      const spacing = 250;
-      const cols = Math.ceil(Math.sqrt(nodes.length));
+    if (viewMode === 'building') {
+      // For building view, re-organize buildings in a better grid
+      const buildingNodes = nodes.filter(n => n.type === 'building');
+      const spacing = 400;
+      const cols = Math.ceil(Math.sqrt(buildingNodes.length));
       
-      const newNodes = nodes.map((node, index) => {
-        if (node.data.isGroup) return node;
-        const row = Math.floor(index / cols);
-        const col = index % cols;
-        return {
-          ...node,
-          position: { x: col * spacing, y: row * spacing },
-        };
+      const newNodes = nodes.map((node) => {
+        if (node.type === 'building') {
+          const index = buildingNodes.findIndex(n => n.id === node.id);
+          const row = Math.floor(index / cols);
+          const col = index % cols;
+          return {
+            ...node,
+            position: { x: col * spacing + 100, y: row * spacing + 100 },
+          };
+        }
+        return node;
+      });
+      setNodes(newNodes);
+    } else {
+      // For physical/services view, organize devices in a grid
+      const deviceNodes = nodes.filter(n => n.type === 'device');
+      const spacing = 280;
+      const cols = Math.ceil(Math.sqrt(deviceNodes.length));
+      
+      const newNodes = nodes.map((node) => {
+        if (node.type === 'device') {
+          const index = deviceNodes.findIndex(n => n.id === node.id);
+          const row = Math.floor(index / cols);
+          const col = index % cols;
+          return {
+            ...node,
+            position: { x: col * spacing + 50, y: row * spacing + 50 },
+          };
+        }
+        return node;
       });
       setNodes(newNodes);
     }
   }, [nodes, viewMode, setNodes]);
 
+  // const applyAutoLayout = useCallback(() => {
+  //   // Basic grid layout for devices in non-building views
+  //   if (viewMode !== 'building') {
+  //     const spacing = 250;
+  //     const cols = Math.ceil(Math.sqrt(nodes.length));
+  //     
+  //     const newNodes = nodes.map((node, index) => {
+  //       if (node.data.isGroup) return node;
+  //       const row = Math.floor(index / cols);
+  //       const col = index % cols;
+  //       return {
+  //         ...node,
+  //         position: { x: col * spacing, y: row * spacing },
+  //       };
+  //     });
+  //     setNodes(newNodes);
+  //   }
+  // }, [nodes, viewMode, setNodes]);
+
   useEffect(() => {
     loadData();
   }, []);
+
+  // Close context menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setContextMenuVisible(false);
+    };
+    
+    // Add event listener
+    document.addEventListener('click', handleClickOutside);
+    
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, [contextMenuVisible]);
 
   const loadData = async () => {
     try {
@@ -401,6 +473,53 @@ const NetworkTopologyPage = () => {
       // Hierarchical navigation is not used after logical view removal
     }
   };
+  
+  // Handle right-click context menu for nodes
+  const handleNodeContextMenu = useCallback((event: React.MouseEvent, node: Node) => {
+    event.preventDefault();
+    setContextMenuNode(node);
+    setContextMenuPosition({ x: event.clientX, y: event.clientY });
+    setContextMenuVisible(true);
+  }, []);
+  
+  // Context menu actions
+  const handleContextMenuAction = useCallback((action: string) => {
+    if (!contextMenuNode) return;
+    
+    const nodeData = contextMenuNode.data;
+    const deviceName = nodeData.label || nodeData.name;
+    
+    switch (action) {
+      case 'ping':
+        // Simulate ping action
+        console.log(`Pinging ${deviceName}...`);
+        alert(`${deviceName} için ping başlatılıyor...\n\nBu özellik entegrasyon sonrası aktif olacaktır.`);
+        break;
+      case 'ssh':
+        // Simulate SSH action
+        console.log(`Opening SSH to ${deviceName}...`);
+        alert(`${deviceName} için SSH bağlantısı kuruluyor...\n\nBu özellik entegrasyon sonrası aktif olacaktır.`);
+        break;
+      case 'view-logs':
+        // View logs action
+        console.log(`Viewing logs for ${deviceName}...`);
+        alert(`${deviceName} logları görüntüleniyor...\n\nBu özellik entegrasyon sonrası aktif olacaktır.`);
+        break;
+      case 'view-details':
+        // Open sidebar with details
+        setSelectedNode(contextMenuNode);
+        setIsSidebarOpen(true);
+        break;
+      case 'refresh':
+        // Refresh node data
+        console.log(`Refreshing ${deviceName}...`);
+        loadData();
+        break;
+    }
+    // Close context menu
+    setContextMenuVisible(false);
+    setContextMenuNode(null);
+  }, [contextMenuNode, loadData]);
   
   const handleEdgeClick = (_event: React.MouseEvent, edge: Edge) => {
     // If it's a building connection edge, show its details
@@ -1515,7 +1634,19 @@ const NetworkTopologyPage = () => {
                       Filtreleri Temizle
                     </Button>
                   )}
-                  
+                                    
+                  {/* Export PNG Button */}
+                  <Button variant="outline" onClick={onExport} className="gap-2" title="PNG Olarak İndir">
+                    <Download className="h-4 w-4" />
+                    Dışa Aktar
+                  </Button>
+                                    
+                  {/* Auto-layout Button */}
+                  <Button variant="outline" onClick={applyAutoLayout} className="gap-2" title="Otomatik Düzen">
+                    <BoxSelect className="h-4 w-4" />
+                    Otomatik Düzen
+                  </Button>
+                                    
                   {/* Results Count */}
                   <div className="ml-auto">
                     <Badge variant="outline" className="px-3 py-1 bg-background/50 border-border/50">
@@ -2185,6 +2316,7 @@ const NetworkTopologyPage = () => {
                     onEdgesChange={onEdgesChange}
                     onConnect={onConnect}
                     onNodeClick={(_, node) => handleNodeClick(node)}
+                    onNodeContextMenu={handleNodeContextMenu}
                     onEdgeClick={handleEdgeClick}
                     onMove={(_, viewport) => {
                       if (viewMode === 'building') {
@@ -2207,6 +2339,52 @@ const NetworkTopologyPage = () => {
                         />
                       </Panel>
                     )}
+                    
+                    {/* Network Health Dashboard Panel - always visible */}
+                    <Panel position="bottom-left">
+                      <div className="bg-card/90 backdrop-blur-md text-foreground rounded-xl shadow-2xl p-4 border border-border min-w-[200px]">
+                        <div className="flex items-center gap-2 mb-3 border-b border-border pb-2">
+                          <Activity className="h-4 w-4 text-emerald-500" />
+                          <h3 className="font-black text-xs uppercase tracking-widest">Ağ Sağlığı</h3>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="text-center p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                            <p className="text-xl font-bold text-emerald-500">{devices.filter(d => d.status === 'ACTIVE').length}</p>
+                            <p className="text-[10px] text-muted-foreground">Aktif</p>
+                          </div>
+                          <div className="text-center p-2 rounded-lg bg-red-500/10 border border-red-500/20">
+                            <p className="text-xl font-bold text-red-500">{devices.filter(d => d.status === 'INACTIVE' || d.status === 'ERROR').length}</p>
+                            <p className="text-[10px] text-muted-foreground">Hata</p>
+                          </div>
+                          <div className="text-center p-2 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                            <p className="text-xl font-bold text-amber-500">{devices.filter(d => d.status === 'MAINTENANCE').length}</p>
+                            <p className="text-[10px] text-muted-foreground">Bakım</p>
+                          </div>
+                          <div className="text-center p-2 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                            <p className="text-xl font-bold text-blue-500">{connections.length}</p>
+                            <p className="text-[10px] text-muted-foreground">Bağlantı</p>
+                          </div>
+                        </div>
+                        <div className="mt-3 pt-2 border-t border-border">
+                          <div className="flex items-center justify-between text-[10px]">
+                            <span className="text-muted-foreground">Sağlık Skoru</span>
+                            <span className="font-bold text-emerald-500">
+                              {devices.length > 0 
+                                ? Math.round((devices.filter(d => d.status === 'ACTIVE').length / devices.length) * 100) 
+                                : 0}%
+                            </span>
+                          </div>
+                          <div className="w-full h-1.5 bg-muted rounded-full mt-1 overflow-hidden">
+                            <div 
+                              className="h-full bg-emerald-500 rounded-full transition-all duration-500"
+                              style={{ 
+                                width: `${devices.length > 0 ? (devices.filter(d => d.status === 'ACTIVE').length / devices.length) * 100 : 0}%` 
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </Panel>
                     
                     <Panel position="top-right" className="bg-card/90 backdrop-blur-md text-foreground rounded-xl shadow-2xl p-5 border border-border max-h-80 overflow-y-auto custom-scrollbar">
                       <div className="space-y-4" role="region" aria-label="Harita Göstergesi">
@@ -2241,6 +2419,62 @@ const NetworkTopologyPage = () => {
                     </Panel>
                   </ReactFlow>
                 </div>
+
+                {/* Context Menu for right-click on nodes */}
+                {contextMenuVisible && (
+                  <div
+                    className="fixed z-[9999] bg-card border border-border rounded-lg shadow-2xl py-1 min-w-[180px] animate-in fade-in zoom-in-95 duration-100"
+                    style={{ left: contextMenuPosition.x, top: contextMenuPosition.y }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="px-3 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider border-b border-border">
+                      {contextMenuNode?.data?.label || contextMenuNode?.data?.name || 'Seçenekler'}
+                    </div>
+                    <button
+                      className="w-full px-3 py-2 text-left text-sm hover:bg-accent flex items-center gap-2 transition-colors"
+                      onClick={() => handleContextMenuAction('view-details')}
+                    >
+                      <Eye className="h-4 w-4 text-blue-500" />
+                      Detayları Görüntüle
+                    </button>
+                    <button
+                      className="w-full px-3 py-2 text-left text-sm hover:bg-accent flex items-center gap-2 transition-colors"
+                      onClick={() => handleContextMenuAction('ping')}
+                    >
+                      <Activity className="h-4 w-4 text-green-500" />
+                      Ping Gönder
+                    </button>
+                    <button
+                      className="w-full px-3 py-2 text-left text-sm hover:bg-accent flex items-center gap-2 transition-colors"
+                      onClick={() => handleContextMenuAction('ssh')}
+                    >
+                      <Terminal className="h-4 w-4 text-purple-500" />
+                      SSH Bağlantısı
+                    </button>
+                    <button
+                      className="w-full px-3 py-2 text-left text-sm hover:bg-accent flex items-center gap-2 transition-colors"
+                      onClick={() => handleContextMenuAction('view-logs')}
+                    >
+                      <Server className="h-4 w-4 text-orange-500" />
+                      Logları Görüntüle
+                    </button>
+                    <div className="border-t border-border my-1" />
+                    <button
+                      className="w-full px-3 py-2 text-left text-sm hover:bg-accent flex items-center gap-2 transition-colors"
+                      onClick={() => handleContextMenuAction('refresh')}
+                    >
+                      <RotateCcw className="h-4 w-4 text-cyan-500" />
+                      Yenile
+                    </button>
+                    <button
+                      className="w-full px-3 py-2 text-left text-sm hover:bg-accent flex items-center gap-2 text-red-500 transition-colors"
+                      onClick={() => { setContextMenuVisible(false); setContextMenuNode(null); }}
+                    >
+                      <X className="h-4 w-4" />
+                      Kapat
+                    </button>
+                  </div>
+                )}
 
                 {/* Sidebar Container */}
                 <div className="relative flex shrink-0">
