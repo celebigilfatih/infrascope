@@ -10,8 +10,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { FortiGateService } from '@/lib/integrations/fortigate';
 import { prisma } from '@/lib/prisma';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    // Get query params
+    const { searchParams } = new URL(request.url);
+    const vpn = searchParams.get('vpn');
+
     // Get FortiGate configuration from database
     const config = await prisma.integrationConfig.findFirst({
       where: { type: 'FORTIGATE', enabled: true },
@@ -52,8 +56,29 @@ export async function GET() {
       enabledModules: fortiConfig.enabledModules,
     });
 
+    // Return VPN data if requested
+    if (vpn === 'ssl') {
+      const users = await service.getSSLVPNUsers();
+      return NextResponse.json({ success: true, data: users });
+    }
+
+    if (vpn === 'ipsec') {
+      const tunnels = await service.getIPsecTunnels();
+      return NextResponse.json({ success: true, data: tunnels });
+    }
+
+    if (vpn === 'config') {
+      const revisions = await service.getConfigRevisions();
+      return NextResponse.json({ success: true, data: revisions });
+    }
+
+    if (vpn === 'interfaces') {
+      const interfaces = await service.getInterfaceStats();
+      return NextResponse.json({ success: true, data: interfaces });
+    }
+
+    // Return system status
     const status = await service.getStatus();
-    
     return NextResponse.json(status);
   } catch (error) {
     console.error('FortiGate status check failed:', error);

@@ -17,7 +17,7 @@ services:
       # Optional: SQL init scripts
       - ./docker/postgres-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     ports:
-      - "5433:5432"
+      - "5434:5432"
     networks:
       - infrascope-network
     healthcheck:
@@ -44,6 +44,7 @@ services:
       HOSTNAME: 0.0.0.0
       DB_HOST: db
       DB_PORT: 5432
+      NODE_TLS_REJECT_UNAUTHORIZED: "0"
     ports:
       - "8170:3000"
     depends_on:

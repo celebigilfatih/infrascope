@@ -13,43 +13,52 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { ChevronLeft, ChevronRight, RefreshCw, Search, FileText, AlertTriangle, CheckCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, RefreshCw, Search, Shield, CheckCircle, XCircle, ArrowRight } from 'lucide-react';
 
-interface Policy {
+interface FirewallPolicy {
   id: string;
-  name: string;
-  category: string;
-  severity: 'critical' | 'high' | 'medium' | 'low';
-  status: 'compliant' | 'non-compliant' | 'partial';
-  lastCheck: string;
-  affectedAssets: number;
-  description: string;
+  policyId: number;
+  name: string | null;
+  action: string;
+  srcInterface: string | null;
+  dstInterface: string | null;
+  srcAddresses: string[] | null;
+  dstAddresses: string[] | null;
+  services: string[] | null;
+  schedule: string | null;
+  hitCount: string;
+  lastHit: string | null;
+  device: {
+    name: string;
+    fortiDeviceId: string;
+  };
 }
 
-const ITEMS_PER_PAGE = 10;
+const ITEMS_PER_PAGE = 15;
 
-export default function PoliciesPage() {
-  const [policies, setPolicies] = useState<Policy[]>([]);
+export default function FirewallPoliciesPage() {
+  const [policies, setPolicies] = useState<FirewallPolicy[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
 
-  useEffect(() => {
-    setTimeout(() => {
-      setPolicies([
-        { id: '1', name: 'Password Policy', category: 'Access Control', severity: 'high', status: 'compliant', lastCheck: '2024-01-15', affectedAssets: 45, description: 'Minimum 12 karakter, karmaşık şifre gereksinimi' },
-        { id: '2', name: 'Firewall Configuration', category: 'Network', severity: 'critical', status: 'non-compliant', lastCheck: '2024-01-14', affectedAssets: 12, description: 'Tüm sunucular firewall arkasında olmalı' },
-        { id: '3', name: 'Patch Management', category: 'Vulnerability', severity: 'high', status: 'partial', lastCheck: '2024-01-10', affectedAssets: 8, description: 'Kritik yamalar 7 gün içinde uygulanmalı' },
-        { id: '4', name: 'Backup Policy', category: 'Data Protection', severity: 'medium', status: 'compliant', lastCheck: '2024-01-15', affectedAssets: 156, description: 'Günlük yedekleme, 30 gün saklama' },
-        { id: '5', name: 'Encryption Standards', category: 'Data Protection', severity: 'high', status: 'compliant', lastCheck: '2024-01-13', affectedAssets: 89, description: 'AES-256 şifreleme gereksinimi' },
-        { id: '6', name: 'Access Review', category: 'Access Control', severity: 'medium', status: 'partial', lastCheck: '2024-01-12', affectedAssets: 234, description: 'Aylık erişim gözden geçirme' },
-        { id: '7', name: 'Malware Protection', category: 'Endpoint', severity: 'critical', status: 'compliant', lastCheck: '2024-01-15', affectedAssets: 312, description: 'Antivirus tüm endpointlerde aktif olmalı' },
-        { id: '8', name: 'Network Segmentation', category: 'Network', severity: 'high', status: 'non-compliant', lastCheck: '2024-01-11', affectedAssets: 15, description: 'DMZ ve iç ağ ayrımı zorunlu' },
-        { id: '9', name: 'Logging Standards', category: 'Compliance', severity: 'medium', status: 'compliant', lastCheck: '2024-01-15', affectedAssets: 67, description: 'Audit logları 1 yıl saklanmalı' },
-        { id: '10', name: 'Remote Access', category: 'Access Control', severity: 'high', status: 'partial', lastCheck: '2024-01-14', affectedAssets: 23, description: 'VPN ve 2FA zorunlu' },
-      ]);
+  const fetchPolicies = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/firewall-policies');
+      const data = await res.json();
+      if (data.success) {
+        setPolicies(data.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch policies:', error);
+    } finally {
       setLoading(false);
-    }, 500);
+    }
+  };
+
+  useEffect(() => {
+    fetchPolicies();
   }, []);
 
   const filteredPolicies = useMemo(() => {
@@ -57,9 +66,10 @@ export default function PoliciesPage() {
     const term = searchTerm.toLowerCase();
     return policies.filter(
       (p) =>
-        p.name.toLowerCase().includes(term) ||
-        p.category.toLowerCase().includes(term) ||
-        p.description.toLowerCase().includes(term)
+        (p.name?.toLowerCase() || '').includes(term) ||
+        p.policyId.toString().includes(term) ||
+        (p.srcInterface?.toLowerCase() || '').includes(term) ||
+        (p.dstInterface?.toLowerCase() || '').includes(term)
     );
   }, [policies, searchTerm]);
 
@@ -73,23 +83,18 @@ export default function PoliciesPage() {
     if (currentPage > totalPages && totalPages > 0) setCurrentPage(1);
   }, [totalPages, currentPage]);
 
-  const getSeverityBadge = (severity: string) => {
-    switch (severity) {
-      case 'critical': return <Badge className="bg-red-600">Critical</Badge>;
-      case 'high': return <Badge variant="destructive">High</Badge>;
-      case 'medium': return <Badge className="bg-orange-500">Medium</Badge>;
-      case 'low': return <Badge variant="secondary">Low</Badge>;
-      default: return <Badge variant="outline">{severity}</Badge>;
+  const getActionBadge = (action: string) => {
+    switch (action.toLowerCase()) {
+      case 'accept': return <Badge className="bg-green-600"><CheckCircle className="h-3 w-3 mr-1" />Accept</Badge>;
+      case 'deny': return <Badge variant="destructive"><XCircle className="h-3 w-3 mr-1" />Deny</Badge>;
+      default: return <Badge variant="outline">{action}</Badge>;
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'compliant': return <Badge variant="success"><CheckCircle className="h-3 w-3 mr-1" />Uyumlu</Badge>;
-      case 'non-compliant': return <Badge variant="destructive"><AlertTriangle className="h-3 w-3 mr-1" />Uyumsuz</Badge>;
-      case 'partial': return <Badge className="bg-orange-500">Kısmi</Badge>;
-      default: return <Badge variant="outline">{status}</Badge>;
-    }
+  const formatAddresses = (addresses: string[] | null) => {
+    if (!addresses || addresses.length === 0) return 'Any';
+    if (addresses.length <= 2) return addresses.join(', ');
+    return `${addresses[0]}, ${addresses[1]} +${addresses.length - 2}`;
   };
 
   const getPageNumbers = () => {
@@ -112,50 +117,51 @@ export default function PoliciesPage() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Security Policies</h1>
-          <p className="text-muted-foreground">Güvenlik politikası uyumluluk yönetimi</p>
+          <h1 className="text-2xl font-bold">Firewall Policies</h1>
+          <p className="text-muted-foreground">FortiGate güvenlik politikaları</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon"><RefreshCw className="h-4 w-4" /></Button>
-          <Button><FileText className="h-4 w-4 mr-2" />Policy Ekle</Button>
+          <Button variant="outline" size="icon" onClick={fetchPolicies} disabled={loading}>
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          </Button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card><CardContent className="p-4">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-full bg-blue-500/20"><FileText className="h-5 w-5 text-blue-500" /></div>
+            <div className="p-2 rounded-full bg-blue-500/20"><Shield className="h-5 w-5 text-blue-500" /></div>
             <div><p className="text-sm text-muted-foreground">Toplam Policy</p><p className="text-2xl font-bold">{policies.length}</p></div>
           </div>
         </CardContent></Card>
         <Card><CardContent className="p-4">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-full bg-green-500/20"><CheckCircle className="h-5 w-5 text-green-500" /></div>
-            <div><p className="text-sm text-muted-foreground">Uyumlu</p><p className="text-2xl font-bold">{policies.filter((p) => p.status === 'compliant').length}</p></div>
+            <div><p className="text-sm text-muted-foreground">Accept</p><p className="text-2xl font-bold">{policies.filter((p) => p.action === 'accept').length}</p></div>
           </div>
         </CardContent></Card>
         <Card><CardContent className="p-4">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-full bg-red-500/20"><AlertTriangle className="h-5 w-5 text-red-500" /></div>
-            <div><p className="text-sm text-muted-foreground">Uyumsuz</p><p className="text-2xl font-bold">{policies.filter((p) => p.status === 'non-compliant').length}</p></div>
+            <div className="p-2 rounded-full bg-red-500/20"><XCircle className="h-5 w-5 text-red-500" /></div>
+            <div><p className="text-sm text-muted-foreground">Deny</p><p className="text-2xl font-bold">{policies.filter((p) => p.action === 'deny').length}</p></div>
           </div>
         </CardContent></Card>
         <Card><CardContent className="p-4">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-full bg-orange-500/20"><AlertTriangle className="h-5 w-5 text-orange-500" /></div>
-            <div><p className="text-sm text-muted-foreground">Etkilenen Varlık</p><p className="text-2xl font-bold">{policies.reduce((acc, p) => acc + p.affectedAssets, 0)}</p></div>
+            <div className="p-2 rounded-full bg-orange-500/20"><ArrowRight className="h-5 w-5 text-orange-500" /></div>
+            <div><p className="text-sm text-muted-foreground">Toplam Hit</p><p className="text-2xl font-bold">{policies.reduce((acc, p) => acc + Number(p.hitCount), 0).toLocaleString()}</p></div>
           </div>
         </CardContent></Card>
       </div>
 
       <div className="relative max-w-md">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input placeholder="Policy ara..." value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }} className="pl-9" />
+        <Input placeholder="Policy ID veya isim ara..." value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }} className="pl-9" />
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2"><FileText className="h-5 w-5" />Policies<Badge variant="secondary">{filteredPolicies.length}</Badge></CardTitle>
+          <CardTitle className="flex items-center gap-2"><Shield className="h-5 w-5" />Firewall Policies<Badge variant="secondary">{filteredPolicies.length}</Badge></CardTitle>
         </CardHeader>
         <CardContent>
           {loading ? (
@@ -165,26 +171,34 @@ export default function PoliciesPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Policy</TableHead>
-                    <TableHead>Kategori</TableHead>
-                    <TableHead>Seviye</TableHead>
-                    <TableHead>Durum</TableHead>
-                    <TableHead className="text-center">Etkilenen</TableHead>
-                    <TableHead>Son Kontrol</TableHead>
+                    <TableHead className="w-16">ID</TableHead>
+                    <TableHead>İsim</TableHead>
+                    <TableHead>Kaynak</TableHead>
+                    <TableHead>Hedef</TableHead>
+                    <TableHead>Servis</TableHead>
+                    <TableHead>İşlem</TableHead>
+                    <TableHead className="text-right">Hit Count</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {paginatedPolicies.length === 0 ? (
-                    <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Policy bulunamadı</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Policy bulunamadı</TableCell></TableRow>
                   ) : (
                     paginatedPolicies.map((policy) => (
                       <TableRow key={policy.id}>
-                        <TableCell className="font-medium">{policy.name}</TableCell>
-                        <TableCell>{policy.category}</TableCell>
-                        <TableCell>{getSeverityBadge(policy.severity)}</TableCell>
-                        <TableCell>{getStatusBadge(policy.status)}</TableCell>
-                        <TableCell className="text-center">{policy.affectedAssets}</TableCell>
-                        <TableCell className="text-muted-foreground">{policy.lastCheck}</TableCell>
+                        <TableCell className="font-mono text-sm">{policy.policyId}</TableCell>
+                        <TableCell className="font-medium">{policy.name || '-'}</TableCell>
+                        <TableCell>
+                          <div className="text-xs text-muted-foreground">{policy.srcInterface || 'Any'}</div>
+                          <div className="text-xs">{formatAddresses(policy.srcAddresses)}</div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-xs text-muted-foreground">{policy.dstInterface || 'Any'}</div>
+                          <div className="text-xs">{formatAddresses(policy.dstAddresses)}</div>
+                        </TableCell>
+                        <TableCell className="text-xs">{formatAddresses(policy.services)}</TableCell>
+                        <TableCell>{getActionBadge(policy.action)}</TableCell>
+                        <TableCell className="text-right font-mono">{Number(policy.hitCount).toLocaleString()}</TableCell>
                       </TableRow>
                     ))
                   )}

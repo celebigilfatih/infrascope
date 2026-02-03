@@ -202,30 +202,35 @@ export class FortiGateService {
 
   private async fetchInterfacesREST(): Promise<FortiGateInterface[]> {
     try {
-      const data = await this.apiRequest<{ results: Array<{
-        name: string;
-        status: 'up' | 'down';
-        speed: number;
-        duplex: 'full' | 'half' | 'auto';
-        ip: string;
-        mask: string;
-        mtu: number;
-        interface: string;
-        vlanid?: number;
-        type: string;
-      }>}>('/cmdb/system/interface');
+      const data = await this.apiRequest<{
+        http_method: string;
+        size: number;
+        results: Array<{
+          name: string;
+          status?: 'up' | 'down';
+          speed?: number;
+          duplex?: 'full' | 'half' | 'auto';
+          ip?: string;
+          mask?: string;
+          mtu?: number;
+          interface?: string;
+          vlanid?: number;
+          type?: string;
+          'cli-conn-status'?: number;
+        }>;
+      }>('/cmdb/system/interface');
 
       return data.results.map(iface => ({
         name: iface.name,
-        status: iface.status,
-        speed: iface.speed,
-        duplex: iface.duplex,
-        ip: iface.ip,
-        mask: iface.mask,
-        mtu: iface.mtu,
-        interface: iface.interface,
+        status: iface.status || (iface['cli-conn-status'] === 1 ? 'up' : 'down'),
+        speed: iface.speed || 0,
+        duplex: iface.duplex || 'auto',
+        ip: iface.ip || '',
+        mask: iface.mask || '',
+        mtu: iface.mtu || 1500,
+        interface: iface.interface || '',
         vlanid: iface.vlanid,
-        type: iface.type as 'physical' | 'vlan' | 'tunnel',
+        type: (iface.type || 'physical') as 'physical' | 'vlan' | 'tunnel',
       }));
     } catch (error) {
       console.error('Failed to fetch interfaces:', error);
@@ -582,7 +587,7 @@ export class FortiGateService {
                 dstAddresses: policy.dstaddr.map(a => a.name),
                 services: policy.service.map(s => s.name),
                 schedule: policy.schedule,
-                hitCount: BigInt(policy.hit_count),
+                hitCount: policy.hit_count ? BigInt(policy.hit_count) : BigInt(0),
                 lastHit: policy.last_used ? new Date(policy.last_used) : null,
                 createdAt: new Date(),
                 updatedAt: new Date(),
@@ -590,7 +595,7 @@ export class FortiGateService {
               update: {
                 name: policy.name,
                 action: policy.action,
-                hitCount: BigInt(policy.hit_count),
+                hitCount: policy.hit_count ? BigInt(policy.hit_count) : BigInt(0),
                 lastHit: policy.last_used ? new Date(policy.last_used) : undefined,
                 updatedAt: new Date(),
               },
@@ -646,24 +651,316 @@ export class FortiGateService {
   }
 
   /**
-   * Get connection status
+   * Get connection status with detailed system info
    */
-  async getStatus(): Promise<{ connected: boolean; version?: string; error?: string }> {
+  async getStatus(): Promise<{
+    connected: boolean;
+    version?: string;
+    hostname?: string;
+    model?: string;
+    serial?: string;
+    cpu?: number;
+    memory?: number;
+    session?: { current: number; percent: number };
+    ha?: { enabled: boolean; role: string; serial: string };
+    sdwan?: { interfaces: Array<{ name: string; link: string; session: number; tx_bandwidth: number; rx_bandwidth: number }> };
+    license?: { status: string; support: string; expires: string };
+    error?: string;
+  }> {
     try {
-      const response = await fetch(`${this.baseUrl}/monitor/system/status`, {
-        headers: {
-          'Authorization': `Bearer ${this.config.accessToken}`,
-        },
+      // Get system status
+      const statusRes = await fetch(`${this.baseUrl}/monitor/system/status`, {
+        headers: { 'Authorization': `Bearer ${this.config.accessToken}` },
+      });
+      if (!statusRes.ok) {
+        return { connected: false, error: `HTTP ${statusRes.status}` };
+      }
+      const statusData = await statusRes.json() as { version: string; hostname: string; model: string; serial: string };
+
+      // Get resource usage
+      const resourceRes = await fetch(`${this.baseUrl}/monitor/system/vdom-resource`, {
+        headers: { 'Authorization': `Bearer ${this.config.accessToken}` },
+      });
+      const resourceData = resourceRes.ok ? await resourceRes.json() as {
+        results: { cpu: number; memory: number; session: { current_usage: number; usage_percent: number } };
+      } : null;
+
+      // Get HA status
+      const haRes = await fetch(`${this.baseUrl}/monitor/system/ha-checksums`, {
+        headers: { 'Authorization': `Bearer ${this.config.accessToken}` },
+      });
+      const haData = haRes.ok ? await haRes.json() as {
+        results: Array<{ is_root_primary: boolean; serial_no: string }>;
+      } : null;
+
+      // Get SD-WAN status
+      const sdwanRes = await fetch(`${this.baseUrl}/monitor/virtual-wan/members`, {
+        headers: { 'Authorization': `Bearer ${this.config.accessToken}` },
+      });
+      const sdwanData = sdwanRes.ok ? await sdwanRes.json() as {
+        results: Record<string, { link: string; session: number; tx_bandwidth: number; rx_bandwidth: number }>;
+      } : null;
+
+      // Get license status
+      const licenseRes = await fetch(`${this.baseUrl}/monitor/license/status`, {
+        headers: { 'Authorization': `Bearer ${this.config.accessToken}` },
+      });
+      const licenseData = licenseRes.ok ? await licenseRes.json() as {
+        results: { forticare: { registration_status: string; support: { enhanced: { support_level: string; expires: number } } } };
+      } : null;
+
+      // Parse SD-WAN interfaces
+      const sdwanInterfaces = sdwanData?.results ? Object.entries(sdwanData.results).map(([name, data]) => ({
+        name,
+        link: data.link,
+        session: data.session,
+        tx_bandwidth: data.tx_bandwidth,
+        rx_bandwidth: data.rx_bandwidth,
+      })) : [];
+
+      // Parse HA info
+      const haMaster = haData?.results?.find(h => h.is_root_primary);
+      const haSlave = haData?.results?.find(h => !h.is_root_primary);
+
+      return {
+        connected: true,
+        version: statusData.version,
+        hostname: statusData.hostname,
+        model: statusData.model,
+        serial: statusData.serial,
+        cpu: resourceData?.results?.cpu,
+        memory: resourceData?.results?.memory,
+        session: resourceData?.results?.session ? {
+          current: resourceData.results.session.current_usage,
+          percent: resourceData.results.session.usage_percent,
+        } : undefined,
+        ha: haData?.results ? {
+          enabled: haData.results.length > 1,
+          role: haMaster ? 'Master' : 'Slave',
+          serial: haSlave?.serial_no || '',
+        } : undefined,
+        sdwan: sdwanInterfaces.length > 0 ? { interfaces: sdwanInterfaces } : undefined,
+        license: licenseData?.results?.forticare ? {
+          status: licenseData.results.forticare.registration_status,
+          support: licenseData.results.forticare.support?.enhanced?.support_level || 'Unknown',
+          expires: licenseData.results.forticare.support?.enhanced?.expires ? 
+            new Date(licenseData.results.forticare.support.enhanced.expires * 1000).toISOString().split('T')[0] : '',
+        } : undefined,
+      };
+    } catch (error) {
+      return { connected: false, error: (error as Error).message };
+    }
+  }
+
+  /**
+   * Get SSL-VPN connected users
+   */
+  async getSSLVPNUsers(): Promise<Array<{
+    user_name: string;
+    remote_host: string;
+    last_login_timestamp: number;
+    two_factor_auth: boolean;
+    interface: string;
+    duration: number;
+    aip: string;
+    in_bytes: number;
+    out_bytes: number;
+  }>> {
+    try {
+      const response = await fetch(`${this.baseUrl}/monitor/vpn/ssl`, {
+        headers: { 'Authorization': `Bearer ${this.config.accessToken}` },
       });
 
       if (!response.ok) {
-        return { connected: false, error: `HTTP ${response.status}` };
+        throw new Error(`HTTP ${response.status}`);
       }
 
-      const data = await response.json() as { version: string; name: string };
-      return { connected: true, version: data.version };
+      const data = await response.json() as {
+        results: Array<{
+          user_name: string;
+          remote_host: string;
+          last_login_timestamp: number;
+          two_factor_auth: boolean;
+          interface: string;
+          duration: number;
+          subsessions: Array<{
+            aip: string;
+            in_bytes: number;
+            out_bytes: number;
+          }>;
+        }>;
+      };
+
+      return data.results.map(user => ({
+        user_name: user.user_name,
+        remote_host: user.remote_host,
+        last_login_timestamp: user.last_login_timestamp,
+        two_factor_auth: user.two_factor_auth,
+        interface: user.interface,
+        duration: user.duration,
+        aip: user.subsessions?.[0]?.aip || '',
+        in_bytes: user.subsessions?.[0]?.in_bytes || 0,
+        out_bytes: user.subsessions?.[0]?.out_bytes || 0,
+      }));
     } catch (error) {
-      return { connected: false, error: (error as Error).message };
+      console.error('Failed to get SSL-VPN users:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get IPsec VPN tunnels
+   */
+  async getIPsecTunnels(): Promise<Array<{
+    name: string;
+    comments: string;
+    status: string;
+    username: string;
+    rgwy: string;
+    incoming_bytes: number;
+    outgoing_bytes: number;
+    connection_count: number;
+  }>> {
+    try {
+      const response = await fetch(`${this.baseUrl}/monitor/vpn/ipsec`, {
+        headers: { 'Authorization': `Bearer ${this.config.accessToken}` },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const data = await response.json() as {
+        results: Array<{
+          name: string;
+          comments: string;
+          proxyid: Array<{ status: string }>;
+          username: string;
+          rgwy: string;
+          incoming_bytes: number;
+          outgoing_bytes: number;
+          connection_count: number;
+        }>;
+      };
+
+      return data.results.map(tunnel => ({
+        name: tunnel.name,
+        comments: tunnel.comments,
+        status: tunnel.proxyid?.[0]?.status || 'unknown',
+        username: tunnel.username,
+        rgwy: tunnel.rgwy,
+        incoming_bytes: tunnel.incoming_bytes,
+        outgoing_bytes: tunnel.outgoing_bytes,
+        connection_count: tunnel.connection_count,
+      }));
+    } catch (error) {
+      console.error('Failed to get IPsec tunnels:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get configuration revisions (change history)
+   */
+  async getConfigRevisions(): Promise<{
+    hasUnsavedChanges: boolean;
+    revisions: Array<{
+      id: number;
+      time: number;
+      admin: string;
+      comment: string;
+      version: string;
+    }>;
+  }> {
+    try {
+      const response = await fetch(`${this.baseUrl}/monitor/system/config-revision`, {
+        headers: { 'Authorization': `Bearer ${this.config.accessToken}` },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const data = await response.json() as {
+        results: {
+          revisions: Array<{
+            id: number;
+            time: number;
+            version_id: string;
+            admin: string;
+            comment: string;
+          }>;
+          current_config_unsaved: boolean;
+        };
+      };
+
+      return {
+        hasUnsavedChanges: data.results.current_config_unsaved,
+        revisions: data.results.revisions.map(rev => ({
+          id: rev.id,
+          time: rev.time,
+          admin: rev.admin,
+          comment: rev.comment,
+          version: rev.version_id,
+        })),
+      };
+    } catch (error) {
+      console.error('Failed to get config revisions:', error);
+      return { hasUnsavedChanges: false, revisions: [] };
+    }
+  }
+
+  /**
+   * Get interface statistics
+   */
+  async getInterfaceStats(): Promise<Array<{
+    id: string;
+    name: string;
+    alias: string;
+    mac: string;
+    ip: string;
+    link: boolean;
+    speed: number;
+    tx_packets: number;
+    rx_packets: number;
+    tx_bytes: number;
+    rx_bytes: number;
+    tx_errors: number;
+    rx_errors: number;
+  }>> {
+    try {
+      const response = await fetch(`${this.baseUrl}/monitor/system/interface`, {
+        headers: { 'Authorization': `Bearer ${this.config.accessToken}` },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const data = await response.json() as {
+        results: Record<string, {
+          id: string;
+          name: string;
+          alias: string;
+          mac: string;
+          ip: string;
+          link: boolean;
+          speed: number;
+          tx_packets: number;
+          rx_packets: number;
+          tx_bytes: number;
+          rx_bytes: number;
+          tx_errors: number;
+          rx_errors: number;
+        }>;
+      };
+
+      return Object.values(data.results).filter(iface => 
+        iface.name && iface.name !== 'lo'
+      );
+    } catch (error) {
+      console.error('Failed to get interface stats:', error);
+      return [];
     }
   }
 }
