@@ -1,0 +1,1591 @@
+<!doctype html><html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>FortiAnalyzer 7.4.7 (2685) JSON API Reference-Report Commands</title>
+<style>body {
+	font-family: Verdana;
+	color: black;
+	background: #D9D9D9;
+	font-size: 13px;
+}
+h1 {
+	font-size: 20px;
+}
+h2 {
+	font-size: 15px;
+	position: sticky;
+	position: -webkit-sticky;
+	top: 0px;
+	background: #D9D9D9;
+}
+h6 {
+	font-size: 13px;
+	margin-bottom: 8px;
+	margin-left: 12px;
+	font-weight: normal;
+}
+table {
+	width: 95%;
+	font-size: 13px;
+	margin-left: 15px;
+	margin-right: 5px;
+	border-collapse: collapse;
+	margin-bottom: 16px;
+}
+td {
+	vertical-align: top;
+	padding: 5px;
+}
+pre {
+	border: 1px solid black;
+	padding: 10px;
+	font-size: 12px;
+	margin-left: 15px;
+	width: 650px;
+}
+th {
+	text-align: left;
+}
+a {
+}
+a:link {
+	text-decoration: none;
+}
+a:visited {
+}
+a:hover {
+	text-decoration: underline;
+}
+.menu {
+	background: #C0C0C0;
+	border-right: 1px solid;
+	position: fixed;
+	padding: 6px;
+	padding-top: 20px;
+	top: 0px;
+	left: 0px;
+	bottom: 0px;
+	width: 200px;
+	overflow-x: hidden;
+	overflow-y: auto;
+	white-space: nowrap;
+}
+.content {
+	position: absolute;
+	padding: 6px;
+	top: 0px;
+	left: 240px;
+	right: 0px;
+}
+.menu_header {
+	font-weight: bold;
+}
+.param_table {
+	border: 1px solid #A0A0A0;
+}
+.table_hdr_name {
+	width: 160px;
+}
+.table_col_name {
+	font-weight: bold;
+	width: 160px;
+}
+.table_col_desc {
+}
+.param_table > thead > tr > th {
+	background-color: #C0C0C0;
+	border-bottom: 1px solid #A0A0A0;
+	padding: 6px;
+}
+.param_table > tbody > tr:nth-child(even) > td {
+	background-color: #D0D0D0;
+}
+.macro_num {
+	font-weight: bold;
+	width: 50px;
+}
+.macro_val {
+}
+</style>
+</head>
+<body>
+<div class="menu"><span class="menu_header"><a href="index.htm">API Reference Home</a></span><br/><span class="menu_item"><a href="objects.htm">Common Objects</a></span><br/><br/><span class="menu_header">Database Modules</span><br/><span class="menu_item"><a href="dvmdb-main.htm">Device Manager Database</a></span><br/><span class="menu_item"><a href="task-main.htm">Task Database</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof74-2779-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof74-2779-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg74-2779-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof72-1732-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof72-1732-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg72-1732-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof70-662-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof70-662-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg70-662-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof64-2087-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof64-2087-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg64-2087-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof62-1263-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof62-1263-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg62-1263-main.htm">Policy Package</a></span><br/><br/><span class="menu_header">Daemon Modules</span><br/><span class="menu_item"><a href="cmdb-main.htm">CLI Configuration</a></span><br/><span class="menu_item"><a href="dvmcmd-main.htm">Device Manager Command</a></span><br/><span class="menu_item"><a href="um-main.htm">Update Manager</a></span><br/><span class="menu_item"><a href="sys-main.htm">System Commands</a></span><br/><br/><span class="menu_header"><a href="faz-cmd-index.htm">FortiAnalyzer Modules</a></span><br/><span class="menu_item"><a href="faz_eventmgmt.htm">Event Mgmt Commands</a></span><br/><span class="menu_item"><a href="faz_eventmgmtconfig.htm">Event Mgmt Config Commands</a></span><br/><span class="menu_item"><a href="faz_fazsys.htm">FAZ System Commands</a></span><br/><span class="menu_item"><a href="faz_fortiview.htm">FortiView Commands</a></span><br/><span class="menu_item"><a href="faz_incidentmgmt.htm">Incident Mgmt Commands</a></span><br/><span class="menu_item"><a href="faz_logview.htm">LogView Commands</a></span><br/><span class="menu_item"><a href="faz_report.htm">Report Commands</a></span><br/><span class="menu_item"><a href="faz_reportconfig.htm">Report Config Commands</a></span><br/><span class="menu_item"><a href="faz_ioc.htm">IOC Commands</a></span><br/><span class="menu_item"><a href="faz_ueba.htm">UEBA Commands</a></span><br/><span class="menu_item"><a href="faz_soar.htm">SOAR Commands</a></span><br/><br/><span class="menu_header"><a href="obj-index.htm">Index of All Objects</a></span><br/><br/></div>
+<div class="content">
+<h1>Report Commands</h1><br/>
+
+<div>
+<h1 id=add_report_adom__adom-name__run>Start Report Request</h1><h2>add /report/adom/&lt;adom-name&gt;/run</h2><p>Start a task to run a report.<h6 id=${report.add.run.req}.request>Request:</h6><pre>
+{
+    "method": "add",
+    "params": [
+        {
+            "url": "/report/adom/&lt;adom-name&gt;/run",
+            "apiver": 3,
+            "schedule": "string",
+            "schedule-param": {
+                "layout-id": number,
+                "device": "string",
+                "time-period": "string",
+                "period-last-n": number,
+                "period-start": "string",
+                "period-end": "string",
+                "week-start": "string",
+                "display-table-contents": number,
+                "include-coverpage": number,
+                "resolve-hostname": number,
+                "filter": [
+                    {
+                        "name": "string",
+                        "value": "string",
+                        "opcode": number
+                    }
+                ],
+                "filter-logic": "string"
+            }
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${report.add.run.req}">Show example...</a></p></div><div id="${report.add.run.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Start a task to run a report.</i><a class="close" href="#${report.add.run.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "2333c69e-bf19-11e5-924a-000c2986047b",
+    "jsonrpc": "2.0",
+    "method": "add",
+    "params": [
+        {
+            "apiver": 3,
+            "schedule": 1,
+            "schedule-param": {
+                "device": "csf:Shawn-CSF,FGT-VM-50_to_60",
+                "time-period": "last-7-days",
+                "filter": [
+                    {
+                        "name": "srcip",
+                        "value": "192.168.22.5",
+                        "opcode": 0
+                    }
+                ]
+            }
+            "url": "/report/adom/lqtest/run"
+        }
+    ],
+    "session": "L6SZDrWEk3V4awuHmmcuJ+eKdNne9ICthB0XjJ7hbAqAIGZHtwlbNGWhI17nBZxReAG2Dt/gIHgdh2bLMNKdXA==",
+    "src": "10.6.119.1"
+}
+</pre></div></div></div><h6 id=${report.add.run.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "tid": "string"
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${report.add.run.resp}">Show example...</a></p></div><div id="${report.add.run.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Start a task to run a report.</i><a class="close" href="#${report.add.run.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "2333c69e-bf19-11e5-924a-000c2986047b",
+    "jsonrpc": "2.0",
+    "result": {
+        "tid": "b18d9afe-e428-11e6-b816-000c294956b2"
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier. /report/adom/&lt;adom-name&gt;/run<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/report/adom/&lt;adom-name&gt;/run</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">schedule</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Schedule name or id. Required if schedule parameters are not included.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">schedule-param</td><td class="table_col_desc"><i>object </i> (optional) <br/><br/>Schedule parameters. If the schedule name is given, the parameters will override the original report ones; If not, the layout-id, device, and time-period are required parameters to initiate a report.<br/><br/><table><tr class='odd_row'><td class="table_col_name">layout-id</td><td class="table_col_desc"><i>number </i> <br/><br/>The report layout ID.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">device</td><td class="table_col_desc"><i>string </i> <br/><br/>The list of device names.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">time-period</td><td class="table_col_desc"><i>string - enum </i> <br/> Default: <i>last-7-days </i> <br/>The type of time period. If 'other' is the type, then 'period-start' and 'period-end' must be specificed; If 'last-n-hours', 'last-n-days', or 'last-n-weeks' is selected, then 'period-last-n' field must be filled.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;today<br/>&nbsp;&nbsp;&nbsp;&nbsp;yesterday<br/>&nbsp;&nbsp;&nbsp;&nbsp;last-n-hours<br/>&nbsp;&nbsp;&nbsp;&nbsp;this-week<br/>&nbsp;&nbsp;&nbsp;&nbsp;last-week<br/>&nbsp;&nbsp;&nbsp;&nbsp;last-7-days<br/>&nbsp;&nbsp;&nbsp;&nbsp;last-n-days<br/>&nbsp;&nbsp;&nbsp;&nbsp;last-2-weeks<br/>&nbsp;&nbsp;&nbsp;&nbsp;last-14-days<br/>&nbsp;&nbsp;&nbsp;&nbsp;this-month<br/>&nbsp;&nbsp;&nbsp;&nbsp;last-month<br/>&nbsp;&nbsp;&nbsp;&nbsp;last-30-days<br/>&nbsp;&nbsp;&nbsp;&nbsp;last-n-weeks<br/>&nbsp;&nbsp;&nbsp;&nbsp;this-quarter<br/>&nbsp;&nbsp;&nbsp;&nbsp;last-quarter<br/>&nbsp;&nbsp;&nbsp;&nbsp;this-year<br/>&nbsp;&nbsp;&nbsp;&nbsp;other</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">period-last-n</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>N for last-n-hours/last-n-days/last-n-weeks.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">timezone</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The timezone index or name. Time range in request and date/time if any in response will follow this timezone. See Appendix<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">period-start</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Start time of report data (hh:mm:ss YYYY/MM/DD).<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">period-end</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>End time of report data (hh:mm:ss YYYY/MM/DD).<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">week-start</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/> Default: <i>sun </i> <br/>Day of week start.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;sun<br/>&nbsp;&nbsp;&nbsp;&nbsp;mon</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">display-table-contents</td><td class="table_col_desc"><i>number - enum </i> (optional) <br/> Default: <i>1 </i> <br/>Display the table of contents.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;0<br/>&nbsp;&nbsp;&nbsp;&nbsp;1</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">include-coverpage</td><td class="table_col_desc"><i>number - enum </i> (optional) <br/> Default: <i>1 </i> <br/>Include the cover page.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;0<br/>&nbsp;&nbsp;&nbsp;&nbsp;1</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">resolve-hostname</td><td class="table_col_desc"><i>number - enum </i> (optional) <br/> Default: <i>0 </i> <br/>Resolve IP to hostname.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;0<br/>&nbsp;&nbsp;&nbsp;&nbsp;1</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">filter</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/><br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/><br/><br/><table><tr class='odd_row'><td class="table_col_name">name</td><td class="table_col_desc"><i>string </i> <br/><br/>Filter field name.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">value</td><td class="table_col_desc"><i>string </i> <br/><br/>Filter value.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">opcode</td><td class="table_col_desc"><i>number - enum </i> <br/> Default: <i>0 </i> <br/>Equal (0) or not equal (1).<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;0<br/>&nbsp;&nbsp;&nbsp;&nbsp;1</i></b><br/></td></tr></table></td></tr></td></tr><tr class='odd_row'><td class="table_col_name">filter-logic</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/> Default: <i>all </i> <br/>Relationship between filters.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;all<br/>&nbsp;&nbsp;&nbsp;&nbsp;any</i></b><br/></td></tr></table></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return Report Task ID</h2><p>A new assigned task ID for the report request will be returned. This task ID must be used in following 'get report run' and 'cancel report run' request.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">tid</td><td class="table_col_desc"><i>string </i> <br/><br/>Task ID.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_report_adom__adom-name__run__tid_>Get Report Task State</h1><h2>get /report/adom/&lt;adom-name&gt;/run/&lt;tid&gt;</h2><p>Get the task state of a report by task ID.<h6 id=${report.get.run.req}.request>Request:</h6><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/report/adom/&lt;adom-name&gt;/run/&lt;tid&gt;",
+            "apiver": 3
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${report.get.run.req}">Show example...</a></p></div><div id="${report.get.run.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Get the task state of a report by task ID.</i><a class="close" href="#${report.get.run.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "==========id",
+    "jsonrpc": "2.0",
+    "method": "get",
+    "params": [
+        {
+            "apiver": "3",
+            "url": "/report/adom/lqtest/run/dd00704e-df64-11e6-91d9-000c294956b2"
+        }
+    ],
+    "session": "uHLndSgO5KgW3HFin4YqV78rKd2EZ4T0tBqE0gKI7d/DMicG3XiRCrmdWb4IX0zuUVQ723D4FUnj3cVxYN2LhQ==",
+    "src": "10.6.119.1"
+}
+</pre></div></div></div><h6 id=${report.get.run.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "state": "string",
+        "progress-percent": number,
+        "device": "string",
+        "period-end": "string",
+        "period-start": "string",
+        "timestamp-start": number,
+        "timestamp-end": number,
+        "title": "string",
+        "tid": "string"
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${report.get.run.resp}">Show example...</a></p></div><div id="${report.get.run.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Get the task state of a report by task ID.</i><a class="close" href="#${report.get.run.resp}.response">&times;</a> <div class="content_cmd"><pre>
+[Pending]
+{
+    "id": "==========id",
+    "jsonrpc": "2.0",
+    "result": {
+        "state": "pending",
+        "progress-percent": 0,
+    }
+}
+
+[Running]
+{
+    "id": "==========id",
+    "jsonrpc": "2.0",
+    "result": {
+        "state": "running",
+        "progress-percent": 19,
+        "device": "FG10CH3G11601832[root],FG1K5D3I15805079[root],FG1K5D3I15805080[root],FG1K5D3I15805080[vdom1],FG3K2D3Z15800141[root],FG3K2D3Z15800141[vd1],FG600C3912800651[lab],FG600C3912800651[lan],FG600C3912800651[root],FG600C3912800651[tp],FG600C3912800651[vd1],FG800C3913802271[root],FG80CM3909603513[root],FGT37D4614800279[1],FGT37D4614800279[root],FGT37D4614800279[vd1],FGT60C3G10000003[root],FGVM04FA10000001[root],FGVM04FA10000001[vdom5],FGVM04FA10000002[root],FGVM04FA10000002[vdom5],FW81CM3909600061[root],FW81CM3909600061[v1tw],FW81CM3909600061[v2cn],FW81CM3909600061[v3sa],FW81CM3909600061[v4il],FW81CM3909600061[v5jp],FW81CM3909600061[v6kr]",
+        "devtype": "FortiGate",
+        "tid": "dd00704e-df64-11e6-91d9-000c294956b2",
+        "start": "2017/01/20 14:34",
+        "end": "2017/01/20 15:04",
+        "timestamp-end": 1484953498,
+        "timestamp-start": 1484951698,
+        "title": "Security Analysis"
+    }
+}
+
+[Generated]
+{
+    "id": "2333c69e-bf19-11e5-924a-000c2986047b",
+    "jsonrpc": "2.0",
+    "result": {
+        "state": "generated",
+        "progress-percent": 100,
+        "device": "FG10CH3G11601832[root],FG1K5D3I15805079[root],FG1K5D3I15805080[root],FG1K5D3I15805080[vdom1],FG3K2D3Z15800141[root],FG3K2D3Z15800141[vd1],FG600C3912800651[lab],FG600C3912800651[lan],FG600C3912800651[root],FG600C3912800651[tp],FG600C3912800651[vd1],FG800C3913802271[root],FG80CM3909603513[root],FGT37D4614800279[1],FGT37D4614800279[root],FGT37D4614800279[vd1],FGT60C3G10000003[root],FGVM04FA10000001[root],FGVM04FA10000001[vdom5],FGVM04FA10000002[root],FGVM04FA10000002[vdom5],FW81CM3909600061[root],FW81CM3909600061[v1tw],FW81CM3909600061[v2cn],FW81CM3909600061[v3sa],FW81CM3909600061[v4il],FW81CM3909600061[v5jp],FW81CM3909600061[v6kr]",
+        "devtype": "FortiGate",
+        "format": [
+            "HTML",
+            "PDF",
+            "XML",
+            "CSV"
+        ],
+        "tid": "dd00704e-df64-11e6-91d9-000c294956b2",
+        "period-end": "2017/01/19 23:59",
+        "period-start": "2015/12/17 00:00",
+        "start": "2017/01/20 15:04",
+        "end": "2017/01/20 15:05",
+        "timestamp-end": 1484953517,
+        "timestamp-start": 1484953498,
+        "title": "Security Analysis"
+    }
+}
+
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier. /report/adom/&lt;adom-name&gt;/run/&lt;tid&gt;<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/report/adom/&lt;adom-name&gt;/run/&lt;tid&gt;</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return Report Task State</h2><p>It returns the state of a report task. If the report is still in pending, there are only state and progress percentage in result.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">state</td><td class="table_col_desc"><i>string </i> <br/><br/>Pending, running, or done.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">progress-percent</td><td class="table_col_desc"><i>number </i> <br/><br/>Percentage of running.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">device</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>A list of devices names. This report is based on devices data.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">format</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>A list of supported formats, such as HTML, PDF, XML, CSV.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">timestamp-start</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>Start timestamp of running this report.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">timestamp-end</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>End timestamp of running this report.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">period-start</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Start time of original data included in this report, YYYY/MM/DD hh:mm.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">period-end</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>End time of original data included in this report, YYYY/MM/DD hh:mm.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">tid</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>A unique task id of this report, you can use it to download or delete this report's data after this report's state becomes 'done'.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=delete_report_adom__adom-name__run__tid_>Cancel Report Task</h1><h2>delete /report/adom/&lt;adom-name&gt;/run/&lt;tid&gt;</h2><p>It will cancel a running report by task ID.<h6 id=${report.delete.run.req}.request>Request:</h6><pre>
+{
+    "method": "delete",
+    "params": [
+        {
+            "url": "/report/adom/&lt;adom-name&gt;/run/&lt;tid&gt;",
+            "apiver": 3
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${report.delete.run.req}">Show example...</a></p></div><div id="${report.delete.run.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: It will cancel a running report by task ID.</i><a class="close" href="#${report.delete.run.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "==============id",
+    "jsonrpc": "2.0",
+    "method": "delete",
+    "params": [
+        {
+            "apiver": "3",
+            "url": "/report/adom/lqtest/run/b18d9afe-e428-11e6-b816-000c294956b2"
+        }
+    ],
+    "session": "L6SZDrWEk3V4awuHmmcuJ+eKdNne9ICthB0XjJ7hbAqAIGZHtwlbNGWhI17nBZxReAG2Dt/gIHgdh2bLMNKdXA==",
+    "src": "10.6.119.1"
+}
+</pre></div></div></div><h6 id=${report.delete.run.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "code": number,
+            "message": "string"
+        }
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${report.delete.run.resp}">Show example...</a></p></div><div id="${report.delete.run.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: It will cancel a running report by task ID.</i><a class="close" href="#${report.delete.run.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "==============id",
+    "jsonrpc": "2.0",
+    "result": {
+        "status": {
+            "code": 0,
+            "message": "succeeded"
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier. /report/adom/&lt;adom-name&gt;/run/&lt;tid&gt;<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/report/adom/&lt;adom-name&gt;/run/&lt;tid&gt;</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return Report Cancellation Status</h2><p>It returns the result of cancelling a running report task.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>string </i> <br/><br/>Cancellation status.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_report_adom__adom-name__reports_state>List Reports</h1><h2>get /report/adom/&lt;adom-name&gt;/reports/state</h2><p>It will list all reports in pending-running or generated state.<h6 id=${report.get.state.req}.request>Request:</h6><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/report/adom/&lt;adom-name&gt;/reports/state",
+            "apiver": 3,
+            "title": "string",
+            "state": "string",
+            "time-range": {"start": "string", "end": "string"},
+            "sort-by": [
+                {"field": "string", "order": "asc<default>|desc"}
+            ]
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${report.get.state.req}">Show example...</a></p></div><div id="${report.get.state.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: It will list all reports in pending-running or generated state.</i><a class="close" href="#${report.get.state.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "2333c69e-bf19-11e5-924a-000c2986047b",
+    "jsonrpc": "2.0",
+    "method": "get",
+    "params": [
+        {
+            "apiver": 3,
+            "state": "pending-running",
+            "url": "/report/adom/lqtest/reports/state"
+        }
+    ],
+    "session": "YSK9VM4YIJrJx4r0Fkp36pFIxo1BrU6xXBHNbj1+LnYrENNWAvgqRT2tTZTkXZzLI21YEyIFx6eN4XXkDCTOIA==",
+    "src": "10.6.119.1"
+}
+</pre></div></div></div><h6 id=${report.get.state.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "data":[
+           {
+            "state": "string",
+            "progress-percent": number,
+            "device": "string",
+            "period-end": "string",
+            "period-start": "string",
+            "timestamp-start": number,
+            "timestamp-end": number,
+            "title": "string",
+            "tid": "string"
+        }],
+        "count":"number"
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${report.get.state.resp}">Show example...</a></p></div><div id="${report.get.state.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: It will list all reports in pending-running or generated state.</i><a class="close" href="#${report.get.state.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "2333c69e-bf19-11e5-924a-000c2986047b",
+    "jsonrpc": "2.0",
+    "result": {
+        "count": 3,
+        "data": [
+            {
+                "date": "2017_01_26",
+                "device": "FG10CH3G11601832[root],FG1K5D3I15805079[root],FG1K5D3I15805080[root],FG1K5D3I15805080[vdom1],FG3K2D3Z15800141[root],FG3K2D3Z15800141[vd1],FG600C3912800651[lab],FG600C3912800651[lan],FG600C3912800651[root],FG600C3912800651[tp],FG600C3912800651[vd1],FG800C3913802271[root],FG80CM3909603513[root],FGT37D4614800279[1],FGT37D4614800279[root],FGT37D4614800279[vd1],FGT60C3G10000003[root],FGVM04FA10000001[root],FGVM04FA10000001[vdom5],FGVM04FA10000002[root],FGVM04FA10000002[vdom5],FW81CM3909600061[root],FW81CM3909600061[v1tw],FW81CM3909600061[v2cn],FW81CM3909600061[v3sa],FW81CM3909600061[v4il],FW81CM3909600061[v5jp],FW81CM3909600061[v6kr]",
+                "devtype": "FortiGate",
+                "name": "S-1_t1-Security Analysis-2017-01-26-1641",
+                "progress-percent": 99,
+                "schedule_color": "#7AE7BF",
+                "start": "2017/01/26 16:41:04",
+                "state": "running",
+                "tid": "47ba0242-e429-11e6-bebc-000c294956b2",
+                "timestamp-start": 1485477664,
+                "title": "Security Analysis"
+            },
+            {
+                "date": "2017_01_18",
+                "devtype": "FortiGate",
+                "name": "S-6_t6-All_chart_types-2017-01-18-1525",
+                "progress-percent": 99,
+                "schedule_color": "#5484ED",
+                "state": "failed",
+                "tid": "5b0921ca-ddd5-11e6-85e7-000c294956b2",
+                "title": "All_chart_types"
+            },
+            {
+                "id": "48a45dc4-e429-11e6-83d0-000c294956b2",
+                "name": "Security Analysis",
+                "state": "pending"
+            }
+        ],
+        "revision": 148547766419
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier. /report/adom/&lt;adom-name&gt;/reports/state<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/report/adom/&lt;adom-name&gt;/reports/state</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">title</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Title of a report.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">state</td><td class="table_col_desc"><i>string </i> <br/><br/>pending-running, or generated.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">sort-by</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>Sort by fields. Only support <b>one field</b> for this API.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/><br/><br/><table><tr class='odd_row'><td class="table_col_name">field</td><td class="table_col_desc"><i>string </i> <br/><br/>Only support title currently. If there is no 'sort-by', then sort by start time of running report.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">order</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/> Default: <i>asc </i> <br/>Order type: ascending or descending.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;asc<br/>&nbsp;&nbsp;&nbsp;&nbsp;desc</i></b><br/></td></tr></table></td></tr></td></tr><tr class='odd_row'><td class="table_col_name">timezone</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The timezone index or name. Time range in request and date/time if any in response will follow this timezone. See Appendix<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">time-range</td><td class="table_col_desc"><i>object </i> (optional) <br/><br/>Time range for source data selection. It is required only if "state" is "generated".<br/><br/><table><tr class='odd_row'><td class="table_col_name">start</td><td class="table_col_desc"><i>string </i> <br/><br/>Starting date time. Consider it following the timezone parameter's, ADOM's or FortiAnalyzer's timezone if timezone info is not specified within time range. Format: 'yyyy-MM-dd'T'HH:mm:ssZ' (RFC 3339) e.g. '2016-10-17T20:45:37-07:00 or 'yyyy-MM-dd HH:mm:ss' e.g. '2016-10-17 20:45:37'<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">end</td><td class="table_col_desc"><i>string </i> <br/><br/>Ending date time. Consider it following the timezone parameter's, ADOM's or FortiAnalyzer's timezone if timezone info is not specified within time range. Format: 'yyyy-MM-dd'T'HH:mm:ssZ' (RFC 3339) e.g. '2016-10-17T20:45:37-07:00 or 'yyyy-MM-dd HH:mm:ss' e.g. '2016-10-17 20:45:37'<br/><br/></td></tr></table></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return Report List</h2><p>It returns a list of pending, running or generated reports.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">count</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>Number of data count.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>A structure that holds the parameter values.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/><br/><br/><table><tr class='odd_row'><td class="table_col_name">state</td><td class="table_col_desc"><i>string </i> <br/><br/>Pending, Running, or Done.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">progress-percent</td><td class="table_col_desc"><i>number </i> <br/><br/>Percentage of running.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">device</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>A list of device names included in the report.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">format</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>A list of report format, such as HTML, PDF, XML, CSV.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">timestamp-start</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Start timestamp of running report.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">timestamp-end</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>End timestamp of running report<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">period-start</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Start time of original date included in this report, YYYY/MM/DD HH:mm<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">period-end</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>End time of original date included in this report, YYYY/MM/DD HH:mm<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">tid</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>A unique ID of this report, you can use it to download or delete this report's data after this report's state is done.<br/><br/></td></tr></table></td></tr></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_report_adom__adom-name__reports_data__tid_>Download Report</h1><h2>get /report/adom/&lt;adom-name&gt;/reports/data/&lt;tid&gt;</h2><p>Request to download a generated report.<h6 id=${report.get.data.req}.request>Request:</h6><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/report/adom/&lt;adom-name&gt;/reports/data/&lt;tid&gt;",
+            "apiver": 3,
+            "format": "string",
+            "data-type": "string"
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${report.get.data.req}">Show example...</a></p></div><div id="${report.get.data.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Request to download a generated report.</i><a class="close" href="#${report.get.data.req}.request">&times;</a> <div class="content_cmd"><pre>
+    [default: zip and base64 enconded]
+{
+    "id": "2333c69e-bf19-11e5-924a-000c2986047b",
+    "jsonrpc": "2.0",
+    "method": "get",
+    "params": [
+        {
+            "url": "/report/adom/root/reports/data/828a3836-f6f9-11e7-aa74-000c2948af14",
+            "format": "csv",
+            "apiver": 3
+        }
+    ],
+    "session": "By+9VI54+djpbAjBh8n3zInFLCCQUT3j9luK0/3iloByFI0DOQJsMHI2cxrIaePoDUsaqMYDRVbIC9M4UQCrTg==",
+    "src": "10.6.119.1"
+}
+    [plain text]
+{
+    "id": "2333c69e-bf19-11e5-924a-000c2986047b",
+    "jsonrpc": "2.0",
+    "method": "get",
+    "params": [
+        {
+            "url": "/report/adom/root/reports/data/828a3836-f6f9-11e7-aa74-000c2948af14",
+            "format": "csv",
+            "data-type": "text",
+            "apiver": 3
+        }
+    ],
+    "session": "By+9VI54+djpbAjBh8n3zInFLCCQUT3j9luK0/3iloByFI0DOQJsMHI2cxrIaePoDUsaqMYDRVbIC9M4UQCrTg==",
+    "src": "10.6.119.1"
+}
+</pre></div></div></div><h6 id=${report.get.data.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "checksum": {
+            "method": "string",
+            "hash": "string"
+        },
+        "data": "string",
+        "length": number,
+        "name": "string",
+        "tid": "string",
+        "data-type": "string"
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${report.get.data.resp}">Show example...</a></p></div><div id="${report.get.data.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Request to download a generated report.</i><a class="close" href="#${report.get.data.resp}.response">&times;</a> <div class="content_cmd"><pre>
+    [default: zip and base64 enconded]
+{
+    "id": "2333c69e-bf19-11e5-924a-000c2986047b",
+    "jsonrpc": "2.0",
+    "result": {
+        "checksum": {
+            "method": "MD5",
+            "hash": "1f3a28f238debc70441d5e1886a276f8"
+        },
+        "data": "UEsDBBQAAAAIADxQK0yPMASAtQAAACwBAAAYABwARm9ydGlBbmFseXplcl9SZXBvcnQuY3N2VVQJAAOUpldaBgdYWnV4CwABBAAAAAAEAAAAAHXMSw+CMAwH8DufYhlXIfJQ9OaDmBiPqInHARWWDErG8PXpLYQLMe7Sf7v+ym3b9vpHlVv8GPMZ3yvscnZpQVOzbRolM2Ek1tQl0LaUWooHqYAl8gPEmMdockdtZA3GyVA3qIWBTVEJqdwMK/qONTYpvih5q349WgbuwmenXX/AnxwoFKZC/dHrAfuBG4UjDvrJQ+aAzlOYrAQ9oTfszl0KlIbFORtQ+IveokQc0VVWgBNifQFQSwECHgMUAAAACAA8UCtMjzAEgLUAAAAsAQAAGAAYAAAAAAABAAAApIEAAAAARm9ydGlBbmFseXplcl9SZXBvcnQuY3N2VVQFAAOUpldadXgLAAEEAAAAAAQAAAAAUEsFBgAAAAABAAEAXgAAAAcBAAAAAA==", 
+        "data-type": "zip/base64", 
+        "length": 379, 
+        "name": "00000-2018-01-11-1001", 
+        "tid": "828a3836-f6f9-11e7-aa74-000c2948af14"
+    }
+}
+    [plain text]
+{
+    "id": "2333c69e-bf19-11e5-924a-000c2986047b",
+    "jsonrpc": "2.0",
+    "result": {
+        "checksum": "2e8dd1dff73c7141fb4084b4143363cd", 
+        "data": ""###Example###"
+"ID","Cloud User","Application","Sessions","File Size"
+" 1 ","test1@test.com","testapp","18 ","763.52 KB"
+" 2 ","test2@test.com","testapp","9 ","723.74 KB"
+" 3 ","video-watcher@test.com","videoapp1","3 ","0 B"
+" 4 ","video-watcher@test.com","videoapp2","3 ","0 B"
+", 
+        "data-type": "text", 
+        "length": 300, 
+        "name": "00000-2018-01-11-1001", 
+        "tid": "828a3836-f6f9-11e7-aa74-000c2948af14"
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier. /report/adom/&lt;adom-name&gt;/data/id<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/report/adom/&lt;adom-name&gt;/reports/data/&lt;tid&gt;</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">format</td><td class="table_col_desc"><i>string </i> (optional) <br/> Default: <i>PDF </i> <br/>One format got by /report/adom/&lt;adom-name&gt;/reports/state. Such as HTML, PDF, XML, CSV.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">data-type</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>One option to download the text format of XML or CSV reports, e.g. 'text'.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return Generated Report Data.</h2><p>The report data is in base64 encoded zip file by default.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">tid</td><td class="table_col_desc"><i>string </i> <br/><br/>ID of the report.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">name</td><td class="table_col_desc"><i>string </i> <br/><br/>Name of the report, e.g. 'Security Analysis'.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>string </i> <br/><br/>Zipped and Base64 encoded data by default. Plain text for XML and CSV when specified in request.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">data-type</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The return type of data, e.g. 'text' or 'zip/base64'.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">length</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>Length of the returned data stream.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">checksum</td><td class="table_col_desc"><i>object </i> (optional) <br/><br/>Checksum information.<br/><br/><table><tr class='odd_row'><td class="table_col_name">method</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Checksum algorithm, e.g. 'MD5'.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">hash</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Checksum string.<br/><br/></td></tr></table></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=delete_report_adom__adom-name__reports_data__tid_>Delete Generated Report</h1><h2>delete /report/adom/&lt;adom-name&gt;/reports/data/&lt;tid&gt;</h2><p>Delete a generated report.<h6 id=${report.delete.data.req}.request>Request:</h6><pre>
+{
+    "method": "delete",
+    "params": [
+        {
+            "url": "/report/adom/&lt;adom-name&gt;/reports/data/&lt;tid&gt;",
+            "apiver": 3
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${report.delete.data.req}">Show example...</a></p></div><div id="${report.delete.data.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Delete a generated report.</i><a class="close" href="#${report.delete.data.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "2333c69e-bf19-11e5-924a-000c2986047b",
+    "jsonrpc": "2.0",
+    "method": "delete",
+    "params": [
+        {
+            "apiver": 3,
+            "url": "/report/adom/lqtest/reports/data/47ba0242-e429-11e6-bebc-000c294956b2"
+        }
+    ],
+    "session": "CVaLo4eHV2ztDVNbCeo44lxmBIXJ5SikQdiR4rXhubRB5oZYX3Njqw8T7SChVx+xaAWp4EEXUmYZYeUaYXqcBw==",
+    "src": "10.6.119.1"
+}
+</pre></div></div></div><h6 id=${report.delete.data.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": "string"
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${report.delete.data.resp}">Show example...</a></p></div><div id="${report.delete.data.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Delete a generated report.</i><a class="close" href="#${report.delete.data.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "2333c69e-bf19-11e5-924a-000c2986047b",
+    "jsonrpc": "2.0",
+    "result": {
+        "status": {
+            "code": 0,
+            "message": "succeeded"
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier. /report/adom/&lt;adom-name&gt;/reports/data/id<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/report/adom/&lt;adom-name&gt;/reports/data/&lt;tid&gt;</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return Status of Deleting Report</h2><p>Return status of deleting a generated report.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>string </i> <br/><br/>Delete status.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=add_report_adom__adom-name__config-file_import>Import Report Config Files</h1><h2>add /report/adom/&lt;adom-name&gt;/config-file/import</h2><p>Request of importing report config files.<h6 id=${report.import.config.req}.request>Request:</h6><pre>
+{
+    "method": "add",
+    "params": [
+        {
+            "url": "/report/adom/&lt;adom-name&gt;/config-file/import",
+            "apiver": 3,
+            "data": "string",
+            "folder": "string"
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${report.import.config.req}">Show example...</a></p></div><div id="${report.import.config.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Request of importing report config files.</i><a class="close" href="#${report.import.config.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "2333c69e-bf19-11e5-924a-000c2986047b",
+    "jsonrpc": "2.0",
+    "method": "add",
+    "params": [
+        {
+            "apiver": 3,
+            "data": "H4sIAAAAAAACA+x5dzzb//cvVdVSdFCrRqtWqL2CUlWU2GKPlNizBImapbQIau+iVuxVI3apEYoW0VpBrZqxR6xfPr/P9497H/dx7/3nfn+Px733c/LI43UeJyfv5H3OyTnP54mgEMm/XYSJIiUs/J+n8P94/qcuIiYsLiouKiEuJUG0S0kJS5BwSJD8F4g3zMvKk4ODxNPd3et/5fe/e/3/UhEUcvHwsoV5QVysfN29vSBAQai7m52gqCPIzdRK0P71/6n8S4qL/8/yLyouJfbf519EQlxChIRD+J/8/9uFPer63wrZptGM+5TkrSA8RFGa9aW7lTPXBSpK8ClLjjF7JDX/5LvHoUpqid+SHkrEe/6+dzILV42rcanTlLo5NbB7Z2YH0RI7e/4iOzMz0wVd/Yzf2nd5TsFBi83/Ud7n26KQ0kJ1NNMTriiegSXHsXFTXop+m/oXT9E/xsvpS6VRKkLZl7tbB9aSVwK6A3/asZ51Td73koBNXJsJkVM2ETVy0C+fqZDHuTcuflOhcM6ljL5nc6YOdHsuochJBdHYIlOm2J9ZL740+2amfcqoMnWS153HdxDxUu+RiVZCre8wH9ovWLkvDZrcvNC0OG2nMibY6Gf5U8/mprL12wBtY+0fxoae8VvX+1rG7N5VL/qDYJz53w6iKQ2eWvCSRGYgbVno/L2VP+458HozUd9NhGIf3CSI3dfeWXjMBoJs/LHF/5p0oEjblms8z5uv2qaj4lWM9VBKLPoqiZUe1XiW7u+C9lwd2tEXzfL/6ahZP5jn8yyVi0//JLpvJpxOxWjxwXM1N8npV7tVt+70q3cEBxsuOhflxrlthN3Qnbyd24fwUSexxLj8fmzAWcBLx9KgqPm+CnfnIF+8qbgatfnwB/c7sqc41TdPdl3tg6PB1mGBXL+ajX1MXxiGx4fcTs4l5SgvjzjlFQvfPOROnB0Pn3r/qeKeBernn7nXnurPXbOYIKH8uhBt7h+QjTEzYU6oax/LTCoywUjBmzu32n5xa7/NIeC2PIOTXInEQ/iiVPB+Sq7z1NhG+7VxqfmOdqpRDangT+5PzprmLkH73opntG0Pjj/I1VKLkUluVvm8V/Xa2oQaU321APVBVOGQjtfS+q/8+pg/lqsqBa90jluYpjThblvcevVCUFY1kMEQSYhHf4dv0JbRuVAZVrCkXiCvJ2G4V8DN0e1tt/b0eLVcE3omVqNpFsjN7g0AB+JXBRZWSg3iB418JSFyaideh4uIt4UXzHWmbsBuZ5ljNfncwqQh6HufPPcmAZ35dsdCW30+ltszkYlA+xCT74nh2IzAG6G4cY2w0dAeI/lxJgJIP9czVz27NLtK19yjKeb5SP8Tyt8C7kKXVmZv7eOD17reJ9QGySzSaKjqZrOTP5G9TiCfLjg1Hn5l9/pMkbVyO2mMbOyxbUPnCI40qvWQUZdxpcLCyd4TFakbrlZubLc/NxP67sD0fMntYHkfphF0+XarLzoY/VauTyWRxc3CZiL54rKzzKdCiNb88tZ0OCPG1ovFYtvLtGzZsU0GUs2UbX/c/Usc8nge25jJE+pLxZXoUpRBOiXCp27gcenT4zB6R1Xd71Zmy37QH2EsmuerPfnp9xq7g4/4tvYmOKFS5esNHmBq4Lcv9XFbNF5scTmgwlH3ChWG4Qo21V6G4TUquYJNhPRSW6YsQyBD4E8Gv04VY7JHqEUzwdtDM5Rts3ySL3wYVArnbS05A4oE/GKNwUB6+l3hxcsfWxum4CXmQHGXrQo2JXXndmhWMiq8clGXelt2+6vBgEG4UmnxXdZ5ao1X0ePbf36edOR//w5WGq1x/iCmQcrCiHto4752XL5+UH2+5GETYrHD111/v3y9STNjfDJS+A7mFi4suYMJvJhVJh/wGcJrzJWvOhIrYbRI/XW23GTnjSrlfmSovvAR7lwCpUxbxhpNvmB4kVlNYi1KKARxxNPrZE7pxt5l0aPwXBPJDtIm5DrVQnK/Uany26nnXiGnqZBPxXMmVNCv1NZTGJQbyMZvFoSL+G8aTG3iGh6Ni0xLB6q0JavFTHP5wTHiLfkXV1OKlo9qaP+fmf9+MF8YxNHVHvLKysshAGJjaweBuvvYekKs7f",
+            "url": "/report/adom/lqtest/config-file/import"
+        }
+    ],
+    "session": "Mp43a/JLdyUqmTE8ZHNJIOqgHiWDq0XRR6OMLoguSCypRZYI7K3sAyaGjBtZrgqbjkYVQHgUkuJApskkTzO1Bw=="
+}
+</pre></div></div></div><h6 id=${report.import.config.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "layout-id": number,
+        "chart-ids": [
+            {"type": "string"}
+        ]
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${report.import.config.resp}">Show example...</a></p></div><div id="${report.import.config.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Request of importing report config files.</i><a class="close" href="#${report.import.config.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "2333c69e-bf19-11e5-924a-000c2986047b",
+    "jsonrpc": "2.0",
+    "result": {
+        "layout-id": 862282548
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier. /report/adom/&lt;adom-name&gt;/config-file/import<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/report/adom/&lt;adom-name&gt;/config-file/import</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>string </i> <br/><br/>Report configuration in <b>Base64</b> format.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">folder</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Folder path that you would like to import report config to. Will be the root folder if the left blank, or the parent directory if the provided directory does not exist. e.g. provided folder path=<i>'/web/vancouver'</i>, <i>'/web'</i> exists, but <i>'/web/vancouver'</i> does not, the report configuration will be imported to <b>'/web'</b>.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return Status of Importing Report Config File</h2><p>Return status of importing report config.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">layout-id</td><td class="table_col_desc"><i>number </i> <br/><br/>The imported report config ID.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">chart-ids</td><td class="table_col_desc"><i>array </i> <br/><br/>The list of imported chart IDs.<br/><br/>member type: <i>string</i><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=add_report_template_import>Import Report Templates</h1><h2>add /report/template/import</h2><p>Request of importing report templates.<h6 id=${report.import.template.req}.request>Request:</h6><pre>
+{
+    "method": "add",
+    "params": [
+        {
+            "url": "/report/template/import",
+            "apiver": 3,
+            "data": "string",
+            "dev-type": "string"
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${report.import.template.req}">Show example...</a></p></div><div id="${report.import.template.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Request of importing report templates.</i><a class="close" href="#${report.import.template.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "2333c69e-bf19-11e5-924a-000c2986047b",
+    "jsonrpc": "2.0",
+    "method": "add",
+    "params": [
+        {
+            "apiver": 3,
+            "file": "/drive0/private/temp/template.uZGh3j",
+            "devtype": "fgt",
+            "url": "/report/template/import"
+        }
+    ],
+    "session": "Mp43a/JLdyUqmTE8ZHNJIOqgHiWDq0XRR6OMLoguSCypRZYI7K3sAyaGjBtZrgqbjkYVQHgUkuJApskkTzO1Bw=="
+}
+</pre></div></div></div><h6 id=${report.import.template.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "code": number,
+            "message": "string"
+        }
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${report.import.template.resp}">Show example...</a></p></div><div id="${report.import.template.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Request of importing report templates.</i><a class="close" href="#${report.import.template.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "2333c69e-bf19-11e5-924a-000c2986047b",
+    "jsonrpc": "2.0",
+    "result": {
+        "status" {
+            "message": "ok"
+        },
+        "templates": [
+          { "title": "Security Report" },
+          { "title": "Client Reputation" }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier. /report/template/import<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/report/template/import</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>string </i> <br/><br/>Report template config file base64 encoded string.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">dev-type</td><td class="table_col_desc"><i>string </i> <br/><br/>ADOM device type for import templates.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return Status of Importing Report Template File</h2><p>Return status of importing report template.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>Status of the current task<br/><br/><table><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>Status code<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Status description<br/><br/></td></tr></table></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_report_adom__adom-name__template_export>Export Report Templates to File</h1><h2>get /report/adom/&lt;adom-name&gt;/template/export</h2><p>Request of exporting report templates to file.<h6 id=${report.export.template.req}.request>Request:</h6><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/report/adom/&lt;adom-name&gt;/template/export",
+            "apiver": 3,
+            "language": "string",
+            "dev-type": "string"
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${report.export.template.req}">Show example...</a></p></div><div id="${report.export.template.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Request of exporting report templates to file.</i><a class="close" href="#${report.export.template.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "2333c69e-bf19-11e5-924a-000c2986047b",
+    "jsonrpc": "2.0",
+    "method": "get",
+    "params": [
+        {
+            "url": "/report/adom/FortiClient/template/export",
+            "apiver": 3,
+            "language": "en"
+        }
+    ],
+    "session": "Mp43a/JLdyUqmTE8ZHNJIOqgHiWDq0XRR6OMLoguSCypRZYI7K3sAyaGjBtZrgqbjkYVQHgUkuJApskkTzO1Bw=="
+}
+</pre></div></div></div><h6 id=${report.export.template.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "checksum": {
+            "method": {
+                "type": "string",
+                "description": "Checksum algorithm, e.g. 'MD5'."
+            },
+            "hash": {
+                "type": "string",
+                "description": "Checksum string."
+            }
+        },
+        "length": {
+            "type": "number",
+            "description": "Length of the returned data stream."
+        },
+        "data": {
+            "type": "string",
+            "description": "Data stream in base64 format."
+        },
+        "data-type": "string"
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${report.export.template.resp}">Show example...</a></p></div><div id="${report.export.template.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Request of exporting report templates to file.</i><a class="close" href="#${report.export.template.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "2333c69e-bf19-11e5-924a-000c2986047b",
+    "jsonrpc": "2.0",
+    "result": {
+        "checksum": {
+            "method": "MD5",
+            "hash": "d08a652b0cf137ef902cc625527642f3"
+        },
+        "data": "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", 
+        "data-type": "tar/base64", 
+        "length": 2892
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier. /report/adom/&lt;adom-name&gt;/template/export<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/report/adom/&lt;adom-name&gt;/template/export</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">dev-type</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Device type abbreviation, e.g. 'fgt', 'fml' etc.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">language</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Language name, e.g. 'en', 'zh', 'ja' etc, filter for exporting report template.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">title</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Template title, filter for exporting report template.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return Status of Exporting Report Template to File</h2><p>Return status of exporting report template.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">checksum</td><td class="table_col_desc"><i>object </i> (optional) <br/><br/>Checksum information.<br/><br/><table><tr class='odd_row'><td class="table_col_name">method</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Checksum algorithm, e.g. 'MD5'.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">hash</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Checksum string.<br/><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">length</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>Length of the returned data stream.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Data stream in base64 format.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">data-type</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The return type of data, e.g. 'tar/base64'.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=add_report_adom__adom-name__template_install>Install Report Template Language Package from File</h1><h2>add /report/adom/&lt;adom-name&gt;/template/install</h2><p>Request of installing language sepcified report templates from file.<h6 id=${report.install.template.req}.request>Request:</h6><pre>
+{
+    "method": "add",
+    "params": [
+        {
+            "url": "/report/adom/&lt;adom-name&gt;/template/install",
+            "apiver": 3,
+            "language": "string",
+            "data": "string"
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${report.install.template.req}">Show example...</a></p></div><div id="${report.install.template.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Request of installing language sepcified report templates from file.</i><a class="close" href="#${report.install.template.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "2333c69e-bf19-11e5-924a-000c2986047b",
+    "jsonrpc": "2.0",
+    "method": "add",
+    "params": [
+        {
+            "apiver": 3,
+            "language": "zh",
+            "url": "/report/adom/root/template/install"
+        }
+    ],
+    "session": "Mp43a/JLdyUqmTE8ZHNJIOqgHiWDq0XRR6OMLoguSCypRZYI7K3sAyaGjBtZrgqbjkYVQHgUkuJApskkTzO1Bw=="
+}
+</pre></div></div></div><h6 id=${report.install.template.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "message": "string",
+            "code": number
+        },
+        "data": {
+            "count": number,
+            "id": [
+                number
+            ]
+        }
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${report.install.template.resp}">Show example...</a></p></div><div id="${report.install.template.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Request of installing language sepcified report templates from file.</i><a class="close" href="#${report.install.template.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": 1, 
+    "jsonrpc": "2.0", 
+    "result": {
+        "data": {
+            "count": 3, 
+            "id": [
+                1000050001, 
+                1000050002, 
+                1000050003
+            ]
+        }, 
+        "status": {
+            "code": 0, 
+            "message": "Total 3 report templates installed."
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier. /report/adom/&lt;adom-name&gt;/template/install<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/report/adom/&lt;adom-name&gt;/template/install</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">language</td><td class="table_col_desc"><i>string </i> <br/><br/>Language name, 'en', 'zh', 'ja' etc, filter for installing report template.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Report template config file base64 encoded string.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return Status of Installing Report Templates from File</h2><p>Return status of installing report templates.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> (optional) <br/><br/>A structured value of status.<br/><br/><table><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The result message of install request.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>The result code of install request.<br/><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>object </i> (optional) <br/><br/>The result data.<br/><br/><table><tr class='odd_row'><td class="table_col_name">id</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>The list of report template IDs.<br/><br/>member type: <i>number</i><br/></td></tr><tr class='odd_row'><td class="table_col_name">count</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>The total number of IDs.<br/><br/></td></tr></table></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_report_adom__adom-name__template_list>List Report Templates for a Specified Language</h1><h2>get /report/adom/&lt;adom-name&gt;/template/list</h2><p>Request of listing report templates.<h6 id=${report.list.template.req}.request>Request:</h6><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/report/adom/&lt;adom-name&gt;/template/list",
+            "apiver": 3,
+            "language": "string",
+            "devtype": "string"
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${report.list.template.req}">Show example...</a></p></div><div id="${report.list.template.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Request of listing report templates.</i><a class="close" href="#${report.list.template.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "2333c69e-bf19-11e5-924a-000c2986047b",
+    "jsonrpc": "2.0",
+    "method": "get",
+    "params": [
+        {
+            "apiver": 3,
+            "language": "en",
+            "url": "/report/adom/root/template/list"
+        }
+    ],
+    "session": "Mp43a/JLdyUqmTE8ZHNJIOqgHiWDq0XRR6OMLoguSCypRZYI7K3sAyaGjBtZrgqbjkYVQHgUkuJApskkTzO1Bw=="
+}
+</pre></div></div></div><h6 id=${report.list.template.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "message": "string",
+            "code": number
+        },
+        "data": [
+            {
+                "layout-id": number,
+                "language": "string",
+                "title": "string",
+                "category":"string",
+                "font-family": "string",
+                "description": "string",
+                "protected": "string"
+            }
+        ]
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${report.list.template.resp}">Show example...</a></p></div><div id="${report.list.template.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Request of listing report templates.</i><a class="close" href="#${report.list.template.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": 1, 
+    "jsonrpc": "2.0", 
+    "result": {
+        "data": [
+            {
+                "category": "User", 
+                "description": "User Security Analysis of Blocked and Allowed sites, categories. Top attacks by severity. Top Viruses and receivers by email. Spam counts and sources.", 
+                "font-family": "Open Sans", 
+                "language": "en", 
+                "layout-id": 1000060000, 
+                "protected": "enable", 
+                "title": "Template - User Security Analysis"
+            }, 
+            {
+                "category": "Security", 
+                "description": "Malware, Botnets - detected, victims and sources. Intrusions detected, sources, blocked severity and timeline.", 
+                "font-family": "Open Sans", 
+                "language": "en", 
+                "layout-id": 1000060006, 
+                "protected": "enable", 
+                "title": "Template - Threat Report"
+            }
+        ], 
+        "status": {
+            "code": 0, 
+            "message": "Get 2 report templates."
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier. /report/adom/&lt;adom-name&gt;/template/list<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/report/adom/&lt;adom-name&gt;/template/list</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">language</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Language name, 'en', 'zh', 'ja' etc, filter for listing report template.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">dev-type</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Device type abbreviation, e.g. 'fgt', 'fml' etc.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return Status of Listing Report Templates</h2><p>Return status of listing report templates.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> (optional) <br/><br/>A structured value of status.<br/><br/><table><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The result message of list request.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>The result code of list request.<br/><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>The list of report templates.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/>A structured value of a report template.<br/><br/><table><tr class='odd_row'><td class="table_col_name">layout-id</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>The id of the template.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">language</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The language of the template.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">title</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The title of the template.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">category</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The category of the template.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">description</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The description of the template.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">font-family</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The font-family of the template.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">protected</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The template is protected enabled or disabled.<br/><br/></td></tr></table></td></tr></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=add_report_template_delete>Delete Report Template Language Package Files</h1><h2>add /report/template/delete</h2><p>Request of deleting language sepcified report templates file.<h6 id=${report.delete.template.req}.request>Request:</h6><pre>
+{
+    "method": "add",
+    "params": [
+        {
+            "url": "/report/template/delete",
+            "apiver": 3,
+            "language": "string",
+            "dev-type": "string",
+            "title": "string"
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${report.delete.template.req}">Show example...</a></p></div><div id="${report.delete.template.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Request of deleting language sepcified report templates file.</i><a class="close" href="#${report.delete.template.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "2333c69e-bf19-11e5-924a-000c2986047b",
+    "jsonrpc": "2.0",
+    "method": "add",
+    "params": [
+        {
+            "apiver": 3,
+            "language": "zh",
+            "url": "/report/template/delete",
+            "dev-type": "fgt"
+            "title": "Template_ja - VPN Report"
+        }
+    ],
+    "session": "Mp43a/JLdyUqmTE8ZHNJIOqgHiWDq0XRR6OMLoguSCypRZYI7K3sAyaGjBtZrgqbjkYVQHgUkuJApskkTzO1Bw=="
+}
+</pre></div></div></div><h6 id=${report.delete.template.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "message": "string",
+            "code": number
+        }
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${report.delete.template.resp}">Show example...</a></p></div><div id="${report.delete.template.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Request of deleting language sepcified report templates file.</i><a class="close" href="#${report.delete.template.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "2333c69e-bf19-11e5-924a-000c2986047b",
+    "jsonrpc": "2.0",
+    "result": {
+        "code": 0,
+        "message": "Total 1 report templates deleted."
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier. /report/template/delete<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/report/template/delete</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">language</td><td class="table_col_desc"><i>string </i> <br/><br/>Language name, 'en', 'zh', 'ja' etc, filter for deleting report template.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">dev-type</td><td class="table_col_desc"><i>string </i> <br/><br/>Device type abbreviation, e.g. 'fgt', 'fml' etc.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">title</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Template title, filter for deleting report template.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return Status of Deleting Report Templates from File</h2><p>Return status of deleting report templates.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>A structured value of status.<br/><br/><table><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The result message of delete request.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>The result code of delete request.<br/><br/></td></tr></table></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_report_adom_root_template_language>List Report Template Language Packages</h1><h2>get /report/adom/root/template/language</h2><p>List report template languages.<h6 id=${report.language.template.req}.request>Request:</h6><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/report/adom/root/template/language",
+            "apiver": 3,
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${report.language.template.req}">Show example...</a></p></div><div id="${report.language.template.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: List report template languages.</i><a class="close" href="#${report.language.template.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "2333c69e-bf19-11e5-924a-000c2986047b",
+    "jsonrpc": "2.0",
+    "method": "get",
+    "params": [
+        {
+            "url": "/report/adom/root/template/language",
+            "apiver": 3
+        }
+    ],
+    "session": "Mp43a/JLdyUqmTE8ZHNJIOqgHiWDq0XRR6OMLoguSCypRZYI7K3sAyaGjBtZrgqbjkYVQHgUkuJApskkTzO1Bw=="
+}
+</pre></div></div></div><h6 id=${report.language.template.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "message": "string",
+            "code": number
+        },
+        "data": [
+            {
+                "installed": "string", 
+                "name": "string"
+            }
+        ]
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${report.language.template.resp}">Show example...</a></p></div><div id="${report.language.template.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: List report template languages.</i><a class="close" href="#${report.language.template.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "2333c69e-bf19-11e5-924a-000c2986047b",
+    "jsonrpc": "2.0",
+    "result": {
+        "status": {
+            "code": 0,
+            "message": "Get 3 template languages, 1 insalled."
+        },
+        "data": [
+            {
+                "installed": "yes", 
+                "name": "English"
+            }, 
+            {
+                "installed": "no", 
+                "name": "Japanese"
+            }, 
+            {
+                "installed": "no", 
+                "name": "Simplified Chinese"
+            }
+        ]
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier. /report/adom/root/template/language<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/report/adom/root/template/language</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return Report Template Languages</h2><p>Return report template languages.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>A structured value of status.<br/><br/><table><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The result message of request.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>The result code of request.<br/><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>The list of report template languages.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/>A structured value of a report template language.<br/><br/><table><tr class='odd_row'><td class="table_col_name">name</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The name of the language.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">installed</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The template language is installed or not.<br/><br/></td></tr></table></td></tr></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=add_report_adom__adom-name__graph-file>Add Graph Files</h1><h2>add /report/adom/&lt;adom-name&gt;/graph-file</h2><p>Request to add a graph file.<h6 id=${report.add.graph-file.req}.request>Request:</h6><pre>
+{
+    "method": "add",
+    "params": [
+        {
+            "url": "/report/adom/&lt;adom-name&gt;/graph-file",
+            "apiver": 3,
+            "file-name": "string",
+            "data": "base64 encoded string"
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${report.add.graph-file.req}">Show example...</a></p></div><div id="${report.add.graph-file.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Request to add a graph file.</i><a class="close" href="#${report.add.graph-file.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "method": "add",
+    "params": [
+        {
+            "url": "/report/adom/root/graph-file",
+            "apiver": 3,
+            "file-name": "new_logo.jpg",
+            "data": "\/9j\/4AAQSkZJRgABAQAAAQABAAD..."
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "Mp43a/JLdyUqmTE8ZHNJIOqgHiWDq0XRR6OMLoguSCypRZYI7K3sAyaGjBtZrgqbjkYVQHgUkuJApskkTzO1Bw=",
+    "id": "2333c69e-bf19-11e5-924a-000c2986047b"
+}
+</pre></div></div></div><h6 id=${report.add.graph-file.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "message": "string",
+            "code": number
+        }
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${report.add.graph-file.resp}">Show example...</a></p></div><div id="${report.add.graph-file.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Request to add a graph file.</i><a class="close" href="#${report.add.graph-file.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "result": {
+        "status": {
+            "message": "OK",
+            "code": 0
+        }
+    },
+    "jsonrpc": "2.0",
+    "id": "2333c69e-bf19-11e5-924a-000c2986047b"
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier. If the ADOM name is in the url, the graph file will be added to the ADOM folder. Otherwise the file will be added into the global folder.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/report/adom/&lt;adom-name&gt;/graph-file<br/>&nbsp;&nbsp;&nbsp;&nbsp;/report/graph-file</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">file-name</td><td class="table_col_desc"><i>string </i> <br/><br/>Graph file name.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>string </i> <br/><br/>Base64 encoded string of the file data.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return Status of Adding Report Graph Files</h2><p>Return the status of adding a report graph file.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>A structured value of status.<br/><br/><table><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The result message of the request.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>The result code of the request.<br/><br/></td></tr></table></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=delete_report_adom__adom-name__graph-file>Delete Graph Files</h1><h2>delete /report/adom/&lt;adom-name&gt;/graph-file</h2><p>Request to delete graph files.<h6 id=${report.delete.graph-file.req}.request>Request:</h6><pre>
+{
+    "method": "delete",
+    "params": [
+        {
+            "url": "/report/adom/&lt;adom-name&gt;/graph-file",
+            "apiver": 3,
+            "file-name": ["string", ...]
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${report.delete.graph-file.req}">Show example...</a></p></div><div id="${report.delete.graph-file.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Request to delete graph files.</i><a class="close" href="#${report.delete.graph-file.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "method": "delete",
+    "params": [
+        {
+            "url": "/report/adom/root/graph-file",
+            "apiver": 3,
+            "file-name": ["logo.jpg", "new_logo.jpg"]
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "Mp43a/JLdyUqmTE8ZHNJIOqgHiWDq0XRR6OMLoguSCypRZYI7K3sAyaGjBtZrgqbjkYVQHgUkuJApskkTzO1Bw=",
+    "id": "2333c69e-bf19-11e5-924a-000c2986047b"
+}
+</pre></div></div></div><h6 id=${report.delete.graph-file.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "message": "string",
+            "code": number
+        }
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${report.delete.graph-file.resp}">Show example...</a></p></div><div id="${report.delete.graph-file.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Request to delete graph files.</i><a class="close" href="#${report.delete.graph-file.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "result": {
+        "status": {
+            "message": "OK",
+            "code": 0
+        }
+    },
+    "jsonrpc": "2.0",
+    "id": "2333c69e-bf19-11e5-924a-000c2986047b"
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier. If the ADOM name is in the url, the graph file in the ADOM folder will be deleted. Otherwise the file in the global folder will be deleted.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/report/adom/&lt;adom-name&gt;/graph-file<br/>&nbsp;&nbsp;&nbsp;&nbsp;/report/graph-file</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">file-name</td><td class="table_col_desc"><i>array </i> <br/><br/>Names of the graph files that will be deleted.<br/><br/>member type: <i>string</i><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return Status of Deleting Report Graph Files</h2><p>Return the status of deleting report graph files.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>A structured value of status.<br/><br/><table><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The result message of the request.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>The result code of the request.<br/><br/></td></tr></table></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_report_adom__adom-name__graph-file>Get Graph File Info</h1><h2>get /report/adom/&lt;adom-name&gt;/graph-file</h2><p>Request to get the info of a graph file.<h6 id=${report.get.graph-file.req}.request>Request:</h6><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/report/adom/&lt;adom-name&gt;/graph-file",
+            "apiver": 3,
+            "file-name": "string"
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${report.get.graph-file.req}">Show example...</a></p></div><div id="${report.get.graph-file.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Request to get the info of a graph file.</i><a class="close" href="#${report.get.graph-file.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/report/adom/root/graph-file",
+            "apiver": 3,
+            "file-name": "new_logo.jpg"
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "Mp43a/JLdyUqmTE8ZHNJIOqgHiWDq0XRR6OMLoguSCypRZYI7K3sAyaGjBtZrgqbjkYVQHgUkuJApskkTzO1Bw=",
+    "id": "2333c69e-bf19-11e5-924a-000c2986047b"
+}
+</pre></div></div></div><h6 id=${report.get.graph-file.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "message": "string",
+            "code": number
+        },
+        "data": {
+            "file-name": "string",
+            "file-size": number,
+            "create-time": number
+        }
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${report.get.graph-file.resp}">Show example...</a></p></div><div id="${report.get.graph-file.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Request to get the info of a graph file.</i><a class="close" href="#${report.get.graph-file.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "result": {
+        "status": {
+            "message": "OK",
+            "code": 0
+        },
+        "data": {
+            "file-name": "new_logo.jpg",
+            "file-size": 324164,
+            "create-time": 1601929423
+        }
+    },
+    "jsonrpc": "2.0",
+    "id": "2333c69e-bf19-11e5-924a-000c2986047b"
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier. If the ADOM name is in the url, the info of a graph file in the ADOM folder will be returned. Otherwise the info of a file in the global folder will be returned.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/report/adom/&lt;adom-name&gt;/graph-file<br/>&nbsp;&nbsp;&nbsp;&nbsp;/report/graph-file</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">file-name</td><td class="table_col_desc"><i>string </i> <br/><br/>Graph file name.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return Report Graph File Info</h2><p>Return the info of a report graph file.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>A structured value of status.<br/><br/><table><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The result message of the request.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>The result code of the request.<br/><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>object </i> (optional) <br/><br/>A structured value of returned data.<br/><br/><table><tr class='odd_row'><td class="table_col_name">file-name</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The graph file name.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">file-size</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>The size of the graph file (in bytes).<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">creat-time</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>The creation time of the graph file (in timestamp).<br/><br/></td></tr></table></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_report_adom__adom-name__graph-file_data>Download Graph Files</h1><h2>get /report/adom/&lt;adom-name&gt;/graph-file/data</h2><p>Request to download a graph file.<h6 id=${report.get.graph-file.data.req}.request>Request:</h6><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/report/adom/&lt;adom-name&gt;/graph-file/data",
+            "apiver": 3,
+            "file-name": "string"
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${report.get.graph-file.data.req}">Show example...</a></p></div><div id="${report.get.graph-file.data.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Request to download a graph file.</i><a class="close" href="#${report.get.graph-file.data.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/report/adom/root/graph-file/data",
+            "apiver": 3,
+            "file-name": "new_logo.jpg"
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "Mp43a/JLdyUqmTE8ZHNJIOqgHiWDq0XRR6OMLoguSCypRZYI7K3sAyaGjBtZrgqbjkYVQHgUkuJApskkTzO1Bw=",
+    "id": "2333c69e-bf19-11e5-924a-000c2986047b"
+}
+</pre></div></div></div><h6 id=${report.get.graph-file.data.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "message": "string",
+            "code": number
+        },
+        "checksum": {
+            "method": "string",
+            "hash": "string"
+        },
+        "length": number
+        "data": "string",
+        "data-type": "string"
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${report.get.graph-file.data.resp}">Show example...</a></p></div><div id="${report.get.graph-file.data.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Request to download a graph file.</i><a class="close" href="#${report.get.graph-file.data.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "result": {
+        "status": {
+            "message": "OK",
+            "code": 0
+        },
+        "checksum": {
+            "method": "MD5",
+            "hash": "d08a652b0cf137ef902cc625527642f3"
+        },
+        "length": 432220
+        "data": "\/9j\/4AAQSkZJRgABAQAAAQABAAD...",
+        "data-type": "base64"
+    },
+    "jsonrpc": "2.0",
+    "id": "2333c69e-bf19-11e5-924a-000c2986047b"
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier. If the ADOM name is in the url, the graph file in the ADOM folder. Otherwise the file will be added into the global folder.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/report/adom/&lt;adom-name&gt;/graph-file/data<br/>&nbsp;&nbsp;&nbsp;&nbsp;/report/graph-file/data</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">file-name</td><td class="table_col_desc"><i>string </i> <br/><br/>Graph file name.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return Status of Downloading Report Graph Files</h2><p>Return the status of downloading a report graph file.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>A structured value of status.<br/><br/><table><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The result message of the request.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>The result code of the request.<br/><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">file-name</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The name of the downloaded file.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">checksum</td><td class="table_col_desc"><i>object </i> (optional) <br/><br/>Checksum information.<br/><br/><table><tr class='odd_row'><td class="table_col_name">method</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Checksum algorithm, e.g. 'MD5'.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">hash</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Checksum string.<br/><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">length</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>Length of the returned data stream.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Data stream in base64 format.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">data-type</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The return type of data.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_report_adom__adom-name__graph-file_list>List Graph File Info</h1><h2>get /report/adom/&lt;adom-name&gt;/graph-file/list</h2><p>Request to get the info of graph files.<h6 id=${report.get.graph-file.list.req}.request>Request:</h6><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/report/adom/&lt;adom-name&gt;/graph-file/list",
+            "apiver": 3,
+            "file-name": ["string", ...]
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${report.get.graph-file.list.req}">Show example...</a></p></div><div id="${report.get.graph-file.list.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Request to get the info of graph files.</i><a class="close" href="#${report.get.graph-file.list.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/report/adom/&lt;adom-name&gt;/graph-file/list",
+            "apiver": 3,
+            "file-name": ["logo.jpg", "new_logo.jpg"]
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "Mp43a/JLdyUqmTE8ZHNJIOqgHiWDq0XRR6OMLoguSCypRZYI7K3sAyaGjBtZrgqbjkYVQHgUkuJApskkTzO1Bw=",
+    "id": "2333c69e-bf19-11e5-924a-000c2986047b"
+}
+</pre></div></div></div><h6 id=${report.get.graph-file.list.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "message": "string",
+            "code": number
+        },
+        "data": [
+            {
+                "file-name": "string",
+                "file-size": number,
+                "create-time": number
+            }
+        ]
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${report.get.graph-file.list.resp}">Show example...</a></p></div><div id="${report.get.graph-file.list.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Request to get the info of graph files.</i><a class="close" href="#${report.get.graph-file.list.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "result": {
+        "status": {
+            "message": "OK",
+            "code": 0
+        },
+        "data": [
+            {
+                "file-name": "logo.jpg",
+                "file-size": 320798,
+                "create-time": 1601427863
+            },
+            {
+                "file-name": "new_logo.jpg",
+                "file-size": 324164,
+                "create-time": 1601929423
+            }
+        ]
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier. If the ADOM name is in the url, the info of graph files in the ADOM folder will be returned. Otherwise the info of files in the global folder will be returned.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/report/adom/&lt;adom-name&gt;/graph-file/list<br/>&nbsp;&nbsp;&nbsp;&nbsp;/report/graph-file/list</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">file-name</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>Names of the graph files that will be listed. Without this param, all files in the folder will be listed.<br/><br/>member type: <i>string</i><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return the List of Report Graph File Info</h2><p>Return the info of report graph files.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>A structured value of status.<br/><br/><table><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The result message of the request.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>The result code of the request.<br/><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>A structured value of returned data.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/>Info of a graph file.<br/><br/><table><tr class='odd_row'><td class="table_col_name">file-name</td><td class="table_col_desc"><i>string </i> <br/><br/>The graph file name.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">file-size</td><td class="table_col_desc"><i>number </i> <br/><br/>The size of the graph file (in bytes).<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">creat-time</td><td class="table_col_desc"><i>number </i> <br/><br/>The creation time of the graph file (in timestamp).<br/><br/></td></tr></table></td></tr></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<style>
+    .overlay {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: rgba(0, 0, 0, 0.5);
+        transition: opacity 200ms;
+        visibility: hidden;
+        opacity: 0;
+    }
+    .overlay .cancel {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        cursor: default;
+    }
+    .overlay:target {
+        visibility: visible;
+        opacity: 1;
+    }
+
+    .popup {
+        margin: 75px auto;
+        padding: 20px;
+        background: #fff;
+        border: 1px solid #666;
+        width: 80%;
+        height: 80vh;
+        overflow: auto;
+        box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+        position: relative;
+    }
+    .popup .close {
+        position: absolute;
+        width: 20px;
+        height: 20px;
+        top: 20px;
+        right: 20px;
+        opacity: 0.8;
+        transition: all 200ms;
+        font-size: 24px;
+        font-weight: bold;
+        text-decoration: none;
+        color: #666;
+    }
+    .popup .close:hover {
+        opacity: 1;
+    }
+    .popup .content_cmd {
+        height: 90%;
+        overflow: auto;
+    }
+    .popup .content_cmd pre {
+        width: 90%;
+    }
+    .popup p {
+        margin: 0 0 1em;
+    }
+    .popup p:last-child {
+        margin: 0;
+    }
+</style>
+    <br/>
+</div></body></html>

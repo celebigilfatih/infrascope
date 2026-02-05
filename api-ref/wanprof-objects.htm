@@ -1,0 +1,115 @@
+<!doctype html><html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>FortiAnalyzer 7.4.7 (2685) JSON API Reference-SD-WAN Template Objects Reference</title>
+<style>body {
+	font-family: Verdana;
+	color: black;
+	background: #D9D9D9;
+	font-size: 13px;
+}
+h1 {
+	font-size: 20px;
+}
+h2 {
+	font-size: 15px;
+	position: sticky;
+	position: -webkit-sticky;
+	top: 0px;
+	background: #D9D9D9;
+}
+h6 {
+	font-size: 13px;
+	margin-bottom: 8px;
+	margin-left: 12px;
+	font-weight: normal;
+}
+table {
+	width: 95%;
+	font-size: 13px;
+	margin-left: 15px;
+	margin-right: 5px;
+	border-collapse: collapse;
+	margin-bottom: 16px;
+}
+td {
+	vertical-align: top;
+	padding: 5px;
+}
+pre {
+	border: 1px solid black;
+	padding: 10px;
+	font-size: 12px;
+	margin-left: 15px;
+	width: 650px;
+}
+th {
+	text-align: left;
+}
+a {
+}
+a:link {
+	text-decoration: none;
+}
+a:visited {
+}
+a:hover {
+	text-decoration: underline;
+}
+.menu {
+	background: #C0C0C0;
+	border-right: 1px solid;
+	position: fixed;
+	padding: 6px;
+	padding-top: 20px;
+	top: 0px;
+	left: 0px;
+	bottom: 0px;
+	width: 200px;
+	overflow-x: hidden;
+	overflow-y: auto;
+	white-space: nowrap;
+}
+.content {
+	position: absolute;
+	padding: 6px;
+	top: 0px;
+	left: 240px;
+	right: 0px;
+}
+.menu_header {
+	font-weight: bold;
+}
+.param_table {
+	border: 1px solid #A0A0A0;
+}
+.table_hdr_name {
+	width: 160px;
+}
+.table_col_name {
+	font-weight: bold;
+	width: 160px;
+}
+.table_col_desc {
+}
+.param_table > thead > tr > th {
+	background-color: #C0C0C0;
+	border-bottom: 1px solid #A0A0A0;
+	padding: 6px;
+}
+.param_table > tbody > tr:nth-child(even) > td {
+	background-color: #D0D0D0;
+}
+.macro_num {
+	font-weight: bold;
+	width: 50px;
+}
+.macro_val {
+}
+</style>
+</head>
+<body>
+<div class="menu"><span class="menu_header"><a href="index.htm">API Reference Home</a></span><br/><span class="menu_item"><a href="objects.htm">Common Objects</a></span><br/><br/><span class="menu_header">Database Modules</span><br/><span class="menu_item"><a href="dvmdb-main.htm">Device Manager Database</a></span><br/><span class="menu_item"><a href="task-main.htm">Task Database</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof74-2779-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof74-2779-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg74-2779-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof72-1732-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof72-1732-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg72-1732-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof70-662-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof70-662-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg70-662-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof64-2087-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof64-2087-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg64-2087-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof62-1263-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof62-1263-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg62-1263-main.htm">Policy Package</a></span><br/><br/><span class="menu_header">Daemon Modules</span><br/><span class="menu_item"><a href="cmdb-main.htm">CLI Configuration</a></span><br/><span class="menu_item"><a href="dvmcmd-main.htm">Device Manager Command</a></span><br/><span class="menu_item"><a href="um-main.htm">Update Manager</a></span><br/><span class="menu_item"><a href="sys-main.htm">System Commands</a></span><br/><br/><span class="menu_header"><a href="faz-cmd-index.htm">FortiAnalyzer Modules</a></span><br/><span class="menu_item"><a href="faz_eventmgmt.htm">Event Mgmt Commands</a></span><br/><span class="menu_item"><a href="faz_eventmgmtconfig.htm">Event Mgmt Config Commands</a></span><br/><span class="menu_item"><a href="faz_fazsys.htm">FAZ System Commands</a></span><br/><span class="menu_item"><a href="faz_fortiview.htm">FortiView Commands</a></span><br/><span class="menu_item"><a href="faz_incidentmgmt.htm">Incident Mgmt Commands</a></span><br/><span class="menu_item"><a href="faz_logview.htm">LogView Commands</a></span><br/><span class="menu_item"><a href="faz_report.htm">Report Commands</a></span><br/><span class="menu_item"><a href="faz_reportconfig.htm">Report Config Commands</a></span><br/><span class="menu_item"><a href="faz_ioc.htm">IOC Commands</a></span><br/><span class="menu_item"><a href="faz_ueba.htm">UEBA Commands</a></span><br/><span class="menu_item"><a href="faz_soar.htm">SOAR Commands</a></span><br/><br/><span class="menu_header"><a href="obj-index.htm">Index of All Objects</a></span><br/><br/></div>
+<div class="content">
+<h1>SD-WAN Template Objects Reference</h1><br/>
+This documentation has been broken up into following pages according to device version:<br/><br/><a href="wanprof74-2779-objects.htm">Version 7.4 latest release, build 2779</a><br/><a href="wanprof74-2462-objects.htm">Version 7.4 older release, build 2462</a><br/><a href="wanprof72-1732-objects.htm">Version 7.2 latest release, build 1732</a><br/><a href="wanprof70-662-objects.htm">Version 7.0 latest release, build 662</a><br/><a href="wanprof64-2087-objects.htm">Version 6.4 latest release, build 2087</a><br/><a href="wanprof64-1716-objects.htm">Version 6.4 older release, build 1716</a><br/><a href="wanprof62-1263-objects.htm">Version 6.2 latest release, build 1263</a><br/>

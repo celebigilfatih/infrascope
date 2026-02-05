@@ -1,0 +1,2103 @@
+<!doctype html><html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>FortiAnalyzer 7.4.7 (2685) JSON API Reference-Event Mgmt Commands</title>
+<style>body {
+	font-family: Verdana;
+	color: black;
+	background: #D9D9D9;
+	font-size: 13px;
+}
+h1 {
+	font-size: 20px;
+}
+h2 {
+	font-size: 15px;
+	position: sticky;
+	position: -webkit-sticky;
+	top: 0px;
+	background: #D9D9D9;
+}
+h6 {
+	font-size: 13px;
+	margin-bottom: 8px;
+	margin-left: 12px;
+	font-weight: normal;
+}
+table {
+	width: 95%;
+	font-size: 13px;
+	margin-left: 15px;
+	margin-right: 5px;
+	border-collapse: collapse;
+	margin-bottom: 16px;
+}
+td {
+	vertical-align: top;
+	padding: 5px;
+}
+pre {
+	border: 1px solid black;
+	padding: 10px;
+	font-size: 12px;
+	margin-left: 15px;
+	width: 650px;
+}
+th {
+	text-align: left;
+}
+a {
+}
+a:link {
+	text-decoration: none;
+}
+a:visited {
+}
+a:hover {
+	text-decoration: underline;
+}
+.menu {
+	background: #C0C0C0;
+	border-right: 1px solid;
+	position: fixed;
+	padding: 6px;
+	padding-top: 20px;
+	top: 0px;
+	left: 0px;
+	bottom: 0px;
+	width: 200px;
+	overflow-x: hidden;
+	overflow-y: auto;
+	white-space: nowrap;
+}
+.content {
+	position: absolute;
+	padding: 6px;
+	top: 0px;
+	left: 240px;
+	right: 0px;
+}
+.menu_header {
+	font-weight: bold;
+}
+.param_table {
+	border: 1px solid #A0A0A0;
+}
+.table_hdr_name {
+	width: 160px;
+}
+.table_col_name {
+	font-weight: bold;
+	width: 160px;
+}
+.table_col_desc {
+}
+.param_table > thead > tr > th {
+	background-color: #C0C0C0;
+	border-bottom: 1px solid #A0A0A0;
+	padding: 6px;
+}
+.param_table > tbody > tr:nth-child(even) > td {
+	background-color: #D0D0D0;
+}
+.macro_num {
+	font-weight: bold;
+	width: 50px;
+}
+.macro_val {
+}
+</style>
+</head>
+<body>
+<div class="menu"><span class="menu_header"><a href="index.htm">API Reference Home</a></span><br/><span class="menu_item"><a href="objects.htm">Common Objects</a></span><br/><br/><span class="menu_header">Database Modules</span><br/><span class="menu_item"><a href="dvmdb-main.htm">Device Manager Database</a></span><br/><span class="menu_item"><a href="task-main.htm">Task Database</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof74-2779-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof74-2779-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg74-2779-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof72-1732-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof72-1732-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg72-1732-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof70-662-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof70-662-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg70-662-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof64-2087-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof64-2087-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg64-2087-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof62-1263-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof62-1263-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg62-1263-main.htm">Policy Package</a></span><br/><br/><span class="menu_header">Daemon Modules</span><br/><span class="menu_item"><a href="cmdb-main.htm">CLI Configuration</a></span><br/><span class="menu_item"><a href="dvmcmd-main.htm">Device Manager Command</a></span><br/><span class="menu_item"><a href="um-main.htm">Update Manager</a></span><br/><span class="menu_item"><a href="sys-main.htm">System Commands</a></span><br/><br/><span class="menu_header"><a href="faz-cmd-index.htm">FortiAnalyzer Modules</a></span><br/><span class="menu_item"><a href="faz_eventmgmt.htm">Event Mgmt Commands</a></span><br/><span class="menu_item"><a href="faz_eventmgmtconfig.htm">Event Mgmt Config Commands</a></span><br/><span class="menu_item"><a href="faz_fazsys.htm">FAZ System Commands</a></span><br/><span class="menu_item"><a href="faz_fortiview.htm">FortiView Commands</a></span><br/><span class="menu_item"><a href="faz_incidentmgmt.htm">Incident Mgmt Commands</a></span><br/><span class="menu_item"><a href="faz_logview.htm">LogView Commands</a></span><br/><span class="menu_item"><a href="faz_report.htm">Report Commands</a></span><br/><span class="menu_item"><a href="faz_reportconfig.htm">Report Config Commands</a></span><br/><span class="menu_item"><a href="faz_ioc.htm">IOC Commands</a></span><br/><span class="menu_item"><a href="faz_ueba.htm">UEBA Commands</a></span><br/><span class="menu_item"><a href="faz_soar.htm">SOAR Commands</a></span><br/><br/><span class="menu_header"><a href="obj-index.htm">Index of All Objects</a></span><br/><br/></div>
+<div class="content">
+<h1>Event Mgmt Commands</h1><br/>
+
+<div>
+<h1 id=get_eventmgmt_adom__adom-name__alerts>Get Alert Events</h1><h2>get /eventmgmt/adom/&lt;adom-name&gt;/alerts</h2><p>Get alert events.<h6 id=${eventmgmt.get.alerts.req}.request>Request:</h6><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/eventmgmt/adom/&lt;adom-name&gt;/alerts",
+            "apiver": 3,
+            "device": [
+                {
+                    "devname": "string",
+                    "devid": "string"
+                }
+            ],
+            "filter": "string",
+            "offset": number,
+            "limit": number,
+            "time-range": {
+                "start": "string",
+                "end": "string"
+            }
+    } ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${eventmgmt.get.alerts.req}">Show example...</a></p></div><div id="${eventmgmt.get.alerts.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Get alert events.</i><a class="close" href="#${eventmgmt.get.alerts.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "method": "get",
+    "params": [
+        {
+            "apiver": "3",
+            "filter": "triggername='Local Device Event' and severity >= 3",
+            "limit": 1,
+            "offset": 1,
+            "time-range": {
+                "end": "2017-01-24T12:08:14",
+                "start": "2017-01-17T12:08:14"
+            },
+            "url": "/eventmgmt/adom/root/alerts"
+        }
+    ],
+    "session": "xxxx"
+}
+</pre></div></div></div><h6 id=${eventmgmt.get.alerts.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "count": number,
+        "data": [
+            { "field": "value", "field": "value", ...},
+            ...
+        ]
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${eventmgmt.get.alerts.resp}">Show example...</a></p></div><div id="${eventmgmt.get.alerts.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Get alert events.</i><a class="close" href="#${eventmgmt.get.alerts.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "result": {
+        "data": [
+            {
+              "ackflag": "no",
+              "alertid": "202112081000055548",
+              "alerttime": "1638999080",
+              "devid": "FGT37D4615800547",
+              "devname": "FGT37D4615800547",
+              "devtype": "SIM",
+              "epid": "104",
+              "epip": "172.18.39.130",
+              "euid": "3",
+              "eventtype": "SIEM",
+              "extrainfo": "the exinfo is N/A and  and 208.91.113.138 end",
+              "filtercksum": "-1121184359",
+              "filterid": "1",
+              "filterkey": "-3013795915422199494",
+              "firstlogtime": "1638990009",
+              "groupby1": "host_name:N/A",
+              "groupby2": "endpoint:null",
+              "groupby3": "dst_ip:208.91.113.138",
+              "indicator": [
+                {
+                  "name": "app_cat",
+                  "type": "Others",
+                  "value": [
+                    "Network.Service"
+                  ]
+                },
+                {
+                  "name": "dst_ip",
+                  "type": "Others",
+                  "value": [
+                    "Network.Service"
+                  ]
+                },
+                {
+                  "name": "event_subtype",
+                  "type": "Others",
+                  "value": [
+                    "Network.Service"
+                  ]
+                }
+              ],
+              "alert_part_info":
+              {
+                "rules": [
+                  {
+                    "dvid": 1055,
+                    "epid": 3739,
+                    "euid": 3,
+                    "name": "rule1",
+                    "apnum": 1,
+                    "exinfo": "{ }",
+                    "idhash": 1049645558,
+                    "ruleid": "ruleid1",
+                    "devtype": 0,
+                    "dstepid": 101,
+                    "dsteuid": 3,
+                    "endtime": 1657820545,
+                    "logtype": 10,
+                    "subtype": -1,
+                    "groupby2": "",
+                    "groupby3": "",
+                    "filterkey": 6639406459403147891,
+                    "indicator": [ ],
+                    "starttime": 1657820525,
+                    "groupby1": "srcip:179.34.3.0"
+                  },
+                  {
+                    "dvid": 1055,
+                    "epid": 3739,
+                    "euid": 3,
+                    "name": "rule2",
+                    "apnum": 1,
+                    "exinfo": "{ }",
+                    "idhash": 713131485,
+                    "ruleid": "ruleid2",
+                    "devtype": 0,
+                    "dstepid": 101,
+                    "dsteuid": 3,
+                    "endtime": 1657820545,
+                    "logtype": 10,
+                    "subtype": -1,
+                    "groupby2": "",
+                    "groupby3": "",
+                    "filterkey": 6639406459403147891,
+                    "indicator": [ ],
+                    "starttime": 1657820525,
+                    "groupby1": "srcip:179.34.3.0"
+                  }
+                ],
+                "ruleid": "ruleid1",
+                "hdlrhash": 1488120312,
+                "rulename": "rule1",
+                "selector": 0,
+                "handlerid": "sqldw",
+                "handlername": "sqldw"
+              },
+              "lastlogtime": "1639007994",
+              "logcount": "19825",
+              "logtype": "siem",
+              "multiflag": "",
+              "readflag": "no",
+              "severity": "medium",
+              "subject": "test",
+              "subtype": "webfilter",
+              "triggername": "testsiem",
+              "updatetime": "1639007994",
+              "vdom": "root"
+            }
+        ]
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>The resource path to <b>Alert Events</b>.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/eventmgmt/adom/&lt;adom-name&gt;/alerts</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">filter</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Filter expression. 'event_value', 'severity', 'trigger_name', 'count', 'comment' and 'flags' are supported. i.e.: trigger_name='Local Device Event' and severity >= 3<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">offset</td><td class="table_col_desc"><i>number </i> (optional) <br/> Default: <i>0 </i> <br/>offset of records to get.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">limit</td><td class="table_col_desc"><i>number </i> (optional) <br/> Default: <i>1000 </i>  Min: <i>1 </i>  Max: <i> 2000 </i> <br/>The max number of records to get.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">timezone</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The timezone index or name. Time range in request and date/time if any in response will follow this timezone. See Appendix<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">time-range</td><td class="table_col_desc"><i>object </i> (optional) <br/><br/>Time range for data selection.<br/><br/><table><tr class='odd_row'><td class="table_col_name">start</td><td class="table_col_desc"><i>string </i> <br/><br/>Starting date time. Consider it following the timezone parameter's, ADOM's or FortiAnalyzer's timezone if timezone info is not specified within time range. Format: 'yyyy-MM-dd'T'HH:mm:ssZ' (RFC 3339) e.g. '2016-10-17T20:45:37-07:00 or 'yyyy-MM-dd HH:mm:ss' e.g. '2016-10-17 20:45:37'<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">end</td><td class="table_col_desc"><i>string </i> <br/><br/>Ending date time. Consider it following the timezone parameter's, ADOM's or FortiAnalyzer's timezone if timezone info is not specified within time range. Format: 'yyyy-MM-dd'T'HH:mm:ssZ' (RFC 3339) e.g. '2016-10-17T20:45:37-07:00 or 'yyyy-MM-dd HH:mm:ss' e.g. '2016-10-17 20:45:37'<br/><br/></td></tr></table></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_eventmgmt_adom__adom-name__alerts_count>Get Alert Count</h1><h2>get /eventmgmt/adom/&lt;adom-name&gt;/alerts/count</h2><p>Get the count of alert events.<h6 id=${eventmgmt.get.alert.count.req}.request>Request:</h6><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/eventmgmt/adom/&lt;adom-name&gt;/alerts/count",
+            "apiver": 3,
+            "filter": "string",
+            "group-by": "string",
+            "timescale": "string",
+            "time-range": {"start": "string", "end": "string"}
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${eventmgmt.get.alert.count.req}">Show example...</a></p></div><div id="${eventmgmt.get.alert.count.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Get the count of alert events.</i><a class="close" href="#${eventmgmt.get.alert.count.req}.request">&times;</a> <div class="content_cmd"><pre>
+[group-by: severity]
+{
+    "id": "2333c69e-bf19-11e5-924a-000c2986047b",
+    "jsonrpc": "2.0",
+    "method": "get",
+    "params": [
+        {
+            "apiver": "3",
+            "time-range": {
+                "end": "2017-01-24T12:08:14",
+                "start": "2017-01-17T12:08:14"
+            },
+            "group-by": "severity",
+            "url": "/eventmgmt/adom/root/alerts/count"
+        }
+    ],
+    "session": "xxxx"
+}
+
+[group-by: severity_timescale, timescale: hour]
+{
+    "id": "972b8490-cb7f-11ea-9e54-000c29b49a9c",
+    "jsonrpc": "2.0",
+    "method": "get",
+    "params": [
+        {
+            "apiver": "3",
+            "time-range": {
+                "end": "2017-01-24T12:08:14",
+                "start": "2017-01-17T12:08:14"
+            },
+            "timescale": "hour",
+            "group-by": "severity_timescale",
+            "url": "/eventmgmt/adom/root/alerts/count"
+        }
+    ],
+    "session": "xxxx"
+}
+
+[group-by: mgmt_state]
+{
+    "id": "0c683134-feee-11eb-9903-0242ac130003", 
+    "jsonrpc": "2.0", 
+    "method": "get", 
+    "params": [
+        {
+            "apiver": 3, 
+            "filter": "mgmt_state!=\"pending_triage\"", 
+            "group-by": "mgmt_state", 
+            "url": "/eventmgmt/adom/root/alerts/count"
+        }
+    ], 
+    "session": "xxxx"
+}
+</pre></div></div></div><h6 id=${eventmgmt.get.alert.count.resp}.response>Response:</h6><pre>
+{
+    "result": {...},
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${eventmgmt.get.alert.count.resp}">Show example...</a></p></div><div id="${eventmgmt.get.alert.count.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Get the count of alert events.</i><a class="close" href="#${eventmgmt.get.alert.count.resp}.response">&times;</a> <div class="content_cmd"><pre>
+[group-by: severity]
+{
+    "id": "2333c69e-bf19-11e5-924a-000c2986047b",
+    "jsonrpc": "2.0",
+    "result": {
+        "data": [
+            {
+                "count": "47",
+                "severity": "critical"
+            },
+            {
+                "count": "2702",
+                "severity": "medium"
+            }
+        ]
+    }
+}
+
+[group-by: severity_timescale, timescale: hour]
+{
+    "id": "972b8490-cb7f-11ea-9e54-000c29b49a9c", 
+    "jsonrpc": "2.0", 
+    "result": {
+        "data": [
+            {
+                "count": "21", 
+                "severity": "critical", 
+                "timescale": "2021-04-26 13:00"
+            }, 
+            {
+                "count": "125", 
+                "severity": "high", 
+                "timescale": "2021-04-26 13:00"
+            }, 
+            {
+                "count": "49", 
+                "severity": "medium", 
+                "timescale": "2021-04-26 13:00"
+            }, 
+            {
+                "count": "12", 
+                "severity": "low", 
+                "timescale": "2021-04-26 13:00"
+            }, 
+            {
+                "count": "52", 
+                "severity": "critical", 
+                "timescale": "2021-04-26 14:00"
+            }, 
+            {
+                "count": "234", 
+                "severity": "high", 
+                "timescale": "2021-04-26 14:00"
+            }, 
+            {
+                "count": "140", 
+                "severity": "medium", 
+                "timescale": "2021-04-26 14:00"
+            }, 
+            {
+                "count": "9", 
+                "severity": "low", 
+                "timescale": "2021-04-26 14:00"
+            }, 
+            ...
+            {
+                "count": "9", 
+                "severity": "critical", 
+                "timescale": "2021-04-27 23:00"
+            }, 
+            {
+                "count": "45", 
+                "severity": "high", 
+                "timescale": "2021-04-27 23:00"
+            }, 
+            {
+                "count": "11", 
+                "severity": "medium", 
+                "timescale": "2021-04-27 23:00"
+            },
+            {
+                "count": "4", 
+                "severity": "low", 
+                "timescale": "2021-04-27 23:00"
+            }
+        ]
+    }
+}
+
+[group-by: mgmt_state]
+{
+    "id": "0c683134-feee-11eb-9903-0242ac130003", 
+    "jsonrpc": "2.0", 
+    "result": {
+        "data": [
+            {
+                "total_acknowledged": "1", 
+                "total_event": "345", 
+                "total_pending_triage": "0", 
+                "total_triaged": "344"
+            }
+        ]
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>The resource path to <b>Alert Count</b>.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/eventmgmt/adom/&lt;adom-name&gt;/alerts/count</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">filter</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Filter expression. 'ackflag', 'assigned', 'mgmt_state', 'triggername', 'eventtype', 'severity', 'eventstatus' and 'tag' are supported. i.e.: ackflag = no and triggername='Local Device Event'. Note: the field 'ackflag' supports = yes/no, !=yes/no and <>yes/no ,  the field 'assigned' only supports = yes/no or !=yes/no, the field 'mgmt_state' only supports (!)= acknowledged/triaged/pending_triage<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">group-by</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/><br/>Get alert count by group.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;severity<br/>&nbsp;&nbsp;&nbsp;&nbsp;trigger<br/>&nbsp;&nbsp;&nbsp;&nbsp;severity_timescale<br/>&nbsp;&nbsp;&nbsp;&nbsp;eventtype<br/>&nbsp;&nbsp;&nbsp;&nbsp;mgmt_state</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">timescale</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/> Default: <i>month </i> <br/>Time scale. Only valid for type 'severity-timescale'.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;month<br/>&nbsp;&nbsp;&nbsp;&nbsp;hour</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">timezone</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The timezone index or name. Time range in request and date/time if any in response will follow this timezone. See Appendix<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">time-range</td><td class="table_col_desc"><i>object </i> (optional) <br/><br/>Time range for source data selection.<br/><br/><table><tr class='odd_row'><td class="table_col_name">start</td><td class="table_col_desc"><i>string </i> <br/><br/>Starting date time. Consider it following the timezone parameter's, ADOM's or FortiAnalyzer's timezone if timezone info is not specified within time range. Format: 'yyyy-MM-dd'T'HH:mm:ssZ' (RFC 3339) e.g. '2016-10-17T20:45:37-07:00 or 'yyyy-MM-dd HH:mm:ss' e.g. '2016-10-17 20:45:37'<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">end</td><td class="table_col_desc"><i>string </i> <br/><br/>Ending date time. Consider it following the timezone parameter's, ADOM's or FortiAnalyzer's timezone if timezone info is not specified within time range. Format: 'yyyy-MM-dd'T'HH:mm:ssZ' (RFC 3339) e.g. '2016-10-17T20:45:37-07:00 or 'yyyy-MM-dd HH:mm:ss' e.g. '2016-10-17 20:45:37'<br/><br/></td></tr></table></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_eventmgmt_adom__adom-name__alertlogs>Get Alert Event Logs</h1><h2>get /eventmgmt/adom/&lt;adom-name&gt;/alertlogs</h2><p>List logs associated with the specific alert.<h6 id=${eventmgmt.get.alertlogs.req}.request>Request:</h6><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/eventmgmt/adom/&lt;adom-name&gt;/alertlogs",
+            "apiver": 3,
+            "alertid": "array",
+            "rulename": "string",
+            "time-order": "string",
+            "offset": number,
+            "limit": number
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${eventmgmt.get.alertlogs.req}">Show example...</a></p></div><div id="${eventmgmt.get.alertlogs.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: List logs associated with the specific alert.</i><a class="close" href="#${eventmgmt.get.alertlogs.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "method": "get",
+    "params": [
+        {
+            "apiver": "3",
+            "limit": 3,
+            "offset": 0,
+            "alertid": ["201712121000007322"],
+            "rulename": "authentication-rule-1",
+            "url": "/eventmgmt/adom/root/alertlogs"
+        }
+    ],
+    "session": "xxxx"
+}
+</pre></div></div></div><h6 id=${eventmgmt.get.alertlogs.resp}.response>Response:</h6><pre>
+{
+    "result": {...},
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${eventmgmt.get.alertlogs.resp}">Show example...</a></p></div><div id="${eventmgmt.get.alertlogs.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: List logs associated with the specific alert.</i><a class="close" href="#${eventmgmt.get.alertlogs.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "result": {
+        "data": [
+            {
+                "action": "passthrough", 
+                "alert_log_seqnum": 537684, 
+                "cat": "12", 
+                "catdesc": "Extremist Groups", 
+                "crlevel": "medium", 
+                "crscore": "10", 
+                "devid": "FGT1KC0000000001", 
+                "devname": "FGT1KC0000000001", 
+                "direction": "outgoing", 
+                "dstintf": "wan1", 
+                "dstip": "62.149.140.219", 
+                "dstport": "80", 
+                "dtime": "2017-12-12 17:48:01", 
+                "epid": "1594", 
+                "euid": "1654", 
+                "eventtype": "ftgd_allow", 
+                "fctuid": "0B9C56A3E63580E695D9278AE0975B87", 
+                "hostname": "www.alternativa-antagonista.com", 
+                "id": "50252079973400605", 
+                "itime": "2017-12-12 09:48:01", 
+                "level": "notice", 
+                "logid": "13312", 
+                "logver": "52", 
+                "method": "domain", 
+                "msg": "URL%20belongs%20to%20an%20allowed%20category%20in%20policy", 
+                "policyid": "2", 
+                "profile": "monitor-all", 
+                "proto": "6", 
+                "rcvdbyte": "17776", 
+                "reqtype": "direct", 
+                "sentbyte": "183", 
+                "service": "HTTP", 
+                "sessionid": "101482656", 
+                "srcintf": "switch", 
+                "srcip": "10.2.60.117", 
+                "srcport": "35536", 
+                "subtype": "webfilter", 
+                "type": "utm", 
+                "unauthuser": "Jessica", 
+                "url": "%2F", 
+                "vd": "root"
+            },
+            {
+                "action": "passthrough", 
+                "alert_log_seqnum": 537842, 
+                "cat": "12", 
+                "catdesc": "Extremist Groups", 
+                "crlevel": "medium", 
+                "crscore": "10", 
+                "devid": "FGT1KC0000000001", 
+                "devname": "FGT1KC0000000001", 
+                "direction": "outgoing", 
+                "dstintf": "wan1", 
+                "dstip": "62.149.140.219", 
+                "dstport": "80", 
+                "dtime": "2017-12-12 17:48:24", 
+                "epid": "1594", 
+                "euid": "1654", 
+                "eventtype": "ftgd_allow", 
+                "fctuid": "0B9C56A3E63580E695D9278AE0975B87", 
+                "hostname": "www.alternativa-antagonista.com", 
+                "id": "50454390847438877", 
+                "itime": "2017-12-12 09:48:24", 
+                "level": "notice", 
+                "logid": "13312", 
+                "logver": "52", 
+                "method": "domain", 
+                "msg": "URL%20belongs%20to%20an%20allowed%20category%20in%20policy", 
+                "policyid": "2", 
+                "profile": "monitor-all", 
+                "proto": "6", 
+                "rcvdbyte": "17776", 
+                "reqtype": "direct", 
+                "sentbyte": "183", 
+                "service": "HTTP", 
+                "sessionid": "101524513", 
+                "srcintf": "switch", 
+                "srcip": "10.2.60.117", 
+                "srcport": "41924", 
+                "subtype": "webfilter", 
+                "type": "utm", 
+                "unauthuser": "Jessica", 
+                "url": "%2F", 
+                "vd": "root"
+            }
+        ]
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>The resource path to <b>Alert Event logs</b>.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/eventmgmt/adom/&lt;adom-name&gt;/alertlogs</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">alertid</td><td class="table_col_desc"><i>array </i> <br/><br/>Alert IDs.<br/><br/>member type: <i>string</i><br/></td></tr><tr class='odd_row'><td class="table_col_name">rulename</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The rule name of the rule configured in correlated typed handler.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">time-order</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/> Default: <i>desc </i> <br/>Sort result in descending or ascending order by time<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;desc<br/>&nbsp;&nbsp;&nbsp;&nbsp;asc</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">offset</td><td class="table_col_desc"><i>number </i> (optional) <br/> Default: <i>0 </i> <br/>offset of records to get.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">limit</td><td class="table_col_desc"><i>number </i> (optional) <br/> Default: <i>1000 </i>  Min: <i>1 </i>  Max: <i> 2000 </i> <br/>The max number of records to get.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_eventmgmt_adom__adom-name__alertlogs_count>Get Alert Event Logs Count</h1><h2>get /eventmgmt/adom/&lt;adom-name&gt;/alertlogs/count</h2><p>Get logs count for a specific event alert.<h6 id=${eventmgmt.get.alertlogs.count.req}.request>Request:</h6><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/eventmgmt/adom/&lt;adom-name&gt;/alertlogs/count",
+            "apiver": 3,
+            "alertid": "array",
+            "rulename": "string"
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${eventmgmt.get.alertlogs.count.req}">Show example...</a></p></div><div id="${eventmgmt.get.alertlogs.count.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Get logs count for a specific event alert.</i><a class="close" href="#${eventmgmt.get.alertlogs.count.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "method": "get",
+    "params": [
+        {
+            "alertid": ["201712121000007322"],
+            "apiver": "3",
+            "rulename": "authentication-rule-1",
+            "url": "/eventmgmt/adom/root/alertlogs/count"
+        }
+    ],
+    "session": "xxxx"
+}
+</pre></div></div></div><h6 id=${eventmgmt.get.alertlogs.count.resp}.response>Response:</h6><pre>
+{
+    "result": {...},
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${eventmgmt.get.alertlogs.count.resp}">Show example...</a></p></div><div id="${eventmgmt.get.alertlogs.count.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Get logs count for a specific event alert.</i><a class="close" href="#${eventmgmt.get.alertlogs.count.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "result": {
+        "data": [
+            {
+                "count": "90"
+            }
+        ]
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>The resource path to <b>Alert Event Logs Count</b>.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/eventmgmt/adom/&lt;adom-name&gt;/alertlogs/count</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">alertid</td><td class="table_col_desc"><i>array </i> <br/><br/>Alert IDs.<br/><br/>member type: <i>string</i><br/></td></tr><tr class='odd_row'><td class="table_col_name">rulename</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The rule name of the rule configured in correlated typed handler.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=update_eventmgmt_adom__adom-name__alerts_comment>Add Alert Comment</h1><h2>update /eventmgmt/adom/&lt;adom-name&gt;/alerts/comment</h2><p>Add comment to a specific alert event.<h6 id=${eventmgmt.update.alert.comment.req}.request>Request:</h6><pre>
+{
+    "method": "update",
+    "params": [
+        {
+            "url": "/eventmgmt/adom/&lt;adom-name&gt;/alerts/comment",
+            "apiver": 3,
+            "alertid": "array",
+            "update-by":"string",
+            "comment": "string"
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${eventmgmt.update.alert.comment.req}">Show example...</a></p></div><div id="${eventmgmt.update.alert.comment.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Add comment to a specific alert event.</i><a class="close" href="#${eventmgmt.update.alert.comment.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "method": "update",
+    "params": [
+        {
+            "alertid": ["201712121000007322"],
+            "apiver": "3",
+            "comment": "Test Comments 2017-01-24 12:09:38!",
+            "update-by":"admin1",
+            "url": "/eventmgmt/adom/root/alerts/comment"
+        }
+    ],
+    "session": "xxxx"
+}
+</pre></div></div></div><h6 id=${eventmgmt.update.alert.comment.resp}.response>Response:</h6><pre>
+{
+    "result": {"status": "string"},
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${eventmgmt.update.alert.comment.resp}">Show example...</a></p></div><div id="${eventmgmt.update.alert.comment.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Add comment to a specific alert event.</i><a class="close" href="#${eventmgmt.update.alert.comment.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "result": {
+        "status": "done"
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>The resource path to <b>Event Alert Comment</b>.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/eventmgmt/adom/&lt;adom-name&gt;/alerts/comment</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">alertid</td><td class="table_col_desc"><i>array </i> <br/><br/>Alert IDs.<br/><br/>member type: <i>string</i><br/></td></tr><tr class='odd_row'><td class="table_col_name">comment</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Content of comment.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">update-by</td><td class="table_col_desc"><i>string </i> <br/><br/>The user perform the operation.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=update_eventmgmt_adom__adom-name__alerts_ack>Acknowledge Alert Event</h1><h2>update /eventmgmt/adom/&lt;adom-name&gt;/alerts/ack</h2><p>Acknowledge a specific alert event.<h6 id=${eventmgmt.update.alert.acknowledge.req}.request>Request:</h6><pre>
+{
+    "method": "update",
+    "params": [
+        {
+            "url": "/eventmgmt/adom/&lt;adom-name&gt;/alerts/ack",
+            "apiver": 3,
+            "update-by":"string",
+            "alertid": "array"
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${eventmgmt.update.alert.acknowledge.req}">Show example...</a></p></div><div id="${eventmgmt.update.alert.acknowledge.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Acknowledge a specific alert event.</i><a class="close" href="#${eventmgmt.update.alert.acknowledge.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "method": "update",
+    "params": [
+        {
+            "alertid": ["201712121000007322"],
+            "apiver": "3",
+            "update-by":"admin1",
+            "url": "/eventmgmt/adom/root/alerts/ack"
+        }
+    ],
+    "session": "xxxx"
+}
+</pre></div></div></div><h6 id=${eventmgmt.update.alert.acknowledge.resp}.response>Response:</h6><pre>
+{
+    "result": {...},
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${eventmgmt.update.alert.acknowledge.resp}">Show example...</a></p></div><div id="${eventmgmt.update.alert.acknowledge.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Acknowledge a specific alert event.</i><a class="close" href="#${eventmgmt.update.alert.acknowledge.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "result": {
+        "status": "done"
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>The resource path to <b>Alert Event Acknowledge</b>.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/eventmgmt/adom/&lt;adom-name&gt;/alerts/ack</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">alertid</td><td class="table_col_desc"><i>array </i> <br/><br/>Alert IDs.<br/><br/>member type: <i>string</i><br/></td></tr><tr class='odd_row'><td class="table_col_name">update-by</td><td class="table_col_desc"><i>string </i> <br/><br/>The user perform the operation.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=update_eventmgmt_adom__adom-name__alerts_read>Mark Alert as Read</h1><h2>update /eventmgmt/adom/&lt;adom-name&gt;/alerts/read</h2><p>Mark a specific alert event as read.<h6 id=${eventmgmt.update.alert.read.req}.request>Request:</h6><pre>
+{
+    "method": "update",
+    "params": [
+        {
+            "url": "/eventmgmt/adom/&lt;adom-name&gt;/alerts/read",
+            "apiver": 3,
+            "alertid": "array"
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${eventmgmt.update.alert.read.req}">Show example...</a></p></div><div id="${eventmgmt.update.alert.read.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Mark a specific alert event as read.</i><a class="close" href="#${eventmgmt.update.alert.read.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "method": "update",
+    "params": [
+        {
+            "alertid": ["201712121000007322"],
+            "apiver": "3",
+            "url": "/eventmgmt/adom/root/alerts/read"
+        }
+    ],
+    "session": "xxxx"
+}
+</pre></div></div></div><h6 id=${eventmgmt.update.alert.read.resp}.response>Response:</h6><pre>
+{
+    "result": {...},
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${eventmgmt.update.alert.read.resp}">Show example...</a></p></div><div id="${eventmgmt.update.alert.read.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Mark a specific alert event as read.</i><a class="close" href="#${eventmgmt.update.alert.read.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "result": {
+        "status": "done"
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>The resource path to <b>Alert Event Read</b>.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/eventmgmt/adom/&lt;adom-name&gt;/alerts/read</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">alertid</td><td class="table_col_desc"><i>array </i> <br/><br/>Alert IDs.<br/><br/>member type: <i>string</i><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_eventmgmt_adom__adom-name__alertfilter>Get Alert filter</h1><h2>get /eventmgmt/adom/&lt;adom-name&gt;/alertfilter</h2><p>Get filter for a specific alert.<h6 id=${eventmgmt.get.alertfilter.req}.request>Request:</h6><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/eventmgmt/adom/&lt;adom-name&gt;/alertfilter",
+            "apiver": 3,
+            "alertid": "string",
+            "ruleid": "string"
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${eventmgmt.get.alertfilter.req}">Show example...</a></p></div><div id="${eventmgmt.get.alertfilter.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Get filter for a specific alert.</i><a class="close" href="#${eventmgmt.get.alertfilter.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "method": "get",
+    "params": [
+        {
+            "apiver": "3",
+            "alertid": "201901281000000030",
+            "ruleid": "login-authentication",
+            "url": "/eventmgmt/adom/root/alertfilter"
+        }
+    ],
+    "session": "xxxx"
+}
+    </pre></div></div></div><h6 id=${eventmgmt.get.alertfilter.resp}.response>Response:</h6><pre>
+{
+    "result": {...},
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${eventmgmt.get.alertfilter.resp}">Show example...</a></p></div><div id="${eventmgmt.get.alertfilter.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Get filter for a specific alert.</i><a class="close" href="#${eventmgmt.get.alertfilter.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+      "id": "12345678", 
+      "jsonrpc": "2.0", 
+      "result": {
+        "filter": " (NOT app)  AND (dvid=1027) AND (((srcip>='172.16.174.0' AND srcip<='172.16.174.255') 
+                   OR (dstip>='172.16.174.0' AND dstip<='172.16.174.255')) AND ( NOT ((srcip>='172.16.174.0' 
+                   AND srcip<='172.16.174.127') OR (dstip>='172.16.174.0' AND dstip<='172.16.174.127')) 
+                   OR ((srcip>='208.91.113.0' AND srcip<='208.91.113.255') OR (dstip>='208.91.113.0' 
+                   AND dstip<='208.91.113.255'))) AND ( app!="RSH" ) )", 
+        "logtype": "traffic", 
+        "time-range": {
+          "end": "2019-01-28 10:13:38", 
+          "start": "2019-01-28 10:13:34"
+        }
+      }
+}
+    </pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>The resource path to <b>Alert filter</b>.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/eventmgmt/adom/&lt;adom-name&gt;/alertfilter</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">alertid</td><td class="table_col_desc"><i>array </i> <br/><br/>Alert IDs.<br/><br/>member type: <i>string</i><br/></td></tr><tr class='odd_row'><td class="table_col_name">ruleid</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The rule id of the rule configured in correlated typed handler.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_eventmgmt_adom__adom-name__alerts_extra-details>Get Alert Extra Details</h1><h2>get /eventmgmt/adom/&lt;adom-name&gt;/alerts/extra-details</h2><p>List alert extra details information.<h6 id=${eventmgmt.get.alert.extra-details.req}.request>Request:</h6><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/eventmgmt/adom/&lt;adom-name&gt;/alerts/extra-details",
+            "apiver": 3,
+            "alertid": "string"
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${eventmgmt.get.alert.extra-details.req}">Show example...</a></p></div><div id="${eventmgmt.get.alert.extra-details.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: List alert extra details information.</i><a class="close" href="#${eventmgmt.get.alert.extra-details.req}.request">&times;</a> <div class="content_cmd"><pre>
+    {
+        "id": "12345678",
+        "jsonrpc": "2.0",
+        "method": "get",
+        "params": [
+            {
+                "apiver": "3",
+                "alertids": ["201901281000000030"],
+                "url": "/eventmgmt/adom/root/alerts/extra-details"
+            }
+        ],
+        "session": "xxxx"
+    }
+        </pre></div></div></div><h6 id=${eventmgmt.get.alert.extra-details.resp}.response>Response:</h6><pre>
+{
+    "result": {...},
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${eventmgmt.get.alert.extra-details.resp}">Show example...</a></p></div><div id="${eventmgmt.get.alert.extra-details.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: List alert extra details information.</i><a class="close" href="#${eventmgmt.get.alert.extra-details.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+  "id": "12345678", 
+  "jsonrpc": "2.0", 
+  "result": {
+    "data": [
+      {
+        "alertid": "202002281000040002", 
+        "devs": [
+          {
+            "devid": "FAZ-VM1234567890", 
+            "devname": "FAZ-VM1234567890", 
+            "dvid": 1027, 
+            "vdom": "root"
+          }
+        ], 
+        "epids": [
+          1035,1046
+        ], 
+        "euids": [
+          1028
+        ]
+      }
+    ]
+  }
+}
+        </pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>The resource path to <b>Alert Event logs</b>.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/eventmgmt/adom/&lt;adom-name&gt;/alerts/extra-details</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">alertids</td><td class="table_col_desc"><i>array </i> <br/><br/>Alert IDs.<br/><br/>member type: <i>string</i><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_eventmgmt_adom__adom-name__alerts_export>Export Basic Handlers (Obsolete)</h1><h2>get /eventmgmt/adom/&lt;adom-name&gt;/alerts/export</h2><p>Request of exporting basic handlers.<h6 id=${eventmgmt.export.alerts.req}.request>Request:</h6><pre>
+{
+  "id": "...",
+  "jsonrpc": "2.0",
+  "method": "get",
+  "params": [
+    {
+      "url": "/eventmgmt/adom/&lt;adom-name&gt;/alerts/export",
+      "filter": [&lt;source&gt;, &lt;operator&gt;, &lt;target1&gt;, &lt;target2&gt;, ...],
+      "attachment": [&lt;object-name&gt;, ...],
+      "data-format": "string",
+      "apiver": "3"
+    }
+  ]
+}
+</pre><div id="wrapper"> <p><a href="#${eventmgmt.export.alerts.req}">Show example...</a></p></div><div id="${eventmgmt.export.alerts.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Request of exporting basic handlers.</i><a class="close" href="#${eventmgmt.export.alerts.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+  "id": "12345678",
+  "jsonrpc": "2.0",
+  "method": "get",
+  "params": [
+    {
+      "url": "/eventmgmt/adom/root/alerts/export",
+      "filter": ["id", "in", 1, 10041],
+      "attachment": ["notification-profile"],
+      "data-format": "zip",
+      "apiver": "3"
+    }
+  ]
+}
+</pre></div></div></div><h6 id=${eventmgmt.export.alerts.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "data-type": "string",
+        "data": "string",
+        "checksum": {
+            "method": "string",
+            "hash": "string"
+        },
+        "length": number,
+        "attached": [&lt;object-name&gt;, ...]
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${eventmgmt.export.alerts.resp}">Show example...</a></p></div><div id="${eventmgmt.export.alerts.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Request of exporting basic handlers.</i><a class="close" href="#${eventmgmt.export.alerts.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "result": {
+        "data-type": "zip/base64",
+        "data": "base64 encoded string",
+        "checksum": {
+            "method": "MD5",
+            "hash": "d08a652b0cf137ef902cc625527642f3"
+        },
+        "length": 193,
+        "attached": ["notification-profile"]
+    },
+    "jsonrpc": "2.0",
+    "id": "12345678"
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/eventmgmt/adom/&lt;adom-name&gt;/alerts/export</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">filter</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>A filter for selecting exporting basic handlers. <a href="objects.htm#filter">Filter Refrence</a><br/><br/>member type: <i>string</i><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">attachment</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>Objects that will be exported with basic handlers.<br/><br/>member type: <i>string</i><br/></td></tr><tr class='odd_row'><td class="table_col_name">data-format</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/> Default: <i>zip </i> <br/>The format of the exporting data.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;zip<br/>&nbsp;&nbsp;&nbsp;&nbsp;txt<br/>&nbsp;&nbsp;&nbsp;&nbsp;cli</i></b><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return Status of Exporting Event Handlers</h2><p>Return status of exporting event handlers.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">checksum</td><td class="table_col_desc"><i>object </i> (optional) <br/><br/>Checksum information.<br/><br/><table><tr class='odd_row'><td class="table_col_name">method</td><td class="table_col_desc"><i>string </i> <br/><br/>Checksum algorithm, e.g. 'MD5'.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">hash</td><td class="table_col_desc"><i>string </i> <br/><br/>Checksum string.<br/><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">length</td><td class="table_col_desc"><i>number </i> <br/><br/>Length of the returned data stream.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>string </i> <br/><br/>Data stream in txt format or base64 encoded zip format.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">data-type</td><td class="table_col_desc"><i>string </i> <br/><br/>The return type of data, e.g. 'zip/base64'.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">attached</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>The attached objects in the exporting file, e.g. 'subnet'.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=add_eventmgmt_adom__adom-name__alerts_import>Import Basic Handlers (Obsolete)</h1><h2>add /eventmgmt/adom/&lt;adom-name&gt;/alerts/import</h2><p>Request of importing basic handlers.<h6 id=${eventmgmt.import.alerts.req}.request>Request:</h6><pre>
+{
+  "id": "...",
+  "jsonrpc": "2.0",
+  "method": "add",
+  "params": [
+    {
+      "url": "/eventmgmt/adom/&lt;adom-name&gt;/alerts/import",
+      "apiver": "3",
+      "data": "string",
+      "data-type": "string",
+      "conflict-option": "string",
+      "attachment": [&lt;object-name&gt;, ...]
+    }
+  ]
+}
+</pre><div id="wrapper"> <p><a href="#${eventmgmt.import.alerts.req}">Show example...</a></p></div><div id="${eventmgmt.import.alerts.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Request of importing basic handlers.</i><a class="close" href="#${eventmgmt.import.alerts.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+  "id": "12345678",
+  "jsonrpc": "2.0",
+  "method": "add",
+  "params": [
+    {
+      "url": "/eventmgmt/adom/root/alerts/import",
+      "apiver": "3",
+      "data": "base64 encoded string",
+      "data-type": "zip/base64",
+      "conflict-option": "rename",
+      "attachment": ["notification-profile"]
+    }
+  ]
+}
+</pre></div></div></div><h6 id=${eventmgmt.import.alerts.resp}.response>Response:</h6><pre>
+{
+    "id": "...",
+    "jsonrpc": "2.0",
+    "result": {
+        "status": {
+            "code": number,
+            "message": "string"
+        },
+        "attached": [&lt;object-name&gt;, ...]
+    }
+}
+</pre><div id="wrapper"> <p><a href="#${eventmgmt.import.alerts.resp}">Show example...</a></p></div><div id="${eventmgmt.import.alerts.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Request of importing basic handlers.</i><a class="close" href="#${eventmgmt.import.alerts.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "result": {
+        "status": {
+            "code": 0,
+            "message": "OK"
+        },
+        "attached": ["notification-profile"]
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/eventmgmt/adom/&lt;adom-name&gt;/alerts/import</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>string </i> <br/><br/>Data stream in json format or base64 encoded zip format.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">data-type</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/> Default: <i>zip/base64 </i> <br/>The format of the importing data.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;zip/base64<br/>&nbsp;&nbsp;&nbsp;&nbsp;txt<br/>&nbsp;&nbsp;&nbsp;&nbsp;cli</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">conflict-option</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/> Default: <i>rename </i> <br/>When the importing object has the name conflict with an local object, rename the importing object, replace the local object, or skip importing the object.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;rename<br/>&nbsp;&nbsp;&nbsp;&nbsp;replace<br/>&nbsp;&nbsp;&nbsp;&nbsp;skip</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">attachment</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>Objects that will be imported with basic handlers.<br/><br/>member type: <i>string</i><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return Status of Importing Event Handlers</h2><p>Return status of importing event handlers.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>Status of the current task<br/><br/><table><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> <br/><br/>Status code<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> <br/><br/>Status description<br/><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">attached</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>The attached objects in the importing file, e.g. 'subnet'.<br/><br/>member type: <i>string</i><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=update_eventmgmt_adom__adom-name__alerts_unack>Unacknowledge Alert Event</h1><h2>update /eventmgmt/adom/&lt;adom-name&gt;/alerts/unack</h2><p>Unacknowledge a specific alert event.<h6 id=${eventmgmt.update.alert.unacknowledge.req}.request>Request:</h6><pre>
+{
+    "method": "update",
+    "params": [
+        {
+            "url": "/eventmgmt/adom/&lt;adom-name&gt;/alerts/unack",
+            "apiver": 3,
+            "update-by":"string",
+            "alertid": "array"
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${eventmgmt.update.alert.unacknowledge.req}">Show example...</a></p></div><div id="${eventmgmt.update.alert.unacknowledge.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Unacknowledge a specific alert event.</i><a class="close" href="#${eventmgmt.update.alert.unacknowledge.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "method": "update",
+    "params": [
+        {
+            "alertid": ["201712121000007322"],
+            "apiver": "3",
+            "update-by":"admin1",
+            "url": "/eventmgmt/adom/root/alerts/unack"
+        }
+    ],
+    "session": "xxxx"
+}
+</pre></div></div></div><h6 id=${eventmgmt.update.alert.unacknowledge.resp}.response>Response:</h6><pre>
+{
+    "result": {...},
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${eventmgmt.update.alert.unacknowledge.resp}">Show example...</a></p></div><div id="${eventmgmt.update.alert.unacknowledge.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Unacknowledge a specific alert event.</i><a class="close" href="#${eventmgmt.update.alert.unacknowledge.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "result": {
+        "status": "done"
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>The resource path to <b>Alert Event Unacknowledge</b>.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/eventmgmt/adom/&lt;adom-name&gt;/alerts/unack</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">alertid</td><td class="table_col_desc"><i>array </i> <br/><br/>Alert IDs.<br/><br/>member type: <i>string</i><br/></td></tr><tr class='odd_row'><td class="table_col_name">update-by</td><td class="table_col_desc"><i>string </i> <br/><br/>The user perform the operation.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=update_eventmgmt_adom__adom-name__alerts_assign>Assign Alert</h1><h2>update /eventmgmt/adom/&lt;adom-name&gt;/alerts/assign</h2><p>Assign alert event.<h6 id=${eventmgmt.update.alert.assign.req}.request>Request:</h6><pre>
+{
+    "method": "update",
+    "params": [
+        {
+            "url": "/eventmgmt/adom/&lt;adom-name&gt;/alerts/assign",
+            "apiver": 3,
+            "assign-to":"string",
+            "alertid": "array"
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${eventmgmt.update.alert.assign.req}">Show example...</a></p></div><div id="${eventmgmt.update.alert.assign.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Assign alert event.</i><a class="close" href="#${eventmgmt.update.alert.assign.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "method": "update",
+    "params": [
+        {
+            "alertid": ["201712121000007322"],
+            "apiver": "3",
+            "assign-to":"admin1",
+            "url": "/eventmgmt/adom/root/alerts/assign"
+        }
+    ],
+    "session": "xxxx"
+}
+</pre></div></div></div><h6 id=${eventmgmt.update.alert.assign.resp}.response>Response:</h6><pre>
+{
+    "result": {...},
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${eventmgmt.update.alert.assign.resp}">Show example...</a></p></div><div id="${eventmgmt.update.alert.assign.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Assign alert event.</i><a class="close" href="#${eventmgmt.update.alert.assign.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "result": {
+        "status": "done"
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>The resource path to assign alert.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/eventmgmt/adom/&lt;adom-name&gt;/alerts/assign</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">alertid</td><td class="table_col_desc"><i>array </i> <br/><br/>Alert IDs.<br/><br/>member type: <i>string</i><br/></td></tr><tr class='odd_row'><td class="table_col_name">assign-to</td><td class="table_col_desc"><i>string </i> <br/><br/>assign the alert to the user<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_eventmgmt_adom__adom-name__basic-handlers_export>Export Basic Handlers</h1><h2>get /eventmgmt/adom/&lt;adom-name&gt;/basic-handlers/export</h2><p>Request of exporting basic handlers.<h6 id=${eventmgmt.export.basic-handlers.req}.request>Request:</h6><pre>
+{
+  "id": "...",
+  "jsonrpc": "2.0",
+  "method": "get",
+  "params": [
+    {
+      "url": "/eventmgmt/adom/&lt;adom-name&gt;/basic-handlers/export",
+      "filter": [&lt;source&gt;, &lt;operator&gt;, &lt;target1&gt;, &lt;target2&gt;, ...],
+      "attachment": [&lt;object-name&gt;, ...],
+      "data-format": "string",
+      "apiver": "3"
+    }
+  ]
+}
+</pre><div id="wrapper"> <p><a href="#${eventmgmt.export.basic-handlers.req}">Show example...</a></p></div><div id="${eventmgmt.export.basic-handlers.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Request of exporting basic handlers.</i><a class="close" href="#${eventmgmt.export.basic-handlers.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+  "id": "...",
+  "jsonrpc": "2.0",
+  "method": "get",
+  "params": [
+    {
+      "url": "/eventmgmt/adom/root/basic-handlers/export",
+      "filter": [["name", "==", "Local Device Event"]],
+      "attachment": [],
+      "data-format": "txt",
+      "apiver": "3"
+    }
+  ]
+}
+</pre></div></div></div><h6 id=${eventmgmt.export.basic-handlers.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "data-type": "string",
+        "data": "string",
+        "checksum": {
+            "method": "string",
+            "hash": "string"
+        },
+        "length": number,
+        "attached": [&lt;object-name&gt;, ...]
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${eventmgmt.export.basic-handlers.resp}">Show example...</a></p></div><div id="${eventmgmt.export.basic-handlers.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Request of exporting basic handlers.</i><a class="close" href="#${eventmgmt.export.basic-handlers.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+  "result": {
+    "data": {
+      "basic-handler": [
+        {
+          "automation-stitch": 0,
+          "creation-time": 0,
+          "data-selector": "",
+          "description": "Default local device event handler",
+          "enable": 1,
+          "enable-time": 0,
+          "handler-id": "20000",
+          "name": "Local Device Event",
+          "notification": "",
+          "protected": 1,
+          "mitre-info": "{"enterprise":["T1200"]}",
+          "rule": [
+            {
+              "aggregate-expr": "COUNT(*) >= 1",
+              "devtype": 0,
+              "enable": 1,
+              "eventstatus": null,
+              "eventtype": "",
+              "extrainfo": "",
+              "extrainfo-type": 0,
+              "filter": [
+                {
+                  "id": 1,
+                  "key": "pri",
+                  "oper": 2,
+                  "value": "4"
+                }
+              ],
+              "filter-expr": null,
+              "filter-relation": 0,
+              "groupby1": "desc",
+              "groupby2": null,
+              "groupby3": null,
+              "indicator": null,
+              "logtype": "event",
+              "name": "Critical or important events",
+              "rule-id": "1",
+              "severity": 2,
+              "subject": null,
+              "tags": "Default,System,Local",
+              "thres-duration": 30,
+              "utmevent": "_any_"
+            }
+          ],
+          "template-url": "/fazcfg-template/basic-handler/root",
+          "update-time": 0,
+          "version": 2
+        }
+      ]
+    },
+    "data-type": "txt",
+    "length": 876
+  },
+  "id": "...",
+  "jsonrpc": "2.0"
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/eventmgmt/adom/&lt;adom-name&gt;/basic-handlers/export</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">filter</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>A filter for selecting exporting basic handlers. <a href="objects.htm#filter">Filter Refrence</a><br/><br/>member type: <i>string</i><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">attachment</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>Objects that will be exported with basic handlers.<br/><br/>member type: <i>string</i><br/></td></tr><tr class='odd_row'><td class="table_col_name">data-format</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/> Default: <i>zip </i> <br/>The format of the exporting data.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;zip<br/>&nbsp;&nbsp;&nbsp;&nbsp;txt<br/>&nbsp;&nbsp;&nbsp;&nbsp;cli</i></b><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=add_eventmgmt_adom__adom-name__basic-handlers_import>Import Basic Handlers</h1><h2>add /eventmgmt/adom/&lt;adom-name&gt;/basic-handlers/import</h2><p>Request of importing basic handlers.<h6 id=${eventmgmt.import.basic-handlers.req}.request>Request:</h6><pre>
+{
+  "id": "...",
+  "jsonrpc": "2.0",
+  "method": "add",
+  "params": [
+    {
+      "url": "/eventmgmt/adom/&lt;adom-name&gt;/basic-handlers/import",
+      "apiver": "3",
+      "data": "string",
+      "data-type": "string",
+      "conflict-option": "string",
+      "attachment": [&lt;object-name&gt;, ...]
+    }
+  ]
+}
+</pre><div id="wrapper"> <p><a href="#${eventmgmt.import.basic-handlers.req}">Show example...</a></p></div><div id="${eventmgmt.import.basic-handlers.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Request of importing basic handlers.</i><a class="close" href="#${eventmgmt.import.basic-handlers.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+  "id": "...",
+  "jsonrpc": "2.0",
+  "method": "add",
+  "params": [
+    {
+      "url": "/eventmgmt/adom/root/basic-handlers/import",
+      "apiver": "3",
+      "data": {
+        "basic-handler": [
+            {
+            "automation-stitch": 0,
+            "creation-time": 0,
+            "data-selector": "",
+            "description": "Default local device event handler",
+            "enable": 1,
+            "enable-time": 0,
+            "handler-id": "20000",
+            "name": "Local Device Event",
+            "notification": "",
+            "protected": 1,
+            "mitre-info": "{"enterprise":["T1200"]}",
+            "rule": [
+                {
+                "aggregate-expr": "COUNT(*) >= 1",
+                "devtype": 0,
+                "enable": 1,
+                "eventstatus": null,
+                "eventtype": "",
+                "extrainfo": "",
+                "extrainfo-type": 0,
+                "filter": [
+                    {
+                    "id": 1,
+                    "key": "pri",
+                    "oper": 2,
+                    "value": "4"
+                    }
+                ],
+                "filter-expr": null,
+                "filter-relation": 0,
+                "groupby1": "desc",
+                "groupby2": null,
+                "groupby3": null,
+                "indicator": null,
+                "logtype": "event",
+                "name": "Critical or important events",
+                "rule-id": "1",
+                "severity": 2,
+                "subject": null,
+                "tags": "Default,System,Local",
+                "thres-duration": 30,
+                "utmevent": "_any_"
+                }
+            ],
+            "template-url": "/fazcfg-template/basic-handler/root",
+            "update-time": 0,
+            "version": 2
+            }
+        ]
+      },
+      "data-type": "txt",
+      "conflict-option": "skip",
+      "attachment": []
+    }
+  ]
+}
+</pre></div></div></div><h6 id=${eventmgmt.import.basic-handlers.resp}.response>Response:</h6><pre>
+{
+    "id": "...",
+    "jsonrpc": "2.0",
+    "result": {
+        "status": {
+            "code": number,
+            "message": "string"
+        },
+        "attached": [&lt;object-name&gt;, ...]
+    }
+}
+</pre><div id="wrapper"> <p><a href="#${eventmgmt.import.basic-handlers.resp}">Show example...</a></p></div><div id="${eventmgmt.import.basic-handlers.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Request of importing basic handlers.</i><a class="close" href="#${eventmgmt.import.basic-handlers.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+  "result": {
+    "status": {
+      "code": 0,
+      "message": "OK"
+    }
+  },
+  "id": "...",
+  "jsonrpc": "2.0"
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/eventmgmt/adom/&lt;adom-name&gt;/basic-handlers/import</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>string </i> <br/><br/>Data stream in json format or base64 encoded zip format.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">data-type</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/> Default: <i>zip/base64 </i> <br/>The format of the importing data.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;zip/base64<br/>&nbsp;&nbsp;&nbsp;&nbsp;txt<br/>&nbsp;&nbsp;&nbsp;&nbsp;cli</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">conflict-option</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/> Default: <i>rename </i> <br/>When the importing object has the name conflict with an local object, rename the importing object, replace the local object, or skip importing the object.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;rename<br/>&nbsp;&nbsp;&nbsp;&nbsp;replace<br/>&nbsp;&nbsp;&nbsp;&nbsp;skip</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">attachment</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>Objects that will be imported with basic handlers.<br/><br/>member type: <i>string</i><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_eventmgmt_adom__adom-name__correlation-handlers_export>Export Correlation Handlers</h1><h2>get /eventmgmt/adom/&lt;adom-name&gt;/correlation-handlers/export</h2><p>Request of exporting correlation handlers.<h6 id=${eventmgmt.export.correlation-handlers.req}.request>Request:</h6><pre>
+{
+  "id": "...",
+  "jsonrpc": "2.0",
+  "method": "get",
+  "params": [
+    {
+      "url": "/eventmgmt/adom/&lt;adom-name&gt;/correlation-handlers/export",
+      "filter": [&lt;source&gt;, &lt;operator&gt;, &lt;target1&gt;, &lt;target2&gt;, ...],
+      "attachment": [&lt;object-name&gt;, ...],
+      "data-format": "string",
+      "apiver": "3"
+    }
+  ]
+}
+</pre><div id="wrapper"> <p><a href="#${eventmgmt.export.correlation-handlers.req}">Show example...</a></p></div><div id="${eventmgmt.export.correlation-handlers.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Request of exporting correlation handlers.</i><a class="close" href="#${eventmgmt.export.correlation-handlers.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+  "id": "...",
+  "jsonrpc": "2.0",
+  "method": "get",
+  "params": [
+    {
+      "url": "/eventmgmt/adom/root/correlation-handlers/export",
+      "filter": [["name", "==", "Default-Brute-Force-Account-Login-Attack-FAZ"]],
+      "attachment": [],
+      "data-format": "txt",
+      "apiver": "3"
+    }
+  ]
+}
+</pre></div></div></div><h6 id=${eventmgmt.export.correlation-handlers.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "data-type": "string",
+        "data": "string",
+        "checksum": {
+            "method": "string",
+            "hash": "string"
+        },
+        "length": number,
+        "attached": [&lt;object-name&gt;, ...]
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${eventmgmt.export.correlation-handlers.resp}">Show example...</a></p></div><div id="${eventmgmt.export.correlation-handlers.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Request of exporting correlation handlers.</i><a class="close" href="#${eventmgmt.export.correlation-handlers.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+  "result": {
+    "data": {
+      "correlation-handler": [
+        {
+          "automation-stitch": 0,
+          "content-pack-id": "",
+          "content-pack-uuid": "",
+          "creation-time": 0,
+          "data-selector": "",
+          "description": "This handler is to detect if an account login failed many times not followed by a login success for FortiAnalyzer.",
+          "enable": 0,
+          "enable-time": 0,
+          "eventstatus": "auto",
+          "extrainfo-type": 0,
+          "handler-id": "handler_id_1",
+          "indicator": null,
+          "name": "Default-Brute-Force-Account-Login-Attack-FAZ",
+          "notification": "",
+          "protected": 1,
+          "mitre-info": "{"enterprise":["T1200"]}",
+          "rule": [
+            {
+              "aggregate-expr": "COUNT(*) >= 5",
+              "devtype": 7,
+              "filter": [
+                {
+                  "id": 1,
+                  "key": "operation",
+                  "oper": 0,
+                  "value": "login failed"
+                }
+              ],
+              "filter-expr": "",
+              "filter-relation": 1,
+              "groupby1": "devid",
+              "groupby2": "",
+              "groupby3": "",
+              "logtype": "event",
+              "name": "Login Failed 5 Times",
+              "rule-id": "rule_id_1",
+              "utmevent": ""
+            },
+            {
+              "aggregate-expr": "COUNT(*)>=1",
+              "devtype": 7,
+              "filter": [
+                {
+                  "id": 1,
+                  "key": "operation",
+                  "oper": 0,
+                  "value": "login"
+                }
+              ],
+              "filter-expr": "",
+              "filter-relation": 1,
+              "groupby1": "devid",
+              "groupby2": "",
+              "groupby3": "",
+              "logtype": "event",
+              "name": "Login Success",
+              "rule-id": "rule_id_2",
+              "utmevent": ""
+            }
+          ],
+          "rule-relation": "rule_id_1 NOT_FOLLOWED_BY[5m] ruld_id_2",
+          "rule-relation-constraint": "ruld_id_1.devid=ruld_id_2.devid",
+          "severity": 2,
+          "tags": "login,attack",
+          "template-url": "/fazcfg-template/correlation-handler/faz",
+          "thres-duration": 30,
+          "update-time": 0,
+          "uuid": "",
+          "version": 2
+        }
+      ]
+    },
+    "data-type": "txt",
+    "length": 1465
+  },
+  "id": "...",
+  "jsonrpc": "2.0"
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/eventmgmt/adom/&lt;adom-name&gt;/correlation-handlers/export</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">filter</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>A filter for selecting exporting correlation handlers. <a href="objects.htm#filter">Filter Refrence</a><br/><br/>member type: <i>string</i><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">attachment</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>Objects that will be exported with correlation handlers.<br/><br/>member type: <i>string</i><br/></td></tr><tr class='odd_row'><td class="table_col_name">data-format</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/> Default: <i>zip </i> <br/>The format of the exporting data.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;zip<br/>&nbsp;&nbsp;&nbsp;&nbsp;txt<br/>&nbsp;&nbsp;&nbsp;&nbsp;cli</i></b><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=add_eventmgmt_adom__adom-name__correlation-handlers_import>Import Correlation Handlers</h1><h2>add /eventmgmt/adom/&lt;adom-name&gt;/correlation-handlers/import</h2><p>Request of importing correlation handlers.<h6 id=${eventmgmt.import.correlation-handlers.req}.request>Request:</h6><pre>
+{
+  "id": "...",
+  "jsonrpc": "2.0",
+  "method": "add",
+  "params": [
+    {
+      "url": "/eventmgmt/adom/&lt;adom-name&gt;/correlation-handlers/import",
+      "apiver": "3",
+      "data": "string",
+      "data-type": "string",
+      "conflict-option": "string",
+      "attachment": [&lt;object-name&gt;, ...]
+    }
+  ]
+}
+</pre><div id="wrapper"> <p><a href="#${eventmgmt.import.correlation-handlers.req}">Show example...</a></p></div><div id="${eventmgmt.import.correlation-handlers.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Request of importing correlation handlers.</i><a class="close" href="#${eventmgmt.import.correlation-handlers.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+  "id": "...",
+  "jsonrpc": "2.0",
+  "method": "add",
+  "params": [
+    {
+      "url": "/eventmgmt/adom/root/correlation-handlers/import",
+      "apiver": "3",
+      "data": {
+        "correlation-handler": [
+            {
+            "automation-stitch": 0,
+            "content-pack-id": "",
+            "content-pack-uuid": "",
+            "creation-time": 0,
+            "data-selector": "",
+            "description": "This handler is to detect if an account login failed many times not followed by a login success for FortiAnalyzer.",
+            "enable": 0,
+            "enable-time": 0,
+            "eventstatus": "auto",
+            "extrainfo-type": 0,
+            "handler-id": "handler_id_1",
+            "indicator": null,
+            "name": "Default-Brute-Force-Account-Login-Attack-FAZ",
+            "notification": "",
+            "protected": 1,
+            "mitre-info": "{"enterprise":["T1200"]}",
+            "rule": [
+                {
+                "aggregate-expr": "COUNT(*) >= 5",
+                "devtype": 7,
+                "filter": [
+                    {
+                    "id": 1,
+                    "key": "operation",
+                    "oper": 0,
+                    "value": "login failed"
+                    }
+                ],
+                "filter-expr": "",
+                "filter-relation": 1,
+                "groupby1": "devid",
+                "groupby2": "",
+                "groupby3": "",
+                "logtype": "event",
+                "name": "Login Failed 5 Times",
+                "rule-id": "rule_id_1",
+                "utmevent": ""
+                },
+                {
+                "aggregate-expr": "COUNT(*)>=1",
+                "devtype": 7,
+                "filter": [
+                    {
+                    "id": 1,
+                    "key": "operation",
+                    "oper": 0,
+                    "value": "login"
+                    }
+                ],
+                "filter-expr": "",
+                "filter-relation": 1,
+                "groupby1": "devid",
+                "groupby2": "",
+                "groupby3": "",
+                "logtype": "event",
+                "name": "Login Success",
+                "rule-id": "rule_id_2",
+                "utmevent": ""
+                }
+            ],
+            "rule-relation": "rule_id_1 NOT_FOLLOWED_BY[5m] ruld_id_2",
+            "rule-relation-constraint": "ruld_id_1.devid=ruld_id_2.devid",
+            "severity": 2,
+            "tags": "login,attack",
+            "template-url": "/fazcfg-template/correlation-handler/faz",
+            "thres-duration": 30,
+            "update-time": 0,
+            "uuid": "",
+            "version": 2
+            }
+        ]
+        },
+      "data-type": "txt",
+      "conflict-option": "skip",
+      "attachment": []
+    }
+  ]
+}
+</pre></div></div></div><h6 id=${eventmgmt.import.correlation-handlers.resp}.response>Response:</h6><pre>
+{
+    "id": "...",
+    "jsonrpc": "2.0",
+    "result": {
+        "status": {
+            "code": number,
+            "message": "string"
+        },
+        "attached": [&lt;object-name&gt;, ...]
+    }
+}
+</pre><div id="wrapper"> <p><a href="#${eventmgmt.import.correlation-handlers.resp}">Show example...</a></p></div><div id="${eventmgmt.import.correlation-handlers.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Request of importing correlation handlers.</i><a class="close" href="#${eventmgmt.import.correlation-handlers.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+  "result": {
+    "status": {
+      "code": 0,
+      "message": "OK"
+    }
+  },
+  "id": "...",
+  "jsonrpc": "2.0"
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/eventmgmt/adom/&lt;adom-name&gt;/correlation-handlers/import</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>string </i> <br/><br/>Data stream in json format or base64 encoded zip format.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">data-type</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/> Default: <i>zip/base64 </i> <br/>The format of the importing data.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;zip/base64<br/>&nbsp;&nbsp;&nbsp;&nbsp;txt<br/>&nbsp;&nbsp;&nbsp;&nbsp;cli</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">conflict-option</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/> Default: <i>rename </i> <br/>When the importing object has the name conflict with an local object, rename the importing object, replace the local object, or skip importing the object.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;rename<br/>&nbsp;&nbsp;&nbsp;&nbsp;replace<br/>&nbsp;&nbsp;&nbsp;&nbsp;skip</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">attachment</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>Objects that will be imported with correlation handlers.<br/><br/>member type: <i>string</i><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=add_eventmgmt_adom__adom-name__mitre-attack-matrix>Get Mitre Attack Matrix</h1><h2>add /eventmgmt/adom/&lt;adom-name&gt;/mitre-attack-matrix</h2><p>Request of getting Mitre Attack Matrix.<h6 id=${eventmgmt.get.mitre-attack-matrix.req}.request>Request:</h6><pre>
+{
+    "id": "...",
+    "jsonrpc": "2.0",
+    "method": "get",
+    "params": [
+        {
+            "url": "/eventmgmt/adom/&lt;adom-name&gt;/mitre-attack-matrix",
+            "apiver": 3,
+            "mitre-domain": "string",
+            "option": ["metadata", "event-count", "incident-count", "handler-count"]
+            "time-range": {
+                "start": "string",
+                "end": "string"
+            }
+    } ]
+}
+</pre><div id="wrapper"> <p><a href="#${eventmgmt.get.mitre-attack-matrix.req}">Show example...</a></p></div><div id="${eventmgmt.get.mitre-attack-matrix.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Request of getting Mitre Attack Matrix.</i><a class="close" href="#${eventmgmt.get.mitre-attack-matrix.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/eventmgmt/adom/&lt;adom-name&gt;/mitre-attack-matrix",
+            "apiver": 3,
+            "mitre-domain": "enterprise",
+            "option": ["metadata", "event-count", "incident-count", "handler-count"]
+            "time-range": {
+                "start": "2023-08-09 10:26:04",
+                "end": "2023-08-16 10:26:04"
+            }
+    } ],
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre></div></div></div><h6 id=${eventmgmt.get.mitre-attack-matrix.resp}.response>Response:</h6><pre>
+{
+    "jsonrpc": "2.0",
+    "id": "...",
+    "result": {
+        "handler-coverage": {
+            "total-handlers":           "number",
+            "total-handlers-enabled":   "number",
+            "total-techniques":         "number",
+            "total-techniques-covered": "number",
+            "coverage-rate":            "number"
+        },
+        "tactics": [
+            {
+                "id": "string",
+                "name": "string",
+                "url": "string",
+                "version": "string",
+                "display_order": "number"
+                "handler-count": {
+                    "total":        "number",
+                    "enabled":      "number",
+                    "triggered":    "number",
+                },
+                "event-count": "number",
+                "incident-count": "number",
+                "techniques": [
+                    {
+                        "techid": "string",
+                        "name": "string",
+                        "url": "string",
+                        "handler-count": {
+                            "total":        "number",
+                            "enabled":      "number",
+                            "triggered":    "number",
+                        },
+                        "event-count":      "number",
+                        "incident-count":   "number",
+                        "heatmap-score": {
+                            "event":        "number",
+                            "incident":     "number",
+                        },
+                        "sub-techniques": [
+                            {
+                                "techid": "string",
+                                "name": "string",
+                                "url": "string",
+                                "handler-count": {
+                                    "total":        "number",
+                                    "enabled":      "number",
+                                    "triggered":    "number",
+                                },
+                                "event-count": "number",
+                                "incident-count":   "number",
+                                "heatmap-score": {
+                                    "event":        "number",
+                                    "incident":     "number",
+                                },
+                            },
+                            ...
+                        ]
+                    },
+                    ...
+                ]
+            },
+            ...
+        ],
+    }
+}
+</pre><div id="wrapper"> <p><a href="#${eventmgmt.get.mitre-attack-matrix.resp}">Show example...</a></p></div><div id="${eventmgmt.get.mitre-attack-matrix.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Request of getting Mitre Attack Matrix.</i><a class="close" href="#${eventmgmt.get.mitre-attack-matrix.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "result": {
+        "handler-coverage": {
+            "total-handlers": 110,
+            "total-handlers-enabled": 27,
+            "total-techniques": 196,
+            "total-techniques-covered": 81,
+            "coverage-rate": 42
+        }
+        "tactics": [
+            {
+                "id": "TA0043",
+                "url": "https://attack.mitre.org/tactics/TA0043",
+                "name": "Reconnaissance",
+                "version": "1.0",
+                "event-count": 0,
+                "display_order": 0,
+                "handler-count": {
+                    "triggered": 0,
+                    "total": 4,
+                    "enabled": 2
+                },
+                "incident-count": 0
+                "techniques": [
+                    {
+                        "url": "https://attack.mitre.org/techniques/T1589",
+                        "name": "Gather Victim Identity Information",
+                        "techid": "T1589",
+                        "event-count": 0,
+                        "handler-count": {
+                            "triggered": 0,
+                            "total": 0,
+                            "enabled": 0
+                        },
+                        "heatmap-score": {
+                            "event": 0,
+                            "incident": 0
+                        },
+                        "incident-count": 0,
+                        "sub-techniques": [
+                            {
+                                "url": "https://attack.mitre.org/techniques/T1589/001",
+                                "name": "Credentials",
+                                "techid": "T1589.001",
+                                "event-count": 0,
+                                "handler-count": {
+                                    "triggered": 0,
+                                    "total": 0,
+                                    "enabled": 0
+                                },
+                                "heatmap-score": {
+                                    "event": 0,
+                                    "incident": 0
+                                },
+                                "incident-count": 0
+                            },
+                            ...
+                        ]
+                    },
+                    ...
+                ]
+            },
+            ...
+        ],
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/eventmgmt/adom/&lt;adom-name&gt;/mitre-attack-matrix</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">mitre-domain</td><td class="table_col_desc"><i>string </i> <br/><br/>Query mitre domain, either enterprise or ics.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">option</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/> Default: <i>metadata </i> <br/>The option of the return data. Metadata is to include the technique name, url and description. Event-count, incident-count and handler-count is to include the statistic of each category.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;metadata<br/>&nbsp;&nbsp;&nbsp;&nbsp;event-count<br/>&nbsp;&nbsp;&nbsp;&nbsp;incident-count<br/>&nbsp;&nbsp;&nbsp;&nbsp;handler-count</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">time-range</td><td class="table_col_desc"><i>object </i> (optional) <br/><br/><br/><br/><table><tr class='odd_row'><td class="table_col_name">start</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The start time of the query time window.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">end</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The end time of the query time window.<br/><br/></td></tr></table></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=add_eventmgmt_adom__adom-name__mitre-attack-matrix_technique__techid_>Get Mitre Attack Matrix by Technique Id</h1><h2>add /eventmgmt/adom/&lt;adom-name&gt;/mitre-attack-matrix/technique/&lt;techid&gt;</h2><p>Request of getting Mitre Attack Matrix by Technique Id.<h6 id=${eventmgmt.get.mitre-attack-matrix.technique.req}.request>Request:</h6><pre>
+{
+    "id": "...",
+    "jsonrpc": "2.0",
+    "method": "get",
+    "params": [
+        {
+            "url": "/eventmgmt/adom/&lt;adom-name&gt;/mitre-attack-matrix/technique/&lt;techid&gt;",
+            "apiver": 3,
+            "mitre-domain": "string",
+            "option": ["metadata","event-count","incident-count","handler-count","event-summary","incident-summary","handler-summary"] //If missing or empty array, default to metadata
+            "time-range": { //optional, used when option contains: event-count, incident-count
+                "start": "string",
+                "end": "string"
+            }            
+    } ]
+}
+</pre><div id="wrapper"> <p><a href="#${eventmgmt.get.mitre-attack-matrix.technique.req}">Show example...</a></p></div><div id="${eventmgmt.get.mitre-attack-matrix.technique.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Request of getting Mitre Attack Matrix by Technique Id.</i><a class="close" href="#${eventmgmt.get.mitre-attack-matrix.technique.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/eventmgmt/adom/&lt;adom-name&gt;/mitre-attack-matrix/technique/&lt;techid&gt;",
+            "apiver": 3,
+            "mitre-domain": "enterprise",
+            "option": ["metadata","handler-summary"]
+            "time-range": {
+                "start": "1970-01-01T00:00:00",
+                "end": "2038-12-31T23:59:59"
+            }
+    } ],
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre></div></div></div><h6 id=${eventmgmt.get.mitre-attack-matrix.technique.resp}.response>Response:</h6><pre>
+{
+    "jsonrpc": "2.0",
+    "id": "...",
+    "result": {
+        "technique": {
+            "techid": "string",
+            "name": "string",
+            "url": "string",
+            "handler-count": {
+                "total":        "number",
+                "enabled":      "number",
+                "triggered":    "number",
+            },
+            "event-count": "number",
+            "incident-count": "number",
+            "sub-techniques": [
+                {
+                    "techid": "string",
+                    "name": "string",
+                    "url": "string",
+                    "handler-count": {
+                        "total":        "number",
+                        "enabled":      "number",
+                        "triggered":    "number",
+                    },
+                    "event-count": "number",
+                    "incident-count": "number",
+                },
+                ...
+            ],
+            "handler-summary": [
+                {
+                    "name": "string",
+                    "description": "string",
+                    "state": "string",
+                    "type": "string",
+                    "techniques": [
+                        {
+                            "tech-id": "string",
+                            "tech-name": "string",
+                        },
+                    ],
+                },
+                ...
+            ],
+            "event-summary": [
+                {
+                    "severity": number,
+                    "handler": "string",
+                    "count": "number",
+                    "affected-devices": [
+                        "string",
+                    ]
+                    "techniques": [
+                        {
+                            "tech-id": "string",
+                            "tech-name": "string",
+                        }
+                    ],
+                },
+                ...
+            ],
+            "incident-summary": [
+                {
+                    "severity": number,
+                    "tech-id": "string",
+                    "tech-name": "string",
+                    "count": "number",
+                    "incids": [
+                        "number",
+                    ]
+                    "descriptions": [
+                        "string",
+                    ]
+                    "affected-devices": [
+                        "string",
+                    ]
+                },
+                ...
+            ],
+        },
+    }
+}
+</pre><div id="wrapper"> <p><a href="#${eventmgmt.get.mitre-attack-matrix.technique.resp}">Show example...</a></p></div><div id="${eventmgmt.get.mitre-attack-matrix.technique.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Request of getting Mitre Attack Matrix by Technique Id.</i><a class="close" href="#${eventmgmt.get.mitre-attack-matrix.technique.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "result": {
+        "technique": {
+            "url": "https://attack.mitre.org/techniques/T1583",
+            "name": "Acquire Infrastructure",
+            "techid": "T1583",
+            "sub-techniques": [
+                {
+                    "url": "https://attack.mitre.org/techniques/T1583/001",
+                    "name": "Domains",
+                    "techid": "T1583.001"
+                },
+                ...
+            ],
+            "handler-summary": [
+            {
+                "name": "Default-FFW-Botnet-Communication-Detection-By-Endpoint",
+                "description": "Default FortiFirewall event handler to detect botnet communication in network grouped by endpoint",
+                "state": "disabled",
+                "type": "BASIC_HANDLER",
+                "techniques": [
+                    {
+                        "tech-id": "T1071.004",
+                        "tech-name": "DNS"
+                    },
+                    {
+                        "tech-id": "T1583.005",
+                        "tech-name": "Botnet"
+                    },
+                    {
+                        "tech-id": "T1584.005",
+                        "tech-name": "Botnet"
+                    }
+                ]
+            }
+            ...
+            ]
+        },
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/eventmgmt/adom/&lt;adom-name&gt;/mitre-attack-matrix</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">mitre-domain</td><td class="table_col_desc"><i>string </i> <br/><br/>Query mitre domain, either enterprise or ics.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">option</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/> Default: <i>metadata </i> <br/>The option of the return data. Metadata is to include the technique name, url and description. Event-count, incident-count and handler-count is to include the statistic of each category. Event-summary, incident-summary and handler-summary is to include the summary data for the given tehcnique id<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;metadata<br/>&nbsp;&nbsp;&nbsp;&nbsp;event-count<br/>&nbsp;&nbsp;&nbsp;&nbsp;incident-count<br/>&nbsp;&nbsp;&nbsp;&nbsp;handler-count<br/>&nbsp;&nbsp;&nbsp;&nbsp;event-summary<br/>&nbsp;&nbsp;&nbsp;&nbsp;incident-summary<br/>&nbsp;&nbsp;&nbsp;&nbsp;handler-summary</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">time-range</td><td class="table_col_desc"><i>object </i> (optional) <br/><br/><br/><br/><table><tr class='odd_row'><td class="table_col_name">start</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The start time of the query time window.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">end</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The end time of the query time window.<br/><br/></td></tr></table></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<style>
+    .overlay {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: rgba(0, 0, 0, 0.5);
+        transition: opacity 200ms;
+        visibility: hidden;
+        opacity: 0;
+    }
+    .overlay .cancel {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        cursor: default;
+    }
+    .overlay:target {
+        visibility: visible;
+        opacity: 1;
+    }
+
+    .popup {
+        margin: 75px auto;
+        padding: 20px;
+        background: #fff;
+        border: 1px solid #666;
+        width: 80%;
+        height: 80vh;
+        overflow: auto;
+        box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+        position: relative;
+    }
+    .popup .close {
+        position: absolute;
+        width: 20px;
+        height: 20px;
+        top: 20px;
+        right: 20px;
+        opacity: 0.8;
+        transition: all 200ms;
+        font-size: 24px;
+        font-weight: bold;
+        text-decoration: none;
+        color: #666;
+    }
+    .popup .close:hover {
+        opacity: 1;
+    }
+    .popup .content_cmd {
+        height: 90%;
+        overflow: auto;
+    }
+    .popup .content_cmd pre {
+        width: 90%;
+    }
+    .popup p {
+        margin: 0 0 1em;
+    }
+    .popup p:last-child {
+        margin: 0;
+    }
+</style>
+    <br/>
+</div></body></html>

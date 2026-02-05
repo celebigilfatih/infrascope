@@ -1,0 +1,116 @@
+<!doctype html><html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>FortiAnalyzer 7.4.7 (2685) JSON API Reference-System Template (For v7.2)</title>
+<style>body {
+	font-family: Verdana;
+	color: black;
+	background: #D9D9D9;
+	font-size: 13px;
+}
+h1 {
+	font-size: 20px;
+}
+h2 {
+	font-size: 15px;
+	position: sticky;
+	position: -webkit-sticky;
+	top: 0px;
+	background: #D9D9D9;
+}
+h6 {
+	font-size: 13px;
+	margin-bottom: 8px;
+	margin-left: 12px;
+	font-weight: normal;
+}
+table {
+	width: 95%;
+	font-size: 13px;
+	margin-left: 15px;
+	margin-right: 5px;
+	border-collapse: collapse;
+	margin-bottom: 16px;
+}
+td {
+	vertical-align: top;
+	padding: 5px;
+}
+pre {
+	border: 1px solid black;
+	padding: 10px;
+	font-size: 12px;
+	margin-left: 15px;
+	width: 650px;
+}
+th {
+	text-align: left;
+}
+a {
+}
+a:link {
+	text-decoration: none;
+}
+a:visited {
+}
+a:hover {
+	text-decoration: underline;
+}
+.menu {
+	background: #C0C0C0;
+	border-right: 1px solid;
+	position: fixed;
+	padding: 6px;
+	padding-top: 20px;
+	top: 0px;
+	left: 0px;
+	bottom: 0px;
+	width: 200px;
+	overflow-x: hidden;
+	overflow-y: auto;
+	white-space: nowrap;
+}
+.content {
+	position: absolute;
+	padding: 6px;
+	top: 0px;
+	left: 240px;
+	right: 0px;
+}
+.menu_header {
+	font-weight: bold;
+}
+.param_table {
+	border: 1px solid #A0A0A0;
+}
+.table_hdr_name {
+	width: 160px;
+}
+.table_col_name {
+	font-weight: bold;
+	width: 160px;
+}
+.table_col_desc {
+}
+.param_table > thead > tr > th {
+	background-color: #C0C0C0;
+	border-bottom: 1px solid #A0A0A0;
+	padding: 6px;
+}
+.param_table > tbody > tr:nth-child(even) > td {
+	background-color: #D0D0D0;
+}
+.macro_num {
+	font-weight: bold;
+	width: 50px;
+}
+.macro_val {
+}
+</style>
+</head>
+<body>
+<div class="menu"><span class="menu_header"><a href="index.htm">API Reference Home</a></span><br/><span class="menu_item"><a href="objects.htm">Common Objects</a></span><br/><br/><span class="menu_header">Database Modules</span><br/><span class="menu_item"><a href="dvmdb-main.htm">Device Manager Database</a></span><br/><span class="menu_item"><a href="task-main.htm">Task Database</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof74-2779-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof74-2779-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg74-2779-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof72-1732-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof72-1732-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg72-1732-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof70-662-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof70-662-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg70-662-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof64-2087-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof64-2087-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg64-2087-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof62-1263-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof62-1263-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg62-1263-main.htm">Policy Package</a></span><br/><br/><span class="menu_header">Daemon Modules</span><br/><span class="menu_item"><a href="cmdb-main.htm">CLI Configuration</a></span><br/><span class="menu_item"><a href="dvmcmd-main.htm">Device Manager Command</a></span><br/><span class="menu_item"><a href="um-main.htm">Update Manager</a></span><br/><span class="menu_item"><a href="sys-main.htm">System Commands</a></span><br/><br/><span class="menu_header"><a href="faz-cmd-index.htm">FortiAnalyzer Modules</a></span><br/><span class="menu_item"><a href="faz_eventmgmt.htm">Event Mgmt Commands</a></span><br/><span class="menu_item"><a href="faz_eventmgmtconfig.htm">Event Mgmt Config Commands</a></span><br/><span class="menu_item"><a href="faz_fazsys.htm">FAZ System Commands</a></span><br/><span class="menu_item"><a href="faz_fortiview.htm">FortiView Commands</a></span><br/><span class="menu_item"><a href="faz_incidentmgmt.htm">Incident Mgmt Commands</a></span><br/><span class="menu_item"><a href="faz_logview.htm">LogView Commands</a></span><br/><span class="menu_item"><a href="faz_report.htm">Report Commands</a></span><br/><span class="menu_item"><a href="faz_reportconfig.htm">Report Config Commands</a></span><br/><span class="menu_item"><a href="faz_ioc.htm">IOC Commands</a></span><br/><span class="menu_item"><a href="faz_ueba.htm">UEBA Commands</a></span><br/><span class="menu_item"><a href="faz_soar.htm">SOAR Commands</a></span><br/><br/><span class="menu_header"><a href="obj-index.htm">Index of All Objects</a></span><br/><br/></div>
+<div class="content">
+<h1>System Template (For v7.2)</h1><br/>
+This documentation applies to v7.2 devices or ADOM, latest release (build 1732).<br/><br/><dl><dt>System Template manages common system configurations that can be shared among various devices. All configurations under this template are device global objects. Once a template is assigned to a device, all configuration will be copied onto the device during the next install.<br/><br/><ul><li>Prefix <b>/pm/devprof/adom/</b> is used to access or modify the template and assignment.</li><li>Prefix <b>/pm/config/adom/devprof/</b> is used to access objects managed by the template.</li></ul></dt><br/><br/><dt><a href="devprof-methods.htm">System Template Methods</a></dt><dd><a href="devprof-methods.htm#get-table">Get method (table)</a></dd><dd><a href="devprof-methods.htm#get-obj">Get method (object)</a></dd><dd><a href="devprof-methods.htm#get-pkg">Get method (package/template)</a></dd><dd><a href="devprof-methods.htm#add">Add method</a></dd><dd><a href="devprof-methods.htm#add-pkgscope">Add method (package/template scope member)</a></dd><dd><a href="devprof-methods.htm#set">Set method</a></dd><dd><a href="devprof-methods.htm#set-pkgscope">Set method (package/template scope member)</a></dd><dd><a href="devprof-methods.htm#update">Update method</a></dd><dd><a href="devprof-methods.htm#update-pkgscope">Update method (package/template scope member)</a></dd><dd><a href="devprof-methods.htm#delete">Delete method</a></dd><dd><a href="devprof-methods.htm#delete-pkgscope">Delete method (package/template scope member)</a></dd><dd><a href="devprof-methods.htm#move">Move method</a></dd><dd><a href="devprof-methods.htm#clone">Clone method</a></dd><dd><a href="devprof-methods.htm#unset-pkgscope">Unset method (package/template scope member)</a></dd><p>&nbsp;</p><dt><a href="devprof72-1732-objects.htm">System Template Objects Reference</a></dt><dd><a href="devprof72-1732-objects.htm#devprof-obj">System Template Object (table)</a></dd><br/><dd><a href="devprof72-1732-objects.htm#device_profile_fortianalyzer">device/profile/fortianalyzer (object)</a></dd><dd><a href="devprof72-1732-objects.htm#device_profile_fortiguard">device/profile/fortiguard (object)</a></dd><dd><a href="devprof72-1732-objects.htm#device_profile_settings">device/profile/settings (object)</a></dd><dd><a href="devprof72-1732-objects.htm#device_template_widget">device/template/widget (table)</a></dd><dd><a href="devprof72-1732-objects.htm#device_template_widget_action-list">device/template/widget/action-list (table)</a></dd><dd><a href="devprof72-1732-objects.htm#device_template_widget_action-list_dynamic_mapping">device/template/widget/action-list/dynamic_mapping (table)</a></dd><dd><a href="devprof72-1732-objects.htm#device_template_widget_action-list_var-list">device/template/widget/action-list/var-list (table)</a></dd><br/><dd><a href="devprof72-1732-objects.htm#log_fortianalyzer-cloud_setting">log/fortianalyzer-cloud/setting (object)</a></dd><dd><a href="devprof72-1732-objects.htm#log_fortianalyzer_setting">log/fortianalyzer/setting (object)</a></dd><dd><a href="devprof72-1732-objects.htm#log_syslogd_filter">log/syslogd/filter (object)</a></dd><dd><a href="devprof72-1732-objects.htm#log_syslogd_filter_exclude-list">log/syslogd/filter/exclude-list (table)</a></dd><dd><a href="devprof72-1732-objects.htm#log_syslogd_filter_exclude-list_fields">log/syslogd/filter/exclude-list/fields (table)</a></dd><dd><a href="devprof72-1732-objects.htm#log_syslogd_filter_free-style">log/syslogd/filter/free-style (table)</a></dd><dd><a href="devprof72-1732-objects.htm#log_syslogd_setting">log/syslogd/setting (object)</a></dd><dd><a href="devprof72-1732-objects.htm#log_syslogd_setting_custom-field-name">log/syslogd/setting/custom-field-name (table)</a></dd><dd><a href="devprof72-1732-objects.htm#log_syslogd_setting_log-templates">log/syslogd/setting/log-templates (table)</a></dd><br/><dd><a href="devprof72-1732-objects.htm#system_alertemail">system/alertemail (object)</a></dd><dd><a href="devprof72-1732-objects.htm#system_autoupdate_override">system/autoupdate/override (object)</a></dd><dd><a href="devprof72-1732-objects.htm#system_central-management">system/central-management (object)</a></dd><dd><a href="devprof72-1732-objects.htm#system_central-management_server-list">system/central-management/server-list (table)</a></dd><dd><a href="devprof72-1732-objects.htm#system_email-server">system/email-server (object)</a></dd><dd><a href="devprof72-1732-objects.htm#system_global">system/global (object)</a></dd><dd><a>system/global/split-port-mode (table)</a></dd><dd><a href="devprof72-1732-objects.htm#system_ntp">system/ntp (object)</a></dd><dd><a href="devprof72-1732-objects.htm#system_ntp_ntpserver">system/ntp/ntpserver (table)</a></dd><dd><a href="devprof72-1732-objects.htm#system_replacemsg_admin">system/replacemsg/admin (object)</a></dd><dd><a href="devprof72-1732-objects.htm#system_replacemsg_alertmail">system/replacemsg/alertmail (object)</a></dd><dd><a href="devprof72-1732-objects.htm#system_replacemsg_auth">system/replacemsg/auth (object)</a></dd><dd><a href="devprof72-1732-objects.htm#system_replacemsg_captive-portal-dflt">system/replacemsg/captive-portal-dflt (object)</a></dd><dd><a href="devprof72-1732-objects.htm#system_replacemsg_device-detection-portal">system/replacemsg/device-detection-portal (object)</a></dd><dd><a href="devprof72-1732-objects.htm#system_replacemsg_ec">system/replacemsg/ec (object)</a></dd><dd><a href="devprof72-1732-objects.htm#system_replacemsg_fortiguard-wf">system/replacemsg/fortiguard-wf (object)</a></dd><dd><a href="devprof72-1732-objects.htm#system_replacemsg_ftp">system/replacemsg/ftp (object)</a></dd><dd><a href="devprof72-1732-objects.htm#system_replacemsg_http">system/replacemsg/http (object)</a></dd><dd><a href="devprof72-1732-objects.htm#system_replacemsg_im">system/replacemsg/im (object)</a></dd><dd><a href="devprof72-1732-objects.htm#system_replacemsg_mail">system/replacemsg/mail (object)</a></dd><dd><a href="devprof72-1732-objects.htm#system_replacemsg_mms">system/replacemsg/mms (object)</a></dd><dd><a href="devprof72-1732-objects.htm#system_replacemsg_nac-quar">system/replacemsg/nac-quar (object)</a></dd><dd><a href="devprof72-1732-objects.htm#system_replacemsg_nntp">system/replacemsg/nntp (object)</a></dd><dd><a href="devprof72-1732-objects.htm#system_replacemsg_spam">system/replacemsg/spam (object)</a></dd><dd><a href="devprof72-1732-objects.htm#system_replacemsg_sslvpn">system/replacemsg/sslvpn (object)</a></dd><dd><a href="devprof72-1732-objects.htm#system_replacemsg_traffic-quota">system/replacemsg/traffic-quota (object)</a></dd><dd><a href="devprof72-1732-objects.htm#system_replacemsg_utm">system/replacemsg/utm (object)</a></dd><dd><a href="devprof72-1732-objects.htm#system_replacemsg_webproxy">system/replacemsg/webproxy (object)</a></dd><dd><a href="devprof72-1732-objects.htm#system_snmp_community">system/snmp/community (table)</a></dd><dd><a href="devprof72-1732-objects.htm#system_snmp_community_hosts">system/snmp/community/hosts (table)</a></dd><dd><a href="devprof72-1732-objects.htm#system_snmp_community_hosts6">system/snmp/community/hosts6 (table)</a></dd><dd><a href="devprof72-1732-objects.htm#system_snmp_sysinfo">system/snmp/sysinfo (object)</a></dd><dd><a href="devprof72-1732-objects.htm#system_snmp_user">system/snmp/user (table)</a></dd><p>&nbsp;</p><dt><a href="devprof-errors.htm">System Template Error Code List</a></dt><p>&nbsp;</p><dt><a href="devprof-examples.htm">System Template Examples</a></dt><dd><a href="devprof-examples.htm#devprof-management">System template management</a></dd><p>&nbsp;</p></dl>
+</div></body></html>

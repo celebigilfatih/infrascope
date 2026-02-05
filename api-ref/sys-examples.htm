@@ -1,0 +1,301 @@
+<!doctype html><html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>FortiAnalyzer 7.4.7 (2685) JSON API Reference-System Commands Examples</title>
+<style>body {
+	font-family: Verdana;
+	color: black;
+	background: #D9D9D9;
+	font-size: 13px;
+}
+h1 {
+	font-size: 20px;
+}
+h2 {
+	font-size: 15px;
+	position: sticky;
+	position: -webkit-sticky;
+	top: 0px;
+	background: #D9D9D9;
+}
+h6 {
+	font-size: 13px;
+	margin-bottom: 8px;
+	margin-left: 12px;
+	font-weight: normal;
+}
+table {
+	width: 95%;
+	font-size: 13px;
+	margin-left: 15px;
+	margin-right: 5px;
+	border-collapse: collapse;
+	margin-bottom: 16px;
+}
+td {
+	vertical-align: top;
+	padding: 5px;
+}
+pre {
+	border: 1px solid black;
+	padding: 10px;
+	font-size: 12px;
+	margin-left: 15px;
+	width: 650px;
+}
+th {
+	text-align: left;
+}
+a {
+}
+a:link {
+	text-decoration: none;
+}
+a:visited {
+}
+a:hover {
+	text-decoration: underline;
+}
+.menu {
+	background: #C0C0C0;
+	border-right: 1px solid;
+	position: fixed;
+	padding: 6px;
+	padding-top: 20px;
+	top: 0px;
+	left: 0px;
+	bottom: 0px;
+	width: 200px;
+	overflow-x: hidden;
+	overflow-y: auto;
+	white-space: nowrap;
+}
+.content {
+	position: absolute;
+	padding: 6px;
+	top: 0px;
+	left: 240px;
+	right: 0px;
+}
+.menu_header {
+	font-weight: bold;
+}
+.param_table {
+	border: 1px solid #A0A0A0;
+}
+.table_hdr_name {
+	width: 160px;
+}
+.table_col_name {
+	font-weight: bold;
+	width: 160px;
+}
+.table_col_desc {
+}
+.param_table > thead > tr > th {
+	background-color: #C0C0C0;
+	border-bottom: 1px solid #A0A0A0;
+	padding: 6px;
+}
+.param_table > tbody > tr:nth-child(even) > td {
+	background-color: #D0D0D0;
+}
+.macro_num {
+	font-weight: bold;
+	width: 50px;
+}
+.macro_val {
+}
+</style>
+</head>
+<body>
+<div class="menu"><span class="menu_header"><a href="index.htm">API Reference Home</a></span><br/><span class="menu_item"><a href="objects.htm">Common Objects</a></span><br/><br/><span class="menu_header">Database Modules</span><br/><span class="menu_item"><a href="dvmdb-main.htm">Device Manager Database</a></span><br/><span class="menu_item"><a href="task-main.htm">Task Database</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof74-2779-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof74-2779-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg74-2779-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof72-1732-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof72-1732-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg72-1732-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof70-662-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof70-662-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg70-662-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof64-2087-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof64-2087-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg64-2087-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof62-1263-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof62-1263-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg62-1263-main.htm">Policy Package</a></span><br/><br/><span class="menu_header">Daemon Modules</span><br/><span class="menu_item"><a href="cmdb-main.htm">CLI Configuration</a></span><br/><span class="menu_item"><a href="dvmcmd-main.htm">Device Manager Command</a></span><br/><span class="menu_item"><a href="um-main.htm">Update Manager</a></span><br/><span class="menu_item"><a href="sys-main.htm">System Commands</a></span><br/><br/><span class="menu_header"><a href="faz-cmd-index.htm">FortiAnalyzer Modules</a></span><br/><span class="menu_item"><a href="faz_eventmgmt.htm">Event Mgmt Commands</a></span><br/><span class="menu_item"><a href="faz_eventmgmtconfig.htm">Event Mgmt Config Commands</a></span><br/><span class="menu_item"><a href="faz_fazsys.htm">FAZ System Commands</a></span><br/><span class="menu_item"><a href="faz_fortiview.htm">FortiView Commands</a></span><br/><span class="menu_item"><a href="faz_incidentmgmt.htm">Incident Mgmt Commands</a></span><br/><span class="menu_item"><a href="faz_logview.htm">LogView Commands</a></span><br/><span class="menu_item"><a href="faz_report.htm">Report Commands</a></span><br/><span class="menu_item"><a href="faz_reportconfig.htm">Report Config Commands</a></span><br/><span class="menu_item"><a href="faz_ioc.htm">IOC Commands</a></span><br/><span class="menu_item"><a href="faz_ueba.htm">UEBA Commands</a></span><br/><span class="menu_item"><a href="faz_soar.htm">SOAR Commands</a></span><br/><br/><span class="menu_header"><a href="obj-index.htm">Index of All Objects</a></span><br/><br/></div>
+<div class="content">
+<h1>System Commands Examples</h1><br/>
+<h2 id='sys-login'>Log in and log out example</h2><br/>Log into the system with the user "admin".<br/><br/><p>Request: </p><pre>{
+    "method": "exec",
+    "params": [ 
+        {
+            "url": "/sys/login/user",
+            "data": {
+                "user": "admin",
+                "passwd": "123456" 
+            } 
+        } 
+    ],
+    "id": 1
+}</pre><br/><p>Response: </p><pre>{
+    "result": [ 
+        {
+            "url": "/sys/login/user",
+            "status": {
+                "code": 0,
+                "message": "OK" 
+            },
+            "data": {
+                "challenge": "When were you born?",
+                "session": "gzKj2PsMZ+4Hhs8Q9Ra+br+YStvpqWz/8e291G1j1GI=" 
+            } 
+        } 
+    ],
+    "id": 1
+}</pre><br/>The log in request returned a challenge question. Now submit another request to answer the challenge question.<br/><br/><p>Request: </p><pre>{
+    "method": "exec",
+    "params": [ 
+        {
+            "url": "/sys/login/challenge",
+            "data": [ 
+                {
+                    "answer": "1990/01/02",
+                    "session": "gzKj2PsMZ+4Hhs8Q9Ra+br+YStvpqWz/8e291G1j1GI=" 
+                } 
+            ] 
+        } 
+    ],
+    "id": 2
+}</pre><br/><p>Response: </p><pre>{
+    "result": [ 
+        {
+            "url": "/sys/login/challenge",
+            "status": {
+                "code": 0,
+                "message": "OK" 
+            },
+            "data": {
+                "challenge": "Where were you born?",
+                "session": "gzKj2PsMZ+4Hhs8Q9Ra+br+YStvpqWz/8e291G1j1GI=" 
+            } 
+        } 
+    ] "id": 2
+}</pre><br/>Answer the next challenge and the log in process is completed.<br/><br/><p>Request: </p><pre>{
+    "method": "exec",
+    "params": [ 
+        {
+            "url": "/sys/login/challenge",
+            "data": [ 
+                {
+                    "answer": "Vancouver",
+                    "session": "gzKj2PsMZ+4Hhs8Q9Ra+br+YStvpqWz/8e291G1j1GI=" 
+                } 
+            ] 
+        } 
+    ],
+    "id": 3
+}</pre><br/><p>Response: </p><pre>{
+    "result": [ 
+        {
+            "url": "/sys/login/challenge",
+            "status": {
+                "code": 0,
+                "message": "OK" 
+            } 
+        } 
+    ],
+    "session": "gzKj2PsMZ+4Hhs8Q9Ra+br+YStvpqWz/8e291G1j1GI=",
+    "id": 3
+}</pre><br/>Execute a JSON command with the new session.<br/><br/><p>Request: </p><pre>{
+    "method": "get",
+    "params": [ 
+        {
+            "url": "/sys/status" 
+        } 
+    ],
+    "session": "gzKj2PsMZ+4Hhs8Q9Ra+br+YStvpqWz/8e291G1j1GI=",
+    "id": 4
+}</pre><br/><p>Response: </p><pre>{
+    "result": [ 
+        {
+            "data": {
+                "64-bit Applications": "No",
+                "Admin Domain Configuration": "Disabled",
+                "BIOS version": "04000002",
+                "Branch Point": "514",
+                "Build": "0514",
+                "Current Time": "Thu Mar 27 15:17:55 PDT 2014",
+                "Daylight Time Saving": "Yes",
+                "FIPS Mode": "Disabled",
+                "HA Mode": "Stand Alone",
+                "Hostname": "FMG-VM",
+                "License Status": "Valid",
+                "Max Number of Admin Domains": 1000000000,
+                "Max Number of Device Groups": 1000000000,
+                "Platform Full Name": "FortiManager-VM",
+                "Platform Type": "FMG-VM",
+                "Release Version Information": " (Interim)",
+                "Serial Number": "FMG-VM0000000001",
+                "Time Zone": "(GMT-8:00) Pacific Time (US & Canada).",
+                "Version": "v5.2.0-build0514 140220 (Interim)" 
+            },
+            "url": "/sys/status",
+            "status": {
+                "code": 0,
+                "message": "OK" 
+            } 
+        } 
+    ],
+    "id": 4
+}</pre><br/>Finally, log out the system.<br/><br/><p>Request: </p><pre>{
+    "method": "exec",
+    "params": [ 
+        {
+            "url": "/sys/logout" 
+        } 
+    ],
+    "session": "gzKj2PsMZ+4Hhs8Q9Ra+br+YStvpqWz/8e291G1j1GI=",
+    "id": 5
+}</pre><br/><p>Response: </p><pre>{
+    "result": [ 
+        {
+            "url": "/sys/logout",
+            "status": {
+                "code": 0,
+                "message": "OK" 
+            } 
+        } 
+    ],
+    "session": "",
+    "id": 5
+}</pre><br/><h2 id='sys-proxy'>JSON proxy example</h2><br/>Send a request to all FortiGates in root ADOM to retrieve VPN status. The request failed for device 'fg1' but succeeded for device 'fg2'.<br/><br/>Request:<br/><pre>{
+    "method": "exec",
+    "params": [ 
+        {
+            "url": "sys/proxy/json",
+            "data": {
+                "target": [ "adom/root/group/All_FortiGate" ],
+                "action": "get",
+                "resource": "/api/monitor?path=vpn&name=ipsec&vdom=root" 
+            } 
+        } 
+    ],
+    "id": 1
+}</pre><br/>Response:<br/><pre>{
+    "id": 1,
+    "result": {
+        "data": [ 
+            {
+                "status": {
+                    "code": -1,
+                    "message": "Unknown error" 
+                },
+                "target": "fg1" 
+            },
+            {
+                "response": {
+                    "action": "select",
+                    "name": "ipsec",
+                    "path": "vpn",
+                    "results": null,
+                    "status": "success",
+                    "vdom": "root" 
+                },
+                "status": {
+                    "code": 0,
+                    "message": "OK" 
+                },
+                "target": "fg2" 
+            } 
+        ],
+        "url": "sys/proxy/json" 
+    }
+}</pre><br/>
+</div></body></html>

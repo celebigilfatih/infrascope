@@ -1,0 +1,116 @@
+<!doctype html><html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>FortiAnalyzer 7.4.7 (2685) JSON API Reference-SD-WAN Template (For v7.4)</title>
+<style>body {
+	font-family: Verdana;
+	color: black;
+	background: #D9D9D9;
+	font-size: 13px;
+}
+h1 {
+	font-size: 20px;
+}
+h2 {
+	font-size: 15px;
+	position: sticky;
+	position: -webkit-sticky;
+	top: 0px;
+	background: #D9D9D9;
+}
+h6 {
+	font-size: 13px;
+	margin-bottom: 8px;
+	margin-left: 12px;
+	font-weight: normal;
+}
+table {
+	width: 95%;
+	font-size: 13px;
+	margin-left: 15px;
+	margin-right: 5px;
+	border-collapse: collapse;
+	margin-bottom: 16px;
+}
+td {
+	vertical-align: top;
+	padding: 5px;
+}
+pre {
+	border: 1px solid black;
+	padding: 10px;
+	font-size: 12px;
+	margin-left: 15px;
+	width: 650px;
+}
+th {
+	text-align: left;
+}
+a {
+}
+a:link {
+	text-decoration: none;
+}
+a:visited {
+}
+a:hover {
+	text-decoration: underline;
+}
+.menu {
+	background: #C0C0C0;
+	border-right: 1px solid;
+	position: fixed;
+	padding: 6px;
+	padding-top: 20px;
+	top: 0px;
+	left: 0px;
+	bottom: 0px;
+	width: 200px;
+	overflow-x: hidden;
+	overflow-y: auto;
+	white-space: nowrap;
+}
+.content {
+	position: absolute;
+	padding: 6px;
+	top: 0px;
+	left: 240px;
+	right: 0px;
+}
+.menu_header {
+	font-weight: bold;
+}
+.param_table {
+	border: 1px solid #A0A0A0;
+}
+.table_hdr_name {
+	width: 160px;
+}
+.table_col_name {
+	font-weight: bold;
+	width: 160px;
+}
+.table_col_desc {
+}
+.param_table > thead > tr > th {
+	background-color: #C0C0C0;
+	border-bottom: 1px solid #A0A0A0;
+	padding: 6px;
+}
+.param_table > tbody > tr:nth-child(even) > td {
+	background-color: #D0D0D0;
+}
+.macro_num {
+	font-weight: bold;
+	width: 50px;
+}
+.macro_val {
+}
+</style>
+</head>
+<body>
+<div class="menu"><span class="menu_header"><a href="index.htm">API Reference Home</a></span><br/><span class="menu_item"><a href="objects.htm">Common Objects</a></span><br/><br/><span class="menu_header">Database Modules</span><br/><span class="menu_item"><a href="dvmdb-main.htm">Device Manager Database</a></span><br/><span class="menu_item"><a href="task-main.htm">Task Database</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof74-2779-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof74-2779-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg74-2779-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof72-1732-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof72-1732-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg72-1732-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof70-662-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof70-662-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg70-662-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof64-2087-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof64-2087-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg64-2087-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof62-1263-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof62-1263-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg62-1263-main.htm">Policy Package</a></span><br/><br/><span class="menu_header">Daemon Modules</span><br/><span class="menu_item"><a href="cmdb-main.htm">CLI Configuration</a></span><br/><span class="menu_item"><a href="dvmcmd-main.htm">Device Manager Command</a></span><br/><span class="menu_item"><a href="um-main.htm">Update Manager</a></span><br/><span class="menu_item"><a href="sys-main.htm">System Commands</a></span><br/><br/><span class="menu_header"><a href="faz-cmd-index.htm">FortiAnalyzer Modules</a></span><br/><span class="menu_item"><a href="faz_eventmgmt.htm">Event Mgmt Commands</a></span><br/><span class="menu_item"><a href="faz_eventmgmtconfig.htm">Event Mgmt Config Commands</a></span><br/><span class="menu_item"><a href="faz_fazsys.htm">FAZ System Commands</a></span><br/><span class="menu_item"><a href="faz_fortiview.htm">FortiView Commands</a></span><br/><span class="menu_item"><a href="faz_incidentmgmt.htm">Incident Mgmt Commands</a></span><br/><span class="menu_item"><a href="faz_logview.htm">LogView Commands</a></span><br/><span class="menu_item"><a href="faz_report.htm">Report Commands</a></span><br/><span class="menu_item"><a href="faz_reportconfig.htm">Report Config Commands</a></span><br/><span class="menu_item"><a href="faz_ioc.htm">IOC Commands</a></span><br/><span class="menu_item"><a href="faz_ueba.htm">UEBA Commands</a></span><br/><span class="menu_item"><a href="faz_soar.htm">SOAR Commands</a></span><br/><br/><span class="menu_header"><a href="obj-index.htm">Index of All Objects</a></span><br/><br/></div>
+<div class="content">
+<h1>SD-WAN Template (For v7.4)</h1><br/>
+This documentation applies to v7.4 devices or ADOM, latest release (build 2779).<br/><br/><dl><dt>SD-WAN Template manages a subset of configuration of <i>system virtual-wan-link</i> or <i>system sdwan</i> object at device VDOM level. Once a template is assigned to a device, all configuration will be copied onto the device during the next install.<br/><br/><ul><li>Prefix <b>/pm/wanprof/adom/</b> is used to access or modify the template and assignment.</li><li>Prefix <b>/pm/config/adom/wanprof/</b> is used to access the <i>system virtual-wan-link</i> or <i>system sdwan</i> objects managed.</li></ul><br/>All objects that are reference by the template are shared, and are listed under <i>ADOM Level Objects</i>.</dt><br/><br/><dt><a href="wanprof-methods.htm">SD-WAN Template Methods</a></dt><dd><a href="wanprof-methods.htm#get-table">Get method (table)</a></dd><dd><a href="wanprof-methods.htm#get-obj">Get method (object)</a></dd><dd><a href="wanprof-methods.htm#get-pkg">Get method (package/template)</a></dd><dd><a href="wanprof-methods.htm#add">Add method</a></dd><dd><a href="wanprof-methods.htm#add-pkgscope">Add method (package/template scope member)</a></dd><dd><a href="wanprof-methods.htm#set">Set method</a></dd><dd><a href="wanprof-methods.htm#set-pkgscope">Set method (package/template scope member)</a></dd><dd><a href="wanprof-methods.htm#update">Update method</a></dd><dd><a href="wanprof-methods.htm#update-pkgscope">Update method (package/template scope member)</a></dd><dd><a href="wanprof-methods.htm#delete">Delete method</a></dd><dd><a href="wanprof-methods.htm#delete-pkgscope">Delete method (package/template scope member)</a></dd><dd><a href="wanprof-methods.htm#move">Move method</a></dd><dd><a href="wanprof-methods.htm#clone">Clone method</a></dd><dd><a href="wanprof-methods.htm#unset-pkgscope">Unset method (package/template scope member)</a></dd><p>&nbsp;</p><dt><a href="wanprof74-2779-objects.htm">SD-WAN Template Objects Reference</a></dt><dd><a href="wanprof74-2779-objects.htm#wanprof-obj">SD-WAN Template Object (table)</a></dd><br/><dd><a href="wanprof74-2779-objects.htm#system_sdwan">system/sdwan (object)</a></dd><dd><a href="wanprof74-2779-objects.htm#system_sdwan_duplication">system/sdwan/duplication (table)</a></dd><dd><a href="wanprof74-2779-objects.htm#system_sdwan_health-check">system/sdwan/health-check (table)</a></dd><dd><a href="wanprof74-2779-objects.htm#system_sdwan_health-check_sla">system/sdwan/health-check/sla (table)</a></dd><dd><a href="wanprof74-2779-objects.htm#system_sdwan_members">system/sdwan/members (table)</a></dd><dd><a href="wanprof74-2779-objects.htm#system_sdwan_neighbor">system/sdwan/neighbor (table)</a></dd><dd><a href="wanprof74-2779-objects.htm#system_sdwan_service">system/sdwan/service (table)</a></dd><dd><a href="wanprof74-2779-objects.htm#system_sdwan_service_sla">system/sdwan/service/sla (table)</a></dd><dd><a href="wanprof74-2779-objects.htm#system_sdwan_zone">system/sdwan/zone (table)</a></dd><dd><a href="wanprof74-2779-objects.htm#system_virtual-wan-link">system/virtual-wan-link (object)</a></dd><dd><a href="wanprof74-2779-objects.htm#system_virtual-wan-link_health-check">system/virtual-wan-link/health-check (table)</a></dd><dd><a href="wanprof74-2779-objects.htm#system_virtual-wan-link_health-check_sla">system/virtual-wan-link/health-check/sla (table)</a></dd><dd><a href="wanprof74-2779-objects.htm#system_virtual-wan-link_members">system/virtual-wan-link/members (table)</a></dd><dd><a href="wanprof74-2779-objects.htm#system_virtual-wan-link_neighbor">system/virtual-wan-link/neighbor (table)</a></dd><dd><a href="wanprof74-2779-objects.htm#system_virtual-wan-link_service">system/virtual-wan-link/service (table)</a></dd><dd><a href="wanprof74-2779-objects.htm#system_virtual-wan-link_service_sla">system/virtual-wan-link/service/sla (table)</a></dd><dd><a href="wanprof74-2779-objects.htm#wanprof_settings">wanprof/settings (object)</a></dd><p>&nbsp;</p><dt><a href="wanprof-errors.htm">SD-WAN Template Error Code List</a></dt><p>&nbsp;</p></dl>
+</div></body></html>

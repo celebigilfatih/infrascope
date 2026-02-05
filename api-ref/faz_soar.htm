@@ -1,0 +1,1867 @@
+<!doctype html><html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>FortiAnalyzer 7.4.7 (2685) JSON API Reference-SOAR Commands</title>
+<style>body {
+	font-family: Verdana;
+	color: black;
+	background: #D9D9D9;
+	font-size: 13px;
+}
+h1 {
+	font-size: 20px;
+}
+h2 {
+	font-size: 15px;
+	position: sticky;
+	position: -webkit-sticky;
+	top: 0px;
+	background: #D9D9D9;
+}
+h6 {
+	font-size: 13px;
+	margin-bottom: 8px;
+	margin-left: 12px;
+	font-weight: normal;
+}
+table {
+	width: 95%;
+	font-size: 13px;
+	margin-left: 15px;
+	margin-right: 5px;
+	border-collapse: collapse;
+	margin-bottom: 16px;
+}
+td {
+	vertical-align: top;
+	padding: 5px;
+}
+pre {
+	border: 1px solid black;
+	padding: 10px;
+	font-size: 12px;
+	margin-left: 15px;
+	width: 650px;
+}
+th {
+	text-align: left;
+}
+a {
+}
+a:link {
+	text-decoration: none;
+}
+a:visited {
+}
+a:hover {
+	text-decoration: underline;
+}
+.menu {
+	background: #C0C0C0;
+	border-right: 1px solid;
+	position: fixed;
+	padding: 6px;
+	padding-top: 20px;
+	top: 0px;
+	left: 0px;
+	bottom: 0px;
+	width: 200px;
+	overflow-x: hidden;
+	overflow-y: auto;
+	white-space: nowrap;
+}
+.content {
+	position: absolute;
+	padding: 6px;
+	top: 0px;
+	left: 240px;
+	right: 0px;
+}
+.menu_header {
+	font-weight: bold;
+}
+.param_table {
+	border: 1px solid #A0A0A0;
+}
+.table_hdr_name {
+	width: 160px;
+}
+.table_col_name {
+	font-weight: bold;
+	width: 160px;
+}
+.table_col_desc {
+}
+.param_table > thead > tr > th {
+	background-color: #C0C0C0;
+	border-bottom: 1px solid #A0A0A0;
+	padding: 6px;
+}
+.param_table > tbody > tr:nth-child(even) > td {
+	background-color: #D0D0D0;
+}
+.macro_num {
+	font-weight: bold;
+	width: 50px;
+}
+.macro_val {
+}
+</style>
+</head>
+<body>
+<div class="menu"><span class="menu_header"><a href="index.htm">API Reference Home</a></span><br/><span class="menu_item"><a href="objects.htm">Common Objects</a></span><br/><br/><span class="menu_header">Database Modules</span><br/><span class="menu_item"><a href="dvmdb-main.htm">Device Manager Database</a></span><br/><span class="menu_item"><a href="task-main.htm">Task Database</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof74-2779-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof74-2779-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg74-2779-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof72-1732-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof72-1732-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg72-1732-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof70-662-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof70-662-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg70-662-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof64-2087-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof64-2087-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg64-2087-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof62-1263-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof62-1263-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg62-1263-main.htm">Policy Package</a></span><br/><br/><span class="menu_header">Daemon Modules</span><br/><span class="menu_item"><a href="cmdb-main.htm">CLI Configuration</a></span><br/><span class="menu_item"><a href="dvmcmd-main.htm">Device Manager Command</a></span><br/><span class="menu_item"><a href="um-main.htm">Update Manager</a></span><br/><span class="menu_item"><a href="sys-main.htm">System Commands</a></span><br/><br/><span class="menu_header"><a href="faz-cmd-index.htm">FortiAnalyzer Modules</a></span><br/><span class="menu_item"><a href="faz_eventmgmt.htm">Event Mgmt Commands</a></span><br/><span class="menu_item"><a href="faz_eventmgmtconfig.htm">Event Mgmt Config Commands</a></span><br/><span class="menu_item"><a href="faz_fazsys.htm">FAZ System Commands</a></span><br/><span class="menu_item"><a href="faz_fortiview.htm">FortiView Commands</a></span><br/><span class="menu_item"><a href="faz_incidentmgmt.htm">Incident Mgmt Commands</a></span><br/><span class="menu_item"><a href="faz_logview.htm">LogView Commands</a></span><br/><span class="menu_item"><a href="faz_report.htm">Report Commands</a></span><br/><span class="menu_item"><a href="faz_reportconfig.htm">Report Config Commands</a></span><br/><span class="menu_item"><a href="faz_ioc.htm">IOC Commands</a></span><br/><span class="menu_item"><a href="faz_ueba.htm">UEBA Commands</a></span><br/><span class="menu_item"><a href="faz_soar.htm">SOAR Commands</a></span><br/><br/><span class="menu_header"><a href="obj-index.htm">Index of All Objects</a></span><br/><br/></div>
+<div class="content">
+<h1>SOAR Commands</h1><br/>
+
+<div>
+<h1 id=add_soar_adom__adom-name__config_connectors>Add Connectors Configuration</h1><h2>add /soar/adom/&lt;adom-name&gt;/config/connectors</h2><p>Add connectors configuration.<h6 id=${soar.add.config.connectors.req}.request>Request:</h6><pre>
+{
+    "id": "...", 
+    "jsonrpc": "2.0", 
+    "method": "add", 
+    "params": [
+        {
+        "apiver": 3, 
+        "data": [
+            {
+                "action": [
+                    {
+                        "description": "string", 
+                        "name": "string", 
+                        "parameters": "string", 
+                        "status": "string"
+                    }, 
+                    ...
+                ], 
+                "description": "string", 
+                "name": "string", 
+                "parameters": "string", 
+                "type": "string", 
+                "uuid": "string"
+            }
+        ],
+        "url": "soar/adom/&lt;adom-name&gt;/config/connectors/"
+        }
+    ], 
+    "session": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${soar.add.config.connectors.req}">Show example...</a></p></div><div id="${soar.add.config.connectors.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Add connectors configuration.</i><a class="close" href="#${soar.add.config.connectors.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "1", 
+    "jsonrpc": "2.0", 
+    "method": "add", 
+    "params": [
+        {
+        "apiver": 3, 
+        "data": [
+            {
+                "action": [
+                    {
+                        "description": "Retrieve list of endpoints and all of the related information to enrich FortiAnalyzer Asset and Identity views", 
+                        "name": "GET_ENDPOINTS", 
+                        "parameters": "{'url':'/endpoints/get','method':'get','params':{'filter':{'group':null,'ip':null}}}", 
+                        "status": "enable"
+                    }, 
+                    {
+                        "description": "Quarantines endpoints", 
+                        "name": "QUARANTINE", 
+                        "parameters": "{'url':'/clients/quarantine','method':'post','params':{'ids':[]}}", 
+                        "status": "enable"
+                    }, 
+                    {
+                        "description": "Unquarantines endpoints", 
+                        "name": "UNQUARANTINE", 
+                        "parameters": "{'url':'/clients/unquarantine','method':'post','params':{'ids':[]}}", 
+                        "status": "enable"
+                    }, 
+                    {
+                        "description": "Retrieve list of software and Apps installed on endpoint to enrich FortiAnalyzer Asset view", 
+                        "name": "GET_SOFTWARE_INVENTORY", 
+                        "parameters": "{'url':'/clients/software','method':'post','params':{'id': null}}", 
+                        "status": "enable"
+                    }, 
+                    {
+                        "description": "Run vulnerability scan on endpoints", 
+                        "name": "VULN_SCAN", 
+                        "parameters": "{'url':'/clients/cmd','method':'post','params':{'ids':[],'cmd':'vuln_scan'}}", 
+                        "status": "enable"
+                    }, 
+                    {
+                        "description": "Run quick AV scan on endpoints", 
+                        "name": "AV_QUICK_SCAN", 
+                        "parameters": "{'url':'/clients/cmd','method':'post','params':{'ids':[],'cmd':'av_quick_scan'}}", 
+                        "status": "enable"
+                    }, 
+                    {
+                        "description": "Run full AV scan on endpoints", 
+                        "name": "AV_FULL_SCAN", 
+                        "parameters": "{'url':'/clients/cmd','method':'post','params':{'ids':[],'cmd':'av_full_scan'}}", 
+                        "status": "enable"
+                    }, 
+                    {
+                        "description": "Retrieve list of running process on endpoints OS", 
+                        "name": "GET_PROCESSES", 
+                        "parameters": "{'url':'','method':'','params':{}}", 
+                        "status": "enable"
+                    }
+                ], 
+                "description": "EMS Connector ec527124-dc63-495c-9386-f531700fdc66", 
+                "name": "EMS Connector ec527124-dc63-495c-9386-f531700fdc66", 
+                "parameters": "{'ip':'xxx.xxx.xxx.xxx','hostname':null,'protocol':'https','name':'...','password':'...','base_url':'/api/v1'}", 
+                "type": "EMS", 
+                "uuid": "ec527124-dc63-495c-9386-f531700fdc66"
+            }
+        ],
+        "url": "soar/adom/root/config/connectors/"
+        }
+    ], 
+    "session": "..."
+}
+</pre></div></div></div><h6 id=${soar.add.config.connectors.resp}.response>Response:</h6><pre>
+{
+    "id": "...", 
+    "jsonrpc": "2.0", 
+    "result": {
+        "data": {
+            "uuid": "string"
+        }, 
+        "status": {
+            "code": number, 
+            "message": "string"
+        }
+    }
+}
+</pre><div id="wrapper"> <p><a href="#${soar.add.config.connectors.resp}">Show example...</a></p></div><div id="${soar.add.config.connectors.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Add connectors configuration.</i><a class="close" href="#${soar.add.config.connectors.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "1", 
+    "jsonrpc": "2.0", 
+    "result": {
+        "data": {
+            "uuid": "ec527124-dc63-495c-9386-f531700fdc66"
+        }, 
+        "status": {
+            "code": 0, 
+            "message": "OK"
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/soar/adom/&lt;adom-name&gt;/config/connectors</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>array </i> <br/><br/>endusers' data.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/><br/><br/><table><tr class='odd_row'><td class="table_col_name">uuid</td><td class="table_col_desc"><i>string </i> <br/><br/>an unique identifier of a connector. 32 hexadecimal digits is displayed in five groups separated by hyphens, in the form 8-4-4-4-12 for a total of 36 characters<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">name</td><td class="table_col_desc"><i>string </i> <br/><br/>name of a connector.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">description</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>description of a connector.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">type</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/><br/>type of a connector.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;EMS<br/>&nbsp;&nbsp;&nbsp;&nbsp;FGD<br/>&nbsp;&nbsp;&nbsp;&nbsp;FML<br/>&nbsp;&nbsp;&nbsp;&nbsp;FCASB</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/><br/>status of a connector.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;enable<br/>&nbsp;&nbsp;&nbsp;&nbsp;disable</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">auth-type</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/><br/>authorization type of a connector.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;none<br/>&nbsp;&nbsp;&nbsp;&nbsp;password<br/>&nbsp;&nbsp;&nbsp;&nbsp;token<br/>&nbsp;&nbsp;&nbsp;&nbsp;certificate<br/>&nbsp;&nbsp;&nbsp;&nbsp;saml</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">auth-user</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>authorization user.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">auth-password</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>authorization password<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">auth-token</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>authorization token<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">server-addr</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>server address<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">server-port</td><td class="table_col_desc"><i>integer </i> (optional) <br/><br/>server port<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">server-name</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>server name<br/><br/></td></tr></table></td></tr></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return The Required Connector Configuration</h2><p>The required the connector configuration will be returned.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>object </i> <br/><br/>A structured value containing uuid.<br/><br/><table><tr class='odd_row'><td class="table_col_name">uuid</td><td class="table_col_desc"><i>string </i> <br/><br/>An unique identifier of a connector. 32 hexadecimal digits is displayed in five groups separated by hyphens, in the form 8-4-4-4-12 for a total of 36 characters<br/><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>Status of the current task.<br/><br/><table><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> <br/><br/>Status code<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> <br/><br/>Status description<br/><br/></td></tr></table></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=update_soar_adom__adom-name__config_connectors>Update Connectors Configuration</h1><h2>update /soar/adom/&lt;adom-name&gt;/config/connectors</h2><p>Update connectors configuration.<h6 id=${soar.update.config.connectors.req}.request>Request:</h6><pre>
+{
+    "id": "...", 
+    "jsonrpc": "2.0", 
+    "method": "update", 
+    "params": [
+        {
+        "apiver": 3, 
+        "data": [
+            {
+                "action": [
+                    {
+                        "description": "string", 
+                        "name": "string", 
+                        "parameters": "string", 
+                        "status": "string"
+                    }, 
+                    ...
+                ], 
+                "description": "string", 
+                "name": "string", 
+                "parameters": "string", 
+                "type": "string", 
+                "uuid": "string"
+            }
+        ],
+        "url": "soar/adom/&lt;adom-name&gt;/config/connectors/"
+        }
+    ], 
+    "session": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${soar.update.config.connectors.req}">Show example...</a></p></div><div id="${soar.update.config.connectors.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Update connectors configuration.</i><a class="close" href="#${soar.update.config.connectors.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+  "id": "1", 
+  "jsonrpc": "2.0", 
+  "method": "update", 
+  "params": [
+      {
+      "apiver": 3, 
+      "data": [
+          {
+
+              "description": "something new", 
+              "uuid": "ec527124-dc63-495c-9386-f531700fdc67"
+          }
+      ],
+      "url": "soar\/adom\/root\/config\/connectors\/"
+      }
+  ]
+}
+</pre></div></div></div><h6 id=${soar.update.config.connectors.resp}.response>Response:</h6><pre>
+{
+    "id": "...", 
+    "jsonrpc": "2.0", 
+    "result": {
+        "data": {
+            "uuid": "string"
+        }, 
+        "status": {
+            "code": number, 
+            "message": "string"
+        }
+    }
+}
+</pre><div id="wrapper"> <p><a href="#${soar.update.config.connectors.resp}">Show example...</a></p></div><div id="${soar.update.config.connectors.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Update connectors configuration.</i><a class="close" href="#${soar.update.config.connectors.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+  "id": "1", 
+  "jsonrpc": "2.0", 
+  "result": {
+    "data": {
+      "uuid": "ec527124-dc63-495c-9386-f531700fdc67"
+    }, 
+    "status": {
+      "code": 0, 
+      "message": "OK"
+    }
+  }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/soar/adom/&lt;adom-name&gt;/config/connectors</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>array </i> <br/><br/>endusers' data.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/><br/><br/><table><tr class='odd_row'><td class="table_col_name">uuid</td><td class="table_col_desc"><i>string </i> <br/><br/>unique identifier of a connector. 32 hexadecimal digits is displayed in five groups separated by hyphens, in the form 8-4-4-4-12 for a total of 36 characters<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">name</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>name of a connector.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">description</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>description of a connector.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">type</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/><br/>type of a connector.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;EMS<br/>&nbsp;&nbsp;&nbsp;&nbsp;FGD<br/>&nbsp;&nbsp;&nbsp;&nbsp;FML<br/>&nbsp;&nbsp;&nbsp;&nbsp;FCASB</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/><br/>status of a connector.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;enable<br/>&nbsp;&nbsp;&nbsp;&nbsp;disable</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">auth-type</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/><br/>authorization type of a connector.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;none<br/>&nbsp;&nbsp;&nbsp;&nbsp;password<br/>&nbsp;&nbsp;&nbsp;&nbsp;token<br/>&nbsp;&nbsp;&nbsp;&nbsp;certificate<br/>&nbsp;&nbsp;&nbsp;&nbsp;saml</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">auth-user</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>authorization user.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">auth-password</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>authorization password<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">auth-token</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>authorization token<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">server-addr</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>server address<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">server-port</td><td class="table_col_desc"><i>integer </i> (optional) <br/><br/>server port<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">server-name</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>server name<br/><br/></td></tr></table></td></tr></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return The Required Connector Configuration</h2><p>The required the connector configuration will be returned.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>object </i> <br/><br/>A structured value containing uuid.<br/><br/><table><tr class='odd_row'><td class="table_col_name">uuid</td><td class="table_col_desc"><i>string </i> <br/><br/>An unique identifier of a connector. 32 hexadecimal digits is displayed in five groups separated by hyphens, in the form 8-4-4-4-12 for a total of 36 characters<br/><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>Status of the current task.<br/><br/><table><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> <br/><br/>Status code<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> <br/><br/>Status description<br/><br/></td></tr></table></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=delete_soar_adom__adom-name__config_connectors__connector-uuid_>Delete Connectors Configuration</h1><h2>delete /soar/adom/&lt;adom-name&gt;/config/connectors/&lt;connector-uuid&gt;</h2><p>Delete connectors configuration.<h6 id=${soar.delete.config.connectors.req}.request>Request:</h6><pre>
+{
+    "id": "...", 
+    "jsonrpc": "2.0", 
+    "method": "delete", 
+    "params": [
+        {
+            "apiver": 3, 
+            "url": "soar/adom/&lt;adom-name&gt;/config/connectors/&lt;connector-uuid&gt;"
+        }
+    ], 
+    "session": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${soar.delete.config.connectors.req}">Show example...</a></p></div><div id="${soar.delete.config.connectors.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Delete connectors configuration.</i><a class="close" href="#${soar.delete.config.connectors.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "1", 
+    "jsonrpc": "2.0", 
+    "method": "delete", 
+    "params": [
+        {
+            "apiver": 3, 
+            "url": "soar/adom/root/config/connectors/ec527124-dc63-495c-9386-f531700fdc66"
+        }
+    ], 
+    "session": "..."
+}
+</pre></div></div></div><h6 id=${soar.delete.config.connectors.resp}.response>Response:</h6><pre>
+{
+    "id": "...", 
+    "jsonrpc": "2.0", 
+    "result": {
+        "status": {
+            "code": number, 
+            "message": "string"
+        }
+    }
+}
+</pre><div id="wrapper"> <p><a href="#${soar.delete.config.connectors.resp}">Show example...</a></p></div><div id="${soar.delete.config.connectors.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Delete connectors configuration.</i><a class="close" href="#${soar.delete.config.connectors.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "1", 
+    "jsonrpc": "2.0", 
+    "result": {
+        "status": {
+            "code": 0, 
+            "message": "OK"
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/soar/adom/&lt;adom-name&gt;/config/connectors/&lt;connector-uuid&gt;</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return Status of Deleting Connector Configuration</h2><p>Return status of deleting connector configuration.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>Status of the current task.<br/><br/><table><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> <br/><br/>Status code<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> <br/><br/>Status description<br/><br/></td></tr></table></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_soar_adom__adom-name__config_connectors__connector-uuid_>Get Connectors Configuration</h1><h2>get /soar/adom/&lt;adom-name&gt;/config/connectors/&lt;connector-uuid&gt;</h2><p>Request to get connectors configuration.<h6 id=${soar.get.config.connectors.req}.request>Request:</h6><pre>
+{
+  "id": "...", 
+  "jsonrpc": "2.0", 
+  "method": "get", 
+  "params": [
+    {
+      "apiver": 3, 
+      "url": "soar/adom/&lt;adom-name&gt;/config/connectors/&lt;connector-uuid&gt;"
+    }
+  ], 
+  "session": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${soar.get.config.connectors.req}">Show example...</a></p></div><div id="${soar.get.config.connectors.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Request to get connectors configuration.</i><a class="close" href="#${soar.get.config.connectors.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+  "id": "1", 
+  "jsonrpc": "2.0", 
+  "method": "get", 
+  "params": [
+    {
+      "apiver": 3, 
+      "url": "soar/adom/root/config/connectors/ec527124-dc63-495c-9386-f531700fdc66"
+    }
+  ], 
+  "session": "..."
+}
+</pre></div></div></div><h6 id=${soar.get.config.connectors.resp}.response>Response:</h6><pre>
+{
+    "id": "...", 
+    "jsonrpc": "2.0", 
+    "result": {
+        "data": {
+            "action": [
+                {
+                    "description": "string", 
+                    "name": "string", 
+                    "parameters": "string", 
+                    "status": number
+                }, 
+                ...
+            ], 
+            "description": "string", 
+            "name": "string", 
+            "parameters": "string", 
+            "status": number, 
+            "type": number, 
+            "uuid": "string"
+        }, 
+        "status": {
+            "code": number, 
+            "message": "string"
+        }
+    }
+}
+</pre><div id="wrapper"> <p><a href="#${soar.get.config.connectors.resp}">Show example...</a></p></div><div id="${soar.get.config.connectors.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Request to get connectors configuration.</i><a class="close" href="#${soar.get.config.connectors.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "1", 
+    "jsonrpc": "2.0", 
+    "result": {
+        "data": {
+            "action": [
+                {
+                    "description": "Run full AV scan on endpoints", 
+                    "name": "AV_FULL_SCAN", 
+                    "parameters": "{'url':'/clients/cmd','method':'post','params':{'ids':[],'cmd':'av_full_scan'}}", 
+                    "status": 1
+                }, 
+                {
+                    "description": "Run quick AV scan on endpoints", 
+                    "name": "AV_QUICK_SCAN", 
+                    "parameters": "{'url':'/clients/cmd','method':'post','params':{'ids':[],'cmd':'av_quick_scan'}}", 
+                    "status": 1
+                }, 
+                {
+                    "description": "Retrieve list of endpoints and all of the related information to enrich FortiAnalyzer Asset and Identity views", 
+                    "name": "GET_ENDPOINTS", 
+                    "parameters": "{'url':'/endpoints/get','method':'get','params':{'filter':{'group':null,'ip':null}}}", 
+                    "status": 1
+                }, 
+                {
+                    "description": "Retrieve list of running process on endpoints OS", 
+                    "name": "GET_PROCESSES", 
+                    "parameters": "{'url':'','method':'','params':{}}", 
+                    "status": 1
+                }, 
+                {
+                    "description": "Retrieve list of software and Apps installed on endpoint to enrich FortiAnalyzer Asset view", 
+                    "name": "GET_SOFTWARE_INVENTORY", 
+                    "parameters": "{'url':'/clients/software','method':'post','params':{'id': null}}", 
+                    "status": 1
+                }, 
+                {
+                    "description": "Quarantines endpoints", 
+                    "name": "QUARANTINE", 
+                    "parameters": "{'url':'/clients/quarantine','method':'post','params':{'ids':[]}}", 
+                    "status": 1
+                }, 
+                {
+                    "description": "Unquarantines endpoints", 
+                    "name": "UNQUARANTINE", 
+                    "parameters": "{'url':'/clients/unquarantine','method':'post','params':{'ids':[]}}", 
+                    "status": 1
+                }, 
+                {
+                    "description": "Run vulnerability scan on endpoints", 
+                    "name": "VULN_SCAN", 
+                    "parameters": "{'url':'/clients/cmd','method':'post','params':{'ids':[],'cmd':'vuln_scan'}}", 
+                    "status": 1
+                }
+            ], 
+            "description": "EMS Connector ec527124-dc63-495c-9386-f531700fdc66", 
+            "name": "EMS Connector ec527124-dc63-495c-9386-f531700fdc66", 
+            "parameters": "{'ip':'xxx.xxx.xxx.xxx','hostname':null,'protocol':'https','name':'...','password':'...','base_url':'/api/v1'}", 
+            "status": 1, 
+            "type": 2, 
+            "uuid": "ec527124-dc63-495c-9386-f531700fdc66"
+        }, 
+        "status": {
+            "code": 0, 
+            "message": "OK"
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/soar/adom/&lt;adom-name&gt;/config/connectors/&lt;connector-uuid&gt;</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return Connector Configuration</h2><p>Return connector configuration.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>endusers' data.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/><br/><br/><table><tr class='odd_row'><td class="table_col_name">uuid</td><td class="table_col_desc"><i>string </i> <br/><br/>unique identifier of a connector, 32 hexadecimal digits is displayed in five groups separated by hyphens, in the form 8-4-4-4-12 for a total of 36 characters.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">name</td><td class="table_col_desc"><i>string </i> <br/><br/>name of a connector.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">description</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>description of a connector.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">type</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>type of a connector.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;EMS<br/>&nbsp;&nbsp;&nbsp;&nbsp;FGD<br/>&nbsp;&nbsp;&nbsp;&nbsp;FML<br/>&nbsp;&nbsp;&nbsp;&nbsp;FCASB</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>status of a connector.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;enable<br/>&nbsp;&nbsp;&nbsp;&nbsp;disable</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">auth-type</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/><br/>authorization type of a connector.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;none<br/>&nbsp;&nbsp;&nbsp;&nbsp;password<br/>&nbsp;&nbsp;&nbsp;&nbsp;token<br/>&nbsp;&nbsp;&nbsp;&nbsp;certificate<br/>&nbsp;&nbsp;&nbsp;&nbsp;saml</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">auth-user</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>authorization user.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">auth-password</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>authorization password<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">auth-token</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>authorization token<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">server-addr</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>server address<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">server-port</td><td class="table_col_desc"><i>integer </i> (optional) <br/><br/>server port<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">server-name</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>server name<br/><br/></td></tr></table></td></tr></td></tr><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>Status of the current task.<br/><br/><table><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> <br/><br/>Status code<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> <br/><br/>Status description<br/><br/></td></tr></table></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=add_soar_adom__adom-name__config_playbooks>Add Playbooks Configuration</h1><h2>add /soar/adom/&lt;adom-name&gt;/config/playbooks</h2><p>Add playbooks configuration.<h6 id=${soar.add.config.playbooks.req}.request>Request:</h6><pre>
+{
+    "id": "...", 
+    "jsonrpc": "2.0", 
+    "method": "add", 
+    "params": [
+        {
+            "apiver": 3, 
+            "data": [
+                {
+                    "book": "string", 
+                    "created_by": "string", 
+                    "created_on": "string", 
+                    "description": "string", 
+                    "modified_by": "string", 
+                    "modified_on": "string", 
+                    "name": "string", 
+                    "status": "string", 
+                    "tags": "string", 
+                    "uuid": "string", 
+                    "version": "string"
+                }
+            ], 
+            "url": "soar/adom/&lt;adom-name&gt;/config/playbooks/"
+        }
+    ]
+    "session": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${soar.add.config.playbooks.req}">Show example...</a></p></div><div id="${soar.add.config.playbooks.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Add playbooks configuration.</i><a class="close" href="#${soar.add.config.playbooks.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "1", 
+    "jsonrpc": "2.0", 
+    "method": "add", 
+    "params": [
+        {
+            "apiver": 3, 
+            "data": [
+                {
+                    "book": "{"play_settings":{"play_type":"ON_SCHEDULE","schedule":{"start_time":"2019-11-28T13:00:00+00:00","end_time":"2020-11-28T13:00:00+00:00","interval":{"type":"N-MINUTES","frequency":10},"render":{"left":100,"top":100}}},"tasks":[{"name":"Get Endpoints","id":"get_endpoints","type":"EMS_GET_ENDPOINTS","description":"get endpoints through EMS Connector","retry":{"count":0,"delay":{"type":"N-SECONDS","duration":10}},"run_condition":"ALL_SUCCESS","input":{"connector_uuid":{"value":""}},"output":{"ems_endpoints":{}},"render":{"top":150,"left":250}},{"name":"Update Asset and Identity","id":"update_asset_and_identity","type":"LOCALHOST_UPDATE_ASSET_AND_IDENTITY","description":"update asset and identity with given source endpoints","input":{"connector_uuid":{"value":""},"ems_endpoints":{"value":"${get_endpoints.ems_endpoints}"}},"render":{"top":200,"left":400}}],"workflow":[{"source_task":"STARTER","target_task":"get_endpoints","label":""},{"source_task":"get_endpoints","target_task":"update_asset_and_identity","label":""}]}", 
+                    "created_by": "admin", 
+                    "created_on": "2020-01-30T15:21:00", 
+                    "description": "Playbook to Update Asset and Identity through EMS Connector", 
+                    "modified_by": "admin", 
+                    "modified_on": "2020-01-30T15:21:00", 
+                    "name": "Playbook: Update Asset and Identity", 
+                    "status": "enable", 
+                    "tags": "ueba", 
+                    "uuid": "3af70b37-169d-4251-9598-dace0564ca59", 
+                    "version": "1.0"
+                }
+            ], 
+            "url": "soar/adom/root/config/playbooks/"
+        }
+    ]
+    "session": "..."
+}
+</pre></div></div></div><h6 id=${soar.add.config.playbooks.resp}.response>Response:</h6><pre>
+{
+    "id": "...", 
+    "jsonrpc": "2.0", 
+    "result": {
+        "data": {
+            "uuid": "string"
+        }, 
+        "status": {
+            "code": number, 
+            "message": "string"
+        }
+    }
+}
+</pre><div id="wrapper"> <p><a href="#${soar.add.config.playbooks.resp}">Show example...</a></p></div><div id="${soar.add.config.playbooks.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Add playbooks configuration.</i><a class="close" href="#${soar.add.config.playbooks.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "1", 
+    "jsonrpc": "2.0", 
+    "result": {
+        "data": {
+            "uuid": "3af70b37-169d-4251-9598-dace0564ca59"
+        }, 
+        "status": {
+            "code": 0, 
+            "message": "OK"
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/soar/adom/&lt;adom-name&gt;/config/playbooks</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>array </i> <br/><br/>endusers' data.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/><br/><br/><table><tr class='odd_row'><td class="table_col_name">uuid</td><td class="table_col_desc"><i>string </i> <br/><br/>unique identifier of a playbook. 32 hexadecimal digits is displayed in five groups separated by hyphens, in the form 8-4-4-4-12 for a total of 36 characters<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">name</td><td class="table_col_desc"><i>string </i> <br/><br/>name of a playbook.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">description</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>description of a playbook.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">created_by</td><td class="table_col_desc"><i>string </i> <br/><br/>the user who creates the playbook.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">created_on</td><td class="table_col_desc"><i>string </i> <br/><br/>the time when the playbook was created.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">modified_by</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>the user who modified the playbook.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">modified_on</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>the time when the playbook was modified.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>status of a playbook.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">version</td><td class="table_col_desc"><i>string </i> <br/><br/>version of a playbook.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">tags</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>tags of a playbook.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">book</td><td class="table_col_desc"><i>string </i> <br/><br/>playbook's content.<br/><br/></td></tr></table></td></tr></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return The Required Playbook Configuration</h2><p>The required the playbook configuration will be returned.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>object </i> <br/><br/>A structured value containing uuid.<br/><br/><table><tr class='odd_row'><td class="table_col_name">uuid</td><td class="table_col_desc"><i>string </i> <br/><br/>An unique identifier of a playbook. 32 hexadecimal digits is displayed in five groups separated by hyphens, in the form 8-4-4-4-12 for a total of 36 characters<br/><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>Status of the current task.<br/><br/><table><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> <br/><br/>Status code<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> <br/><br/>Status description<br/><br/></td></tr></table></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=update_soar_adom__adom-name__config_playbooks>Update Playbooks Configuration</h1><h2>update /soar/adom/&lt;adom-name&gt;/config/playbooks</h2><p>Update playbooks configuration.<h6 id=${soar.update.config.playbooks.req}.request>Request:</h6><pre>
+{
+    "id": "...", 
+    "jsonrpc": "2.0", 
+    "method": "update", 
+    "params": [
+        {
+            "apiver": 3, 
+            "data": [
+                {
+                    "book": "string", 
+                    "created_by": "string", 
+                    "created_on": "string", 
+                    "description": "string", 
+                    "modified_by": "string", 
+                    "modified_on": "string", 
+                    "name": "string", 
+                    "status": "string", 
+                    "tags": "string", 
+                    "uuid": "string", 
+                    "version": "string"
+                }
+            ], 
+            "url": "soar/adom/&lt;adom-name&gt;/config/playbooks/"
+        }
+    ]
+    "session": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${soar.update.config.playbooks.req}">Show example...</a></p></div><div id="${soar.update.config.playbooks.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Update playbooks configuration.</i><a class="close" href="#${soar.update.config.playbooks.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+  "id": "1", 
+  "jsonrpc": "2.0", 
+  "method": "update", 
+  "params": [
+      {
+          "apiver": 3, 
+          "data": [
+              {
+                  "description": "something new", 
+                  "uuid": "3af70b37-169d-4251-9598-dace0564ca56"
+              }
+          ], 
+          "url": "soar/adom/root/config/playbooks/"
+      }
+  ],
+  "session": "..."
+}
+</pre></div></div></div><h6 id=${soar.update.config.playbooks.resp}.response>Response:</h6><pre>
+{
+    "id": "...", 
+    "jsonrpc": "2.0", 
+    "result": {
+        "data": {
+            "uuid": "string"
+        }, 
+        "status": {
+            "code": number, 
+            "message": "string"
+        }
+    }
+}
+</pre><div id="wrapper"> <p><a href="#${soar.update.config.playbooks.resp}">Show example...</a></p></div><div id="${soar.update.config.playbooks.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Update playbooks configuration.</i><a class="close" href="#${soar.update.config.playbooks.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+  "id": "1", 
+  "jsonrpc": "2.0", 
+  "result": {
+    "data": {
+      "uuid": "3af70b37-169d-4251-9598-dace0564ca56"
+    }, 
+    "status": {
+      "code": 0, 
+      "message": "OK"
+    }
+  }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/soar/adom/&lt;adom-name&gt;/config/playbooks</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>array </i> <br/><br/>endusers' data.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/><br/><br/><table><tr class='odd_row'><td class="table_col_name">uuid</td><td class="table_col_desc"><i>string </i> <br/><br/>unique identifier of a playbook. 32 hexadecimal digits is displayed in five groups separated by hyphens, in the form 8-4-4-4-12 for a total of 36 characters<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">name</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>name of a playbook.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">description</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>description of a playbook.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">created_by</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>the user who creates the playbook.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">created_on</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>the time when the playbook was created.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">modified_by</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>the user who modified the playbook.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">modified_on</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>the time when the playbook was modified.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>status of a playbook.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">version</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>version of a playbook.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">tags</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>tags of a playbook.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">book</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>playbook's content.<br/><br/></td></tr></table></td></tr></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return The Required Playbook Configuration</h2><p>The required the playbook configuration will be returned.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>object </i> <br/><br/>A structured value containing uuid.<br/><br/><table><tr class='odd_row'><td class="table_col_name">uuid</td><td class="table_col_desc"><i>string </i> <br/><br/>An unique identifier of a playbook. 32 hexadecimal digits is displayed in five groups separated by hyphens, in the form 8-4-4-4-12 for a total of 36 characters<br/><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>Status of the current task.<br/><br/><table><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> <br/><br/>Status code<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> <br/><br/>Status description<br/><br/></td></tr></table></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=delete_soar_adom__adom-name__config_playbooks__playbook-uuid_>Delete Playbooks Configuration</h1><h2>delete /soar/adom/&lt;adom-name&gt;/config/playbooks/&lt;playbook-uuid&gt;</h2><p>Delete playbooks configuration.<h6 id=${soar.delete.config.playbooks.req}.request>Request:</h6><pre>
+{
+    "id": "...", 
+    "jsonrpc": "2.0", 
+    "method": "delete", 
+    "params": [
+        {
+            "apiver": 3, 
+            "url": "soar/adom/&lt;adom-name&gt;/config/playbooks/&lt;playbook-uuid&gt;"
+        }
+    ], 
+    "session": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${soar.delete.config.playbooks.req}">Show example...</a></p></div><div id="${soar.delete.config.playbooks.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Delete playbooks configuration.</i><a class="close" href="#${soar.delete.config.playbooks.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "1", 
+    "jsonrpc": "2.0", 
+    "method": "delete", 
+    "params": [
+        {
+            "apiver": 3, 
+            "url": "soar/adom/root/config/playbooks/3af70b37-169d-4251-9598-dace0564ca59"
+        }
+    ], 
+    "session": "..."
+}
+</pre></div></div></div><h6 id=${soar.delete.config.playbooks.resp}.response>Response:</h6><pre>
+{
+    "id": "...", 
+    "jsonrpc": "2.0", 
+    "result": {
+        "status": {
+            "code": number, 
+            "message": "string"
+        }
+    }
+}
+</pre><div id="wrapper"> <p><a href="#${soar.delete.config.playbooks.resp}">Show example...</a></p></div><div id="${soar.delete.config.playbooks.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Delete playbooks configuration.</i><a class="close" href="#${soar.delete.config.playbooks.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "1", 
+    "jsonrpc": "2.0", 
+    "result": {
+            "status": {
+            "code": 0, 
+            "message": "OK"
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/soar/adom/&lt;adom-name&gt;/config/playbooks/&lt;playbook-uuid&gt;</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return Status of Deleting Playbook Configuration</h2><p>Return status of deleting playbook configuration.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>Status of the current task.<br/><br/><table><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> <br/><br/>Status code<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> <br/><br/>Status description<br/><br/></td></tr></table></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_soar_adom__adom-name__config_playbooks__playbook-uuid_>Get Playbooks Configuration</h1><h2>get /soar/adom/&lt;adom-name&gt;/config/playbooks/&lt;playbook-uuid&gt;</h2><p>Request to get playbooks configuration.<h6 id=${soar.get.config.playbooks.req}.request>Request:</h6><pre>
+{
+    "id": "...", 
+    "jsonrpc": "2.0", 
+    "method": "get", 
+    "params": [
+        {
+            "apiver": 3, 
+            "url": "soar/adom/&lt;adom-name&gt;/config/playbooks/&lt;playbook-uuid&gt"
+        }
+    ], 
+    "session": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${soar.get.config.playbooks.req}">Show example...</a></p></div><div id="${soar.get.config.playbooks.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Request to get playbooks configuration.</i><a class="close" href="#${soar.get.config.playbooks.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "1", 
+    "jsonrpc": "2.0", 
+    "method": "get", 
+    "params": [
+        {
+            "apiver": 3, 
+            "url": "soar/adom/root/config/playbooks/3af70b37-169d-4251-9598-dace0564ca59"
+        }
+    ], 
+    "session": "..."
+}
+</pre></div></div></div><h6 id=${soar.get.config.playbooks.resp}.response>Response:</h6><pre>
+{
+    "id": "...", 
+    "jsonrpc": "2.0", 
+    "result": {
+        "data": {
+            "book": "string", 
+            "created_by": "string", 
+            "created_on": "string", 
+            "description": "string", 
+            "modified_by": "string", 
+            "modified_on": "string", 
+            "name": "string", 
+            "status": number, 
+            "tags": "string", 
+            "uuid": "string", 
+            "version": "string"
+        }, 
+        "status": {
+            "code": number, 
+            "message": "string"
+        }
+    }
+}
+</pre><div id="wrapper"> <p><a href="#${soar.get.config.playbooks.resp}">Show example...</a></p></div><div id="${soar.get.config.playbooks.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Request to get playbooks configuration.</i><a class="close" href="#${soar.get.config.playbooks.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "1", 
+    "jsonrpc": "2.0", 
+    "result": {
+        "data": {
+            "book": "{"play_settings":{"play_type":"ON_SCHEDULE","schedule":{"start_time":"2019-11-28T13:00:00+00:00","end_time":"2020-11-28T13:00:00+00:00","interval":{"type":"N-MINUTES","frequency":10},"render":{"left":100,"top":100}}},"tasks":[{"name":"Get Endpoints","id":"get_endpoints","type":"EMS_GET_ENDPOINTS","description":"get endpoints through EMS Connector","retry":{"count":0,"delay":{"type":"N-SECONDS","duration":10}},"run_condition":"ALL_SUCCESS","input":{"connector_uuid":{"value":""}},"output":{"ems_endpoints":{}},"render":{"top":150,"left":250}},{"name":"Update Asset and Identity","id":"update_asset_and_identity","type":"LOCALHOST_UPDATE_ASSET_AND_IDENTITY","description":"update asset and identity with given source endpoints","input":{"connector_uuid":{"value":""},"ems_endpoints":{"value":"${get_endpoints.ems_endpoints}"}},"render":{"top":200,"left":400}}],"workflow":[{"source_task":"STARTER","target_task":"get_endpoints","label":""},{"source_task":"get_endpoints","target_task":"update_asset_and_identity","label":""}]}", 
+            "created_by": "admin", 
+            "created_on": "2020-01-30T15:21:00", 
+            "description": "Playbook to Update Asset and Identity through EMS Connector", 
+            "modified_by": "admin", 
+            "modified_on": "2020-01-30T15:21:00", 
+            "name": "Playbook: Update Asset and Identity", 
+            "status": 1, 
+            "tags": "ueba", 
+            "uuid": "3af70b37-169d-4251-9598-dace0564ca59", 
+            "version": "1.0"
+        }, 
+        "status": {
+            "code": 0, 
+            "message": "OK"
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/soar/adom/&lt;adom-name&gt;/config/playbooks/&lt;playbook-uuid&gt;</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return Playbook Configuration</h2><p>Return playbook configuration.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>object </i> (optional) <br/><br/>endusers' data.<br/><br/><table><tr class='odd_row'><td class="table_col_name">name</td><td class="table_col_desc"><i>string </i> <br/><br/>name of a playbook.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">description</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>description of a playbook.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">created_by</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>the user who creates the playbook.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">created_on</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>the time when the playbook was created.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">modified_by</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>the user who modified the playbook.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">modified_on</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>the time when the playbook was modified.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>status of a playbook.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">version</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>version of a playbook.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">tags</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>tags of a playbook.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">book</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>playbook's content.<br/><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>Status of the current task.<br/><br/><table><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> <br/><br/>Status code<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> <br/><br/>Status description<br/><br/></td></tr></table></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_soar_adom__adom-name__fos-connector_automation-rules>Get FOS-Connector Automation Rules</h1><h2>get /soar/adom/&lt;adom-name&gt;/fos-connector/automation-rules</h2><p>Get FOS-connector automation rules.<h6 id=${soar.get.fosconnector.automationrules.req}.request>Request:</h6><pre>
+{
+    "id": "...", 
+    "jsonrpc": "2.0", 
+    "method": "get", 
+    "params": [
+        {
+            "apiver": 3, 
+            "group-by": "string", 
+            "url": "/soar/adom/&lt;adom-name&gt;/fos-connector/automation-rules"
+        }
+    ], 
+    "session": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${soar.get.fosconnector.automationrules.req}">Show example...</a></p></div><div id="${soar.get.fosconnector.automationrules.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Get FOS-connector automation rules.</i><a class="close" href="#${soar.get.fosconnector.automationrules.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "...", 
+    "jsonrpc": "2.0", 
+    "method": "get", 
+    "params": [
+        {
+            "apiver": 3,
+            "url": "/soar/adom/SOAR/fos-connector/automation-rules"
+        }
+    ], 
+    "session": "..."
+}
+</pre></div></div></div><h6 id=${soar.get.fosconnector.automationrules.resp}.response>Response:</h6><pre>
+{
+    "id": "...", 
+    "jsonrpc": "2.0", 
+    "result": {
+        "data": [
+            {
+                "devid": "string", 
+                "rule": [
+                    {
+                        "action": [
+                            {
+                                "name": "string", 
+                                "type": "string"
+                            }
+                        ], 
+                        "name": "string", 
+                        "parameter": [
+                            "string", ...
+                        ]
+                    }, 
+                    ...
+                ]
+            }
+        ], 
+        "status": {
+            "code": number, 
+            "message": "string"
+        }
+    }
+}
+</pre><div id="wrapper"> <p><a href="#${soar.get.fosconnector.automationrules.resp}">Show example...</a></p></div><div id="${soar.get.fosconnector.automationrules.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Get FOS-connector automation rules.</i><a class="close" href="#${soar.get.fosconnector.automationrules.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "...", 
+    "jsonrpc": "2.0", 
+    "result": {
+        "data": [
+            {
+                "devid": "FGVM02TM19002716", 
+                "rule": [
+                    {
+                        "action": [
+                            {
+                                "name": "add_cnc_to_blacklist", 
+                                "type": "cli-script"
+                            }
+                        ], 
+                        "name": "add_cnc_to_blacklist", 
+                        "parameter": [
+                            "cncip"
+                        ]
+                    }, 
+                    {
+                        "action": [
+                            {
+                                "name": "activate_strict_ips_shawn", 
+                                "type": "cli-script"
+                            }
+                        ], 
+                        "name": "activate_strict_ips", 
+                        "parameter": [
+                            "policyid"
+                        ]
+                    }
+                ]
+            }
+        ], 
+        "status": {
+            "code": 0, 
+            "message": "ok"
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/soar/adom/&lt;adom-name&gt;/fos-connector/automation-rules</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return The Required FOS-Connector Automation Rules</h2><p>The required adom's FOS-connector automation rules will be returned.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>array </i> <br/><br/>automation rules' data.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/><br/><br/><table><tr class='odd_row'><td class="table_col_name">devid</td><td class="table_col_desc"><i>string </i> <br/><br/>Device ID<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">rule</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>Automation rule(s)<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/><br/><br/><table><tr class='odd_row'><td class="table_col_name">name</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Name of the rule<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">action</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>Action of the rule<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/><br/><br/><table><tr class='odd_row'><td class="table_col_name">name</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Name of the action<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">type</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Type of the action<br/><br/></td></tr></table></td></tr></td></tr><tr class='odd_row'><td class="table_col_name">parameters</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>Parameters of the rule<br/><br/>member type: <i>string</i><br/></td></tr></table></td></tr></td></tr></table></td></tr></td></tr><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>Status of the current task.<br/><br/><table><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> <br/><br/>Error code of the query<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> <br/><br/>Error message of the query<br/><br/></td></tr></table></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=add_soar_adom__adom-name__playbook_run>Start Playbook Request</h1><h2>add /soar/adom/&lt;adom-name&gt;/playbook/run</h2><p>Start a task to run a playbook.<h6 id=${soar.add.playbook.run.req}.request>Request:</h6><pre>
+{
+    "id": "...", 
+    "jsonrpc": "2.0", 
+    "method": "add", 
+    "params": [
+        {
+            "apiver": 3, 
+            "playbook-input": {
+                "any-variable-name": "string"
+            }, 
+            "playbook-uuid": "string", 
+            "incident-id": "string",
+            "url": "/soar/adom/&lt;adom-name&gt;/playbook/run"
+        }
+    ], 
+    "session": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${soar.add.playbook.run.req}">Show example...</a></p></div><div id="${soar.add.playbook.run.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Start a task to run a playbook.</i><a class="close" href="#${soar.add.playbook.run.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "...", 
+    "jsonrpc": "2.0", 
+    "method": "add", 
+    "params": [
+        {
+            "apiver": 3, 
+            "playbook-input": {
+                "message": "this is the message passed to the playbook macro ${trigger.message}"
+                "variable": "this is a variable passed to the playbook macro ${trigger.variable}"
+            }, 
+            "playbook-uuid": "2b36d3c6-537f-4671-8280-44549f824e6a", 
+            "incident-id": "IN00000001",
+            "url": "/soar/adom/SOAR/playbook/run"
+        }
+    ], 
+    "session": "..."
+}
+</pre></div></div></div><h6 id=${soar.add.playbook.run.resp}.response>Response:</h6><pre>
+{
+    "id": "...", 
+    "jsonrpc": "2.0", 
+    "result": {
+        "data": {
+            "playbook-uuid": "string",
+            "instance-id": "string"
+        },
+        "status": {
+            "code": number, 
+            "message": "string"
+        }
+    }
+}
+</pre><div id="wrapper"> <p><a href="#${soar.add.playbook.run.resp}">Show example...</a></p></div><div id="${soar.add.playbook.run.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Start a task to run a playbook.</i><a class="close" href="#${soar.add.playbook.run.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "...", 
+    "jsonrpc": "2.0", 
+    "result": {
+        "data": {
+            "playbook-uuid": "2b36d3c6-537f-4671-8280-44549f824e6a",
+            "instance-id": "2020-03-30 11:53:13.31809-07"
+        },
+        "status": {
+            "code": 0, 
+            "message": "ok"
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/soar/adom/&lt;adom-name&gt;/playbook/run</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">playbook-uuid</td><td class="table_col_desc"><i>string </i> <br/><br/>An unique identifier of a playbook. 32 hexadecimal digits is displayed in five groups separated by hyphens, in the form 8-4-4-4-12 for a total of 36 characters.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">incident-id</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Incident ID<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">playbook-input</td><td class="table_col_desc"><i>object </i> (optional) <br/><br/>any variable that needed to be passed to the playbook can be filled here as a property: property name is the variable name, property value is the variable value<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return The Status of Running Playbook</h2><p>A new assigned task ID for the report request will be returned. This task ID must be used in following 'get report run' and 'cancel report run' request.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>object </i> (optional) <br/><br/>playbook run data.<br/><br/><table><tr class='odd_row'><td class="table_col_name">playbook-uuid</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>An unique identifier of a playbook. 32 hexadecimal digits is displayed in five groups separated by hyphens, in the form 8-4-4-4-12 for a total of 36 characters.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">instance-id</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>instance id to track specific playbook run<br/><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>Status of the current task.<br/><br/><table><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> <br/><br/>Error code of the query<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> <br/><br/>Error message of the query<br/><br/></td></tr></table></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_soar_adom__adom-name__playbook_run>Get Playbook Information</h1><h2>get /soar/adom/&lt;adom-name&gt;/playbook/run</h2><p>Get playbook information.<h6 id=${soar.get.playbook.run.req}.request>Request:</h6><pre>
+{
+    "id": "...", 
+    "jsonrpc": "2.0", 
+    "method": "get", 
+    "params": [
+        {
+            "apiver": 3, 
+            "playbook-uuid": "string",
+            "instance-id": "string",
+            "sort-by": [
+                {
+                    "field": "string", 
+                    "order": "string"
+                }
+            ], 
+            "time-range": {
+                "end": "string", 
+                "start": "string"
+            }, 
+            "filter": "string",
+            "url": "/soar/adom/&lt;adom-name&gt;/playbook/run"
+        }
+    ], 
+    "session": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${soar.get.playbook.run.req}">Show example...</a></p></div><div id="${soar.get.playbook.run.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Get playbook information.</i><a class="close" href="#${soar.get.playbook.run.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "...", 
+    "jsonrpc": "2.0", 
+    "method": "get", 
+    "params": [
+        {
+            "apiver": 3,
+            "playbook-uuid": "2b36d3c6-537f-4671-8280-44549f824e6a",
+            "instance-id": "2020-03-30 11:53:13.31809-07",
+            "sort-by": [
+                {
+                    "field": "start-datetime", 
+                    "order": "desc"
+                }
+            ], 
+            "time-range": {
+                "end": "2020-04-01T11:52:35", 
+                "start": "1970-01-01T00:00:00+0000"
+            },
+            "filter": "trigger-source-id<>'IN00019917' playbook-name~'Event trigger-LocalHostConnector'",
+            "url": "/soar/adom/SOAR/playbook/run"
+        }
+    ], 
+    "session": "..."
+}
+
+</pre></div></div></div><h6 id=${soar.get.playbook.run.resp}.response>Response:</h6><pre>
+{
+    "id": "9efa3e12-72b7-11ea-b9fd-0cc47aa59bb0", 
+    "jsonrpc": "2.0", 
+    "result": {
+        "data": [
+            {
+                "end-datetime": "string", 
+                "instance-id": "string", 
+                "playbook-name": "string", 
+                "playbook-uuid": "string", 
+                "start-datetime": "string", 
+                "state": "string", 
+                "trigger-source-id": "string", 
+                "trigger-source-type": "string", 
+                "trigger-time": "string"
+            }, 
+            ...
+        ], 
+        "status": {
+            "code": number, 
+            "message": "string"
+        }
+    }
+}
+</pre><div id="wrapper"> <p><a href="#${soar.get.playbook.run.resp}">Show example...</a></p></div><div id="${soar.get.playbook.run.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Get playbook information.</i><a class="close" href="#${soar.get.playbook.run.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "9efa3e12-72b7-11ea-b9fd-0cc47aa59bb0", 
+    "jsonrpc": "2.0", 
+    "result": {
+        "data": [
+            {
+                "end-datetime": "", 
+                "instance-id": "2020-03-30 11:53:13.31809-07", 
+                "playbook-name": "On-schedule-create incident", 
+                "playbook-uuid": "941a1c06-2841-47c5-b45b-ca429d23a332", 
+                "start-datetime": "2020-03-30 11:54:13.319421-07", 
+                "state": "running", 
+                "trigger-source-id": "", 
+                "trigger-source-type": "", 
+                "trigger-time": ""
+            }
+        ], 
+        "status": {
+            "code": 0, 
+            "message": "ok"
+        }
+    }
+}
+
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/soar/adom/&lt;adom-name&gt;/playbook/run</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">playbook-uuid</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>An unique identifier of a playbook. 32 hexadecimal digits is displayed in five groups separated by hyphens, in the form 8-4-4-4-12 for a total of 36 characters.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">instance-id</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Instance ID to get.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">sort-by</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>Sort by field.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/><br/><br/><table><tr class='odd_row'><td class="table_col_name">field</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/><br/>Sortable field.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;playbook-uuid<br/>&nbsp;&nbsp;&nbsp;&nbsp;playbook-name<br/>&nbsp;&nbsp;&nbsp;&nbsp;instance-id<br/>&nbsp;&nbsp;&nbsp;&nbsp;start-datetime<br/>&nbsp;&nbsp;&nbsp;&nbsp;end-datetime<br/>&nbsp;&nbsp;&nbsp;&nbsp;state<br/>&nbsp;&nbsp;&nbsp;&nbsp;trigger-source-id<br/>&nbsp;&nbsp;&nbsp;&nbsp;trigger-source-time<br/>&nbsp;&nbsp;&nbsp;&nbsp;trigger-time</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">order</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/> Default: <i>asc </i> <br/>Sorting order, asc or desc.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;asc<br/>&nbsp;&nbsp;&nbsp;&nbsp;desc</i></b><br/></td></tr></table></td></tr></td></tr><tr class='odd_row'><td class="table_col_name">timezone</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The timezone index or name. Time range in request and date/time if any in response will follow this timezone. See Appendix<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">time-range</td><td class="table_col_desc"><i>object </i> (optional) <br/><br/>Time range for source data selection.<br/><br/><table><tr class='odd_row'><td class="table_col_name">start</td><td class="table_col_desc"><i>string </i> <br/><br/>Starting date time. Consider it following the timezone parameter's, ADOM's or FortiAnalyzer's timezone if timezone info is not specified within time range. Format: 'yyyy-MM-dd'T'HH:mm:ssZ' (RFC 3339) e.g. '2016-10-17T20:45:37-07:00 or 'yyyy-MM-dd HH:mm:ss' e.g. '2016-10-17 20:45:37'<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">end</td><td class="table_col_desc"><i>string </i> <br/><br/>Ending date time. Consider it following the timezone parameter's, ADOM's or FortiAnalyzer's timezone if timezone info is not specified within time range. Format: 'yyyy-MM-dd'T'HH:mm:ssZ' (RFC 3339) e.g. '2016-10-17T20:45:37-07:00 or 'yyyy-MM-dd HH:mm:ss' e.g. '2016-10-17 20:45:37'<br/><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">filter</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Filtering expresion.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return The Required Playbook Information</h2><p>The required playbook information will be returned.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>array </i> <br/><br/>automation rules' data.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/><br/><br/><table><tr class='odd_row'><td class="table_col_name">playbook-uuid</td><td class="table_col_desc"><i>string </i> <br/><br/>Unique identifier of a playbook. 32 hexadecimal digits is displayed in five groups separated by hyphens, in the form 8-4-4-4-12 for a total of 36 characters<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">playbook-name</td><td class="table_col_desc"><i>string </i> <br/><br/>Playbook name<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">trigger-source-type</td><td class="table_col_desc"><i>string </i> <br/><br/>Source type of the playbook's trigger<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">trigger-source-id</td><td class="table_col_desc"><i>string </i> <br/><br/>Trigger source name<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">state</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>state<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;success<br/>&nbsp;&nbsp;&nbsp;&nbsp;running<br/>&nbsp;&nbsp;&nbsp;&nbsp;failed</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">start-datetime</td><td class="table_col_desc"><i>string </i> <br/><br/>Starting date time<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">end-datetime</td><td class="table_col_desc"><i>string </i> <br/><br/>Ending date time<br/><br/></td></tr></table></td></tr></td></tr><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>Status of the current task.<br/><br/><table><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> <br/><br/>Error code of the query<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> <br/><br/>Error message of the query<br/><br/></td></tr></table></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_soar_adom__adom-name__task_monitor>Get Task Information</h1><h2>get /soar/adom/&lt;adom-name&gt;/task/monitor</h2><p>Get task information.<h6 id=${soar.get.task.monitor.req}.request>Request:</h6><pre>
+{
+    "id": "...", 
+    "jsonrpc": "2.0", 
+    "method": "get", 
+    "params": [
+        {
+            "apiver": 3, 
+            "instance-id": "string", 
+            "playbook-uuid": "string", 
+            "sort-by": [
+                {
+                    "field": "string", 
+                    "order": "string"
+                }
+            ],
+            "time-range": {
+                "end": "string", 
+                "start": "string"
+            }, 
+            "filter": "string",
+            "url": "/soar/adom/&lt;adom-name&gt;/task/monitor"
+        }
+    ], 
+    "session": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${soar.get.task.monitor.req}">Show example...</a></p></div><div id="${soar.get.task.monitor.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Get task information.</i><a class="close" href="#${soar.get.task.monitor.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "...", 
+    "jsonrpc": "2.0", 
+    "method": "get", 
+    "params": [
+        {
+            "apiver": 3, 
+            "instance-id": "2020-03-30 02:17:39.230514-07", 
+            "playbook-uuid": "941a1c06-2841-47c5-b45b-ca429d23a332", 
+            "time-range": {
+                "end": "2020-04-01T02:19:47", 
+                "start": "1970-01-01T00:00:00+0000"
+            }, 
+            "sort-by": [
+                {
+                    "field": "start-datetime", 
+                    "order": "desc"
+                }
+            ], 
+            "filter": "state!='success' task-id='get_endpoint'",
+            "url": "/soar/adom/SOAR/task/monitor"
+        }
+    ], 
+    "session": "..."
+}
+</pre></div></div></div><h6 id=${soar.get.task.monitor.resp}.response>Response:</h6><pre>
+{
+    "id": "...", 
+    "jsonrpc": "2.0", 
+    "result": {
+        "data": [
+            {
+                "end-datetime": "string", 
+                "instance-id": "string", 
+                "playbook-uuid": "string", 
+                "start-datetime": "string", 
+                "state": "string", 
+                "task-id": "string", 
+                "task-name": "string"
+            }
+        ], 
+        "status": {
+            "code": number, 
+            "message": "string"
+        }
+    }
+}
+</pre><div id="wrapper"> <p><a href="#${soar.get.task.monitor.resp}">Show example...</a></p></div><div id="${soar.get.task.monitor.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Get task information.</i><a class="close" href="#${soar.get.task.monitor.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "...", 
+    "jsonrpc": "2.0", 
+    "result": {
+        "data": [
+            {
+                "end-datetime": "2020-03-30 02:18:42.287175-07", 
+                "instance-id": "2020-03-30 02:17:39.230514-07", 
+                "playbook-uuid": "941a1c06-2841-47c5-b45b-ca429d23a332", 
+                "start-datetime": "2020-03-30 02:18:42.101673-07", 
+                "state": "success", 
+                "task-id": "create_incident", 
+                "task-name": "Create Incident"
+            }
+        ], 
+        "status": {
+            "code": 0, 
+            "message": "ok"
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/soar/adom/&lt;adom-name&gt;/task/monitor</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">sort-by</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>Sort by field.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/><br/><br/><table><tr class='odd_row'><td class="table_col_name">field</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Sortable field.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">order</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/> Default: <i>asc </i> <br/>Sorting order, asc or desc.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;asc<br/>&nbsp;&nbsp;&nbsp;&nbsp;desc</i></b><br/></td></tr></table></td></tr></td></tr><tr class='odd_row'><td class="table_col_name">filter</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Filtering expression.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">instance-id</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Instance ID to get.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">playbook-uuid</td><td class="table_col_desc"><i>string </i> <br/><br/>Playbook UUID to get. An unique identifier of a playbook. 32 hexadecimal digits is displayed in five groups separated by hyphens, in the form 8-4-4-4-12 for a total of 36 characters<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">timezone</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The timezone index or name. Time range in request and date/time if any in response will follow this timezone. See Appendix<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">time-range</td><td class="table_col_desc"><i>object </i> <br/><br/>Time range for source data selection.<br/><br/><table><tr class='odd_row'><td class="table_col_name">start</td><td class="table_col_desc"><i>string </i> <br/><br/>Starting date time. Consider it following the timezone parameter's, ADOM's or FortiAnalyzer's timezone if timezone info is not specified within time range. Format: 'yyyy-MM-dd'T'HH:mm:ssZ' (RFC 3339) e.g. '2016-10-17T20:45:37-07:00 or 'yyyy-MM-dd HH:mm:ss' e.g. '2016-10-17 20:45:37'<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">end</td><td class="table_col_desc"><i>string </i> <br/><br/>Ending date time. Consider it following the timezone parameter's, ADOM's or FortiAnalyzer's timezone if timezone info is not specified within time range. Format: 'yyyy-MM-dd'T'HH:mm:ssZ' (RFC 3339) e.g. '2016-10-17T20:45:37-07:00 or 'yyyy-MM-dd HH:mm:ss' e.g. '2016-10-17 20:45:37'<br/><br/></td></tr></table></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return The Required Task Information</h2><p>The required task information will be returned.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>array </i> <br/><br/>automation rules' data.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/><br/><br/><table><tr class='odd_row'><td class="table_col_name">playbook-uuid</td><td class="table_col_desc"><i>string </i> <br/><br/>Playbook UUID associated with a task, An unique identifier of a playbook. 32 hexadecimal digits is displayed in five groups separated by hyphens, in the form 8-4-4-4-12 for a total of 36 characters<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">playbook-name</td><td class="table_col_desc"><i>string </i> <br/><br/>Playbook name associated with a task<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">task-id</td><td class="table_col_desc"><i>string </i> <br/><br/>Task ID<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">task-name</td><td class="table_col_desc"><i>string </i> <br/><br/>Task name<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">state</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>state of a task<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;success<br/>&nbsp;&nbsp;&nbsp;&nbsp;running<br/>&nbsp;&nbsp;&nbsp;&nbsp;failed<br/>&nbsp;&nbsp;&nbsp;&nbsp;upstream_failed<br/>&nbsp;&nbsp;&nbsp;&nbsp;skipped<br/>&nbsp;&nbsp;&nbsp;&nbsp;queued<br/>&nbsp;&nbsp;&nbsp;&nbsp;scheduled<br/>&nbsp;&nbsp;&nbsp;&nbsp;up_for_retry<br/>&nbsp;&nbsp;&nbsp;&nbsp;up_for_reschedule</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">start-datetime</td><td class="table_col_desc"><i>string </i> <br/><br/>Starting date time of a task<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">end-datetime</td><td class="table_col_desc"><i>string </i> <br/><br/>Ending date time of a task<br/><br/></td></tr></table></td></tr></td></tr><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>Status of the current task.<br/><br/><table><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> <br/><br/>Error code of the query<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> <br/><br/>Error message of the query<br/><br/></td></tr></table></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_soar_adom__adom-name__playbook_export>Export Playbooks</h1><h2>get /soar/adom/&lt;adom-name&gt;/playbook/export</h2><p>Request of exporting playbooks.<h6 id=${soar.export.playbook.req}.request>Request:</h6><pre>
+{
+  "id": "...",
+  "jsonrpc": "2.0",
+  "method": "get",
+  "params": [
+    {
+      "url": "/soar/adom/&lt;adom-name&gt;/playbook/export",
+      "filter": [&lt;source&gt;, &lt;operator&gt;, &lt;target1&gt;, &lt;target2&gt;, ...],
+      "attachment": [&lt;object-name&gt;, ...],
+      "data-format": "string",
+      "apiver": "3"
+    }
+  ]
+}
+</pre><div id="wrapper"> <p><a href="#${soar.export.playbook.req}">Show example...</a></p></div><div id="${soar.export.playbook.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Request of exporting playbooks.</i><a class="close" href="#${soar.export.playbook.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+  "id": "...",
+  "jsonrpc": "2.0",
+  "method": "get",
+  "params": [
+    {
+      "url": "/soar/adom/root/playbook/export",
+      "filter": ["uuid", "in", "941a1c06-2841-47c5-b45b-ca429d23a332", "2b36d3c6-537f-4671-8280-44549f824e6a"],
+      "attachment": ["connector"],
+      "data-format": "zip",
+      "apiver": "3"
+    }
+  ]
+}
+</pre></div></div></div><h6 id=${soar.export.playbook.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "data-type": "string",
+        "data": "string",
+        "checksum": {
+            "method": "string",
+            "hash": "string"
+        },
+        "length": number,
+        "attached": [&lt;object-name&gt;, ...]
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${soar.export.playbook.resp}">Show example...</a></p></div><div id="${soar.export.playbook.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Request of exporting playbooks.</i><a class="close" href="#${soar.export.playbook.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "result": {
+        "data-type": "zip/base64",
+        "data": "base64 encoded string",
+        "checksum": {
+            "method": "MD5",
+            "hash": "cc0f348f0b2b4d4ad83bc0f54e5c9d5c"
+        },
+        "length": 1094000,
+        "attached": ["connector"]
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/soar/adom/&lt;adom-name&gt;/playbook/export</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">filter</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>A filter for selecting exporting playbooks. <a href="objects.htm#filter">Filter Refrence</a><br/><br/>member type: <i>string</i><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">attachment</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>Objects that will be exported with event handlers.<br/><br/>member type: <i>string</i><br/></td></tr><tr class='odd_row'><td class="table_col_name">data-format</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/> Default: <i>zip </i> <br/>The format of the exporting data.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;zip<br/>&nbsp;&nbsp;&nbsp;&nbsp;txt</i></b><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return Status of Exporting Playbooks</h2><p>Return status of exporting playbooks.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">checksum</td><td class="table_col_desc"><i>object </i> (optional) <br/><br/>Checksum information.<br/><br/><table><tr class='odd_row'><td class="table_col_name">method</td><td class="table_col_desc"><i>string </i> <br/><br/>Checksum algorithm, e.g. 'MD5'.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">hash</td><td class="table_col_desc"><i>string </i> <br/><br/>Checksum string.<br/><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">length</td><td class="table_col_desc"><i>number </i> <br/><br/>Length of the returned data stream.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>string </i> <br/><br/>Data stream in txt format or base64 encoded zip format.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">data-type</td><td class="table_col_desc"><i>string </i> <br/><br/>The return type of data, e.g. 'zip/base64'.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">attached</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>The attached objects in the exporting file, e.g. 'connector'.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=add_soar_adom__adom-name__playbook_import>Import Playbooks</h1><h2>add /soar/adom/&lt;adom-name&gt;/playbook/import</h2><p>Request of importing playbooks.<h6 id=${soar.import.playbook.req}.request>Request:</h6><pre>
+{
+  "id": "...",
+  "jsonrpc": "2.0",
+  "method": "add",
+  "params": [
+    {
+      "url": "/soar/adom/&lt;adom-name&gt;/playbook/import",
+      "apiver": "3",
+      "data": "string",
+      "data-type": "string",
+      "conflict-option": "string",
+      "attachment": [&lt;object-name&gt;, ...]
+    }
+  ]
+}
+</pre><div id="wrapper"> <p><a href="#${soar.import.playbook.req}">Show example...</a></p></div><div id="${soar.import.playbook.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Request of importing playbooks.</i><a class="close" href="#${soar.import.playbook.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+  "id": "...",
+  "jsonrpc": "2.0",
+  "method": "add",
+  "params": [
+    {
+      "url": "/soar/adom/root/playbook/import",
+      "apiver": "3",
+      "data": "base64 encoded string",
+      "data-type": "zip/base64",
+      "conflict-option": "rename",
+      "attachment": ["connector"]
+    }
+  ]
+}
+</pre></div></div></div><h6 id=${soar.import.playbook.resp}.response>Response:</h6><pre>
+{
+    "id": "...",
+    "jsonrpc": "2.0",
+    "result": {
+        "status": {
+            "code": number,
+            "message": "string"
+        },
+        "attached": [&lt;object-name&gt;, ...]
+    }
+}
+</pre><div id="wrapper"> <p><a href="#${soar.import.playbook.resp}">Show example...</a></p></div><div id="${soar.import.playbook.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Request of importing playbooks.</i><a class="close" href="#${soar.import.playbook.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "...",
+    "jsonrpc": "2.0",
+    "result": {
+        "status": {
+            "code": 0,
+            "message": "OK"
+        },
+        "attached": ["connector"]
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/soar/adom/&lt;adom-name&gt;/playbook/import</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>string </i> <br/><br/>Data stream in txt format or base64 encoded zip format.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">data-type</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/> Default: <i>zip/base64 </i> <br/>The format of the importing data.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;zip/base64<br/>&nbsp;&nbsp;&nbsp;&nbsp;txt</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">conflict-option</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/> Default: <i>rename </i> <br/>When the importing object has the name conflict with an local object, rename the importing object, replace the local object, or skip importing the object.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;rename<br/>&nbsp;&nbsp;&nbsp;&nbsp;replace<br/>&nbsp;&nbsp;&nbsp;&nbsp;skip</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">attachment</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>Objects that will be imported with playbooks.<br/><br/>member type: <i>string</i><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return Status of Importing Playbooks</h2><p>Return status of importing playbooks.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>Status of the current task<br/><br/><table><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> <br/><br/>Status code<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> <br/><br/>Status description<br/><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">attached</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>The attached objects in the importing file, e.g. 'connector'.<br/><br/>member type: <i>string</i><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_soar_adom__adom-name__subnet_export>Export Subnets and Subnet Groups</h1><h2>get /soar/adom/&lt;adom-name&gt;/subnet/export</h2><p>Request of exporting subnets and subnet groups.<h6 id=${soar.export.subnet.req}.request>Request:</h6><pre>
+{
+    "id": "...",
+    "jsonrpc": "2.0",
+    "method": "get",
+    "params": [
+        {
+            "url": "/soar/adom/&lt;adom-name&gt;/subnet/export",
+            "filter": {
+                "address-object": [&lt;name1&gt;, &lt;name2&gt;, ...],
+                "address-group": [&lt;name1&gt;, &lt;name2&gt;, ...]
+            },
+            "data-format": "string",
+            "apiver": "3"
+        }
+    ]
+}
+</pre><div id="wrapper"> <p><a href="#${soar.export.subnet.req}">Show example...</a></p></div><div id="${soar.export.subnet.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Request of exporting subnets and subnet groups.</i><a class="close" href="#${soar.export.subnet.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "...",
+    "jsonrpc": "2.0",
+    "method": "get",
+    "params": [
+        {
+            "url": "/soar/adom/root/subnet/export",
+            "filter": {
+                "address-object": ["Endpoint", "IPrange"],
+                "address-group": ["Group 1", "all"]
+            },
+            "data-format": "txt",
+            "apiver": "3"
+        }
+    ]
+}
+</pre></div></div></div><h6 id=${soar.export.subnet.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "data": {
+            "address-object": [
+                {
+                    "address": "string",
+                    "name": "string",
+                    "object-type": number,
+                },
+                {
+                    "address": "string",
+                    "name": "string",
+                    "object-type": number,
+                },
+                ...
+            ],
+            "address-group": [
+                {
+                    "address-grps": [
+                        {
+                            "name": "string"
+                        },
+                        {
+                            "name": "string"
+                        },
+                        ...
+                    ],
+                    "address-objs": [
+                        {
+                            "name": "string"
+                        },
+                        {
+                            "name": "string"
+                        },
+                        ...
+                    ],
+                    "create-time": "string",
+                    "description": "string",
+                    "name": "string",
+                    "tags": "string",
+                    "update-time": "string"
+                },
+                ...
+            ]
+        },
+        "data-type": "string",
+        "length": number,
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${soar.export.subnet.resp}">Show example...</a></p></div><div id="${soar.export.subnet.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Request of exporting subnets and subnet groups.</i><a class="close" href="#${soar.export.subnet.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "result": {
+        "data": {
+            "address-object": [
+                {
+                    "address": "192.168.22.0\/24",
+                    "name": "Endpoint",
+                    "object-type": 0
+                },
+                {
+                    "address": "172.18.28.160-172.18.28.165",
+                    "name": "IPrange",
+                    "object-type": 1
+                }
+            ],
+            "address-group": [
+                {
+                    "address-grps": [
+                        {
+                            "name": "Group 1"
+                        }
+                    ],
+                    "address-objs": [
+                        {
+                            "name": "IPrange"
+                        }
+                    ],
+                    "create-time": "1616691139",
+                    "description": "all subnets",
+                    "name": "all",
+                    "tags": "",
+                    "update-time": "1616691139"
+                },
+                {
+                    "address-grps": null,
+                    "address-objs": [
+                        {
+                            "name": "Endpoint"
+                        }
+                    ],
+                    "create-time": "1616691139",
+                    "description": "",
+                    "name": "Group 1",
+                    "tags": "",
+                    "update-time": "1616691139"
+                },
+            ]
+        },
+        "data-type": "txt",
+        "length": 570,
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/soar/adom/&lt;adom-name&gt;/subnet/export</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">filter</td><td class="table_col_desc"><i>object </i> (optional) <br/><br/>A filter for selecting exporting subnets and subnet groups<br/><br/><table><tr class='odd_row'><td class="table_col_name">address-object</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>The filter array of names. If all subnets will be exported, set this filter to null ("address-object": null,). If none of the subnets will be exported, leave the filter array blank ("address-object": [],).<br/><br/>member type: <i>string</i><br/></td></tr><tr class='odd_row'><td class="table_col_name">address-group</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>The filter array of names. If all subnet groups will be exported, set this filter to null ("address-group": null,). If none of the subnet groups will be exported, leave the filter array blank ("address-group": [],).<br/><br/>member type: <i>string</i><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">data-format</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/> Default: <i>txt </i> <br/>The format of the exporting data.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;zip<br/>&nbsp;&nbsp;&nbsp;&nbsp;txt</i></b><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return Status of Exporting Subnets and Subnet Groups</h2><p>Return status of exporting subnet and subnet groups.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>object </i> <br/><br/>Data stream in txt format or base64 encoded zip format.<br/><br/><table><tr class='odd_row'><td class="table_col_name">address-object</td><td class="table_col_desc"><i>array </i> <br/><br/>The array of the exported subnets.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/>The object in the exported subnet.<br/><br/><table><tr class='odd_row'><td class="table_col_name">address</td><td class="table_col_desc"><i>string </i> <br/><br/>The address in the subnet.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">name</td><td class="table_col_desc"><i>string </i> <br/><br/>The name of the subnet.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">obj-type</td><td class="table_col_desc"><i>number </i> <br/><br/>The type of the sunbet.<br/><br/></td></tr></table></td></tr></td></tr><tr class='odd_row'><td class="table_col_name">address-group</td><td class="table_col_desc"><i>array </i> <br/><br/>The array of the exported subnet groups.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/>The object in the exported subnet group.<br/><br/><table><tr class='odd_row'><td class="table_col_name">address-grps</td><td class="table_col_desc"><i>array </i> <br/><br/>The subnet groups referred in the exported subnet group.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/>The objects in the referred subnet group.<br/><br/><table><tr class='odd_row'><td class="table_col_name">name</td><td class="table_col_desc"><i>string </i> <br/><br/>The name of the referred subnet group.<br/><br/></td></tr></table></td></tr></td></tr><tr class='odd_row'><td class="table_col_name">address-objs</td><td class="table_col_desc"><i>array </i> <br/><br/>The subnets referred in the exported subnet group.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/>The objects in the referred subnet.<br/><br/><table><tr class='odd_row'><td class="table_col_name">name</td><td class="table_col_desc"><i>string </i> <br/><br/>The name of the referred subnet.<br/><br/></td></tr></table></td></tr></td></tr><tr class='odd_row'><td class="table_col_name">create-time</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The timestamp of creating the subnet group.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">discription</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The discription of the exported subnet group.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">name</td><td class="table_col_desc"><i>string </i> <br/><br/>The name of the exported subnet group.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">tags</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The tags of the exported subnet group.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">update-time</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The timestamp of updating the subnet group.<br/><br/></td></tr></table></td></tr></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">data-type</td><td class="table_col_desc"><i>string </i> <br/><br/>The return type of data, e.g. 'txt'.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">length</td><td class="table_col_desc"><i>number </i> <br/><br/>Length of the returned data stream.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=add_soar_adom__adom-name__subnet_import>Import Subnet and Subnet Groups</h1><h2>add /soar/adom/&lt;adom-name&gt;/subnet/import</h2><p>Request of importing subnet and subnet groups.<h6 id=${soar.import.subnet.req}.request>Request:</h6><pre>
+{
+    "id": "...",
+    "jsonrpc": "2.0",
+    "method": "add",
+    "params": [
+        {
+            "url": "/soar/adom/&lt;adom-name&gt;/subnet/import",
+            "apiver": "3",
+            "data": {
+                "address-object": [
+                    {
+                        "address": "string",
+                        "name": "string",
+                        "object-type": number
+                    },
+                    {
+                        "address": "string",
+                        "name": "string",
+                        "object-type": number
+                    },
+                    ...
+                ],
+                "address-group": [
+                    {
+                        "address-grps": [
+                            {
+                                "name": "string"
+                            },
+                            {
+                                "name": "string"
+                            },
+                            ...
+                        ],
+                        "address-objs": [
+                            {
+                                "name": "string"
+                            },
+                            {
+                                "name": "string"
+                            },
+                            ...
+                        ],
+                        "create-time": "string",
+                        "description": "string",
+                        "name": "string",
+                        "tags": "string",
+                        "update-time": "string"
+                    },
+                    ...
+                ]
+            },
+            "data-type": "string",
+            "conflict-option": "string",
+        }
+    ]
+}
+</pre><div id="wrapper"> <p><a href="#${soar.import.subnet.req}">Show example...</a></p></div><div id="${soar.import.subnet.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Request of importing subnet and subnet groups.</i><a class="close" href="#${soar.import.subnet.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "...",
+    "jsonrpc": "2.0",
+    "method": "add",
+    "params": [
+        {
+            "url": "/soar/adom/root/subnet/import",
+            "apiver": "3",
+            "data": {
+                "address-object": [
+                    {
+                        "address": "192.168.22.0\/24",
+                        "name": "Endpoint",
+                        "object-type": 0
+                    },
+                    {
+                        "address": "172.18.28.160-172.18.28.165",
+                        "name": "IPrange",
+                        "object-type": 1
+                    }
+                ],
+                "address-group": [
+                    {
+                        "address-grps": [
+                            {
+                                "name": "Group 1"
+                            }
+                        ],
+                        "address-objs": [
+                            {
+                                "name": "IPrange"
+                            }
+                        ],
+                        "create-time": "1616691139",
+                        "description": "all subnets",
+                        "name": "all",
+                        "tags": "",
+                        "update-time": "1616691139"
+                    },
+                    {
+                        "address-grps": null,
+                        "address-objs": [
+                            {
+                                "name": "Endpoint"
+                            }
+                        ],
+                        "create-time": "1616691139",
+                        "description": "",
+                        "name": "Group 1",
+                        "tags": "",
+                        "update-time": "1616691139"
+                    },
+                ]
+            },
+            "data-type": "txt",
+            "conflict-option": "rename",
+        }
+    ]
+}
+</pre></div></div></div><h6 id=${soar.import.subnet.resp}.response>Response:</h6><pre>
+{
+    "id": "...",
+    "jsonrpc": "2.0",
+    "result": {
+        "status": {
+            "code": number,
+            "message": "string"
+        },
+        "attached": [&lt;object-name&gt;, ...]
+    }
+}
+</pre><div id="wrapper"> <p><a href="#${soar.import.subnet.resp}">Show example...</a></p></div><div id="${soar.import.subnet.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Request of importing subnet and subnet groups.</i><a class="close" href="#${soar.import.subnet.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "...",
+    "jsonrpc": "2.0",
+    "result": {
+        "status": {
+            "code": 0,
+            "message": "OK"
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/soar/adom/&lt;adom-name&gt;/subnet/import</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>object </i> <br/><br/>Data stream in txt format or base64 encoded zip format.<br/><br/><table><tr class='odd_row'><td class="table_col_name">address-object</td><td class="table_col_desc"><i>array </i> <br/><br/>The array of the importing subnets.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/>The object in the importing subnet.<br/><br/><table><tr class='odd_row'><td class="table_col_name">address</td><td class="table_col_desc"><i>string </i> <br/><br/>The address in the subnet.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">name</td><td class="table_col_desc"><i>string </i> <br/><br/>The name of the subnet.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">obj-type</td><td class="table_col_desc"><i>number </i> <br/><br/>The type of the sunbet.<br/><br/></td></tr></table></td></tr></td></tr><tr class='odd_row'><td class="table_col_name">address-group</td><td class="table_col_desc"><i>array </i> <br/><br/>The array of the importing subnet groups.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/>The object in the importing subnet group.<br/><br/><table><tr class='odd_row'><td class="table_col_name">address-grps</td><td class="table_col_desc"><i>array </i> <br/><br/>The subnet groups referred in the importing subnet group.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/>The objects in the referred subnet group.<br/><br/><table><tr class='odd_row'><td class="table_col_name">name</td><td class="table_col_desc"><i>string </i> <br/><br/>The name of the referred subnet group.<br/><br/></td></tr></table></td></tr></td></tr><tr class='odd_row'><td class="table_col_name">address-objs</td><td class="table_col_desc"><i>array </i> <br/><br/>The subnets referred in the importing subnet group.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/>The objects in the referred subnet.<br/><br/><table><tr class='odd_row'><td class="table_col_name">name</td><td class="table_col_desc"><i>string </i> <br/><br/>The name of the referred subnet.<br/><br/></td></tr></table></td></tr></td></tr><tr class='odd_row'><td class="table_col_name">create-time</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The timestamp of creating the subnet group.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">discription</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The discription of the importing subnet group.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">name</td><td class="table_col_desc"><i>string </i> <br/><br/>The name of the importing subnet group.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">tags</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The tags of the importing subnet group.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">update-time</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The timestamp of updating the subnet group.<br/><br/></td></tr></table></td></tr></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">data-type</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/> Default: <i>txt </i> <br/>The format of the importing data.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;zip/base64<br/>&nbsp;&nbsp;&nbsp;&nbsp;txt</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">conflict-option</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/> Default: <i>rename </i> <br/>When the importing object has the name conflict with an local object, rename the importing object, replace the local object, or skip importing the object.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;rename<br/>&nbsp;&nbsp;&nbsp;&nbsp;replace<br/>&nbsp;&nbsp;&nbsp;&nbsp;skip</i></b><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return Status of Importing Subnets and Subnet groups</h2><p>Return status of importing subnets and subnet groups.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>Status of the current task<br/><br/><table><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> <br/><br/>Status code<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> <br/><br/>Status description<br/><br/></td></tr></table></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=delete_soar_adom__adom-name__playbook_run>Delete Playbook Run</h1><h2>delete /soar/adom/&lt;adom-name&gt;/playbook/run</h2><p>Delete playbook run.<h6 id=${soar.delete.playbook.run.req}.request>Request:</h6><pre>
+{
+    "id": "...", 
+    "jsonrpc": "2.0", 
+    "method": "delete", 
+    "params": [
+        {
+            "apiver": 3, 
+            "playbook-runs": {
+                "playbook-uuid": "string",
+                "instance-id": "string"
+            }, 
+            "url": "/soar/adom/&lt;adom-name&gt;/playbook/run"
+        }
+    ], 
+    "session": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${soar.delete.playbook.run.req}">Show example...</a></p></div><div id="${soar.delete.playbook.run.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Delete playbook run.</i><a class="close" href="#${soar.delete.playbook.run.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "...", 
+    "jsonrpc": "2.0", 
+    "method": "delete", 
+    "params": [
+        {
+            "apiver": 3, 
+            "playbook-runs": {
+                "playbook-uuid": "5979abf1-a807-47fd-8aca-c03d3b27c124", 
+                "instance-id": "2021-05-04T18:37:57.976500+00:00"
+            },
+            "url": "/soar/adom/SOAR/playbook/run"
+        }
+    ], 
+    "session": "..."
+}
+
+</pre></div></div></div><h6 id=${soar.delete.playbook.run.resp}.response>Response:</h6><pre>
+{
+    "id": "9efa3e12-72b7-11ea-b9fd-0cc47aa59bb0", 
+    "jsonrpc": "2.0", 
+    "result": {
+        "status": {
+            "code": number, 
+            "message": "string"
+        }
+    }
+}
+</pre><div id="wrapper"> <p><a href="#${soar.delete.playbook.run.resp}">Show example...</a></p></div><div id="${soar.delete.playbook.run.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Delete playbook run.</i><a class="close" href="#${soar.delete.playbook.run.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "9efa3e12-72b7-11ea-b9fd-0cc47aa59bb0", 
+    "jsonrpc": "2.0", 
+    "result": {
+        "status": {
+            "code": 0, 
+            "message": "ok"
+        }
+    }
+}
+
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/soar/adom/&lt;adom-name&gt;/playbook/run</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">playbook-runs</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>A structure that holds playbook runs, can not be empty.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/>A structure that hold one playbook run.<br/><br/><table><tr class='odd_row'><td class="table_col_name">playbook-uuid</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The playbook uuid.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">instance-id</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The playbook run instance id.<br/><br/></td></tr></table></td></tr></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return Status of Deleting Playbook Run</h2><p>Return status of deleting playbook run.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>Status of the current task.<br/><br/><table><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> <br/><br/>Status code<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> <br/><br/>Status description<br/><br/></td></tr></table></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<style>
+    .overlay {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: rgba(0, 0, 0, 0.5);
+        transition: opacity 200ms;
+        visibility: hidden;
+        opacity: 0;
+    }
+    .overlay .cancel {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        cursor: default;
+    }
+    .overlay:target {
+        visibility: visible;
+        opacity: 1;
+    }
+
+    .popup {
+        margin: 75px auto;
+        padding: 20px;
+        background: #fff;
+        border: 1px solid #666;
+        width: 80%;
+        height: 80vh;
+        overflow: auto;
+        box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+        position: relative;
+    }
+    .popup .close {
+        position: absolute;
+        width: 20px;
+        height: 20px;
+        top: 20px;
+        right: 20px;
+        opacity: 0.8;
+        transition: all 200ms;
+        font-size: 24px;
+        font-weight: bold;
+        text-decoration: none;
+        color: #666;
+    }
+    .popup .close:hover {
+        opacity: 1;
+    }
+    .popup .content_cmd {
+        height: 90%;
+        overflow: auto;
+    }
+    .popup .content_cmd pre {
+        width: 90%;
+    }
+    .popup p {
+        margin: 0 0 1em;
+    }
+    .popup p:last-child {
+        margin: 0;
+    }
+</style>
+    <br/>
+</div></body></html>

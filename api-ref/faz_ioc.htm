@@ -1,0 +1,533 @@
+<!doctype html><html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>FortiAnalyzer 7.4.7 (2685) JSON API Reference-IOC Commands</title>
+<style>body {
+	font-family: Verdana;
+	color: black;
+	background: #D9D9D9;
+	font-size: 13px;
+}
+h1 {
+	font-size: 20px;
+}
+h2 {
+	font-size: 15px;
+	position: sticky;
+	position: -webkit-sticky;
+	top: 0px;
+	background: #D9D9D9;
+}
+h6 {
+	font-size: 13px;
+	margin-bottom: 8px;
+	margin-left: 12px;
+	font-weight: normal;
+}
+table {
+	width: 95%;
+	font-size: 13px;
+	margin-left: 15px;
+	margin-right: 5px;
+	border-collapse: collapse;
+	margin-bottom: 16px;
+}
+td {
+	vertical-align: top;
+	padding: 5px;
+}
+pre {
+	border: 1px solid black;
+	padding: 10px;
+	font-size: 12px;
+	margin-left: 15px;
+	width: 650px;
+}
+th {
+	text-align: left;
+}
+a {
+}
+a:link {
+	text-decoration: none;
+}
+a:visited {
+}
+a:hover {
+	text-decoration: underline;
+}
+.menu {
+	background: #C0C0C0;
+	border-right: 1px solid;
+	position: fixed;
+	padding: 6px;
+	padding-top: 20px;
+	top: 0px;
+	left: 0px;
+	bottom: 0px;
+	width: 200px;
+	overflow-x: hidden;
+	overflow-y: auto;
+	white-space: nowrap;
+}
+.content {
+	position: absolute;
+	padding: 6px;
+	top: 0px;
+	left: 240px;
+	right: 0px;
+}
+.menu_header {
+	font-weight: bold;
+}
+.param_table {
+	border: 1px solid #A0A0A0;
+}
+.table_hdr_name {
+	width: 160px;
+}
+.table_col_name {
+	font-weight: bold;
+	width: 160px;
+}
+.table_col_desc {
+}
+.param_table > thead > tr > th {
+	background-color: #C0C0C0;
+	border-bottom: 1px solid #A0A0A0;
+	padding: 6px;
+}
+.param_table > tbody > tr:nth-child(even) > td {
+	background-color: #D0D0D0;
+}
+.macro_num {
+	font-weight: bold;
+	width: 50px;
+}
+.macro_val {
+}
+</style>
+</head>
+<body>
+<div class="menu"><span class="menu_header"><a href="index.htm">API Reference Home</a></span><br/><span class="menu_item"><a href="objects.htm">Common Objects</a></span><br/><br/><span class="menu_header">Database Modules</span><br/><span class="menu_item"><a href="dvmdb-main.htm">Device Manager Database</a></span><br/><span class="menu_item"><a href="task-main.htm">Task Database</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof74-2779-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof74-2779-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg74-2779-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof72-1732-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof72-1732-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg72-1732-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof70-662-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof70-662-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg70-662-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof64-2087-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof64-2087-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg64-2087-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof62-1263-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof62-1263-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg62-1263-main.htm">Policy Package</a></span><br/><br/><span class="menu_header">Daemon Modules</span><br/><span class="menu_item"><a href="cmdb-main.htm">CLI Configuration</a></span><br/><span class="menu_item"><a href="dvmcmd-main.htm">Device Manager Command</a></span><br/><span class="menu_item"><a href="um-main.htm">Update Manager</a></span><br/><span class="menu_item"><a href="sys-main.htm">System Commands</a></span><br/><br/><span class="menu_header"><a href="faz-cmd-index.htm">FortiAnalyzer Modules</a></span><br/><span class="menu_item"><a href="faz_eventmgmt.htm">Event Mgmt Commands</a></span><br/><span class="menu_item"><a href="faz_eventmgmtconfig.htm">Event Mgmt Config Commands</a></span><br/><span class="menu_item"><a href="faz_fazsys.htm">FAZ System Commands</a></span><br/><span class="menu_item"><a href="faz_fortiview.htm">FortiView Commands</a></span><br/><span class="menu_item"><a href="faz_incidentmgmt.htm">Incident Mgmt Commands</a></span><br/><span class="menu_item"><a href="faz_logview.htm">LogView Commands</a></span><br/><span class="menu_item"><a href="faz_report.htm">Report Commands</a></span><br/><span class="menu_item"><a href="faz_reportconfig.htm">Report Config Commands</a></span><br/><span class="menu_item"><a href="faz_ioc.htm">IOC Commands</a></span><br/><span class="menu_item"><a href="faz_ueba.htm">UEBA Commands</a></span><br/><span class="menu_item"><a href="faz_soar.htm">SOAR Commands</a></span><br/><br/><span class="menu_header"><a href="obj-index.htm">Index of All Objects</a></span><br/><br/></div>
+<div class="content">
+<h1>IOC Commands</h1><br/>
+
+<div>
+<h1 id=update_ioc_adom__adom-name__events_ack>Acknowledge IOC Event</h1><h2>update /ioc/adom/&lt;adom-name&gt;/events/ack</h2><p>Acknowledge a specific IOC event.<h6 id=${ioc.update.events.ack.req}.request>Request:</h6><pre>
+{
+    "method": "update",
+    "params": [
+        {
+            "url": "/ioc/adom/&lt;adom-name&lt;/events/ack",
+            "apiver": 3,
+            "events":[
+                {
+                    "endpoint-id": "string",
+                    "source-ip": "string",
+                    "timestamp": "string",
+                    "comment": "string"
+                }
+            ]
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><h6 id=${ioc.update.events.ack.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "data": { "ack-time": number },
+        "status": "string"
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>The resource path to <b>IOC Event Acknowledge</b>.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/ioc/adom/&lt;adom-name&gt;/events/ack</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">timezone</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The timezone index or name. Time range in request and date/time if any in response will follow this timezone. See Appendix<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">time-range</td><td class="table_col_desc"><i>object </i> (optional) <br/><br/>Time range for IOC acknowledge.<br/><br/><table><tr class='odd_row'><td class="table_col_name">start</td><td class="table_col_desc"><i>string </i> <br/><br/>Starting date time. Consider it following the timezone parameter's, ADOM's or FortiAnalyzer's timezone if timezone info is not specified within time range. Format: 'yyyy-MM-dd'T'HH:mm:ssZ' (RFC 3339) e.g. '2016-10-17T20:45:37-07:00 or 'yyyy-MM-dd HH:mm:ss' e.g. '2016-10-17 20:45:37'<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">end</td><td class="table_col_desc"><i>string </i> <br/><br/>Ending date time. Consider it following the timezone parameter's, ADOM's or FortiAnalyzer's timezone if timezone info is not specified within time range. Format: 'yyyy-MM-dd'T'HH:mm:ssZ' (RFC 3339) e.g. '2016-10-17T20:45:37-07:00 or 'yyyy-MM-dd HH:mm:ss' e.g. '2016-10-17 20:45:37'<br/><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">events</td><td class="table_col_desc"><i>array </i> <br/><br/>Events that need to acknowledge.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/><br/><br/><table><tr class='odd_row'><td class="table_col_name">endpoint-id</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Endpoint ID. Max length 12 bytes<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">source-ip</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Source IP.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">comment</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Comments of acknowledgement.<br/><br/></td></tr></table></td></tr></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_ioc_license_state>Get IOC license state</h1><h2>get /ioc/license/state</h2><p>Get IOC license state.<h6 id=${ioc.get.license.state.req}.request>Request:</h6><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/ioc/license/state",
+            "apiver": 3
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${ioc.get.license.state.req}">Show example...</a></p></div><div id="${ioc.get.license.state.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Get IOC license state.</i><a class="close" href="#${ioc.get.license.state.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "method": "get",
+    "params": [
+        {
+            "apiver": "3",
+            "url": "/ioc/license/state"
+        }
+    ],
+    "session": "xxxx"
+}
+</pre></div></div></div><h6 id=${ioc.get.license.state.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "data": { 
+           "license-state": "string",
+           "expiration": "string",
+           "TIDB-version": "string",
+           "TIDB-load-time": "string"
+        },
+        "status": {
+           "code": number,
+           "message": "string"
+        }
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${ioc.get.license.state.resp}">Show example...</a></p></div><div id="${ioc.get.license.state.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Get IOC license state.</i><a class="close" href="#${ioc.get.license.state.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "result": {
+        "data": [
+            {
+               "license-state": "valid",
+               "expiration": "2025-Jan-04",
+               "TIDB-version": "00000.00253-1610271903",
+               "TIDB-load-time": "2018-03-05 05:51:24"
+            }
+        ],
+    "status": {
+         "code": 0,
+         "message": "ok"
+      },
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>The resource path to <b>IOC license state</b>.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/ioc/license/state</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Get IOC license state Resopnse</h2><p>Get IOC License State Resopnse.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>Status of the current task<br/><br/><table><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>Status code<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Status description<br/><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>A structure that holds the returned values.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/><br/><br/><table><tr class='odd_row'><td class="table_col_name">license-state</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>IOC license state<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">expiration</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>IOC license expiration<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">TIDB-version</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>TIDB version<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">TIDB-load-time</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>TIDB load time<br/><br/></td></tr></table></td></tr></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_ioc_adom__adom-name__rescan_run>Get IOC rescan running task</h1><h2>get /ioc/adom/&lt;adom-name&gt;/rescan/run</h2><p>Get IOC rescan running task.<h6 id=${ioc.get.rescan.run.req}.request>Request:</h6><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/ioc/rescan/run",
+            "apiver": 3
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${ioc.get.rescan.run.req}">Show example...</a></p></div><div id="${ioc.get.rescan.run.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Get IOC rescan running task.</i><a class="close" href="#${ioc.get.rescan.run.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/ioc/rescan/run",
+            "apiver": 3
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "xxxx",
+    "id": "12345678"
+}
+</pre></div></div></div><h6 id=${ioc.get.rescan.run.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "data": { 
+           "tid": "number",
+           "timestamp-begin": "number",
+           "timestamp-end": "number",
+           "time-begin": "string",
+           "time-end": "string",
+           "status": "string",
+           "msg": "string",
+           "percentage": "number",
+           "threats-count": "number",
+           "new-blacklist-tidb": "number"
+        },
+        "status": {
+           "code": number,
+           "message": "string"
+        }
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${ioc.get.rescan.run.resp}">Show example...</a></p></div><div id="${ioc.get.rescan.run.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Get IOC rescan running task.</i><a class="close" href="#${ioc.get.rescan.run.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "result": {
+        "data": { 
+           "tid": "1536109300",
+           "timestamp-begin": "1536109300",
+           "timestamp-end": "1536189300",
+           "time-begin": "2018-09-04 18:01:40 -0800",
+           "time-end": "2018-09-05 16:15:00 -0800",
+           "status": "running",
+           "msg": "",
+           "percentage": "34",
+           "threats-count": "17",
+           "new-blacklist-tidb": "209"
+        },
+        "status": {
+           "code": 0,
+           "message": "ok"
+        }
+    },
+    "jsonrpc": "2.0",
+    "id": "12345678"
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>The resource path to <b>IOC rescan run</b>.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/ioc/adom/&lt;adom-name&gt;/rescan/run</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Get IOC rescan running task</h2><p>Resopnse of get IOC rescan running task.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>Status of the current task<br/><br/><table><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>Status code<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Status description<br/><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>A structure that holds the returned values.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/><br/><br/><table><tr class='odd_row'><td class="table_col_name">tid</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>task id<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">timestamp-begin</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>task begin time<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">timestamp-end</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>task end time<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">time-begin</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>task begin time<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">time-end</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>task end time<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>task status<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">msg</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>detail information of the task<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">percentage</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>percentage of task progress<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">threats-count</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>count of threats found in the task<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">new-blacklist-tidb</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>count of new blacklist in this version of tidb<br/><br/></td></tr></table></td></tr></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_ioc_adom__adom-name__rescan_history>Get IOC rescan history</h1><h2>get /ioc/adom/&lt;adom-name&gt;/rescan/history</h2><p>Get IOC rescan history.<h6 id=${ioc.get.rescan.history.req}.request>Request:</h6><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/ioc/rescan/history",
+            "apiver": 3
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${ioc.get.rescan.history.req}">Show example...</a></p></div><div id="${ioc.get.rescan.history.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Get IOC rescan history.</i><a class="close" href="#${ioc.get.rescan.history.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/ioc/rescan/history",
+            "apiver": 3
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "XXXX",
+    "id": "34567"
+}
+</pre></div></div></div><h6 id=${ioc.get.rescan.history.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "data": [{ 
+           "tid": "number",
+           "timestamp-begin": "number",
+           "timestamp-end": "number",
+           "time-begin": "string",
+           "time-end": "string",
+           "status": "string",
+           "percentage": "number",
+           "threats-count": "number",
+           "new-blacklist-tidb": "number",
+           "logs-count": "number",
+           "logtimestamp-begin": "number",
+           "logtimestamp-end": "number",
+           "logtime-begin": "string",
+           "logtime-end": "string"
+        }],
+        "status": {
+           "code": number,
+           "message": "string"
+        }
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${ioc.get.rescan.history.resp}">Show example...</a></p></div><div id="${ioc.get.rescan.history.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Get IOC rescan history.</i><a class="close" href="#${ioc.get.rescan.history.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "result": {
+        "data": [{ 
+           "tid": 1536109300,
+           "timestamp-begin": 1536109300,
+           "timestamp-end": 1536129300,
+           "time-begin": "2018-09-04 18:01:40 -0800",
+           "time-end": "2018-09-04 23:35:00 -0800",
+           "status": "complete",
+           "percentage": 35,
+           "threats-count": 19,
+           "new-blacklist-tidb": 311,
+           "logs-count": 1238630412,
+           "logtimestamp-begin": 1535504400,
+           "logtimestamp-end": 1536109200,
+           "logtime-begin": "2018-08-28 18:00:00 -0800",
+           "logtime-end": "2018-09-04 18:00:00 -0800"
+        }],
+        "status": {
+           "code": 0,
+           "message": "ok"
+        }
+    },
+    "jsonrpc": "2.0",
+    "id": "34567"
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>The resource path to <b>IOC rescan history</b>.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/ioc/adom/&lt;adom-name&gt;/rescan/history</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Get IOC rescan history</h2><p>Resopnse of get IOC rescan history.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>Status of the current task<br/><br/><table><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>Status code<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Status description<br/><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>A structure that holds the returned values.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/><br/><br/><table><tr class='odd_row'><td class="table_col_name">tid</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>task id<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">timestamp-begin</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>task begin time<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">timestamp-end</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>task end time<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">time-begin</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>task begin time<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">time-end</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>task end time<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>task status<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">percentage</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>percentage of task progress<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">threats-count</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>count of threats found in the task<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">new-blacklist-tidb</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>count of new blacklist in this version of tidb<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">logs-count</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>count of logs in the task<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">logtimestamp-begin</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>begin time in logs<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">logtimestamp-end</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>end time in logs<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">logtime-begin</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>begin time in logs<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">logtime-end</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>end time in logs<br/><br/></td></tr></table></td></tr></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=delete_ioc_adom__adom-name__rescan_run__tid_>Delete an IOC rescan running task</h1><h2>delete /ioc/adom/&lt;adom-name&gt;/rescan/run/&lt;tid&gt;</h2><p>Delete an IOC rescan running task.<h6 id=${ioc.delete.rescan.run.req}.request>Request:</h6><pre>
+{
+    "method": "delete",
+    "params": [
+        {
+            "url": "/ioc/rescan/run",
+            "apiver": 3
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${ioc.delete.rescan.run.req}">Show example...</a></p></div><div id="${ioc.delete.rescan.run.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Delete an IOC rescan running task.</i><a class="close" href="#${ioc.delete.rescan.run.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "method": "delete",
+    "params": [
+        {
+            "url": "/ioc/rescan/run",
+            "apiver": 3
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "XXXX",
+    "id": "567890"
+}
+</pre></div></div></div><h6 id=${ioc.delete.rescan.run.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "data": { 
+           "status": "string"
+        },
+        "status": {
+           "code": number,
+           "message": "string"
+        }
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${ioc.delete.rescan.run.resp}">Show example...</a></p></div><div id="${ioc.delete.rescan.run.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Delete an IOC rescan running task.</i><a class="close" href="#${ioc.delete.rescan.run.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "result": {
+        "data": { 
+           "status": "ok"
+        },
+        "status": {
+           "code": 0,
+           "message": "ok"
+        }
+    },
+    "jsonrpc": "2.0",
+    "id": "567890"
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>The resource path to <b>IOC rescan run</b>.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/ioc/adom/&lt;adom-name&gt;/rescan/run/&lt;tid&gt;</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Delete an IOC rescan running task</h2><p>Resopnse of delete an IOC rescan running task.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>Status of the current task<br/><br/><table><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>Status code<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Status description<br/><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>A structure that holds the returned values.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/><br/><br/><table><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>result<br/><br/></td></tr></table></td></tr></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<style>
+    .overlay {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: rgba(0, 0, 0, 0.5);
+        transition: opacity 200ms;
+        visibility: hidden;
+        opacity: 0;
+    }
+    .overlay .cancel {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        cursor: default;
+    }
+    .overlay:target {
+        visibility: visible;
+        opacity: 1;
+    }
+
+    .popup {
+        margin: 75px auto;
+        padding: 20px;
+        background: #fff;
+        border: 1px solid #666;
+        width: 80%;
+        height: 80vh;
+        overflow: auto;
+        box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+        position: relative;
+    }
+    .popup .close {
+        position: absolute;
+        width: 20px;
+        height: 20px;
+        top: 20px;
+        right: 20px;
+        opacity: 0.8;
+        transition: all 200ms;
+        font-size: 24px;
+        font-weight: bold;
+        text-decoration: none;
+        color: #666;
+    }
+    .popup .close:hover {
+        opacity: 1;
+    }
+    .popup .content_cmd {
+        height: 90%;
+        overflow: auto;
+    }
+    .popup .content_cmd pre {
+        width: 90%;
+    }
+    .popup p {
+        margin: 0 0 1em;
+    }
+    .popup p:last-child {
+        margin: 0;
+    }
+</style>
+    <br/>
+</div></body></html>

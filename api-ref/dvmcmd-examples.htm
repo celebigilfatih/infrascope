@@ -1,0 +1,378 @@
+<!doctype html><html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>FortiAnalyzer 7.4.7 (2685) JSON API Reference-Device Manager Command Examples</title>
+<style>body {
+	font-family: Verdana;
+	color: black;
+	background: #D9D9D9;
+	font-size: 13px;
+}
+h1 {
+	font-size: 20px;
+}
+h2 {
+	font-size: 15px;
+	position: sticky;
+	position: -webkit-sticky;
+	top: 0px;
+	background: #D9D9D9;
+}
+h6 {
+	font-size: 13px;
+	margin-bottom: 8px;
+	margin-left: 12px;
+	font-weight: normal;
+}
+table {
+	width: 95%;
+	font-size: 13px;
+	margin-left: 15px;
+	margin-right: 5px;
+	border-collapse: collapse;
+	margin-bottom: 16px;
+}
+td {
+	vertical-align: top;
+	padding: 5px;
+}
+pre {
+	border: 1px solid black;
+	padding: 10px;
+	font-size: 12px;
+	margin-left: 15px;
+	width: 650px;
+}
+th {
+	text-align: left;
+}
+a {
+}
+a:link {
+	text-decoration: none;
+}
+a:visited {
+}
+a:hover {
+	text-decoration: underline;
+}
+.menu {
+	background: #C0C0C0;
+	border-right: 1px solid;
+	position: fixed;
+	padding: 6px;
+	padding-top: 20px;
+	top: 0px;
+	left: 0px;
+	bottom: 0px;
+	width: 200px;
+	overflow-x: hidden;
+	overflow-y: auto;
+	white-space: nowrap;
+}
+.content {
+	position: absolute;
+	padding: 6px;
+	top: 0px;
+	left: 240px;
+	right: 0px;
+}
+.menu_header {
+	font-weight: bold;
+}
+.param_table {
+	border: 1px solid #A0A0A0;
+}
+.table_hdr_name {
+	width: 160px;
+}
+.table_col_name {
+	font-weight: bold;
+	width: 160px;
+}
+.table_col_desc {
+}
+.param_table > thead > tr > th {
+	background-color: #C0C0C0;
+	border-bottom: 1px solid #A0A0A0;
+	padding: 6px;
+}
+.param_table > tbody > tr:nth-child(even) > td {
+	background-color: #D0D0D0;
+}
+.macro_num {
+	font-weight: bold;
+	width: 50px;
+}
+.macro_val {
+}
+</style>
+</head>
+<body>
+<div class="menu"><span class="menu_header"><a href="index.htm">API Reference Home</a></span><br/><span class="menu_item"><a href="objects.htm">Common Objects</a></span><br/><br/><span class="menu_header">Database Modules</span><br/><span class="menu_item"><a href="dvmdb-main.htm">Device Manager Database</a></span><br/><span class="menu_item"><a href="task-main.htm">Task Database</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof74-2779-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof74-2779-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg74-2779-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof72-1732-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof72-1732-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg72-1732-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof70-662-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof70-662-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg70-662-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof64-2087-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof64-2087-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg64-2087-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof62-1263-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof62-1263-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg62-1263-main.htm">Policy Package</a></span><br/><br/><span class="menu_header">Daemon Modules</span><br/><span class="menu_item"><a href="cmdb-main.htm">CLI Configuration</a></span><br/><span class="menu_item"><a href="dvmcmd-main.htm">Device Manager Command</a></span><br/><span class="menu_item"><a href="um-main.htm">Update Manager</a></span><br/><span class="menu_item"><a href="sys-main.htm">System Commands</a></span><br/><br/><span class="menu_header"><a href="faz-cmd-index.htm">FortiAnalyzer Modules</a></span><br/><span class="menu_item"><a href="faz_eventmgmt.htm">Event Mgmt Commands</a></span><br/><span class="menu_item"><a href="faz_eventmgmtconfig.htm">Event Mgmt Config Commands</a></span><br/><span class="menu_item"><a href="faz_fazsys.htm">FAZ System Commands</a></span><br/><span class="menu_item"><a href="faz_fortiview.htm">FortiView Commands</a></span><br/><span class="menu_item"><a href="faz_incidentmgmt.htm">Incident Mgmt Commands</a></span><br/><span class="menu_item"><a href="faz_logview.htm">LogView Commands</a></span><br/><span class="menu_item"><a href="faz_report.htm">Report Commands</a></span><br/><span class="menu_item"><a href="faz_reportconfig.htm">Report Config Commands</a></span><br/><span class="menu_item"><a href="faz_ioc.htm">IOC Commands</a></span><br/><span class="menu_item"><a href="faz_ueba.htm">UEBA Commands</a></span><br/><span class="menu_item"><a href="faz_soar.htm">SOAR Commands</a></span><br/><br/><span class="menu_header"><a href="obj-index.htm">Index of All Objects</a></span><br/><br/></div>
+<div class="content">
+<h1>Device Manager Command Examples</h1><br/>
+<h2 id='dvmcmd-example'>Device management examples</h2><br/>Probe a remote FortiGate device at 192.168.1.1.<br/><br/>Request:<br/><pre>{
+    "id": 1,
+    "method": "exec",
+    "params": [ 
+        {
+            "url": "dvm/cmd/discover/device",
+            "data": {
+                "adom": "root",
+                "device": {
+                    "adm_pass": "",
+                    "adm_usr": "admin",
+                    "ip": "192.168.1.1" 
+                } 
+            } 
+        } 
+    ]
+}</pre><br/>Response:<br/><pre>{
+    "id": 1,
+    "result": {
+        "data": {
+            "device": {
+                "adm_usr": "admin",
+                "av_ver": "16.00560(2012-10-19 08:31)",
+                "beta": -1,
+                "branch_pt": 526,
+                "build": 526,
+                "conn_mode": 1,
+                "conn_status": 1,
+                "dev_status": 1,
+                "flags": 2097155,
+                "ip": "192.168.1.1",
+                "ips_ver": "4.00345(2013-05-23 00:39)",
+                "last_checked": 1396398164,
+                "maxvdom": 10,
+                "mr": 2,
+                "name": "FortiGate-VM",
+                "os_type": 0,
+                "os_ver": 5,
+                "patch": -1,
+                "platform_id": 74,
+                "platform_str": "FortiGate-VM",
+                "sn": "FGVMEV0000000001",
+                "version": 500,
+                "vm_cpu": 1,
+                "vm_cpu_limit": 1,
+                "vm_mem": 501,
+                "vm_mem_limit": 2048,
+                "vm_status": 3 
+            } 
+        },
+        "status": {
+            "code": 0,
+            "message": "OK" 
+        },
+        "url": "dvm/cmd/discover/device" 
+    }
+}</pre><br/>Add the device into Device Manager.<br/><br/>Request:<br/><pre>{
+    "id": 2,
+    "method": "exec",
+    "params": [ 
+        {
+            "url": "dvm/cmd/add/device",
+            "data": {
+                "adom": "root",
+                "flags": [ "create_task", "nonblocking" ],
+                "device": {
+                    "adm_pass": "",
+                    "adm_usr": "admin",
+                    "desc": "Real FortiGate device",
+                    "ip": "192.168.1.1",
+                    "meta fields": {
+                        "Company/Organization": "Fortinet",
+                        "Country": "Canada" 
+                    },
+                    "name": "fg1",
+                    "mgmt_mode": "fmgfaz" 
+                } 
+            } 
+        } 
+    ]
+}</pre><br/>Response:<br/><pre>{
+    "id": 2,
+    "result": {
+        "data": {
+            "pid": 850,
+            "taskid": 490 
+        },
+        "status": {
+            "code": 0,
+            "message": "OK" 
+        },
+        "url": "dvm/cmd/add/device" 
+    }
+}</pre><br/>Query the status of the non-blocking add device task to check if it is completed without any error.<br/><br/>Request:<br/><pre>{
+    "id": 3,
+    "method": "get",
+    "params": [ 
+        {
+            "url": "/task/task",
+            "filter": [ "id", "==", 490 ],
+            "fields": [ "state", "percent", "num_err" ],
+            "loadsub": 0 
+        } 
+    ]
+}</pre><br/>Response:<br/><pre>{
+    "id": 3,
+    "result": [ 
+        {
+            "data": [ 
+                {
+                    "num_err": 0,
+                    "percent": 100,
+                    "state": 0 
+                } 
+            ],
+            "url": "/task/task" 
+        } 
+    ]
+}</pre><br/>Refresh the FGFM connection for the newly-added device "fg1".<br/>This task is performed without the "create_task" flag, so no task id will be created and returned.<br/><br/>Request:<br/><pre>{
+    "id": 4,
+    "method": "exec",
+    "params": [ 
+        {
+            "url": "dvm/cmd/update/device",
+            "data": {
+                "adom": "root",
+                "flags": [ "nonblocking" ],
+                "device": "fg1" 
+            } 
+        } 
+    ]
+}</pre><br/>Response:<br/><pre>{
+    "id": 4,
+    "result": {
+        "data": {
+            "pid": 1321 
+        },
+        "status": {
+            "code": 0,
+            "message": "OK" 
+        },
+        "url": "dvm/cmd/update/device" 
+    }
+}</pre><br/>Retrieve the configuration for the device "fg1".<br/><br/>Request:<br/><pre>{
+    "id": 5,
+    "method": "exec",
+    "params": [ 
+        {
+            "url": "dvm/cmd/reload/dev-list",
+            "data": {
+                "adom": "root",
+                "flags": [ "create_task", "nonblocking" ],
+                "reload-dev-member-list": {
+                    "name": "fg1" 
+                },
+                "tag": "Retrieved from JSON API" 
+            } 
+        } 
+    ]
+}</pre><br/>Response:<br/><pre>{
+    "id": 5,
+    "result": {
+        "data": {
+            "pid": 1557,
+            "taskid": 492 
+        },
+        "status": {
+            "code": 0,
+            "message": "OK" 
+        },
+        "url": "dvm/cmd/reload/dev-list" 
+    }
+}</pre><br/>Add a new model device "fg2".<br/>This command is executed as a blocking call, so the daemon will return an updated device object with the attributes of the model device.<br/><br/>For FOS/FOC devices, platform will be automatically determined by serial number specified, and the device can be later linked to real device with matching serial number.<br/><br/>For other devices, the request should also include platform string and device IP.<br/><br/>Request:<br/><pre>{
+    "id": 6,
+    "method": "exec",
+    "params": [ 
+        {
+            "url": "dvm/cmd/add/device",
+            "data": {
+                "adom": "root",
+                "device": {
+                    "adm_pass": "",
+                    "adm_usr": "admin",
+                    "desc": "Model device",
+                    "name": "fg2",
+                    "mgmt_mode": "fmg",
+                    "sn": "FG-5KC0000000001",
+                    "os_type": "fos",
+                    "os_ver": 5,
+                    "mr": 0,
+                    "patch": 6,
+                    "device action": "add_model" 
+                } 
+            } 
+        } 
+    ]
+}</pre><br/>Response:<br/><pre>{
+    "id": 6,
+    "result": {
+        "data": {
+            "device": {
+                "adm_usr": "admin",
+                "beta": -1,
+                "branch_pt": 271,
+                "build": 271,
+                "conn_mode": 1,
+                "desc": "Model device",
+                "dev_status": 1,
+                "flags": 262144,
+                "ip": "192.168.1.2",
+                "maxvdom": 10,
+                "mgmt_id": 476679418,
+                "mgmt_mode": 1,
+                "mr": 0,
+                "name": "fg2",
+                "oid": 817,
+                "os_type": 0,
+                "os_ver": 5,
+                "patch": 6,
+                "platform_str": "FortiGate-5001C",
+                "sn": "FGT20C0476679MDL",
+                "version": 500 
+            } 
+        },
+        "status": {
+            "code": 0,
+            "message": "OK" 
+        },
+        "url": "dvm/cmd/add/device" 
+    }
+}</pre><br/>Remove both devices from Device Manager.<br/><br/>Request:<br/><pre>{
+    "id": 7,
+    "method": "exec",
+    "params": [ 
+        {
+            "url": "dvm/cmd/del/dev-list",
+            "data": {
+                "adom": "root",
+                "flags": [ "create_task", "nonblocking" ],
+                "del-dev-member-list": [ 
+                    {
+                        "name": "fg1" 
+                    },
+                    {
+                        "name": "fg2" 
+                    } 
+                ] 
+            } 
+        } 
+    ]
+}</pre><br/>Response:<br/><pre>{
+    "id": 7,
+    "result": {
+        "data": {
+            "taskid": 496 
+        },
+        "status": {
+            "code": 0,
+            "message": "OK" 
+        },
+        "url": "dvm/cmd/del/dev-list" 
+    }
+}</pre><br/>
+</div></body></html>

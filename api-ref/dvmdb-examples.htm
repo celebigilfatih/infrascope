@@ -1,0 +1,802 @@
+<!doctype html><html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>FortiAnalyzer 7.4.7 (2685) JSON API Reference-Device Manager Database Examples</title>
+<style>body {
+	font-family: Verdana;
+	color: black;
+	background: #D9D9D9;
+	font-size: 13px;
+}
+h1 {
+	font-size: 20px;
+}
+h2 {
+	font-size: 15px;
+	position: sticky;
+	position: -webkit-sticky;
+	top: 0px;
+	background: #D9D9D9;
+}
+h6 {
+	font-size: 13px;
+	margin-bottom: 8px;
+	margin-left: 12px;
+	font-weight: normal;
+}
+table {
+	width: 95%;
+	font-size: 13px;
+	margin-left: 15px;
+	margin-right: 5px;
+	border-collapse: collapse;
+	margin-bottom: 16px;
+}
+td {
+	vertical-align: top;
+	padding: 5px;
+}
+pre {
+	border: 1px solid black;
+	padding: 10px;
+	font-size: 12px;
+	margin-left: 15px;
+	width: 650px;
+}
+th {
+	text-align: left;
+}
+a {
+}
+a:link {
+	text-decoration: none;
+}
+a:visited {
+}
+a:hover {
+	text-decoration: underline;
+}
+.menu {
+	background: #C0C0C0;
+	border-right: 1px solid;
+	position: fixed;
+	padding: 6px;
+	padding-top: 20px;
+	top: 0px;
+	left: 0px;
+	bottom: 0px;
+	width: 200px;
+	overflow-x: hidden;
+	overflow-y: auto;
+	white-space: nowrap;
+}
+.content {
+	position: absolute;
+	padding: 6px;
+	top: 0px;
+	left: 240px;
+	right: 0px;
+}
+.menu_header {
+	font-weight: bold;
+}
+.param_table {
+	border: 1px solid #A0A0A0;
+}
+.table_hdr_name {
+	width: 160px;
+}
+.table_col_name {
+	font-weight: bold;
+	width: 160px;
+}
+.table_col_desc {
+}
+.param_table > thead > tr > th {
+	background-color: #C0C0C0;
+	border-bottom: 1px solid #A0A0A0;
+	padding: 6px;
+}
+.param_table > tbody > tr:nth-child(even) > td {
+	background-color: #D0D0D0;
+}
+.macro_num {
+	font-weight: bold;
+	width: 50px;
+}
+.macro_val {
+}
+</style>
+</head>
+<body>
+<div class="menu"><span class="menu_header"><a href="index.htm">API Reference Home</a></span><br/><span class="menu_item"><a href="objects.htm">Common Objects</a></span><br/><br/><span class="menu_header">Database Modules</span><br/><span class="menu_item"><a href="dvmdb-main.htm">Device Manager Database</a></span><br/><span class="menu_item"><a href="task-main.htm">Task Database</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof74-2779-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof74-2779-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg74-2779-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof72-1732-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof72-1732-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg72-1732-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof70-662-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof70-662-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg70-662-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof64-2087-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof64-2087-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg64-2087-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof62-1263-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof62-1263-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg62-1263-main.htm">Policy Package</a></span><br/><br/><span class="menu_header">Daemon Modules</span><br/><span class="menu_item"><a href="cmdb-main.htm">CLI Configuration</a></span><br/><span class="menu_item"><a href="dvmcmd-main.htm">Device Manager Command</a></span><br/><span class="menu_item"><a href="um-main.htm">Update Manager</a></span><br/><span class="menu_item"><a href="sys-main.htm">System Commands</a></span><br/><br/><span class="menu_header"><a href="faz-cmd-index.htm">FortiAnalyzer Modules</a></span><br/><span class="menu_item"><a href="faz_eventmgmt.htm">Event Mgmt Commands</a></span><br/><span class="menu_item"><a href="faz_eventmgmtconfig.htm">Event Mgmt Config Commands</a></span><br/><span class="menu_item"><a href="faz_fazsys.htm">FAZ System Commands</a></span><br/><span class="menu_item"><a href="faz_fortiview.htm">FortiView Commands</a></span><br/><span class="menu_item"><a href="faz_incidentmgmt.htm">Incident Mgmt Commands</a></span><br/><span class="menu_item"><a href="faz_logview.htm">LogView Commands</a></span><br/><span class="menu_item"><a href="faz_report.htm">Report Commands</a></span><br/><span class="menu_item"><a href="faz_reportconfig.htm">Report Config Commands</a></span><br/><span class="menu_item"><a href="faz_ioc.htm">IOC Commands</a></span><br/><span class="menu_item"><a href="faz_ueba.htm">UEBA Commands</a></span><br/><span class="menu_item"><a href="faz_soar.htm">SOAR Commands</a></span><br/><br/><span class="menu_header"><a href="obj-index.htm">Index of All Objects</a></span><br/><br/></div>
+<div class="content">
+<h1>Device Manager Database Examples</h1><br/>
+<h2 id='dvmdb-device'>Device and device group management examples</h2><br/>Get a summary list of all managed devices.<br/><br/>Request:<br/><pre>{
+    "id": 1,
+    "method": "get",
+    "params": [ 
+        {
+            "url": "/dvmdb/device",
+            "fields": [ "name", "ip", "platform_str", "os_ver" ],
+            "loadsub": 0 
+        } 
+    ] 
+}</pre><br/>Response:<br/><pre>{
+    "id": 1,
+    "result": [ 
+        {
+            "data": [ 
+                {
+                    "ip": "192.168.1.3",
+                    "name": "faz",
+                    "os_ver": 5,
+                    "platform_str": "FortiAnalyzer-100C" 
+                },
+                {
+                    "ip": "192.168.1.5",
+                    "name": "fgvm",
+                    "os_ver": 4,
+                    "platform_str": "FortiGate-VM" 
+                },
+                {
+                    "ip": "192.168.1.7",
+                    "name": "fg1",
+                    "os_ver": 5,
+                    "platform_str": "FortiGate-3600C" 
+                },
+                {
+                    "ip": "192.168.1.82",
+                    "name": "fsa",
+                    "os_ver": 1,
+                    "platform_str": "FortiSandbox-3000D" 
+                },
+                {
+                    "ip": "192.168.1.4",
+                    "name": "fazvm64",
+                    "os_ver": 5,
+                    "platform_str": "FortiAnalyzer-VM64" 
+                },
+                {
+                    "ip": "192.168.1.15",
+                    "name": "foc",
+                    "os_ver": 5,
+                    "platform_str": "FortiCarrier-VM64" 
+                },
+                {
+                    "ip": "192.168.1.34",
+                    "name": "fg2",
+                    "os_ver": 5,
+                    "platform_str": "FortiGate-VM" 
+                } 
+            ],
+            "url": "/dvmdb/device" 
+        } 
+    ] 
+}</pre><br/>Get a summary list of all devices in root ADOM with name containing "fg".<br/><br/>Request:<br/><pre>{
+    "id": 2,
+    "method": "get",
+    "params": [ 
+        {
+            "url": "/dvmdb/adom/root/device",
+            "fields": [ "name", "ip", "platform_str", "os_ver" ],
+            "filter": [ "name", "like", "fg%" ],
+            "loadsub": 0 
+        } 
+    ] 
+}</pre><br/>Response:<br/><pre>{
+    "id": 2,
+    "result": [ 
+        {
+            "data": [ 
+                {
+                    "ip": "192.168.1.5",
+                    "name": "fgvm",
+                    "os_ver": 4,
+                    "platform_str": "FortiGate-VM" 
+                },
+                {
+                    "ip": "192.168.1.7",
+                    "name": "fg1",
+                    "os_ver": 5,
+                    "platform_str": "FortiGate-3600C" 
+                },
+                {
+                    "ip": "192.168.1.34",
+                    "name": "fg2",
+                    "os_ver": 5,
+                    "platform_str": "FortiGate-VM" 
+                } 
+            ],
+            "url": "/dvmdb/device" 
+        } 
+    ] 
+}</pre><br/>Edit the device meta field.<br/><br/>Request:<br/><pre>{
+    "id": 3,
+    "method": "update",
+    "params": [ 
+        {
+            "url": "/dvmdb/device/fg1",
+            "data": {
+                "meta fields": {
+                    "Company/Organization": "Fortinet" 
+                } 
+            } 
+        } 
+    ] 
+}</pre><br/>Response:<br/><pre>{
+    "id": 3,
+    "result": [ 
+        {
+            "status": {
+                "code": 0,
+                "message": "OK" 
+            },
+            "url": "/dvmdb/device/fg1" 
+        } 
+    ] 
+}</pre><br/>Move a device to another ADOM, add, set, or update the object member of the new ADOM. Delete directly from the old ADOM will result in an error.<br/><br/>Request:<br/><pre>{
+    "id": 4,
+    "method": "add",
+    "params": [ 
+        {
+            "url": "/dvmdb/adom/new_adom/object member",
+            "data": [ 
+                {
+                    "name": "fg1",
+                    "vdom": "root" 
+                },
+                {
+                    "name": "fg1",
+                    "vdom": "vd1" 
+                } 
+            ] 
+        } 
+    ] 
+}</pre><br/>Response:<br/><pre>{
+    "id": 4,
+    "result": [ 
+        {
+            "status": {
+                "code": 0,
+                "message": "OK" 
+            },
+            "url": "/dvmdb/adom/new_adom/object member" 
+        } 
+    ] 
+}</pre><br/>Create two new device groups.<br/><br/>Request:<br/><pre>{
+    "id": 5,
+    "method": "add",
+    "params": [ 
+        {
+            "url": "/dvmdb/adom/new_adom/group",
+            "data": [ 
+                {
+                    "name": "grp1",
+                    "os_type": "fos",
+                    "desc": "new group" 
+                },
+                {
+                    "name": "grp2",
+                    "os_type": "fos",
+                    "desc": "new group" 
+                } 
+            ] 
+        } 
+    ] 
+}</pre><br/>Response:<br/><pre>{
+    "id": 5,
+    "result": [ 
+        {
+            "status": {
+                "code": 0,
+                "message": "OK" 
+            },
+            "url": "/dvmdb/adom/new_adom/group" 
+        } 
+    ] 
+}</pre><br/>Set the member of one of the new device group to a list mixed with device VDOMs and groups.<br/><br/>Request:<br/><pre>{
+    "id": 6,
+    "method": "set",
+    "params": [ 
+        {
+            "url": "/dvmdb/adom/new_adom/group/grp1/object member",
+            "data": [ 
+                {
+                    "name": "fg1",
+                    "vdom": "root" 
+                },
+                {
+                    "name": "fg1",
+                    "vdom": "vd1" 
+                },
+                {
+                    "name": "grp2" 
+                } 
+            ] 
+        } 
+    ] 
+}</pre><br/>Response:<br/><pre>{
+    "id": 6,
+    "result": [ 
+        {
+            "status": {
+                "code": 0,
+                "message": "OK" 
+            },
+            "url": "/dvmdb/adom/new_adom/group/grp1/object member" 
+        } 
+    ] 
+}</pre><br/>Fetch the device group grp1, including selected attributes of member objects.<br/><br/>Request:<br/><pre>{
+    "id": 7,
+    "method": "get",
+    "params": [ 
+        {
+            "url": "/dvmdb/adom/new_adom/group/grp1",
+            "expand member": [ 
+                {
+                    "url": "/group",
+                    "fields": [ "name", "desc" ] 
+                },
+                {
+                    "url": "/device",
+                    "fields": [ "name", "platform_str", "desc" ] 
+                } 
+            ] 
+        } 
+    ] 
+}</pre><br/>Response:<br/><pre>{
+    "id": 7,
+    "result": [ 
+        {
+            "data": {
+                "desc": "new group",
+                "expand member": {
+                    "/device": [ 
+                        {
+                            "desc": "",
+                            "name": "fg1",
+                            "platform_str": "FortiGate-3600C",
+                            "vdom": [ 
+                                {
+                                    "comments": "",
+                                    "devid": 369,
+                                    "ext_flags": 1,
+                                    "flags": 0,
+                                    "name": "root",
+                                    "node_flags": 0,
+                                    "opmode": 1,
+                                    "rtm_prof_id": 0,
+                                    "tab_status": "" 
+                                },
+                                {
+                                    "comments": "",
+                                    "devid": 369,
+                                    "ext_flags": 0,
+                                    "flags": 0,
+                                    "name": "vd1",
+                                    "node_flags": 4,
+                                    "opmode": 1,
+                                    "rtm_prof_id": 0,
+                                    "tab_status": "" 
+                                } 
+                            ] 
+                        } 
+                    ],
+                    "/group": [ 
+                        {
+                            "desc": "new group",
+                            "name": "grp2" 
+                        } 
+                    ] 
+                },
+                "name": "grp1",
+                "os_type": 0,
+                "type": 0 
+            },
+            "url": "/dvmdb/adom/new_adom/group/grp1" 
+        } 
+    ] 
+}</pre><br/><br/><h2 id='dvmdb-loggroup'>Log group examples</h2><br/>Get list for all devices/VDOM in ADOM root which is not belong to any log_group.<br/><br/>Request:<br/><pre>{
+    "id": 1,
+    "method": "get",
+    "params": [ 
+        {
+            "option": "object member",
+            "url": "/dvmdb/adom/root/device",
+            "used_by_cat_excluded": [ "/log_group" ] 
+        } 
+    ]
+}</pre>Response:<br/><pre>{
+    "id": 1,
+    "result": [ 
+        {
+            "data": [ 
+                {
+                    "name": "fg1",
+                    ... 
+                } 
+            ],
+            "url": "/dvmdb/adom/root/device" 
+        } 
+    ] 
+}</pre><br/>Add a log_group into ADOM.<br/><br/>Request:<br/><pre>{
+    "id": 2,
+    "method": "add",
+    "params": [ 
+        {
+            "data": {
+                "desc": "",
+                "disk_full_act": 0,
+                "disk_quota": 0,
+                "disk_used": 0,
+                "name": "lgrp1",
+                "os_type": 0,
+                "type": 1 
+            },
+            "url": "/dvmdb/adom/root/log_group" 
+        } 
+    ] 
+}</pre>Response:<br/><pre>{
+    "id": 2,
+    "result": [ 
+        {
+            "status": {
+                "code": 0,
+                "message": "OK" 
+            },
+            "url": "/dvmdb/adom/root/log_group" 
+        } 
+    ] 
+}</pre><br/>Add a VDOM into log group.<br/><br/>Request:<br/><pre>{
+    "id": 3,
+    "method": "add",
+    "params": [ 
+        {
+            "data": [ 
+                {
+                    "name": "fg1",
+                    "vdom": "root" 
+                } 
+            ],
+            "url": "dvmdb/adom/root/log_group/lgrp1/object member"
+        } 
+    ] 
+}</pre>Response:<br/><pre>{
+    "id": 3,
+    "result": [ 
+        {
+            "status": {
+                "code": 0,
+                "message": "OK" 
+            },
+            "url": "dvmdb/log_group/lgrp1/object member" 
+        } 
+    ] 
+}</pre><br/>Get a list of all log groups.<br/><br/>Request:<br/><pre>{
+    "id": 4,
+    "method": "get",
+    "params": [ 
+        {
+            "option": "object member",
+            "fields": [ "name" ],
+            "url": "/dvmdb/adom/root/log_group" 
+        } 
+    ] 
+}</pre>Response:<br/><pre>{
+    "id": 4,
+    "result": [ 
+        {
+            "data": [ 
+                {
+                    "name": "lgrp1",
+                    "object member": [ 
+                        {
+                            "name": "fg1",
+                            "vdom": "root" 
+                        } 
+                    ] 
+                } 
+            ],
+            "url": "/dvmdb/adom/root/log_group" 
+        } 
+    ] 
+}</pre><br/><br/>Delete a VDOM from log group.<br/><br/>Request:<br/><pre>{
+    "id": 5,
+    "method": "delete",
+    "params": [ 
+        {
+            "data": [ 
+                {
+                    "name": "fg1",
+                    "vdom": "root" 
+                } 
+            ],
+            "url": "dvmdb/adom/root/log_group/lgrp1/object member"
+        } 
+    ] 
+}</pre>Response:<br/><pre>{
+    "id": 5,
+    "result": [ 
+        {
+            "status": {
+                "code": 0,
+                "message": "OK" 
+            },
+            "url": "dvmdb/log_group/lgrp1/object member" 
+        } 
+    ] 
+}</pre><br/>Update log group memberships.<br/><br/>Request:<br/><pre>{
+    "id": 6,
+    "method": "set",
+    "params": [ 
+        {
+            "data": [ 
+                {
+                    "name": "fg1",
+                    "vdom": "root" 
+                } 
+            ],
+            "url": "dvmdb/adom/root/log_group/lgrp1/object member"
+        } 
+    ] 
+}</pre>Response:<br/><pre>{
+    "id": 6,
+    "result": [ 
+        {
+            "status": {
+                "code": 0,
+                "message": "OK" 
+            },
+            "url": "dvmdb/log_group/lgrp1/object member" 
+        } 
+    ] 
+}</pre><br/>Query "lgrp1" detail information.<br/><br/>Request:<br/><pre>{
+    "id": 7,
+    "method": "get",
+    "params": [ 
+        {
+            "option": "object member",
+            "url": "/dvmdb/adom/root/log_group/lgrp1" 
+        } 
+    ] 
+}</pre>Response:<br/><pre>{
+    "id": 7,
+    "result": [ 
+        {
+            "data": {
+                "desc": "",
+                "disk_full_act": 0,
+                "disk_quota": 0,
+                "disk_used": 0,
+                "name": "lgrp1",
+                "object member": [ 
+                    {
+                        "name": "fg1",
+                        "vdom": "root"
+                    } 
+                ],
+                "oid": 145,
+                "os_type": 0,
+                "type": 1 
+            },
+            "url": "/dvmdb/adom/root/log_group/lgrp1" 
+        } 
+    ] 
+}</pre><br/>Update a log group entry.<br/><br/>Request:<br/><pre>{
+    "id": 8,
+    "method": "update",
+    "params": [ 
+        {
+            "data": {
+                "desc": "",
+                "disk_full_act": 0,
+                "disk_quota": 0,
+                "disk_used": 0,
+                "os_type": 0,
+                "type": 0 
+            },
+            "url": "/dvmdb/adom/root/log_group/lgrp1" 
+        } 
+    ] 
+}</pre>Response:<br/><pre>{
+    "id": 8,
+    "result": [ 
+        {
+            "status": {
+                "code": 0,
+                "message": "OK" 
+            },
+            "url": "/dvmdb/adom/root/log_group/lgrp1" 
+        } 
+    ] 
+}</pre><br/>Delete a log group entry.<br/><br/>Request:<br/><pre>{
+    "id": 9,
+    "method": "delete",
+    "params": [ 
+        {
+            "url": "/dvmdb/adom/root/log_group/lgrp1" 
+        } 
+    ] 
+}</pre>Response:<br/><pre>{
+    "id": 9,
+    "result": [ 
+        {
+            "status": {
+                "code": 0,
+                "message": "OK" 
+            },
+            "url": "log_group/lgrp1" 
+        } 
+    ] 
+}</pre><br/><h2 id='dvmdb-adomrev'>ADOM revision examples</h2><br/>Get the checksum of root ADOM.<br/><br/>Request:<br/><pre>{
+    "id": 1,
+    "method": "get",
+    "params": [ 
+        {
+            "url": "/dvmdb/adom/root",
+            "option": "chksum" 
+        } 
+    ] 
+}</pre><br/>Response:<br/><pre>{
+    "id": 1,
+    "result": [ 
+        {
+            "data": 1395275786,
+            "url": "/dvmdb/adom/root" 
+        } 
+    ] 
+}</pre><br/>Create a new revision of root ADOM.<br/><br/>Request:<br/><pre>{
+    "id": 2,
+    "method": "add",
+    "params": [ 
+        {
+            "url": "/dvmdb/adom/root/revision",
+            "data": {
+                "created_by": "admin",
+                "desc": "",
+                "locked": 0,
+                "name": "rev2" 
+            } 
+        } 
+    ] 
+}</pre><br/>Response:<br/><pre>{
+    "id": 2,
+    "result": [ 
+        {
+            "data": {
+                "version": 2 
+            },
+            "status": {
+                "code": 0,
+                "message": "OK" 
+            },
+            "url": "/dvmdb/adom/root/revision" 
+        } 
+    ] 
+}</pre><br/>Get a list of revisions in root ADOM, sorted from latest to oldest.<br/><br/>Request:<br/><pre>{
+    "id": 3,
+    "method": "get",
+    "params": [ 
+        {
+            "url": "/dvmdb/adom/root/revision",
+            "sortings": [ 
+                {
+                    "version": -1 
+                } 
+            ] 
+        } 
+    ] 
+}</pre><br/>Response:<br/><pre>{
+    "id": 3,
+    "result": [ 
+        {
+            "data": [ 
+                {
+                    "created_by": "admin",
+                    "created_time": 1395275874,
+                    "desc": "",
+                    "locked": 0,
+                    "name": "rev2",
+                    "version": 2 
+                },
+                {
+                    "created_by": "admin",
+                    "created_time": 1395274727,
+                    "desc": "",
+                    "locked": 0,
+                    "name": "rev",
+                    "version": 1 
+                } 
+            ],
+            "url": "/dvmdb/adom/root/revision" 
+        } 
+    ] 
+}</pre><br/>Get the checksum of the new revision.<br/><br/>Request:<br/><pre>{
+    "id": 4,
+    "method": "get",
+    "params": [ 
+        {
+            "url": "/dvmdb/adom/root/revision/2",
+            "option": "chksum" 
+        } 
+    ] 
+}</pre><br/>Response:<br/><pre>{
+    "id": 4,
+    "result": [ 
+        {
+            "data": 1395275786,
+            "url": "/dvmdb/adom/root/revision/2" 
+        } 
+    ] 
+}</pre><br/>Restore a revision to the root ADOM.<br/><br/>Request:<br/><pre>{
+    "id": 5,
+    "method": "clone",
+    "params": [ 
+        {
+            "url": "/dvmdb/adom/root/revision/1",
+            "data": {
+                "created_by": "admin",
+                "desc": "",
+                "locked": 0,
+                "name": "restored-rev" 
+            } 
+        } 
+    ] 
+}</pre><br/>Response:<br/><pre>{
+    "id": 5,
+    "result": [ 
+        {
+            "data": {
+                "version": 3 
+            },
+            "status": {
+                "code": 0,
+                "message": "OK" 
+            },
+            "url": "/dvmdb/adom/root/revision/1" 
+        } 
+    ] 
+}</pre><br/>Lock a revision from being automatically deleted.<br/><br/>Request:<br/><pre>{
+    "id": 6,
+    "method": "update",
+    "params": [ 
+        {
+            "url": "/dvmdb/adom/root/revision/3",
+            "data": {
+                "locked": 1 
+            } 
+        } 
+    ] 
+}</pre><br/>Response:<br/><pre>{
+    "id": 6,
+    "result": [ 
+        {
+            "status": {
+                "code": 0,
+                "message": "OK" 
+            },
+            "url": "/dvmdb/adom/root/revision/3" 
+        } 
+    ] 
+}</pre><br/>Delete an old revision.<br/><br/>Request:<br/><pre>{
+    "id": 7,
+    "method": "delete",
+    "params": [ 
+        {
+            "url": "/dvmdb/adom/root/revision/1" 
+        } 
+    ] 
+}</pre><br/>Response:<br/><pre>{
+    "id": 7,
+    "result": [ 
+        {
+            "status": {
+                "code": 0,
+                "message": "OK" 
+            },
+            "url": "/dvmdb/adom/root/revision/1" 
+        } 
+    ] 
+}</pre><br/>
+</div></body></html>

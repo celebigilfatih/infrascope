@@ -1,0 +1,3087 @@
+<!doctype html><html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>FortiAnalyzer 7.4.7 (2685) JSON API Reference-LogView Commands</title>
+<style>body {
+	font-family: Verdana;
+	color: black;
+	background: #D9D9D9;
+	font-size: 13px;
+}
+h1 {
+	font-size: 20px;
+}
+h2 {
+	font-size: 15px;
+	position: sticky;
+	position: -webkit-sticky;
+	top: 0px;
+	background: #D9D9D9;
+}
+h6 {
+	font-size: 13px;
+	margin-bottom: 8px;
+	margin-left: 12px;
+	font-weight: normal;
+}
+table {
+	width: 95%;
+	font-size: 13px;
+	margin-left: 15px;
+	margin-right: 5px;
+	border-collapse: collapse;
+	margin-bottom: 16px;
+}
+td {
+	vertical-align: top;
+	padding: 5px;
+}
+pre {
+	border: 1px solid black;
+	padding: 10px;
+	font-size: 12px;
+	margin-left: 15px;
+	width: 650px;
+}
+th {
+	text-align: left;
+}
+a {
+}
+a:link {
+	text-decoration: none;
+}
+a:visited {
+}
+a:hover {
+	text-decoration: underline;
+}
+.menu {
+	background: #C0C0C0;
+	border-right: 1px solid;
+	position: fixed;
+	padding: 6px;
+	padding-top: 20px;
+	top: 0px;
+	left: 0px;
+	bottom: 0px;
+	width: 200px;
+	overflow-x: hidden;
+	overflow-y: auto;
+	white-space: nowrap;
+}
+.content {
+	position: absolute;
+	padding: 6px;
+	top: 0px;
+	left: 240px;
+	right: 0px;
+}
+.menu_header {
+	font-weight: bold;
+}
+.param_table {
+	border: 1px solid #A0A0A0;
+}
+.table_hdr_name {
+	width: 160px;
+}
+.table_col_name {
+	font-weight: bold;
+	width: 160px;
+}
+.table_col_desc {
+}
+.param_table > thead > tr > th {
+	background-color: #C0C0C0;
+	border-bottom: 1px solid #A0A0A0;
+	padding: 6px;
+}
+.param_table > tbody > tr:nth-child(even) > td {
+	background-color: #D0D0D0;
+}
+.macro_num {
+	font-weight: bold;
+	width: 50px;
+}
+.macro_val {
+}
+</style>
+</head>
+<body>
+<div class="menu"><span class="menu_header"><a href="index.htm">API Reference Home</a></span><br/><span class="menu_item"><a href="objects.htm">Common Objects</a></span><br/><br/><span class="menu_header">Database Modules</span><br/><span class="menu_item"><a href="dvmdb-main.htm">Device Manager Database</a></span><br/><span class="menu_item"><a href="task-main.htm">Task Database</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof74-2779-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof74-2779-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg74-2779-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof72-1732-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof72-1732-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg72-1732-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof70-662-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof70-662-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg70-662-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof64-2087-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof64-2087-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg64-2087-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof62-1263-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof62-1263-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg62-1263-main.htm">Policy Package</a></span><br/><br/><span class="menu_header">Daemon Modules</span><br/><span class="menu_item"><a href="cmdb-main.htm">CLI Configuration</a></span><br/><span class="menu_item"><a href="dvmcmd-main.htm">Device Manager Command</a></span><br/><span class="menu_item"><a href="um-main.htm">Update Manager</a></span><br/><span class="menu_item"><a href="sys-main.htm">System Commands</a></span><br/><br/><span class="menu_header"><a href="faz-cmd-index.htm">FortiAnalyzer Modules</a></span><br/><span class="menu_item"><a href="faz_eventmgmt.htm">Event Mgmt Commands</a></span><br/><span class="menu_item"><a href="faz_eventmgmtconfig.htm">Event Mgmt Config Commands</a></span><br/><span class="menu_item"><a href="faz_fazsys.htm">FAZ System Commands</a></span><br/><span class="menu_item"><a href="faz_fortiview.htm">FortiView Commands</a></span><br/><span class="menu_item"><a href="faz_incidentmgmt.htm">Incident Mgmt Commands</a></span><br/><span class="menu_item"><a href="faz_logview.htm">LogView Commands</a></span><br/><span class="menu_item"><a href="faz_report.htm">Report Commands</a></span><br/><span class="menu_item"><a href="faz_reportconfig.htm">Report Config Commands</a></span><br/><span class="menu_item"><a href="faz_ioc.htm">IOC Commands</a></span><br/><span class="menu_item"><a href="faz_ueba.htm">UEBA Commands</a></span><br/><span class="menu_item"><a href="faz_soar.htm">SOAR Commands</a></span><br/><br/><span class="menu_header"><a href="obj-index.htm">Index of All Objects</a></span><br/><br/></div>
+<div class="content">
+<h1>LogView Commands</h1><br/>
+
+<div>
+<h1 id=add_logview_adom__adom-name__logsearch>Start Log Search Request</h1><h2>add /logview/adom/&lt;adom-name&gt;/logsearch</h2><p>Start a new task to search logs.<h6 id=${logview.add.logsearch.req}.request>Request:</h6><pre>
+{
+    "method": "add",
+    "params": [
+        {
+            "url": "/logview/adom/&lt;adom-name&gt;/logsearch",
+            "apiver": 3,
+            "device": [
+                {"devname": "string"},
+                {"devid": "string"}
+            ],
+            "logtype": "string",
+            "filter": "string",
+            "time-order": "string",
+            "time-range": {"start": "string", "end": "string"},
+            "case-sensitive": boolean
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${logview.add.logsearch.req}">Show example...</a></p></div><div id="${logview.add.logsearch.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Start a new task to search logs.</i><a class="close" href="#${logview.add.logsearch.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "2333c69e-bf19-11e5-924a-000c2986047b",
+    "jsonrpc": "2.0",
+    "method": "add",
+    "params": [
+        {
+            "apiver": 3,
+            "case-sensitive": false,
+            "device": [
+                {
+                    "devid": "All_FortiGate"
+                }
+            ],
+            "filter": "",
+            "logtype": "traffic",
+            "time-order": "desc",
+            "time-range": {
+                "end": "2017-02-16 00:00",
+                "start": "2016-09-11 00:00"
+            },
+            "url": "/logview/adom/lqtest/logsearch"
+        }
+    ],
+    "session": "JH17elqhfOyqE2WpbQeqYi9sthBwwZ/Ol0Jkt7fJfU3OENjE8qq4bqNprn4KFDSj4RHjXd0C5cwLF/7rs3FuuQ==",
+    "src": "10.6.119.1"
+}
+</pre></div></div></div><h6 id=${logview.add.logsearch.resp}.response>Response:</h6><pre>
+{
+    "result": {"tid": "string"},
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${logview.add.logsearch.resp}">Show example...</a></p></div><div id="${logview.add.logsearch.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Start a new task to search logs.</i><a class="close" href="#${logview.add.logsearch.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "2333c69e-bf19-11e5-924a-000c2986047b",
+    "jsonrpc": "2.0",
+    "result": {
+        "tid": 661848071
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>The resource path to <b>log Search</b>.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/logview/adom/&lt;adom-name&gt;/logsearch</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">device</td><td class="table_col_desc"><i>array </i> <br/><br/>Device filter. For all devices in some type please use the All-Device ID. <b><i>See Appendix</i></b><br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/><br/><br/><table><tr class='odd_row'><td class="table_col_name">devid</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/><br/>Format: devid[vdom]. e.g. 'FGT60C0000000001[root]'. See Appendix<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;device-id[vdom]<br/>&nbsp;&nbsp;&nbsp;&nbsp;device-id<br/>&nbsp;&nbsp;&nbsp;&nbsp;All_FortiGate<br/>&nbsp;&nbsp;&nbsp;&nbsp;All_FortiMail<br/>&nbsp;&nbsp;&nbsp;&nbsp;All_FortiWeb<br/>&nbsp;&nbsp;&nbsp;&nbsp;All_FortiManager<br/>&nbsp;&nbsp;&nbsp;&nbsp;All_Syslog<br/>&nbsp;&nbsp;&nbsp;&nbsp;All_FortiClient<br/>&nbsp;&nbsp;&nbsp;&nbsp;All_FortiCache<br/>&nbsp;&nbsp;&nbsp;&nbsp;All_FortiProxy<br/>&nbsp;&nbsp;&nbsp;&nbsp;All_FortiAnalyzer<br/>&nbsp;&nbsp;&nbsp;&nbsp;All_FortiSandbox<br/>&nbsp;&nbsp;&nbsp;&nbsp;All_FortiAuthenticator<br/>&nbsp;&nbsp;&nbsp;&nbsp;All_FortiDDoS</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">devname</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Format: devname[vdom]. e.g. 'FGT-vancouver[traffic]'<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">csfname</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Name of security fabric. Format: csfname. e.g. 'Corp_SF'<br/><br/></td></tr></table></td></tr></td></tr><tr class='odd_row'><td class="table_col_name">filter</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Filter expression.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">logtype</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>The name of the logtype.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;traffic<br/>&nbsp;&nbsp;&nbsp;&nbsp;app-ctrl<br/>&nbsp;&nbsp;&nbsp;&nbsp;attack<br/>&nbsp;&nbsp;&nbsp;&nbsp;content<br/>&nbsp;&nbsp;&nbsp;&nbsp;dlp<br/>&nbsp;&nbsp;&nbsp;&nbsp;emailfilter<br/>&nbsp;&nbsp;&nbsp;&nbsp;event<br/>&nbsp;&nbsp;&nbsp;&nbsp;history<br/>&nbsp;&nbsp;&nbsp;&nbsp;virus<br/>&nbsp;&nbsp;&nbsp;&nbsp;voip<br/>&nbsp;&nbsp;&nbsp;&nbsp;webfilter<br/>&nbsp;&nbsp;&nbsp;&nbsp;netscan<br/>&nbsp;&nbsp;&nbsp;&nbsp;fct-event<br/>&nbsp;&nbsp;&nbsp;&nbsp;fct-traffic<br/>&nbsp;&nbsp;&nbsp;&nbsp;waf<br/>&nbsp;&nbsp;&nbsp;&nbsp;gtp</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">case-sensitive</td><td class="table_col_desc"><i>boolean </i> (optional) <br/> Default: <i>False </i> <br/>Case sensitivity in filter.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">time-order</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/> Default: <i>desc </i> <br/>Sort result in descending or ascending order by time<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;desc<br/>&nbsp;&nbsp;&nbsp;&nbsp;asc</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">timezone</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The timezone index or name. Time range in request and date/time if any in response will follow this timezone. See Appendix<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">time-range</td><td class="table_col_desc"><i>object </i> <br/><br/>Time range for log selection.<br/><br/><table><tr class='odd_row'><td class="table_col_name">start</td><td class="table_col_desc"><i>string </i> <br/><br/>Starting date time. Consider it following the timezone parameter's, ADOM's or FortiAnalyzer's timezone if timezone info is not specified within time range. Format: 'yyyy-MM-dd'T'HH:mm:ssZ' (RFC 3339) e.g. '2016-10-17T20:45:37-07:00 or 'yyyy-MM-dd HH:mm:ss' e.g. '2016-10-17 20:45:37'<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">end</td><td class="table_col_desc"><i>string </i> <br/><br/>Ending date time. Consider it following the timezone parameter's, ADOM's or FortiAnalyzer's timezone if timezone info is not specified within time range. Format: 'yyyy-MM-dd'T'HH:mm:ssZ' (RFC 3339) e.g. '2016-10-17T20:45:37-07:00 or 'yyyy-MM-dd HH:mm:ss' e.g. '2016-10-17 20:45:37'<br/><br/></td></tr></table></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return Log Search Task ID</h2><p>A new assigned task ID for the Log Search request will be returned. Be aware there is a 30 seconds timeout for the task. The timeout should to be refreshed in order to keep the task active.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">tid</td><td class="table_col_desc"><i>number </i> <br/><br/>The task ID for Log Search <b>fetch</b> task.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_logview_adom__adom-name__logsearch__tid_>Fetch Log Search Result by Task ID</h1><h2>get /logview/adom/&lt;adom-name&gt;/logsearch/&lt;tid&gt;</h2><p>Get the log search request result with the task ID.<h6 id=${logview.get.logsearch.req}.request>Request:</h6><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/logview/adom/&lt;adom-name&gt;/logsearch/&lt;tid&gt;",
+            "apiver": 3,
+            "offset": number,
+            "limit": number
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${logview.get.logsearch.req}">Show example...</a></p></div><div id="${logview.get.logsearch.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Get the log search request result with the task ID.</i><a class="close" href="#${logview.get.logsearch.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "2333c69e-bf19-11e5-924a-000c2986047b",
+    "jsonrpc": "2.0",
+    "method": "get",
+    "params": [
+        {
+            "apiver": 3,
+            "limit": 10,
+            "offset": 0,
+            "url": "/logview/adom/lqtest/logsearch/193200136"
+        }
+    ],
+    "session": "44sHAOqwFFSxHraOf6iV4Iel8VQl5VkvwQ0gXAGU/gArX0aMiQIUsXplMDwdzNbE5dGLpF2QFy5cO2/ePTM0Rg==",
+    "src": "10.6.119.1"
+}
+</pre></div></div></div><h6 id=${logview.get.logsearch.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "percentage": number,"return-lines": number,
+        "data": [
+            {"field": "value", "field": "value", ...}
+            ...
+        ],
+        "tid": number,
+        "status": {
+            "code": number,
+            "message": "string"
+        }
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${logview.get.logsearch.resp}">Show example...</a></p></div><div id="${logview.get.logsearch.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Get the log search request result with the task ID.</i><a class="close" href="#${logview.get.logsearch.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "2333c69e-bf19-11e5-924a-000c2986047b",
+    "jsonrpc": "2.0",
+    "result": {
+        "data": [
+            {
+                "action": "accept",
+                "app": "DNS",
+                "appcat": "Not.Scanned",
+                "date": "2016-11-10",
+                "devid": "FG10CH3G11601832",
+                "devname": "FG10832",
+                "devtype": "Linux PC",
+                "dstcountry": "Reserved",
+                "dstintf": "wan1",
+                "dstip": "172.16.100.100",
+                "dstport": "53",
+                "dtime": "2016-11-10 17:04:06",
+                "duration": "181",
+                "itime": "2016-11-10 16:25:01",
+                "itime_t": "1478823901",
+                "level": "notice",
+                "logid": "13",
+                "logver": "52",
+                "mastersrcmac": "00:0c:29:90:56:85",
+                "osname": "Linux",
+                "policyid": "14",
+                "proto": "17",
+                "rcvdbyte": "104",
+                "rcvdpkt": "1",
+                "sentbyte": "69",
+                "sentpkt": "1",
+                "service": "DNS",
+                "sessionid": "40196891",
+                "srccountry": "Reserved",
+                "srcintf": "switch",
+                "srcip": "10.2.60.117",
+                "srcmac": "00:0c:29:90:56:85",
+                "srcname": "WX-UBUNTU-SERVER",
+                "srcport": "33060",
+                "subtype": "forward",
+                "time": "17:04:06",
+                "trandisp": "snat",
+                "transip": "172.18.4.117",
+                "transport": "33060",
+                "type": "traffic",
+                "vd": "root"
+            },
+            {
+                "action": "accept",
+                "app": "DNS",
+                "appcat": "Not.Scanned",
+                "date": "2016-11-10",
+                "devid": "FG10CH3G11601832",
+                "devname": "FG10832",
+                "devtype": "Linux PC",
+                "dstcountry": "Reserved",
+                "dstintf": "wan1",
+                "dstip": "172.16.100.100",
+                "dstport": "53",
+                "dtime": "2016-11-10 17:04:04",
+                "duration": "181",
+                "itime": "2016-11-10 16:25:01",
+                "itime_t": "1478823901",
+                "level": "notice",
+                "logid": "13",
+                "logver": "52",
+                "mastersrcmac": "00:0c:29:90:56:85",
+                "osname": "Linux",
+                "policyid": "14",
+                "proto": "17",
+                "rcvdbyte": "104",
+                "rcvdpkt": "1",
+                "sentbyte": "69",
+                "sentpkt": "1",
+                "service": "DNS",
+                "sessionid": "40196889",
+                "srccountry": "Reserved",
+                "srcintf": "switch",
+                "srcip": "10.2.60.117",
+                "srcmac": "00:0c:29:90:56:85",
+                "srcname": "WX-UBUNTU-SERVER",
+                "srcport": "53457",
+                "subtype": "forward",
+                "time": "17:04:04",
+                "trandisp": "snat",
+                "transip": "172.18.4.117",
+                "transport": "53457",
+                "type": "traffic",
+                "vd": "root"
+            },
+            {
+                "action": "accept",
+                "app": "DNS",
+                "appcat": "Not.Scanned",
+                "date": "2016-11-10",
+                "devid": "FG10CH3G11601832",
+                "devname": "FG10832",
+                "devtype": "Linux PC",
+                "dstcountry": "Reserved",
+                "dstintf": "wan1",
+                "dstip": "172.16.100.100",
+                "dstport": "53",
+                "dtime": "2016-11-10 17:04:04",
+                "duration": "181",
+                "itime": "2016-11-10 16:24:59",
+                "itime_t": "1478823899",
+                "level": "notice",
+                "logid": "13",
+                "logver": "52",
+                "mastersrcmac": "00:0c:29:90:56:85",
+                "osname": "Linux",
+                "policyid": "14",
+                "proto": "17",
+                "rcvdbyte": "104",
+                "rcvdpkt": "1",
+                "sentbyte": "69",
+                "sentpkt": "1",
+                "service": "DNS",
+                "sessionid": "40196888",
+                "srccountry": "Reserved",
+                "srcintf": "switch",
+                "srcip": "10.2.60.117",
+                "srcmac": "00:0c:29:90:56:85",
+                "srcname": "WX-UBUNTU-SERVER",
+                "srcport": "45099",
+                "subtype": "forward",
+                "time": "17:04:04",
+                "trandisp": "snat",
+                "transip": "172.18.4.117",
+                "transport": "45099",
+                "type": "traffic",
+                "vd": "root"
+            },
+            {
+                "action": "accept",
+                "app": "DNS",
+                "appcat": "Not.Scanned",
+                "date": "2016-11-10",
+                "devid": "FG10CH3G11601832",
+                "devname": "FG10832",
+                "devtype": "Linux PC",
+                "dstcountry": "Reserved",
+                "dstintf": "wan1",
+                "dstip": "172.16.100.100",
+                "dstport": "53",
+                "dtime": "2016-11-10 17:04:04",
+                "duration": "181",
+                "itime": "2016-11-10 16:24:59",
+                "itime_t": "1478823899",
+                "level": "notice",
+                "logid": "13",
+                "logver": "52",
+                "mastersrcmac": "00:0c:29:90:56:85",
+                "osname": "Linux",
+                "policyid": "14",
+                "proto": "17",
+                "rcvdbyte": "104",
+                "rcvdpkt": "1",
+                "sentbyte": "69",
+                "sentpkt": "1",
+                "service": "DNS",
+                "sessionid": "40196887",
+                "srccountry": "Reserved",
+                "srcintf": "switch",
+                "srcip": "10.2.60.117",
+                "srcmac": "00:0c:29:90:56:85",
+                "srcname": "WX-UBUNTU-SERVER",
+                "srcport": "42878",
+                "subtype": "forward",
+                "time": "17:04:04",
+                "trandisp": "snat",
+                "transip": "172.18.4.117",
+                "transport": "42878",
+                "type": "traffic",
+                "vd": "root"
+            },
+            {
+                "action": "accept",
+                "app": "DNS",
+                "appcat": "Not.Scanned",
+                "date": "2016-11-10",
+                "devid": "FG10CH3G11601832",
+                "devname": "FG10832",
+                "devtype": "Linux PC",
+                "dstcountry": "Reserved",
+                "dstintf": "wan1",
+                "dstip": "172.16.100.100",
+                "dstport": "53",
+                "dtime": "2016-11-10 17:04:04",
+                "duration": "181",
+                "itime": "2016-11-10 16:24:59",
+                "itime_t": "1478823899",
+                "level": "notice",
+                "logid": "13",
+                "logver": "52",
+                "mastersrcmac": "00:0c:29:90:56:85",
+                "osname": "Linux",
+                "policyid": "14",
+                "proto": "17",
+                "rcvdbyte": "104",
+                "rcvdpkt": "1",
+                "sentbyte": "69",
+                "sentpkt": "1",
+                "service": "DNS",
+                "sessionid": "40196886",
+                "srccountry": "Reserved",
+                "srcintf": "switch",
+                "srcip": "10.2.60.117",
+                "srcmac": "00:0c:29:90:56:85",
+                "srcname": "WX-UBUNTU-SERVER",
+                "srcport": "37655",
+                "subtype": "forward",
+                "time": "17:04:04",
+                "trandisp": "snat",
+                "transip": "172.18.4.117",
+                "transport": "37655",
+                "type": "traffic",
+                "vd": "root"
+            },
+            {
+                "action": "close",
+                "app": "RSH",
+                "appcat": "Not.Scanned",
+                "date": "2016-11-10",
+                "devid": "FG10CH3G11601832",
+                "devname": "FG10832",
+                "devtype": "Fortinet Device",
+                "dstcountry": "Reserved",
+                "dstintf": "switch",
+                "dstip": "172.18.4.108",
+                "dstport": "514",
+                "dtime": "2016-11-10 17:04:03",
+                "duration": "6",
+                "itime": "2016-11-10 16:24:59",
+                "itime_t": "1478823899",
+                "level": "notice",
+                "logid": "13",
+                "logver": "52",
+                "mastersrcmac": "08:5b:0e:2c:c9:3f",
+                "osname": "Linux",
+                "policyid": "22",
+                "proto": "6",
+                "rcvdbyte": "4425",
+                "rcvdpkt": "9",
+                "sentbyte": "3262",
+                "sentpkt": "13",
+                "service": "RSH",
+                "sessionid": "40197320",
+                "srccountry": "Reserved",
+                "srcintf": "wan1",
+                "srcip": "172.18.4.156",
+                "srcmac": "08:5b:0e:2c:c9:3f",
+                "srcname": "FWF60C3G13006291",
+                "srcport": "6437",
+                "subtype": "forward",
+                "time": "17:04:03",
+                "trandisp": "snat+dnat",
+                "tranip": "10.2.60.57",
+                "tranport": "514",
+                "transip": "10.2.60.116",
+                "transport": "6437",
+                "type": "traffic",
+                "vd": "root"
+            },
+            {
+                "action": "accept",
+                "app": "DNS",
+                "appcat": "Not.Scanned",
+                "date": "2016-11-10",
+                "devid": "FG10CH3G11601832",
+                "devname": "FG10832",
+                "devtype": "Linux PC",
+                "dstcountry": "Reserved",
+                "dstintf": "wan1",
+                "dstip": "172.16.100.100",
+                "dstport": "53",
+                "dtime": "2016-11-10 17:04:01",
+                "duration": "181",
+                "itime": "2016-11-10 16:24:55",
+                "itime_t": "1478823895",
+                "level": "notice",
+                "logid": "13",
+                "logver": "52",
+                "mastersrcmac": "00:0c:29:90:56:85",
+                "osname": "Linux",
+                "policyid": "14",
+                "proto": "17",
+                "rcvdbyte": "104",
+                "rcvdpkt": "1",
+                "sentbyte": "69",
+                "sentpkt": "1",
+                "service": "DNS",
+                "sessionid": "40196882",
+                "srccountry": "Reserved",
+                "srcintf": "switch",
+                "srcip": "10.2.60.117",
+                "srcmac": "00:0c:29:90:56:85",
+                "srcname": "WX-UBUNTU-SERVER",
+                "srcport": "53171",
+                "subtype": "forward",
+                "time": "17:04:01",
+                "trandisp": "snat",
+                "transip": "172.18.4.117",
+                "transport": "53171",
+                "type": "traffic",
+                "vd": "root"
+            },
+            {
+                "action": "accept",
+                "app": "DNS",
+                "appcat": "Not.Scanned",
+                "date": "2016-11-10",
+                "devid": "FG10CH3G11601832",
+                "devname": "FG10832",
+                "devtype": "Linux PC",
+                "dstcountry": "Reserved",
+                "dstintf": "wan1",
+                "dstip": "172.16.100.100",
+                "dstport": "53",
+                "dtime": "2016-11-10 17:03:59",
+                "duration": "181",
+                "itime": "2016-11-10 16:24:55",
+                "itime_t": "1478823895",
+                "level": "notice",
+                "logid": "13",
+                "logver": "52",
+                "mastersrcmac": "00:0c:29:90:56:85",
+                "osname": "Linux",
+                "policyid": "14",
+                "proto": "17",
+                "rcvdbyte": "104",
+                "rcvdpkt": "1",
+                "sentbyte": "69",
+                "sentpkt": "1",
+                "service": "DNS",
+                "sessionid": "40196879",
+                "srccountry": "Reserved",
+                "srcintf": "switch",
+                "srcip": "10.2.60.117",
+                "srcmac": "00:0c:29:90:56:85",
+                "srcname": "WX-UBUNTU-SERVER",
+                "srcport": "45908",
+                "subtype": "forward",
+                "time": "17:03:59",
+                "trandisp": "snat",
+                "transip": "172.18.4.117",
+                "transport": "45908",
+                "type": "traffic",
+                "vd": "root"
+            },
+            {
+                "action": "accept",
+                "app": "DNS",
+                "appcat": "Not.Scanned",
+                "date": "2016-11-10",
+                "devid": "FG10CH3G11601832",
+                "devname": "FG10832",
+                "devtype": "Linux PC",
+                "dstcountry": "Reserved",
+                "dstintf": "wan1",
+                "dstip": "172.16.100.100",
+                "dstport": "53",
+                "dtime": "2016-11-10 17:03:59",
+                "duration": "181",
+                "itime": "2016-11-10 16:24:55",
+                "itime_t": "1478823895",
+                "level": "notice",
+                "logid": "13",
+                "logver": "52",
+                "mastersrcmac": "00:0c:29:90:56:85",
+                "osname": "Linux",
+                "policyid": "14",
+                "proto": "17",
+                "rcvdbyte": "104",
+                "rcvdpkt": "1",
+                "sentbyte": "69",
+                "sentpkt": "1",
+                "service": "DNS",
+                "sessionid": "40196878",
+                "srccountry": "Reserved",
+                "srcintf": "switch",
+                "srcip": "10.2.60.117",
+                "srcmac": "00:0c:29:90:56:85",
+                "srcname": "WX-UBUNTU-SERVER",
+                "srcport": "44727",
+                "subtype": "forward",
+                "time": "17:03:59",
+                "trandisp": "snat",
+                "transip": "172.18.4.117",
+                "transport": "44727",
+                "type": "traffic",
+                "vd": "root"
+            },
+            {
+                "action": "accept",
+                "app": "DNS",
+                "appcat": "Not.Scanned",
+                "date": "2016-11-10",
+                "devid": "FG10CH3G11601832",
+                "devname": "FG10832",
+                "devtype": "Linux PC",
+                "dstcountry": "Reserved",
+                "dstintf": "wan1",
+                "dstip": "172.16.100.100",
+                "dstport": "53",
+                "dtime": "2016-11-10 17:03:59",
+                "duration": "181",
+                "itime": "2016-11-10 16:24:55",
+                "itime_t": "1478823895",
+                "level": "notice",
+                "logid": "13",
+                "logver": "52",
+                "mastersrcmac": "00:0c:29:90:56:85",
+                "osname": "Linux",
+                "policyid": "14",
+                "proto": "17",
+                "rcvdbyte": "104",
+                "rcvdpkt": "1",
+                "sentbyte": "69",
+                "sentpkt": "1",
+                "service": "DNS",
+                "sessionid": "40196877",
+                "srccountry": "Reserved",
+                "srcintf": "switch",
+                "srcip": "10.2.60.117",
+                "srcmac": "00:0c:29:90:56:85",
+                "srcname": "WX-UBUNTU-SERVER",
+                "srcport": "49901",
+                "subtype": "forward",
+                "time": "17:03:59",
+                "trandisp": "snat",
+                "transip": "172.18.4.117",
+                "transport": "49901",
+                "type": "traffic",
+                "vd": "root"
+            }
+        ],
+        "percentage": 100,
+        "return-lines": 10,
+        "status": {
+            "code": 0,
+            "message": "succeeded"
+        },
+        "tid": 193200136
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>The resource path to <b>Log Search task</b><br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/logview/adom/&lt;adom-name&gt;/logsearch/&lt;tid&gt;</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">offset</td><td class="table_col_desc"><i>number </i> (optional) <br/> Default: <i>0 </i>  Min: <i>0 </i> <br/>Number of records to offset.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">limit</td><td class="table_col_desc"><i>number </i> (optional) <br/> Default: <i>50 </i>  Min: <i>1 </i>  Max: <i> 500 </i> <br/>Number of records to return.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return Log Search Result</h2><p>The log search result will be returned if the task is done, otherwise a running percentage, or an error message if failed will be returned.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">percentage</td><td class="table_col_desc"><i>number </i> <br/><br/>The searching process percentage for the corresponding task ID. Equals to 100 if found (1) requested number of matching logs (2) all matching logs.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">masked-fields</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>datamasked field list.<br/><br/>member type: <i>string</i><br/></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>array </i> <br/><br/>Dataset<br/><br/>member type: <i></i><br/></td></tr><tr class='odd_row'><td class="table_col_name">return-lines</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>Number of returned lines. The task reaches the end of all results when percentage = 100 and 'return-lines' is smaller than 'limit' in the <b>fetch</b> request.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">tid</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>Corresponding task ID.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> (optional) <br/><br/>Status of the current task<br/><br/><table><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>Status code<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Status description<br/><br/></td></tr></table></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=delete_logview_adom__adom-name__logsearch__tid_>Cancel Log Search Request by Task ID</h1><h2>delete /logview/adom/&lt;adom-name&gt;/logsearch/&lt;tid&gt;</h2><p>Cancel a log search task by the task ID.<h6 id=${logview.delete.logsearch.req}.request>Request:</h6><pre>
+{
+    "method": "delete",
+    "params": [
+        {
+            "url": "/logview/adom/&lt;adom-name&gt;/logsearch/&lt;tid&gt;",
+            "apiver": 3
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${logview.delete.logsearch.req}">Show example...</a></p></div><div id="${logview.delete.logsearch.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Cancel a log search task by the task ID.</i><a class="close" href="#${logview.delete.logsearch.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "==============id",
+    "jsonrpc": "2.0",
+    "method": "delete",
+    "params": [
+        {
+            "apiver": "3",
+            "url": "/logview/adom/lqtest/logsearch/963969035"
+        }
+    ],
+    "session": "vpsq1TG8zNJvLA2fk7LXlRjpwVj/ZPRCz6zKOMs0SJuaYOal2WrujAuJobb1J7AoYHaGAgnbYmY8fWnB513gCw==",
+    "src": "10.6.119.1"
+}
+</pre></div></div></div><h6 id=${logview.delete.logsearch.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "code": number,
+            "message": "string"
+        },
+        "task-id": number
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${logview.delete.logsearch.resp}">Show example...</a></p></div><div id="${logview.delete.logsearch.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Cancel a log search task by the task ID.</i><a class="close" href="#${logview.delete.logsearch.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "==============id",
+    "jsonrpc": "2.0",
+    "result": {
+        "status": {
+            "code": 0,
+            "message": "succeeded"
+        },
+        "task-id": 963969035
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>The resource path to <b>Log Search task</b><br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/logview/adom/&lt;adom-name&gt;/logsearch/&lt;tid&gt;</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return Log Search Task Cancellation Status</h2><p>It returns the status of cancelling a log search task.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Cancellation status.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">task-id</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>The ID of the cancelled task.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_logview_adom__adom-name__logsearch_count__tid_>Fetch the Total Number of Logs by Task ID</h1><h2>get /logview/adom/&lt;adom-name&gt;/logsearch/count/&lt;tid&gt;</h2><p>Get the total number of logs with the task ID.<h6 id=${logview.get.logsearch.count.req}.request>Request:</h6><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/logview/adom/&lt;adom-name&gt;/logsearch/count/&lt;tid&gt;",
+            "apiver": 3,
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${logview.get.logsearch.count.req}">Show example...</a></p></div><div id="${logview.get.logsearch.count.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Get the total number of logs with the task ID.</i><a class="close" href="#${logview.get.logsearch.count.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "2333c69e-bf19-11e5-924a-000c2986047b",
+    "jsonrpc": "2.0",
+    "method": "get",
+    "params": [
+        {
+            "apiver": 3,
+            "url": "/logview/adom/lqtest/logsearch/count/193200136"
+        }
+    ],
+    "session": "44sHAOqwFFSxHraOf6iV4Iel8VQl5VkvwQ0gXAGU/gArX0aMiQIUsXplMDwdzNbE5dGLpF2QFy5cO2/ePTM0Rg=="
+}
+</pre></div></div></div><h6 id=${logview.get.logsearch.count.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "total-logs": number,
+        "scanned-logs": number,
+        "matched-logs": number,
+        "elapsed-time-ms": number,
+        "estimated-remain-sec": number,
+        "progress-percent": number,
+        "status": {
+            "code": number,
+            "message": "string"
+        }
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${logview.get.logsearch.count.resp}">Show example...</a></p></div><div id="${logview.get.logsearch.count.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Get the total number of logs with the task ID.</i><a class="close" href="#${logview.get.logsearch.count.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "2333c69e-bf19-11e5-924a-000c2986047b",
+    "jsonrpc": "2.0",
+    "result": {
+        "total-logs": 14533278,
+        "scanned-logs": 14533278,
+        "matched-logs": 14533278,
+        "elapsed-time-ms": 2,
+        "estimated-remain-sec": 0,
+        "progress-percent": 100,
+        "status": {
+            "code": 0,
+            "message": "succeeded"
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>The resource path to log count tastk. <b>tid</b> is the task id of a log search request.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/logview/adom/&lt;adom-name&gt;/logsearch/count/&lt;tid&gt;</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return Total Log Count Result</h2><p>The total number of logs will be returned if the task is done, otherwise an interim count with a running percentage, or an error message if failed will be returned.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">total-logs</td><td class="table_col_desc"><i>number </i> <br/><br/>Number of all logs in the time range.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">scanned-logs</td><td class="table_col_desc"><i>number </i> <br/><br/>Number of scanned logs, including matched and not matched logs.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">matched-logs</td><td class="table_col_desc"><i>number </i> <br/><br/>Number of all matched logs when "progress-percentage" is 100. If the percentage is below 100, repeated requests need to be sent to fetch the total count.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">elapsed-time-ms</td><td class="table_col_desc"><i>number </i> <br/><br/>Time spent for the current task, in millisecond.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">estimated-remain-sec</td><td class="table_col_desc"><i>number </i> <br/><br/>Estimated remaining time, in second.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">progress-percent</td><td class="table_col_desc"><i>number </i> <br/><br/>The searching process percentage for the corresponding task ID.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>Status of the current task.<br/><br/><table><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> <br/><br/>Status code.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> <br/><br/>Status description.<br/><br/></td></tr></table></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_logview_adom__adom-name__logfiles_state>Get Log-File State</h1><h2>get /logview/adom/&lt;adom-name&gt;/logfiles/state</h2><p>Get file state of log file(s).<h6 id=${logview.get.logfiles.state.req}.request>Request:</h6><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/logview/adom/&lt;adom-name&gt;/logfiles/state",
+            "apiver": 3,
+            "devid": "string",
+            "vdom": "string",
+            "filename": "string",
+            "time-range": {"start": "string", "end": "string"}
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${logview.get.logfiles.state.req}">Show example...</a></p></div><div id="${logview.get.logfiles.state.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Get file state of log file(s).</i><a class="close" href="#${logview.get.logfiles.state.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "2333c69e-bf19-11e5-924a-000c2986047b",
+    "jsonrpc": "2.0",
+    "method": "get",
+    "params": [
+        {
+            "apiver": 3,
+            "devid": "FG10CH3G11601832",
+            "filename": "elog.1478819464.log.gz",
+            "url": "/logview/adom/lqtest/logfiles/state",
+            "vdom": "root"
+        }
+    ],
+    "session": "1/3FDrPaHS5IH9Zfvr3p5m2XzjC7rveOL73Atcw6I60bR75bMRZB6Y0bdC/kEfHxYcdh9YDWqffikJCSJf4a7g==",
+    "src": "10.6.119.1"
+}
+</pre></div></div></div><h6 id=${logview.get.logfiles.state.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "device-file-list": [
+            {
+                "starttime": "string",
+                "endtime": "string",
+                "device-id": "string",
+                "device-name": "string",
+                "vdom-file-list": [
+                    {
+                        "vdom-name": "string",
+                        "starttime": "string",
+                        "endtime": "string",
+                        "logfile-list": {...},
+                    }
+                ]
+            }
+        ]
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${logview.get.logfiles.state.resp}">Show example...</a></p></div><div id="${logview.get.logfiles.state.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Get file state of log file(s).</i><a class="close" href="#${logview.get.logfiles.state.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "2333c69e-bf19-11e5-924a-000c2986047b",
+    "jsonrpc": "2.0",
+    "result": {
+        "device-file-list": [
+            {
+                "device-id": "FG10CH3G11601832",
+                "device-name": "FG10832",
+                "endtime": "2016-11-10 16:24:43",
+                "starttime": "2016-11-10 15:11:04",
+                "vdom-file-list": [
+                    {
+                        "endtime": "2016-11-10 16:24:43",
+                        "logfile-list": {
+                            "elog": {
+                                "files": [
+                                    {
+                                        "endtime": "2016-11-10 16:24:43",
+                                        "filename": "elog.1478819464.log.gz",
+                                        "fsize": "11774",
+                                        "starttime": "2016-11-10 15:11:04"
+                                    }
+                                ],
+                                "logtype": {
+                                    "id": 5,
+                                    "key": "elog",
+                                    "name": "Event."
+                                }
+                            }
+                        },
+                        "starttime": "2016-11-10 15:11:04",
+                        "vdom-name": "root"
+                    }
+                ]
+            }
+        ]
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>The resource path to <b>Log-File State get task</b><br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/logview/adom/&lt;adom-name&gt;/logfiles/state</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">devid</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/><br/>ID of the device. If left empty, all devices under the <adom-name> will be considered. See Appendix for available options<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;device-id<br/>&nbsp;&nbsp;&nbsp;&nbsp;All_FortiGate<br/>&nbsp;&nbsp;&nbsp;&nbsp;All_FortiMail<br/>&nbsp;&nbsp;&nbsp;&nbsp;All_FortiWeb<br/>&nbsp;&nbsp;&nbsp;&nbsp;All_FortiManager<br/>&nbsp;&nbsp;&nbsp;&nbsp;All_Syslog<br/>&nbsp;&nbsp;&nbsp;&nbsp;All_FortiClient<br/>&nbsp;&nbsp;&nbsp;&nbsp;All_FortiCache<br/>&nbsp;&nbsp;&nbsp;&nbsp;All_FortiProxy<br/>&nbsp;&nbsp;&nbsp;&nbsp;All_FortiAnalyzer<br/>&nbsp;&nbsp;&nbsp;&nbsp;All_FortiSandbox<br/>&nbsp;&nbsp;&nbsp;&nbsp;All_FortiAuthenticator<br/>&nbsp;&nbsp;&nbsp;&nbsp;All_FortiDDoS</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">vdom</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Name of the VDOM. If left empty, all VDOM under the <devid> will be considered.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">filename</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>name of the file. If left empty, all files under the <vdom> will be considered<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">timezone</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The timezone index or name. Time range in request and date/time if any in response will follow this timezone. See Appendix<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">time-range</td><td class="table_col_desc"><i>object </i> (optional) <br/><br/>Time range for data selection.<br/><br/><table><tr class='odd_row'><td class="table_col_name">start</td><td class="table_col_desc"><i>string </i> <br/><br/>Starting date time. Consider it following the timezone parameter's, ADOM's or FortiAnalyzer's timezone if timezone info is not specified within time range. Format: 'yyyy-MM-dd'T'HH:mm:ssZ' (RFC 3339) e.g. '2016-10-17T20:45:37-07:00 or 'yyyy-MM-dd HH:mm:ss' e.g. '2016-10-17 20:45:37'<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">end</td><td class="table_col_desc"><i>string </i> <br/><br/>Ending date time. Consider it following the timezone parameter's, ADOM's or FortiAnalyzer's timezone if timezone info is not specified within time range. Format: 'yyyy-MM-dd'T'HH:mm:ssZ' (RFC 3339) e.g. '2016-10-17T20:45:37-07:00 or 'yyyy-MM-dd HH:mm:ss' e.g. '2016-10-17 20:45:37'<br/><br/></td></tr></table></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return Log-File State</h2><p>It returns the log file state information.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">device-file-list</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>An array of json objects holding the results from devices.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/><br/><br/><table><tr class='odd_row'><td class="table_col_name">starttime</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The starting time of all found results of this device.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">endtime</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The ending time of all found results of this device.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">device-id</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Device ID<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">device-name</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Device Name<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">vdom-file-list</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>An array of json objects holding the results from VDOMs<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/><br/><br/><table><tr class='odd_row'><td class="table_col_name">vdom-name</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>VDOM Name<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">starttime</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The starting time of all found results in this vdom.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">endtime</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The ending time of all found results in this vdom.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">logfile-list</td><td class="table_col_desc"><i>object </i> (optional) <br/><br/>An json object holding the list of logfiles<br/><br/><table><tr class='odd_row'><td class="table_col_name">logtype-name</td><td class="table_col_desc"><i>object </i> (optional) <br/><br/><br/><br/><table><tr class='odd_row'><td class="table_col_name">logtype</td><td class="table_col_desc"><i>object </i> (optional) <br/><br/><br/><br/><table><tr class='odd_row'><td class="table_col_name">id</td><td class="table_col_desc"><i>number - enum </i> (optional) <br/><br/>The numeric id of the logtype. See Appendix<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;Type ID</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">name</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/><br/>The name of the logtype. See Appendix<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;Type Name</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">key</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/><br/>The logtype keyname. See Appendix<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;Logfile Name</i></b><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">files</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>An array holds the basic information of the files<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/><br/><br/><table><tr class='odd_row'><td class="table_col_name">filename</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The name of file<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">starttime</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The starting time of the logfile content.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">endtime</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The ending time of the logfile content.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">fsize</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>The size of the logfile.<br/><br/></td></tr></table></td></tr></td></tr></table></td></tr></table></td></tr></table></td></tr></td></tr></table></td></tr></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_logview_adom__adom-name__logfiles_data>Get Log-File Content</h1><h2>get /logview/adom/&lt;adom-name&gt;/logfiles/data</h2><p>Get the content of the specified log file.<h6 id=${logview.get.logfiles.data.req}.request>Request:</h6><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/logview/adom/&lt;adom-name&gt;/logfiles/data",
+            "apiver": 3,
+            "devid": "string",
+            "vdom": "string",
+            "filename": "string",
+            "data-type": "string",
+            "offset": number,
+            "length": number
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${logview.get.logfiles.data.req}">Show example...</a></p></div><div id="${logview.get.logfiles.data.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Get the content of the specified log file.</i><a class="close" href="#${logview.get.logfiles.data.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "2333c69e-bf19-11e5-924a-000c2986047b",
+    "jsonrpc": "2.0",
+    "method": "get",
+    "params": [
+        {
+            "url": "/logview/adom/root/logfiles/data",
+            "devid": "FG10CH3G11601364",
+            "vdom": "root",
+            "filename": "tlog.1527014165.log.gz",
+            "data-type": "csv/gzip/base64",
+            "offset": 5000,
+            "length": 1500,
+            "apiver": 3
+        }
+    ],
+    "session": "+c1MpNvxPatj3INx7rQ1drV0OAyLuOOmo6L5MmWIgLW2nol6igC3WW3Mng+pWGj415J/DjsFjnWpSad0Tk7ewg==",
+    "src": "10.6.119.1"
+}
+</pre></div></div></div><h6 id=${logview.get.logfiles.data.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "data": "string",
+        "offset": number,
+        "length": number,
+        "checksum": {
+            "method": "string",
+            "hash": "string"
+        },
+        "data-type": "string",
+        "log-count": number,
+        "logfile-orig-size": number
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${logview.get.logfiles.data.resp}">Show example...</a></p></div><div id="${logview.get.logfiles.data.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Get the content of the specified log file.</i><a class="close" href="#${logview.get.logfiles.data.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "2333c69e-bf19-11e5-924a-000c2986047b",
+    "jsonrpc": "2.0",
+    "result": {
+        "checksum": {
+            "method": "MD5",
+            "hash": "501d2ff0deec2d4629b9d342873831e1"
+        },
+        "data": "H4sIAAAAAAAAA+1TTW8bIRC992f43KyA/fRKnCIlPiSSVadSbxUB1kZeA4VZu/73Hdh1q+TQc1VF4sB7DMPMe8zKgDlpTmvWElrRpl59XikBmjNC2ztS4kJmjml6RvoqYaXPRvGHR0ruN+UjpQ2hZVPhwVnx4BykK1evOQQxDEYijNNrZgYXLiIoZIQE4yyXo4s6Qe/55uVlO2+lAD7Zo3UXOxOjicCVHsQ0puwCQMgjfzKgd15rVdw7OzzvQ7HdbIvn4ttuh0GYROko+VcbsCM1120FtjJXTgiduVzZk7HTz4QjSDdZCFf+EISVeua0x47pfCOCsTDwi7BsgZ7TritQvoJRUlC6hHkXgHckgSzhG1HVhGUlCXL0kr9MwXr6sz+4CLnmlLeoClYnnY2K+gdntKtrVq7Lsm0YYR1J7mVDvwNaStfrulp3KX7UZz1y68Dkfka3Ty+kKk4CewsxyJOQnJCeyJ6te9b2ou6HpJmL+fmbPN6NRl7xdnrLBweON7gL8qxer+nf0Bv0R+Dp7agt5KOyaRaYjsq8D2es6GZ81DGiIJi8LKua0i5xQd7s+KJTfDYS2WxBvBiQh4XwSSNWNDcD/tIUHmVv6pKs2/Rb0WlloufYLCw4poQtK2iHss8ZM/3m4gSn5SN7ESMcgpv2h5lHyS3wi34dzIgSz+TvOYC9usMPuvq0ejeBzccE/vMT2OeMH0P43wzhLz/KiVoHBwAA", 
+        "data-type": "csv/gzip/base64", 
+        "length": 1715,
+        "log-count": 2,
+        "offset": 5172,
+        "logfile-orig-size": 21525
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>The resource path to <b>Log-File Content task</b><br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/logview/adom/&lt;adom-name&gt;/logfiles/data</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">devid</td><td class="table_col_desc"><i>string </i> <br/><br/>ID of the device hosting the logfile.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">vdom</td><td class="table_col_desc"><i>string </i> <br/><br/>Name of the VDOM. If left empty, all VDOM under the <devid> will be considered.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">filename</td><td class="table_col_desc"><i>string </i> <br/><br/>Name of the file.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">offset</td><td class="table_col_desc"><i>number </i> (optional) <br/> Default: <i>0 </i>  Min: <i>0 </i> <br/>Offset bytes from the beginning of the file.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">length</td><td class="table_col_desc"><i>number </i> (optional) <br/> Default: <i>1048576 </i>  Min: <i>1 </i>  Max: <i> 52428800 </i> <br/>Length in byte of the file content to return. Default is 1MB, the maximum is 50MB.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">data-type</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/> Default: <i>base64 </i> <br/>The type of return data, e.g. 'text/gzip/base64'.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;base64<br/>&nbsp;&nbsp;&nbsp;&nbsp;csv/gzip/base64<br/>&nbsp;&nbsp;&nbsp;&nbsp;text/gzip/base64</i></b><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return Status of Getting Log-File Content</h2><p>It returns the status of getting log file content.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">checksum</td><td class="table_col_desc"><i>object </i> (optional) <br/><br/>Checksum information.<br/><br/><table><tr class='odd_row'><td class="table_col_name">method</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Checksum algorithm, e.g. 'MD5'.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">hash</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Checksum string.<br/><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">offset</td><td class="table_col_desc"><i>number </i> <br/><br/>Actual offset bytes from the beginning of the log file.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">length</td><td class="table_col_desc"><i>number </i> <br/><br/>Actual length in byte of file content returned.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">log-count</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>Actual number of logs returned when download csv or text logs.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">logfile-orig-size</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>Uncompressed file size for gzip-format log files.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>string </i> <br/><br/>Data stream in base64 format.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">data-type</td><td class="table_col_desc"><i>string </i> <br/><br/>The return type of data, e.g. 'text/gzip/base64'.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_logview_adom__adom-name__logfiles_search>Log Search over Log-File</h1><h2>get /logview/adom/&lt;adom-name&gt;/logfiles/search</h2><p>Run a log search task on a single log file.<h6 id=${logview.get.logfiles.search.req}.request>Request:</h6><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/logview/adom/&lt;adom-name&gt;/logfiles/search",
+            "apiver": 3,
+            "devid": "string",
+            "vdom": "string",
+            "filename": "string",
+            "offset": number,
+            "limit": number,
+            "case-sensitive": boolean,
+            "filter": "string",
+            "logtype": "string"
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${logview.get.logfiles.search.req}">Show example...</a></p></div><div id="${logview.get.logfiles.search.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Run a log search task on a single log file.</i><a class="close" href="#${logview.get.logfiles.search.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "2333c69e-bf19-11e5-924a-000c2986047b",
+    "jsonrpc": "2.0",
+    "method": "get",
+    "params": [
+        {
+            "apiver": 3,
+            "devid": "FG10CH3G11601832",
+            "filename": "elog.1478819464.log.gz",
+            "limit": 10,
+            "logtype": "traffic",
+            "offset": 0,
+            "url": "/logview/adom/lqtest/logfiles/search",
+            "vdom": "root"
+        }
+    ],
+    "session": "1KLwy56s8CaMRmU2APZwCCXVeyhaG+7wL7s5BEp6FrWxm62NyXIKmohP0KBXSdZwPENLKvsl7EniPp6grkpvBg==",
+    "src": "10.6.119.1"
+}
+</pre></div></div></div><h6 id=${logview.get.logfiles.search.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "return-lines": number,
+        "total-count": number,
+        "data": [
+            {"fields": "values"}
+        ]
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${logview.get.logfiles.search.resp}">Show example...</a></p></div><div id="${logview.get.logfiles.search.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Run a log search task on a single log file.</i><a class="close" href="#${logview.get.logfiles.search.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "2333c69e-bf19-11e5-924a-000c2986047b",
+    "jsonrpc": "2.0",
+    "result": {
+        "data": [
+            {
+                "action": "perf-stats",
+                "bandwidth": "281/320",
+                "cpu": "2",
+                "devid": "FG10CH3G11601832",
+                "devname": "FG10832",
+                "disk": "17",
+                "disklograte": "2",
+                "dtime": "2016-11-10 17:03:46",
+                "fazlograte": "2",
+                "itime": "2016-11-10 16:24:43",
+                "itime_t": "1478823883",
+                "level": "notice",
+                "logdesc": "System performance statistics",
+                "logid": "40704",
+                "logver": "52",
+                "mem": "65",
+                "msg": "Performance%20statistics%3A%20average%20CPU%3A%202%2C%20memory%3A%20%2065%2C%20concurrent%20sessions%3A%20%20181%2C%20setup-rate%3A%200",
+                "setuprate": "0",
+                "subtype": "system",
+                "totalsession": "181",
+                "type": "event",
+                "vd": "root"
+            },
+            {
+                "action": "rogue-ap-changed",
+                "age": "16",
+                "apscan": "N/A",
+                "apstatus": "0",
+                "aptype": "0",
+                "bssid": "00:25:9c:d9:40:88",
+                "channel": "1",
+                "detectionmethod": "N/A",
+                "devid": "FG10CH3G11601832",
+                "devname": "FG10832",
+                "dtime": "2016-11-10 17:03:43",
+                "encryption": "TKIP",
+                "itime": "2016-11-10 16:24:39",
+                "itime_t": "1478823879",
+                "level": "notice",
+                "live": "9355484",
+                "logdesc": "Rogue AP change detected",
+                "logid": "43571",
+                "logver": "52",
+                "manuf": "Cisco-Linksys, LLC",
+                "msg": "AP%20FTNT2008%2000%3A25%3A9c%3Ad9%3A40%3A88%20chan%201%20live%209355484",
+                "noise": "-95",
+                "onwire": "no",
+                "radioband": "802.11n",
+                "radioidclosest": "0",
+                "radioiddetected": "0",
+                "rate": "144",
+                "security": "WPA Personal",
+                "signal": "-85",
+                "snclosest": "FP320C3X14000002",
+                "sndetected": "FP320C3X14000002",
+                "ssid": "FTNT2008",
+                "stacount": "0",
+                "stamac": "N/A",
+                "subtype": "wireless",
+                "type": "event",
+                "vd": "root"
+            },
+            {
+                "action": "rogue-ap-detected",
+                "age": "16",
+                "apscan": "N/A",
+                "apstatus": "0",
+                "aptype": "0",
+                "bssid": "00:25:9c:d9:40:88",
+                "channel": "1",
+                "detectionmethod": "N/A",
+                "devid": "FG10CH3G11601832",
+                "devname": "FG10832",
+                "dtime": "2016-11-10 17:03:43",
+                "encryption": "TKIP",
+                "itime": "2016-11-10 16:24:39",
+                "itime_t": "1478823879",
+                "level": "notice",
+                "live": "9355484",
+                "logdesc": "Rogue AP detected",
+                "logid": "43563",
+                "logver": "52",
+                "manuf": "Cisco-Linksys, LLC",
+                "msg": "AP%20FTNT2008%2000%3A25%3A9c%3Ad9%3A40%3A88%20chan%201%20live%209355484",
+                "noise": "-95",
+                "onwire": "no",
+                "radioband": "802.11n",
+                "radioidclosest": "0",
+                "radioiddetected": "0",
+                "rate": "144",
+                "security": "WPA Personal",
+                "signal": "-85",
+                "snclosest": "FP320C3X14000002",
+                "sndetected": "FP320C3X14000002",
+                "ssid": "FTNT2008",
+                "stacount": "0",
+                "stamac": "N/A",
+                "subtype": "wireless",
+                "type": "event",
+                "vd": "root"
+            },
+            {
+                "action": "rogue-ap-off-air",
+                "age": "924",
+                "apscan": "N/A",
+                "apstatus": "0",
+                "aptype": "0",
+                "bssid": "22:0c:c8:52:c4:6c",
+                "channel": "6",
+                "detectionmethod": "N/A",
+                "devid": "FG10CH3G11601832",
+                "devname": "FG10832",
+                "dtime": "2016-11-10 17:03:37",
+                "encryption": "AES",
+                "itime": "2016-11-10 16:24:31",
+                "itime_t": "1478823871",
+                "level": "notice",
+                "live": "7269246",
+                "logdesc": "Rogue AP off air",
+                "logid": "43564",
+                "logver": "52",
+                "manuf": "Xytronix Research &",
+                "msg": "AP%20Guest%20of%20Power%20Solutions%2022%3A0c%3Ac8%3A52%3Ac4%3A6c%20chan%206%20live%207269246%20age%20924",
+                "noise": "-95",
+                "onwire": "no",
+                "radioband": "802.11n",
+                "radioidclosest": "0",
+                "radioiddetected": "0",
+                "rate": "144",
+                "security": "WPA2 Personal",
+                "signal": "-88",
+                "snclosest": "FP320C3X14000002",
+                "sndetected": "N/A",
+                "ssid": "Guest of Power Solutions",
+                "stacount": "0",
+                "stamac": "N/A",
+                "subtype": "wireless",
+                "type": "event",
+                "vd": "root"
+            },
+            {
+                "action": "rogue-ap-off-air",
+                "age": "917",
+                "apscan": "N/A",
+                "apstatus": "0",
+                "aptype": "0",
+                "bssid": "08:5b:0e:7f:76:99",
+                "channel": "6",
+                "detectionmethod": "N/A",
+                "devid": "FG10CH3G11601832",
+                "devname": "FG10832",
+                "dtime": "2016-11-10 17:03:07",
+                "encryption": "N/A",
+                "itime": "2016-11-10 16:24:00",
+                "itime_t": "1478823840",
+                "level": "notice",
+                "live": "7057170",
+                "logdesc": "Rogue AP off air",
+                "logid": "43564",
+                "logver": "52",
+                "manuf": "Fortinet, Inc.",
+                "msg": "AP%20Lon.4094%2008%3A5b%3A0e%3A7f%3A76%3A99%20chan%206%20live%207057170%20age%20917",
+                "noise": "-95",
+                "onwire": "no",
+                "radioband": "802.11n",
+                "radioidclosest": "0",
+                "radioiddetected": "0",
+                "rate": "144",
+                "security": "OPEN",
+                "signal": "-86",
+                "snclosest": "FP320C3X14000002",
+                "sndetected": "N/A",
+                "ssid": "Lon.4094",
+                "stacount": "0",
+                "stamac": "N/A",
+                "subtype": "wireless",
+                "type": "event",
+                "vd": "root"
+            },
+            {
+                "action": "tunnel-stats",
+                "assignip": "N/A",
+                "cookies": "25d008b6139981bd/ffb867e7f062e4c4",
+                "devid": "FG10CH3G11601832",
+                "devname": "FG10832",
+                "dtime": "2016-11-10 17:02:18",
+                "duration": "1730661",
+                "group": "N/A",
+                "itime": "2016-11-10 16:23:15",
+                "itime_t": "1478823795",
+                "level": "notice",
+                "locip": "172.18.4.116",
+                "locport": "500",
+                "logdesc": "IPsec tunnel statistics",
+                "logid": "37141",
+                "logver": "52",
+                "msg": "IPsec%20tunnel%20statistics",
+                "nextstat": "300",
+                "outintf": "wan1",
+                "rcvdbyte": "1879503808",
+                "remip": "172.18.4.119",
+                "remport": "500",
+                "sentbyte": "63549416",
+                "subtype": "vpn",
+                "tunnelid": "728167360",
+                "tunnelip": "N/A",
+                "tunneltype": "ipsec",
+                "type": "event",
+                "user": "N/A",
+                "vd": "root",
+                "vpntunnel": "peer-3",
+                "xauthgroup": "N/A",
+                "xauthuser": "N/A"
+            },
+            {
+                "action": "tunnel-stats",
+                "assignip": "N/A",
+                "cookies": "c73f19f1278e7a22/c1c234298750cd3f",
+                "devid": "FG10CH3G11601832",
+                "devname": "FG10832",
+                "dtime": "2016-11-10 17:02:18",
+                "duration": "2356294",
+                "group": "N/A",
+                "itime": "2016-11-10 16:23:15",
+                "itime_t": "1478823795",
+                "level": "notice",
+                "locip": "172.18.4.116",
+                "locport": "500",
+                "logdesc": "IPsec tunnel statistics",
+                "logid": "37141",
+                "logver": "52",
+                "msg": "IPsec%20tunnel%20statistics",
+                "nextstat": "300",
+                "outintf": "wan1",
+                "rcvdbyte": "25899570896",
+                "remip": "172.18.4.115",
+                "remport": "500",
+                "sentbyte": "1052804249",
+                "subtype": "vpn",
+                "tunnelid": "728218121",
+                "tunnelip": "0.0.0.0",
+                "tunneltype": "ipsec",
+                "type": "event",
+                "user": "fgt600c",
+                "vd": "root",
+                "vpntunnel": "dialup-3b_0",
+                "xauthgroup": "N/A",
+                "xauthuser": "N/A"
+            },
+            {
+                "action": "rogue-ap-detected",
+                "age": "12",
+                "apscan": "N/A",
+                "apstatus": "0",
+                "aptype": "0",
+                "bssid": "78:61:7c:47:a9:bc",
+                "channel": "6",
+                "detectionmethod": "N/A",
+                "devid": "FG10CH3G11601832",
+                "devname": "FG10832",
+                "dtime": "2016-11-10 17:01:43",
+                "encryption": "AES/TKIP",
+                "itime": "2016-11-10 16:22:39",
+                "itime_t": "1478823759",
+                "level": "notice",
+                "live": "3287081",
+                "logdesc": "Rogue AP detected",
+                "logid": "43563",
+                "logver": "52",
+                "manuf": "MITSUMI ELECTRIC",
+                "msg": "AP%20WiFi%20Hotspot%202340%2078%3A61%3A7c%3A47%3Aa9%3Abc%20chan%206%20live%203287081",
+                "noise": "-95",
+                "onwire": "no",
+                "radioband": "802.11n",
+                "radioidclosest": "0",
+                "radioiddetected": "0",
+                "rate": "65",
+                "security": "WPA2 Personal",
+                "signal": "-87",
+                "snclosest": "FP320C3X14000002",
+                "sndetected": "FP320C3X14000002",
+                "ssid": "WiFi Hotspot 2340",
+                "stacount": "0",
+                "stamac": "N/A",
+                "subtype": "wireless",
+                "type": "event",
+                "vd": "root"
+            },
+            {
+                "action": "rogue-ap-detected",
+                "age": "26",
+                "apscan": "N/A",
+                "apstatus": "0",
+                "aptype": "0",
+                "bssid": "08:5b:0e:eb:af:50",
+                "channel": "1",
+                "detectionmethod": "N/A",
+                "devid": "FG10CH3G11601832",
+                "devname": "FG10832",
+                "dtime": "2016-11-10 17:01:43",
+                "encryption": "AES",
+                "itime": "2016-11-10 16:22:39",
+                "itime_t": "1478823759",
+                "level": "notice",
+                "live": "9361355",
+                "logdesc": "Rogue AP detected",
+                "logid": "43563",
+                "logver": "52",
+                "manuf": "Fortinet, Inc.",
+                "msg": "AP%20FTNT-Guest-Cloud%2008%3A5b%3A0e%3Aeb%3Aaf%3A50%20chan%201%20live%209361355",
+                "noise": "-95",
+                "onwire": "no",
+                "radioband": "802.11ac-2G",
+                "radioidclosest": "0",
+                "radioiddetected": "0",
+                "rate": "260",
+                "security": "WPA2 Personal",
+                "signal": "-71",
+                "snclosest": "FP320C3X14000002",
+                "sndetected": "FP320C3X14000002",
+                "ssid": "FTNT-Guest-Cloud",
+                "stacount": "0",
+                "stamac": "N/A",
+                "subtype": "wireless",
+                "type": "event",
+                "vd": "root"
+            },
+            {
+                "action": "rogue-ap-off-air",
+                "age": "909",
+                "apscan": "N/A",
+                "apstatus": "0",
+                "aptype": "0",
+                "bssid": "a2:6c:ac:7d:6e:41",
+                "channel": "11",
+                "detectionmethod": "N/A",
+                "devid": "FG10CH3G11601832",
+                "devname": "FG10832",
+                "dtime": "2016-11-10 17:01:37",
+                "encryption": "N/A",
+                "itime": "2016-11-10 16:22:35",
+                "itime_t": "1478823755",
+                "level": "notice",
+                "live": "2618310",
+                "logdesc": "Rogue AP off air",
+                "logid": "43564",
+                "logver": "52",
+                "manuf": "N/A",
+                "msg": "AP%20guestavi%20a2%3A6c%3Aac%3A7d%3A6e%3A41%20chan%2011%20live%202618310%20age%20909",
+                "noise": "-95",
+                "onwire": "no",
+                "radioband": "802.11n",
+                "radioidclosest": "0",
+                "radioiddetected": "0",
+                "rate": "130",
+                "security": "OPEN",
+                "signal": "-79",
+                "snclosest": "FP320C3X14000002",
+                "sndetected": "N/A",
+                "ssid": "guestavi",
+                "stacount": "0",
+                "stamac": "N/A",
+                "subtype": "wireless",
+                "type": "event",
+                "vd": "root"
+            }
+        ],
+        "return-lines": 10,
+        "total-count": 2203
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>The resource path to <b>Log-File Search task</b><br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/logview/adom/&lt;adom-name&gt;/logfiles/search</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">devid</td><td class="table_col_desc"><i>string </i> <br/><br/>ID of the device hosting the logfile.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">vdom</td><td class="table_col_desc"><i>string </i> <br/><br/>Name of the VDOM hosting the logfile.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">filename</td><td class="table_col_desc"><i>string </i> <br/><br/>File name to search.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">offset</td><td class="table_col_desc"><i>number </i> (optional) <br/> Default: <i>0 </i>  Min: <i>0 </i> <br/>Offset number of log records from the beginning of the log file.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">limit</td><td class="table_col_desc"><i>number </i> (optional) <br/> Default: <i>50 </i>  Min: <i>1 </i>  Max: <i> 500 </i> <br/>Maximum number of log records to fetch.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">case-sensitive</td><td class="table_col_desc"><i>boolean </i> (optional) <br/> Default: <i>True </i> <br/>Case sensitivty.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">filter</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Filter to apply.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">logtype</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Name of the logtype.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;traffic<br/>&nbsp;&nbsp;&nbsp;&nbsp;app-ctrl<br/>&nbsp;&nbsp;&nbsp;&nbsp;attack<br/>&nbsp;&nbsp;&nbsp;&nbsp;content<br/>&nbsp;&nbsp;&nbsp;&nbsp;dlp<br/>&nbsp;&nbsp;&nbsp;&nbsp;emailfilter<br/>&nbsp;&nbsp;&nbsp;&nbsp;event<br/>&nbsp;&nbsp;&nbsp;&nbsp;history<br/>&nbsp;&nbsp;&nbsp;&nbsp;virus<br/>&nbsp;&nbsp;&nbsp;&nbsp;voip<br/>&nbsp;&nbsp;&nbsp;&nbsp;webfilter<br/>&nbsp;&nbsp;&nbsp;&nbsp;netscan<br/>&nbsp;&nbsp;&nbsp;&nbsp;fct-event<br/>&nbsp;&nbsp;&nbsp;&nbsp;fct-traffic<br/>&nbsp;&nbsp;&nbsp;&nbsp;waf<br/>&nbsp;&nbsp;&nbsp;&nbsp;gtp</i></b><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return Log Search over Log-File Result</h2><p>It returns the log file search result and process status.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">return-lines</td><td class="table_col_desc"><i>number </i> <br/><br/>Number of total log records found in the logfile with regards to the conditions.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">total-count</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>Number of total log records found in the logfile.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">masked-fields</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>datamasked field list.<br/><br/>member type: <i>string</i><br/></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>array </i> <br/><br/>An array of json objects hosting the returned logfile records.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/><br/><br/><table><tr class='odd_row'><td class="table_col_name">fields</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The value for the fields in original logfile.<br/><br/></td></tr></table></td></tr></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_logview_adom__adom-name__logfields>List log Fields</h1><h2>get /logview/adom/&lt;adom-name&gt;/logfields</h2><p>Get all log fields.<h6 id=${logview.get.logfields.req}.request>Request:</h6><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/logview/adom/&lt;adom-name&gt;/logfields",
+            "apiver": 3,
+            "devtype": "string",
+            "logtype": "string",
+            "subtype": "string"
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${logview.get.logfields.req}">Show example...</a></p></div><div id="${logview.get.logfields.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Get all log fields.</i><a class="close" href="#${logview.get.logfields.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "2333c69e-bf19-11e5-924a-000c2986047b",
+    "jsonrpc": "2.0",
+    "method": "get",
+    "params": [
+        {
+            "apiver": 3,
+            "devtype": "FortiGate",
+            "logtype": "traffic",
+            "url": "/logview/adom/lqtest/logfields"
+        }
+    ],
+    "session": "6nxcaDJrBUpQE9U1pdFdBM1/bWDP1k345hC2/IDxs6oGEmcUAWZwQJovO+7S4rm5o14AM1Zs5PERxWKf3ez6+g==",
+    "src": "10.6.119.1"
+}
+</pre></div></div></div><h6 id=${logview.get.logfields.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "data": [
+            {
+                "logtype": "string",
+                "field": [
+                    {
+                        "name": "string",
+                        "desc": "string",
+                        "type": "string",
+                        "extended": boolean,
+                        "defaultshow": boolean
+                    }
+                ],
+                "private-field": [
+                    {
+                        "name": "string",
+                        "desc": "string",
+                        "type": "string",
+                        "extended": boolean,
+                        "logfldgrp": number,
+                        "defaultshow": boolean
+                    }
+                ]
+            }
+        ]
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${logview.get.logfields.resp}">Show example...</a></p></div><div id="${logview.get.logfields.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Get all log fields.</i><a class="close" href="#${logview.get.logfields.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "2333c69e-bf19-11e5-924a-000c2986047b",
+    "jsonrpc": "2.0",
+    "result": {
+        "field": [
+            {
+                "defaultshow": 1,
+                "desc": "itime",
+                "logfldgrp": 9,
+                "name": "itime",
+                "type": 0
+            },
+            {
+                "defaultshow": 0,
+                "desc": "Device time",
+                "logfldgrp": 9,
+                "name": "dtime",
+                "type": 0
+            },
+            {
+                "defaultshow": 0,
+                "desc": "logid",
+                "logfldgrp": 3,
+                "name": "logid",
+                "type": 3
+            },
+            {
+                "defaultshow": 0,
+                "desc": "type",
+                "logfldgrp": 8,
+                "name": "type",
+                "type": 4
+            },
+            {
+                "defaultshow": 0,
+                "desc": "subtype",
+                "logfldgrp": 8,
+                "name": "subtype",
+                "type": 4
+            },
+            {
+                "defaultshow": 0,
+                "desc": "level",
+                "logfldgrp": 6,
+                "name": "level",
+                "type": 4
+            },
+            {
+                "defaultshow": 0,
+                "desc": "vd",
+                "logfldgrp": 3,
+                "name": "vd",
+                "type": 3
+            },
+            {
+                "defaultshow": 1,
+                "desc": "devid",
+                "logfldgrp": 5,
+                "name": "devid",
+                "type": 3
+            },
+            {
+                "defaultshow": 0,
+                "desc": "devid",
+                "logfldgrp": 5,
+                "name": "devname",
+                "type": 3
+            },
+            {
+                "defaultshow": 1,
+                "desc": "action",
+                "logfldgrp": 0,
+                "name": "action",
+                "type": 4
+            },
+            {
+                "defaultshow": 0,
+                "desc": "trandisp",
+                "logfldgrp": 3,
+                "name": "trandisp",
+                "type": 4
+            },
+            {
+                "defaultshow": 0,
+                "desc": "srcport",
+                "logfldgrp": 5,
+                "name": "srcport",
+                "type": 1
+            },
+            {
+                "defaultshow": 0,
+                "desc": "dstport",
+                "logfldgrp": 4,
+                "name": "dstport",
+                "type": 1
+            },
+            {
+                "defaultshow": 0,
+                "desc": "tranport",
+                "logfldgrp": 4,
+                "name": "tranport",
+                "type": 1
+            },
+            {
+                "defaultshow": 1,
+                "desc": "srcip",
+                "logfldgrp": 5,
+                "name": "srcip",
+                "type": 5
+            },
+            {
+                "defaultshow": 0,
+                "desc": "srcname",
+                "logfldgrp": 5,
+                "name": "srcname",
+                "type": 3
+            },
+            {
+                "defaultshow": 1,
+                "desc": "dstip",
+                "logfldgrp": 4,
+                "name": "dstip",
+                "type": 5
+            },
+            {
+                "defaultshow": 0,
+                "desc": "dstname",
+                "logfldgrp": 4,
+                "name": "dstname",
+                "type": 3
+            },
+            {
+                "defaultshow": 0,
+                "desc": "tranip",
+                "logfldgrp": 4,
+                "name": "tranip",
+                "type": 5
+            },
+            {
+                "defaultshow": 1,
+                "desc": "service",
+                "logfldgrp": 1,
+                "name": "service",
+                "type": 3
+            },
+            {
+                "defaultshow": 0,
+                "desc": "proto",
+                "logfldgrp": 1,
+                "name": "proto",
+                "type": 1
+            },
+            {
+                "defaultshow": 0,
+                "desc": "slot",
+                "logfldgrp": 9,
+                "name": "slot",
+                "type": 1
+            },
+            {
+                "defaultshow": 0,
+                "desc": "duration",
+                "logfldgrp": 2,
+                "name": "duration",
+                "type": 0
+            },
+            {
+                "defaultshow": 0,
+                "desc": "policyid",
+                "logfldgrp": 0,
+                "name": "policyid",
+                "type": 1
+            },
+            {
+                "defaultshow": 1,
+                "desc": "sentbyte",
+                "logfldgrp": 2,
+                "name": "sentbyte",
+                "type": 0
+            },
+            {
+                "defaultshow": 1,
+                "desc": "rcvdbyte",
+                "logfldgrp": 2,
+                "name": "rcvdbyte",
+                "type": 0
+            },
+            {
+                "defaultshow": 0,
+                "desc": "sentpkt",
+                "logfldgrp": 2,
+                "name": "sentpkt",
+                "type": 0
+            },
+            {
+                "defaultshow": 0,
+                "desc": "rcvdpkt",
+                "logfldgrp": 2,
+                "name": "rcvdpkt",
+                "type": 0
+            },
+            {
+                "defaultshow": 0,
+                "desc": "vpn",
+                "logfldgrp": 2,
+                "name": "vpn",
+                "type": 3
+            },
+            {
+                "defaultshow": 0,
+                "desc": "srcintf",
+                "logfldgrp": 5,
+                "name": "srcintf",
+                "type": 3
+            },
+            {
+                "defaultshow": 0,
+                "desc": "dstintf",
+                "logfldgrp": 4,
+                "name": "dstintf",
+                "type": 3
+            },
+            {
+                "defaultshow": 0,
+                "desc": "sessionid",
+                "logfldgrp": 3,
+                "name": "sessionid",
+                "type": 1
+            },
+            {
+                "defaultshow": 1,
+                "desc": "user",
+                "logfldgrp": 5,
+                "name": "user",
+                "type": 3
+            },
+            {
+                "defaultshow": 0,
+                "desc": "group",
+                "logfldgrp": 5,
+                "name": "group",
+                "type": 3
+            },
+            {
+                "defaultshow": 0,
+                "desc": "custom",
+                "logfldgrp": 9,
+                "name": "custom_field1",
+                "type": 3
+            },
+            {
+                "defaultshow": 0,
+                "desc": "wanoptapptype",
+                "logfldgrp": 2,
+                "name": "wanoptapptype",
+                "type": 4
+            },
+            {
+                "defaultshow": 0,
+                "desc": "wanin",
+                "logfldgrp": 2,
+                "name": "wanin",
+                "type": 1
+            },
+            {
+                "defaultshow": 0,
+                "desc": "wanout",
+                "logfldgrp": 2,
+                "name": "wanout",
+                "type": 1
+            },
+            {
+                "defaultshow": 0,
+                "desc": "lanin",
+                "logfldgrp": 2,
+                "name": "lanin",
+                "type": 0
+            },
+            {
+                "defaultshow": 0,
+                "desc": "lanout",
+                "logfldgrp": 2,
+                "name": "lanout",
+                "type": 0
+            },
+            {
+                "defaultshow": 1,
+                "desc": "app",
+                "logfldgrp": 1,
+                "name": "app",
+                "type": 3
+            },
+            {
+                "defaultshow": 0,
+                "desc": "appcat",
+                "logfldgrp": 1,
+                "name": "appcat",
+                "type": 3
+            },
+            {
+                "defaultshow": 0,
+                "desc": "shaperdropsentbyte",
+                "logfldgrp": 2,
+                "name": "shaperdropsentbyte",
+                "type": 1
+            },
+            {
+                "defaultshow": 0,
+                "desc": "shaperdroprcvdbyte",
+                "logfldgrp": 2,
+                "name": "shaperdroprcvdbyte",
+                "type": 1
+            },
+            {
+                "defaultshow": 0,
+                "desc": "shaperperipdropbyte",
+                "logfldgrp": 2,
+                "name": "shaperperipdropbyte",
+                "type": 1
+            },
+            {
+                "defaultshow": 0,
+                "desc": "shapersentname",
+                "logfldgrp": 0,
+                "name": "shapersentname",
+                "type": 3
+            },
+            {
+                "defaultshow": 0,
+                "desc": "shaperrcvdname",
+                "logfldgrp": 0,
+                "name": "shaperrcvdname",
+                "type": 3
+            },
+            {
+                "defaultshow": 0,
+                "desc": "shaperperipname",
+                "logfldgrp": 0,
+                "name": "shaperperipname",
+                "type": 3
+            },
+            {
+                "defaultshow": 0,
+                "desc": "transip",
+                "logfldgrp": 5,
+                "name": "transip",
+                "type": 5
+            },
+            {
+                "defaultshow": 0,
+                "desc": "transport",
+                "logfldgrp": 5,
+                "name": "transport",
+                "type": 1
+            },
+            {
+                "defaultshow": 0,
+                "desc": "dstcountry",
+                "logfldgrp": 4,
+                "name": "dstcountry",
+                "type": 3
+            },
+            {
+                "defaultshow": 0,
+                "desc": "vpntype",
+                "logfldgrp": 8,
+                "name": "vpntype",
+                "type": 3
+            },
+            {
+                "defaultshow": 0,
+                "desc": "applist",
+                "logfldgrp": 1,
+                "name": "applist",
+                "type": 3
+            },
+            {
+                "defaultshow": 0,
+                "desc": "appact",
+                "logfldgrp": 1,
+                "name": "appact",
+                "type": 4
+            },
+            {
+                "defaultshow": 0,
+                "desc": "devtype",
+                "logfldgrp": 5,
+                "name": "devtype",
+                "type": 3
+            },
+            {
+                "defaultshow": 0,
+                "desc": "osname",
+                "logfldgrp": 5,
+                "name": "osname",
+                "type": 3
+            },
+            {
+                "defaultshow": 0,
+                "desc": "osversion",
+                "logfldgrp": 5,
+                "name": "osversion",
+                "type": 3
+            },
+            {
+                "defaultshow": 0,
+                "desc": "unauthuser",
+                "logfldgrp": 5,
+                "name": "unauthuser",
+                "type": 3
+            },
+            {
+                "defaultshow": 0,
+                "desc": "unauthusersource",
+                "logfldgrp": 5,
+                "name": "unauthusersource",
+                "type": 3
+            },
+            {
+                "defaultshow": 0,
+                "desc": "mastersrcmac",
+                "logfldgrp": 5,
+                "name": "mastersrcmac",
+                "type": 3
+            },
+            {
+                "defaultshow": 0,
+                "desc": "srcmac",
+                "logfldgrp": 5,
+                "name": "srcmac",
+                "type": 3
+            },
+            {
+                "defaultshow": 0,
+                "desc": "collectedemail",
+                "logfldgrp": 5,
+                "name": "collectedemail",
+                "type": 3
+            },
+            {
+                "defaultshow": 0,
+                "desc": "appid",
+                "logfldgrp": 1,
+                "name": "appid",
+                "type": 0
+            },
+            {
+                "defaultshow": 0,
+                "desc": "srccountry",
+                "logfldgrp": 5,
+                "name": "srccountry",
+                "type": 3
+            },
+            {
+                "defaultshow": 0,
+                "desc": "msg",
+                "logfldgrp": 3,
+                "name": "msg",
+                "type": 3
+            },
+            {
+                "defaultshow": 1,
+                "desc": "utmaction",
+                "logfldgrp": 0,
+                "name": "utmaction",
+                "type": 4
+            },
+            {
+                "defaultshow": 0,
+                "desc": "crscore",
+                "logfldgrp": 6,
+                "name": "crscore",
+                "type": 1
+            },
+            {
+                "defaultshow": 0,
+                "desc": "craction",
+                "logfldgrp": 0,
+                "name": "craction",
+                "type": 1
+            },
+            {
+                "defaultshow": 0,
+                "desc": "srcssid",
+                "logfldgrp": 5,
+                "name": "srcssid",
+                "type": 3
+            },
+            {
+                "defaultshow": 0,
+                "desc": "dstssid",
+                "logfldgrp": 4,
+                "name": "dstssid",
+                "type": 3
+            },
+            {
+                "defaultshow": 0,
+                "desc": "srcuuid",
+                "logfldgrp": 5,
+                "name": "srcuuid",
+                "type": 7
+            },
+            {
+                "defaultshow": 0,
+                "desc": "dstuuid",
+                "logfldgrp": 4,
+                "name": "dstuuid",
+                "type": 7
+            },
+            {
+                "defaultshow": 0,
+                "desc": "poluuid",
+                "logfldgrp": 0,
+                "name": "poluuid",
+                "type": 7
+            },
+            {
+                "defaultshow": 0,
+                "desc": "apprisk",
+                "logfldgrp": 1,
+                "name": "apprisk",
+                "type": 4
+            },
+            {
+                "defaultshow": 0,
+                "desc": "countapp",
+                "logfldgrp": 6,
+                "name": "countapp",
+                "type": 0
+            },
+            {
+                "defaultshow": 0,
+                "desc": "countav",
+                "logfldgrp": 6,
+                "name": "countav",
+                "type": 0
+            },
+            {
+                "defaultshow": 0,
+                "desc": "countdlp",
+                "logfldgrp": 6,
+                "name": "countdlp",
+                "type": 0
+            },
+            {
+                "defaultshow": 0,
+                "desc": "countemail",
+                "logfldgrp": 6,
+                "name": "countemail",
+                "type": 0
+            },
+            {
+                "defaultshow": 0,
+                "desc": "countips",
+                "logfldgrp": 6,
+                "name": "countips",
+                "type": 0
+            },
+            {
+                "defaultshow": 0,
+                "desc": "countweb",
+                "logfldgrp": 6,
+                "name": "countweb",
+                "type": 0
+            },
+            {
+                "defaultshow": 0,
+                "desc": "countssl",
+                "logfldgrp": 6,
+                "name": "countssl",
+                "type": 0
+            },
+            {
+                "defaultshow": 0,
+                "desc": "countff",
+                "logfldgrp": 6,
+                "name": "countff",
+                "type": 0
+            },
+            {
+                "defaultshow": 0,
+                "desc": "counticap",
+                "logfldgrp": 6,
+                "name": "counticap",
+                "type": 0
+            },
+            {
+                "defaultshow": 0,
+                "desc": "countvpatch",
+                "logfldgrp": 6,
+                "name": "countvpatch",
+                "type": 0
+            },
+            {
+                "defaultshow": 0,
+                "desc": "countcasb",
+                "logfldgrp": 6,
+                "name": "countcasb",
+                "type": 0
+            },
+            {
+                "defaultshow": 0,
+                "desc": "countwaf",
+                "logfldgrp": 6,
+                "name": "countwaf",
+                "type": 0
+            },
+            {
+                "defaultshow": 0,
+                "desc": "utmevent",
+                "logfldgrp": 9,
+                "name": "utmevent",
+                "type": 3
+            },
+            {
+                "defaultshow": 0,
+                "desc": "utmsubtype",
+                "logfldgrp": 9,
+                "name": "utmsubtype",
+                "type": 3
+            },
+            {
+                "defaultshow": 0,
+                "desc": "sender",
+                "logfldgrp": 5,
+                "name": "sender",
+                "type": 3
+            },
+            {
+                "defaultshow": 0,
+                "desc": "recipient",
+                "logfldgrp": 5,
+                "name": "recipient",
+                "type": 3
+            },
+            {
+                "defaultshow": 0,
+                "desc": "virus",
+                "logfldgrp": 7,
+                "name": "virus",
+                "type": 3
+            },
+            {
+                "defaultshow": 0,
+                "desc": "attack",
+                "logfldgrp": 7,
+                "name": "attack",
+                "type": 3
+            },
+            {
+                "defaultshow": 0,
+                "desc": "hostname",
+                "logfldgrp": 4,
+                "name": "hostname",
+                "type": 3
+            },
+            {
+                "defaultshow": 0,
+                "desc": "catdesc",
+                "logfldgrp": 8,
+                "name": "catdesc",
+                "type": 3
+            },
+            {
+                "defaultshow": 0,
+                "desc": "dlpsensor",
+                "logfldgrp": 9,
+                "name": "dlpsensor",
+                "type": 3
+            },
+            {
+                "defaultshow": 0,
+                "desc": "crlevel",
+                "logfldgrp": 6,
+                "name": "crlevel",
+                "type": 4
+            },
+            {
+                "defaultshow": 0,
+                "desc": "centralnatid",
+                "logfldgrp": 9,
+                "name": "centralnatid",
+                "type": 1
+            },
+            {
+                "defaultshow": 0,
+                "desc": "apsn",
+                "logfldgrp": 9,
+                "name": "apsn",
+                "type": 3
+            },
+            {
+                "defaultshow": 0,
+                "desc": "ap",
+                "logfldgrp": 9,
+                "name": "ap",
+                "type": 3
+            },
+            {
+                "defaultshow": 0,
+                "desc": "channel",
+                "logfldgrp": 9,
+                "name": "channel",
+                "type": 1
+            },
+            {
+                "defaultshow": 0,
+                "desc": "radioband",
+                "logfldgrp": 9,
+                "name": "radioband",
+                "type": 3
+            },
+            {
+                "defaultshow": 0,
+                "desc": "vwpvlanid",
+                "logfldgrp": 9,
+                "name": "vwpvlanid",
+                "type": 1
+            },
+            {
+                "defaultshow": 0,
+                "desc": "policytype",
+                "logfldgrp": 9,
+                "name": "policytype",
+                "type": 4
+            },
+            {
+                "defaultshow": 0,
+                "desc": "policymode",
+                "logfldgrp": 9,
+                "name": "policymode",
+                "type": 3
+            },
+            {
+                "defaultshow": 0,
+                "desc": "shapingpolicyid",
+                "logfldgrp": 9,
+                "name": "shapingpolicyid",
+                "type": 1
+            },
+            {
+                "defaultshow": 0,
+                "desc": "sslaction",
+                "logfldgrp": 9,
+                "name": "sslaction",
+                "type": 3
+            },
+            {
+                "defaultshow": 0,
+                "desc": "url",
+                "logfldgrp": 1,
+                "name": "url",
+                "type": 3
+            },
+            {
+                "defaultshow": 0,
+                "desc": "agent",
+                "logfldgrp": 5,
+                "name": "agent",
+                "type": 3
+            },
+            {
+                "defaultshow": 0,
+                "desc": "fctuid",
+                "logfldgrp": 9,
+                "name": "fctuid",
+                "type": 7
+            },
+            {
+                "defaultshow": 0,
+                "desc": "fct_devid",
+                "name": "fct_devid",
+                "type": 3
+            },
+            {
+                "defaultshow": 0,
+                "desc": "String for unique utmaction values from correlated FortiClient logs, separated by ','.",
+                "name": "fct_utmaction",
+                "type": 3
+            }
+        ],
+        "private-field": [
+            {
+                "defaultshow": 0,
+                "desc": "batch id",
+                "logfldgrp": 9,
+                "name": "bid",
+                "type": 0
+            },
+            {
+                "defaultshow": 0,
+                "desc": "Log version",
+                "logfldgrp": 9,
+                "name": "logver",
+                "type": 0
+            },
+            {
+                "defaultshow": 0,
+                "desc": "utmref",
+                "logfldgrp": 9,
+                "name": "utmref",
+                "type": 3
+            },
+            {
+                "defaultshow": 0,
+                "desc": "threats",
+                "logfldgrp": 9,
+                "name": "threats",
+                "type": 8
+            },
+            {
+                "defaultshow": 0,
+                "desc": "threatlvls",
+                "logfldgrp": 9,
+                "name": "threatlvls",
+                "type": 8
+            },
+            {
+                "defaultshow": 0,
+                "desc": "threattyps",
+                "logfldgrp": 9,
+                "name": "threattyps",
+                "type": 8
+            },
+            {
+                "defaultshow": 0,
+                "desc": "threatcnts",
+                "logfldgrp": 9,
+                "name": "threatcnts",
+                "type": 8
+            },
+            {
+                "defaultshow": 0,
+                "desc": "threatwgts",
+                "logfldgrp": 9,
+                "name": "threatwgts",
+                "type": 8
+            },
+            {
+                "defaultshow": 0,
+                "desc": "clouduser info from app-ctrl log.",
+                "logfldgrp": 5,
+                "name": "clouduser",
+                "type": 3
+            },
+            {
+                "defaultshow": 0,
+                "desc": "app-name from app-ctrl log.",
+                "logfldgrp": 9,
+                "name": "apps",
+                "type": 8
+            },
+            {
+                "defaultshow": 0,
+                "desc": "combination of SaaS and SaaS category.",
+                "logfldgrp": 9,
+                "name": "saasinfo",
+                "type": 8
+            },
+            {
+                "defaultshow": 0,
+                "desc": "ebtime",
+                "logfldgrp": 9,
+                "name": "ebtime",
+                "type": 8
+            },
+            {
+                "defaultshow": 0,
+                "desc": "fct_corr_id",
+                "name": "fct_corr_id",
+                "type": 0
+            },
+            {
+                "defaultshow": 0,
+                "desc": "fct_fctref",
+                "name": "fct_fctref",
+                "type": 3
+            }
+        ]
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>The resource path to <b>LogView Logfile State task</b>.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/logview/adom/&lt;adom-name&gt;/logfields</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">devtype</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Device type name, such as FortiGate, FortiClient, FortiMail, FortiWeb, FortiSandbox, FortiDDos, FortiDeceptor, FortiADC, FortiFirewall<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">logtype</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/><br/>Logtype names<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;traffic<br/>&nbsp;&nbsp;&nbsp;&nbsp;app-ctrl<br/>&nbsp;&nbsp;&nbsp;&nbsp;attack<br/>&nbsp;&nbsp;&nbsp;&nbsp;content<br/>&nbsp;&nbsp;&nbsp;&nbsp;dlp<br/>&nbsp;&nbsp;&nbsp;&nbsp;emailfilter<br/>&nbsp;&nbsp;&nbsp;&nbsp;event<br/>&nbsp;&nbsp;&nbsp;&nbsp;history<br/>&nbsp;&nbsp;&nbsp;&nbsp;virus<br/>&nbsp;&nbsp;&nbsp;&nbsp;voip<br/>&nbsp;&nbsp;&nbsp;&nbsp;webfilter<br/>&nbsp;&nbsp;&nbsp;&nbsp;netscan<br/>&nbsp;&nbsp;&nbsp;&nbsp;fct-event<br/>&nbsp;&nbsp;&nbsp;&nbsp;fct-traffic<br/>&nbsp;&nbsp;&nbsp;&nbsp;waf<br/>&nbsp;&nbsp;&nbsp;&nbsp;gtp<br/>&nbsp;&nbsp;&nbsp;&nbsp;ztna<br/>&nbsp;&nbsp;&nbsp;&nbsp;security</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">subtype</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Subtype names.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return Log Fields</h2><p>It returns the available log fields.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>The data stream for the log fields.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/><br/><br/><table><tr class='odd_row'><td class="table_col_name">logtype</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/><br/>The logtype name. See Appendix<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;Logtype name</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">field</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>The fields to be listed.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/><br/><br/><table><tr class='odd_row'><td class="table_col_name">name</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The name of the field.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">desc</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The description of the field.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">type</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The type of the field.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">extended</td><td class="table_col_desc"><i>boolean </i> (optional) <br/><br/>If it is an extended field. An extended field is neither in the logfile nor in the database.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">defaultshow</td><td class="table_col_desc"><i>boolean </i> (optional) <br/><br/>If the fields is displayed by default.<br/><br/></td></tr></table></td></tr></td></tr><tr class='odd_row'><td class="table_col_name">private-field</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>The private fields to be listed. Private fields are those in the database but not in the logfiles.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/><br/><br/><table><tr class='odd_row'><td class="table_col_name">name</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The name of the field.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">desc</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The description of the field.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">type</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The type of the field.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">extended</td><td class="table_col_desc"><i>boolean </i> (optional) <br/><br/>If it is an extended field. An extended field is neither in the logfile nor in the database.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">logfldgrp</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>Log field group information.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">defaultshow</td><td class="table_col_desc"><i>boolean </i> (optional) <br/><br/>If the fields is displayed by default.<br/><br/></td></tr></table></td></tr></td></tr><tr class='odd_row'><td class="table_col_name">masked-fields</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>datamasked field list.<br/><br/>member type: <i>string</i><br/></td></tr></table></td></tr></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_logview_adom__adom-name__logstats>Get Log Stats</h1><h2>get /logview/adom/&lt;adom-name&gt;/logstats</h2><p>the last log time and log rate per device[vdom].<h6 id=${logview.get.logstats.req}.request>Request:</h6><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "device": [
+              {"devname": "string"},
+              {"devid": "string"}
+            ],
+            "url": "/logview/adom/root/logstats",
+            "apiver": 3
+        }
+    ],
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${logview.get.logstats.req}">Show example...</a></p></div><div id="${logview.get.logstats.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: the last log time and log rate per device[vdom].</i><a class="close" href="#${logview.get.logstats.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "device": [
+              {
+                "devid": "FGT1KC0000000001"
+              },
+              {
+                "devid": "FGT1KC0000000002[root]"
+              }
+            ],
+            "url": "/logview/adom/root/logstats",
+            "apiver": 3
+        }
+    ],
+    "jsonrpc": "2.0",
+    "id": 1
+}
+</pre></div></div></div><h6 id=${logview.get.logstats.resp}.response>Response:</h6><pre>
+{
+    "id": 1,
+    "jsonrpc": "2.0",
+    "result": {
+        "data": {
+            "devs": [
+                {
+                    "devid": "string",
+                    "devname": "string",
+                    "is-ha": boolean,
+                    "logging-mode": boolean,
+                    "encrypted-logging": boolean,
+                    "encrypted-forwarding": boolean,
+                    "status": number,
+                    "logstat-info": "string",
+                    "vdoms": [
+                        {
+                        "last-log-time": "string",
+                        "last-log-timestamp": number,
+                        "lograte": number,
+                        "log-disk-size": number,
+                        "log-db-size": number,
+                        "adom-quota-MB": number,
+                        "vdom": "string"
+                        }
+                    ]
+                }
+            ],
+            "log-interval-dev-no-logging-realtime": number,
+            "log-interval-dev-no-logging-upload": number
+        }
+    }
+}
+</pre><div id="wrapper"> <p><a href="#${logview.get.logstats.resp}">Show example...</a></p></div><div id="${logview.get.logstats.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: the last log time and log rate per device[vdom].</i><a class="close" href="#${logview.get.logstats.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": 1,
+    "jsonrpc": "2.0",
+    "result": {
+        "data": {
+            "devs": [
+                {
+                    "devid": "FGT1KC0000000001",
+                    "devname": "FGT-vancouver",
+                    "is-ha": 0,
+                    "logging-mode": 0,
+                    "encrypted-logging": 0,
+                    "encrypted-forwarding": 1,
+                    "status": 0,
+                    "logstat-info": "0,0,0,1682546613,0,0",
+                    "vdoms": [
+                        {
+                        "last-log-time": "2019-10-24 10:47:25 -0700",
+                        "last-log-timestamp": 1571939245,
+                        "lograte": 3.0,
+                        "log-disk-size": 1081344,
+                        "log-db-size": 9396472,
+                        "adom-quota-MB": 51200,
+                        "vdom": "root"
+                        },
+                        {
+                        "last-log-time": "2019-10-24 12:12:53 -0700",
+                        "last-log-timestamp": 1571944373,
+                        "lograte": 0.0,
+                        "log-disk-size": 405504,
+                        "log-db-size": 338202,
+                        "adom-quota-MB": 51200,
+                        "vdom": "vd1"
+                        }
+                    ]
+                },
+                {
+                    "devid": "FGT1KC0000000002",
+                    "devname": "FGT-101E",
+                    "is-ha": 0,
+                    "logging-mode": 0,
+                    "encrypted-logging": 0,
+                    "encrypted-forwarding": 0,
+                    "vdoms": [
+                        {
+                        "log-disk-size": 0,
+                        "log-db-size": 0,
+                        "adom-quota-MB": 51200,
+                        "vdom": "root"
+                        }
+                    ]
+                }
+            ],
+            "log-interval-dev-no-logging-realtime": 900,
+            "log-interval-dev-no-logging-upload": 21600
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>The resource path to <b>log stats</b>.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/logview/adom/&lt;adom-name&gt;/logstats</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">device</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>Device filter. For all devices in some type please use the All-Device ID. <b><i>See Appendix</i></b><br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/><br/><br/><table><tr class='odd_row'><td class="table_col_name">devid</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/><br/>Format: devid[vdom]. e.g. 'FGT60C0000000001[root]'. See Appendix<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;device-id[vdom]<br/>&nbsp;&nbsp;&nbsp;&nbsp;device-id<br/>&nbsp;&nbsp;&nbsp;&nbsp;All_FortiGate<br/>&nbsp;&nbsp;&nbsp;&nbsp;All_FortiMail<br/>&nbsp;&nbsp;&nbsp;&nbsp;All_FortiWeb<br/>&nbsp;&nbsp;&nbsp;&nbsp;All_FortiManager<br/>&nbsp;&nbsp;&nbsp;&nbsp;All_Syslog<br/>&nbsp;&nbsp;&nbsp;&nbsp;All_FortiClient<br/>&nbsp;&nbsp;&nbsp;&nbsp;All_FortiCache<br/>&nbsp;&nbsp;&nbsp;&nbsp;All_FortiProxy<br/>&nbsp;&nbsp;&nbsp;&nbsp;All_FortiAnalyzer<br/>&nbsp;&nbsp;&nbsp;&nbsp;All_FortiSandbox<br/>&nbsp;&nbsp;&nbsp;&nbsp;All_FortiAuthenticator<br/>&nbsp;&nbsp;&nbsp;&nbsp;All_FortiDDoS</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">devname</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Format: devname[vdom]. e.g. 'FGT-vancouver[traffic]'<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">csfname</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Name of security fabric. Format: csfname. e.g. 'Corp_SF'<br/><br/></td></tr></table></td></tr></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return Log Stats</h2><p>It returns the last log time and log rate.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>object </i> <br/><br/>The json object hosting the returned log stats records.<br/><br/><table><tr class='odd_row'><td class="table_col_name">devs</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>An array of json objects hosting the returned log stats records.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/><br/><br/><table><tr class='odd_row'><td class="table_col_name">devid</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Format: devid. e.g. 'FGT60C0000000001'.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">devname</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Format: devname. e.g. 'FGT-vancouver'<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">is-ha</td><td class="table_col_desc"><i>boolean </i> (optional) <br/><br/>Whether the device is a HA member (1) or not (0).<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">logging-mode</td><td class="table_col_desc"><i>boolean </i> (optional) <br/><br/>The logging mode is 'store and upload' (1) or 'realtime' (0).<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">encrypted-logging</td><td class="table_col_desc"><i>boolean </i> (optional) <br/><br/>Whether logging through encrypted transmission (1) or not (0).<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">encrypted_forwarding</td><td class="table_col_desc"><i>boolean </i> (optional) <br/><br/>Whether logging through reliable (encrypted) forwarding (1) or not (0).<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>The device status.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">logstat-info</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The log stats information.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">vdoms</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>An array of json objects hosting the vdoms' log stats records.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/><br/><br/><table><tr class='odd_row'><td class="table_col_name">vdom</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Format: vdom. e.g. 'root'.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">last-log-time</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>last received log's time.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">last-log-timestamp</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>last received log's timestamp.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">lograte</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>log rate, #/second.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">log-disk-size</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>The size of logs on disk.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">log-db-size</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>The size of logs in DB.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">adom-quota-MB</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>ADOM quota in MB.<br/><br/></td></tr></table></td></tr></td></tr></table></td></tr></td></tr><tr class='odd_row'><td class="table_col_name">log-interval-dev-no-logging-realtime</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>The interval of no real-time device log.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">log-interval-dev-no-logging-upload</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>The interval of no upload device log.<br/><br/></td></tr></table></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_logview_pcapfile>Get Log Pcapfile</h1><h2>get /logview/pcapfile</h2><p>Get the pcapfile associated with a log.<h6 id=${logview.get.pcapfile.req}.request>Request:</h6><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "key-type": "string",
+            "key-data": "string",
+            "url": "/logview/pcapfile",
+            "apiver": 3
+        }
+    ],
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${logview.get.pcapfile.req}">Show example...</a></p></div><div id="${logview.get.pcapfile.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Get the pcapfile associated with a log.</i><a class="close" href="#${logview.get.pcapfile.req}.request">&times;</a> <div class="content_cmd"><pre>
+["key-type": "log-data". "key-data" is in the logbase txt format]
+{
+  "id": "", 
+  "jsonrpc": "2.0", 
+  "method": "get", 
+  "params": [
+    {
+      "apiver": 3, 
+      "key-data": "date=\"2021-10-21\" time=\"11:20:01\" id=7021632510840799264 bid=815422 dvid=1369 itime=1634851217 euid=3 epid=1025 dsteuid=3 
+      dstepid=101 logver=604021723 sfsid=7021632515137373566 type=\"utm\" subtype=\"app-ctrl\" level=\"information\" action=\"pass\" 
+      sessionid=263393834 policyid=11 srcip=\"192.168.19.140\" dstip=\"10.59.61.114\" srcport=1153 dstport=514 proto=6 logid=\"1059028704\" 
+      service=\"SSL\" eventtime=1634851202974064702 incidentserialno=386169988 direction=\"incoming\" apprisk=\"medium\" appid=41540 
+      srcintfrole=\"lan\" dstintfrole=\"wan\" applist=\"default\" appcat=\"Network.Service\" app=\"SSL_TLSv1.2\" hostname="fortinet-ca2.fortinet.
+      com\" url=\"/\" eventtype=\"signature\" srcintf=\"port8\" dstintf=\"wan1\" msg=\"Network.Service: SSL_TLSv1.2,\" tz=\"-1000\" 
+      devid=\"FG200E4Q17916059\" vd=\"root\" devname=\"rcgw-3\" csf=\"rosie_csf_10\"", 
+      "key-type": "log-data", 
+      "url": "/logview/pcapfile/"
+    }
+  ], 
+  "session": "oBxY5noIuXZV+2aJlcUhAhDWtXBmZZ9mtpOo+sDsEFx5zmlbMRiOMxc5YU/4u1ZUnMlB7mMt8qf3zgyFPQ2Dsw=="
+}
+
+["key-type": "log-data". "key-data" is in the JSON format]
+{
+  "id": "", 
+  "jsonrpc": "2.0", 
+  "method": "get", 
+  "params": [
+    {
+      "apiver": 3, 
+      "key-data": { "date": "2021-10-21", "time": "11:28:31", "id": "7021634701274120242", "itime": "2021-10-21 14:28:47", 
+      "euid": "3", "epid": "1025", "dsteuid": "3", "dstepid": "101", "logver": "604021723", "sfsid": "7021634718455610636", 
+      "type": "utm", "subtype": "app-ctrl", "level": "information", "action": "pass", "sessionid": "263419112", "policyid": 
+      "11", "srcip": "192.168.19.140", "dstip": "10.59.61.114", "srcport": "8253", "dstport": "514", "proto": "6", "logid": 
+      "1059028704", "service": "SSL", "eventtime": "1634851712348500961", "incidentserialno": "386183899", "direction": 
+      "incoming", "apprisk": "medium", "appid": "41540", "srcintfrole": "lan", "dstintfrole": "wan", "applist": "default", 
+      "appcat": "Network.Service", "app": "SSL_TLSv1.2", "hostname": "fortinet-ca2.fortinet.com", "url": "%2F", "eventtype": 
+      "signature", "srcintf": "port8", "dstintf": "wan1", "msg": "Network.Service%3A%20SSL_TLSv1.2%2C", "tz": "-1000", "devid": 
+      "FG200E4Q17916059", "vd": "root", "csf": "rosie_csf_10", "dtime": "2021-10-21 11:28:31", "itime_t": "1634851727", 
+      "devname": "rcgw-3", "pktlog": "/drive0/private/ips_files/FG200E4Q17916059/root/1634851554/386183899:0", "pcapurl": "pcapfile?
+      ZGV2aWQ9IkZHMjAwRTRRMTc5MTYwNTkiIHZkPSJyb290IiBzdWJ0eXBlPSJhcHAtY3RybCIgY2hlY2tzdW09IiIgZXBvY2g9MCBpbmNpZGVudHNlcmlhbG5vPTM4NjE4Mzg5OSBzZXJ2aW
+      NlPSJTU0wiIHR5cGU9InV0bSIgZXZlbnRpZD0wIGluZGVudGlkeD0wIGZpbGVwYXRoPSIvaXBzX2ZpbGVzL0ZHMjAwRTRRMTc5MTYwNTkvcm9vdC8xNjM0ODUxNTU0LzM4NjE4Mzg5OTow
+      Ig==" }, 
+      "key-type": "log-data", 
+      "url": "/logview/pcapfile/"
+    }
+  ], 
+  "session": "WxHhsetXDa3wlUnKZKNuuZHbL6Y4lKCBGVqtfTClReAk+TV4hNI7XIcRnfC7epZaK38Bj2jaMDTLXocq9xs9BA=="
+}
+
+["key-type": "pcapurl". "key-data" is encoded in base64 format]
+NOTE: the "key-data" accepts two formats: 1) &lt;base64 encoded data&gt; or 2) pcapfile?&lt;base64 encoded data&gt;
+e.g. 1) "key-data": "ZGV2aWQ9I...zg5OTo"
+     2) "key-data": "pcapfile?ZGV2aWQ9I...zg5OTo"
+
+{
+  "id": "", 
+  "jsonrpc": "2.0", 
+  "method": "get", 
+  "params": [
+    {
+      "apiver": 3, 
+      "key-data": 
+      "ZGV2aWQ9IkZHMjAwRTRRMTc5MTYwNTkiIHZkPSJyb290IiBzdWJ0eXBlPSJhcHAtY3RybCIgY2hlY2tzdW09IiIgZXBvY2g9MCBpbmNpZGVudHNlcmlhbG5vPTM4NjE4Mzg5OSBzZXJ2a
+      WNlPSJTU0wiIHR5cGU9InV0bSIgZXZlbnRpZD0wIGluZGVudGlkeD0wIGZpbGVwYXRoPSIvaXBzX2ZpbGVzL0ZHMjAwRTRRMTc5MTYwNTkvcm9vdC8xNjM0ODUxNTU0LzM4NjE4Mzg5OTo
+      wIg==", 
+      "key-type": "pcapurl", 
+      "url": "/logview/pcapfile/"
+    }
+  ], 
+  "session": "WxHhsetXDa3wlUnKZKNuuZHbL6Y4lKCBGVqtfTClReAk+TV4hNI7XIcRnfC7epZaK38Bj2jaMDTLXocq9xs9BA=="
+}
+</pre></div></div></div><h6 id=${logview.get.pcapfile.resp}.response>Response:</h6><pre>
+{
+    "id": 1,
+    "jsonrpc": "2.0",
+    "result": {
+        "checksum": {
+            "method": "string",
+            "hash": "string"
+        },
+        "data":"string", 
+        "data-type": "string", 
+        "length": number, 
+        "file-name": "string",
+        "file-category":"string"
+    }
+}
+</pre><div id="wrapper"> <p><a href="#${logview.get.pcapfile.resp}">Show example...</a></p></div><div id="${logview.get.pcapfile.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Get the pcapfile associated with a log.</i><a class="close" href="#${logview.get.pcapfile.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+  "id": "", 
+  "jsonrpc": "2.0", 
+  "result": {
+    "checksum": {
+                  "method": "MD5",
+                  "hash": "937219f33bf10d778c0bb105d3cc699b"
+                }, 
+    "data": 
+    "UEsDBAoAAAAAAIlyVVMIYAFiBAYAAAQGAABFABwAZHJpdmUwL3ByaXZhdGUvaXBzX2ZpbGVzL0ZHMjAwRTRRMTc5MTYwNTkvcm9vdC8xNjM0ODUwNzg2LzM4NjE2OTk4ODowVVQJAAOR2XF
+    ...XBzX2ZpbGVzL0ZHMjAwRTRRMTc5MTYwNTkvcm9vdC8xNjM0ODUwNzg2LzM4NjE2OTk4ODowVVQFAAOR2XFhdXgLAAEEAAAAAAQAAAAAUEsFBgAAAAABAAEAiwAAAIMGAAAAAA==", 
+    "data-type": "zip/base64", 
+    "length": 1828, 
+    "file-name": "386169988:0",
+    "file-category":"ips_file"
+  }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>The resource path to <b>pcapfile</b>.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/logview/pcapfile</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">key-data</td><td class="table_col_desc"><i>string </i> <br/><br/>The key for searching pcapfile. It supports three type of data: 1) JSON format log , 2) txt format log and 3) pcapurl. A pcapurl can be found in the logsearch result if the log does have an associated pcapfile. e.g. 'pcapfile?ZGV2aWQ9IkZHMjAwRTRRMTc5MTYwNTkiIHZkPSJyb290IiBzdWJ0eXBlPSJhcHAtY3RybCIgY2hlY2tzdW09IiIgZXBvY2g9MCBpbmNpZGVudHNlcmlhbG5vPTM4NjE4Mzg5OSBzZXJ2aWNlPSJTU0wiIHR5cGU9InV0bSIgZXZlbnRpZD0wIGluZGVudGlkeD0wIGZpbGVwYXRoPSIvaXBzX2ZpbGVzL0ZHMjAwRTRRMTc5MTYwNTkvcm9vdC8xNjM0ODUxNTU0LzM4NjE4Mzg5OTowIg==\'. For more details, please click 'Show examples...' .<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">key-type</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>The type of the given key-data.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;log-data<br/>&nbsp;&nbsp;&nbsp;&nbsp;pcapurl</i></b><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return a Pcapfile</h2><p>It returns a pcapfile.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>string </i> <br/><br/>A returned pcapfile compressed and encoded according to 'data-type'.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">data-type</td><td class="table_col_desc"><i>string </i> <br/><br/>Indicating if the pcapfile is zipped with or without password and encoded in base64. e.g. 'base64', 'zip/base64' and 'zip-password/base64'.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">file-category</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>The category of the returned pcapfile.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;ips_file<br/>&nbsp;&nbsp;&nbsp;&nbsp;email_file<br/>&nbsp;&nbsp;&nbsp;&nbsp;ftp_file<br/>&nbsp;&nbsp;&nbsp;&nbsp;http_file<br/>&nbsp;&nbsp;&nbsp;&nbsp;im_file<br/>&nbsp;&nbsp;&nbsp;&nbsp;mms_file<br/>&nbsp;&nbsp;&nbsp;&nbsp;quarantined_file</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">file-name</td><td class="table_col_desc"><i>string </i> <br/><br/>The filename of the returned pcapfile.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">length</td><td class="table_col_desc"><i>number </i> <br/><br/>The length of encoded base64 data (excluding the ending '\0'.)<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">zip-password</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Password for unzipping pcapfile if it is zipped with password.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+
+    <h1 id=appendix>Appendix</h1>
+    <h2 id=list_of_logtypes>List of Available Log Types</h2><p>The sencond column, e.g. Type Name, can be filled into the field &lt;logtype&gt;.</p><br/>
+    <table class="param_table">
+      <thead>
+        <tr>
+            <th class="table_hdr_name">Type ID</th>
+            <th class="table_hdr_name">Type Name</th>
+            <th class="table_hdr_name">Logfile Name</th>
+            <th class="table_hdr_desc">Description</th>
+        </tr>
+      </thead>
+      <tr>
+        <td class="tg-yw4l">0</td>
+        <td class="table_col_name">app-ctrl</td>
+        <td class="tg-yw4l">rlog</td>
+        <td class="tg-yw4l">Application Control</td>
+      </tr>
+      <tr>
+        <td class="tg-yw4l">1</td>
+        <td class="table_col_name">attack</td>
+        <td class="tg-yw4l">alog</td>
+        <td class="tg-yw4l">Attack</td>
+      </tr>
+      <tr>
+        <td class="tg-yw4l">2</td>
+        <td class="table_col_name">content</td>
+        <td class="tg-yw4l">clog</td>
+        <td class="tg-yw4l">DLP Archive</td>
+      </tr>
+      <tr>
+        <td class="tg-yw4l">3</td>
+        <td class="table_col_name">dlp</td>
+        <td class="tg-yw4l">dlog</td>
+        <td class="tg-yw4l">Data Leak Prevention</td>
+      </tr>
+      <tr>
+        <td class="tg-yw4l">4</td>
+        <td class="table_col_name">emailfilter</td>
+        <td class="tg-yw4l">slog</td>
+        <td class="tg-yw4l">Email Filter</td>
+      </tr>
+      <tr>
+        <td class="tg-yw4l">5</td>
+        <td class="table_col_name">event</td>
+        <td class="tg-yw4l">elog</td>
+        <td class="tg-yw4l">Event</td>
+      </tr>
+      <tr>
+        <td class="tg-yw4l">7</td>
+        <td class="table_col_name">history</td>
+        <td class="tg-yw4l">hlog</td>
+        <td class="tg-yw4l">Mail Statistics</td>
+      </tr>
+      <tr>
+        <td class="tg-yw4l">10</td>
+        <td class="table_col_name">traffic</td>
+        <td class="tg-yw4l">tlog</td>
+        <td class="tg-yw4l">Traffic</td>
+      </tr>
+      <tr>
+        <td class="tg-yw4l">11</td>
+        <td class="table_col_name">virus</td>
+        <td class="tg-yw4l">vlog</td>
+        <td class="tg-yw4l">Virus</td>
+      </tr>
+      <tr>
+        <td class="tg-yw4l">12</td>
+        <td class="table_col_name">voip</td>
+        <td class="tg-yw4l">plog</td>
+        <td class="tg-yw4l">VoIP</td>
+      </tr>
+      <tr>
+        <td class="tg-yw4l">13</td>
+        <td class="table_col_name">webfilter</td>
+        <td class="tg-yw4l">wlog</td>
+        <td class="tg-yw4l">Web Filter</td>
+      </tr>
+      <tr>
+        <td class="tg-yw4l">14</td>
+        <td class="table_col_name">netscan</td>
+        <td class="tg-yw4l">nlog</td>
+        <td class="tg-yw4l">Network Scan</td>
+      </tr>
+      <tr>
+        <td class="tg-yw4l">15</td>
+        <td class="table_col_name">fct-event</td>
+        <td class="tg-yw4l">Elog</td>
+        <td class="tg-yw4l">FCT Event</td>
+      </tr>
+      <tr>
+        <td class="tg-yw4l">16</td>
+        <td class="table_col_name">fct-traffic</td>
+        <td class="tg-yw4l">Tlog</td>
+        <td class="tg-yw4l">FCT Traffic</td>
+      </tr>
+      <tr>
+        <td class="tg-yw4l">17</td>
+        <td class="table_col_name">fct-netscan</td>
+        <td class="tg-yw4l">Nlog</td>
+        <td class="tg-yw4l">FCT Vulnerability Scan</td>
+      </tr>
+      <tr>
+        <td class="tg-yw4l">18</td>
+        <td class="table_col_name">waf</td>
+        <td class="tg-yw4l">flog</td>
+        <td class="tg-yw4l">WAF</td>
+      </tr>
+      <tr>
+        <td class="tg-yw4l">19</td>
+        <td class="table_col_name">gtp</td>
+        <td class="tg-yw4l">Glog</td>
+        <td class="tg-yw4l">GTP</td>
+      </tr>
+    </table> 
+    <br/><br/><br/><br/><div>
+
+    <h2 id=list_of_alldevices>List of All-Device ID</h2><p>The all-device ID as devid/devname represents all devices in some device type within the ADOM.</p><br/>
+    <table class="param_table">
+      <thead>
+        <tr>
+          <th class="table_hdr_name">All-Device ID</th>
+          <th class="table_hdr_desc">Description</th>
+        </tr>
+      </thead>
+      <tr>
+        <td class="table_col_name">All_FortiGate</td>
+        <td class="tg-yw4l">All FortiGate Devices.</td>
+      </tr>
+      
+      <tr>
+        <td class="table_col_name">All_FortiMail</td>
+        <td class="tg-yw4l">All FortiMail Devices.</td>
+      </tr>
+      <tr>
+        <td class="table_col_name">All_FortiWeb</td>
+        <td class="tg-yw4l">All FortiWeb Devices.</td>
+      </tr>
+      <tr>
+        <td class="table_col_name">All_FortiManager</td>
+        <td class="tg-yw4l">All FortiManager Devices.</td>
+      </tr>
+      <tr>
+        <td class="table_col_name">All_Syslog</td>
+        <td class="tg-yw4l">All Syslog Devices.</td>
+      </tr>
+      <tr>
+        <td class="table_col_name">All_FortiClient</td>
+        <td class="tg-yw4l">All FortiClient Devices.</td>
+      </tr>
+      <tr>
+        <td class="table_col_name">All_FortiCache</td>
+        <td class="tg-yw4l">All FortiCache Devices.</td>
+      </tr>
+      <tr>
+        <td class="table_col_name">All_FortiProxy</td>
+        <td class="tg-yw4l">All FortiProxy Devices.</td>
+      </tr>
+      <tr>
+        <td class="table_col_name">All_FortiAnalyzer</td>
+        <td class="tg-yw4l">All FortiAnalyzer Devices.</td>
+      </tr>
+      <tr>
+        <td class="table_col_name">All_FortiSandbox</td>
+        <td class="tg-yw4l">All FortiSandbox Devices.</td>
+      </tr>
+      <tr>
+        <td class="table_col_name">All_FortiAuthenticator</td>
+        <td class="tg-yw4l">All FortiAuthenticator Devices.</td>
+      </tr>
+      <tr>
+        <td class="table_col_name">All_FortiDDoS</td>
+        <td class="tg-yw4l">All FortiDDoS Devices.</td>
+      </tr>
+      <tr>
+        <td class="table_col_name">All_FortiDeceptor</td>
+        <td class="tg-yw4l">All FortiDeceptor Devices.</td>
+      </tr>
+      <tr>
+        <td class="table_col_name">ALL_FAD</td>
+        <td class="tg-yw4l">All FortiADC Devices.</td>
+      </tr>
+      <tr>
+        <td class="table_col_name">ALL_FFW</td>
+        <td class="tg-yw4l">All FortiFirewall Devices.</td>
+      </tr>
+      <tr>
+        <td class="table_col_name">ALL_FAI</td>
+        <td class="tg-yw4l">All FortiNDR Devices.</td>
+      </tr>
+      <tr>
+        <td class="table_col_name">ALL_FSR</td>
+        <td class="tg-yw4l">All FortiSOAR Devices.</td>
+      </tr>
+      <tr>
+        <td class="table_col_name">ALL_FIS</td>
+        <td class="tg-yw4l">All FortiIsolator Devices.</td>
+      </tr>
+      <tr>
+        <td class="table_col_name">ALL_FED</td>
+        <td class="tg-yw4l">All FortiEDR Devices.</td>
+      </tr>
+      <tr>
+        <td class="table_col_name">ALL_FPA</td>
+        <td class="tg-yw4l">All FortiPAM Devices.</td>
+      </tr>
+      <tr>
+        <td class="table_col_name">ALL_FCA</td>
+        <td class="tg-yw4l">All FortiCASB Devices.</td>
+      </tr>
+      <tr>
+        <td class="table_col_name">ALL_FTC</td>
+        <td class="tg-yw4l">All FortiToken Devices.</td>
+      </tr>
+      <tr>
+        <td class="table_col_name">ALL_FRA</td>
+        <td class="tg-yw4l">All FortiSRA Devices.</td>
+      </tr>
+    </table>
+    <br/><br/><br/><br/><div>
+
+    <h2 id=list_of_timezone>List of Timezone Used by FortiAnalyzer JSON API </h2>
+    <p>A list of timezone index and names for timezone parameter. &lt;view-name&gt;:</p>
+    <table class="param_table">
+    <thead><tr><td>Index</td><td>Name</td><td>Description</td></tr></thead>
+    <tr><td>0</td><td>Pacific/Kwajalein</td><td>(GMT-12:00) Eniwetak, Kwajalein.</td></tr>
+    <tr><td>1</td><td>Pacific/Midway</td><td>(GMT-11:00) Midway Island, Samoa.</td></tr>
+    <tr><td>2</td><td>US/Hawaii</td><td>(GMT-10:00) Hawaii.</td></tr>
+    <tr><td>3</td><td>US/Alaska</td><td>(GMT-9:00) Alaska.</td></tr>
+    <tr><td>4</td><td>US/Pacific</td><td>(GMT-8:00) Pacific Time (US & Canada).</td></tr>
+    <tr><td>5</td><td>US/Arizona</td><td>(GMT-7:00) Arizona.</td></tr>
+    <tr><td>6</td><td>US/Mountain</td><td>(GMT-7:00) Mountain Time (US & Canada).</td></tr>
+    <tr><td>81</td><td>America/Chihuahua</td><td>(GMT-7:00) Baja California Sur, Chihuahua.</td></tr>
+    <tr><td>7</td><td>Canada/Central</td><td>(GMT-6:00) Central America.</td></tr>
+    <tr><td>8</td><td>US/Central</td><td>(GMT-6:00) Central Time (US & Canada).</td></tr>
+    <tr><td>9</td><td>America/Mexico_City</td><td>(GMT-6:00) Mexico City.</td></tr>
+    <tr><td>10</td><td>Canada/Saskatchewan</td><td>(GMT-6:00) Saskatchewan.</td></tr>
+    <tr><td>11</td><td>America/Bogota</td><td>(GMT-5:00) Bogota, Lima, Quito.</td></tr>
+    <tr><td>12</td><td>US/Eastern</td><td>(GMT-5:00) Eastern Time (US & Canada).</td></tr>
+    <tr><td>13</td><td>US/East-Indiana</td><td>(GMT-5:00) Indiana (East).</td></tr>
+    <tr><td>76</td><td>Brazil/Acre</td><td>(GMT-5:00) Brazil-Acre.</td></tr>
+    <tr><td>74</td><td>America/Caracas</td><td>(GMT-4:30) Caracas.</td></tr>
+    <tr><td>14</td><td>Canada/Atlantic</td><td>(GMT-4:00) Atlantic Time (Canada).</td></tr>
+    <tr><td>15</td><td>America/La_Paz</td><td>(GMT-4:00) La Paz.</td></tr>
+    <tr><td>16</td><td>America/Santiago</td><td>(GMT-4:00) Santiago.</td></tr>
+    <tr><td>77</td><td>Brazil/West</td><td>(GMT-4:00) Brazil-West.</td></tr>
+    <tr><td>86</td><td>America/Asuncion</td><td>(GMT-4:00) Paraguay.</td></tr>
+    <tr><td>17</td><td>Canada/Newfoundland</td><td>(GMT-3:30) Newfoundland.</td></tr>
+    <tr><td>18</td><td>America/Sao_Paulo</td><td>(GMT-3:00) Brasilia.</td></tr>
+    <tr><td>19</td><td>America/Buenos_Aires</td><td>(GMT-3:00) Buenos Aires, Georgetown.</td></tr>
+    <tr><td>20</td><td>America/Godthab</td><td>(GMT-3:00) Nuuk (Greenland).</td></tr>
+    <tr><td>78</td><td>Brazil/East</td><td>(GMT-3:00) Brazil-East.</td></tr>
+    <tr><td>21</td><td>Etc/GMT+2</td><td>(GMT-2:00) Mid-Atlantic (Deprecated).</td></tr>
+    <tr><td>79</td><td>Brazil/DeNoronha</td><td>(GMT-2:00) Brazil-DeNoronha.</td></tr>
+    <tr><td>22</td><td>Atlantic/Azores</td><td>(GMT-1:00) Azores.</td></tr>
+    <tr><td>23</td><td>Atlantic/Cape_Verde</td><td>(GMT-1:00) Cape Verde Is.</td></tr>
+    <tr><td>24</td><td>Africa/Monrovia</td><td>(GMT) Monrovia.</td></tr>
+    <tr><td>87</td><td>Africa/Casablanca</td><td>(GMT) Casablanca.</td></tr>
+    <tr><td>90</td><td>Europe/Dublin</td><td>(GMT) Dublin.</td></tr>
+    <tr><td>91</td><td>Europe/Lisbon</td><td>(GMT) Lisbon.</td></tr>
+    <tr><td>25</td><td>Europe/London</td><td>(GMT) London, Edinburgh.</td></tr>
+    <tr><td>89</td><td>GMT</td><td>(GMT) Greenwich Mean Time.</td></tr>
+    <tr><td>26</td><td>Europe/Amsterdam</td><td>(GMT+1:00) Amsterdam, Berlin, Bern, Rome, Stockholm, Vienna.</td></tr>
+    <tr><td>27</td><td>Europe/Belgrade</td><td>(GMT+1:00) Belgrade, Bratislava, Budapest, Ljubljana, Prague.</td></tr>
+    <tr><td>28</td><td>Europe/Brussels</td><td>(GMT+1:00) Brussels, Copenhagen, Madrid, Paris.</td></tr>
+    <tr><td>29</td><td>Europe/Skopje</td><td>(GMT+1:00) Sarajevo, Skopje, Warsaw, Zagreb.</td></tr>
+    <tr><td>30</td><td>Africa/Lagos</td><td>(GMT+1:00) West Central Africa.</td></tr>
+    <tr><td>75</td><td>Africa/Windhoek</td><td>(GMT+1:00) Namibia.</td></tr>
+    <tr><td>31</td><td>Europe/Athens</td><td>(GMT+2:00) Athens, Sofia, Vilnius.</td></tr>
+    <tr><td>32</td><td>Europe/Bucharest</td><td>(GMT+2:00) Bucharest.</td></tr>
+    <tr><td>33</td><td>Africa/Cairo</td><td>(GMT+2:00) Cairo.</td></tr>
+    <tr><td>34</td><td>Africa/Harare</td><td>(GMT+2:00) Harare, Pretoria.</td></tr>
+    <tr><td>35</td><td>Europe/Helsinki</td><td>(GMT+2:00) Helsinki, Riga,Tallinn.</td></tr>
+    <tr><td>36</td><td>Asia/Jerusalem</td><td>(GMT+2:00) Jerusalem.</td></tr>
+    <tr><td>37</td><td>Asia/Baghdad</td><td>(GMT+3:00) Baghdad.</td></tr>
+    <tr><td>38</td><td>Asia/Kuwait</td><td>(GMT+3:00) Kuwait, Riyadh.</td></tr>
+    <tr><td>39</td><td>Europe/Moscow</td><td>(GMT+3:00) St.Petersburg, Volgograd.</td></tr>
+    <tr><td>88</td><td>Europe/Moscow</td><td>(GMT+3:00) Moscow.</td></tr>
+    <tr><td>40</td><td>Africa/Nairobi</td><td>(GMT+3:00) Nairobi.</td></tr>
+    <tr><td>83</td><td>Europe/Minsk</td><td>(GMT+3:00) Minsk.</td></tr>
+    <tr><td>85</td><td>Europe/Istanbul</td><td>(GMT+3:00) Istanbul.</td></tr>
+    <tr><td>41</td><td>Asia/Tehran</td><td>(GMT+3:30) Tehran.</td></tr>
+    <tr><td>42</td><td>Asia/Muscat</td><td>(GMT+4:00) Abu Dhabi, Muscat.</td></tr>
+    <tr><td>43</td><td>Asia/Baku</td><td>(GMT+4:00) Baku.</td></tr>
+    <tr><td>44</td><td>Asia/Kabul</td><td>(GMT+4:30) Kabul.</td></tr>
+    <tr><td>45</td><td>Asia/Yekaterinburg</td><td>(GMT+5:00) Ekaterinburg.</td></tr>
+    <tr><td>46</td><td>Asia/Karachi</td><td>(GMT+5:00) Islamabad, Karachi, Tashkent.</td></tr>
+    <tr><td>47</td><td>Asia/Calcutta</td><td>(GMT+5:30) Calcutta, Chennai, Mumbai, New Delhi.</td></tr>
+    <tr><td>51</td><td>Asia/Kolkata</td><td>(GMT+5:30) Sri Jayawardenepura.</td></tr>
+    <tr><td>48</td><td>Asia/Katmandu</td><td>(GMT+5:45) Kathmandu.</td></tr>
+    <tr><td>49</td><td>Asia/Almaty</td><td>(GMT+6:00) Almaty, Novosibirsk.</td></tr>
+    <tr><td>50</td><td>Asia/Dhaka</td><td>(GMT+6:00) Astana, Dhaka.</td></tr>
+    <tr><td>52</td><td>Asia/Rangoon</td><td>(GMT+6:30) Rangoon.</td></tr>
+    <tr><td>53</td><td>Asia/Bangkok</td><td>(GMT+7:00) Bangkok, Hanoi, Jakarta.</td></tr>
+    <tr><td>54</td><td>Asia/Krasnoyarsk</td><td>(GMT+7:00) Krasnoyarsk.</td></tr>
+    <tr><td>55</td><td>Asia/Hong_Kong</td><td>(GMT+8:00) Beijing, ChongQing, HongKong, Urumqi.</td></tr>
+    <tr><td>56</td><td>Asia/Irkutsk</td><td>(GMT+8:00) Irkutsk, Ulaanbaatar.</td></tr>
+    <tr><td>57</td><td>Asia/Kuala_Lumpur</td><td>(GMT+8:00) Kuala Lumpur, Singapore.</td></tr>
+    <tr><td>58</td><td>Australia/Perth</td><td>(GMT+8:00) Perth.</td></tr>
+    <tr><td>59</td><td>Asia/Taipei</td><td>(GMT+8:00) Taipei.</td></tr>
+    <tr><td>60</td><td>Asia/Tokyo</td><td>(GMT+9:00) Osaka, Sapporo, Tokyo, Seoul.</td></tr>
+    <tr><td>61</td><td>Asia/Yakutsk</td><td>(GMT+9:00) Yakutsk.</td></tr>
+    <tr><td>62</td><td>Australia/Adelaide</td><td>(GMT+9:30) Adelaide.</td></tr>
+    <tr><td>63</td><td>Australia/Darwin</td><td>(GMT+9:30) Darwin.</td></tr>
+    <tr><td>64</td><td>Australia/Brisbane</td><td>(GMT+10:00) Brisbane.</td></tr>
+    <tr><td>65</td><td>Australia/Canberra</td><td>(GMT+10:00) Canberra, Melbourne, Sydney.</td></tr>
+    <tr><td>66</td><td>Pacific/Guam</td><td>(GMT+10:00) Guam, Port Moresby.</td></tr>
+    <tr><td>67</td><td>Australia/Hobart</td><td>(GMT+10:00) Hobart.</td></tr>
+    <tr><td>68</td><td>Asia/Vladivostok</td><td>(GMT+10:00) Vladivostok.</td></tr>
+    <tr><td>69</td><td>Asia/Magadan</td><td>(GMT+11:00) Magadan.</td></tr>
+    <tr><td>70</td><td>Etc/GMT-11</td><td>(GMT+11:00) Solomon Is., New Caledonia.</td></tr>
+    <tr><td>71</td><td>Pacific/Auckland</td><td>(GMT+12:00) Auckland, Wellington.</td></tr>
+    <tr><td>72</td><td>Pacific/Fiji</td><td>(GMT+12:00) Fiji, Kamchatka, Marshall Is.</td></tr>
+    <tr><td>82</td><td>Pacific/Chatham</td><td>(GMT+12:45) Chatham Islands.</td></tr>
+    <tr><td>73</td><td>Etc/GMT-13</td><td>(GMT+13:00) Nuku'alofa.</td></tr>
+    <tr><td>84</td><td>Pacific/Apia</td><td>(GMT+13:00) Samoa.</td></tr>
+    <tr><td>80</td><td>Pacific/Kiritimati</td><td>(GMT+14:00) Kiritimati.</td></tr>
+    <tr><td></td><td></td><td></td></tr>
+    </table>
+    <br/><br/><br/>
+<style>
+    .overlay {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: rgba(0, 0, 0, 0.5);
+        transition: opacity 200ms;
+        visibility: hidden;
+        opacity: 0;
+    }
+    .overlay .cancel {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        cursor: default;
+    }
+    .overlay:target {
+        visibility: visible;
+        opacity: 1;
+    }
+
+    .popup {
+        margin: 75px auto;
+        padding: 20px;
+        background: #fff;
+        border: 1px solid #666;
+        width: 80%;
+        height: 80vh;
+        overflow: auto;
+        box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+        position: relative;
+    }
+    .popup .close {
+        position: absolute;
+        width: 20px;
+        height: 20px;
+        top: 20px;
+        right: 20px;
+        opacity: 0.8;
+        transition: all 200ms;
+        font-size: 24px;
+        font-weight: bold;
+        text-decoration: none;
+        color: #666;
+    }
+    .popup .close:hover {
+        opacity: 1;
+    }
+    .popup .content_cmd {
+        height: 90%;
+        overflow: auto;
+    }
+    .popup .content_cmd pre {
+        width: 90%;
+    }
+    .popup p {
+        margin: 0 0 1em;
+    }
+    .popup p:last-child {
+        margin: 0;
+    }
+</style>
+    <br/>
+</div></body></html>

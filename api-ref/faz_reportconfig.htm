@@ -1,0 +1,2826 @@
+<!doctype html><html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>FortiAnalyzer 7.4.7 (2685) JSON API Reference-Report Config Commands</title>
+<style>body {
+	font-family: Verdana;
+	color: black;
+	background: #D9D9D9;
+	font-size: 13px;
+}
+h1 {
+	font-size: 20px;
+}
+h2 {
+	font-size: 15px;
+	position: sticky;
+	position: -webkit-sticky;
+	top: 0px;
+	background: #D9D9D9;
+}
+h6 {
+	font-size: 13px;
+	margin-bottom: 8px;
+	margin-left: 12px;
+	font-weight: normal;
+}
+table {
+	width: 95%;
+	font-size: 13px;
+	margin-left: 15px;
+	margin-right: 5px;
+	border-collapse: collapse;
+	margin-bottom: 16px;
+}
+td {
+	vertical-align: top;
+	padding: 5px;
+}
+pre {
+	border: 1px solid black;
+	padding: 10px;
+	font-size: 12px;
+	margin-left: 15px;
+	width: 650px;
+}
+th {
+	text-align: left;
+}
+a {
+}
+a:link {
+	text-decoration: none;
+}
+a:visited {
+}
+a:hover {
+	text-decoration: underline;
+}
+.menu {
+	background: #C0C0C0;
+	border-right: 1px solid;
+	position: fixed;
+	padding: 6px;
+	padding-top: 20px;
+	top: 0px;
+	left: 0px;
+	bottom: 0px;
+	width: 200px;
+	overflow-x: hidden;
+	overflow-y: auto;
+	white-space: nowrap;
+}
+.content {
+	position: absolute;
+	padding: 6px;
+	top: 0px;
+	left: 240px;
+	right: 0px;
+}
+.menu_header {
+	font-weight: bold;
+}
+.param_table {
+	border: 1px solid #A0A0A0;
+}
+.table_hdr_name {
+	width: 160px;
+}
+.table_col_name {
+	font-weight: bold;
+	width: 160px;
+}
+.table_col_desc {
+}
+.param_table > thead > tr > th {
+	background-color: #C0C0C0;
+	border-bottom: 1px solid #A0A0A0;
+	padding: 6px;
+}
+.param_table > tbody > tr:nth-child(even) > td {
+	background-color: #D0D0D0;
+}
+.macro_num {
+	font-weight: bold;
+	width: 50px;
+}
+.macro_val {
+}
+</style>
+</head>
+<body>
+<div class="menu"><span class="menu_header"><a href="index.htm">API Reference Home</a></span><br/><span class="menu_item"><a href="objects.htm">Common Objects</a></span><br/><br/><span class="menu_header">Database Modules</span><br/><span class="menu_item"><a href="dvmdb-main.htm">Device Manager Database</a></span><br/><span class="menu_item"><a href="task-main.htm">Task Database</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof74-2779-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof74-2779-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg74-2779-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof72-1732-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof72-1732-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg72-1732-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof70-662-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof70-662-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg70-662-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof64-2087-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof64-2087-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg64-2087-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof62-1263-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof62-1263-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg62-1263-main.htm">Policy Package</a></span><br/><br/><span class="menu_header">Daemon Modules</span><br/><span class="menu_item"><a href="cmdb-main.htm">CLI Configuration</a></span><br/><span class="menu_item"><a href="dvmcmd-main.htm">Device Manager Command</a></span><br/><span class="menu_item"><a href="um-main.htm">Update Manager</a></span><br/><span class="menu_item"><a href="sys-main.htm">System Commands</a></span><br/><br/><span class="menu_header"><a href="faz-cmd-index.htm">FortiAnalyzer Modules</a></span><br/><span class="menu_item"><a href="faz_eventmgmt.htm">Event Mgmt Commands</a></span><br/><span class="menu_item"><a href="faz_eventmgmtconfig.htm">Event Mgmt Config Commands</a></span><br/><span class="menu_item"><a href="faz_fazsys.htm">FAZ System Commands</a></span><br/><span class="menu_item"><a href="faz_fortiview.htm">FortiView Commands</a></span><br/><span class="menu_item"><a href="faz_incidentmgmt.htm">Incident Mgmt Commands</a></span><br/><span class="menu_item"><a href="faz_logview.htm">LogView Commands</a></span><br/><span class="menu_item"><a href="faz_report.htm">Report Commands</a></span><br/><span class="menu_item"><a href="faz_reportconfig.htm">Report Config Commands</a></span><br/><span class="menu_item"><a href="faz_ioc.htm">IOC Commands</a></span><br/><span class="menu_item"><a href="faz_ueba.htm">UEBA Commands</a></span><br/><span class="menu_item"><a href="faz_soar.htm">SOAR Commands</a></span><br/><br/><span class="menu_header"><a href="obj-index.htm">Index of All Objects</a></span><br/><br/></div>
+<div class="content">
+<h1>Report Config Commands</h1><br/>
+
+<div>
+<h1 id=add_report_adom__adom-name__config_chart>/report/adom/&lt;adom-name&gt;/config/chart</h1><h2>add /report/adom/&lt;adom-name&gt;/config/chart</h2><p>support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/chart<br>object: /report/adom/&lt;adom-name&gt;/config/chart/&lt;name&gt;<h6 id=${reportconfig.add.req}.request>Request:</h6><pre>
+{
+    "method": "add",
+    "params": [
+        {
+            "url": "report/adom/&lt;adom-name&gt;/config/&lt;obj-type&gt;/&lt;obj-name&gt;",
+            "apiver": 3,
+            "filter": [],
+            "sortings": [],
+            "data": [
+              { "field": "value", "field": "value", ...},
+              ...
+            ]
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${reportconfig.add.req}">Show example...</a></p></div><div id="${reportconfig.add.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/chart<br>object: /report/adom/&lt;adom-name&gt;/config/chart/&lt;name&gt;</i><a class="close" href="#${reportconfig.add.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "method": "add",
+    "params": [
+        {
+            "url": "report/adom/root/config/schedule/6",
+            "apiver": "3",
+            "filter": [],
+            "data": {
+              "auto-hcache": 1,
+              "dev-type": 0,
+              "device-list-type": 0,
+              "devices": [
+                {
+                  "devices-name": "All_FortiGate",
+                  "type": 2
+                }
+              ],
+              "display-table-contents": 1,
+              "filter": null,
+              "filter-logic": 0,
+              "filter-type": 0,
+              "include-coverpage": 1,
+              "include-other": 2,
+              "language": "Default",
+              "ldap-query": 0,
+              "ldap-server": "",
+              "ldap-user-case-change": 0,
+              "max-reports": 99,
+              "name": "6",
+              "obfuscate-user": 0,
+              "orientation": 0,
+              "output-format": 1,
+              "output-profile": "",
+              "period-end": null,
+              "period-last-n": 0,
+              "period-opt": 1,
+              "period-start": null,
+              "print-report-filters": 1,
+              "report-layout": [
+                {
+                  "layout-id": 6
+                }
+              ],
+              "report-per-device": 0,
+              "resolve-hostname": 0,
+              "schedule-color": "51B749",
+              "schedule-frequency": 1,
+              "schedule-type": 3,
+              "schedule-valid-end": null,
+              "schedule-valid-start": [
+                "00:00",
+                "2017/10/17"
+              ],
+              "status": 1,
+              "time-period": 5,
+              "week-start": 0
+            }
+        }
+    ],
+    "session": "xxxx"
+}
+</pre></div></div></div><h6 id=${reportconfig.add.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "code":    number,
+            "message": "string"
+        },
+        "data": [
+            { "field": "value", "field": "value", ...},
+            ...
+        ]
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${reportconfig.add.resp}">Show example...</a></p></div><div id="${reportconfig.add.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/chart<br>object: /report/adom/&lt;adom-name&gt;/config/chart/&lt;name&gt;</i><a class="close" href="#${reportconfig.add.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "result": {
+        "status": {
+          "code": 0,
+          "message": "ok"
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">category</td><td class="table_col_desc"><i>string </i> <br/><br/><br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">chart-style</td><td class="table_col_desc"><i>string </i> <br/><br/><br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">chart-type</td><td class="table_col_desc"><i> </i> (optional) <br/><br/><br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">drill-down-table</td><td class="table_col_desc"><i>array </i> <br/><br/>reference: /report/adom/&lt;adom-name&gt;/config/chart/&lt;chart_name&gt;/drill-down-table<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">table-columns</td><td class="table_col_desc"><i>array </i> <br/><br/>reference: /report/adom/&lt;adom-name&gt;/config/chart/&lt;chart_name&gt;/table-columns<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">variable-template</td><td class="table_col_desc"><i>array </i> <br/><br/>reference: /report/adom/&lt;adom-name&gt;/config/chart/&lt;chart_name&gt;/variable-template<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=add_report_adom__adom-name__config_chart__chart_name__drill-down-table>/report/adom/&lt;adom-name&gt;/config/chart/&lt;chart_name&gt;/drill-down-table</h1><h2>add /report/adom/&lt;adom-name&gt;/config/chart/&lt;chart_name&gt;/drill-down-table</h2><p>support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/chart/&lt;chart_name&gt;/drill-down-table<br>object: /report/adom/&lt;adom-name&gt;/config/chart/&lt;chart_name&gt;/drill-down-table/&lt;table-id&gt;<h6 id=${reportconfig.add.req}.request>Request:</h6><pre>
+{
+    "method": "add",
+    "params": [
+        {
+            "url": "report/adom/&lt;adom-name&gt;/config/&lt;obj-type&gt;/&lt;obj-name&gt;",
+            "apiver": 3,
+            "filter": [],
+            "sortings": [],
+            "data": [
+              { "field": "value", "field": "value", ...},
+              ...
+            ]
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${reportconfig.add.req}">Show example...</a></p></div><div id="${reportconfig.add.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/chart/&lt;chart_name&gt;/drill-down-table<br>object: /report/adom/&lt;adom-name&gt;/config/chart/&lt;chart_name&gt;/drill-down-table/&lt;table-id&gt;</i><a class="close" href="#${reportconfig.add.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "method": "add",
+    "params": [
+        {
+            "url": "report/adom/root/config/schedule/6",
+            "apiver": "3",
+            "filter": [],
+            "data": {
+              "auto-hcache": 1,
+              "dev-type": 0,
+              "device-list-type": 0,
+              "devices": [
+                {
+                  "devices-name": "All_FortiGate",
+                  "type": 2
+                }
+              ],
+              "display-table-contents": 1,
+              "filter": null,
+              "filter-logic": 0,
+              "filter-type": 0,
+              "include-coverpage": 1,
+              "include-other": 2,
+              "language": "Default",
+              "ldap-query": 0,
+              "ldap-server": "",
+              "ldap-user-case-change": 0,
+              "max-reports": 99,
+              "name": "6",
+              "obfuscate-user": 0,
+              "orientation": 0,
+              "output-format": 1,
+              "output-profile": "",
+              "period-end": null,
+              "period-last-n": 0,
+              "period-opt": 1,
+              "period-start": null,
+              "print-report-filters": 1,
+              "report-layout": [
+                {
+                  "layout-id": 6
+                }
+              ],
+              "report-per-device": 0,
+              "resolve-hostname": 0,
+              "schedule-color": "51B749",
+              "schedule-frequency": 1,
+              "schedule-type": 3,
+              "schedule-valid-end": null,
+              "schedule-valid-start": [
+                "00:00",
+                "2017/10/17"
+              ],
+              "status": 1,
+              "time-period": 5,
+              "week-start": 0
+            }
+        }
+    ],
+    "session": "xxxx"
+}
+</pre></div></div></div><h6 id=${reportconfig.add.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "code":    number,
+            "message": "string"
+        },
+        "data": [
+            { "field": "value", "field": "value", ...},
+            ...
+        ]
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${reportconfig.add.resp}">Show example...</a></p></div><div id="${reportconfig.add.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/chart/&lt;chart_name&gt;/drill-down-table<br>object: /report/adom/&lt;adom-name&gt;/config/chart/&lt;chart_name&gt;/drill-down-table/&lt;table-id&gt;</i><a class="close" href="#${reportconfig.add.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "result": {
+        "status": {
+          "code": 0,
+          "message": "ok"
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">chart</td><td class="table_col_desc"><i>string </i> <br/><br/><br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">chart-group</td><td class="table_col_desc"><i>string </i> <br/><br/><br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">flag</td><td class="table_col_desc"><i> </i> (optional) <br/><br/><br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=add_report_adom__adom-name__config_chart__chart_name__table-columns>/report/adom/&lt;adom-name&gt;/config/chart/&lt;chart_name&gt;/table-columns</h1><h2>add /report/adom/&lt;adom-name&gt;/config/chart/&lt;chart_name&gt;/table-columns</h2><p>support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/chart/&lt;chart_name&gt;/table-columns<br>object: /report/adom/&lt;adom-name&gt;/config/chart/&lt;chart_name&gt;/table-columns/&lt;id&gt;<h6 id=${reportconfig.add.req}.request>Request:</h6><pre>
+{
+    "method": "add",
+    "params": [
+        {
+            "url": "report/adom/&lt;adom-name&gt;/config/&lt;obj-type&gt;/&lt;obj-name&gt;",
+            "apiver": 3,
+            "filter": [],
+            "sortings": [],
+            "data": [
+              { "field": "value", "field": "value", ...},
+              ...
+            ]
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${reportconfig.add.req}">Show example...</a></p></div><div id="${reportconfig.add.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/chart/&lt;chart_name&gt;/table-columns<br>object: /report/adom/&lt;adom-name&gt;/config/chart/&lt;chart_name&gt;/table-columns/&lt;id&gt;</i><a class="close" href="#${reportconfig.add.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "method": "add",
+    "params": [
+        {
+            "url": "report/adom/root/config/schedule/6",
+            "apiver": "3",
+            "filter": [],
+            "data": {
+              "auto-hcache": 1,
+              "dev-type": 0,
+              "device-list-type": 0,
+              "devices": [
+                {
+                  "devices-name": "All_FortiGate",
+                  "type": 2
+                }
+              ],
+              "display-table-contents": 1,
+              "filter": null,
+              "filter-logic": 0,
+              "filter-type": 0,
+              "include-coverpage": 1,
+              "include-other": 2,
+              "language": "Default",
+              "ldap-query": 0,
+              "ldap-server": "",
+              "ldap-user-case-change": 0,
+              "max-reports": 99,
+              "name": "6",
+              "obfuscate-user": 0,
+              "orientation": 0,
+              "output-format": 1,
+              "output-profile": "",
+              "period-end": null,
+              "period-last-n": 0,
+              "period-opt": 1,
+              "period-start": null,
+              "print-report-filters": 1,
+              "report-layout": [
+                {
+                  "layout-id": 6
+                }
+              ],
+              "report-per-device": 0,
+              "resolve-hostname": 0,
+              "schedule-color": "51B749",
+              "schedule-frequency": 1,
+              "schedule-type": 3,
+              "schedule-valid-end": null,
+              "schedule-valid-start": [
+                "00:00",
+                "2017/10/17"
+              ],
+              "status": 1,
+              "time-period": 5,
+              "week-start": 0
+            }
+        }
+    ],
+    "session": "xxxx"
+}
+</pre></div></div></div><h6 id=${reportconfig.add.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "code":    number,
+            "message": "string"
+        },
+        "data": [
+            { "field": "value", "field": "value", ...},
+            ...
+        ]
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${reportconfig.add.resp}">Show example...</a></p></div><div id="${reportconfig.add.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/chart/&lt;chart_name&gt;/table-columns<br>object: /report/adom/&lt;adom-name&gt;/config/chart/&lt;chart_name&gt;/table-columns/&lt;id&gt;</i><a class="close" href="#${reportconfig.add.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "result": {
+        "status": {
+          "code": 0,
+          "message": "ok"
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">column-attr</td><td class="table_col_desc"><i> </i> (optional) <br/><br/><br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=add_report_adom__adom-name__config_chart__chart_name__variable-template>/report/adom/&lt;adom-name&gt;/config/chart/&lt;chart_name&gt;/variable-template</h1><h2>add /report/adom/&lt;adom-name&gt;/config/chart/&lt;chart_name&gt;/variable-template</h2><p>support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/chart/&lt;chart_name&gt;/variable-template<br>object: /report/adom/&lt;adom-name&gt;/config/chart/&lt;chart_name&gt;/variable-template/&lt;var&gt;<h6 id=${reportconfig.add.req}.request>Request:</h6><pre>
+{
+    "method": "add",
+    "params": [
+        {
+            "url": "report/adom/&lt;adom-name&gt;/config/&lt;obj-type&gt;/&lt;obj-name&gt;",
+            "apiver": 3,
+            "filter": [],
+            "sortings": [],
+            "data": [
+              { "field": "value", "field": "value", ...},
+              ...
+            ]
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${reportconfig.add.req}">Show example...</a></p></div><div id="${reportconfig.add.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/chart/&lt;chart_name&gt;/variable-template<br>object: /report/adom/&lt;adom-name&gt;/config/chart/&lt;chart_name&gt;/variable-template/&lt;var&gt;</i><a class="close" href="#${reportconfig.add.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "method": "add",
+    "params": [
+        {
+            "url": "report/adom/root/config/schedule/6",
+            "apiver": "3",
+            "filter": [],
+            "data": {
+              "auto-hcache": 1,
+              "dev-type": 0,
+              "device-list-type": 0,
+              "devices": [
+                {
+                  "devices-name": "All_FortiGate",
+                  "type": 2
+                }
+              ],
+              "display-table-contents": 1,
+              "filter": null,
+              "filter-logic": 0,
+              "filter-type": 0,
+              "include-coverpage": 1,
+              "include-other": 2,
+              "language": "Default",
+              "ldap-query": 0,
+              "ldap-server": "",
+              "ldap-user-case-change": 0,
+              "max-reports": 99,
+              "name": "6",
+              "obfuscate-user": 0,
+              "orientation": 0,
+              "output-format": 1,
+              "output-profile": "",
+              "period-end": null,
+              "period-last-n": 0,
+              "period-opt": 1,
+              "period-start": null,
+              "print-report-filters": 1,
+              "report-layout": [
+                {
+                  "layout-id": 6
+                }
+              ],
+              "report-per-device": 0,
+              "resolve-hostname": 0,
+              "schedule-color": "51B749",
+              "schedule-frequency": 1,
+              "schedule-type": 3,
+              "schedule-valid-end": null,
+              "schedule-valid-start": [
+                "00:00",
+                "2017/10/17"
+              ],
+              "status": 1,
+              "time-period": 5,
+              "week-start": 0
+            }
+        }
+    ],
+    "session": "xxxx"
+}
+</pre></div></div></div><h6 id=${reportconfig.add.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "code":    number,
+            "message": "string"
+        },
+        "data": [
+            { "field": "value", "field": "value", ...},
+            ...
+        ]
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${reportconfig.add.resp}">Show example...</a></p></div><div id="${reportconfig.add.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/chart/&lt;chart_name&gt;/variable-template<br>object: /report/adom/&lt;adom-name&gt;/config/chart/&lt;chart_name&gt;/variable-template/&lt;var&gt;</i><a class="close" href="#${reportconfig.add.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "result": {
+        "status": {
+          "code": 0,
+          "message": "ok"
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">description</td><td class="table_col_desc"><i>string </i> <br/><br/><br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">drilldown-flag</td><td class="table_col_desc"><i> </i> (optional) <br/><br/><br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=add_report_adom__adom-name__config_dataset>/report/adom/&lt;adom-name&gt;/config/dataset</h1><h2>add /report/adom/&lt;adom-name&gt;/config/dataset</h2><p>support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/dataset<br>object: /report/adom/&lt;adom-name&gt;/config/dataset/&lt;name&gt;<h6 id=${reportconfig.add.req}.request>Request:</h6><pre>
+{
+    "method": "add",
+    "params": [
+        {
+            "url": "report/adom/&lt;adom-name&gt;/config/&lt;obj-type&gt;/&lt;obj-name&gt;",
+            "apiver": 3,
+            "filter": [],
+            "sortings": [],
+            "data": [
+              { "field": "value", "field": "value", ...},
+              ...
+            ]
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${reportconfig.add.req}">Show example...</a></p></div><div id="${reportconfig.add.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/dataset<br>object: /report/adom/&lt;adom-name&gt;/config/dataset/&lt;name&gt;</i><a class="close" href="#${reportconfig.add.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "method": "add",
+    "params": [
+        {
+            "url": "report/adom/root/config/schedule/6",
+            "apiver": "3",
+            "filter": [],
+            "data": {
+              "auto-hcache": 1,
+              "dev-type": 0,
+              "device-list-type": 0,
+              "devices": [
+                {
+                  "devices-name": "All_FortiGate",
+                  "type": 2
+                }
+              ],
+              "display-table-contents": 1,
+              "filter": null,
+              "filter-logic": 0,
+              "filter-type": 0,
+              "include-coverpage": 1,
+              "include-other": 2,
+              "language": "Default",
+              "ldap-query": 0,
+              "ldap-server": "",
+              "ldap-user-case-change": 0,
+              "max-reports": 99,
+              "name": "6",
+              "obfuscate-user": 0,
+              "orientation": 0,
+              "output-format": 1,
+              "output-profile": "",
+              "period-end": null,
+              "period-last-n": 0,
+              "period-opt": 1,
+              "period-start": null,
+              "print-report-filters": 1,
+              "report-layout": [
+                {
+                  "layout-id": 6
+                }
+              ],
+              "report-per-device": 0,
+              "resolve-hostname": 0,
+              "schedule-color": "51B749",
+              "schedule-frequency": 1,
+              "schedule-type": 3,
+              "schedule-valid-end": null,
+              "schedule-valid-start": [
+                "00:00",
+                "2017/10/17"
+              ],
+              "status": 1,
+              "time-period": 5,
+              "week-start": 0
+            }
+        }
+    ],
+    "session": "xxxx"
+}
+</pre></div></div></div><h6 id=${reportconfig.add.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "code":    number,
+            "message": "string"
+        },
+        "data": [
+            { "field": "value", "field": "value", ...},
+            ...
+        ]
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${reportconfig.add.resp}">Show example...</a></p></div><div id="${reportconfig.add.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/dataset<br>object: /report/adom/&lt;adom-name&gt;/config/dataset/&lt;name&gt;</i><a class="close" href="#${reportconfig.add.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "result": {
+        "status": {
+          "code": 0,
+          "message": "ok"
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">description</td><td class="table_col_desc"><i>string </i> <br/><br/><br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">dev-drilldown</td><td class="table_col_desc"><i> </i> (optional) <br/><br/><br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">variable</td><td class="table_col_desc"><i>array </i> <br/><br/>reference: /report/adom/&lt;adom-name&gt;/config/dataset/&lt;dataset_name&gt;/variable<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=add_report_adom__adom-name__config_dataset__dataset_name__variable>/report/adom/&lt;adom-name&gt;/config/dataset/&lt;dataset_name&gt;/variable</h1><h2>add /report/adom/&lt;adom-name&gt;/config/dataset/&lt;dataset_name&gt;/variable</h2><p>support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/dataset/&lt;dataset_name&gt;/variable<br>object: /report/adom/&lt;adom-name&gt;/config/dataset/&lt;dataset_name&gt;/variable/&lt;var&gt;<h6 id=${reportconfig.add.req}.request>Request:</h6><pre>
+{
+    "method": "add",
+    "params": [
+        {
+            "url": "report/adom/&lt;adom-name&gt;/config/&lt;obj-type&gt;/&lt;obj-name&gt;",
+            "apiver": 3,
+            "filter": [],
+            "sortings": [],
+            "data": [
+              { "field": "value", "field": "value", ...},
+              ...
+            ]
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${reportconfig.add.req}">Show example...</a></p></div><div id="${reportconfig.add.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/dataset/&lt;dataset_name&gt;/variable<br>object: /report/adom/&lt;adom-name&gt;/config/dataset/&lt;dataset_name&gt;/variable/&lt;var&gt;</i><a class="close" href="#${reportconfig.add.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "method": "add",
+    "params": [
+        {
+            "url": "report/adom/root/config/schedule/6",
+            "apiver": "3",
+            "filter": [],
+            "data": {
+              "auto-hcache": 1,
+              "dev-type": 0,
+              "device-list-type": 0,
+              "devices": [
+                {
+                  "devices-name": "All_FortiGate",
+                  "type": 2
+                }
+              ],
+              "display-table-contents": 1,
+              "filter": null,
+              "filter-logic": 0,
+              "filter-type": 0,
+              "include-coverpage": 1,
+              "include-other": 2,
+              "language": "Default",
+              "ldap-query": 0,
+              "ldap-server": "",
+              "ldap-user-case-change": 0,
+              "max-reports": 99,
+              "name": "6",
+              "obfuscate-user": 0,
+              "orientation": 0,
+              "output-format": 1,
+              "output-profile": "",
+              "period-end": null,
+              "period-last-n": 0,
+              "period-opt": 1,
+              "period-start": null,
+              "print-report-filters": 1,
+              "report-layout": [
+                {
+                  "layout-id": 6
+                }
+              ],
+              "report-per-device": 0,
+              "resolve-hostname": 0,
+              "schedule-color": "51B749",
+              "schedule-frequency": 1,
+              "schedule-type": 3,
+              "schedule-valid-end": null,
+              "schedule-valid-start": [
+                "00:00",
+                "2017/10/17"
+              ],
+              "status": 1,
+              "time-period": 5,
+              "week-start": 0
+            }
+        }
+    ],
+    "session": "xxxx"
+}
+</pre></div></div></div><h6 id=${reportconfig.add.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "code":    number,
+            "message": "string"
+        },
+        "data": [
+            { "field": "value", "field": "value", ...},
+            ...
+        ]
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${reportconfig.add.resp}">Show example...</a></p></div><div id="${reportconfig.add.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/dataset/&lt;dataset_name&gt;/variable<br>object: /report/adom/&lt;adom-name&gt;/config/dataset/&lt;dataset_name&gt;/variable/&lt;var&gt;</i><a class="close" href="#${reportconfig.add.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "result": {
+        "status": {
+          "code": 0,
+          "message": "ok"
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">drilldown-flag</td><td class="table_col_desc"><i> </i> (optional) <br/><br/><br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=add_report_adom__adom-name__config_layout>/report/adom/&lt;adom-name&gt;/config/layout</h1><h2>add /report/adom/&lt;adom-name&gt;/config/layout</h2><p>support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/layout<br>object: /report/adom/&lt;adom-name&gt;/config/layout/&lt;layout-id&gt;<h6 id=${reportconfig.add.req}.request>Request:</h6><pre>
+{
+    "method": "add",
+    "params": [
+        {
+            "url": "report/adom/&lt;adom-name&gt;/config/&lt;obj-type&gt;/&lt;obj-name&gt;",
+            "apiver": 3,
+            "filter": [],
+            "sortings": [],
+            "data": [
+              { "field": "value", "field": "value", ...},
+              ...
+            ]
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${reportconfig.add.req}">Show example...</a></p></div><div id="${reportconfig.add.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/layout<br>object: /report/adom/&lt;adom-name&gt;/config/layout/&lt;layout-id&gt;</i><a class="close" href="#${reportconfig.add.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "method": "add",
+    "params": [
+        {
+            "url": "report/adom/root/config/schedule/6",
+            "apiver": "3",
+            "filter": [],
+            "data": {
+              "auto-hcache": 1,
+              "dev-type": 0,
+              "device-list-type": 0,
+              "devices": [
+                {
+                  "devices-name": "All_FortiGate",
+                  "type": 2
+                }
+              ],
+              "display-table-contents": 1,
+              "filter": null,
+              "filter-logic": 0,
+              "filter-type": 0,
+              "include-coverpage": 1,
+              "include-other": 2,
+              "language": "Default",
+              "ldap-query": 0,
+              "ldap-server": "",
+              "ldap-user-case-change": 0,
+              "max-reports": 99,
+              "name": "6",
+              "obfuscate-user": 0,
+              "orientation": 0,
+              "output-format": 1,
+              "output-profile": "",
+              "period-end": null,
+              "period-last-n": 0,
+              "period-opt": 1,
+              "period-start": null,
+              "print-report-filters": 1,
+              "report-layout": [
+                {
+                  "layout-id": 6
+                }
+              ],
+              "report-per-device": 0,
+              "resolve-hostname": 0,
+              "schedule-color": "51B749",
+              "schedule-frequency": 1,
+              "schedule-type": 3,
+              "schedule-valid-end": null,
+              "schedule-valid-start": [
+                "00:00",
+                "2017/10/17"
+              ],
+              "status": 1,
+              "time-period": 5,
+              "week-start": 0
+            }
+        }
+    ],
+    "session": "xxxx"
+}
+</pre></div></div></div><h6 id=${reportconfig.add.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "code":    number,
+            "message": "string"
+        },
+        "data": [
+            { "field": "value", "field": "value", ...},
+            ...
+        ]
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${reportconfig.add.resp}">Show example...</a></p></div><div id="${reportconfig.add.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/layout<br>object: /report/adom/&lt;adom-name&gt;/config/layout/&lt;layout-id&gt;</i><a class="close" href="#${reportconfig.add.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "result": {
+        "status": {
+          "code": 0,
+          "message": "ok"
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">alignment</td><td class="table_col_desc"><i> </i> (optional) <br/><br/><br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">component</td><td class="table_col_desc"><i>array </i> <br/><br/>reference: /report/adom/&lt;adom-name&gt;/config/layout/&lt;layout-id&gt;/component<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">folders</td><td class="table_col_desc"><i>array </i> <br/><br/>reference: /sql-report/layout/folders<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">footer</td><td class="table_col_desc"><i>array </i> <br/><br/>reference: /report/adom/&lt;adom-name&gt;/config/layout/&lt;layout-id&gt;/footer<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">header</td><td class="table_col_desc"><i>array </i> <br/><br/>reference: /report/adom/&lt;adom-name&gt;/config/layout/&lt;layout-id&gt;/header<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=add_report_adom__adom-name__config_layout-folder>/report/adom/&lt;adom-name&gt;/config/layout-folder</h1><h2>add /report/adom/&lt;adom-name&gt;/config/layout-folder</h2><p>support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/layout-folder<br>object: /report/adom/&lt;adom-name&gt;/config/layout-folder/&lt;folder-id&gt;<h6 id=${reportconfig.add.req}.request>Request:</h6><pre>
+{
+    "method": "add",
+    "params": [
+        {
+            "url": "report/adom/&lt;adom-name&gt;/config/&lt;obj-type&gt;/&lt;obj-name&gt;",
+            "apiver": 3,
+            "filter": [],
+            "sortings": [],
+            "data": [
+              { "field": "value", "field": "value", ...},
+              ...
+            ]
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${reportconfig.add.req}">Show example...</a></p></div><div id="${reportconfig.add.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/layout-folder<br>object: /report/adom/&lt;adom-name&gt;/config/layout-folder/&lt;folder-id&gt;</i><a class="close" href="#${reportconfig.add.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "method": "add",
+    "params": [
+        {
+            "url": "report/adom/root/config/schedule/6",
+            "apiver": "3",
+            "filter": [],
+            "data": {
+              "auto-hcache": 1,
+              "dev-type": 0,
+              "device-list-type": 0,
+              "devices": [
+                {
+                  "devices-name": "All_FortiGate",
+                  "type": 2
+                }
+              ],
+              "display-table-contents": 1,
+              "filter": null,
+              "filter-logic": 0,
+              "filter-type": 0,
+              "include-coverpage": 1,
+              "include-other": 2,
+              "language": "Default",
+              "ldap-query": 0,
+              "ldap-server": "",
+              "ldap-user-case-change": 0,
+              "max-reports": 99,
+              "name": "6",
+              "obfuscate-user": 0,
+              "orientation": 0,
+              "output-format": 1,
+              "output-profile": "",
+              "period-end": null,
+              "period-last-n": 0,
+              "period-opt": 1,
+              "period-start": null,
+              "print-report-filters": 1,
+              "report-layout": [
+                {
+                  "layout-id": 6
+                }
+              ],
+              "report-per-device": 0,
+              "resolve-hostname": 0,
+              "schedule-color": "51B749",
+              "schedule-frequency": 1,
+              "schedule-type": 3,
+              "schedule-valid-end": null,
+              "schedule-valid-start": [
+                "00:00",
+                "2017/10/17"
+              ],
+              "status": 1,
+              "time-period": 5,
+              "week-start": 0
+            }
+        }
+    ],
+    "session": "xxxx"
+}
+</pre></div></div></div><h6 id=${reportconfig.add.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "code":    number,
+            "message": "string"
+        },
+        "data": [
+            { "field": "value", "field": "value", ...},
+            ...
+        ]
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${reportconfig.add.resp}">Show example...</a></p></div><div id="${reportconfig.add.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/layout-folder<br>object: /report/adom/&lt;adom-name&gt;/config/layout-folder/&lt;folder-id&gt;</i><a class="close" href="#${reportconfig.add.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "result": {
+        "status": {
+          "code": 0,
+          "message": "ok"
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">folder-id</td><td class="table_col_desc"><i>number </i> <br/><br/><br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">folder-name</td><td class="table_col_desc"><i>string </i> <br/><br/><br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">parent-id</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/><br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=add_report_adom__adom-name__config_layout__layout-id__component>/report/adom/&lt;adom-name&gt;/config/layout/&lt;layout-id&gt;/component</h1><h2>add /report/adom/&lt;adom-name&gt;/config/layout/&lt;layout-id&gt;/component</h2><p>support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/layout/&lt;layout-id&gt;/component<br>object: /report/adom/&lt;adom-name&gt;/config/layout/&lt;layout-id&gt;/component/&lt;component-id&gt;<h6 id=${reportconfig.add.req}.request>Request:</h6><pre>
+{
+    "method": "add",
+    "params": [
+        {
+            "url": "report/adom/&lt;adom-name&gt;/config/&lt;obj-type&gt;/&lt;obj-name&gt;",
+            "apiver": 3,
+            "filter": [],
+            "sortings": [],
+            "data": [
+              { "field": "value", "field": "value", ...},
+              ...
+            ]
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${reportconfig.add.req}">Show example...</a></p></div><div id="${reportconfig.add.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/layout/&lt;layout-id&gt;/component<br>object: /report/adom/&lt;adom-name&gt;/config/layout/&lt;layout-id&gt;/component/&lt;component-id&gt;</i><a class="close" href="#${reportconfig.add.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "method": "add",
+    "params": [
+        {
+            "url": "report/adom/root/config/schedule/6",
+            "apiver": "3",
+            "filter": [],
+            "data": {
+              "auto-hcache": 1,
+              "dev-type": 0,
+              "device-list-type": 0,
+              "devices": [
+                {
+                  "devices-name": "All_FortiGate",
+                  "type": 2
+                }
+              ],
+              "display-table-contents": 1,
+              "filter": null,
+              "filter-logic": 0,
+              "filter-type": 0,
+              "include-coverpage": 1,
+              "include-other": 2,
+              "language": "Default",
+              "ldap-query": 0,
+              "ldap-server": "",
+              "ldap-user-case-change": 0,
+              "max-reports": 99,
+              "name": "6",
+              "obfuscate-user": 0,
+              "orientation": 0,
+              "output-format": 1,
+              "output-profile": "",
+              "period-end": null,
+              "period-last-n": 0,
+              "period-opt": 1,
+              "period-start": null,
+              "print-report-filters": 1,
+              "report-layout": [
+                {
+                  "layout-id": 6
+                }
+              ],
+              "report-per-device": 0,
+              "resolve-hostname": 0,
+              "schedule-color": "51B749",
+              "schedule-frequency": 1,
+              "schedule-type": 3,
+              "schedule-valid-end": null,
+              "schedule-valid-start": [
+                "00:00",
+                "2017/10/17"
+              ],
+              "status": 1,
+              "time-period": 5,
+              "week-start": 0
+            }
+        }
+    ],
+    "session": "xxxx"
+}
+</pre></div></div></div><h6 id=${reportconfig.add.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "code":    number,
+            "message": "string"
+        },
+        "data": [
+            { "field": "value", "field": "value", ...},
+            ...
+        ]
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${reportconfig.add.resp}">Show example...</a></p></div><div id="${reportconfig.add.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/layout/&lt;layout-id&gt;/component<br>object: /report/adom/&lt;adom-name&gt;/config/layout/&lt;layout-id&gt;/component/&lt;component-id&gt;</i><a class="close" href="#${reportconfig.add.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "result": {
+        "status": {
+          "code": 0,
+          "message": "ok"
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">alignment</td><td class="table_col_desc"><i>number </i> <br/><br/><br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">bg-color</td><td class="table_col_desc"><i>string </i> <br/><br/><br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">category</td><td class="table_col_desc"><i>string </i> <br/><br/><br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">chart</td><td class="table_col_desc"><i>string </i> <br/><br/><br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">chart-option</td><td class="table_col_desc"><i> </i> (optional) <br/><br/><br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">variable</td><td class="table_col_desc"><i>array </i> <br/><br/>reference: /report/adom/&lt;adom-name&gt;/config/layout/&lt;layout-id&gt;/component/&lt;component-id&gt;/variable<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=add_report_adom__adom-name__config_layout__layout-id__component__component-id__variable>/report/adom/&lt;adom-name&gt;/config/layout/&lt;layout-id&gt;/component/&lt;component-id&gt;/variable</h1><h2>add /report/adom/&lt;adom-name&gt;/config/layout/&lt;layout-id&gt;/component/&lt;component-id&gt;/variable</h2><p>support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/layout/&lt;layout-id&gt;/component/&lt;component-id&gt;/variable<br>object: /report/adom/&lt;adom-name&gt;/config/layout/&lt;layout-id&gt;/component/&lt;component-id&gt;/variable/&lt;var&gt;<h6 id=${reportconfig.add.req}.request>Request:</h6><pre>
+{
+    "method": "add",
+    "params": [
+        {
+            "url": "report/adom/&lt;adom-name&gt;/config/&lt;obj-type&gt;/&lt;obj-name&gt;",
+            "apiver": 3,
+            "filter": [],
+            "sortings": [],
+            "data": [
+              { "field": "value", "field": "value", ...},
+              ...
+            ]
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${reportconfig.add.req}">Show example...</a></p></div><div id="${reportconfig.add.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/layout/&lt;layout-id&gt;/component/&lt;component-id&gt;/variable<br>object: /report/adom/&lt;adom-name&gt;/config/layout/&lt;layout-id&gt;/component/&lt;component-id&gt;/variable/&lt;var&gt;</i><a class="close" href="#${reportconfig.add.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "method": "add",
+    "params": [
+        {
+            "url": "report/adom/root/config/schedule/6",
+            "apiver": "3",
+            "filter": [],
+            "data": {
+              "auto-hcache": 1,
+              "dev-type": 0,
+              "device-list-type": 0,
+              "devices": [
+                {
+                  "devices-name": "All_FortiGate",
+                  "type": 2
+                }
+              ],
+              "display-table-contents": 1,
+              "filter": null,
+              "filter-logic": 0,
+              "filter-type": 0,
+              "include-coverpage": 1,
+              "include-other": 2,
+              "language": "Default",
+              "ldap-query": 0,
+              "ldap-server": "",
+              "ldap-user-case-change": 0,
+              "max-reports": 99,
+              "name": "6",
+              "obfuscate-user": 0,
+              "orientation": 0,
+              "output-format": 1,
+              "output-profile": "",
+              "period-end": null,
+              "period-last-n": 0,
+              "period-opt": 1,
+              "period-start": null,
+              "print-report-filters": 1,
+              "report-layout": [
+                {
+                  "layout-id": 6
+                }
+              ],
+              "report-per-device": 0,
+              "resolve-hostname": 0,
+              "schedule-color": "51B749",
+              "schedule-frequency": 1,
+              "schedule-type": 3,
+              "schedule-valid-end": null,
+              "schedule-valid-start": [
+                "00:00",
+                "2017/10/17"
+              ],
+              "status": 1,
+              "time-period": 5,
+              "week-start": 0
+            }
+        }
+    ],
+    "session": "xxxx"
+}
+</pre></div></div></div><h6 id=${reportconfig.add.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "code":    number,
+            "message": "string"
+        },
+        "data": [
+            { "field": "value", "field": "value", ...},
+            ...
+        ]
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${reportconfig.add.resp}">Show example...</a></p></div><div id="${reportconfig.add.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/layout/&lt;layout-id&gt;/component/&lt;component-id&gt;/variable<br>object: /report/adom/&lt;adom-name&gt;/config/layout/&lt;layout-id&gt;/component/&lt;component-id&gt;/variable/&lt;var&gt;</i><a class="close" href="#${reportconfig.add.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "result": {
+        "status": {
+          "code": 0,
+          "message": "ok"
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">description</td><td class="table_col_desc"><i>string </i> <br/><br/><br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">drilldown-flag</td><td class="table_col_desc"><i> </i> (optional) <br/><br/><br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=add_sql-report_layout_folders>/sql-report/layout/folders</h1><h2>add /sql-report/layout/folders</h2><p>support method: add, set, get, update, delete<br>table: /sql-report/layout/folders<br>object: /sql-report/layout/folders/&lt;folder-id&gt;<h6 id=${reportconfig.add.req}.request>Request:</h6><pre>
+{
+    "method": "add",
+    "params": [
+        {
+            "url": "report/adom/&lt;adom-name&gt;/config/&lt;obj-type&gt;/&lt;obj-name&gt;",
+            "apiver": 3,
+            "filter": [],
+            "sortings": [],
+            "data": [
+              { "field": "value", "field": "value", ...},
+              ...
+            ]
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${reportconfig.add.req}">Show example...</a></p></div><div id="${reportconfig.add.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: support method: add, set, get, update, delete<br>table: /sql-report/layout/folders<br>object: /sql-report/layout/folders/&lt;folder-id&gt;</i><a class="close" href="#${reportconfig.add.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "method": "add",
+    "params": [
+        {
+            "url": "report/adom/root/config/schedule/6",
+            "apiver": "3",
+            "filter": [],
+            "data": {
+              "auto-hcache": 1,
+              "dev-type": 0,
+              "device-list-type": 0,
+              "devices": [
+                {
+                  "devices-name": "All_FortiGate",
+                  "type": 2
+                }
+              ],
+              "display-table-contents": 1,
+              "filter": null,
+              "filter-logic": 0,
+              "filter-type": 0,
+              "include-coverpage": 1,
+              "include-other": 2,
+              "language": "Default",
+              "ldap-query": 0,
+              "ldap-server": "",
+              "ldap-user-case-change": 0,
+              "max-reports": 99,
+              "name": "6",
+              "obfuscate-user": 0,
+              "orientation": 0,
+              "output-format": 1,
+              "output-profile": "",
+              "period-end": null,
+              "period-last-n": 0,
+              "period-opt": 1,
+              "period-start": null,
+              "print-report-filters": 1,
+              "report-layout": [
+                {
+                  "layout-id": 6
+                }
+              ],
+              "report-per-device": 0,
+              "resolve-hostname": 0,
+              "schedule-color": "51B749",
+              "schedule-frequency": 1,
+              "schedule-type": 3,
+              "schedule-valid-end": null,
+              "schedule-valid-start": [
+                "00:00",
+                "2017/10/17"
+              ],
+              "status": 1,
+              "time-period": 5,
+              "week-start": 0
+            }
+        }
+    ],
+    "session": "xxxx"
+}
+</pre></div></div></div><h6 id=${reportconfig.add.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "code":    number,
+            "message": "string"
+        },
+        "data": [
+            { "field": "value", "field": "value", ...},
+            ...
+        ]
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${reportconfig.add.resp}">Show example...</a></p></div><div id="${reportconfig.add.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: support method: add, set, get, update, delete<br>table: /sql-report/layout/folders<br>object: /sql-report/layout/folders/&lt;folder-id&gt;</i><a class="close" href="#${reportconfig.add.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "result": {
+        "status": {
+          "code": 0,
+          "message": "ok"
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">folder-id</td><td class="table_col_desc"><i>number </i> <br/><br/><br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=add_report_adom__adom-name__config_layout__layout-id__footer>/report/adom/&lt;adom-name&gt;/config/layout/&lt;layout-id&gt;/footer</h1><h2>add /report/adom/&lt;adom-name&gt;/config/layout/&lt;layout-id&gt;/footer</h2><p>support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/layout/&lt;layout-id&gt;/footer<br>object: /report/adom/&lt;adom-name&gt;/config/layout/&lt;layout-id&gt;/footer/&lt;footer-id&gt;<h6 id=${reportconfig.add.req}.request>Request:</h6><pre>
+{
+    "method": "add",
+    "params": [
+        {
+            "url": "report/adom/&lt;adom-name&gt;/config/&lt;obj-type&gt;/&lt;obj-name&gt;",
+            "apiver": 3,
+            "filter": [],
+            "sortings": [],
+            "data": [
+              { "field": "value", "field": "value", ...},
+              ...
+            ]
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${reportconfig.add.req}">Show example...</a></p></div><div id="${reportconfig.add.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/layout/&lt;layout-id&gt;/footer<br>object: /report/adom/&lt;adom-name&gt;/config/layout/&lt;layout-id&gt;/footer/&lt;footer-id&gt;</i><a class="close" href="#${reportconfig.add.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "method": "add",
+    "params": [
+        {
+            "url": "report/adom/root/config/schedule/6",
+            "apiver": "3",
+            "filter": [],
+            "data": {
+              "auto-hcache": 1,
+              "dev-type": 0,
+              "device-list-type": 0,
+              "devices": [
+                {
+                  "devices-name": "All_FortiGate",
+                  "type": 2
+                }
+              ],
+              "display-table-contents": 1,
+              "filter": null,
+              "filter-logic": 0,
+              "filter-type": 0,
+              "include-coverpage": 1,
+              "include-other": 2,
+              "language": "Default",
+              "ldap-query": 0,
+              "ldap-server": "",
+              "ldap-user-case-change": 0,
+              "max-reports": 99,
+              "name": "6",
+              "obfuscate-user": 0,
+              "orientation": 0,
+              "output-format": 1,
+              "output-profile": "",
+              "period-end": null,
+              "period-last-n": 0,
+              "period-opt": 1,
+              "period-start": null,
+              "print-report-filters": 1,
+              "report-layout": [
+                {
+                  "layout-id": 6
+                }
+              ],
+              "report-per-device": 0,
+              "resolve-hostname": 0,
+              "schedule-color": "51B749",
+              "schedule-frequency": 1,
+              "schedule-type": 3,
+              "schedule-valid-end": null,
+              "schedule-valid-start": [
+                "00:00",
+                "2017/10/17"
+              ],
+              "status": 1,
+              "time-period": 5,
+              "week-start": 0
+            }
+        }
+    ],
+    "session": "xxxx"
+}
+</pre></div></div></div><h6 id=${reportconfig.add.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "code":    number,
+            "message": "string"
+        },
+        "data": [
+            { "field": "value", "field": "value", ...},
+            ...
+        ]
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${reportconfig.add.resp}">Show example...</a></p></div><div id="${reportconfig.add.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/layout/&lt;layout-id&gt;/footer<br>object: /report/adom/&lt;adom-name&gt;/config/layout/&lt;layout-id&gt;/footer/&lt;footer-id&gt;</i><a class="close" href="#${reportconfig.add.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "result": {
+        "status": {
+          "code": 0,
+          "message": "ok"
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">footer-id</td><td class="table_col_desc"><i>number </i> <br/><br/><br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">graphic</td><td class="table_col_desc"><i>string </i> <br/><br/><br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">text</td><td class="table_col_desc"><i>string </i> <br/><br/><br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">type</td><td class="table_col_desc"><i> </i> (optional) <br/><br/><br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=add_report_adom__adom-name__config_layout__layout-id__header>/report/adom/&lt;adom-name&gt;/config/layout/&lt;layout-id&gt;/header</h1><h2>add /report/adom/&lt;adom-name&gt;/config/layout/&lt;layout-id&gt;/header</h2><p>support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/layout/&lt;layout-id&gt;/header<br>object: /report/adom/&lt;adom-name&gt;/config/layout/&lt;layout-id&gt;/header/&lt;header-id&gt;<h6 id=${reportconfig.add.req}.request>Request:</h6><pre>
+{
+    "method": "add",
+    "params": [
+        {
+            "url": "report/adom/&lt;adom-name&gt;/config/&lt;obj-type&gt;/&lt;obj-name&gt;",
+            "apiver": 3,
+            "filter": [],
+            "sortings": [],
+            "data": [
+              { "field": "value", "field": "value", ...},
+              ...
+            ]
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${reportconfig.add.req}">Show example...</a></p></div><div id="${reportconfig.add.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/layout/&lt;layout-id&gt;/header<br>object: /report/adom/&lt;adom-name&gt;/config/layout/&lt;layout-id&gt;/header/&lt;header-id&gt;</i><a class="close" href="#${reportconfig.add.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "method": "add",
+    "params": [
+        {
+            "url": "report/adom/root/config/schedule/6",
+            "apiver": "3",
+            "filter": [],
+            "data": {
+              "auto-hcache": 1,
+              "dev-type": 0,
+              "device-list-type": 0,
+              "devices": [
+                {
+                  "devices-name": "All_FortiGate",
+                  "type": 2
+                }
+              ],
+              "display-table-contents": 1,
+              "filter": null,
+              "filter-logic": 0,
+              "filter-type": 0,
+              "include-coverpage": 1,
+              "include-other": 2,
+              "language": "Default",
+              "ldap-query": 0,
+              "ldap-server": "",
+              "ldap-user-case-change": 0,
+              "max-reports": 99,
+              "name": "6",
+              "obfuscate-user": 0,
+              "orientation": 0,
+              "output-format": 1,
+              "output-profile": "",
+              "period-end": null,
+              "period-last-n": 0,
+              "period-opt": 1,
+              "period-start": null,
+              "print-report-filters": 1,
+              "report-layout": [
+                {
+                  "layout-id": 6
+                }
+              ],
+              "report-per-device": 0,
+              "resolve-hostname": 0,
+              "schedule-color": "51B749",
+              "schedule-frequency": 1,
+              "schedule-type": 3,
+              "schedule-valid-end": null,
+              "schedule-valid-start": [
+                "00:00",
+                "2017/10/17"
+              ],
+              "status": 1,
+              "time-period": 5,
+              "week-start": 0
+            }
+        }
+    ],
+    "session": "xxxx"
+}
+</pre></div></div></div><h6 id=${reportconfig.add.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "code":    number,
+            "message": "string"
+        },
+        "data": [
+            { "field": "value", "field": "value", ...},
+            ...
+        ]
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${reportconfig.add.resp}">Show example...</a></p></div><div id="${reportconfig.add.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/layout/&lt;layout-id&gt;/header<br>object: /report/adom/&lt;adom-name&gt;/config/layout/&lt;layout-id&gt;/header/&lt;header-id&gt;</i><a class="close" href="#${reportconfig.add.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "result": {
+        "status": {
+          "code": 0,
+          "message": "ok"
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">graphic</td><td class="table_col_desc"><i>string </i> <br/><br/><br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">header-id</td><td class="table_col_desc"><i>number </i> <br/><br/><br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">text</td><td class="table_col_desc"><i>string </i> <br/><br/><br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">type</td><td class="table_col_desc"><i> </i> (optional) <br/><br/><br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=add_report_adom__adom-name__config_macro>/report/adom/&lt;adom-name&gt;/config/macro</h1><h2>add /report/adom/&lt;adom-name&gt;/config/macro</h2><p>support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/macro<br>object: /report/adom/&lt;adom-name&gt;/config/macro/&lt;name&gt;<h6 id=${reportconfig.add.req}.request>Request:</h6><pre>
+{
+    "method": "add",
+    "params": [
+        {
+            "url": "report/adom/&lt;adom-name&gt;/config/&lt;obj-type&gt;/&lt;obj-name&gt;",
+            "apiver": 3,
+            "filter": [],
+            "sortings": [],
+            "data": [
+              { "field": "value", "field": "value", ...},
+              ...
+            ]
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${reportconfig.add.req}">Show example...</a></p></div><div id="${reportconfig.add.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/macro<br>object: /report/adom/&lt;adom-name&gt;/config/macro/&lt;name&gt;</i><a class="close" href="#${reportconfig.add.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "method": "add",
+    "params": [
+        {
+            "url": "report/adom/root/config/schedule/6",
+            "apiver": "3",
+            "filter": [],
+            "data": {
+              "auto-hcache": 1,
+              "dev-type": 0,
+              "device-list-type": 0,
+              "devices": [
+                {
+                  "devices-name": "All_FortiGate",
+                  "type": 2
+                }
+              ],
+              "display-table-contents": 1,
+              "filter": null,
+              "filter-logic": 0,
+              "filter-type": 0,
+              "include-coverpage": 1,
+              "include-other": 2,
+              "language": "Default",
+              "ldap-query": 0,
+              "ldap-server": "",
+              "ldap-user-case-change": 0,
+              "max-reports": 99,
+              "name": "6",
+              "obfuscate-user": 0,
+              "orientation": 0,
+              "output-format": 1,
+              "output-profile": "",
+              "period-end": null,
+              "period-last-n": 0,
+              "period-opt": 1,
+              "period-start": null,
+              "print-report-filters": 1,
+              "report-layout": [
+                {
+                  "layout-id": 6
+                }
+              ],
+              "report-per-device": 0,
+              "resolve-hostname": 0,
+              "schedule-color": "51B749",
+              "schedule-frequency": 1,
+              "schedule-type": 3,
+              "schedule-valid-end": null,
+              "schedule-valid-start": [
+                "00:00",
+                "2017/10/17"
+              ],
+              "status": 1,
+              "time-period": 5,
+              "week-start": 0
+            }
+        }
+    ],
+    "session": "xxxx"
+}
+</pre></div></div></div><h6 id=${reportconfig.add.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "code":    number,
+            "message": "string"
+        },
+        "data": [
+            { "field": "value", "field": "value", ...},
+            ...
+        ]
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${reportconfig.add.resp}">Show example...</a></p></div><div id="${reportconfig.add.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/macro<br>object: /report/adom/&lt;adom-name&gt;/config/macro/&lt;name&gt;</i><a class="close" href="#${reportconfig.add.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "result": {
+        "status": {
+          "code": 0,
+          "message": "ok"
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">chart-style</td><td class="table_col_desc"><i>string </i> <br/><br/><br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">data-attr</td><td class="table_col_desc"><i> </i> (optional) <br/><br/><br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=add_report_adom__adom-name__config_output>/report/adom/&lt;adom-name&gt;/config/output</h1><h2>add /report/adom/&lt;adom-name&gt;/config/output</h2><p>support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/output<br>object: /report/adom/&lt;adom-name&gt;/config/output/&lt;name&gt;<h6 id=${reportconfig.add.req}.request>Request:</h6><pre>
+{
+    "method": "add",
+    "params": [
+        {
+            "url": "report/adom/&lt;adom-name&gt;/config/&lt;obj-type&gt;/&lt;obj-name&gt;",
+            "apiver": 3,
+            "filter": [],
+            "sortings": [],
+            "data": [
+              { "field": "value", "field": "value", ...},
+              ...
+            ]
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${reportconfig.add.req}">Show example...</a></p></div><div id="${reportconfig.add.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/output<br>object: /report/adom/&lt;adom-name&gt;/config/output/&lt;name&gt;</i><a class="close" href="#${reportconfig.add.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "method": "add",
+    "params": [
+        {
+            "url": "report/adom/root/config/schedule/6",
+            "apiver": "3",
+            "filter": [],
+            "data": {
+              "auto-hcache": 1,
+              "dev-type": 0,
+              "device-list-type": 0,
+              "devices": [
+                {
+                  "devices-name": "All_FortiGate",
+                  "type": 2
+                }
+              ],
+              "display-table-contents": 1,
+              "filter": null,
+              "filter-logic": 0,
+              "filter-type": 0,
+              "include-coverpage": 1,
+              "include-other": 2,
+              "language": "Default",
+              "ldap-query": 0,
+              "ldap-server": "",
+              "ldap-user-case-change": 0,
+              "max-reports": 99,
+              "name": "6",
+              "obfuscate-user": 0,
+              "orientation": 0,
+              "output-format": 1,
+              "output-profile": "",
+              "period-end": null,
+              "period-last-n": 0,
+              "period-opt": 1,
+              "period-start": null,
+              "print-report-filters": 1,
+              "report-layout": [
+                {
+                  "layout-id": 6
+                }
+              ],
+              "report-per-device": 0,
+              "resolve-hostname": 0,
+              "schedule-color": "51B749",
+              "schedule-frequency": 1,
+              "schedule-type": 3,
+              "schedule-valid-end": null,
+              "schedule-valid-start": [
+                "00:00",
+                "2017/10/17"
+              ],
+              "status": 1,
+              "time-period": 5,
+              "week-start": 0
+            }
+        }
+    ],
+    "session": "xxxx"
+}
+</pre></div></div></div><h6 id=${reportconfig.add.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "code":    number,
+            "message": "string"
+        },
+        "data": [
+            { "field": "value", "field": "value", ...},
+            ...
+        ]
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${reportconfig.add.resp}">Show example...</a></p></div><div id="${reportconfig.add.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/output<br>object: /report/adom/&lt;adom-name&gt;/config/output/&lt;name&gt;</i><a class="close" href="#${reportconfig.add.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "result": {
+        "status": {
+          "code": 0,
+          "message": "ok"
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">description</td><td class="table_col_desc"><i>string </i> <br/><br/><br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">email</td><td class="table_col_desc"><i> </i> (optional) <br/><br/><br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">email-recipients</td><td class="table_col_desc"><i>array </i> <br/><br/>reference: /report/adom/&lt;adom-name&gt;/config/output/&lt;output-name&gt;/email-recipients<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=add_report_adom__adom-name__config_output__output-name__email-recipients>/report/adom/&lt;adom-name&gt;/config/output/&lt;output-name&gt;/email-recipients</h1><h2>add /report/adom/&lt;adom-name&gt;/config/output/&lt;output-name&gt;/email-recipients</h2><p>support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/output/&lt;output-name&gt;/email-recipients<br>object: /report/adom/&lt;adom-name&gt;/config/output/&lt;output-name&gt;/email-recipients/&lt;address&gt;<h6 id=${reportconfig.add.req}.request>Request:</h6><pre>
+{
+    "method": "add",
+    "params": [
+        {
+            "url": "report/adom/&lt;adom-name&gt;/config/&lt;obj-type&gt;/&lt;obj-name&gt;",
+            "apiver": 3,
+            "filter": [],
+            "sortings": [],
+            "data": [
+              { "field": "value", "field": "value", ...},
+              ...
+            ]
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${reportconfig.add.req}">Show example...</a></p></div><div id="${reportconfig.add.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/output/&lt;output-name&gt;/email-recipients<br>object: /report/adom/&lt;adom-name&gt;/config/output/&lt;output-name&gt;/email-recipients/&lt;address&gt;</i><a class="close" href="#${reportconfig.add.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "method": "add",
+    "params": [
+        {
+            "url": "report/adom/root/config/schedule/6",
+            "apiver": "3",
+            "filter": [],
+            "data": {
+              "auto-hcache": 1,
+              "dev-type": 0,
+              "device-list-type": 0,
+              "devices": [
+                {
+                  "devices-name": "All_FortiGate",
+                  "type": 2
+                }
+              ],
+              "display-table-contents": 1,
+              "filter": null,
+              "filter-logic": 0,
+              "filter-type": 0,
+              "include-coverpage": 1,
+              "include-other": 2,
+              "language": "Default",
+              "ldap-query": 0,
+              "ldap-server": "",
+              "ldap-user-case-change": 0,
+              "max-reports": 99,
+              "name": "6",
+              "obfuscate-user": 0,
+              "orientation": 0,
+              "output-format": 1,
+              "output-profile": "",
+              "period-end": null,
+              "period-last-n": 0,
+              "period-opt": 1,
+              "period-start": null,
+              "print-report-filters": 1,
+              "report-layout": [
+                {
+                  "layout-id": 6
+                }
+              ],
+              "report-per-device": 0,
+              "resolve-hostname": 0,
+              "schedule-color": "51B749",
+              "schedule-frequency": 1,
+              "schedule-type": 3,
+              "schedule-valid-end": null,
+              "schedule-valid-start": [
+                "00:00",
+                "2017/10/17"
+              ],
+              "status": 1,
+              "time-period": 5,
+              "week-start": 0
+            }
+        }
+    ],
+    "session": "xxxx"
+}
+</pre></div></div></div><h6 id=${reportconfig.add.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "code":    number,
+            "message": "string"
+        },
+        "data": [
+            { "field": "value", "field": "value", ...},
+            ...
+        ]
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${reportconfig.add.resp}">Show example...</a></p></div><div id="${reportconfig.add.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/output/&lt;output-name&gt;/email-recipients<br>object: /report/adom/&lt;adom-name&gt;/config/output/&lt;output-name&gt;/email-recipients/&lt;address&gt;</i><a class="close" href="#${reportconfig.add.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "result": {
+        "status": {
+          "code": 0,
+          "message": "ok"
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">address</td><td class="table_col_desc"><i>string </i> <br/><br/><br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">email-from</td><td class="table_col_desc"><i>string </i> <br/><br/><br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">email-server</td><td class="table_col_desc"><i>string </i> <br/><br/><br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=add_report_adom__adom-name__config_schedule>/report/adom/&lt;adom-name&gt;/config/schedule</h1><h2>add /report/adom/&lt;adom-name&gt;/config/schedule</h2><p>support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/schedule<br>object: /report/adom/&lt;adom-name&gt;/config/schedule/&lt;name&gt;<h6 id=${reportconfig.add.req}.request>Request:</h6><pre>
+{
+    "method": "add",
+    "params": [
+        {
+            "url": "report/adom/&lt;adom-name&gt;/config/&lt;obj-type&gt;/&lt;obj-name&gt;",
+            "apiver": 3,
+            "filter": [],
+            "sortings": [],
+            "data": [
+              { "field": "value", "field": "value", ...},
+              ...
+            ]
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${reportconfig.add.req}">Show example...</a></p></div><div id="${reportconfig.add.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/schedule<br>object: /report/adom/&lt;adom-name&gt;/config/schedule/&lt;name&gt;</i><a class="close" href="#${reportconfig.add.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "method": "add",
+    "params": [
+        {
+            "url": "report/adom/root/config/schedule/6",
+            "apiver": "3",
+            "filter": [],
+            "data": {
+              "auto-hcache": 1,
+              "dev-type": 0,
+              "device-list-type": 0,
+              "devices": [
+                {
+                  "devices-name": "All_FortiGate",
+                  "type": 2
+                }
+              ],
+              "display-table-contents": 1,
+              "filter": null,
+              "filter-logic": 0,
+              "filter-type": 0,
+              "include-coverpage": 1,
+              "include-other": 2,
+              "language": "Default",
+              "ldap-query": 0,
+              "ldap-server": "",
+              "ldap-user-case-change": 0,
+              "max-reports": 99,
+              "name": "6",
+              "obfuscate-user": 0,
+              "orientation": 0,
+              "output-format": 1,
+              "output-profile": "",
+              "period-end": null,
+              "period-last-n": 0,
+              "period-opt": 1,
+              "period-start": null,
+              "print-report-filters": 1,
+              "report-layout": [
+                {
+                  "layout-id": 6
+                }
+              ],
+              "report-per-device": 0,
+              "resolve-hostname": 0,
+              "schedule-color": "51B749",
+              "schedule-frequency": 1,
+              "schedule-type": 3,
+              "schedule-valid-end": null,
+              "schedule-valid-start": [
+                "00:00",
+                "2017/10/17"
+              ],
+              "status": 1,
+              "time-period": 5,
+              "week-start": 0
+            }
+        }
+    ],
+    "session": "xxxx"
+}
+</pre></div></div></div><h6 id=${reportconfig.add.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "code":    number,
+            "message": "string"
+        },
+        "data": [
+            { "field": "value", "field": "value", ...},
+            ...
+        ]
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${reportconfig.add.resp}">Show example...</a></p></div><div id="${reportconfig.add.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/schedule<br>object: /report/adom/&lt;adom-name&gt;/config/schedule/&lt;name&gt;</i><a class="close" href="#${reportconfig.add.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "result": {
+        "status": {
+          "code": 0,
+          "message": "ok"
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">address-filter</td><td class="table_col_desc"><i>array </i> <br/><br/>reference: /report/adom/&lt;adom-name&gt;/config/schedule/&lt;schedule_name&gt;/address-filter<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">admin-user</td><td class="table_col_desc"><i>string </i> <br/><br/><br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">auto-hcache</td><td class="table_col_desc"><i> </i> (optional) <br/><br/><br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">devices</td><td class="table_col_desc"><i>array </i> <br/><br/>reference: /report/adom/&lt;adom-name&gt;/config/schedule/&lt;schedule_name&gt;/devices<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">filter</td><td class="table_col_desc"><i>array </i> <br/><br/>reference: /report/adom/&lt;adom-name&gt;/config/schedule/&lt;schedule_name&gt;/filter<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">report-layout</td><td class="table_col_desc"><i>array </i> <br/><br/>reference: /report/adom/&lt;adom-name&gt;/config/schedule/&lt;schedule_name&gt;/report-layout<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">soc-cust-filters</td><td class="table_col_desc"><i>array </i> <br/><br/>reference: /sql-report/schedule/soc-cust-filters<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=add_report_adom__adom-name__config_schedule__schedule_name__address-filter>/report/adom/&lt;adom-name&gt;/config/schedule/&lt;schedule_name&gt;/address-filter</h1><h2>add /report/adom/&lt;adom-name&gt;/config/schedule/&lt;schedule_name&gt;/address-filter</h2><p>support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/schedule/&lt;schedule_name&gt;/address-filter<br>object: /report/adom/&lt;adom-name&gt;/config/schedule/&lt;schedule_name&gt;/address-filter/&lt;id&gt;<h6 id=${reportconfig.add.req}.request>Request:</h6><pre>
+{
+    "method": "add",
+    "params": [
+        {
+            "url": "report/adom/&lt;adom-name&gt;/config/&lt;obj-type&gt;/&lt;obj-name&gt;",
+            "apiver": 3,
+            "filter": [],
+            "sortings": [],
+            "data": [
+              { "field": "value", "field": "value", ...},
+              ...
+            ]
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${reportconfig.add.req}">Show example...</a></p></div><div id="${reportconfig.add.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/schedule/&lt;schedule_name&gt;/address-filter<br>object: /report/adom/&lt;adom-name&gt;/config/schedule/&lt;schedule_name&gt;/address-filter/&lt;id&gt;</i><a class="close" href="#${reportconfig.add.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "method": "add",
+    "params": [
+        {
+            "url": "report/adom/root/config/schedule/6",
+            "apiver": "3",
+            "filter": [],
+            "data": {
+              "auto-hcache": 1,
+              "dev-type": 0,
+              "device-list-type": 0,
+              "devices": [
+                {
+                  "devices-name": "All_FortiGate",
+                  "type": 2
+                }
+              ],
+              "display-table-contents": 1,
+              "filter": null,
+              "filter-logic": 0,
+              "filter-type": 0,
+              "include-coverpage": 1,
+              "include-other": 2,
+              "language": "Default",
+              "ldap-query": 0,
+              "ldap-server": "",
+              "ldap-user-case-change": 0,
+              "max-reports": 99,
+              "name": "6",
+              "obfuscate-user": 0,
+              "orientation": 0,
+              "output-format": 1,
+              "output-profile": "",
+              "period-end": null,
+              "period-last-n": 0,
+              "period-opt": 1,
+              "period-start": null,
+              "print-report-filters": 1,
+              "report-layout": [
+                {
+                  "layout-id": 6
+                }
+              ],
+              "report-per-device": 0,
+              "resolve-hostname": 0,
+              "schedule-color": "51B749",
+              "schedule-frequency": 1,
+              "schedule-type": 3,
+              "schedule-valid-end": null,
+              "schedule-valid-start": [
+                "00:00",
+                "2017/10/17"
+              ],
+              "status": 1,
+              "time-period": 5,
+              "week-start": 0
+            }
+        }
+    ],
+    "session": "xxxx"
+}
+</pre></div></div></div><h6 id=${reportconfig.add.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "code":    number,
+            "message": "string"
+        },
+        "data": [
+            { "field": "value", "field": "value", ...},
+            ...
+        ]
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${reportconfig.add.resp}">Show example...</a></p></div><div id="${reportconfig.add.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/schedule/&lt;schedule_name&gt;/address-filter<br>object: /report/adom/&lt;adom-name&gt;/config/schedule/&lt;schedule_name&gt;/address-filter/&lt;id&gt;</i><a class="close" href="#${reportconfig.add.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "result": {
+        "status": {
+          "code": 0,
+          "message": "ok"
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">address-type</td><td class="table_col_desc"><i> </i> (optional) <br/><br/><br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=add_report_adom__adom-name__config_schedule__schedule_name__devices>/report/adom/&lt;adom-name&gt;/config/schedule/&lt;schedule_name&gt;/devices</h1><h2>add /report/adom/&lt;adom-name&gt;/config/schedule/&lt;schedule_name&gt;/devices</h2><p>support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/schedule/&lt;schedule_name&gt;/devices<br>object: /report/adom/&lt;adom-name&gt;/config/schedule/&lt;schedule_name&gt;/devices/&lt;devices-name&gt;<h6 id=${reportconfig.add.req}.request>Request:</h6><pre>
+{
+    "method": "add",
+    "params": [
+        {
+            "url": "report/adom/&lt;adom-name&gt;/config/&lt;obj-type&gt;/&lt;obj-name&gt;",
+            "apiver": 3,
+            "filter": [],
+            "sortings": [],
+            "data": [
+              { "field": "value", "field": "value", ...},
+              ...
+            ]
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${reportconfig.add.req}">Show example...</a></p></div><div id="${reportconfig.add.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/schedule/&lt;schedule_name&gt;/devices<br>object: /report/adom/&lt;adom-name&gt;/config/schedule/&lt;schedule_name&gt;/devices/&lt;devices-name&gt;</i><a class="close" href="#${reportconfig.add.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "method": "add",
+    "params": [
+        {
+            "url": "report/adom/root/config/schedule/6",
+            "apiver": "3",
+            "filter": [],
+            "data": {
+              "auto-hcache": 1,
+              "dev-type": 0,
+              "device-list-type": 0,
+              "devices": [
+                {
+                  "devices-name": "All_FortiGate",
+                  "type": 2
+                }
+              ],
+              "display-table-contents": 1,
+              "filter": null,
+              "filter-logic": 0,
+              "filter-type": 0,
+              "include-coverpage": 1,
+              "include-other": 2,
+              "language": "Default",
+              "ldap-query": 0,
+              "ldap-server": "",
+              "ldap-user-case-change": 0,
+              "max-reports": 99,
+              "name": "6",
+              "obfuscate-user": 0,
+              "orientation": 0,
+              "output-format": 1,
+              "output-profile": "",
+              "period-end": null,
+              "period-last-n": 0,
+              "period-opt": 1,
+              "period-start": null,
+              "print-report-filters": 1,
+              "report-layout": [
+                {
+                  "layout-id": 6
+                }
+              ],
+              "report-per-device": 0,
+              "resolve-hostname": 0,
+              "schedule-color": "51B749",
+              "schedule-frequency": 1,
+              "schedule-type": 3,
+              "schedule-valid-end": null,
+              "schedule-valid-start": [
+                "00:00",
+                "2017/10/17"
+              ],
+              "status": 1,
+              "time-period": 5,
+              "week-start": 0
+            }
+        }
+    ],
+    "session": "xxxx"
+}
+</pre></div></div></div><h6 id=${reportconfig.add.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "code":    number,
+            "message": "string"
+        },
+        "data": [
+            { "field": "value", "field": "value", ...},
+            ...
+        ]
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${reportconfig.add.resp}">Show example...</a></p></div><div id="${reportconfig.add.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/schedule/&lt;schedule_name&gt;/devices<br>object: /report/adom/&lt;adom-name&gt;/config/schedule/&lt;schedule_name&gt;/devices/&lt;devices-name&gt;</i><a class="close" href="#${reportconfig.add.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "result": {
+        "status": {
+          "code": 0,
+          "message": "ok"
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">devices-name</td><td class="table_col_desc"><i>string </i> <br/><br/><br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">interfaces</td><td class="table_col_desc"><i>array </i> <br/><br/>reference: /sql-report/schedule/devices/interfaces<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=add_sql-report_schedule_devices_interfaces>/sql-report/schedule/devices/interfaces</h1><h2>add /sql-report/schedule/devices/interfaces</h2><p>support method: add, set, get, update, delete<br>table: /sql-report/schedule/devices/interfaces<br>object: /sql-report/schedule/devices/interfaces/&lt;name&gt;<h6 id=${reportconfig.add.req}.request>Request:</h6><pre>
+{
+    "method": "add",
+    "params": [
+        {
+            "url": "report/adom/&lt;adom-name&gt;/config/&lt;obj-type&gt;/&lt;obj-name&gt;",
+            "apiver": 3,
+            "filter": [],
+            "sortings": [],
+            "data": [
+              { "field": "value", "field": "value", ...},
+              ...
+            ]
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${reportconfig.add.req}">Show example...</a></p></div><div id="${reportconfig.add.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: support method: add, set, get, update, delete<br>table: /sql-report/schedule/devices/interfaces<br>object: /sql-report/schedule/devices/interfaces/&lt;name&gt;</i><a class="close" href="#${reportconfig.add.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "method": "add",
+    "params": [
+        {
+            "url": "report/adom/root/config/schedule/6",
+            "apiver": "3",
+            "filter": [],
+            "data": {
+              "auto-hcache": 1,
+              "dev-type": 0,
+              "device-list-type": 0,
+              "devices": [
+                {
+                  "devices-name": "All_FortiGate",
+                  "type": 2
+                }
+              ],
+              "display-table-contents": 1,
+              "filter": null,
+              "filter-logic": 0,
+              "filter-type": 0,
+              "include-coverpage": 1,
+              "include-other": 2,
+              "language": "Default",
+              "ldap-query": 0,
+              "ldap-server": "",
+              "ldap-user-case-change": 0,
+              "max-reports": 99,
+              "name": "6",
+              "obfuscate-user": 0,
+              "orientation": 0,
+              "output-format": 1,
+              "output-profile": "",
+              "period-end": null,
+              "period-last-n": 0,
+              "period-opt": 1,
+              "period-start": null,
+              "print-report-filters": 1,
+              "report-layout": [
+                {
+                  "layout-id": 6
+                }
+              ],
+              "report-per-device": 0,
+              "resolve-hostname": 0,
+              "schedule-color": "51B749",
+              "schedule-frequency": 1,
+              "schedule-type": 3,
+              "schedule-valid-end": null,
+              "schedule-valid-start": [
+                "00:00",
+                "2017/10/17"
+              ],
+              "status": 1,
+              "time-period": 5,
+              "week-start": 0
+            }
+        }
+    ],
+    "session": "xxxx"
+}
+</pre></div></div></div><h6 id=${reportconfig.add.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "code":    number,
+            "message": "string"
+        },
+        "data": [
+            { "field": "value", "field": "value", ...},
+            ...
+        ]
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${reportconfig.add.resp}">Show example...</a></p></div><div id="${reportconfig.add.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: support method: add, set, get, update, delete<br>table: /sql-report/schedule/devices/interfaces<br>object: /sql-report/schedule/devices/interfaces/&lt;name&gt;</i><a class="close" href="#${reportconfig.add.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "result": {
+        "status": {
+          "code": 0,
+          "message": "ok"
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">name</td><td class="table_col_desc"><i>string </i> <br/><br/><br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=add_report_adom__adom-name__config_schedule__schedule_name__filter>/report/adom/&lt;adom-name&gt;/config/schedule/&lt;schedule_name&gt;/filter</h1><h2>add /report/adom/&lt;adom-name&gt;/config/schedule/&lt;schedule_name&gt;/filter</h2><p>support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/schedule/&lt;schedule_name&gt;/filter<br>object: /report/adom/&lt;adom-name&gt;/config/schedule/&lt;schedule_name&gt;/filter/&lt;name&gt;<h6 id=${reportconfig.add.req}.request>Request:</h6><pre>
+{
+    "method": "add",
+    "params": [
+        {
+            "url": "report/adom/&lt;adom-name&gt;/config/&lt;obj-type&gt;/&lt;obj-name&gt;",
+            "apiver": 3,
+            "filter": [],
+            "sortings": [],
+            "data": [
+              { "field": "value", "field": "value", ...},
+              ...
+            ]
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${reportconfig.add.req}">Show example...</a></p></div><div id="${reportconfig.add.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/schedule/&lt;schedule_name&gt;/filter<br>object: /report/adom/&lt;adom-name&gt;/config/schedule/&lt;schedule_name&gt;/filter/&lt;name&gt;</i><a class="close" href="#${reportconfig.add.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "method": "add",
+    "params": [
+        {
+            "url": "report/adom/root/config/schedule/6",
+            "apiver": "3",
+            "filter": [],
+            "data": {
+              "auto-hcache": 1,
+              "dev-type": 0,
+              "device-list-type": 0,
+              "devices": [
+                {
+                  "devices-name": "All_FortiGate",
+                  "type": 2
+                }
+              ],
+              "display-table-contents": 1,
+              "filter": null,
+              "filter-logic": 0,
+              "filter-type": 0,
+              "include-coverpage": 1,
+              "include-other": 2,
+              "language": "Default",
+              "ldap-query": 0,
+              "ldap-server": "",
+              "ldap-user-case-change": 0,
+              "max-reports": 99,
+              "name": "6",
+              "obfuscate-user": 0,
+              "orientation": 0,
+              "output-format": 1,
+              "output-profile": "",
+              "period-end": null,
+              "period-last-n": 0,
+              "period-opt": 1,
+              "period-start": null,
+              "print-report-filters": 1,
+              "report-layout": [
+                {
+                  "layout-id": 6
+                }
+              ],
+              "report-per-device": 0,
+              "resolve-hostname": 0,
+              "schedule-color": "51B749",
+              "schedule-frequency": 1,
+              "schedule-type": 3,
+              "schedule-valid-end": null,
+              "schedule-valid-start": [
+                "00:00",
+                "2017/10/17"
+              ],
+              "status": 1,
+              "time-period": 5,
+              "week-start": 0
+            }
+        }
+    ],
+    "session": "xxxx"
+}
+</pre></div></div></div><h6 id=${reportconfig.add.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "code":    number,
+            "message": "string"
+        },
+        "data": [
+            { "field": "value", "field": "value", ...},
+            ...
+        ]
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${reportconfig.add.resp}">Show example...</a></p></div><div id="${reportconfig.add.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/schedule/&lt;schedule_name&gt;/filter<br>object: /report/adom/&lt;adom-name&gt;/config/schedule/&lt;schedule_name&gt;/filter/&lt;name&gt;</i><a class="close" href="#${reportconfig.add.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "result": {
+        "status": {
+          "code": 0,
+          "message": "ok"
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">description</td><td class="table_col_desc"><i>string </i> <br/><br/><br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">name</td><td class="table_col_desc"><i>string </i> <br/><br/><br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">opcode</td><td class="table_col_desc"><i> </i> (optional) <br/><br/><br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=add_report_adom__adom-name__config_schedule__schedule_name__report-layout>/report/adom/&lt;adom-name&gt;/config/schedule/&lt;schedule_name&gt;/report-layout</h1><h2>add /report/adom/&lt;adom-name&gt;/config/schedule/&lt;schedule_name&gt;/report-layout</h2><p>support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/schedule/&lt;schedule_name&gt;/report-layout<br>object: /report/adom/&lt;adom-name&gt;/config/schedule/&lt;schedule_name&gt;/report-layout/&lt;layout-id&gt;<h6 id=${reportconfig.add.req}.request>Request:</h6><pre>
+{
+    "method": "add",
+    "params": [
+        {
+            "url": "report/adom/&lt;adom-name&gt;/config/&lt;obj-type&gt;/&lt;obj-name&gt;",
+            "apiver": 3,
+            "filter": [],
+            "sortings": [],
+            "data": [
+              { "field": "value", "field": "value", ...},
+              ...
+            ]
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${reportconfig.add.req}">Show example...</a></p></div><div id="${reportconfig.add.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/schedule/&lt;schedule_name&gt;/report-layout<br>object: /report/adom/&lt;adom-name&gt;/config/schedule/&lt;schedule_name&gt;/report-layout/&lt;layout-id&gt;</i><a class="close" href="#${reportconfig.add.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "method": "add",
+    "params": [
+        {
+            "url": "report/adom/root/config/schedule/6",
+            "apiver": "3",
+            "filter": [],
+            "data": {
+              "auto-hcache": 1,
+              "dev-type": 0,
+              "device-list-type": 0,
+              "devices": [
+                {
+                  "devices-name": "All_FortiGate",
+                  "type": 2
+                }
+              ],
+              "display-table-contents": 1,
+              "filter": null,
+              "filter-logic": 0,
+              "filter-type": 0,
+              "include-coverpage": 1,
+              "include-other": 2,
+              "language": "Default",
+              "ldap-query": 0,
+              "ldap-server": "",
+              "ldap-user-case-change": 0,
+              "max-reports": 99,
+              "name": "6",
+              "obfuscate-user": 0,
+              "orientation": 0,
+              "output-format": 1,
+              "output-profile": "",
+              "period-end": null,
+              "period-last-n": 0,
+              "period-opt": 1,
+              "period-start": null,
+              "print-report-filters": 1,
+              "report-layout": [
+                {
+                  "layout-id": 6
+                }
+              ],
+              "report-per-device": 0,
+              "resolve-hostname": 0,
+              "schedule-color": "51B749",
+              "schedule-frequency": 1,
+              "schedule-type": 3,
+              "schedule-valid-end": null,
+              "schedule-valid-start": [
+                "00:00",
+                "2017/10/17"
+              ],
+              "status": 1,
+              "time-period": 5,
+              "week-start": 0
+            }
+        }
+    ],
+    "session": "xxxx"
+}
+</pre></div></div></div><h6 id=${reportconfig.add.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "code":    number,
+            "message": "string"
+        },
+        "data": [
+            { "field": "value", "field": "value", ...},
+            ...
+        ]
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${reportconfig.add.resp}">Show example...</a></p></div><div id="${reportconfig.add.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: support method: add, set, get, update, delete<br>table: /report/adom/&lt;adom-name&gt;/config/schedule/&lt;schedule_name&gt;/report-layout<br>object: /report/adom/&lt;adom-name&gt;/config/schedule/&lt;schedule_name&gt;/report-layout/&lt;layout-id&gt;</i><a class="close" href="#${reportconfig.add.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "result": {
+        "status": {
+          "code": 0,
+          "message": "ok"
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">is-global</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/><br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=add_sql-report_schedule_soc-cust-filters>/sql-report/schedule/soc-cust-filters</h1><h2>add /sql-report/schedule/soc-cust-filters</h2><p>support method: add, set, get, update, delete<br>table: /sql-report/schedule/soc-cust-filters<br>object: /sql-report/schedule/soc-cust-filters/&lt;name&gt;<h6 id=${reportconfig.add.req}.request>Request:</h6><pre>
+{
+    "method": "add",
+    "params": [
+        {
+            "url": "report/adom/&lt;adom-name&gt;/config/&lt;obj-type&gt;/&lt;obj-name&gt;",
+            "apiver": 3,
+            "filter": [],
+            "sortings": [],
+            "data": [
+              { "field": "value", "field": "value", ...},
+              ...
+            ]
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${reportconfig.add.req}">Show example...</a></p></div><div id="${reportconfig.add.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: support method: add, set, get, update, delete<br>table: /sql-report/schedule/soc-cust-filters<br>object: /sql-report/schedule/soc-cust-filters/&lt;name&gt;</i><a class="close" href="#${reportconfig.add.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "method": "add",
+    "params": [
+        {
+            "url": "report/adom/root/config/schedule/6",
+            "apiver": "3",
+            "filter": [],
+            "data": {
+              "auto-hcache": 1,
+              "dev-type": 0,
+              "device-list-type": 0,
+              "devices": [
+                {
+                  "devices-name": "All_FortiGate",
+                  "type": 2
+                }
+              ],
+              "display-table-contents": 1,
+              "filter": null,
+              "filter-logic": 0,
+              "filter-type": 0,
+              "include-coverpage": 1,
+              "include-other": 2,
+              "language": "Default",
+              "ldap-query": 0,
+              "ldap-server": "",
+              "ldap-user-case-change": 0,
+              "max-reports": 99,
+              "name": "6",
+              "obfuscate-user": 0,
+              "orientation": 0,
+              "output-format": 1,
+              "output-profile": "",
+              "period-end": null,
+              "period-last-n": 0,
+              "period-opt": 1,
+              "period-start": null,
+              "print-report-filters": 1,
+              "report-layout": [
+                {
+                  "layout-id": 6
+                }
+              ],
+              "report-per-device": 0,
+              "resolve-hostname": 0,
+              "schedule-color": "51B749",
+              "schedule-frequency": 1,
+              "schedule-type": 3,
+              "schedule-valid-end": null,
+              "schedule-valid-start": [
+                "00:00",
+                "2017/10/17"
+              ],
+              "status": 1,
+              "time-period": 5,
+              "week-start": 0
+            }
+        }
+    ],
+    "session": "xxxx"
+}
+</pre></div></div></div><h6 id=${reportconfig.add.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "code":    number,
+            "message": "string"
+        },
+        "data": [
+            { "field": "value", "field": "value", ...},
+            ...
+        ]
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${reportconfig.add.resp}">Show example...</a></p></div><div id="${reportconfig.add.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: support method: add, set, get, update, delete<br>table: /sql-report/schedule/soc-cust-filters<br>object: /sql-report/schedule/soc-cust-filters/&lt;name&gt;</i><a class="close" href="#${reportconfig.add.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "result": {
+        "status": {
+          "code": 0,
+          "message": "ok"
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">name</td><td class="table_col_desc"><i>string </i> <br/><br/><br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<style>
+    .overlay {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: rgba(0, 0, 0, 0.5);
+        transition: opacity 200ms;
+        visibility: hidden;
+        opacity: 0;
+    }
+    .overlay .cancel {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        cursor: default;
+    }
+    .overlay:target {
+        visibility: visible;
+        opacity: 1;
+    }
+
+    .popup {
+        margin: 75px auto;
+        padding: 20px;
+        background: #fff;
+        border: 1px solid #666;
+        width: 80%;
+        height: 80vh;
+        overflow: auto;
+        box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+        position: relative;
+    }
+    .popup .close {
+        position: absolute;
+        width: 20px;
+        height: 20px;
+        top: 20px;
+        right: 20px;
+        opacity: 0.8;
+        transition: all 200ms;
+        font-size: 24px;
+        font-weight: bold;
+        text-decoration: none;
+        color: #666;
+    }
+    .popup .close:hover {
+        opacity: 1;
+    }
+    .popup .content_cmd {
+        height: 90%;
+        overflow: auto;
+    }
+    .popup .content_cmd pre {
+        width: 90%;
+    }
+    .popup p {
+        margin: 0 0 1em;
+    }
+    .popup p:last-child {
+        margin: 0;
+    }
+</style>
+    <br/>
+</div></body></html>

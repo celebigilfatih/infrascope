@@ -1,0 +1,1522 @@
+<!doctype html><html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>FortiAnalyzer 7.4.7 (2685) JSON API Reference-Incident Mgmt Commands</title>
+<style>body {
+	font-family: Verdana;
+	color: black;
+	background: #D9D9D9;
+	font-size: 13px;
+}
+h1 {
+	font-size: 20px;
+}
+h2 {
+	font-size: 15px;
+	position: sticky;
+	position: -webkit-sticky;
+	top: 0px;
+	background: #D9D9D9;
+}
+h6 {
+	font-size: 13px;
+	margin-bottom: 8px;
+	margin-left: 12px;
+	font-weight: normal;
+}
+table {
+	width: 95%;
+	font-size: 13px;
+	margin-left: 15px;
+	margin-right: 5px;
+	border-collapse: collapse;
+	margin-bottom: 16px;
+}
+td {
+	vertical-align: top;
+	padding: 5px;
+}
+pre {
+	border: 1px solid black;
+	padding: 10px;
+	font-size: 12px;
+	margin-left: 15px;
+	width: 650px;
+}
+th {
+	text-align: left;
+}
+a {
+}
+a:link {
+	text-decoration: none;
+}
+a:visited {
+}
+a:hover {
+	text-decoration: underline;
+}
+.menu {
+	background: #C0C0C0;
+	border-right: 1px solid;
+	position: fixed;
+	padding: 6px;
+	padding-top: 20px;
+	top: 0px;
+	left: 0px;
+	bottom: 0px;
+	width: 200px;
+	overflow-x: hidden;
+	overflow-y: auto;
+	white-space: nowrap;
+}
+.content {
+	position: absolute;
+	padding: 6px;
+	top: 0px;
+	left: 240px;
+	right: 0px;
+}
+.menu_header {
+	font-weight: bold;
+}
+.param_table {
+	border: 1px solid #A0A0A0;
+}
+.table_hdr_name {
+	width: 160px;
+}
+.table_col_name {
+	font-weight: bold;
+	width: 160px;
+}
+.table_col_desc {
+}
+.param_table > thead > tr > th {
+	background-color: #C0C0C0;
+	border-bottom: 1px solid #A0A0A0;
+	padding: 6px;
+}
+.param_table > tbody > tr:nth-child(even) > td {
+	background-color: #D0D0D0;
+}
+.macro_num {
+	font-weight: bold;
+	width: 50px;
+}
+.macro_val {
+}
+</style>
+</head>
+<body>
+<div class="menu"><span class="menu_header"><a href="index.htm">API Reference Home</a></span><br/><span class="menu_item"><a href="objects.htm">Common Objects</a></span><br/><br/><span class="menu_header">Database Modules</span><br/><span class="menu_item"><a href="dvmdb-main.htm">Device Manager Database</a></span><br/><span class="menu_item"><a href="task-main.htm">Task Database</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof74-2779-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof74-2779-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg74-2779-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof72-1732-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof72-1732-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg72-1732-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof70-662-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof70-662-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg70-662-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof64-2087-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof64-2087-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg64-2087-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof62-1263-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof62-1263-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg62-1263-main.htm">Policy Package</a></span><br/><br/><span class="menu_header">Daemon Modules</span><br/><span class="menu_item"><a href="cmdb-main.htm">CLI Configuration</a></span><br/><span class="menu_item"><a href="dvmcmd-main.htm">Device Manager Command</a></span><br/><span class="menu_item"><a href="um-main.htm">Update Manager</a></span><br/><span class="menu_item"><a href="sys-main.htm">System Commands</a></span><br/><br/><span class="menu_header"><a href="faz-cmd-index.htm">FortiAnalyzer Modules</a></span><br/><span class="menu_item"><a href="faz_eventmgmt.htm">Event Mgmt Commands</a></span><br/><span class="menu_item"><a href="faz_eventmgmtconfig.htm">Event Mgmt Config Commands</a></span><br/><span class="menu_item"><a href="faz_fazsys.htm">FAZ System Commands</a></span><br/><span class="menu_item"><a href="faz_fortiview.htm">FortiView Commands</a></span><br/><span class="menu_item"><a href="faz_incidentmgmt.htm">Incident Mgmt Commands</a></span><br/><span class="menu_item"><a href="faz_logview.htm">LogView Commands</a></span><br/><span class="menu_item"><a href="faz_report.htm">Report Commands</a></span><br/><span class="menu_item"><a href="faz_reportconfig.htm">Report Config Commands</a></span><br/><span class="menu_item"><a href="faz_ioc.htm">IOC Commands</a></span><br/><span class="menu_item"><a href="faz_ueba.htm">UEBA Commands</a></span><br/><span class="menu_item"><a href="faz_soar.htm">SOAR Commands</a></span><br/><br/><span class="menu_header"><a href="obj-index.htm">Index of All Objects</a></span><br/><br/></div>
+<div class="content">
+<h1>Incident Mgmt Commands</h1><br/>
+
+<div>
+<h1 id=add_incidentmgmt_adom__adom-name__incident>Add an Incident</h1><h2>add /incidentmgmt/adom/&lt;adom-name&gt;/incident</h2><p>Add a new incident.<h6 id=${incidentmgmt.add.incident.req}.request>Request:</h6><pre>
+{
+    "method": "add",
+    "params": [
+        {
+            "url": "/incidentmgmt/adom/&lt;adom-name&gt;/incident",
+            "reporter": "string",
+            "epid": number,
+            "euid": number,
+            "endpoint": "string",
+            "category": "string",
+            "severity": "string",
+            "status": "string",
+            "description": "string",
+            "apiver": 3
+        }
+    ],
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${incidentmgmt.add.incident.req}">Show example...</a></p></div><div id="${incidentmgmt.add.incident.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Add a new incident.</i><a class="close" href="#${incidentmgmt.add.incident.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "method": "add",
+    "params": [
+        {
+            "url": "/incidentmgmt/adom/root/incident",
+            "reporter": "admin",
+            "epid": 123,
+            "euid": 456,
+            "endpoint": "someep",
+            "category": "CAT2",
+            "severity": "low",
+            "status": "response",
+            "description": "some description",
+            "apiver": 3
+        }
+    ],
+    "jsonrpc": "2.0",
+    "id": 1
+}
+</pre></div></div></div><h6 id=${incidentmgmt.add.incident.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "incid": "string"
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${incidentmgmt.add.incident.resp}">Show example...</a></p></div><div id="${incidentmgmt.add.incident.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Add a new incident.</i><a class="close" href="#${incidentmgmt.add.incident.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": 1, 
+    "jsonrpc": "2.0", 
+    "result": {
+        "incid": "IN00000003"
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/incidentmgmt/adom/&lt;adom-name&gt;/incident</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">reporter</td><td class="table_col_desc"><i>string </i> <br/><br/>The reporter name of the incident.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">epid</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>The endpoint ID.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">endpoint</td><td class="table_col_desc"><i>string </i> <br/><br/>The endpoint name.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">euid</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>The enduser ID.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">category</td><td class="table_col_desc"><i>string </i> <br/><br/>The incident category.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">severity</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/><br/>The severity level.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;high<br/>&nbsp;&nbsp;&nbsp;&nbsp;medium<br/>&nbsp;&nbsp;&nbsp;&nbsp;low</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/><br/>The incident status.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;draft<br/>&nbsp;&nbsp;&nbsp;&nbsp;analysis<br/>&nbsp;&nbsp;&nbsp;&nbsp;response<br/>&nbsp;&nbsp;&nbsp;&nbsp;review<br/>&nbsp;&nbsp;&nbsp;&nbsp;closed<br/>&nbsp;&nbsp;&nbsp;&nbsp;cancelled</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">description</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The incident description.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return an incident ID</h2><p>A new assigned incident ID for the add request will be returned.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">incid</td><td class="table_col_desc"><i>string </i> <br/><br/>A new assigned incident ID.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=update_incidentmgmt_adom__adom-name__incident__incid_>Update an Incident</h1><h2>update /incidentmgmt/adom/&lt;adom-name&gt;/incident/&lt;incid&gt;</h2><p>Update an incident.<h6 id=${incidentmgmt.update.incident.req}.request>Request:</h6><pre>
+{
+    "method": "update",
+    "params": [
+        {
+            "url": "/incidentmgmt/adom/&lt;adom-name&gt;/incident/&lt;incid&gt;",
+            "lastuser": "string",
+            "epid": number,
+            "euid": number,
+            "endpoint": "string",
+            "category": "string",
+            "severity": "string",
+            "status": "string",
+            "description": "string",
+            "lastrevision": number
+            "apiver": 3
+        }
+    ],
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${incidentmgmt.update.incident.req}">Show example...</a></p></div><div id="${incidentmgmt.update.incident.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Update an incident.</i><a class="close" href="#${incidentmgmt.update.incident.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "method": "update",
+    "params": [
+        {
+            "url": "/incidentmgmt/adom/root/incident/IN00000002",
+            "description": "something new",
+            "apiver": 3
+        }
+    ],
+    "jsonrpc": "2.0",
+    "id": 1
+}
+</pre></div></div></div><h6 id=${incidentmgmt.update.incident.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "code": number,
+            "message": "string"
+        }
+    }
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${incidentmgmt.update.incident.resp}">Show example...</a></p></div><div id="${incidentmgmt.update.incident.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Update an incident.</i><a class="close" href="#${incidentmgmt.update.incident.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": 1, 
+    "jsonrpc": "2.0", 
+    "result": {
+        "status": {
+            "code": 0, 
+            "message": "succeeded"
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/incidentmgmt/adom/&lt;adom-name&gt;/incident/&lt;incid&gt;</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">lastuser</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The last user of the incident.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">epid</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>The endpoint ID.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">endpoint</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The endpoint name.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">euid</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>The enduser ID.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">category</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The incident category.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">severity</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/><br/>The severity level.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;high<br/>&nbsp;&nbsp;&nbsp;&nbsp;medium<br/>&nbsp;&nbsp;&nbsp;&nbsp;low</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/><br/>The incident status.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;draft<br/>&nbsp;&nbsp;&nbsp;&nbsp;analysis<br/>&nbsp;&nbsp;&nbsp;&nbsp;response<br/>&nbsp;&nbsp;&nbsp;&nbsp;review<br/>&nbsp;&nbsp;&nbsp;&nbsp;closed<br/>&nbsp;&nbsp;&nbsp;&nbsp;cancelled</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">description</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The incident description.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">lastrevision</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>The version to check before save.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return an incident update status</h2><p>A status for the update request will be returned.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>A structured value of status.<br/><br/><table><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> <br/><br/>The update status message.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> <br/><br/>The update status code.<br/><br/></td></tr></table></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_incidentmgmt_adom__adom-name__incidents>List incidents</h1><h2>get /incidentmgmt/adom/&lt;adom-name&gt;/incidents</h2><p>Get an incidents list.<h6 id=${incidentmgmt.list.incident.req}.request>Request:</h6><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/incidentmgmt/adom/&lt;adom-name&gt;/incidents",
+            "incids": [
+                "string",
+                ...
+            ],
+            "filter": "string",
+            "sort-by": [
+                {
+                    "field": "string",
+                    "order": "string"
+                },
+                ...
+            ],
+            "offset": number,
+            "limit": number,
+            "detail-level": "string",
+            "apiver": 3
+        }
+    ],
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${incidentmgmt.list.incident.req}">Show example...</a></p></div><div id="${incidentmgmt.list.incident.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Get an incidents list.</i><a class="close" href="#${incidentmgmt.list.incident.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/incidentmgmt/adom/root/incidents",
+            "incids": [
+                "IN00000001",
+                "IN00000003",
+                "IN00000005",
+                "IN00000007",
+                "IN00000009"
+            ],
+            "filter": "severity='low'",
+            "sort-by": [
+                {
+                    "field": "incid",
+                    "order": "desc"
+                }
+            ],
+            "offset": 1,
+            "limit": 2,
+            "detail-level": "standard",
+            "apiver": 3
+        }
+    ],
+    "jsonrpc": "2.0",
+    "id": 1
+}
+</pre></div></div></div><h6 id=${incidentmgmt.list.incident.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "code": number, 
+            "message": "string"
+        },
+        "detail-level": "string",
+        "data": [
+            {
+                "attach_lastupdate": "string",
+                "attach_revision": "string",
+                "category": "string",
+                "createtime": "string",
+                "description": "string",
+                "endpoint": "string",
+                "epid": "string",
+                "euid": "string",
+                "incid": "string",
+                "lastupdate": "string",
+                "lastuser": "string",
+                "refinfo": "string",
+                "reporter": "string",
+                "revision": "string",
+                "severity": "string",
+                "status": "string"
+            },
+            ...
+        ]
+    }
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${incidentmgmt.list.incident.resp}">Show example...</a></p></div><div id="${incidentmgmt.list.incident.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Get an incidents list.</i><a class="close" href="#${incidentmgmt.list.incident.resp}.response">&times;</a> <div class="content_cmd"><pre>
+Basic:
+{
+    "id": 1, 
+    "jsonrpc": "2.0", 
+    "result": {
+        "data": [
+            {
+                "attach_lastupdate": "1521750043",
+                "attach_revision": "13",
+                "incid": "IN00000007",
+                "lastupdate": "1516401369",
+                "revision": "1"
+            }, 
+            {
+                "attach_lastupdate": "", 
+                "attach_revision": "0",
+                "incid": "IN00000005",
+                "lastupdate": "",
+                "revision": "0"
+            }
+        ], 
+        "detail-level": "basic",
+        "status": {
+            "code": 0, 
+            "message": "2 record(s)."
+        }
+    }
+}
+
+Standard:
+{
+    "id": 1, 
+    "jsonrpc": "2.0", 
+    "result": {
+        "data": [
+            {
+                "attach_lastupdate": "1521750043",
+                "attach_revision": "13",
+                "category": "CAT1",
+                "createtime": "1516401458",
+                "description": "something",
+                "endpoint": "OFFICE-PC1",
+                "epid": "12",
+                "euid": "34",
+                "incid": "IN00000007",
+                "lastupdate": "151640369",
+                "lastuser": "John",
+                "refinfo": "", 
+                "reporter": "admin",
+                "revision": "1",
+                "severity": "low",
+                "status": "response"
+            }, 
+            {
+                "attach_lastupdate": "", 
+                "attach_revision": "0",
+                "category": "CAT2",
+                "createtime": "1516401457",
+                "description": "something",
+                "endpoint": "OFFICE-PC2",
+                "epid": "123",
+                "euid": "456",
+                "incid": "IN00000005",
+                "lastupdate": "",
+                "lastuser": "",
+                "refinfo": "", 
+                "reporter": "admin",
+                "revision": "0",
+                "severity": "low",
+                "status": "response"
+            }
+        ], 
+        "detail-level": "standard",
+        "status": {
+            "code": 0, 
+            "message": "2 record(s)."
+        }
+    }
+}
+
+Extended:
+{
+    "id": 1, 
+    "jsonrpc": "2.0", 
+    "result": {
+        "data": [
+            {
+                "attach_lastupdate": "1521750043",
+                "attach_revision": "13",
+                "category": "CAT1",
+                "attachments": [
+                    {
+                        "lastupdate": "1521734786",
+                        "revision": "3", 
+                        "attachid": "1"
+                    }, 
+                    {
+                        "lastupdate": "1521750043",
+                        "revision": "8", 
+                        "attachid": "2"
+                    }
+                ],
+                "epcount": "0",
+                "eucount": "0",
+                "eparr": [],
+                "euarr": [],
+                "createtime": "1516401458",
+                "description": "something",
+                "endpoint": "OFFICE-PC1",
+                "epid": "12",
+                "euid": "34",
+                "incid": "IN00000007",
+                "lastupdate": "1516401369",
+                "lastuser": "John",
+                "refinfo": "", 
+                "reporter": "admin",
+                "revision": "1",
+                "severity": "low",
+                "status": "response"
+            }, 
+            {
+                "attach_lastupdate": "", 
+                "attach_revision": "0",
+                "attachments": [],
+                "category": "CAT2",
+                "createtime": "1516401457",
+                "description": "something",
+                "endpoint": "OFFICE-PC2",
+                "epid": "123",
+                "euid": "456",
+                "epcount": "2",
+                "eucount": "2",
+                "eparr": [
+                    {
+                        "dvid": 1029, 
+                        "epid": 1201, 
+                        "epip": "172.18.19.17", 
+                        "epname": "OFFICE-PC3", 
+                        "mac": "", 
+                        "osname": "", 
+                        "osversion": ""
+                    }, 
+                    {
+                        "dvid": 1048, 
+                        "epid": 1831, 
+                        "epip": "172.16.79.8", 
+                        "epname": "OFFICE-PC4", 
+                        "mac": "ff:ff:ff:aa:aa:aa", 
+                        "osname": "windows", 
+                        "osversion": "1"
+                    }
+                ],
+                "euarr": [
+                         {
+                           "euid": 1119, 
+                           "euname": "tom"
+                         }, 
+                         {
+                           "euid": 2132, 
+                           "euname": "jerry"
+                         }
+                       ],
+                "incid": "IN00000005",
+                "lastupdate": "",
+                "lastuser": "",
+                "refinfo": "", 
+                "reporter": "admin",
+                "revision": "0",
+                "severity": "low",
+                "status": "response"
+            }
+        ], 
+        "detail-level": "extended",
+        "status": {
+            "code": 0, 
+            "message": "2 record(s)."
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/incidentmgmt/adom/&lt;adom-name&gt;/incidents</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">incids</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>The incident ID list.<br/><br/>member type: <i>string</i><br/></td></tr><tr class='odd_row'><td class="table_col_name">filter</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The query filter.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">sort-by</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>Sort by field.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/><br/><br/><table><tr class='odd_row'><td class="table_col_name">field</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Sortable field.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">order</td><td class="table_col_desc"><i>string </i> (optional) <br/> Default: <i>ASC </i> <br/>Sorting order, ASC or DESC.<br/><br/></td></tr></table></td></tr></td></tr><tr class='odd_row'><td class="table_col_name">limit</td><td class="table_col_desc"><i>number </i> (optional) <br/> Default: <i>50 </i>  Min: <i>1 </i>  Max: <i> 2000 </i> <br/>The maximun number of records to get.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">offset</td><td class="table_col_desc"><i>number </i> (optional) <br/> Default: <i>0 </i>  Min: <i>0 </i> <br/>The offset of records to get.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">detail-level</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The detail level of return data, basic, standard(default) or extended.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return an incidents list</h2><p>A list of incidents will be returned.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>A structured value of status.<br/><br/><table><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> <br/><br/>The get status message.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> <br/><br/>The get status code.<br/><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">detail-level</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The detail level of return data, basic, standard(default) or extended.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">masked-fields</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>datamasked field list.<br/><br/>member type: <i>string</i><br/></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>array </i> <br/><br/>A structured value of dataset.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/>Incident entries.<br/><br/></td></tr></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_incidentmgmt_adom__adom-name__incidents_count>Count incidents</h1><h2>get /incidentmgmt/adom/&lt;adom-name&gt;/incidents/count</h2><p>Get a count number of incidents.<h6 id=${incidentmgmt.count.incident.req}.request>Request:</h6><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/incidentmgmt/adom/&lt;adom-name&gt;/incidents/count",
+            "incids": [
+                "string",
+                ...
+            ],
+            "filter": "string",
+            "apiver": 3
+        }
+    ],
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${incidentmgmt.count.incident.req}">Show example...</a></p></div><div id="${incidentmgmt.count.incident.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Get a count number of incidents.</i><a class="close" href="#${incidentmgmt.count.incident.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/incidentmgmt/adom/root/incidents/count",
+            "incids": [
+                "IN00000001",
+                "IN00000003",
+                "IN00000005",
+                "IN00000007",
+                "IN00000009"
+            ],
+            "filter": "severity='low'",
+            "apiver": 3
+        }
+    ],
+    "jsonrpc": "2.0",
+    "id": 1
+}
+</pre></div></div></div><h6 id=${incidentmgmt.count.incident.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "code": number, 
+            "message": "string"
+        },
+        "data": [
+            {
+                "count": "string"
+            }
+        ]
+    }
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${incidentmgmt.count.incident.resp}">Show example...</a></p></div><div id="${incidentmgmt.count.incident.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Get a count number of incidents.</i><a class="close" href="#${incidentmgmt.count.incident.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": 1, 
+    "jsonrpc": "2.0", 
+    "result": {
+        "data": [
+            {
+                "count": "5"
+            }
+        ], 
+        "status": {
+            "code": 0, 
+            "message": "1 record(s)."
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/incidentmgmt/adom/&lt;adom-name&gt;/incidents/count</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">incids</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>The incident ID list.<br/><br/>member type: <i>string</i><br/></td></tr><tr class='odd_row'><td class="table_col_name">filter</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The query filter.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return an incidents number</h2><p>A number of incidents will be returned.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>A structured value of status.<br/><br/><table><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> <br/><br/>The get status message.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> <br/><br/>The get status code.<br/><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">masked-fields</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>datamasked field list.<br/><br/>member type: <i>string</i><br/></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>array </i> <br/><br/><br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/><br/><br/><table><tr class='odd_row'><td class="table_col_name">count</td><td class="table_col_desc"><i>string </i> <br/><br/>The number of incidents.<br/><br/></td></tr></table></td></tr></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=delete_incidentmgmt_adom__adom-name__incidents>Delete incidents</h1><h2>delete /incidentmgmt/adom/&lt;adom-name&gt;/incidents</h2><p>Delete some incidents.<h6 id=${incidentmgmt.delete.incident.req}.request>Request:</h6><pre>
+{
+    "method": "delete",
+    "params": [
+        {
+            "url": "/incidentmgmt/adom/&lt;adom-name&gt;/incidents",
+            "incids": [
+                "string",
+                ...
+            ],
+            "apiver": 3
+        }
+    ],
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${incidentmgmt.delete.incident.req}">Show example...</a></p></div><div id="${incidentmgmt.delete.incident.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Delete some incidents.</i><a class="close" href="#${incidentmgmt.delete.incident.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "method": "delete",
+    "params": [
+        {
+            "url": "/incidentmgmt/adom/root/incidents",
+            "incids": [
+                "IN00000001",
+                "IN00000003",
+                "IN00000005"
+            ],
+            "apiver": 3
+        }
+    ],
+    "jsonrpc": "2.0",
+    "id": 1
+}
+</pre></div></div></div><h6 id=${incidentmgmt.delete.incident.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "code": number, 
+            "message": "string"
+        }
+    }
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${incidentmgmt.delete.incident.resp}">Show example...</a></p></div><div id="${incidentmgmt.delete.incident.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Delete some incidents.</i><a class="close" href="#${incidentmgmt.delete.incident.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": 1, 
+    "jsonrpc": "2.0",
+    "result": {
+        "status": {
+            "code": 0,
+            "message": "succeeded"
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/incidentmgmt/adom/&lt;adom-name&gt;/incidents</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">incids</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>A structure that holds incident IDs, can not be empty.<br/><br/>member type: <i>string</i><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return an incident delete status</h2><p>A status for the delete request will be returned.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>A structured value of status.<br/><br/><table><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> <br/><br/>The delete status message.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> <br/><br/>The delete status code.<br/><br/></td></tr></table></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=add_incidentmgmt_adom__adom-name__attachments>Add Incident Attachments</h1><h2>add /incidentmgmt/adom/&lt;adom-name&gt;/attachments</h2><p>Add new incident attachments.<h6 id=${incidentmgmt.add.attachment.req}.request>Request:</h6><pre>
+{
+    "method": "add",
+    "params": [
+        {
+            "url": "/incidentmgmt/adom/&lt;adom-name&gt;/attachments",
+            "incid": "string",
+            "lastuser": "string",
+            "attachments": [
+                {
+                    "attachtype": "string",
+                    "data": "string in json format"
+                },
+                ...
+            ],
+            "apiver": 3
+        }
+    ],
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${incidentmgmt.add.attachment.req}">Show example...</a></p></div><div id="${incidentmgmt.add.attachment.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Add new incident attachments.</i><a class="close" href="#${incidentmgmt.add.attachment.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "method": "add",
+    "params": [
+        {
+            "url": "/incidentmgmt/adom/root/attachments",
+            "incid": "IN00000002",
+            "attachments": [
+                {
+                  "attachtype": "report",
+                  "data": "{"report-id": "6edc28e0-1122-11ea-8c2c-000c293ef5b2"}"
+                },
+                {
+                  "attachtype": "file",
+                  "data": "{ "content": "iVBORw0KGgoAAAANSUhEUgAAAI4AAACOAQAAAADPhg2lAAAAx0lEQVR4Ac2V0Q3EIAxDI2UARmL1jsQASJydlJ7Kv6NGFeLefWBSx7V11vwIMlbH44M71yPHwaNbu7BiW4GG+ei+LqyUUoWshZRCBBF1KBq94tqv3stQmok6Dn/JUBavfcyQDM0YFVI2OkSIUR6PdTY+S49YNBNdBeQFiLuFH8iFaWyDGrG5e0T/UatEj5kggmGkRzvc+SekFKA7FDif/fGXFmXwbVqGeDxfq5WhO2dfn0wZyo80LhxpW4DSTBzRTHk9Ousb6Ad0NtIsvHTevQAAAABJRU5ErkJggg==", "format": "base64", "name": "my.png"}"
+                }
+                {
+                    "attachtype": "note",
+                    "data": "{"dev":"test","type":"unknown","number":1}"
+                }
+            ],
+            "lastuser": "admin",
+            "apiver": 3
+        }
+    ],
+    "jsonrpc": "2.0",
+    "id": 1
+}
+</pre></div></div></div><h6 id=${incidentmgmt.add.attachment.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "attachids": [
+            "string",
+            ...
+        ]
+    }
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${incidentmgmt.add.attachment.resp}">Show example...</a></p></div><div id="${incidentmgmt.add.attachment.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Add new incident attachments.</i><a class="close" href="#${incidentmgmt.add.attachment.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": 1, 
+    "jsonrpc": "2.0",
+    "result": {
+        "attachids": [
+            "8",
+            "9",
+            "10"
+        ]
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/incidentmgmt/adom/&lt;adom-name&gt;/attachments</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">incid</td><td class="table_col_desc"><i>string </i> <br/><br/>The incident ID.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">attachments</td><td class="table_col_desc"><i>array </i> <br/><br/>A structure that holds multiple attachments<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/><br/><br/><table><tr class='odd_row'><td class="table_col_name">attachtype</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>The attachment type.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;alertevent<br/>&nbsp;&nbsp;&nbsp;&nbsp;note<br/>&nbsp;&nbsp;&nbsp;&nbsp;file<br/>&nbsp;&nbsp;&nbsp;&nbsp;report</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">attachsrc</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/><br/>Attachment Source.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;manual<br/>&nbsp;&nbsp;&nbsp;&nbsp;playbook</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">attachsrcid</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>User name for manual type attachment source, playbook UUID for playbook.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">attachsrctrigger</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Attachment trigger information.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>string </i> <br/><br/>Any attachment data in json format. For attachtype-report, it at least includes report-id, i.e, report's uuid. For attachtype-file, it at least includes file name.<br/><br/></td></tr></table></td></tr></td></tr><tr class='odd_row'><td class="table_col_name">lastuser</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>User name who added or updated the attachment.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return attachment IDs</h2><p>New assigned attachment IDs for the add request will be returned.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">attachids</td><td class="table_col_desc"><i>array </i> <br/><br/>A structure that holds attachment IDs.<br/><br/>member type: <i>string</i><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=update_incidentmgmt_adom__adom-name__attachment__attachid_>Update an Attachment</h1><h2>update /incidentmgmt/adom/&lt;adom-name&gt;/attachment/&lt;attachid&gt;</h2><p>Update an incident attachment.<h6 id=${incidentmgmt.update.attachment.req}.request>Request:</h6><pre>
+{
+    "method": "update",
+    "params": [
+        {
+            "url": "/incidentmgmt/adom/&lt;adom-name&gt;/attachment/&lt;attachid&gt;",
+            "data": "string in json format",
+            "lastuser": "string",
+            "lastrevision": "string",
+            "apiver": 3
+        }
+    ],
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${incidentmgmt.update.attachment.req}">Show example...</a></p></div><div id="${incidentmgmt.update.attachment.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Update an incident attachment.</i><a class="close" href="#${incidentmgmt.update.attachment.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "method": "update",
+    "params": [
+        {
+            "url": "/incidentmgmt/adom/root/attachment/5",
+            "data": "{"dev":"new","type":"new","number":11}",
+            "lastuser": "some user",
+            "lastrevision": "1",
+            "apiver": 3
+        }
+    ],
+    "jsonrpc": "2.0",
+    "id": 1
+}
+</pre></div></div></div><h6 id=${incidentmgmt.update.attachment.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "code": number,
+            "message": "string"
+        }
+    }
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${incidentmgmt.update.attachment.resp}">Show example...</a></p></div><div id="${incidentmgmt.update.attachment.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Update an incident attachment.</i><a class="close" href="#${incidentmgmt.update.attachment.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": 1, 
+    "jsonrpc": "2.0",
+    "result": {
+        "status": {
+            "code": 0,
+            "message": "succeeded"
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/incidentmgmt/adom/&lt;adom-name&gt;/attachment/&lt;attachid&gt;</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">lastuser</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>User name who updated the attachment.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">attachsrc</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/><br/>Attachment Source.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;manual<br/>&nbsp;&nbsp;&nbsp;&nbsp;playbook</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">attachsrcid</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>User name for manual type attachment source, playbook UUID for playbook.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">attachsrctrigger</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Attachment trigger information.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>string </i> <br/><br/>Any attachment data in json format.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">lastrevision</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>The version to check before save.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return an attachment update status</h2><p>A status for the update request will be returned.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>A structured value of status.<br/><br/><table><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> <br/><br/>The update status message.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> <br/><br/>The update status code.<br/><br/></td></tr></table></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_incidentmgmt_adom__adom-name__attachments>List attachments</h1><h2>get /incidentmgmt/adom/&lt;adom-name&gt;/attachments</h2><p>Get an attachments list.<h6 id=${incidentmgmt.list.attachment.req}.request>Request:</h6><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/incidentmgmt/adom/&lt;adom-name&gt;/attachments",
+            "incid": "string",
+            "attachtype": "string",
+            "apiver": 3
+        }
+    ],
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${incidentmgmt.list.attachment.req}">Show example...</a></p></div><div id="${incidentmgmt.list.attachment.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Get an attachments list.</i><a class="close" href="#${incidentmgmt.list.attachment.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/incidentmgmt/adom/root/attachments",
+            "incid": "IN00000002",
+            "attachtype": "report",
+            "apiver": 3
+        }
+    ],
+    "jsonrpc": "2.0",
+    "id": 1
+}
+</pre></div></div></div><h6 id=${incidentmgmt.list.attachment.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "code": number,
+            "message": "string"
+        }
+    },
+    "data": [
+        {
+            "attachid": "string",
+            "attachtype": "string",
+            "createtime": "string",
+            "data": "string",
+            "incid": "string",
+            "lastupdate": "string",
+            "lastuser": "string",
+            "revision": "string"
+        },
+        ...
+    ]
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${incidentmgmt.list.attachment.resp}">Show example...</a></p></div><div id="${incidentmgmt.list.attachment.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Get an attachments list.</i><a class="close" href="#${incidentmgmt.list.attachment.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": 1,
+    "jsonrpc": "2.0",
+    "result": {
+        "data": [
+            {
+              "attachid": "26",
+              "attachtype": "report",
+              "createtime": "1574867432",
+              "data": "{"name": "aaaa-2019-11-27-0630_1", "uuid": "6edc28e0-1122-11ea-8c2c-000c293ef5b2"}",
+              "incid": "IN00000005",
+              "lastuser": "",
+              "revision": "0
+            },
+            {
+              "attachid": "27",
+              "attachtype": "report",
+              "createtime": "1574867650",
+              "data": "{"name": "aaaa-2019-11-27-0630_1", "uuid": "6edc28e0-1122-11ea-8c2c-000c293ef5b2"}",
+              "incid": "IN00000005",
+              "lastuser": "",
+              "revision": "0"
+            },
+            {
+              "attachid": "28",
+              "attachtype": "report",
+              "createtime": "1574867650",
+              "data": "{"name": "aaa_bbbb-2019-11-27-0712_3", "uuid": "4d4805fe-1128-11ea-9367-000c293ef5b2"}",
+              "incid": "IN00000005",
+              "lastuser": "",
+              "revision": "0"
+            }
+
+        ],
+        "status": {
+            "code": 0,
+            "message": "2 record(s)."
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/incidentmgmt/adom/&lt;adom-name&gt;/attachments</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">incid</td><td class="table_col_desc"><i>string </i> <br/><br/>The incident ID.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">attachtype</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/><br/>The attachment type.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;alertevent<br/>&nbsp;&nbsp;&nbsp;&nbsp;note<br/>&nbsp;&nbsp;&nbsp;&nbsp;file<br/>&nbsp;&nbsp;&nbsp;&nbsp;report</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">limit</td><td class="table_col_desc"><i>number </i> (optional) <br/> Default: <i>50 </i>  Min: <i>1 </i>  Max: <i> 2000 </i> <br/>The maximun number of records to get.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">offset</td><td class="table_col_desc"><i>number </i> (optional) <br/> Default: <i>0 </i>  Min: <i>0 </i> <br/>The offset of records to get.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return an attachments list</h2><p>A list of attachments will be returned.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>A structured value of status.<br/><br/><table><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> <br/><br/>The get status message.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> <br/><br/>The get status code.<br/><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>array </i> <br/><br/>A structured value of dataset.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/>Attachment entries.<br/><br/></td></tr></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_incidentmgmt_adom__adom-name__attachments_count>Count attachments</h1><h2>get /incidentmgmt/adom/&lt;adom-name&gt;/attachments/count</h2><p>Get a count number of attachments.<h6 id=${incidentmgmt.count.attachment.req}.request>Request:</h6><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/incidentmgmt/adom/&lt;adom-name&gt;/attachments/count",
+            "incid": "string",
+            "attachtype": "string",
+            "apiver": 3
+        }
+    ],
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${incidentmgmt.count.attachment.req}">Show example...</a></p></div><div id="${incidentmgmt.count.attachment.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Get a count number of attachments.</i><a class="close" href="#${incidentmgmt.count.attachment.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/incidentmgmt/adom/root/attachments/count",
+            "incid": "IN00000002",
+            "attachtype": "log",
+            "apiver": 3
+        }
+    ],
+    "jsonrpc": "2.0",
+    "id": 1
+}
+</pre></div></div></div><h6 id=${incidentmgmt.count.attachment.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "code": number,
+            "message": "string"
+        }
+    },
+    "data": [
+        {
+            "count": "string",
+        }
+    ]
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${incidentmgmt.count.attachment.resp}">Show example...</a></p></div><div id="${incidentmgmt.count.attachment.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Get a count number of attachments.</i><a class="close" href="#${incidentmgmt.count.attachment.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": 1,
+    "jsonrpc": "2.0",
+    "result": {
+        "data": [
+            {
+                "count": "2"
+            }
+        ],
+        "status": {
+            "code": 0,
+            "message": "1 record(s)."
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/incidentmgmt/adom/&lt;adom-name&gt;/attachments/count</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">incid</td><td class="table_col_desc"><i>string </i> <br/><br/>The incident ID.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">attachtype</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/><br/>The attachment type.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;alertevent<br/>&nbsp;&nbsp;&nbsp;&nbsp;log<br/>&nbsp;&nbsp;&nbsp;&nbsp;comment<br/>&nbsp;&nbsp;&nbsp;&nbsp;logsearchfilter<br/>&nbsp;&nbsp;&nbsp;&nbsp;uploadfile<br/>&nbsp;&nbsp;&nbsp;&nbsp;report</i></b><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return an attachments number</h2><p>A number of attachments will be returned.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>A structured value of status.<br/><br/><table><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> <br/><br/>The get status message.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> <br/><br/>The get status code.<br/><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>array </i> <br/><br/><br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/><br/><br/><table><tr class='odd_row'><td class="table_col_name">count</td><td class="table_col_desc"><i>string </i> <br/><br/>The number of attachments.<br/><br/></td></tr></table></td></tr></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=delete_incidentmgmt_adom__adom-name__attachments>Delete attachments</h1><h2>delete /incidentmgmt/adom/&lt;adom-name&gt;/attachments</h2><p>Delete some attachments.<h6 id=${incidentmgmt.delete.attachment.req}.request>Request:</h6><pre>
+{
+    "method": "delete",
+    "params": [
+        {
+            "url": "/incidentmgmt/adom/&lt;adom-name&gt;/attachments",
+            "incid": "string",
+            "attachids": [
+                number,
+                ...
+            ],
+            "apiver": 3
+        }
+    ],
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${incidentmgmt.delete.attachment.req}">Show example...</a></p></div><div id="${incidentmgmt.delete.attachment.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Delete some attachments.</i><a class="close" href="#${incidentmgmt.delete.attachment.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "method": "delete",
+    "params": [
+        {
+            "url": "/incidentmgmt/adom/root/attachments",
+            "incid": "IN00000003",
+            "attachids": [
+                6,
+                7,
+                8
+            ],
+            "apiver": 3
+        }
+    ],
+    "jsonrpc": "2.0",
+    "id": 1
+}
+</pre></div></div></div><h6 id=${incidentmgmt.delete.attachment.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "code": number,
+            "message": "string"
+        }
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${incidentmgmt.delete.attachment.resp}">Show example...</a></p></div><div id="${incidentmgmt.delete.attachment.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Delete some attachments.</i><a class="close" href="#${incidentmgmt.delete.attachment.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": 1, 
+    "jsonrpc": "2.0",
+    "result": {
+        "status": {
+            "code": 0,
+            "message": "succeeded"
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/incidentmgmt/adom/&lt;adom-name&gt;/attachments</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">incid</td><td class="table_col_desc"><i>string </i> <br/><br/>The incidnet ID.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">attachids</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>A structure that holds attachment IDs.<br/><br/>member type: <i>number</i><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return an attachment delete status</h2><p>A status for the delete request will be returned.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>A structured value of status.<br/><br/><table><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> <br/><br/>The delete status message.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> <br/><br/>The delete status code.<br/><br/></td></tr></table></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=add_incidentmgmt_adom__adom-name__epeu-history>Add Incident Epeu-history</h1><h2>add /incidentmgmt/adom/&lt;adom-name&gt;/epeu-history</h2><p>Add new incident epeu-history.<h6 id=${incidentmgmt.add.epeu-history.req}.request>Request:</h6><pre>
+{
+    "method": "add",
+    "params": [
+        {
+            "url": "/incidentmgmt/adom/&lt;adom-name&gt;/epeu-history",
+            "srctype": "string",
+            "srcinfo": "string",
+            "incid":"string",
+            "seqid": "string",
+            "epid":number,
+            "euid":number,
+            "dvid":number,
+            "epname":"string",
+            "euname":"string",
+            "notes":"string",
+            "tags":"string",
+            "mac":"string",
+            "osname":"string",
+            "osversion":"string",
+            "fctuid":"string",
+            "apiver": 3
+
+        }
+    ],
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+
+</pre><div id="wrapper"> <p><a href="#${incidentmgmt.add.epeu-history.req}">Show example...</a></p></div><div id="${incidentmgmt.add.epeu-history.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Add new incident epeu-history.</i><a class="close" href="#${incidentmgmt.add.epeu-history.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "method": "add",
+    "params": [
+        {
+            "url": "/incidentmgmt/adom/root/epeu-history",
+            "incid":"IN00000027",
+            "srctype": "manual-input",
+            "srcinfo": "admin",
+            "epid": 1201,
+            "euid": 1119,
+            "dvid":1029,
+            "epname": "epabc",
+            "euname": "euabc",
+            "tag": "a,b,c",
+            "attachid": "1234",
+            "eventid": "5678",
+            "epos": "linux",
+            "epip": "1.1.1.1",
+            "epmac": "ff:ff:ff:ff:ff:ff",
+            "note": "somnote",
+            "apiver": 3
+        }
+    ],
+    "jsonrpc": "2.0",
+    "id": 1
+}
+
+</pre></div></div></div><h6 id=${incidentmgmt.add.epeu-history.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "seqid": "string",
+        "status": "string"
+    }
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+
+</pre><div id="wrapper"> <p><a href="#${incidentmgmt.add.epeu-history.resp}">Show example...</a></p></div><div id="${incidentmgmt.add.epeu-history.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Add new incident epeu-history.</i><a class="close" href="#${incidentmgmt.add.epeu-history.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+  "id": 1, 
+  "jsonrpc": "2.0", 
+  "result": {
+    "seqid": "1589919658316000", 
+    "status": "done"
+  }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/incidentmgmt/adom/&lt;adom-name&gt;/epeu-history</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">incid</td><td class="table_col_desc"><i>string </i> <br/><br/>The incident ID.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">attachid</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The attachment ID.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">eventid</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The event ID.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">epid</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>The endpoint ID.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">euid</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>The enduser ID.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">dvid</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>The device vdom ID.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">endpoint</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The endpoint name.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">epip</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The endpoint's ip address.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">mac</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The endpoint's mac address.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">fctuid</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The endpoint's fctuid.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">osname</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The endpoint's operating system.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">osversion</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The endpoint's operating system version.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">euname</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The enduser's name.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">tags</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The tags.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">notes</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The notes.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">srctype</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/><br/>The incident epeu-history source type.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;manual-input<br/>&nbsp;&nbsp;&nbsp;&nbsp;auto-event-attachement<br/>&nbsp;&nbsp;&nbsp;&nbsp;manual-event-attachment<br/>&nbsp;&nbsp;&nbsp;&nbsp;auto-incident<br/>&nbsp;&nbsp;&nbsp;&nbsp;manual-incident</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">srcinfo</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The source info.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return epeu-history ID</h2><p>New assigned epeu-history IDs for the add request will be returned.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">seqid</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The incident epeu-history id.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The command executed status.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=update_incidentmgmt_adom__adom-name__epeu-history>Update an inicent epeu-history</h1><h2>update /incidentmgmt/adom/&lt;adom-name&gt;/epeu-history</h2><p>Update an incident epeu-history.<h6 id=${incidentmgmt.update.epeu-history.req}.request>Request:</h6><pre>
+{
+    "method": "update",
+    "params": [
+        {
+            "url": "/incidentmgmt/adom/&lt;adom-name&gt;/epeu-history",
+            "incid":"string",
+            "seqid": "string",
+            "epid":number,
+            "euid":number,
+            "dvid":number,
+            "epname":"string",
+            "euname":"string",
+            "notes":"string",
+            "tags":"string",
+            "mac":"string",
+            "osname":"string",
+            "osversion":"string",
+            "fctuid":"string",
+            "apiver": 3
+        }
+    ],
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+
+</pre><div id="wrapper"> <p><a href="#${incidentmgmt.update.epeu-history.req}">Show example...</a></p></div><div id="${incidentmgmt.update.epeu-history.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Update an incident epeu-history.</i><a class="close" href="#${incidentmgmt.update.epeu-history.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "method": "update",
+    "params": [
+        {
+            "url": "/incidentmgmt/adom/root/epeu-history",
+            "incid":"IN00000027",
+            "seqid": "1589919094294000",
+            "eepid":2222,
+            "euid":2222,
+            "dvid":1039,
+            "epname":"office-abc",
+            "euname":"tom",
+            "notes":"somenotes",
+            "tags":"sometags",
+            "mac":"ff:ff:ff:aa:aa:aa",
+            "osname":"windows",
+            "osversion":"1",
+            "fctuid":"660C297ABFFE4A899C77D604B322040B",
+            "apiver": 3
+        }
+    ],
+    "jsonrpc": "2.0",
+    "id": 1
+}
+</pre></div></div></div><h6 id=${incidentmgmt.update.epeu-history.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "data": [
+            {
+                "incid": string,
+                "seqid": "string"
+            },
+        ...
+        ],
+        "status":string
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+
+</pre><div id="wrapper"> <p><a href="#${incidentmgmt.update.epeu-history.resp}">Show example...</a></p></div><div id="${incidentmgmt.update.epeu-history.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Update an incident epeu-history.</i><a class="close" href="#${incidentmgmt.update.epeu-history.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+  "id": 1, 
+  "jsonrpc": "2.0", 
+  "result": {
+    "data": [
+      {
+        "incid": "IN00000027", 
+        "seqid": "1589919094294000"
+      }
+    ], 
+    "status": "done"
+  }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/incidentmgmt/adom/&lt;adom-name&gt;/epeu-history</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">seqid</td><td class="table_col_desc"><i>string </i> <br/><br/>The incident epeu-history ID.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">attachid</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The attachment ID.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">eventid</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The event ID.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">epid</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>The endpoint ID.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">euid</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>The enduser ID.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">dvid</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>The device vdom ID.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">endpoint</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The endpoint name.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">epip</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The endpoint's ip address.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">mac</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The endpoint's mac address.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">fctuid</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The endpoint's fctuid.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">osname</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The endpoint's operating system.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">osversion</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The endpoint's operating system version.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">euname</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The enduser's name.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">tags</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The tags.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">notes</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The notes.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">srctype</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/><br/>The incident epeu-history source type.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;manual-input<br/>&nbsp;&nbsp;&nbsp;&nbsp;auto-event-attachement<br/>&nbsp;&nbsp;&nbsp;&nbsp;manual-event-epeu-history<br/>&nbsp;&nbsp;&nbsp;&nbsp;auto-incident<br/>&nbsp;&nbsp;&nbsp;&nbsp;manual-incident</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">srcinfo</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The source info.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return an epeu-history update status</h2><p>A status for the update request will be returned.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>A structure that holds updated incident ID and epeu-history ID.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/>The updated entry's incident ID and epeu-history ID.<br/><br/><table><tr class='odd_row'><td class="table_col_name">incid</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The updated entry's incident ID.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">seqid</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The updated entry's seqid.<br/><br/></td></tr></table></td></tr></td></tr><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>string </i> <br/><br/>The command executed status.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_incidentmgmt_adom__adom-name__epeu-history>List epeu-history</h1><h2>get /incidentmgmt/adom/&lt;adom-name&gt;/epeu-history</h2><p>Get an epeu-history list.<h6 id=${incidentmgmt.list.epeu-history.req}.request>Request:</h6><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/incidentmgmt/adom/&lt;adom-name&gt;/epeu-history",
+            "incid": "string",
+            "filter": "string",
+            "apiver": 3
+        }
+    ],
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+
+</pre><div id="wrapper"> <p><a href="#${incidentmgmt.list.epeu-history.req}">Show example...</a></p></div><div id="${incidentmgmt.list.epeu-history.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Get an epeu-history list.</i><a class="close" href="#${incidentmgmt.list.epeu-history.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/incidentmgmt/adom/root/epeu-history",
+            "incid":"IN00000027",
+            "offset": 0,
+            "limit": 50,
+            "apiver": 3
+        }
+    ],
+    "jsonrpc": "2.0",
+    "id": 1
+}
+</pre></div></div></div><h6 id=${incidentmgmt.list.epeu-history.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "code": number,
+            "message": "string"
+        }
+    },
+    "data": [
+        {
+            "attachid": "string",
+            "ctime": "string",
+            "devid": "string",
+            "devname": "string",
+            "dvid": "1048", 
+            "epid": "string", 
+            "epip": "string", 
+            "epname": "string", 
+            "euid": "string", 
+            "euname": "string", 
+            "eventid": "string", 
+            "fctuid": "string", 
+            "incid": "string", 
+            "mac": "string", 
+            "notes": "string", 
+            "osname": "string", 
+            "osversion": "string", 
+            "seqid": "string", 
+            "srcinfo": "string", 
+            "srctype": "string", 
+            "tags": "string"
+        },
+        ...
+    ]
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+
+</pre><div id="wrapper"> <p><a href="#${incidentmgmt.list.epeu-history.resp}">Show example...</a></p></div><div id="${incidentmgmt.list.epeu-history.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Get an epeu-history list.</i><a class="close" href="#${incidentmgmt.list.epeu-history.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+  "id": 1, 
+  "jsonrpc": "2.0", 
+  "result": {
+    "data": [
+      {
+        "attachid": "442", 
+        "ctime": "1589567223", 
+        "devid": "FGT37D4614800104", 
+        "devname": "FGT37D4614800104", 
+        "dvid": "1048", 
+        "epid": "1831", 
+        "epip": "172.16.79.8", 
+        "epname": "aaa", 
+        "euid": "2222", 
+        "euname": "eubbb", 
+        "eventid": "202004081000070002", 
+        "fctuid": "660C297ABFFE4A899C77D604B322040B", 
+        "incid": "IN00000027", 
+        "mac": "ff:ff:ff:aa:aa:aa", 
+        "notes": "somenotes", 
+        "osname": "windows", 
+        "osversion": "1", 
+        "seqid": "1589567223079000", 
+        "srcinfo": "admin", 
+        "srctype": "manual-event-attachment", 
+        "tags": "sometags"
+      }, 
+      {
+        "ctime": "1589919658", 
+        "devid": "FGVM00TM19003065", 
+        "devname": "smal-1", 
+        "dvid": "1029", 
+        "epid": "1201", 
+        "epip": "1.1.1.1", 
+        "epname": "someep", 
+        "euid": "1119", 
+        "euname": "someeu", 
+        "eventid": "5678", 
+        "incid": "IN00000027", 
+        "seqid": "1589919658316000", 
+        "srcinfo": "admin", 
+        "srctype": "manual-input"
+      }
+    ], 
+    "status": "done"
+  }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/incidentmgmt/adom/&lt;adom-name&gt;/epeu-history</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">incid</td><td class="table_col_desc"><i>string </i> <br/><br/>The incident ID.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">limit</td><td class="table_col_desc"><i>number </i> (optional) <br/> Default: <i>50 </i>  Min: <i>1 </i>  Max: <i> 2000 </i> <br/>The maximun number of records to get.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">offset</td><td class="table_col_desc"><i>number </i> (optional) <br/> Default: <i>0 </i>  Min: <i>0 </i> <br/>The offset of records to get.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return an epeu-history list</h2><p>A list of epeu-history will be returned.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>array </i> <br/><br/>A structure that holds deleted incident ID and epeu-history ID.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/>The deleted entry's incident ID and epeu-history ID.<br/><br/><table><tr class='odd_row'><td class="table_col_name">incid</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The deleted entry's incident ID.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">seqid</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The deleted entry's seqid.<br/><br/></td></tr></table></td></tr></td></tr><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>string </i> <br/><br/>The command executed status.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=delete_incidentmgmt_adom__adom-name__epeu-history>Delete epeu-history</h1><h2>delete /incidentmgmt/adom/&lt;adom-name&gt;/epeu-history</h2><p>Delete some epeu-history.<h6 id=${incidentmgmt.delete.epeu-history.req}.request>Request:</h6><pre>
+{
+    "method": "delete",
+    "params": [
+        {
+            "url": "/incidentmgmt/adom/&lt;adom-name&gt;/epeu-history",
+            "incid": "string",
+            "seqid": "string",
+            "apiver": 3
+        }
+    ],
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+
+</pre><div id="wrapper"> <p><a href="#${incidentmgmt.delete.epeu-history.req}">Show example...</a></p></div><div id="${incidentmgmt.delete.epeu-history.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Delete some epeu-history.</i><a class="close" href="#${incidentmgmt.delete.epeu-history.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "method": "delete",
+    "params": [
+        {
+            "url": "/incidentmgmt/adom/root/epeu-history",
+            "incid":"IN00000027",
+            "seqid": "1589919094294000",
+            "apiver": 3
+        }
+    ],
+    "jsonrpc": "2.0",
+    "id": 1
+}
+
+</pre></div></div></div><h6 id=${incidentmgmt.delete.epeu-history.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "data": [
+            {
+                "incid": string,
+                "seqid": "string"
+            },
+        ...
+        ],
+        "status":string
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+
+</pre><div id="wrapper"> <p><a href="#${incidentmgmt.delete.epeu-history.resp}">Show example...</a></p></div><div id="${incidentmgmt.delete.epeu-history.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Delete some epeu-history.</i><a class="close" href="#${incidentmgmt.delete.epeu-history.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+  "id": 1, 
+  "jsonrpc": "2.0", 
+  "result": {
+    "data": [
+      {
+        "incid": "IN00000027", 
+        "seqid": "1589919094294000"
+      }
+    ], 
+    "status": "done"
+  }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/incidentmgmt/adom/&lt;adom-name&gt;/epeu-history</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">incid</td><td class="table_col_desc"><i>string </i> <br/><br/>The incidnet ID.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">seqid</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The incident epeu-history ID<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return an epeu-history delete status</h2><p>A status for the delete request will be returned.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>string </i> <br/><br/>The command executed status.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<style>
+    .overlay {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: rgba(0, 0, 0, 0.5);
+        transition: opacity 200ms;
+        visibility: hidden;
+        opacity: 0;
+    }
+    .overlay .cancel {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        cursor: default;
+    }
+    .overlay:target {
+        visibility: visible;
+        opacity: 1;
+    }
+
+    .popup {
+        margin: 75px auto;
+        padding: 20px;
+        background: #fff;
+        border: 1px solid #666;
+        width: 80%;
+        height: 80vh;
+        overflow: auto;
+        box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+        position: relative;
+    }
+    .popup .close {
+        position: absolute;
+        width: 20px;
+        height: 20px;
+        top: 20px;
+        right: 20px;
+        opacity: 0.8;
+        transition: all 200ms;
+        font-size: 24px;
+        font-weight: bold;
+        text-decoration: none;
+        color: #666;
+    }
+    .popup .close:hover {
+        opacity: 1;
+    }
+    .popup .content_cmd {
+        height: 90%;
+        overflow: auto;
+    }
+    .popup .content_cmd pre {
+        width: 90%;
+    }
+    .popup p {
+        margin: 0 0 1em;
+    }
+    .popup p:last-child {
+        margin: 0;
+    }
+</style>
+    <br/>
+</div></body></html>

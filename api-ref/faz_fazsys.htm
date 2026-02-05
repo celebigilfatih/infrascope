@@ -1,0 +1,818 @@
+<!doctype html><html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>FortiAnalyzer 7.4.7 (2685) JSON API Reference-FAZ System Commands</title>
+<style>body {
+	font-family: Verdana;
+	color: black;
+	background: #D9D9D9;
+	font-size: 13px;
+}
+h1 {
+	font-size: 20px;
+}
+h2 {
+	font-size: 15px;
+	position: sticky;
+	position: -webkit-sticky;
+	top: 0px;
+	background: #D9D9D9;
+}
+h6 {
+	font-size: 13px;
+	margin-bottom: 8px;
+	margin-left: 12px;
+	font-weight: normal;
+}
+table {
+	width: 95%;
+	font-size: 13px;
+	margin-left: 15px;
+	margin-right: 5px;
+	border-collapse: collapse;
+	margin-bottom: 16px;
+}
+td {
+	vertical-align: top;
+	padding: 5px;
+}
+pre {
+	border: 1px solid black;
+	padding: 10px;
+	font-size: 12px;
+	margin-left: 15px;
+	width: 650px;
+}
+th {
+	text-align: left;
+}
+a {
+}
+a:link {
+	text-decoration: none;
+}
+a:visited {
+}
+a:hover {
+	text-decoration: underline;
+}
+.menu {
+	background: #C0C0C0;
+	border-right: 1px solid;
+	position: fixed;
+	padding: 6px;
+	padding-top: 20px;
+	top: 0px;
+	left: 0px;
+	bottom: 0px;
+	width: 200px;
+	overflow-x: hidden;
+	overflow-y: auto;
+	white-space: nowrap;
+}
+.content {
+	position: absolute;
+	padding: 6px;
+	top: 0px;
+	left: 240px;
+	right: 0px;
+}
+.menu_header {
+	font-weight: bold;
+}
+.param_table {
+	border: 1px solid #A0A0A0;
+}
+.table_hdr_name {
+	width: 160px;
+}
+.table_col_name {
+	font-weight: bold;
+	width: 160px;
+}
+.table_col_desc {
+}
+.param_table > thead > tr > th {
+	background-color: #C0C0C0;
+	border-bottom: 1px solid #A0A0A0;
+	padding: 6px;
+}
+.param_table > tbody > tr:nth-child(even) > td {
+	background-color: #D0D0D0;
+}
+.macro_num {
+	font-weight: bold;
+	width: 50px;
+}
+.macro_val {
+}
+</style>
+</head>
+<body>
+<div class="menu"><span class="menu_header"><a href="index.htm">API Reference Home</a></span><br/><span class="menu_item"><a href="objects.htm">Common Objects</a></span><br/><br/><span class="menu_header">Database Modules</span><br/><span class="menu_item"><a href="dvmdb-main.htm">Device Manager Database</a></span><br/><span class="menu_item"><a href="task-main.htm">Task Database</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof74-2779-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof74-2779-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg74-2779-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof72-1732-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof72-1732-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg72-1732-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof70-662-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof70-662-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg70-662-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof64-2087-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof64-2087-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg64-2087-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof62-1263-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof62-1263-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg62-1263-main.htm">Policy Package</a></span><br/><br/><span class="menu_header">Daemon Modules</span><br/><span class="menu_item"><a href="cmdb-main.htm">CLI Configuration</a></span><br/><span class="menu_item"><a href="dvmcmd-main.htm">Device Manager Command</a></span><br/><span class="menu_item"><a href="um-main.htm">Update Manager</a></span><br/><span class="menu_item"><a href="sys-main.htm">System Commands</a></span><br/><br/><span class="menu_header"><a href="faz-cmd-index.htm">FortiAnalyzer Modules</a></span><br/><span class="menu_item"><a href="faz_eventmgmt.htm">Event Mgmt Commands</a></span><br/><span class="menu_item"><a href="faz_eventmgmtconfig.htm">Event Mgmt Config Commands</a></span><br/><span class="menu_item"><a href="faz_fazsys.htm">FAZ System Commands</a></span><br/><span class="menu_item"><a href="faz_fortiview.htm">FortiView Commands</a></span><br/><span class="menu_item"><a href="faz_incidentmgmt.htm">Incident Mgmt Commands</a></span><br/><span class="menu_item"><a href="faz_logview.htm">LogView Commands</a></span><br/><span class="menu_item"><a href="faz_report.htm">Report Commands</a></span><br/><span class="menu_item"><a href="faz_reportconfig.htm">Report Config Commands</a></span><br/><span class="menu_item"><a href="faz_ioc.htm">IOC Commands</a></span><br/><span class="menu_item"><a href="faz_ueba.htm">UEBA Commands</a></span><br/><span class="menu_item"><a href="faz_soar.htm">SOAR Commands</a></span><br/><br/><span class="menu_header"><a href="obj-index.htm">Index of All Objects</a></span><br/><br/></div>
+<div class="content">
+<h1>FAZ System Commands</h1><br/>
+
+<div>
+<h1 id=get_fazsys_adom__adom-name__enduser-avatar>Get Enduser Avatar</h1><h2>get /fazsys/adom/&lt;adom-name&gt;/enduser-avatar</h2><p>Get Enduser Avatar.<h6 id=${fazsys.get.enduser-avatar.req}.request>Request:</h6><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/fazsys/adom/&lt;adom-name&gt;/enduser-avatar",
+            "apiver": 3,
+            "user": [
+	            {
+                        "epid": "string",
+	                "euid": "string",
+	                "fgtdevid": "string"
+	            },
+	            {
+	                "name": "string",
+	                "fctuid": "string",
+	                "fgtdevid": "string"
+	            }
+            ]
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${fazsys.get.enduser-avatar.req}">Show example...</a></p></div><div id="${fazsys.get.enduser-avatar.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Get Enduser Avatar.</i><a class="close" href="#${fazsys.get.enduser-avatar.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678",
+    "jsonrpc": "2.0",
+    "method": "get",
+    "params": [
+        {
+            "url": "/fazsys/adom/root/enduser-avatar",
+            "apiver": 3,
+            "user": [
+                {
+                    "devid": "FGT1KB3909601020",
+                    "epid": "1236",
+                    "euid": "1084"
+                },
+                {
+                    "devid": "FGT1KB3909601020",
+                    "epid": "1608",
+                    "euid": "1932"
+                },
+                {
+                    "devid": "FGT1KB3909601020",
+                    "epid": "1671",
+                    "euid": "2037"
+                },
+                {
+                    "devid": "FGT1KB3909601020",
+                    "epid": "2865",
+                    "euid": "19278"
+                },
+                {
+                    "devid": "FGT1KB3909601020",
+                    "epid": "3678",
+                    "euid": "1038"
+                }
+            ]
+        }
+    ],
+    "session": "xxxx"
+}
+</pre></div></div></div><h6 id=${fazsys.get.enduser-avatar.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "code":    number,
+            "message": "string"
+        },
+	    "result": {
+	        "data": [
+	            { "field": "value", "field": "value", ...},
+	            ...
+            ]
+	    }
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${fazsys.get.enduser-avatar.resp}">Show example...</a></p></div><div id="${fazsys.get.enduser-avatar.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Get Enduser Avatar.</i><a class="close" href="#${fazsys.get.enduser-avatar.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "12345678", 
+    "jsonrpc": "2.0", 
+    "result": {
+        "result": {
+            "data": [
+                {
+                    "avatar": "...", 
+                    "epid": "1236",
+                    "euid": "1084"
+                }, 
+                {
+                    "avatar": "...", 
+                    "epid": "1608",
+                    "euid": "1932"
+                }, 
+                {
+                    "avatar": "...", 
+                    "epid": "1671",
+                    "euid": "2037"
+                }, 
+                {
+                    "avatar": "...", 
+                    "epid": "2865",
+                    "euid": "19278"
+                }
+            ]
+        }, 
+        "status": {
+            "code": 0, 
+            "message": "Return 4 avatar(s) of total 5 requested.
+"
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>The resource path to <b>Enduser Avatar</b>.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/fazsys/adom/&lt;adom-name&gt;/enduser-avatar</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">user</td><td class="table_col_desc"><i>array </i> <br/><br/>A structure that hold the users info. One user is identified by ('epid' and 'euid') or ('name' and 'fctuid')<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/><br/><br/><table><tr class='odd_row'><td class="table_col_name">epid</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Endpoint identifier.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">euid</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>User identifier.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">name</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The user name, the name and fctuid together identify one user.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">fctuid</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The fctuid of the requested user, the name and fctuid together identify one user<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">fgtdevid</td><td class="table_col_desc"><i>string </i> <br/><br/>The related fortigate device id.<br/><br/></td></tr></table></td></tr></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Get Enduser Avatar Resopnse</h2><p>Get Enduser Avatar Resopnse.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>Status of the current task<br/><br/><table><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>Status code<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Status description<br/><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>A structure that holds the returned values.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/><br/><br/><table><tr class='odd_row'><td class="table_col_name">euid</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Enduser identifier.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">name</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Enduser name.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">fctuid</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Enduser fctuid.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">avatar</td><td class="table_col_desc"><i>string </i> <br/><br/>Enduser avatar.<br/><br/></td></tr></table></td></tr></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_fazsys_language_translation-file_list>Get language translation files list</h1><h2>get /fazsys/language/translation-file/list</h2><p>Get language translation files list.<h6 id=${fazsys.list.translation-file.req}.request>Request:</h6><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/fazsys/language/translation-file/list",
+            "apiver": 3,
+            "language": [ "en", "ru" ]
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><h6 id=${fazsys.list.translation-file.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "data": [
+          {
+            "language": "en",
+            "name": "English",
+            "status": "System"
+          }, 
+          {
+            "language": "ru",
+            "name": "Russian",
+            "status": "User defined",
+            "create date": "2018-07-10"
+          }
+        ]
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/fazsys/language/translation-file/list</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">language</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/><br/><br/>member type: <i>string</i><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return an language translation file list</h2><p>A list of language translation file will be returned.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> (optional) <br/><br/>A structured value of status.<br/><br/><table><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> <br/><br/>The get status message.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> <br/><br/>The get status code.<br/><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>array </i> <br/><br/>A structured value of dataset.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/>language translation file entries.<br/><br/><table><tr class='odd_row'><td class="table_col_name">language</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The language code.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">name</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The name of language.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The status of language.<br/><br/></td></tr></table></td></tr></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=delete_fazsys_language_translation-file__language-code_>Delete language translation file</h1><h2>delete /fazsys/language/translation-file/&lt;language-code&gt;</h2><p>Delete language translation file.<h6 id=${fazsys.delete.translation-file.req}.request>Request:</h6><pre>
+{
+  "id": "1",
+  "jsonrpc": "2.0",
+  "method": "delete",
+  "params": [
+    {
+      "url": "/fazsys/language/translation-file/<language-code>"
+      "apiver": "3"
+    }
+  ]
+}
+</pre><h6 id=${fazsys.delete.translation-file.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": "ok",
+        "message": "Russian translation file was deleted."
+    },
+    "jsonrpc": "2.0",
+    "id": "1"
+}
+</pre></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/fazsys/language/translation-file/&lt;language-code&gt;</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return an language translation file deletion status</h2><p>A status for the delete request will be returned.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>A structured value of status.<br/><br/><table><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> <br/><br/>The delete status message.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> <br/><br/>The delete status code.<br/><br/></td></tr></table></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=add_fazsys_language_translation-file_import>Import Language Translation Files</h1><h2>add /fazsys/language/translation-file/import</h2><p>Request of importing language translation files.<h6 id=${fazsys.import.translation-file.req}.request>Request:</h6><pre>
+{
+  "id": "1",
+  "jsonrpc": "2.0",
+  "method": "add",
+  "params": [
+    {
+      "url": "/fazsys/language/translation-file/import",
+      "apiver": "3",
+      "data": "base64 encoded string"
+    }
+  ]
+}
+</pre><h6 id=${fazsys.import.translation-file.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "code": 0,
+            "message": "Get 2 translation files, 1 imported."
+        },
+        "data": [
+          {
+            "language": "ru",
+            "name": "Russian", 
+            "imported": "yes"
+          },
+          {
+            "language": "fr",
+            "name": "French",
+            "imported": "no"
+          }
+        ]
+    },
+    "jsonrpc": "2.0",
+    "id": "1"
+}
+</pre></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/fazsys/language/translation-file/import</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>string </i> <br/><br/>Language translation files in <b>Base64</b> format.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return Status of Importing Language Transltion File</h2><p>Return status of importing language translation file.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>Status of the current task<br/><br/><table><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>Status code<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Status description<br/><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>array </i> <br/><br/>Imported language translation file status<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/><br/><br/><table><tr class='odd_row'><td class="table_col_name">language</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>language code<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">name</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>language name<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">imported</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>imported status<br/><br/></td></tr></table></td></tr></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_fazsys_language_translation-file_export>Export Language Translation File</h1><h2>get /fazsys/language/translation-file/export</h2><p>Request of exporting language translation file.<h6 id=${fazsys.export.translation-file.req}.request>Request:</h6><pre>
+{
+  "id": "1",
+  "jsonrpc": "2.0",
+  "method": "get",
+  "params": [
+    {
+      "url": "/fazsys/language/translation-file/export",
+      "apiver": "3",
+      "language": ["en", "ru"]
+    }
+  ]
+}
+</pre><h6 id=${fazsys.export.translation-file.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "data-type": "zip/base64",
+        "data": "base64 encoded string",
+        "checksum": "cc0f348f0b2b4d4ad83bc0f54e5c9d5c",
+        "length": 1094000
+    },
+    "jsonrpc": "2.0",
+    "id": "1"
+}
+</pre></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/fazsys/language/translation-file/export</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">language</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>Language code list, e.g. 'en', 'zh', 'ja' etc, filter for exporting language translation file.<br/><br/>member type: <i>string</i><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return Status of Exporting Language Translation File</h2><p>Return status of exporting language translation file.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">checksum</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>checksum in MD5.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">length</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>Length of the returned data stream.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Data stream in base64 format.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">data-type</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The return type of data, e.g. 'zip/base64'.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_fazsys_language_fonts_list>Get system fonts list (Not used)</h1><h2>get /fazsys/language/fonts/list</h2><p>Get system fonts list.<h6 id=${fazsys.list.fonts.req}.request>Request:</h6><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/fazsys/language/fonts/list",
+            "apiver": 3,
+            "font": [ "Open Sans", "Ubuntu" ]
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><h6 id=${fazsys.list.fonts.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "data": [
+          {
+            "name": "Open Sans",
+            "style": "Regular",
+            "status": "System"
+          }, 
+          {
+            "name": "Ubuntu",
+            "style": "Regular",
+            "status": "User defined",
+            "create date": "2018-07-10"
+          }
+        ]
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/fazsys/language/fonts/list</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">font</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>Font name, e.g. 'UnBatang', 'Open Sans', etc, filter for exporting font file.<br/><br/>member type: <i>string</i><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return a system fonts list</h2><p>A list of system fonts will be returned.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> (optional) <br/><br/>A structured value of status.<br/><br/><table><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> <br/><br/>The get status message.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> <br/><br/>The get status code.<br/><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>array </i> <br/><br/>A structured value of dataset.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/>system font entries.<br/><br/></td></tr></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=delete_fazsys_language_fonts__font-name_>Delete font</h1><h2>delete /fazsys/language/fonts/&lt;font-name&gt;</h2><p>Delete font.<h6 id=${fazsys.delete.fonts.req}.request>Request:</h6><pre>
+{
+  "id": "1",
+  "jsonrpc": "2.0",
+  "method": "delete",
+  "params": [
+    {
+      "url": "/fazsys/language/fonts/<fone-name>"
+      "apiver": "3"
+    }
+  ]
+}
+</pre><h6 id=${fazsys.delete.fonts.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": "ok",
+        "message": "Ubuntu Bold font was deleted."
+    },
+    "jsonrpc": "2.0",
+    "id": "1"
+}
+</pre></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/fazsys/language/fonts/&lt;font-name&gt;</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return font deletion status</h2><p>A status for the delete request will be returned.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>A structured value of status.<br/><br/><table><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> <br/><br/>The delete status message.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> <br/><br/>The delete status code.<br/><br/></td></tr></table></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=add_fazsys_language_fonts_import>Import Fonts</h1><h2>add /fazsys/language/fonts/import</h2><p>Request of importing fonts.<h6 id=${fazsys.import.fonts.req}.request>Request:</h6><pre>
+{
+  "id": "1",
+  "jsonrpc": "2.0",
+  "method": "add",
+  "params": [
+    {
+      "url": "/fazsys/language/fonts/import",
+      "apiver": "3",
+      "data": "base64 encoded string"
+    }
+  ]
+}
+</pre><h6 id=${fazsys.import.fonts.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "code": 0,
+            "message": "Get 2 fonts, 1 imported."
+        },
+        "data": [
+          {
+            "name": "Ubuntu",
+            "style": "Regualr", 
+            "imported": "yes"
+          },
+          {
+            "name": "Open Sans",
+            "style": "Bold",
+            "imported": "no"
+          }
+        ]
+    },
+    "jsonrpc": "2.0",
+    "id": "1"
+}
+</pre></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/fazsys/language/fonts/import</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>string </i> <br/><br/>Font files in <b>Base64</b> format.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return Status of Importing Font File</h2><p>Return status of importing font file.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>Status of the current task<br/><br/><table><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>Status code<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Status description<br/><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>array </i> <br/><br/>Imported font file status<br/><br/>member type: <i></i><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_fazsys_language_fonts_export>Export Font File</h1><h2>get /fazsys/language/fonts/export</h2><p>Request of exporting font file.<h6 id=${fazsys.export.fonts.req}.request>Request:</h6><pre>
+{
+  "id": "1",
+  "jsonrpc": "2.0",
+  "method": "get",
+  "params": [
+    {
+      "url": "/fazsys/language/fonts/export",
+      "apiver": "3",
+      "font": ["Open Sans", "Ubuntu"]
+    }
+  ]
+}
+</pre><h6 id=${fazsys.export.fonts.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "data-type": "zip/base64",
+        "data": "base64 encoded string",
+        "checksum": "cc0f348f0b2b4d4ad83bc0f54e5c9d5c",
+        "length": 1094000
+    },
+    "jsonrpc": "2.0",
+    "id": "1"
+}
+</pre></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/fazsys/language/fonts/export</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">font</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>Font name, e.g. 'UnBatang', 'Open Sans', etc, filter for exporting font file.<br/><br/>member type: <i>string</i><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return Status of Exporting Font File</h2><p>Return status of exporting font file.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">checksum</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>checksum in MD5.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">length</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>Length of the returned data stream.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Data stream in base64 format.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">data-type</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The return type of data, e.g. 'zip/base64'.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_fazsys_adom__adom-name__forticare_licinfo>Get FortiCare License Information</h1><h2>get /fazsys/adom/&lt;adom-name&gt;/forticare/licinfo</h2><p>Get FortiCare License Information.<h6 id=${fazsys.get.forticare.licinfo.req}.request>Request:</h6><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/fazsys/adom/&lt;adom-name&gt;/forticare/licinfo",
+            "apiver": 3
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${fazsys.get.forticare.licinfo.req}">Show example...</a></p></div><div id="${fazsys.get.forticare.licinfo.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Get FortiCare License Information.</i><a class="close" href="#${fazsys.get.forticare.licinfo.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/fazsys/adom/&lt;adom-name&gt;/forticare/licinfo",
+            "apiver": 3
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre></div></div></div><h6 id=${fazsys.get.forticare.licinfo.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "code":    number,
+            "message": "string"
+        },
+	    "result": {
+	        "data": [
+	            { 
+                    "account_id": "string",
+                    "company": "string",
+                    "industry": "string",
+                    "system_id": "string",
+                    "rawdata": "string",
+                    "contract_list": {
+                        "contracts": [
+                            "contract": "string",
+                            ...
+                        ],
+                        "nr_contract: number
+                    }
+                }
+            ]
+	    }
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${fazsys.get.forticare.licinfo.resp}">Show example...</a></p></div><div id="${fazsys.get.forticare.licinfo.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Get FortiCare License Information.</i><a class="close" href="#${fazsys.get.forticare.licinfo.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "result": {
+        "status": {
+            "code":    number,
+            "message": "string"
+        },
+	    "result": {
+	        "data": [
+	            {
+                    "account_id": "admin@fortinet.com",
+                    "company": "Fortinet",
+                    "industry": "",
+                    "system_id": "3423533",
+                    "rawdata": "",
+                    "contract_list": {
+                        "contracts": [
+                            "contract": "COMP-1-20-20220101",
+                            ...
+                        ],
+                        "nr_contract: 2
+                    }
+                }
+            ]
+	    }
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>The resource path to <b>Forticare License Information</b>.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/fazsys/adom/&lt;adom-name&gt;/forticare/licinfo</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Get FortiCare License Information Resopnse</h2><p>Get FortiCare License Information Response.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>Status of the current task<br/><br/><table><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>Status code<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Status description<br/><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>object </i> (optional) <br/><br/>A structure that holds the returned values.<br/><br/><table><tr class='odd_row'><td class="table_col_name">account_id</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>FortiCare Account ID<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">system_id</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>FortiCare System ID<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">company</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>FortiCare Company<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">industry</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>FortiCare Industry<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">rawdata</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>FortiCare Contract Rawdata<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">contract_list</td><td class="table_col_desc"><i>object </i> (optional) <br/><br/>A structure that holds the list of contracts and number of contracts.<br/><br/><table><tr class='odd_row'><td class="table_col_name">nr_contract</td><td class="table_col_desc"><i>integer </i> (optional) <br/><br/>number of contracts in the list<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">contracts</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>A structure that holds the list of contracts.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/><br/><br/><table><tr class='odd_row'><td class="table_col_name">contract</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>contract content<br/><br/></td></tr></table></td></tr></td></tr></table></td></tr></table></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_fazsys_monitor_logforward-status>Get Log Forwarding Server Status</h1><h2>get /fazsys/monitor/logforward-status</h2><p>Get Log Forwarding Server Status.<h6 id=${fazsys.get.monitor.logforward-status.req}.request>Request:</h6><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/fazsys/monitor/logforward-status",
+            "apiver": 3,
+            "id": [number, ...]
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "...",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${fazsys.get.monitor.logforward-status.req}">Show example...</a></p></div><div id="${fazsys.get.monitor.logforward-status.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Get Log Forwarding Server Status.</i><a class="close" href="#${fazsys.get.monitor.logforward-status.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/fazsys/monitor/logforward-status",
+            "apiver": 3,
+            "id": [1,2]
+        }
+    ],
+    "jsonrpc": "2.0",
+    "session": "Mp43a/JLdyUqmTE8ZHNJIOqgHiWDq0XRR6OMLoguSCypRZYI7K3sAyaGjBtZrgqbjkYVQHgUkuJApskkTzO1Bw==",
+    "id": "2333c69e-bf19-11e5-924a-000c2986047b"
+}
+</pre></div></div></div><h6 id=${fazsys.get.monitor.logforward-status.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "code": number,
+            "message": "string"
+        },
+	    "result": {
+	        "data": [
+	            {
+                    "id": number,
+                    "status": "string",
+                    "lograte": number,
+                }
+            ]
+	    }
+    },
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${fazsys.get.monitor.logforward-status.resp}">Show example...</a></p></div><div id="${fazsys.get.monitor.logforward-status.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Get Log Forwarding Server Status.</i><a class="close" href="#${fazsys.get.monitor.logforward-status.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "result": {
+        "status": {
+            "code": 0,
+            "message": "ok"
+        },
+	    "result": {
+	        "data": [
+	            {
+                    "id": 1,
+                    "status": "connected",
+                    "lograte": 70.200000
+                },
+                {
+                    "id": 2,
+                    "status": "connected",
+                    "lograte": 3.560000
+                }
+            ]
+	    }
+    },
+    "jsonrpc": "2.0",
+    "id": "2333c69e-bf19-11e5-924a-000c2986047b"
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>The resource path to <b>log forwarding server status</b>.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/fazsys/monitor/logforward-status</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">id</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>An array of the log forwarding server ID. If the ID array is empty or omitted, status of all log forwarding servers will be returned.<br/><br/>member type: <i>number</i><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Get Log Forwarding Server Status Response</h2><p>Get Log Forwarding Server Status Response.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>Status of the current task.<br/><br/><table><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>Status code.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Status description.<br/><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>object </i> (optional) <br/><br/>A structure that holds the returned values.<br/><br/><table><tr class='odd_row'><td class="table_col_name">id</td><td class="table_col_desc"><i>number </i> <br/><br/>Log forwarding server ID.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Log forwarding server status.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;connected<br/>&nbsp;&nbsp;&nbsp;&nbsp;disconnected</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">lograte</td><td class="table_col_desc"><i>number </i> <br/><br/>The average log rate (logs/sec) in the last 60 seconds.<br/><br/></td></tr></table></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<style>
+    .overlay {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: rgba(0, 0, 0, 0.5);
+        transition: opacity 200ms;
+        visibility: hidden;
+        opacity: 0;
+    }
+    .overlay .cancel {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        cursor: default;
+    }
+    .overlay:target {
+        visibility: visible;
+        opacity: 1;
+    }
+
+    .popup {
+        margin: 75px auto;
+        padding: 20px;
+        background: #fff;
+        border: 1px solid #666;
+        width: 80%;
+        height: 80vh;
+        overflow: auto;
+        box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+        position: relative;
+    }
+    .popup .close {
+        position: absolute;
+        width: 20px;
+        height: 20px;
+        top: 20px;
+        right: 20px;
+        opacity: 0.8;
+        transition: all 200ms;
+        font-size: 24px;
+        font-weight: bold;
+        text-decoration: none;
+        color: #666;
+    }
+    .popup .close:hover {
+        opacity: 1;
+    }
+    .popup .content_cmd {
+        height: 90%;
+        overflow: auto;
+    }
+    .popup .content_cmd pre {
+        width: 90%;
+    }
+    .popup p {
+        margin: 0 0 1em;
+    }
+    .popup p:last-child {
+        margin: 0;
+    }
+</style>
+    <br/>
+</div></body></html>

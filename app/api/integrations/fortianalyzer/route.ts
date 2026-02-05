@@ -1,9 +1,8 @@
 /**
  * FortiAnalyzer Integration API Routes
  * 
- * GET /api/integrations/fortianalyzer?type=events - Get event logs
- * GET /api/integrations/fortianalyzer?type=threats - Get threat logs
- * GET /api/integrations/fortianalyzer?type=traffic - Get traffic logs
+ * GET /api/integrations/fortianalyzer?type=status - Get system status
+ * GET /api/integrations/fortianalyzer?type=adoms - Get ADOMs
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -14,8 +13,7 @@ export async function GET(request: NextRequest) {
   try {
     // Get query params
     const { searchParams } = new URL(request.url);
-    const logType = searchParams.get('type') || 'events';
-    const limit = parseInt(searchParams.get('limit') || '20');
+    const dataType = searchParams.get('type') || 'status';
 
     // Get FortiAnalyzer configuration from database
     const config = await prisma.integrationConfig.findFirst({
@@ -31,37 +29,51 @@ export async function GET(request: NextRequest) {
 
     const faConfig = config.config as {
       host: string;
-      accessToken: string;
-      pollingInterval?: number;
+      username?: string;
+      password?: string;
     };
 
     const service = new FortiAnalyzerService({
       host: faConfig.host,
-      accessToken: faConfig.accessToken,
-      pollingInterval: faConfig.pollingInterval,
+      username: faConfig.username || 'fcelebigil',
+      password: faConfig.password || 'Thor.7485-a',
     });
 
-    // Return logs based on type
-    let logs = [];
+    // Login first
+    const loggedIn = await service.login();
+    if (!loggedIn) {
+      return NextResponse.json({
+        success: false,
+        error: 'Failed to login to FortiAnalyzer',
+      });
+    }
 
-    if (logType === 'events') {
-      logs = await service.getEventLogs(limit);
-    } else if (logType === 'threats') {
-      logs = await service.getThreatLogs(limit);
-    } else if (logType === 'traffic') {
-      logs = await service.getTrafficLogs(limit);
+    // Return data based on type
+    let data = null;
+
+    if (dataType === 'status') {
+      data = await service.getStatus();
+    } else if (dataType === 'adoms') {
+      data = await service.getAdoms();
+    } else if (dataType === 'events') {
+      data = await service.getEventLogs(10);
+    } else if (dataType === 'traffic') {
+      const tid = await service.startLogSearch('traffic', 10);
+      if (tid) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        data = await service.fetchLogResults(tid, 0, 10);
+      }
     } else {
       return NextResponse.json(
-        { success: false, error: 'Invalid log type' },
+        { success: false, error: 'Invalid data type' },
         { status: 400 }
       );
     }
 
     return NextResponse.json({ 
       success: true, 
-      data: logs,
-      type: logType,
-      count: logs.length 
+      data,
+      type: dataType,
     });
   } catch (error) {
     console.error('FortiAnalyzer API error:', error);

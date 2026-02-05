@@ -1,0 +1,1755 @@
+<!doctype html><html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>FortiAnalyzer 7.4.7 (2685) JSON API Reference-UEBA Commands</title>
+<style>body {
+	font-family: Verdana;
+	color: black;
+	background: #D9D9D9;
+	font-size: 13px;
+}
+h1 {
+	font-size: 20px;
+}
+h2 {
+	font-size: 15px;
+	position: sticky;
+	position: -webkit-sticky;
+	top: 0px;
+	background: #D9D9D9;
+}
+h6 {
+	font-size: 13px;
+	margin-bottom: 8px;
+	margin-left: 12px;
+	font-weight: normal;
+}
+table {
+	width: 95%;
+	font-size: 13px;
+	margin-left: 15px;
+	margin-right: 5px;
+	border-collapse: collapse;
+	margin-bottom: 16px;
+}
+td {
+	vertical-align: top;
+	padding: 5px;
+}
+pre {
+	border: 1px solid black;
+	padding: 10px;
+	font-size: 12px;
+	margin-left: 15px;
+	width: 650px;
+}
+th {
+	text-align: left;
+}
+a {
+}
+a:link {
+	text-decoration: none;
+}
+a:visited {
+}
+a:hover {
+	text-decoration: underline;
+}
+.menu {
+	background: #C0C0C0;
+	border-right: 1px solid;
+	position: fixed;
+	padding: 6px;
+	padding-top: 20px;
+	top: 0px;
+	left: 0px;
+	bottom: 0px;
+	width: 200px;
+	overflow-x: hidden;
+	overflow-y: auto;
+	white-space: nowrap;
+}
+.content {
+	position: absolute;
+	padding: 6px;
+	top: 0px;
+	left: 240px;
+	right: 0px;
+}
+.menu_header {
+	font-weight: bold;
+}
+.param_table {
+	border: 1px solid #A0A0A0;
+}
+.table_hdr_name {
+	width: 160px;
+}
+.table_col_name {
+	font-weight: bold;
+	width: 160px;
+}
+.table_col_desc {
+}
+.param_table > thead > tr > th {
+	background-color: #C0C0C0;
+	border-bottom: 1px solid #A0A0A0;
+	padding: 6px;
+}
+.param_table > tbody > tr:nth-child(even) > td {
+	background-color: #D0D0D0;
+}
+.macro_num {
+	font-weight: bold;
+	width: 50px;
+}
+.macro_val {
+}
+</style>
+</head>
+<body>
+<div class="menu"><span class="menu_header"><a href="index.htm">API Reference Home</a></span><br/><span class="menu_item"><a href="objects.htm">Common Objects</a></span><br/><br/><span class="menu_header">Database Modules</span><br/><span class="menu_item"><a href="dvmdb-main.htm">Device Manager Database</a></span><br/><span class="menu_item"><a href="task-main.htm">Task Database</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof74-2779-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof74-2779-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg74-2779-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof72-1732-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof72-1732-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg72-1732-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof70-662-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof70-662-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg70-662-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof64-2087-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof64-2087-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg64-2087-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof62-1263-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof62-1263-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg62-1263-main.htm">Policy Package</a></span><br/><br/><span class="menu_header">Daemon Modules</span><br/><span class="menu_item"><a href="cmdb-main.htm">CLI Configuration</a></span><br/><span class="menu_item"><a href="dvmcmd-main.htm">Device Manager Command</a></span><br/><span class="menu_item"><a href="um-main.htm">Update Manager</a></span><br/><span class="menu_item"><a href="sys-main.htm">System Commands</a></span><br/><br/><span class="menu_header"><a href="faz-cmd-index.htm">FortiAnalyzer Modules</a></span><br/><span class="menu_item"><a href="faz_eventmgmt.htm">Event Mgmt Commands</a></span><br/><span class="menu_item"><a href="faz_eventmgmtconfig.htm">Event Mgmt Config Commands</a></span><br/><span class="menu_item"><a href="faz_fazsys.htm">FAZ System Commands</a></span><br/><span class="menu_item"><a href="faz_fortiview.htm">FortiView Commands</a></span><br/><span class="menu_item"><a href="faz_incidentmgmt.htm">Incident Mgmt Commands</a></span><br/><span class="menu_item"><a href="faz_logview.htm">LogView Commands</a></span><br/><span class="menu_item"><a href="faz_report.htm">Report Commands</a></span><br/><span class="menu_item"><a href="faz_reportconfig.htm">Report Config Commands</a></span><br/><span class="menu_item"><a href="faz_ioc.htm">IOC Commands</a></span><br/><span class="menu_item"><a href="faz_ueba.htm">UEBA Commands</a></span><br/><span class="menu_item"><a href="faz_soar.htm">SOAR Commands</a></span><br/><br/><span class="menu_header"><a href="obj-index.htm">Index of All Objects</a></span><br/><br/></div>
+<div class="content">
+<h1>UEBA Commands</h1><br/>
+
+<div>
+<h1 id=get_ueba_adom__adom-name__endpoints>List endpoints</h1><h2>get /ueba/adom/&lt;adom-name&gt;/endpoints</h2><p>Get an endpoints list.<h6 id=${ueba.list.endpoint.req}.request>Request:</h6><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/ueba/adom/&lt;adom-name&gt;/endpoints",
+            "detail-level": "string";
+            "epids": [
+                "string",
+                ...
+            ],
+            "filter": "string",
+            "sort-by": [
+                {
+                    "field": "string",
+                    "order": "string"
+                },
+                ...
+            ]
+            "offset": number,
+            "limit": number,
+            "time-range": {"start": "string", "end": "string"},
+            "apiver": 3
+        }
+    ],
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${ueba.list.endpoint.req}">Show example...</a></p></div><div id="${ueba.list.endpoint.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Get an endpoints list.</i><a class="close" href="#${ueba.list.endpoint.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/ueba/adom/root/endpoints",
+            "detail-level": "basic",
+            "epids": [
+                "1027",
+                "1028"
+            ],
+            "filter": "epname='OFFICE-PC1'",
+            "sort-by": [
+                {
+                    "field": "epid",
+                    "order": "desc"
+                }
+            ],
+            "offset": 1,
+            "limit": 2,
+            "apiver": 3
+        }
+    ],
+    "jsonrpc": "2.0",
+    "id": 1
+}
+
+OR
+
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/ueba/adom/root/endpoints",
+            "detail-level": "basic",
+            "filter": "epname='OFFICE-PC1'",
+            "sort-by": [
+                {
+                    "field": "epid",
+                    "order": "desc"
+                }
+            ],
+            "offset": 1,
+            "limit": 2,
+            "time-range": { "start": "2023-9-5 15:17:15", "end": "2023-9-12 15:17:15" },
+            "apiver": 3
+        }
+    ],
+    "jsonrpc": "2.0",
+    "id": 1
+}
+</pre></div></div></div><h6 id=${ueba.list.endpoint.resp}.response>Response:</h6><pre>
+simple:
+{
+    "id": "...", 
+    "jsonrpc": "2.0", 
+    "result": {
+        "data": [
+            {
+                "epid": number, 
+                "epname": "string", 
+                "epip": "string",
+            }, 
+            ...
+        ], 
+        "status": {
+            "code": number, 
+            "message": "string"
+        }
+    }
+}
+
+basic:
+{
+    "id": "...", 
+    "jsonrpc": "2.0", 
+    "result": {
+        "data": [
+            {
+                "adomoid": number, 
+                "detectkey": "string", 
+                "detecttype": "string", 
+                "devid": "string", 
+                "epdevtype": "string", 
+                "epid": number, 
+                "epip": "string", 
+                "epname": "string", 
+                "fctuid": "string", 
+                "lastseen": number, 
+                "mac": "string"
+                "macip": [
+                    {
+                        "epip": "string", 
+                        "lastseen": number, 
+                        "mac": "string"
+                    }
+                ], 
+                "osname": "string", 
+                "osversion": "string", 
+                "vd": "string", 
+                "vuln-stats":{
+                    "cnt_cri":number,
+                    "cnt_hig":number,
+                    "cnt_med":number,
+                    "cnt_low":number,
+                    "cnt_inf":number,
+                    "scan_time": "string"
+                }
+            }, 
+            ...
+        ], 
+        "status": {
+            "code": number, 
+            "message": "string"
+        }
+    }
+}
+
+standard:
+{
+    "result":{
+        "status":{
+            "code":number,
+            "message":"string"
+        },
+        "data":[
+            {
+                "detecttype":"string",
+                "epdevtype":"string",
+                "epid":number,
+                "epname":"string",
+                "fctuid":"string",
+                "mac":"string",
+                "firstseen":"string",
+                "lastseen":"string",
+                "epip":"string",
+                "osname":"string",
+                "osversion":"string",
+                "eptag":"string",
+                "office":"string",
+                "department":"string",
+                "macip":[
+                    {
+                        "mac":"string",
+                        "epip":"string",
+                        "lastseen":number
+                    },
+                    "..."
+                ],
+                "vuln-stats":{
+                    "cnt_cri":number,
+                    "cnt_hig":number,
+                    "cnt_med":number,
+                    "cnt_low":number,
+                    "cnt_inf":number
+                },
+                "iot-vuln-stats":{
+                    "cnt_cri":number,
+                    "cnt_hig":number,
+                    "cnt_med":number,
+                    "cnt_low":number,
+                    "cnt_unk":number
+                },
+                "attrupdate": {
+                    "lastupdate": "string",
+                    "loguid": number,
+                    "logtype": "string",
+                    "devtype": "string"
+                }
+                "source":[
+                    "string",
+                    "..."
+                ],
+                "user":[
+                    {
+                        "euid":number,
+                        "euname":"string",
+                        "lastseen":number
+                    },
+                    "..."
+                ]
+            },
+            "..."
+        ]
+    },
+    "jsonrpc":"2.0",
+    "id":"..."
+}
+</pre><div id="wrapper"> <p><a href="#${ueba.list.endpoint.resp}">Show example...</a></p></div><div id="${ueba.list.endpoint.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Get an endpoints list.</i><a class="close" href="#${ueba.list.endpoint.resp}.response">&times;</a> <div class="content_cmd"><pre>
+simple:
+{
+    "id": "9dee6870-9986-11ec-9d24-000c29676612", 
+    "jsonrpc": "2.0", 
+    "result": {
+        "data": [
+            {
+                "epid": "1027", 
+                "epip": "178.10.199.186", 
+                "epname": "178.10.199.186"
+            }, 
+            {
+                "epid": "1028", 
+                "epip": "12.101.179.111", 
+                "epname": "12.101.179.111"
+            }
+        ], 
+        "status": {
+            "code": 0, 
+            "message": "ok"
+        }
+    }
+}
+
+basic:
+{
+    "id": 1, 
+    "jsonrpc": "2.0", 
+    "result": {
+        "data": [
+            {
+                "adomoid": "841", 
+                "devid": "FGT37D4615801346", 
+                "epdevtype": "Windows PC", 
+                "epid": "1027",
+                "epip": "172.17.96.216", 
+                "epname": "OFFICE-PC1", 
+                "lastseen": "1517312435",
+                "mac": "50:7b:9d:e4:c8:fc", 
+                "macip" : [
+                    {
+                        "mac": "50:7b:9d:e4:c8:fc", 
+                        "epip": "172.17.96.216", 
+                        "lastseen": "1517312435"
+                    }
+                ],
+                "osname": "Windows", 
+                "osversion": "10", 
+                "detectname": "50:7b:9d:e4:c8:fc", 
+                "detecttype": "by_mac"
+                "vd": "root"
+            }, 
+            {
+                "adomoid": "841", 
+                "devid": "FGT37D4615801346", 
+                "epdevtype": "Windows PC", 
+                "epid": "1028", 
+                "epip": "fe80::853a:70ab:b362:109c", 
+                "epname": "OFFICE-PC2", 
+                "fctuid": "98553CD359FD45779B4664F064C72EA8", 
+                "hostname": "OFFICE-PC2", 
+                "lastseen": "1517335992", 
+                "mac": "50:7b:9d:e4:c8:cd", 
+                "macip" : [
+                    {
+                        "mac": "50:7b:9d:e4:c8:cd", 
+                        "epip": "fe80::853a:70ab:b362:109c", 
+                        "lastseen": "1517335992"
+                    }
+                ],
+                "osname": "Windows", 
+                "osversion": "10", 
+                "detectname": "98553CD359FD45779B4664F064C72EA8", 
+                "detecttype": "by_fctuid"
+                "vd": "root"
+            }
+        ], 
+        "status": {
+            "code": 0,
+            "message": "succeeded"
+        }
+    }
+}
+
+standard:
+{
+   "jsonrpc":"2.0",
+   "id":"e20bb184-65e1-11ed-b4c2-000c295444a1",
+   "result":{
+      "data":[
+         {
+            "user":[
+               {
+                  "euid":"1027",
+                  "lastseen":"1668622020",
+                  "euname":"looc"
+               }
+            ],
+            "epname":"Android",
+            "epid":"1057",
+            "mac":"1e:9d:d4:4b:4c:c9",
+            "epip":"172.17.248.64",
+            "epdevtype":"Phone",
+            "detecttype":"by_mac",
+            "firstseen":"2022-05-25 21:21:05",
+            "osname":"Android",
+            "osversion":"11",
+            "lastseen":"2022-11-16 10:07:00",
+            "source":[
+               "S108DVCHTPDQH946\/port6"
+            ],
+            "macip":[
+               {
+                  "mac":"1e:9d:d4:4b:4c:c9",
+                  "epip":"172.17.248.64",
+                  "lastseen":"2022-11-16 10:07:00"
+               }
+            ],
+            "attrupdate":{
+               "lastupdate":"2022-05-25 21:21:05",
+               "loguid":"7101895347856736451",
+               "logtype":"traffic",
+               "devtype":"FGT"
+            }
+         },
+         {
+            "user":[
+               {
+                  "euid":"1028",
+                  "lastseen":"1668621811",
+                  "euname":"tonygan"
+               }
+            ],
+            "epname":"OFFICE-LT0",
+            "epid":"1059",
+            "mac":"04:33:c2:18:dc:ab",
+            "epip":"172.17.240.220",
+            "epdevtype":"Computer",
+            "detecttype":"by_fctuid",
+            "firstseen":"2022-05-25 21:21:06",
+            "fctuid":"5B6F26712D3A4FB19C1B2C832B36DF4D",
+            "osname":"Windows",
+            "osversion":"10",
+            "lastseen":"2022-11-16 10:03:31",
+            "vuln-stats":
+            {
+                "cnt_cri": 1,
+                "cnt_hig": 2,
+                "cnt_med": 3,
+                "cnt_low": 4,
+                "cnt_inf": 5,
+            },
+            "iot-vuln-stats":
+            {
+                "cnt_cri": 1,
+                "cnt_hig": 2,
+                "cnt_med": 3,
+                "cnt_low": 4,
+                "cnt_unk": 5,
+            },
+            "source":[
+               "FGT91E-3\/port5"
+            ],
+            "macip":[
+               {
+                  "mac":"04:33:c2:18:dc:ab",
+                  "epip":"172.17.240.220",
+                  "lastseen":"2022-11-16 10:03:31"
+               }
+            ],
+            "attrupdate":{
+               "lastupdate":"2022-11-02 08:49:17",
+               "loguid":"7161446323554615470",
+               "logtype":"traffic",
+               "devtype":"FGT"
+            }
+         },
+         {
+            "epname":"10.2.60.45",
+            "epid":"1032",
+            "epip":"10.2.60.45",
+            "detecttype":"by_ip",
+            "firstseen":"2022-05-25 21:20:52",
+            "lastseen":"2022-11-02 14:05:56",
+            "source":[
+               "FGT91E-3\/internal"
+            ],
+            "attrupdate":{
+               "lastupdate":"2022-05-25 21:20:52",
+               "loguid":"7101895292013772813",
+               "logtype":"traffic",
+               "devtype":"FGT"
+            }
+         }
+      ]
+   }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/ueba/adom/&lt;adom-name&gt;/endpoints</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">epids</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>The endpoint ID list.<br/><br/>member type: <i>string</i><br/></td></tr><tr class='odd_row'><td class="table_col_name">filter</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The query filter.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">sort-by</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>Sort by field.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/><br/><br/><table><tr class='odd_row'><td class="table_col_name">field</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Sortable field. Standard detail-level supports fields: epid, epname, mac, epip, fctuid, osname, detecttype, firstseen, lastseen<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">order</td><td class="table_col_desc"><i>string </i> (optional) <br/> Default: <i>ASC </i> <br/>Sorting order, ASC or DESC.<br/><br/></td></tr></table></td></tr></td></tr><tr class='odd_row'><td class="table_col_name">limit</td><td class="table_col_desc"><i>number </i> (optional) <br/> Default: <i>100000 </i>  Min: <i>1 </i>  Max: <i> 1000000 </i> <br/>The maximun number of records to get.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">offset</td><td class="table_col_desc"><i>number </i> (optional) <br/> Default: <i>0 </i>  Min: <i>0 </i> <br/>The offset of records to get.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">detail-level</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/> Default: <i>basic </i> <br/>The level of details to get.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;simple<br/>&nbsp;&nbsp;&nbsp;&nbsp;basic<br/>&nbsp;&nbsp;&nbsp;&nbsp;standard</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">time-range</td><td class="table_col_desc"><i>object </i> <br/><br/>Time range for endpoints. (required if the epids field is not provided)<br/><br/><table><tr class='odd_row'><td class="table_col_name">start</td><td class="table_col_desc"><i>string </i> <br/><br/>Starting date time. Consider it following the timezone parameter's, ADOM's or FortiAnalyzer's timezone if timezone info is not specified within time range. Format: 'yyyy-MM-dd'T'HH:mm:ssZ' (RFC 3339) e.g. '2016-10-17T20:45:37-07:00 or 'yyyy-MM-dd HH:mm:ss' e.g. '2016-10-17 20:45:37'<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">end</td><td class="table_col_desc"><i>string </i> <br/><br/>Ending date time. Consider it following the timezone parameter's, ADOM's or FortiAnalyzer's timezone if timezone info is not specified within time range. Format: 'yyyy-MM-dd'T'HH:mm:ssZ' (RFC 3339) e.g. '2016-10-17T20:45:37-07:00 or 'yyyy-MM-dd HH:mm:ss' e.g. '2016-10-17 20:45:37'<br/><br/></td></tr></table></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return an endpoints list</h2><p>A list of endpoints will be returned.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>A structured value of status.<br/><br/><table><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> <br/><br/>The get status message.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> <br/><br/>The get status code.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">total-endpoints</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>The total number of endpoints that qualifies the search criteria.<br/><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>array </i> <br/><br/>A structured value of dataset. (When detail-level is Standard)<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/>Endpoint entries.<br/><br/><table><tr class='odd_row'><td class="table_col_name">epid</td><td class="table_col_desc"><i>number </i> <br/><br/>ID of an endpoint.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">epname</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Name of an endpoint.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">mac</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Mac address of an endpoint.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">epip</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>IP address of an endpoint.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">epdevtype</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Device type of an endpoint.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">osname</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>OS of an endpoint.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">osversion</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>OS version of an endpoint.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">office</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Office of an endpoint.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">Department</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Office of an endpoint.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">detecttype</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/><br/>The method of detecting an endpoint.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;by_none<br/>&nbsp;&nbsp;&nbsp;&nbsp;by_fctuid<br/>&nbsp;&nbsp;&nbsp;&nbsp;by_mac<br/>&nbsp;&nbsp;&nbsp;&nbsp;by_ip<br/>&nbsp;&nbsp;&nbsp;&nbsp;by_sno</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">firstseen</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The timestamp of the initial endpoint detection. Format: yyyy-mm-dd hh:mm:ss<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">lastseen</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The timestamp of the last endpoint detection. Format: yyyy-mm-dd hh:mm:ss<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">source</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>The source(s) of detecting an endpoint<br/><br/>member type: <i>string</i><br/></td></tr><tr class='odd_row'><td class="table_col_name">user</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>User(s) detected on the endpoint<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/>One user detected on the endpoint<br/><br/><table><tr class='odd_row'><td class="table_col_name">euid</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>ID of an enduser.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">lastseen</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>The epoch timestamp of last seeing the enduser.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">euname</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Name of an enduser.<br/><br/></td></tr></table></td></tr></td></tr><tr class='odd_row'><td class="table_col_name">eptag</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Tags of an endpoint.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">fctuid</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>FCT UUID of an endpoint.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">attrupdate</td><td class="table_col_desc"><i>object </i> (optional) <br/><br/>Infomation related to the last update.<br/><br/><table><tr class='odd_row'><td class="table_col_name">lastupdate</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The timestamp of the last update in the Format of 'YYYY-MM-DD hh:mm:ss'.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">loguid</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>The log id of the last associated log.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">logtype</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The log type of the last associated log.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">devtype</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The log device of the last associated log.<br/><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">iot-vuln-stats</td><td class="table_col_desc"><i>object </i> (optional) <br/><br/>IoT vulnerabilities (vulnerabilities detected by FortiGate) statistics.<br/><br/><table><tr class='odd_row'><td class="table_col_name">cnt_cri</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>Number of critial severity IoT vulnerabilities.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">cnt_hig</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>Number of high severity IoT vulnerabilities.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">cnt_med</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>Number of medium severity IoT vulnerabilities.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">cnt_low</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>Number of low severity IoT vulnerabilities.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">cnt_unk</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>Number of unknown severity IoT vulnerabilities.<br/><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">vuln-stats</td><td class="table_col_desc"><i>object </i> (optional) <br/><br/>vulnerabilities (vulnerabilities detected by FortiClient) statistics.<br/><br/><table><tr class='odd_row'><td class="table_col_name">cnt_cri</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>Number of critial severity vulnerabilities.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">cnt_hig</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>Number of high severity vulnerabilities.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">cnt_med</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>Number of medium severity vulnerabilities.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">cnt_low</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>Number of low severity vulnerabilities.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">cnt_inf</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>Number of informative severity vulnerabilities.<br/><br/></td></tr></table></td></tr></table></td></tr></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_ueba_adom__adom-name__endusers>List endusers</h1><h2>get /ueba/adom/&lt;adom-name&gt;/endusers</h2><p>Get an endusers list.<h6 id=${ueba.list.enduser.req}.request>Request:</h6><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/ueba/adom/&lt;adom-name&gt;/endusers",
+            "euids": [
+                "string",
+                ...
+            ],
+            "filter": "string",
+            "sort-by": [
+                {
+                    "field": "string",
+                    "order": "string"
+                },
+                ...
+            ]
+            "offset": number,
+            "limit": number,
+            "detail-level": "string",
+            "apiver": 3
+        }
+    ],
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${ueba.list.enduser.req}">Show example...</a></p></div><div id="${ueba.list.enduser.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Get an endusers list.</i><a class="close" href="#${ueba.list.enduser.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/ueba/adom/root/endusers",
+            "euids": [
+                "100"
+            ],
+            "filter": "euname='localhost'",
+            "sort-by": [
+                {
+                    "field": "euid",
+                    "order": "desc"
+                }
+            ],
+            "offset": 1,
+            "limit": 2,
+            "detail-level": "extended",
+            "apiver": 3
+        }
+    ],
+    "jsonrpc": "2.0",
+    "id": 1
+}
+</pre></div></div></div><h6 id=${ueba.list.enduser.resp}.response>Response:</h6><pre>
+Basic:
+{
+    "result": {
+        "status": {
+            "code": number, 
+            "message": "string"
+        },
+        "data": [
+            {
+                "euid": number, 
+                "euuuid": "uuid",
+                "euname": "string", 
+                "title": "string",
+                "firstname": "string",
+                "lastname": "string"
+            },
+            ...
+        ]
+    }
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+
+Standard:
+{
+    "result": {
+        "status": {
+            "code": number, 
+            "message": "string"
+        },
+        "data": [
+            {
+                "euid": number, 
+                "euuuid": "uuid",
+                "euname": "string", 
+                "title": "string",
+                "firstname": "string",
+                "lastname": "string",
+                "gender": "string",
+                "birthday": "date",
+                "socialid": "jsonb", 
+                "authtype": "string",
+                "eugroup": "string",
+                "homeaddr": "string",
+                "employeeid": "string",
+                "firstseen": number,
+                "lastseen": number, 
+                "workaddr": "string",
+                "workphone": "string",
+                "workemail": "string",
+                "phone": "string",
+                "email": "string"
+            },
+            ...
+        ]
+    }
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+
+Extended:
+{
+    "result": {
+        "status": {
+            "code": number, 
+            "message": "string"
+        },
+        "data": [
+            {
+                "euid": number, 
+                "euuuid": "uuid",
+                "euname": "string", 
+                "title": "string",
+                "firstname": "string",
+                "lastname": "string",
+                "gender": "string",
+                "birthday": "date",
+                "socialid": "jsonb", 
+                "authtype": "string",
+                "eugroup": "string",
+                "homeaddr": "string",
+                "employeeid": "string",
+                "firstseen": number,
+                "lastseen": number, 
+                "workaddr": "string",
+                "workphone": "string",
+                "workemail": "string",
+                "phone": "string",
+                "email": "string",
+                "extended": [
+                    {
+                        "source": "string",
+                        "data": {
+                            "workemail": "string",
+                            "workphone": "string",
+                            ...
+                        }
+                    },
+                    {
+                        "source": "string",
+                        "data": {
+                            "workemail": "string",
+                            "workaddr": "string",
+                            ...
+                        }
+                    },
+                    ...
+                ]
+            },
+            ...
+        ]
+    }
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${ueba.list.enduser.resp}">Show example...</a></p></div><div id="${ueba.list.enduser.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Get an endusers list.</i><a class="close" href="#${ueba.list.enduser.resp}.response">&times;</a> <div class="content_cmd"><pre>
+Basic:
+{
+    "id": 1, 
+    "jsonrpc": "2.0", 
+    "result": {
+        "data": [
+            {
+                "euid": "100", 
+                "euuuid": "", 
+                "euname": "localhost", 
+                "title": "", 
+                "firstname": "", 
+                "lastname": "" 
+            }
+        ], 
+        "status": {
+            "code": 0,
+            "message": "succeeded"
+        }
+    }
+}
+
+Standard:
+{
+    "id": 1, 
+    "jsonrpc": "2.0", 
+    "result": {
+        "data": [
+            {
+                "euid": "100", 
+                "euuuid": "",
+                "euname": "localhost", 
+                "title": "",
+                "firstname": "",
+                "lastname": "",
+                "gender": "",
+                "birthday": "",
+                "socialid": "", 
+                "authtype": "",
+                "eugroup": "",
+                "homeaddr": "",
+                "employeeid": "",
+                "firstseen": "",
+                "lastseen": "", 
+                "workaddr": "",
+                "workphone": "",
+                "workemail": "",
+                "phone": "",
+                "email": ""
+            }
+        ], 
+        "status": {
+            "code": 0,
+            "message": "succeeded"
+        }
+    }
+}
+
+Extended:
+{
+    "id": 1, 
+    "jsonrpc": "2.0", 
+    "result": {
+        "data": [
+            {
+                "euid": "100", 
+                "euuuid": "",
+                "euname": "localhost", 
+                "title": "",
+                "firstname": "",
+                "lastname": "",
+                "gender": "",
+                "birthday": "",
+                "socialid": "", 
+                "authtype": "",
+                "eugroup": "",
+                "homeaddr": "",
+                "employeeid": "",
+                "firstseen": "",
+                "lastseen": "", 
+                "workaddr": "",
+                "workphone": "",
+                "workemail": "",
+                "phone": "",
+                "email": "",
+                "extended": [
+                    {
+                        "source": "fct(98553CD359FD45779B4664F064C72EA8)",
+                        "data": {
+                            "workemail": "mikezhang@gmail.com",
+                            "workphone": "2360013242"
+                        }
+                    },
+                    {
+                        "source": "fgt(FGT37D4615801346)",
+                        "data": {
+                            "workemail": "mikez@gmail.com",
+                            "workaddr": "10-Sunset St"
+                        }
+                    }
+                ]
+            }
+        ], 
+        "status": {
+            "code": 0,
+            "message": "succeeded"
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/ueba/adom/&lt;adom-name&gt;/endusers</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">euids</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>The enduser ID list.<br/><br/>member type: <i>string</i><br/></td></tr><tr class='odd_row'><td class="table_col_name">filter</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The query filter.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">sort-by</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>Sort by field.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/><br/><br/><table><tr class='odd_row'><td class="table_col_name">field</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Sortable field. Standard detail-level supports fields: euid, euname, eugroup, socialid, vpnip, firstseen, lastseen<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">order</td><td class="table_col_desc"><i>string </i> (optional) <br/> Default: <i>ASC </i> <br/>Sorting order, ASC or DESC.<br/><br/></td></tr></table></td></tr></td></tr><tr class='odd_row'><td class="table_col_name">limit</td><td class="table_col_desc"><i>number </i> (optional) <br/> Default: <i>100000 </i>  Min: <i>1 </i>  Max: <i> 1000000 </i> <br/>The maximun number of records to get.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">offset</td><td class="table_col_desc"><i>number </i> (optional) <br/> Default: <i>0 </i>  Min: <i>0 </i> <br/>The offset of records to get.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">detail-level</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/> Default: <i>standard </i> <br/>The level of details to get.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;basic<br/>&nbsp;&nbsp;&nbsp;&nbsp;standard<br/>&nbsp;&nbsp;&nbsp;&nbsp;extended</i></b><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return an endusers list</h2><p>A list of endusers will be returned.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>A structured value of status.<br/><br/><table><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> <br/><br/>The get status message.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> <br/><br/>The get status code.<br/><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>array </i> <br/><br/>A structured value of dataset.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/>Enduser entries.<br/><br/></td></tr></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=add_ueba_adom__adom-name__endpoints>Add/Update endpoints</h1><h2>add /ueba/adom/&lt;adom-name&gt;/endpoints</h2><p>Add/Update endpoints.<h6 id=${ueba.add.endpoint.req}.request>Request:</h6><pre>
+{
+    "method": "add",
+    "params": [
+        {
+            "url": "/ueba/adom/&lt;adom-name&gt;/endpoints",
+            "apiver": 3,
+            "data": [
+                {
+                    "id":{"type":"string", "value":"string"},
+                    "name":"string",
+                    "nic":[{"mac":"string", "ip":"string"}],
+                    "owneruserid":"string",
+                    "devtype":"string",
+                    "hwvendor":"string",
+                    "hwfamily":"string",
+                    "hwversion":"string",
+                    "osname":"string",
+                    "osversion":"string"
+                }
+            ]
+        }
+    ],
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${ueba.add.endpoint.req}">Show example...</a></p></div><div id="${ueba.add.endpoint.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Add/Update endpoints.</i><a class="close" href="#${ueba.add.endpoint.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "method": "add",
+    "params": [
+        {
+            "url": "/ueba/adom/root/endpoints",
+            "apiver": 3,
+            "data": [
+              {
+                  "id":{
+                      "type":"serialno",
+                      "value":"FGT37D4615801346"
+                   },
+                   "name":"fgt_yvr_2nd_floor",
+                   "nic":[
+                       {
+                           "mac":"e0:3f:49:6e:50:4f",
+                           "ip":"172.16.95.26"
+                       },
+                       {
+                           "mac":"e0:3f:49:6e:50:5f",
+                           "ip":"172.16.95.27"
+                       }
+                    ],
+                    "hwvendor":"Fortinet",
+                    "hwfamily":"FortiGate",
+                    "osname":"FortiOS",
+                    "osversion":"FortiOS 6.2"
+              },
+              {
+                  "id":{
+                      "type":"serialno",
+                      "value":"FL-3KD3R13000082"
+                   },
+                   "name":"faz_yvr",
+                   "nic":[
+                       {
+                           "mac":"e0:3f:49:6e:50:4f",
+                           "ip":"172.16.95.26"
+                       },
+                       {"mac":"e0:3f:49:6e:50:5f",
+                       "ip":"172.16.95.27"
+                       }
+                    ],
+                    "hwvendor":"Fortinet",
+                    "hwfamily":"FortiAnalyzer",
+                    "osname":"linux"
+                     "osversion":"linux 3.2"
+              },
+              {
+                  "id":{
+                      "type":"fctuid", 
+                      "value":"63173B5B3AA0498BA6A2EE07733429ED"
+                   },
+                   "name":"OFFICE-PC1",
+                   "fctid": "",
+                   "nic":[
+                       {
+                           "mac":"a4:1f:72:4e:5f:cc",
+                           "ip":"172.17.20.26"
+                       }
+                    ],
+                    "hwvendor":"Dell",
+                    "hwfamily":"OptiPlex",
+                    "osname":"Windows",
+                    "osversion":"Windows 10 Pro"
+              },
+              {
+                  "id":{
+                      "type":"mac",
+                      "value":"a4:1f:72:4e:5f:dd"
+                   },
+                   "name":"OFFICE-PC2",
+                   "nic":[
+                       {
+                           "mac":"a4:1f:72:4e:5f:dd",
+                           "ip":"172.17.20.27"
+                       }
+                    ],
+                    "hwvendor":"Dell",
+                    "hwfamily":"OptiPlex",
+                    "osname":"Linux",
+                    "osversion":"Ubuntu 16.0"
+              },
+              {
+                  "id":{
+                      "type":"mac",
+                      "value":"50:9a:4c:13:8f:9e"
+                   },
+                   "name":"Lina iPhone",
+                   "nic":[
+                       {
+                           "mac":"50:9a:4c:13:8f:9e",
+                           "ip":"172.18.22.77"
+                       }
+                    ],
+                    "hwvendor":"Apple",
+                    "hwfamily":"iPhone",
+                    "osname":"ios",
+                    "osversion":"ios 12.0"
+              }
+            ]
+        }
+    ],
+    "jsonrpc": "2.0",
+    "id": 1
+}
+</pre></div></div></div><h6 id=${ueba.add.endpoint.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "code": number, 
+            "message": "string"
+        },
+        "data": [
+            {
+                "epid": number,
+                "detecttype": "string",
+                "detectkey": "string",
+            },
+            ...
+        ]
+    }
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${ueba.add.endpoint.resp}">Show example...</a></p></div><div id="${ueba.add.endpoint.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Add/Update endpoints.</i><a class="close" href="#${ueba.add.endpoint.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": 1, 
+    "jsonrpc": "2.0", 
+    "result": {
+        "data": [
+            {
+                "epid": 1056,
+                "detecttype": "by_sno",
+                "detectkey": "FGT37D4615801346"
+            },
+            {
+                "epid": 1057,
+                "detecttype": "by_sno",
+                "detectkey": "FL-3KD3R13000082"
+            },
+            {
+                "epid": 1058,
+                "detecttype": "by_fctid",
+                "detectkey": "63173B5B3AA0498BA6A2EE07733429ED"
+            },
+            {
+                "epid": 1059,
+                "detecttype": "by_mac",
+                "detectkey": "a4:1f:72:4e:5f:dd"
+            },
+            {
+                "epid": 1060,
+                "detecttype": "by_mac",
+                "detectkey": "50:9a:4c:13:8f:9e"
+            }
+        ], 
+        "status": {
+            "code": 0,
+            "message": "succeeded"
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/ueba/adom/&lt;adom-name&gt;/endpoints</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>array </i> <br/><br/>endpoints' data.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/><br/><br/><table><tr class='odd_row'><td class="table_col_name">id</td><td class="table_col_desc"><i>object </i> <br/><br/>identifier of an endpoint.<br/><br/><table><tr class='odd_row'><td class="table_col_name">type</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/><br/>type of identifier of an endpoint.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;serialno<br/>&nbsp;&nbsp;&nbsp;&nbsp;mac<br/>&nbsp;&nbsp;&nbsp;&nbsp;fctuid</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">value</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>value of identifier of an endpoint.<br/><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">name</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>name of an endpoint<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">nic</td><td class="table_col_desc"><i>array </i> <br/><br/>network interface card data of an endpoint.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/><br/><br/><table><tr class='odd_row'><td class="table_col_name">mac</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>mac address of an endpoint.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">ip</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>ip address of an endpoint.<br/><br/></td></tr></table></td></tr></td></tr><tr class='odd_row'><td class="table_col_name">devtype</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>devtype of an endpoint. such as FortiGate, FortiClient, FortiMail, FortiWeb, FortiSandbox, FortiDDos, iPad, PC and etc.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">hwfamily</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>HW family of an endpoint.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">hwversion</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>HW version of an endpoint.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">osname</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>OS name of an endpoint.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">osversion</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>OS version of an endpoint.<br/><br/></td></tr></table></td></tr></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Result of addition of endpoints</h2><p>Result of addition of endpoints.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>A structured value of status.<br/><br/><table><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> <br/><br/>The add status message.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> <br/><br/>The add status code.<br/><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>array </i> <br/><br/>A structured value of dataset.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/>Endpoint keys.<br/><br/><table><tr class='odd_row'><td class="table_col_name">epid</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>id of an endpoint.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">detecttype</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>by_mac, by_sno, or by_fctuid.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">detectkey</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>key of an endpoint<br/><br/></td></tr></table></td></tr></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=add_ueba_adom__adom-name__endusers>Add/Update endusers</h1><h2>add /ueba/adom/&lt;adom-name&gt;/endusers</h2><p>Add/Update endusers.<h6 id=${ueba.add.enduser.req}.request>Request:</h6><pre>
+{
+    "method": "add",
+    "params": [
+        {
+            "url": "/ueba/adom/&lt;adom-name&gt;/endusers",
+            "apiver": 3,
+            "data": [
+              {
+                "id":"string",
+                "title": "string",
+                "firstname":"string",
+                "lastname":"string",
+                "gender":"string",
+                "homeaddr":"string",
+                "group":"string",
+                "employeeid":"string",
+                "workaddr":"string",
+                "workphone":"string",
+                "workemail":"string",
+                "phone":"string",
+                "email":"string",
+                "socialid":{
+                    "forticlient": {"name": "string", "email": "string", "phoneno": "string"},
+                    "google": {"name": "string", "email": "string", "phoneno": "string"},
+                    "linkedin": {"name": "string", "email": "string", "phoneno": "string"},
+                    "salesforce": {"name": "string", "email": "string", "phoneno": "string"}
+                    }
+               }
+            ]
+        }
+    ],
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${ueba.add.enduser.req}">Show example...</a></p></div><div id="${ueba.add.enduser.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Add/Update endusers.</i><a class="close" href="#${ueba.add.enduser.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "method": "add",
+    "params": [
+        {
+            "url": "/ueba/adom/root/endusers",
+            "apiver": 3,
+            "data": [
+              {
+                  "id":"sjobs",
+                  "title": "CEO",
+                  "firstname":"Steph",
+                  "lastname":"Jobs",
+                  "gender":"Male",
+                  "socialid":{
+                      "google": {
+                          "name":"sjobs",
+                          "email":"sjobs@google.com",
+                          "phone":"15556661234"}
+                        }
+                    },
+                    "address":"1234 Heaven St"
+              },
+              {
+                  "id":"bgates",
+                  "title": "CTO",
+                  "firstname":"Bill",
+                  "lastname":"Gates",
+                  "gender":"Male",
+                  "socialid":{
+                      "linkedin":{
+                          "name":"bgates",
+                          "email":"bgates@microsoft.com",
+                          "phone":"15556667890"
+                       }
+                   },
+                   "address":"5678 kkk drv"
+               }
+            ]
+        }
+    ],
+    "jsonrpc": "2.0",
+    "id": 1
+}
+</pre></div></div></div><h6 id=${ueba.add.enduser.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "code": number, 
+            "message": "string"
+        },
+        "data": [
+            {
+            "euid": number,
+            "detecttype": "string",
+            "detectkey": "string",
+            },
+            ...
+        ]
+    }
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${ueba.add.enduser.resp}">Show example...</a></p></div><div id="${ueba.add.enduser.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Add/Update endusers.</i><a class="close" href="#${ueba.add.enduser.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": 1, 
+    "jsonrpc": "2.0", 
+    "result": {
+        "data": [
+                {
+                    "euid": 1056,
+                    "detecttype": "by_unauthuser",
+                    "detectkey": "sjobs"
+                },
+                {
+                    "euid": 1057,
+                    "detecttype": "by_unauthuser",
+                    "detectkey": "bgates"
+                }
+                ], 
+        "status": {
+            "code": 0,
+            "message": "succeeded"
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/ueba/adom/&lt;adom-name&gt;/endusers</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>array </i> <br/><br/>endusers' data.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/><br/><br/><table><tr class='odd_row'><td class="table_col_name">id</td><td class="table_col_desc"><i>string </i> <br/><br/>identifier of an enduser.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">title</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>title of an enduser.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">firstname</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>firstname of an enduser.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">lastname</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>lastname of an enduser.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">gender</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>gender of an enduser.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">homeaddr</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>home address of an enduser.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">group</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>group of an enduser, such as HR, finance.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">employeeid</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>employeeid of an enduser.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">workaddr</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>work address of an enduser.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">workphone</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>work phone of an enduser.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">workemail</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>work email of an enduser.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">phone</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>phone of an enduser.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">email</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>email of an enduser.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">socialid</td><td class="table_col_desc"><i>object </i> (optional) <br/><br/>social media identifiers of an enduser.<br/><br/><table><tr class='odd_row'><td class="table_col_name">forticlient</td><td class="table_col_desc"><i>object </i> (optional) <br/><br/>data on forticlient.<br/><br/><table><tr class='odd_row'><td class="table_col_name">name</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>identifier on forticlient.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">email</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>email on forticlient.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">phoneno</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>phoneno on forticlient.<br/><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">google</td><td class="table_col_desc"><i>object </i> (optional) <br/><br/>data on google.<br/><br/><table><tr class='odd_row'><td class="table_col_name">name</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>identifier on google.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">email</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>email on google.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">phoneno</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>phoneno on google.<br/><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">linkedin</td><td class="table_col_desc"><i>object </i> (optional) <br/><br/>data on linkedin.<br/><br/><table><tr class='odd_row'><td class="table_col_name">name</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>identifier on linkedin.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">email</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>email on linkedin.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">phoneno</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>phoneno on linkedin.<br/><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">salesforce</td><td class="table_col_desc"><i>object </i> (optional) <br/><br/>data on salesforce.<br/><br/><table><tr class='odd_row'><td class="table_col_name">name</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>identifier on salesforce.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">email</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>email on salesforce.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">phoneno</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>phoneno on salesforce.<br/><br/></td></tr></table></td></tr></table></td></tr></table></td></tr></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Result of addition of endusers</h2><p>Result of addition of endusers.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>A structured value of status.<br/><br/><table><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> <br/><br/>The add status message.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> <br/><br/>The add status code.<br/><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>array </i> <br/><br/>A structured value of dataset.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/>Endpoint keys.<br/><br/><table><tr class='odd_row'><td class="table_col_name">euid</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>id of an enduser.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">detecttype</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>only support by_userid now.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">detectkey</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>key of an enduser<br/><br/></td></tr></table></td></tr></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_ueba_adom__adom-name__endpoints_stats>List endpoint stats</h1><h2>get /ueba/adom/&lt;adom-name&gt;/endpoints/stats</h2><p>Get an endpoint stats list.<h6 id=${ueba.list.endpoint.stats.req}.request>Request:</h6><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/ueba/adom/&lt;adom-name&gt;/endpoints/stats",
+            "apiver": 3,
+            "stats-item": [
+                "total-count",
+                "new-count",
+                ...
+            ],
+            "time-range": {"start": "string", "end": "string"}
+        }
+    ],
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${ueba.list.endpoint.stats.req}">Show example...</a></p></div><div id="${ueba.list.endpoint.stats.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Get an endpoint stats list.</i><a class="close" href="#${ueba.list.endpoint.stats.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/ueba/adom/root/endpoints/stats",
+            "stats-item": [
+                "total-count",
+                "new-count",
+                ...
+            ]
+            "apiver": 3
+        }
+    ],
+    "jsonrpc": "2.0",
+    "id": 1
+}
+</pre></div></div></div><h6 id=${ueba.list.endpoint.stats.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "code": number, 
+            "message": "string"
+        },
+        "data": [
+            {
+                "total-count": number, 
+                "new-count": number
+            },
+            ...
+        ]
+    }
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${ueba.list.endpoint.stats.resp}">Show example...</a></p></div><div id="${ueba.list.endpoint.stats.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Get an endpoint stats list.</i><a class="close" href="#${ueba.list.endpoint.stats.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": 1, 
+    "jsonrpc": "2.0", 
+    "result": {
+        "data": [
+            {
+                "total-count": 3056, 
+                "new-count": 36  
+            }
+        ], 
+        "status": {
+            "code": 0,
+            "message": "succeeded"
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/ueba/adom/&lt;adom-name&gt;/endpoints/stats</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">stats-item</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>an array of strings that holds the requested stats type.<br/><br/>member type: <i>string</i><br/></td></tr><tr class='odd_row'><td class="table_col_name">timezone</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The timezone index or name. Time range in request and date/time if any in response will follow this timezone. See Appendix<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">time-range</td><td class="table_col_desc"><i>object </i> (optional) <br/><br/>Time range for endpoint stats.<br/><br/><table><tr class='odd_row'><td class="table_col_name">start</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Starting date time. Consider it following the timezone parameter's, ADOM's or FortiAnalyzer's timezone if timezone info is not specified within time range. Format: 'yyyy-MM-dd'T'HH:mm:ssZ' (RFC 3339) e.g. '2016-10-17T20:45:37-07:00 or 'yyyy-MM-dd HH:mm:ss' e.g. '2016-10-17 20:45:37'<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">end</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Ending date time. Consider it following the timezone parameter's, ADOM's or FortiAnalyzer's timezone if timezone info is not specified within time range. Format: 'yyyy-MM-dd'T'HH:mm:ssZ' (RFC 3339) e.g. '2016-10-17T20:45:37-07:00 or 'yyyy-MM-dd HH:mm:ss' e.g. '2016-10-17 20:45:37'<br/><br/></td></tr></table></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return an endpoint stats list</h2><p>A list of endpoint stats will be returned.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>A structured value of status.<br/><br/><table><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> <br/><br/><br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> <br/><br/><br/><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>array </i> <br/><br/>A structured value of dataset.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/>Endpoint stats entries.<br/><br/></td></tr></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_ueba_adom__adom-name__endusers_stats>List enduser stats</h1><h2>get /ueba/adom/&lt;adom-name&gt;/endusers/stats</h2><p>Get an enduser stats list.<h6 id=${ueba.list.enduser.stats.req}.request>Request:</h6><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/ueba/adom/&lt;adom-name&gt;/endusers/stats",
+            "apiver": 3,
+            "stats-item": [
+                "total-count",
+                "new-count",
+                ...
+            ],
+            "time-range": {"start": "string", "end": "string"}
+        }
+    ],
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${ueba.list.enduser.stats.req}">Show example...</a></p></div><div id="${ueba.list.enduser.stats.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Get an enduser stats list.</i><a class="close" href="#${ueba.list.enduser.stats.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/ueba/adom/root/endusers/stats",
+            "stats-item": [
+                "total-count",
+                "new-count",
+                ...
+            ]
+            "apiver": 3
+        }
+    ],
+    "jsonrpc": "2.0",
+    "id": 1
+}
+</pre></div></div></div><h6 id=${ueba.list.enduser.stats.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "code": number, 
+            "message": "string"
+        },
+        "data": [
+            {
+                "total-count": number, 
+                "new-count": number
+            },
+            ...
+        ]
+    }
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${ueba.list.enduser.stats.resp}">Show example...</a></p></div><div id="${ueba.list.enduser.stats.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Get an enduser stats list.</i><a class="close" href="#${ueba.list.enduser.stats.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": 1, 
+    "jsonrpc": "2.0", 
+    "result": {
+        "data": [
+            {
+                "total-count": 3056, 
+                "new-count": 36  
+            }
+        ], 
+        "status": {
+            "code": 0,
+            "message": "succeeded"
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/ueba/adom/&lt;adom-name&gt;/endusers/stats</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">stats-item</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>an array of strings that holds the requested stats type.<br/><br/>member type: <i>string</i><br/></td></tr><tr class='odd_row'><td class="table_col_name">timezone</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The timezone index or name. Time range in request and date/time if any in response will follow this timezone. See Appendix<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">time-range</td><td class="table_col_desc"><i>object </i> (optional) <br/><br/>Time range for enduser stats.<br/><br/><table><tr class='odd_row'><td class="table_col_name">start</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Starting date time. Consider it following the timezone parameter's, ADOM's or FortiAnalyzer's timezone if timezone info is not specified within time range. Format: 'yyyy-MM-dd'T'HH:mm:ssZ' (RFC 3339) e.g. '2016-10-17T20:45:37-07:00 or 'yyyy-MM-dd HH:mm:ss' e.g. '2016-10-17 20:45:37'<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">end</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Ending date time. Consider it following the timezone parameter's, ADOM's or FortiAnalyzer's timezone if timezone info is not specified within time range. Format: 'yyyy-MM-dd'T'HH:mm:ssZ' (RFC 3339) e.g. '2016-10-17T20:45:37-07:00 or 'yyyy-MM-dd HH:mm:ss' e.g. '2016-10-17 20:45:37'<br/><br/></td></tr></table></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return an enduser stats list</h2><p>A list of enduser stats will be returned.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>A structured value of status.<br/><br/><table><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> <br/><br/><br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> <br/><br/><br/><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>array </i> <br/><br/>A structured value of dataset.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/>Enduser stats entries.<br/><br/></td></tr></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=add_ueba_adom__adom-name__fgt-epeu_refresh>Request a fgt-epeu service refresh</h1><h2>add /ueba/adom/&lt;adom-name&gt;/fgt-epeu/refresh</h2><p>Request FGT to send the latest epeu data through oftp immediately.<h6 id=${ueba.refresh.fgt.epeu.req}.request>Request:</h6><pre>
+{
+    "method": "get",
+    "params": [
+        {
+            "url": "/ueba/adom/&lt;adom-name&gt;/fgt-epeu/refresh",
+            "apiver": 3,
+            "devid": "string"
+        }
+    ],
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${ueba.refresh.fgt.epeu.req}">Show example...</a></p></div><div id="${ueba.refresh.fgt.epeu.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Request FGT to send the latest epeu data through oftp immediately.</i><a class="close" href="#${ueba.refresh.fgt.epeu.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id":"1",
+    "jsonrpc":"2.0",
+    "method":"add",
+    "params":[
+       {
+          "apiver":3,
+          "devid": "FGVM04TM22008323",
+          "url":"/ueba/adom/root/fgt-epeu/refresh"
+       }
+    ],
+    "session":"..."
+ }
+</pre></div></div></div><h6 id=${ueba.refresh.fgt.epeu.resp}.response>Response:</h6><pre>
+{
+    "result": {
+        "status": {
+            "code": number, 
+            "message": "string"
+        }
+    }
+    "jsonrpc": "2.0",
+    "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${ueba.refresh.fgt.epeu.resp}">Show example...</a></p></div><div id="${ueba.refresh.fgt.epeu.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Request FGT to send the latest epeu data through oftp immediately.</i><a class="close" href="#${ueba.refresh.fgt.epeu.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+    "id": "1", 
+    "jsonrpc": "2.0", 
+    "result": {
+        "status": {
+            "code": 0, 
+            "message": "ok"
+        }
+    }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/ueba/adom/&lt;adom-name&gt;/fgt-epeu/refresh</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">devid</td><td class="table_col_desc"><i>string </i> <br/><br/>The serial number of the target fortigate<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return an ACK of the refresh request</h2><p>Acknowledgement of a fgt-epeu service refresh request.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>A structured value of status.<br/><br/><table><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> <br/><br/><br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> <br/><br/><br/><br/></td></tr></table></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_ueba_adom__adom-name__ot-view>Get the OT-view asset information and relation</h1><h2>get /ueba/adom/&lt;adom-name&gt;/ot-view</h2><p>Get the OT-view asset information and relation.<h6 id=${ueba.list.otview.req}.request>Request:</h6><pre>
+{
+  "id": "1", 
+  "jsonrpc": "2.0", 
+  "method": "get", 
+  "params": [
+    {
+      "apiver": 3, 
+      "filter": "string", 
+      "group-by": ["string", "string",...], 
+      "url": "ueba/adom/otview_test/ot-view"
+    }
+  ], 
+  "session": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${ueba.list.otview.req}">Show example...</a></p></div><div id="${ueba.list.otview.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: Get the OT-view asset information and relation.</i><a class="close" href="#${ueba.list.otview.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+  "id": "1", 
+  "jsonrpc": "2.0", 
+  "method": "get", 
+  "params": [
+    {
+      "apiver": 3, 
+      "filter": "devid=FGVM02TM22010006,FGVM02TM22010005", 
+      "group-by": [
+        "osname"
+      ], 
+      "url": "ueba/adom/otview_test/ot-view"
+    }
+  ], 
+  "session": "..."
+}
+</pre></div></div></div><h6 id=${ueba.list.otview.resp}.response>Response:</h6><pre>
+{
+  "id": "1", 
+  "jsonrpc": "2.0", 
+  "result": {
+    "data": [
+      {
+        "epid": [number], 
+        "from-epid": [number], 
+        "osname": "string", 
+        "purduelevel": number,
+        "epkey": "string", 
+        "epname": "string"
+      }
+    ], 
+    "status": {
+      "code": 0, 
+      "message": "ok"
+    }
+  }
+}
+</pre><div id="wrapper"> <p><a href="#${ueba.list.otview.resp}">Show example...</a></p></div><div id="${ueba.list.otview.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: Get the OT-view asset information and relation.</i><a class="close" href="#${ueba.list.otview.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+  "id": "1", 
+  "jsonrpc": "2.0", 
+  "result": {
+    "data": [
+      {
+        "epid": [
+          "32192",
+          "32193"
+        ], 
+        "from-epid": [
+          "1050"
+        ], 
+        "osname": "mac OS", 
+        "purduelevel": "5"
+      }, 
+      {
+        "epid": [
+          "31951", 
+          "30979", 
+          "32743", 
+          "30661"
+        ], 
+        "from-epid": [
+          "1050"
+        ], 
+        "osname": "Linux", 
+        "purduelevel": "5"
+      }, 
+      {
+        "epid": [
+          "33626", 
+          "35472", 
+          "35508"
+        ], 
+        "from-epid": [
+          "1051"
+        ], 
+        "osname": "Linux", 
+        "purduelevel": "4.5"
+      }, 
+      {
+        "epid": [
+          "27865", 
+          "26605", 
+          "26389"
+        ], 
+        "from-epid": [
+          "1050"
+        ], 
+        "osname": "iOS", 
+        "purduelevel": "4"
+      }, 
+      {
+        "epid": [
+          "1050"
+        ], 
+        "epkey": "FGVM02TM22010005", 
+        "epname": "FGVM02TM22010005", 
+        "purduelevel": "3"
+      }, 
+      {
+        "epid": [
+          "1051"
+        ], 
+        "epkey": "FGVM02TM22010006", 
+        "epname": "FGVM02TM22010006", 
+        "purduelevel": "3"
+      }
+    ], 
+    "status": {
+      "code": 0, 
+      "message": "ok"
+    }
+  }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/ueba/adom/&lt;adom-name&gt;/ot-view</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">filter</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The query filter. (only support devid filtering now)<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">group-by</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>Group by field.<br/><br/>member type: <i>string</i><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return the OT-view asset information and relation</h2><p>Return the OT-view asset information and relation.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>A structured value of status.<br/><br/><table><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> <br/><br/><br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> <br/><br/><br/><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>A structured value of dataset.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/>OT-view node.<br/><br/><table><tr class='odd_row'><td class="table_col_name">epid</td><td class="table_col_desc"><i>array </i> <br/><br/>An array of epid.<br/><br/>member type: <i>number</i><br/></td></tr><tr class='odd_row'><td class="table_col_name">from-epid</td><td class="table_col_desc"><i>array </i> <br/><br/>An array of epid.<br/><br/>member type: <i>number</i><br/></td></tr><tr class='odd_row'><td class="table_col_name">purdue-level</td><td class="table_col_desc"><i>number </i> <br/><br/>purdue-level of an endpoint / a node.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">epdevtype</td><td class="table_col_desc"><i>string </i> <br/><br/>epdevtype of an endpoint / a node<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">epname</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>name of an endpoint. (available when the 'epid' has single item)<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">epkey</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>detection key of an endpoint. (available when the 'epid' has single item)<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">osname</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>osname of an endpoint / a node<br/><br/></td></tr></table></td></tr></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=get_ueba_adom__adom-name__endpoints_vuln>Get the endpoints vulnerability details</h1><h2>get /ueba/adom/&lt;adom-name&gt;/endpoints/vuln</h2><p>get the endpoints vulnerability details.<h6 id=${ueba.list.endpoint.vuln.req}.request>Request:</h6><pre>
+{
+    "id":"1",
+    "jsonrpc":"2.0",
+    "method":"get",
+    "params":[
+        {
+            "epids":[
+                number,
+                ...
+            ],
+            "apiver": 3, 
+            "detectby": "string",
+            "filter": "string",
+            "limit": number, 
+            "offset": number,
+            "sort-by": [
+                {
+                    "field": "string",
+                    "order": "string"
+                },
+                ...
+            ],
+            "time-range": {
+                "start": "string",
+                "end": "string"
+            }, 
+            "url": "/ueba/adom/root/endpoints/vuln"
+        }
+    ],
+    "session":"..."
+ }
+</pre><div id="wrapper"> <p><a href="#${ueba.list.endpoint.vuln.req}">Show example...</a></p></div><div id="${ueba.list.endpoint.vuln.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: get the endpoints vulnerability details.</i><a class="close" href="#${ueba.list.endpoint.vuln.req}.request">&times;</a> <div class="content_cmd"><pre>
+{
+    "id":"1",
+    "jsonrpc":"2.0",
+    "method":"get",
+    "params":[
+       {
+          "epids":[1027],
+          "apiver":3,
+          "detectby": "FortiClient",
+          "filter": "",
+          "sort-by":[
+            {
+               "field":"vulnid",
+               "order":"asc"
+            }
+         ],
+          "time-range":{
+            "start":"2023-2-6 11:17:30",
+            "end":"2023-3-13 11:17:30"
+         },
+          "url":"ueba\/adom\/root\/endpoints/vulnerabilities"
+       }
+    ],
+    "session":"..."
+ }
+</pre></div></div></div><h6 id=${ueba.list.endpoint.vuln.resp}.response>Response:</h6><pre>
+{
+  "id": "1", 
+  "jsonrpc": "2.0", 
+  "result": {
+    "data": [
+        {
+            "epid":"number",
+            "vuln-group":[
+                {
+                    "vendor":"string",
+                    "product":"string",
+                    "model":"string",
+                    "firmware":"string",
+                    "version-min":"string",
+                    "vuln":[
+                        {
+                            "vulnid":"number",
+                            "type":"string",
+                            "severity":"string",
+                            "references":"string",
+                            "description":"string",
+                            "signiture":"number"
+                        },
+                        "..."
+                    ]
+                },
+                "..."
+            ]
+        },
+    ], 
+    "status": {
+        "code": 0, 
+        "message": "ok"
+    }
+  }
+}
+</pre><div id="wrapper"> <p><a href="#${ueba.list.endpoint.vuln.resp}">Show example...</a></p></div><div id="${ueba.list.endpoint.vuln.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: get the endpoints vulnerability details.</i><a class="close" href="#${ueba.list.endpoint.vuln.resp}.response">&times;</a> <div class="content_cmd"><pre>
+{
+  "id": "1", 
+  "jsonrpc": "2.0", 
+  "result": {
+    "data": [
+      {
+        "epid": "1027", 
+        "vuln-group": {
+          "firmware": "NULL",
+          "model": "NULL", 
+          "product": "Chrome", 
+          "vendor": "Google", 
+          "version_min": "60.0.3112.32", 
+          "vuln": [
+            {
+              "description": "Use after free in Safebrowsing in Google Chrome prior to 94.0.4606.71 allowed a remote attacker who had compromised the renderer process to potentially exploit heap corruption via a crafted HTML page.",
+              "references": "CVE-2021-37974", 
+              "severity": "High", 
+              "signiture": 0, 
+              "type": "Buffer Errors", 
+              "vuln_id": 48970
+            }, 
+            {
+              "description": "Heap buffer overflow in Blink in Google Chrome prior to 94.0.4606.81 allowed a remote attacker to potentially exploit heap corruption via a crafted HTML page.", 
+              "references": "CVE-2021-37978", 
+              "severity": "High", 
+              "signiture": 0, 
+              "type": "Buffer Errors", 
+              "vuln_id": 48974
+            }, 
+            {
+              "description": "Inappropriate implementation in Memory in Google Chrome prior to 94.0.4606.71 allowed a remote attacker to obtain potentially sensitive information from process memory via a crafted HTML page.",  
+              "references": "CVE-2021-37976", 
+              "severity": "Medium", 
+              "signiture": 0, 
+              "type": "Improper Authentication", 
+              "vuln_id": 48972
+            }
+          ]
+        }
+      }
+    ], 
+    "status": {
+      "code": 0, 
+      "message": "ok"
+    }
+  }
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">url</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>Uniform Resource Identifier.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;/ueba/adom/&lt;adom-name&gt;/endpoints/vuln</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">apiver</td><td class="table_col_desc"><i>number - enum </i> <br/><br/>Current API version.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;3</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">epids</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>The endpoint ID list.<br/><br/>member type: <i>string</i><br/></td></tr><tr class='odd_row'><td class="table_col_name">detectby</td><td class="table_col_desc"><i>string - enum </i> (optional) <br/><br/>The vulnerabilities detection source. 'FortiGate' by default.<br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;FortiClient<br/>&nbsp;&nbsp;&nbsp;&nbsp;FortiGate</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">filter</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>The query filter.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">sort-by</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>Sort by field.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/><br/><br/><table><tr class='odd_row'><td class="table_col_name">field</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>Sortable field.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">order</td><td class="table_col_desc"><i>string </i> (optional) <br/> Default: <i>ASC </i> <br/>Sorting order, ASC or DESC.<br/><br/></td></tr></table></td></tr></td></tr><tr class='odd_row'><td class="table_col_name">limit</td><td class="table_col_desc"><i>number </i> (optional) <br/> Default: <i>100000 </i>  Min: <i>1 </i>  Max: <i> 1000000 </i> <br/>The maximun number of records to get.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">offset</td><td class="table_col_desc"><i>number </i> (optional) <br/> Default: <i>0 </i>  Min: <i>0 </i> <br/>The offset of records to get.<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h2 id=>Return the endpoints vulnerability details</h2><p>Return the endpoints vulnerability details.</p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Response Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">status</td><td class="table_col_desc"><i>object </i> <br/><br/>A structured value of status.<br/><br/><table><tr class='odd_row'><td class="table_col_name">message</td><td class="table_col_desc"><i>string </i> <br/><br/><br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">code</td><td class="table_col_desc"><i>number </i> <br/><br/><br/><br/></td></tr></table></td></tr><tr class='odd_row'><td class="table_col_name">data</td><td class="table_col_desc"><i>array </i> (optional) <br/><br/>A structured value of dataset.<br/><br/><tr class='odd_row'><td class="table_col_name"></td><td class="table_col_desc"><i>object </i> <br/><br/>A group of vulnerabilities associated with one epid.<br/><br/><table><tr class='odd_row'><td class="table_col_name">epid</td><td class="table_col_desc"><i>number </i> <br/><br/>the epid of the asset having a vulnerability.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">vuln-group</td><td class="table_col_desc"><i>object </i> <br/><br/>Detailed vulnerability infomation associated with the given epid.<br/><br/><table><tr class='odd_row'><td class="table_col_name">vendor</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>vendor of a IoT object.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">product</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>product name of a IoT object<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">model</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>model of a IoT object<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">firmware</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>firmware of a IoT object<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">version-min</td><td class="table_col_desc"><i>string </i> (optional) <br/><br/>version of a IoT object<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">vuln</td><td class="table_col_desc"><i>object </i> (optional) <br/><br/>Detailed vulnerability infomation associated with the given IoT object.<br/><br/><table><tr class='odd_row'><td class="table_col_name">vulnid</td><td class="table_col_desc"><i>number </i> <br/><br/>id of a vulnerability.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">type</td><td class="table_col_desc"><i>string </i> <br/><br/>vulnerability type.<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">severity</td><td class="table_col_desc"><i>string - enum </i> <br/><br/>vulnerability severity <br/><br/> Enum list: <br/> <b><i>&nbsp;&nbsp;&nbsp;&nbsp;Unknown<br/>&nbsp;&nbsp;&nbsp;&nbsp;Low<br/>&nbsp;&nbsp;&nbsp;&nbsp;Medium<br/>&nbsp;&nbsp;&nbsp;&nbsp;High<br/>&nbsp;&nbsp;&nbsp;&nbsp;Critical<br/>&nbsp;&nbsp;&nbsp;&nbsp;Info</i></b><br/></td></tr><tr class='odd_row'><td class="table_col_name">references</td><td class="table_col_desc"><i>string </i> <br/><br/>CVE number of a vulnerability<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">description</td><td class="table_col_desc"><i>string </i> <br/><br/>description of a vulnerability<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">signiture</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/>signiture of a vulnerability<br/><br/></td></tr></table></td></tr></table></td></tr></table></td></tr></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<style>
+    .overlay {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: rgba(0, 0, 0, 0.5);
+        transition: opacity 200ms;
+        visibility: hidden;
+        opacity: 0;
+    }
+    .overlay .cancel {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        cursor: default;
+    }
+    .overlay:target {
+        visibility: visible;
+        opacity: 1;
+    }
+
+    .popup {
+        margin: 75px auto;
+        padding: 20px;
+        background: #fff;
+        border: 1px solid #666;
+        width: 80%;
+        height: 80vh;
+        overflow: auto;
+        box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+        position: relative;
+    }
+    .popup .close {
+        position: absolute;
+        width: 20px;
+        height: 20px;
+        top: 20px;
+        right: 20px;
+        opacity: 0.8;
+        transition: all 200ms;
+        font-size: 24px;
+        font-weight: bold;
+        text-decoration: none;
+        color: #666;
+    }
+    .popup .close:hover {
+        opacity: 1;
+    }
+    .popup .content_cmd {
+        height: 90%;
+        overflow: auto;
+    }
+    .popup .content_cmd pre {
+        width: 90%;
+    }
+    .popup p {
+        margin: 0 0 1em;
+    }
+    .popup p:last-child {
+        margin: 0;
+    }
+</style>
+    <br/>
+</div></body></html>

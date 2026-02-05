@@ -136,6 +136,9 @@ export default function FirewallPage() {
   const [ipsecTunnels, setIpsecTunnels] = useState<IPsecTunnel[]>([]);
   const [interfaceStats, setInterfaceStats] = useState<InterfaceStats[]>([]);
   const [eventLogs, setEventLogs] = useState<EventLog[]>([]);
+  const [fortiAnalyzerStatus, setFortiAnalyzerStatus] = useState<Record<string, unknown> | null>(null);
+  const [fortiAnalyzerAdoms, setFortiAnalyzerAdoms] = useState<Array<Record<string, unknown>>>([]);
+  const [faEventLogs, setFaEventLogs] = useState<Array<Record<string, unknown>>>([]);
   const [configRevisions, setConfigRevisions] = useState<{
     hasUnsavedChanges: boolean;
     revisions: ConfigRevision[];
@@ -147,25 +150,29 @@ export default function FirewallPage() {
   const [sslPage, setSslPage] = useState(1);
   const [ipsecSearch, setIpsecSearch] = useState('');
   const [ipsecPage, setIpsecPage] = useState(1);
+  const [interfaceSearch, setInterfaceSearch] = useState('');
+  const [interfacePage, setInterfacePage] = useState(1);
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [statusRes, sslRes, ipsecRes, configRes, interfaceRes, eventsRes] = await Promise.all([
+      const [statusRes, sslRes, ipsecRes, interfaceRes, faStatusRes, faAdomsRes, faEventsRes] = await Promise.all([
         fetch('/api/integrations/fortigate'),
         fetch('/api/integrations/fortigate?vpn=ssl'),
         fetch('/api/integrations/fortigate?vpn=ipsec'),
-        fetch('/api/integrations/fortigate?vpn=config'),
         fetch('/api/integrations/fortigate?vpn=interfaces'),
-        fetch('/api/integrations/fortianalyzer?type=events&limit=10'),
+        fetch('/api/integrations/fortianalyzer?type=status'),
+        fetch('/api/integrations/fortianalyzer?type=adoms'),
+        fetch('/api/integrations/fortianalyzer?type=events'),
       ]);
 
       const statusData = await statusRes.json();
       const sslData = await sslRes.json();
       const ipsecData = await ipsecRes.json();
-      const configData = await configRes.json();
       const interfaceData = await interfaceRes.json();
-      const eventsData = await eventsRes.json();
+      const faStatusData = await faStatusRes.json();
+      const faAdomsData = await faAdomsRes.json();
+      const faEventsData = await faEventsRes.json();
 
       if (statusData.connected) {
         setStatus({
@@ -190,16 +197,20 @@ export default function FirewallPage() {
         setIpsecTunnels(ipsecData.data);
       }
 
-      if (configData.success) {
-        setConfigRevisions(configData.data);
-      }
-
       if (interfaceData.success) {
         setInterfaceStats(interfaceData.data);
       }
 
-      if (eventsData.success) {
-        setEventLogs(eventsData.data);
+      if (faStatusData.success) {
+        setFortiAnalyzerStatus(faStatusData.data);
+      }
+
+      if (faAdomsData.success) {
+        setFortiAnalyzerAdoms(faAdomsData.data || []);
+      }
+
+      if (faEventsData.success) {
+        setFaEventLogs(faEventsData.data || []);
       }
     } catch (error) {
       console.error('Failed to fetch data:', error);
@@ -251,6 +262,25 @@ export default function FirewallPage() {
     const start = (ipsecPage - 1) * ITEMS_PER_PAGE;
     return filteredIpsecTunnels.slice(start, start + ITEMS_PER_PAGE);
   }, [filteredIpsecTunnels, ipsecPage]);
+
+  // Group revisions by admin
+  // Interface filter and pagination
+  const filteredInterfaces = useMemo(() => {
+    return interfaceStats.filter((iface: InterfaceStats) => {
+      const searchLower = interfaceSearch.toLowerCase();
+      return (
+        iface.name.toLowerCase().includes(searchLower) ||
+        (iface.alias && iface.alias.toLowerCase().includes(searchLower)) ||
+        iface.ip.toLowerCase().includes(searchLower)
+      );
+    });
+  }, [interfaceStats, interfaceSearch]);
+
+  const interfaceTotalPages = Math.ceil(filteredInterfaces.length / ITEMS_PER_PAGE);
+  const paginatedInterfaces = filteredInterfaces.slice(
+    (interfacePage - 1) * ITEMS_PER_PAGE,
+    interfacePage * ITEMS_PER_PAGE
+  );
 
   // Group revisions by admin
   const revisionsByAdmin = useMemo(() => {
@@ -451,7 +481,128 @@ export default function FirewallPage() {
           <CardTitle className="flex items-center gap-2">
             <Network className="h-5 w-5" />
             Interface İstatistikleri
-            <Badge variant="secondary">{interfaceStats.length}</Badge>
+            <Badge variant="secondary">{filteredInterfaces.length}</Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {/* Search */}
+          <div className="flex items-center gap-4 mb-4">
+            <div className="relative flex-1 max-w-sm">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Interface ara..."
+                value={interfaceSearch}
+                onChange={(e) => {
+                  setInterfaceSearch(e.target.value);
+                  setInterfacePage(1);
+                }}
+                className="pl-10"
+              />
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="flex justify-center py-12">
+              <RefreshCw className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : (
+            <>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>İsim</TableHead>
+                    <TableHead>Durum</TableHead>
+                    <TableHead>IP</TableHead>
+                    <TableHead>Hız</TableHead>
+                    <TableHead>RX/TX (GB)</TableHead>
+                    <TableHead>Paketler</TableHead>
+                    <TableHead>Hatalar</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paginatedInterfaces.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                        Interface bulunamadı
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    paginatedInterfaces.map((iface: InterfaceStats) => (
+                      <TableRow key={iface.id}>
+                        <TableCell>
+                          <div>
+                            <p className="font-medium">{iface.name}</p>
+                            {iface.alias && (
+                              <p className="text-xs text-muted-foreground">{iface.alias}</p>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={iface.link ? 'success' : 'secondary'}>
+                            {iface.link ? 'Bağlı' : 'Kapalı'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="font-mono text-xs">{iface.ip || '-'}</TableCell>
+                        <TableCell>{iface.speed > 0 ? `${iface.speed} Mbps` : '-'}</TableCell>
+                        <TableCell>
+                          {(iface.rx_bytes / 1000000000).toFixed(2)} / {(iface.tx_bytes / 1000000000).toFixed(2)}
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          {iface.rx_packets.toLocaleString()} / {iface.tx_packets.toLocaleString()}
+                        </TableCell>
+                        <TableCell>
+                          {(iface.rx_errors + iface.tx_errors) > 0 ? (
+                            <span className="text-red-600 font-medium">
+                              {iface.rx_errors + iface.tx_errors}
+                            </span>
+                          ) : (
+                            '-'
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+
+              {/* Pagination */}
+              {interfaceTotalPages > 1 && (
+                <div className="flex items-center justify-center gap-4 mt-4">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setInterfacePage(p => Math.max(1, p - 1))}
+                    disabled={interfacePage === 1}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="text-sm">
+                    Sayfa {interfacePage} / {interfaceTotalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setInterfacePage(p => Math.min(interfaceTotalPages, p + 1))}
+                    disabled={interfacePage === interfaceTotalPages}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* FortiAnalyzer Status */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Server className="h-5 w-5" />
+            FortiAnalyzer Durumu
+            {fortiAnalyzerStatus && (
+              <Badge variant="success">Bağlı</Badge>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -459,50 +610,52 @@ export default function FirewallPage() {
             <div className="flex justify-center py-12">
               <RefreshCw className="h-8 w-8 animate-spin text-primary" />
             </div>
+          ) : !fortiAnalyzerStatus ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <AlertTriangle className="h-8 w-8 mx-auto mb-2 opacity-50" />
+              <p>FortiAnalyzer bağlantısı kurulamadı</p>
+            </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {interfaceStats.map((iface) => (
-                <div key={iface.id} className="p-4 bg-muted rounded-lg border">
-                  <div className="flex items-center justify-between mb-3">
-                    <div>
-                      <p className="font-medium">{iface.name}</p>
-                      <p className="text-xs text-muted-foreground">{iface.alias || iface.mac}</p>
-                    </div>
-                    <Badge variant={iface.link ? 'success' : 'secondary'} className="text-xs">
-                      {iface.link ? 'Bağlı' : 'Kapalı'}
-                    </Badge>
-                  </div>
-                  
-                  <div className="space-y-2 text-sm">
-                    {iface.ip && (
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">IP:</span>
-                        <span className="font-mono">{iface.ip}</span>
-                      </div>
-                    )}
-                    {iface.speed > 0 && (
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Hız:</span>
-                        <span>{iface.speed.toLocaleString()} Mbps</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">RX/TX:</span>
-                      <span>{(iface.rx_bytes / 1000000000).toFixed(2)} / {(iface.tx_bytes / 1000000000).toFixed(2)} GB</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Paketler:</span>
-                      <span>{iface.rx_packets.toLocaleString()} / {iface.tx_packets.toLocaleString()}</span>
-                    </div>
-                    {(iface.rx_errors > 0 || iface.tx_errors > 0) && (
-                      <div className="flex justify-between text-red-600">
-                        <span className="text-muted-foreground">Hatalar:</span>
-                        <span>{iface.rx_errors + iface.tx_errors}</span>
-                      </div>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-3 bg-muted rounded-lg">
+                  <p className="text-xs text-muted-foreground">Hostname</p>
+                  <p className="font-medium">{fortiAnalyzerStatus.Hostname as string}</p>
+                </div>
+                <div className="p-3 bg-muted rounded-lg">
+                  <p className="text-xs text-muted-foreground">Version</p>
+                  <p className="font-medium">{fortiAnalyzerStatus.Version as string}</p>
+                </div>
+                <div className="p-3 bg-muted rounded-lg">
+                  <p className="text-xs text-muted-foreground">Platform</p>
+                  <p className="font-medium">{fortiAnalyzerStatus['Platform Full Name'] as string}</p>
+                </div>
+                <div className="p-3 bg-muted rounded-lg">
+                  <p className="text-xs text-muted-foreground">Serial</p>
+                  <p className="font-medium">{fortiAnalyzerStatus['Serial Number'] as string}</p>
+                </div>
+              </div>
+              
+              <div className="p-3 bg-muted rounded-lg">
+                <p className="text-xs text-muted-foreground mb-2">Disk Kullanımı</p>
+                <p className="text-sm">{fortiAnalyzerStatus['Disk Usage'] as string}</p>
+              </div>
+
+              {fortiAnalyzerAdoms.length > 0 && (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-2">ADOM'lar ({fortiAnalyzerAdoms.length})</p>
+                  <div className="flex flex-wrap gap-2">
+                    {fortiAnalyzerAdoms.slice(0, 8).map((adom: Record<string, unknown>, idx: number) => (
+                      <Badge key={idx} variant="outline" className="text-xs">
+                        {adom.name as string}
+                      </Badge>
+                    ))}
+                    {fortiAnalyzerAdoms.length > 8 && (
+                      <Badge variant="secondary" className="text-xs">+{fortiAnalyzerAdoms.length - 8}</Badge>
                     )}
                   </div>
                 </div>
-              ))}
+              )}
             </div>
           )}
         </CardContent>
@@ -513,8 +666,8 @@ export default function FirewallPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <AlertTriangle className="h-5 w-5" />
-            FortiAnalyzer Event Kayıtları
-            <Badge variant="secondary">{eventLogs.length}</Badge>
+            FortiAnalyzer Event Logları
+            <Badge variant="secondary">{faEventLogs.length}</Badge>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -522,161 +675,37 @@ export default function FirewallPage() {
             <div className="flex justify-center py-12">
               <RefreshCw className="h-8 w-8 animate-spin text-primary" />
             </div>
-          ) : eventLogs.length === 0 ? (
+          ) : faEventLogs.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <AlertTriangle className="h-8 w-8 mx-auto mb-2 opacity-50" />
               <p>Event log'u bulunamadı</p>
-              <p className="text-xs">FortiAnalyzer bağlantı kontrolü yapınız</p>
+              <p className="text-xs">FortiAnalyzer log arama sonuçları boş</p>
             </div>
           ) : (
             <div className="space-y-3 max-h-96 overflow-y-auto">
-              {eventLogs.map((log: EventLog, idx: number) => (
+              {faEventLogs.slice(0, 10).map((log: Record<string, unknown>, idx: number) => (
                 <div key={idx} className="p-3 bg-muted rounded-lg border-l-4 border-orange-500">
                   <div className="flex items-start justify-between mb-2">
                     <div>
-                      <p className="font-medium text-sm">{log.type} - {log.subtype}</p>
+                      <p className="font-medium text-sm">{log.type as string} - {log.subtype as string}</p>
                       <p className="text-xs text-muted-foreground">
-                        {new Date(log.eventtime * 1000).toLocaleString('tr-TR')}
+                        {log.itime as string} | {log.devname as string}
                       </p>
                     </div>
                     <Badge variant="outline" className="text-xs">
-                      {log.action}
+                      {log.action as string}
                     </Badge>
                   </div>
-                  {log.user && (
-                    <p className="text-sm mb-1">
-                      <span className="text-muted-foreground">Kullanıcı:</span> {log.user}
-                    </p>
-                  )}
                   {(log.srcip || log.dstip) && (
                     <p className="text-sm mb-1 font-mono text-xs">
-                      <span className="text-muted-foreground">Flow:</span> {log.srcip} → {log.dstip}
+                      <span className="text-muted-foreground">Flow:</span> {log.srcip as string} → {log.dstip as string}
                     </p>
                   )}
                   {log.msg && (
-                    <p className="text-sm text-muted-foreground italic">{log.msg}</p>
+                    <p className="text-sm text-muted-foreground italic">{log.msg as string}</p>
                   )}
                 </div>
               ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Config Changes by Admin */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <User className="h-5 w-5" />
-              Admin İşlem Kayıtları
-              {manualChanges.length > 0 && (
-                <Badge variant="default">{manualChanges.length} Manuel</Badge>
-              )}
-            </div>
-            {configRevisions.hasUnsavedChanges && (
-              <Badge variant="warning" className="flex items-center gap-1">
-                <AlertTriangle className="h-3 w-3" />
-                Kaydedilmemiş Değişiklik
-              </Badge>
-            )}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="flex justify-center py-8">
-              <RefreshCw className="h-6 w-6 animate-spin text-primary" />
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {/* Admin Summary */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {Object.entries(revisionsByAdmin).map(([admin, revs]) => (
-                  <div key={admin} className="p-3 bg-muted rounded-lg">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-medium text-sm">{admin}</span>
-                      <Badge
-                        variant={admin === 'daemon_admin' ? 'secondary' : 'default'}
-                        className="text-xs"
-                      >
-                        {revs.length} işlem
-                      </Badge>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      {admin === 'daemon_admin' ? 'Otomatik Yedekleme' : 'Manuel İşlem'}
-                    </p>
-                  </div>
-                ))}
-              </div>
-
-              {/* Manual Changes Table */}
-              {manualChanges.length > 0 && (
-                <div>
-                  <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
-                    <History className="h-4 w-4" />
-                    Manuel Değişiklikler (Yetkili Kullanıcılar)
-                  </h4>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Tarih</TableHead>
-                        <TableHead>Admin</TableHead>
-                        <TableHead>Açıklama</TableHead>
-                        <TableHead>Versiyon</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {manualChanges.map((rev) => (
-                        <TableRow key={rev.id}>
-                          <TableCell className="text-sm">{formatDate(rev.time)}</TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className="text-xs">
-                              {rev.admin}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-sm">{rev.comment}</TableCell>
-                          <TableCell className="font-mono text-xs">v{rev.version}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-
-              {/* All Revisions */}
-              <div>
-                <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
-                  <FileText className="h-4 w-4" />
-                  Tüm Konfigürasyon Revizyonları
-                </h4>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>ID</TableHead>
-                      <TableHead>Tarih</TableHead>
-                      <TableHead>Admin</TableHead>
-                      <TableHead>Açıklama</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {configRevisions.revisions.slice(0, 10).map((rev) => (
-                      <TableRow key={rev.id}>
-                        <TableCell className="font-mono text-xs">{rev.id}</TableCell>
-                        <TableCell className="text-sm">{formatDate(rev.time)}</TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={rev.admin === 'daemon_admin' ? 'secondary' : 'outline'}
-                            className="text-xs"
-                          >
-                            {rev.admin}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-sm">{rev.comment}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
             </div>
           )}
         </CardContent>

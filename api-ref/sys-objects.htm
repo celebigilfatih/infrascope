@@ -1,0 +1,116 @@
+<!doctype html><html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>FortiAnalyzer 7.4.7 (2685) JSON API Reference-System Commands Objects Reference</title>
+<style>body {
+	font-family: Verdana;
+	color: black;
+	background: #D9D9D9;
+	font-size: 13px;
+}
+h1 {
+	font-size: 20px;
+}
+h2 {
+	font-size: 15px;
+	position: sticky;
+	position: -webkit-sticky;
+	top: 0px;
+	background: #D9D9D9;
+}
+h6 {
+	font-size: 13px;
+	margin-bottom: 8px;
+	margin-left: 12px;
+	font-weight: normal;
+}
+table {
+	width: 95%;
+	font-size: 13px;
+	margin-left: 15px;
+	margin-right: 5px;
+	border-collapse: collapse;
+	margin-bottom: 16px;
+}
+td {
+	vertical-align: top;
+	padding: 5px;
+}
+pre {
+	border: 1px solid black;
+	padding: 10px;
+	font-size: 12px;
+	margin-left: 15px;
+	width: 650px;
+}
+th {
+	text-align: left;
+}
+a {
+}
+a:link {
+	text-decoration: none;
+}
+a:visited {
+}
+a:hover {
+	text-decoration: underline;
+}
+.menu {
+	background: #C0C0C0;
+	border-right: 1px solid;
+	position: fixed;
+	padding: 6px;
+	padding-top: 20px;
+	top: 0px;
+	left: 0px;
+	bottom: 0px;
+	width: 200px;
+	overflow-x: hidden;
+	overflow-y: auto;
+	white-space: nowrap;
+}
+.content {
+	position: absolute;
+	padding: 6px;
+	top: 0px;
+	left: 240px;
+	right: 0px;
+}
+.menu_header {
+	font-weight: bold;
+}
+.param_table {
+	border: 1px solid #A0A0A0;
+}
+.table_hdr_name {
+	width: 160px;
+}
+.table_col_name {
+	font-weight: bold;
+	width: 160px;
+}
+.table_col_desc {
+}
+.param_table > thead > tr > th {
+	background-color: #C0C0C0;
+	border-bottom: 1px solid #A0A0A0;
+	padding: 6px;
+}
+.param_table > tbody > tr:nth-child(even) > td {
+	background-color: #D0D0D0;
+}
+.macro_num {
+	font-weight: bold;
+	width: 50px;
+}
+.macro_val {
+}
+</style>
+</head>
+<body>
+<div class="menu"><span class="menu_header"><a href="index.htm">API Reference Home</a></span><br/><span class="menu_item"><a href="objects.htm">Common Objects</a></span><br/><br/><span class="menu_header">Database Modules</span><br/><span class="menu_item"><a href="dvmdb-main.htm">Device Manager Database</a></span><br/><span class="menu_item"><a href="task-main.htm">Task Database</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof74-2779-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof74-2779-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg74-2779-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof72-1732-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof72-1732-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg72-1732-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof70-662-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof70-662-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg70-662-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof64-2087-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof64-2087-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg64-2087-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof62-1263-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof62-1263-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg62-1263-main.htm">Policy Package</a></span><br/><br/><span class="menu_header">Daemon Modules</span><br/><span class="menu_item"><a href="cmdb-main.htm">CLI Configuration</a></span><br/><span class="menu_item"><a href="dvmcmd-main.htm">Device Manager Command</a></span><br/><span class="menu_item"><a href="um-main.htm">Update Manager</a></span><br/><span class="menu_item"><a href="sys-main.htm">System Commands</a></span><br/><br/><span class="menu_header"><a href="faz-cmd-index.htm">FortiAnalyzer Modules</a></span><br/><span class="menu_item"><a href="faz_eventmgmt.htm">Event Mgmt Commands</a></span><br/><span class="menu_item"><a href="faz_eventmgmtconfig.htm">Event Mgmt Config Commands</a></span><br/><span class="menu_item"><a href="faz_fazsys.htm">FAZ System Commands</a></span><br/><span class="menu_item"><a href="faz_fortiview.htm">FortiView Commands</a></span><br/><span class="menu_item"><a href="faz_incidentmgmt.htm">Incident Mgmt Commands</a></span><br/><span class="menu_item"><a href="faz_logview.htm">LogView Commands</a></span><br/><span class="menu_item"><a href="faz_report.htm">Report Commands</a></span><br/><span class="menu_item"><a href="faz_reportconfig.htm">Report Config Commands</a></span><br/><span class="menu_item"><a href="faz_ioc.htm">IOC Commands</a></span><br/><span class="menu_item"><a href="faz_ueba.htm">UEBA Commands</a></span><br/><span class="menu_item"><a href="faz_soar.htm">SOAR Commands</a></span><br/><br/><span class="menu_header"><a href="obj-index.htm">Index of All Objects</a></span><br/><br/></div>
+<div class="content">
+<h1>System Commands Objects Reference</h1><br/>
+<div id='api_sdnconnector'><h2>api/sdnconnector (command)</h2><p>Query SDN connector data.</p><p>Supported methods: <a href="sys-methods.htm#exec">exec</a></p><h6>Object URL:</h6><table><tr><td class="table_col_name">Command object</td><td class="table_col_desc">/sys/api/sdnconnector</td></tr></table><table class='param_table'><col class='table_hdr_name'/><col class='table_hdr_desc'/><thead><tr><th class='table_hdr_name'>Attribute List</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class="odd_row"><td class="table_col_name">adom</td><td class="table_col_desc"><i>string</i><br/>ADOM name.</td></tr><tr class="even_row"><td class="table_col_name">command</td><td class="table_col_desc"><i>string</i><br/>For ACI and Nuage connector only, can be either <b>egps</b> or <b>tenants</b>.</td></tr><tr class="odd_row"><td class="table_col_name">connector_name</td><td class="table_col_desc"><i>string</i><br/>Connector object in ADOM to be queried.</td></tr></tbody></table><table class='param_table'><col class='table_hdr_name'/><col class='table_hdr_desc'/><thead><tr><th class='table_hdr_name'>Response Data</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class="odd_row"><td class="table_col_name">data</td><td class="table_col_desc"><i>string</i><br/>Query response in string format.</td></tr></tbody></table></div><p>&nbsp;</p><div id='generate_wsdl'><h2>generate/wsdl (command)</h2><p>Generate WSDL for specific module and objects.</p><p>Supported methods: <a href="sys-methods.htm#exec">exec</a></p><h6>Object URL:</h6><table><tr><td class="table_col_name">Command object</td><td class="table_col_desc">/sys/generate/wsdl</td></tr></table><table class='param_table'><col class='table_hdr_name'/><col class='table_hdr_desc'/><thead><tr><th class='table_hdr_name'>Attribute List</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class="odd_row"><td class="table_col_name">endpoint</td><td class="table_col_desc"><i>string</i></td></tr><tr class="even_row"><td class="table_col_name">target</td><td class="table_col_desc"><i>string</i><br/>URL to the module, ADOM, and object.</td></tr></tbody></table><table class='param_table'><col class='table_hdr_name'/><col class='table_hdr_desc'/><thead><tr><th class='table_hdr_name'>Response Data</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class="odd_row"><td class="table_col_name">syntax</td><td class="table_col_desc"><i>string</i><br/>Generated output of module/object syntax in WSDL format.</td></tr></tbody></table></div><p>&nbsp;</p><div id='ha_status'><h2>ha/status (object)</h2><p>Obtain HA information and status of the system. Read-only.</p><p>Supported methods: <a href="sys-methods.htm#get-obj">get</a></p><h6>Object URL:</h6><table><tr><td class="table_col_name">Table object</td><td class="table_col_desc">/sys/ha/status</td></tr></table><table class='param_table'><col class='table_hdr_name'/><col class='table_hdr_desc'/><thead><tr><th class='table_hdr_name'>Attribute List</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class="odd_row"><td class="table_col_name">ha-gropu-id</td><td class="table_col_desc"><i>int32</i><br/>Default value: 1</td></tr><tr class="even_row"><td class="table_col_name">ha-group-name</td><td class="table_col_desc"><i>string</i></td></tr><tr class="odd_row"><td class="table_col_name">hb-interval</td><td class="table_col_desc"><i>unsigned int32</i><br/>Default value: 5</td></tr><tr class="even_row"><td class="table_col_name">hb-intreface</td><td class="table_col_desc"><i>string</i></td></tr><tr class="odd_row"><td class="table_col_name">members</td><td class="table_col_desc"><i>table</i><table><tr class="odd_row"><td class="table_col_name">ip</td><td class="table_col_desc"><i>string</i> (36 bytes)</td></tr><tr class="even_row"><td class="table_col_name">role</td><td class="table_col_desc"><i>option</i><table><tr><td class="table_col_name">&quot;master&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;slave&quot;</td><td class="table_col_desc"></td></tr></table></td></tr><tr class="odd_row"><td class="table_col_name">serialno</td><td class="table_col_desc"><i>string</i> (36 bytes)</td></tr><tr class="even_row"><td class="table_col_name">status</td><td class="table_col_desc"><i>option</i><table><tr><td class="table_col_name">&quot;down&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;negotiating&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;synchronizing&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;up&quot;</td><td class="table_col_desc"></td></tr></table></td></tr></table></td></tr><tr class="even_row"><td class="table_col_name">mode</td><td class="table_col_desc"><i>option</i><table><tr><td class="table_col_name">&quot;standalone&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;a-p&quot;</td><td class="table_col_desc"></td></tr></table></td></tr><tr class="odd_row"><td class="table_col_name">role</td><td class="table_col_desc"><i>option</i><table><tr><td class="table_col_name">&quot;standalone&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;master&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;slave&quot;</td><td class="table_col_desc"></td></tr></table></td></tr><tr class="even_row"><td class="table_col_name">status</td><td class="table_col_desc"><i>option</i><table><tr><td class="table_col_name">&quot;down&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;up&quot;</td><td class="table_col_desc"></td></tr></table></td></tr><tr class="odd_row"><td class="table_col_name">vip-interface</td><td class="table_col_desc"><i>string</i></td></tr><tr class="even_row"><td class="table_col_name">virtual-ip</td><td class="table_col_desc"><i>string</i></td></tr></tbody></table></div><p>&nbsp;</p><div id='login_challenge'><h2>login/challenge (command)</h2><p>Answer a log in challenge question, used following a <a href="#login_user">login/user</a> or <a href="#login_challenge">login/challenge</a> command.</p><p>Supported methods: <a href="sys-methods.htm#exec">exec</a></p><h6>Object URL:</h6><table><tr><td class="table_col_name">Command object</td><td class="table_col_desc">/sys/login/challenge</td></tr></table><table class='param_table'><col class='table_hdr_name'/><col class='table_hdr_desc'/><thead><tr><th class='table_hdr_name'>Attribute List</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class="odd_row"><td class="table_col_name">answer</td><td class="table_col_desc"><i>string</i> (1024 bytes)<br/>Answer to the challenge question from previous request.</td></tr><tr class="even_row"><td class="table_col_name">session</td><td class="table_col_desc"><i>string</i><br/>Session ID returned from <a href="#login_user">login/user</a> or previous <a href="#login_challenge">login/challenge</a> command.</td></tr></tbody></table><table class='param_table'><col class='table_hdr_name'/><col class='table_hdr_desc'/><thead><tr><th class='table_hdr_name'>Response Data</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class="odd_row"><td class="table_col_name">challenge</td><td class="table_col_desc"><i>string</i> (1024 bytes)<br/>New challenge question that must be answered with another <a href="#login_challenge">login/challenge</a> command. If no further question is returned, then the log in process is completed.</td></tr><tr class="even_row"><td class="table_col_name">session</td><td class="table_col_desc"><i>string</i><br/>If there is further challenge question(s), the session is used to along with the answer for the next <a href="#login_challenge">login/challenge</a> command.</td></tr></tbody></table></div><p>&nbsp;</p><div id='login_user'><h2>login/user (command)</h2><p>Log into the device with user name and password. A new session cookies will be generated and returned as a property of the response object.</p><p>Supported methods: <a href="sys-methods.htm#exec">exec</a></p><h6>Object URL:</h6><table><tr><td class="table_col_name">Command object</td><td class="table_col_desc">/sys/login/user</td></tr></table><table class='param_table'><col class='table_hdr_name'/><col class='table_hdr_desc'/><thead><tr><th class='table_hdr_name'>Attribute List</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class="odd_row"><td class="table_col_name">passwd</td><td class="table_col_desc"><i>string</i> (128 bytes)</td></tr><tr class="even_row"><td class="table_col_name">user</td><td class="table_col_desc"><i>string</i> (128 bytes)</td></tr></tbody></table><table class='param_table'><col class='table_hdr_name'/><col class='table_hdr_desc'/><thead><tr><th class='table_hdr_name'>Response Data</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class="odd_row"><td class="table_col_name">challenge</td><td class="table_col_desc"><i>string</i> (1024 bytes)<br/>The log in challenge question. User must follow this request with a <a href="#login_challenge">login/challenge</a> command to complete the log in process. If no log in challenge is used, the log in process is completed.</td></tr><tr class="even_row"><td class="table_col_name">session</td><td class="table_col_desc"><i>string</i><br/>If there is a log in challenge, a temporary session is created. Use this session along with the answer to complete the log in process with the <a href="#login_challenge">login/challenge</a> command.</td></tr></tbody></table></div><p>&nbsp;</p><div id='logout'><h2>logout (command)</h2><p>Log out a session.</p><p>Supported methods: <a href="sys-methods.htm#exec">exec</a></p><h6>Object URL:</h6><table><tr><td class="table_col_name">Command object</td><td class="table_col_desc">/sys/logout</td></tr></table></div><p>&nbsp;</p><div id='proxy_json'><h2>proxy/json (command)</h2><p>Send and receive JSON request to/from managed devices. The response will be an array of data, one for each queried device.</p><p>Supported methods: <a href="sys-methods.htm#exec">exec</a></p><h6>Object URL:</h6><table><tr><td class="table_col_name">Command object</td><td class="table_col_desc">/sys/proxy/json</td></tr></table><table class='param_table'><col class='table_hdr_name'/><col class='table_hdr_desc'/><thead><tr><th class='table_hdr_name'>Attribute List</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class="odd_row"><td class="table_col_name">action</td><td class="table_col_desc"><i>option</i><br/>Specify HTTP action for the request.<table><tr><td class="table_col_name">&quot;get&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;post&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;put&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;delete&quot;</td><td class="table_col_desc"></td></tr></table></td></tr><tr class="even_row"><td class="table_col_name">payload</td><td class="table_col_desc"><i>object</i><br/>JSON payload of the request. The payload will be URL-encoded and becomes the "json" field in the query string for both GET and POST request.<table></table></td></tr><tr class="odd_row"><td class="table_col_name">resource</td><td class="table_col_desc"><i>string</i><br/>URL on the remote device to be accessed.</td></tr><tr class="even_row"><td class="table_col_name">target</td><td class="table_col_desc"><i>datasource</i>, refer to <a href="dvmdb-objects.htm#device">device object</a>, or  <a href="dvmdb-objects.htm#group">group object</a></td></tr><tr class="odd_row"><td class="table_col_name">timeout</td><td class="table_col_desc"><i>unsigned int32</i><br/>Maximum time in seconds to wait for response from remote device.  If no response recieved from remote device before timeout expires, the proxy will return with error.  If the proxy request is sent to multiple devices, it will not affect the response for other devices that already returned a result.  Valid range: 10 to 28800.<br/>Default value: 60</td></tr></tbody></table><table class='param_table'><col class='table_hdr_name'/><col class='table_hdr_desc'/><thead><tr><th class='table_hdr_name'>Response Data</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class="odd_row"><td class="table_col_name">response</td><td class="table_col_desc"><i>object</i><br/>If success, the data retrieved for the device.<table></table></td></tr><tr class="even_row"><td class="table_col_name">status</td><td class="table_col_desc"><i>object</i>, refer to result object<br/>The error code and message returned for the device.<table></table></td></tr><tr class="odd_row"><td class="table_col_name">target</td><td class="table_col_desc"><i>string</i><br/>The name of the device where the set of data is belonged to.</td></tr></tbody></table></div><p>&nbsp;</p><div id='reboot'><h2>reboot (command)</h2><p>Restart FortiAnalyzer.</p><p>Supported methods: <a href="sys-methods.htm#exec">exec</a></p><h6>Object URL:</h6><table><tr><td class="table_col_name">Command object</td><td class="table_col_desc">/sys/reboot</td></tr></table><table class='param_table'><col class='table_hdr_name'/><col class='table_hdr_desc'/><thead><tr><th class='table_hdr_name'>Attribute List</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class="odd_row"><td class="table_col_name">message</td><td class="table_col_desc"><i>string</i><br/>Optional message to be stored in event log.</td></tr></tbody></table></div><p>&nbsp;</p><div id='status'><h2>status (object)</h2><p>Obtain system status. Read-only.</p><p>Supported methods: <a href="sys-methods.htm#get-obj">get</a></p><h6>Object URL:</h6><table><tr><td class="table_col_name">Table object</td><td class="table_col_desc">/sys/status</td></tr></table><table class='param_table'><col class='table_hdr_name'/><col class='table_hdr_desc'/><thead><tr><th class='table_hdr_name'>Attribute List</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class="odd_row"><td class="table_col_name">Admin Domain Configuration</td><td class="table_col_desc"><i>string</i></td></tr><tr class="even_row"><td class="table_col_name">BIOS version</td><td class="table_col_desc"><i>string</i></td></tr><tr class="odd_row"><td class="table_col_name">Branch Point</td><td class="table_col_desc"><i>string</i></td></tr><tr class="even_row"><td class="table_col_name">Current Time</td><td class="table_col_desc"><i>string</i></td></tr><tr class="odd_row"><td class="table_col_name">Daylight Time Saving</td><td class="table_col_desc"><i>string</i></td></tr><tr class="even_row"><td class="table_col_name">Disk Usage</td><td class="table_col_desc"><i>string</i></td></tr><tr class="odd_row"><td class="table_col_name">HA Mode</td><td class="table_col_desc"><i>string</i></td></tr><tr class="even_row"><td class="table_col_name">Hostname</td><td class="table_col_desc"><i>string</i></td></tr><tr class="odd_row"><td class="table_col_name">License Status</td><td class="table_col_desc"><i>string</i></td></tr><tr class="even_row"><td class="table_col_name">Max Number of Admin Domains</td><td class="table_col_desc"><i>string</i></td></tr><tr class="odd_row"><td class="table_col_name">Max Number of Device Groups</td><td class="table_col_desc"><i>string</i></td></tr><tr class="even_row"><td class="table_col_name">Platform Full Name</td><td class="table_col_desc"><i>string</i></td></tr><tr class="odd_row"><td class="table_col_name">Platform Type</td><td class="table_col_desc"><i>string</i></td></tr><tr class="even_row"><td class="table_col_name">Release Version Information</td><td class="table_col_desc"><i>string</i></td></tr><tr class="odd_row"><td class="table_col_name">Serial Number</td><td class="table_col_desc"><i>string</i></td></tr><tr class="even_row"><td class="table_col_name">Time Zone</td><td class="table_col_desc"><i>string</i></td></tr><tr class="odd_row"><td class="table_col_name">Version</td><td class="table_col_desc"><i>string</i></td></tr><tr class="even_row"><td class="table_col_name">x86-64 Applications</td><td class="table_col_desc"><i>string</i></td></tr></tbody></table></div><p>&nbsp;</p>
+</div></body></html>

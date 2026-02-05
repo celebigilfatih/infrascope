@@ -1,0 +1,396 @@
+<!doctype html><html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>FortiAnalyzer 7.4.7 (2685) JSON API Reference-Task Database Examples</title>
+<style>body {
+	font-family: Verdana;
+	color: black;
+	background: #D9D9D9;
+	font-size: 13px;
+}
+h1 {
+	font-size: 20px;
+}
+h2 {
+	font-size: 15px;
+	position: sticky;
+	position: -webkit-sticky;
+	top: 0px;
+	background: #D9D9D9;
+}
+h6 {
+	font-size: 13px;
+	margin-bottom: 8px;
+	margin-left: 12px;
+	font-weight: normal;
+}
+table {
+	width: 95%;
+	font-size: 13px;
+	margin-left: 15px;
+	margin-right: 5px;
+	border-collapse: collapse;
+	margin-bottom: 16px;
+}
+td {
+	vertical-align: top;
+	padding: 5px;
+}
+pre {
+	border: 1px solid black;
+	padding: 10px;
+	font-size: 12px;
+	margin-left: 15px;
+	width: 650px;
+}
+th {
+	text-align: left;
+}
+a {
+}
+a:link {
+	text-decoration: none;
+}
+a:visited {
+}
+a:hover {
+	text-decoration: underline;
+}
+.menu {
+	background: #C0C0C0;
+	border-right: 1px solid;
+	position: fixed;
+	padding: 6px;
+	padding-top: 20px;
+	top: 0px;
+	left: 0px;
+	bottom: 0px;
+	width: 200px;
+	overflow-x: hidden;
+	overflow-y: auto;
+	white-space: nowrap;
+}
+.content {
+	position: absolute;
+	padding: 6px;
+	top: 0px;
+	left: 240px;
+	right: 0px;
+}
+.menu_header {
+	font-weight: bold;
+}
+.param_table {
+	border: 1px solid #A0A0A0;
+}
+.table_hdr_name {
+	width: 160px;
+}
+.table_col_name {
+	font-weight: bold;
+	width: 160px;
+}
+.table_col_desc {
+}
+.param_table > thead > tr > th {
+	background-color: #C0C0C0;
+	border-bottom: 1px solid #A0A0A0;
+	padding: 6px;
+}
+.param_table > tbody > tr:nth-child(even) > td {
+	background-color: #D0D0D0;
+}
+.macro_num {
+	font-weight: bold;
+	width: 50px;
+}
+.macro_val {
+}
+</style>
+</head>
+<body>
+<div class="menu"><span class="menu_header"><a href="index.htm">API Reference Home</a></span><br/><span class="menu_item"><a href="objects.htm">Common Objects</a></span><br/><br/><span class="menu_header">Database Modules</span><br/><span class="menu_item"><a href="dvmdb-main.htm">Device Manager Database</a></span><br/><span class="menu_item"><a href="task-main.htm">Task Database</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof74-2779-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof74-2779-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg74-2779-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof72-1732-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof72-1732-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg72-1732-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof70-662-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof70-662-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg70-662-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof64-2087-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof64-2087-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg64-2087-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof62-1263-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof62-1263-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg62-1263-main.htm">Policy Package</a></span><br/><br/><span class="menu_header">Daemon Modules</span><br/><span class="menu_item"><a href="cmdb-main.htm">CLI Configuration</a></span><br/><span class="menu_item"><a href="dvmcmd-main.htm">Device Manager Command</a></span><br/><span class="menu_item"><a href="um-main.htm">Update Manager</a></span><br/><span class="menu_item"><a href="sys-main.htm">System Commands</a></span><br/><br/><span class="menu_header"><a href="faz-cmd-index.htm">FortiAnalyzer Modules</a></span><br/><span class="menu_item"><a href="faz_eventmgmt.htm">Event Mgmt Commands</a></span><br/><span class="menu_item"><a href="faz_eventmgmtconfig.htm">Event Mgmt Config Commands</a></span><br/><span class="menu_item"><a href="faz_fazsys.htm">FAZ System Commands</a></span><br/><span class="menu_item"><a href="faz_fortiview.htm">FortiView Commands</a></span><br/><span class="menu_item"><a href="faz_incidentmgmt.htm">Incident Mgmt Commands</a></span><br/><span class="menu_item"><a href="faz_logview.htm">LogView Commands</a></span><br/><span class="menu_item"><a href="faz_report.htm">Report Commands</a></span><br/><span class="menu_item"><a href="faz_reportconfig.htm">Report Config Commands</a></span><br/><span class="menu_item"><a href="faz_ioc.htm">IOC Commands</a></span><br/><span class="menu_item"><a href="faz_ueba.htm">UEBA Commands</a></span><br/><span class="menu_item"><a href="faz_soar.htm">SOAR Commands</a></span><br/><br/><span class="menu_header"><a href="obj-index.htm">Index of All Objects</a></span><br/><br/></div>
+<div class="content">
+<h1>Task Database Examples</h1><br/>
+<h2 id='task-example'>Task database query example</h2><br/>Query the summary of all security console install packages (src = 1) tasks that are contains errors (state = 5) or warnings (state = 8).<br/><br/>Request:<br/><pre>{
+    "id": 1,
+    "method": "get",
+    "params": [ 
+        {
+            "url": "/task/task",
+            "fields": [ "id", "title", "state" ],
+            "filter": [ 
+                [ 
+                    [ "state", "==", 5 ],
+                    "||",
+                    [ "state", "==", 8 ] 
+                ],
+                "&&",
+                [ "src", "==", 1 ] 
+            ],
+            "sortings": [ 
+                {
+                    "id": -1 
+                } 
+            ],
+            "loadsub": 0 
+        } 
+    ] 
+}</pre><br/>Result:<br/><pre>{
+    "id": 1,
+    "result": [ 
+        {
+            "data": [ 
+                {
+                    "id": 434,
+                    "state": 5,
+                    "title": "Reinstall packages" 
+                },
+                {
+                    "id": 388,
+                    "state": 8,
+                    "title": "Reinstall packages" 
+                },
+                {
+                    "id": 386,
+                    "state": 8,
+                    "title": "Copy Package 'default'" 
+                },
+                {
+                    "id": 385,
+                    "state": 8,
+                    "title": "Reinstall packages" 
+                },
+                {
+                    "id": 380,
+                    "state": 5,
+                    "title": "Reinstall packages" 
+                },
+                ... 
+            ],
+            "url": "/task/task" 
+        } 
+    ] 
+}</pre><br/>Query three newest tasks for security console packages installs (src = 1) that resulted in a warning state (state = 8).<br/><br/>Request:<br/><pre>{
+    "id": 2,
+    "method": "get",
+    "params": [ 
+        {
+            "url": "/task/task",
+            "filter": [ 
+                [ "state", "==", 8 ],
+                "&&",
+                [ "src", "==", 1 ] 
+            ],
+            "sortings": [ 
+                {
+                    "id": -1 
+                } 
+            ],
+            "loadsub": 0,
+            "range": [0, 3] 
+        } 
+    ] 
+}</pre><br/>Response:<br/><pre>{
+    "id": 2,
+    "result": [ 
+        {
+            "data": [ 
+                {
+                    "adom": "adom_43",
+                    "end_tm": 1390249934,
+                    "flags": 0,
+                    "id": 388,
+                    "num_done": 6,
+                    "num_err": 0,
+                    "num_lines": 7,
+                    "num_warn": 1,
+                    "percent": 100,
+                    "pid": 338,
+                    "src": 1,
+                    "start_tm": 1390249902,
+                    "state": 8,
+                    "title": "Reinstall packages",
+                    "tot_percent": 700,
+                    "user": "admin" 
+                },
+                {
+                    "adom": "adom_43",
+                    "end_tm": 1390249869,
+                    "flags": 0,
+                    "id": 386,
+                    "num_done": 3,
+                    "num_err": 0,
+                    "num_lines": 6,
+                    "num_warn": 3,
+                    "percent": 100,
+                    "pid": 679,
+                    "src": 1,
+                    "start_tm": 1390249867,
+                    "state": 8,
+                    "title": "Copy Package 'default'",
+                    "tot_percent": 600,
+                    "user": "admin" 
+                },
+                {
+                    "adom": "adom_43",
+                    "end_tm": 1390249850,
+                    "flags": 0,
+                    "id": 385,
+                    "num_done": 1,
+                    "num_err": 0,
+                    "num_lines": 4,
+                    "num_warn": 3,
+                    "percent": 100,
+                    "pid": 630,
+                    "src": 1,
+                    "start_tm": 1390249847,
+                    "state": 8,
+                    "title": "Reinstall packages",
+                    "tot_percent": 400,
+                    "user": "admin" 
+                } 
+            ],
+            "url": "/task/task" 
+        } 
+    ] 
+}</pre><br/>Query all task lines from task id 388.<br/><br/>Request:<br/><pre>{
+    "id": 3,
+    "method": "get",
+    "params": [ 
+        {
+            "url": "/task/task/388/line" 
+        } 
+    ] 
+}</pre><br/>Response:<br/><pre>{
+    "id": 3,
+    "result": [ 
+        {
+            "data": [ 
+                {
+                    "detail": "install and save finished status=OK",
+                    "err": 0,
+                    "ip": "0.0.0.0",
+                    "name": "fg2",
+                    "oid": "",
+                    "percent": 100,
+                    "state": 4,
+                    "vdom": "" 
+                },
+                {
+                    "detail": "Installation to real device done",
+                    "err": 0,
+                    "ip": "172.16.80.234",
+                    "name": "fg2[copy]",
+                    "oid": "",
+                    "percent": 100,
+                    "state": 8,
+                    "vdom": "root" 
+                },
+                {
+                    "detail": "install and save finished status=OK",
+                    "err": 0,
+                    "ip": "0.0.0.0",
+                    "name": "fg1",
+                    "oid": "",
+                    "percent": 100,
+                    "state": 4,
+                    "vdom": "" 
+                },
+                {
+                    "detail": "Installation to real device done",
+                    "err": 0,
+                    "ip": "172.16.80.224",
+                    "name": "fg1[copy]",
+                    "oid": "",
+                    "percent": 100,
+                    "state": 4,
+                    "vdom": "VD1" 
+                },
+                {
+                    "detail": "Installation to real device done",
+                    "err": 0,
+                    "ip": "172.16.80.224",
+                    "name": "fg1[copy]",
+                    "oid": "",
+                    "percent": 100,
+                    "state": 4,
+                    "vdom": "VD2" 
+                },
+                {
+                    "detail": "Installation to real device done",
+                    "err": 0,
+                    "ip": "172.16.80.224",
+                    "name": "fg1[copy]",
+                    "oid": "",
+                    "percent": 100,
+                    "state": 4,
+                    "vdom": "root" 
+                },
+                {
+                    "detail": "copy and install packages default in adom adom_43 done",
+                    "err": 0,
+                    "ip": "0.0.0.0",
+                    "name": "adom_43",
+                    "oid": "",
+                    "percent": 100,
+                    "state": 4,
+                    "vdom": "package reinstallation" 
+                } 
+            ],
+            "url": "/task/task/388/line" 
+        } 
+    ] 
+}</pre><br/>Query the history of a specific task line using name and VDOM filters.<br/><br/>Request:<br/><pre>{
+    "id": 4,
+    "method": "get",
+    "params": [ 
+        {
+            "url": "/task/task/388/history",
+            "filter": [ 
+                [ "name", "==", "fg1[copy]" ],
+                "&&",
+                [ "vdom", "==", "root" ] 
+            ],
+            "sortings": [ 
+                {
+                    "percent": 1 
+                } 
+            ] 
+        } 
+    ] 
+}</pre><br/>Response:<br/><pre>{
+    "id": 4,
+    "result": [ 
+        {
+            "data": [ 
+                {
+                    "detail": "Start copying policy to devdb, device(fg1), vdomid(root)",
+                    "name": "fg1[copy]",
+                    "percent": 1,
+                    "vdom": "root" 
+                },
+                {
+                    "detail": "Initiate request to install to real device",
+                    "name": "fg1[copy]",
+                    "percent": 80,
+                    "vdom": "root" 
+                },
+                {
+                    "detail": "Copy to device done",
+                    "name": "fg1[copy]",
+                    "percent": 100,
+                    "vdom": "root" 
+                },
+                {
+                    "detail": "Installation to real device done",
+                    "name": "fg1[copy]",
+                    "percent": 100,
+                    "vdom": "root" 
+                } 
+            ],
+            "url": "/task/task/388/history" 
+        } 
+    ] 
+}</pre><br/>
+</div></body></html>

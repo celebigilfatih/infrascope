@@ -1,0 +1,213 @@
+<!doctype html><html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>FortiAnalyzer 7.4.7 (2685) JSON API Reference-Common Objects</title>
+<style>body {
+	font-family: Verdana;
+	color: black;
+	background: #D9D9D9;
+	font-size: 13px;
+}
+h1 {
+	font-size: 20px;
+}
+h2 {
+	font-size: 15px;
+	position: sticky;
+	position: -webkit-sticky;
+	top: 0px;
+	background: #D9D9D9;
+}
+h6 {
+	font-size: 13px;
+	margin-bottom: 8px;
+	margin-left: 12px;
+	font-weight: normal;
+}
+table {
+	width: 95%;
+	font-size: 13px;
+	margin-left: 15px;
+	margin-right: 5px;
+	border-collapse: collapse;
+	margin-bottom: 16px;
+}
+td {
+	vertical-align: top;
+	padding: 5px;
+}
+pre {
+	border: 1px solid black;
+	padding: 10px;
+	font-size: 12px;
+	margin-left: 15px;
+	width: 650px;
+}
+th {
+	text-align: left;
+}
+a {
+}
+a:link {
+	text-decoration: none;
+}
+a:visited {
+}
+a:hover {
+	text-decoration: underline;
+}
+.menu {
+	background: #C0C0C0;
+	border-right: 1px solid;
+	position: fixed;
+	padding: 6px;
+	padding-top: 20px;
+	top: 0px;
+	left: 0px;
+	bottom: 0px;
+	width: 200px;
+	overflow-x: hidden;
+	overflow-y: auto;
+	white-space: nowrap;
+}
+.content {
+	position: absolute;
+	padding: 6px;
+	top: 0px;
+	left: 240px;
+	right: 0px;
+}
+.menu_header {
+	font-weight: bold;
+}
+.param_table {
+	border: 1px solid #A0A0A0;
+}
+.table_hdr_name {
+	width: 160px;
+}
+.table_col_name {
+	font-weight: bold;
+	width: 160px;
+}
+.table_col_desc {
+}
+.param_table > thead > tr > th {
+	background-color: #C0C0C0;
+	border-bottom: 1px solid #A0A0A0;
+	padding: 6px;
+}
+.param_table > tbody > tr:nth-child(even) > td {
+	background-color: #D0D0D0;
+}
+.macro_num {
+	font-weight: bold;
+	width: 50px;
+}
+.macro_val {
+}
+</style>
+</head>
+<body>
+<div class="menu"><span class="menu_header"><a href="index.htm">API Reference Home</a></span><br/><span class="menu_item"><a href="objects.htm">Common Objects</a></span><br/><br/><span class="menu_header">Database Modules</span><br/><span class="menu_item"><a href="dvmdb-main.htm">Device Manager Database</a></span><br/><span class="menu_item"><a href="task-main.htm">Task Database</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof74-2779-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof74-2779-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg74-2779-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof72-1732-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof72-1732-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg72-1732-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof70-662-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof70-662-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg70-662-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof64-2087-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof64-2087-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg64-2087-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof62-1263-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof62-1263-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg62-1263-main.htm">Policy Package</a></span><br/><br/><span class="menu_header">Daemon Modules</span><br/><span class="menu_item"><a href="cmdb-main.htm">CLI Configuration</a></span><br/><span class="menu_item"><a href="dvmcmd-main.htm">Device Manager Command</a></span><br/><span class="menu_item"><a href="um-main.htm">Update Manager</a></span><br/><span class="menu_item"><a href="sys-main.htm">System Commands</a></span><br/><br/><span class="menu_header"><a href="faz-cmd-index.htm">FortiAnalyzer Modules</a></span><br/><span class="menu_item"><a href="faz_eventmgmt.htm">Event Mgmt Commands</a></span><br/><span class="menu_item"><a href="faz_eventmgmtconfig.htm">Event Mgmt Config Commands</a></span><br/><span class="menu_item"><a href="faz_fazsys.htm">FAZ System Commands</a></span><br/><span class="menu_item"><a href="faz_fortiview.htm">FortiView Commands</a></span><br/><span class="menu_item"><a href="faz_incidentmgmt.htm">Incident Mgmt Commands</a></span><br/><span class="menu_item"><a href="faz_logview.htm">LogView Commands</a></span><br/><span class="menu_item"><a href="faz_report.htm">Report Commands</a></span><br/><span class="menu_item"><a href="faz_reportconfig.htm">Report Config Commands</a></span><br/><span class="menu_item"><a href="faz_ioc.htm">IOC Commands</a></span><br/><span class="menu_item"><a href="faz_ueba.htm">UEBA Commands</a></span><br/><span class="menu_item"><a href="faz_soar.htm">SOAR Commands</a></span><br/><br/><span class="menu_header"><a href="obj-index.htm">Index of All Objects</a></span><br/><br/></div>
+<div class="content">
+<h1>Common Objects</h1><br/>
+<h2 id="scope">Scope object</h2>
+An array of objects used for setting or retrieving object members of a parent object.
+<pre>
+	"object member": [
+		{
+			"name": "...",
+			"vdom": "..."
+		},
+		{
+			"name": "..."
+		},
+		{
+			"name": "...",
+			"is group": ...
+		},
+		  ...
+	]
+</pre>
+When referencing to a device, the object should contain both "name" and "vdom" (unless otherwise noted).<br/>
+When referencing to other objects (ie. device groups), only the name attribute is used.<br/><br/>
+For some cases where scope is supported for both device and device group and where device VDOM name is optional, additional attribute "is group" can be specified to force the scope member to be interpreted as device group.  Otherwise, the scope member is interpreted as device by default.<br/><br/>
+<br/>
+
+<h2 id="filter">Filter object</h2>
+An array of strings and/or integers that removes unwanted matches from the result. Only results that match the filter conditions will be returned.
+<pre>
+	"filter": [ &lt;source&gt;, &lt;operator&gt;, &lt;target1&gt;, &lt;target2&gt;, ... ]
+</pre>
+Unless otherwise specifid, the <b>source</b> for the filter can be an attribute or meta attribute of the object, or an external attribute of a referenced object; the <b>target</b> can be a string or numerical value. The <b>operator</b> can be one of the following:<br/><br/>
+<table class='param_table'><col class='table_hdr_name'/><col class='table_hdr_desc'/><thead><tr><th class='table_hdr_name'>Operator</th><th class='table_hdr_desc'># of target(s)</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody>
+<tr class="odd_row"><td class="table_col_name">"=="</td><td class="table_col_desc">1</td><td class="table_col_desc">Equal to</td></tr>
+<tr class="even_row"><td class="table_col_name">"!="</td><td class="table_col_desc">1</td><td class="table_col_desc">Not equal to</td></tr>
+<tr class="odd_row"><td class="table_col_name">"&lt;"</td><td class="table_col_desc">1</td><td class="table_col_desc">Less than</td></tr>
+<tr class="even_row"><td class="table_col_name">"&lt;="</td><td class="table_col_desc">1</td><td class="table_col_desc">Less than or equal to</td></tr>
+<tr class="odd_row"><td class="table_col_name">"&gt;"</td><td class="table_col_desc">1</td><td class="table_col_desc">Greater than</td></tr>
+<tr class="even_row"><td class="table_col_name">"&gt;="</td><td class="table_col_desc">1</td><td class="table_col_desc">Greater than or equal to</td></tr>
+<tr class="odd_row"><td class="table_col_name">"&"</td><td class="table_col_desc">1</td><td class="table_col_desc">Bitwise AND, <i>target</i> can be integer value only, test if (<i>source</i> & <i>target</i>) = 0</td></tr>
+<tr class="even_row"><td class="table_col_name">"&"</td><td class="table_col_desc">2</td><td class="table_col_desc">Bitwise AND, <i>target</i> can be integer value only, test if (<i>source</i> & <i>target1</i>) = <i>target2</i></td></tr>
+<tr class="odd_row"><td class="table_col_name">"in"</td><td class="table_col_desc">1 or more</td><td class="table_col_desc">Test if <i>source</i> is one of the values in <i>target</i></td></tr>
+<tr class="even_row"><td class="table_col_name">"contain"</td><td class="table_col_desc">1</td><td class="table_col_desc">If <i>source</i> have a list of values, test if it contains <i>target</i></td></tr>
+<tr class="odd_row"><td class="table_col_name">"like"</td><td class="table_col_desc">1</td><td class="table_col_desc">SQL pattern matching, where <i>target</i> is a string using % (any character) and _ (single character) wildcard</td></tr>
+<tr class="even_row"><td class="table_col_name">"!like"</td><td class="table_col_desc">1</td><td class="table_col_desc">Not like, inverse of "like" operation</td></tr>
+<tr class="odd_row"><td class="table_col_name">"glob"</td><td class="table_col_desc">1</td><td class="table_col_desc">Case-sensitive pattern matching with <i>target</i> string using UNIX wildcards</td></tr>
+<tr class="even_row"><td class="table_col_name">"!glob"</td><td class="table_col_desc">1</td><td class="table_col_desc">Not glob, inverse of "glob" operation</td></tr>
+<tr class="odd_row"><td class="table_col_name">"&&"</td><td class="table_col_desc">1</td><td class="table_col_desc">Logical AND operator for nested filter with multiple criteria, where <i>source</i> and <i>target</i> must be another filter</td></tr>
+<tr class="even_row"><td class="table_col_name">"||"</td><td class="table_col_desc">1</td><td class="table_col_desc">Logical OR operator for nested filter with multiple criteria, where <i>source</i> and <i>target</i> must be another filter</td></tr>
+</tbody></table>
+
+For inverse matches, an "!" element should be appended at the beginning of the array, before the source.<br/><br/>
+<br/>
+
+<h2 id="sortings">Sorting object</h2>
+An array of objects to specify the order of matching entries in the result data array.
+<pre>
+	"sortings": [
+		{ "attribute": order },
+		{ "attribute": order },
+		  ...
+	]
+</pre>
+The <b>attribute</b> specifies the name of the attribute to be sorted. This can be point to an external attribute of a referenced object. Multiple attributes can be specified if the data is to be sorted with 2 or more levels.<br/><br/>
+<b>Order</b> can be either 1 for ascending, or -1 for descending.<br/><br/>
+<br/>
+
+<h2 id="expand-member">Expand member object</h2>
+An array of objects to specify the object types and attributes of object member to be returned along with the fetch. The result from this fetch will be returned as a "expand member" sub-object in the result data object.
+<pre>
+	"expand member": [
+		{
+			"url": "...",
+			"fields": [ ... ],
+			"meta fields": [ ... ]
+		},
+		{
+			"url": "...",
+			"fields": [ ... ],
+			"meta fields": [ ... ]
+		},
+		  ...
+	]
+</pre>
+The <b>url</b> attribute specifies the type of the member object to be fetched. This is done by referencing to table URL without module prefix (ie. "/device" for "dvmdb/device"). Any object member whose URL is not included in the expand member array will not be returned in the result.<br/><br/>
+Similar to the parameter in <i>get</i> method, <b>fields</b> and <b>meta fields</b> arrays limit the output result. The expand member sub-object in result will contain only attributes and meta attributes specified in the array. However, if <i>field</i> is no specified, entire member object will be returned.<br/><br/>
+<br/>
+
+<h2 id="section">Section object</h2>
+An object used to modify section attributes.
+<pre>
+	"data": {
+		"attr": "...",
+		"name": "..."
+	}
+</pre>
+The <b>attr</b> attribute can be either "global-label" for section in sequence, or "label" for section in interface-pair view. If not specified, "global-label" will be used.<br/><br/>
+Section title is specified in the <b>name</b> attribute for <i>set</i> request.<br/><br/>
+<br/>
+
+<br/>
+</div></body></html>

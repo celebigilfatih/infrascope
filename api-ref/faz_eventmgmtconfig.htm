@@ -1,0 +1,1328 @@
+<!doctype html><html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>FortiAnalyzer 7.4.7 (2685) JSON API Reference-Event Mgmt Config Commands</title>
+<style>body {
+	font-family: Verdana;
+	color: black;
+	background: #D9D9D9;
+	font-size: 13px;
+}
+h1 {
+	font-size: 20px;
+}
+h2 {
+	font-size: 15px;
+	position: sticky;
+	position: -webkit-sticky;
+	top: 0px;
+	background: #D9D9D9;
+}
+h6 {
+	font-size: 13px;
+	margin-bottom: 8px;
+	margin-left: 12px;
+	font-weight: normal;
+}
+table {
+	width: 95%;
+	font-size: 13px;
+	margin-left: 15px;
+	margin-right: 5px;
+	border-collapse: collapse;
+	margin-bottom: 16px;
+}
+td {
+	vertical-align: top;
+	padding: 5px;
+}
+pre {
+	border: 1px solid black;
+	padding: 10px;
+	font-size: 12px;
+	margin-left: 15px;
+	width: 650px;
+}
+th {
+	text-align: left;
+}
+a {
+}
+a:link {
+	text-decoration: none;
+}
+a:visited {
+}
+a:hover {
+	text-decoration: underline;
+}
+.menu {
+	background: #C0C0C0;
+	border-right: 1px solid;
+	position: fixed;
+	padding: 6px;
+	padding-top: 20px;
+	top: 0px;
+	left: 0px;
+	bottom: 0px;
+	width: 200px;
+	overflow-x: hidden;
+	overflow-y: auto;
+	white-space: nowrap;
+}
+.content {
+	position: absolute;
+	padding: 6px;
+	top: 0px;
+	left: 240px;
+	right: 0px;
+}
+.menu_header {
+	font-weight: bold;
+}
+.param_table {
+	border: 1px solid #A0A0A0;
+}
+.table_hdr_name {
+	width: 160px;
+}
+.table_col_name {
+	font-weight: bold;
+	width: 160px;
+}
+.table_col_desc {
+}
+.param_table > thead > tr > th {
+	background-color: #C0C0C0;
+	border-bottom: 1px solid #A0A0A0;
+	padding: 6px;
+}
+.param_table > tbody > tr:nth-child(even) > td {
+	background-color: #D0D0D0;
+}
+.macro_num {
+	font-weight: bold;
+	width: 50px;
+}
+.macro_val {
+}
+</style>
+</head>
+<body>
+<div class="menu"><span class="menu_header"><a href="index.htm">API Reference Home</a></span><br/><span class="menu_item"><a href="objects.htm">Common Objects</a></span><br/><br/><span class="menu_header">Database Modules</span><br/><span class="menu_item"><a href="dvmdb-main.htm">Device Manager Database</a></span><br/><span class="menu_item"><a href="task-main.htm">Task Database</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof74-2779-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof74-2779-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg74-2779-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof72-1732-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof72-1732-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg72-1732-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof70-662-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof70-662-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg70-662-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof64-2087-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof64-2087-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg64-2087-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof62-1263-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof62-1263-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg62-1263-main.htm">Policy Package</a></span><br/><br/><span class="menu_header">Daemon Modules</span><br/><span class="menu_item"><a href="cmdb-main.htm">CLI Configuration</a></span><br/><span class="menu_item"><a href="dvmcmd-main.htm">Device Manager Command</a></span><br/><span class="menu_item"><a href="um-main.htm">Update Manager</a></span><br/><span class="menu_item"><a href="sys-main.htm">System Commands</a></span><br/><br/><span class="menu_header"><a href="faz-cmd-index.htm">FortiAnalyzer Modules</a></span><br/><span class="menu_item"><a href="faz_eventmgmt.htm">Event Mgmt Commands</a></span><br/><span class="menu_item"><a href="faz_eventmgmtconfig.htm">Event Mgmt Config Commands</a></span><br/><span class="menu_item"><a href="faz_fazsys.htm">FAZ System Commands</a></span><br/><span class="menu_item"><a href="faz_fortiview.htm">FortiView Commands</a></span><br/><span class="menu_item"><a href="faz_incidentmgmt.htm">Incident Mgmt Commands</a></span><br/><span class="menu_item"><a href="faz_logview.htm">LogView Commands</a></span><br/><span class="menu_item"><a href="faz_report.htm">Report Commands</a></span><br/><span class="menu_item"><a href="faz_reportconfig.htm">Report Config Commands</a></span><br/><span class="menu_item"><a href="faz_ioc.htm">IOC Commands</a></span><br/><span class="menu_item"><a href="faz_ueba.htm">UEBA Commands</a></span><br/><span class="menu_item"><a href="faz_soar.htm">SOAR Commands</a></span><br/><br/><span class="menu_header"><a href="obj-index.htm">Index of All Objects</a></span><br/><br/></div>
+<div class="content">
+<h1>Event Mgmt Config Commands</h1><br/>
+
+<div>
+<h1 id=add_eventmgmt_adom__adom-name__config_basic-handler>/eventmgmt/adom/&lt;adom-name&gt;/config/basic-handler</h1><h2>add /eventmgmt/adom/&lt;adom-name&gt;/config/basic-handler</h2><p>support method: add, set, get, update, delete<br>table: /eventmgmt/adom/&lt;adom-name&gt;/config/basic-handler<br>object: /eventmgmt/adom/&lt;adom-name&gt;/config/basic-handler/&lt;handler-id&gt;<h6 id=${eventmgmtconfig.basic-handler.add.req}.request>Request:</h6><pre>
+get objects:
+{
+  "params": [
+    {
+      "url": "eventmgmt/adom/root/config/basic-handler",
+      "apiver": 3,
+      "filter": [...]
+    }
+  ],
+  "jsonrpc": "2.0",
+  "method": "get",
+  "session": "...",
+  "id": "..."
+}
+
+add objects:
+{
+  "params": [
+    {
+      "url": "eventmgmt/adom/root/config/basic-handler",
+      "apiver": 3,
+      "data": [
+        {
+           "ATTR1": VALUE1,
+           "ATTR2": VALUE2,
+           ...
+         },
+        ...
+      ]
+    }
+  ],
+  "jsonrpc": "2.0",
+  "method": "add",
+  "session": "...",
+  "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${eventmgmtconfig.basic-handler.add.req}">Show example...</a></p></div><div id="${eventmgmtconfig.basic-handler.add.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: support method: add, set, get, update, delete<br>table: /eventmgmt/adom/&lt;adom-name&gt;/config/basic-handler<br>object: /eventmgmt/adom/&lt;adom-name&gt;/config/basic-handler/&lt;handler-id&gt;</i><a class="close" href="#${eventmgmtconfig.basic-handler.add.req}.request">&times;</a> <div class="content_cmd"><pre>
+get objects:
+{
+  "params": [
+    {
+      "url": "eventmgmt/adom/root/config/basic-handler",
+      "apiver": 3,
+      "filter": [["handler-id","==","handler_id_1"], "||" ,["handler-id","==","handler_id_2"]]
+    }
+  ],
+  "jsonrpc": "2.0",
+  "method": "get",
+  "session": "...",
+  "id": "..."
+}
+
+add objects:
+{
+  "params": [
+    {
+      "url": "/eventmgmt/adom/root/config/basic-handler",
+      "apiver": 3,
+      "data": [
+        {
+        "automation-stitch": 0,
+        "content-pack-id": null,
+        "content-pack-uuid": null,
+        "creation-time": 0,
+        "data-selector": "20000",
+        "description": "Default local device event handler",
+        "enable": 0,
+        "enable-time": 0,
+        "handler-id": "handler_id_1",
+        "name": "Local Device Event",
+        "notification": null,
+        "protected": 1,
+        "mitre-info": "{"enterprise":["T1200"]}",
+        "rule": [
+            {
+            "aggregate-expr": "COUNT(*) >= 1",
+            "devtype": 0,
+            "enable": 1,
+            "eventtype": "",
+            "extrainfo": "",
+            "extrainfo-type": 0,
+            "filter": [
+                {
+                "id": 1,
+                "key": "pri",
+                "oper": 2,
+                "value": "4"
+                }
+            ],
+            "filter-relation": 0,
+            "groupby1": "desc",
+            "indicator": null,
+            "logtype": "event",
+            "name": "Critical or important events",
+            "rule-id": "rule_id_1",
+            "severity": 2,
+            "tags": "Default,System,Local",
+            "thres-duration": 30,
+            "utmevent": "_any_"
+            }
+        ],
+        "template-url": "/fazcfg-template/basic-handler/root",
+        "update-time": 0,
+        "uuid": null,
+        "version": 2
+        }
+      ],
+    }
+  ],
+  "jsonrpc": "2.0",
+  "method": "add",
+  "session": "...",
+  "id": "..."
+}
+
+update objects:
+{
+  "params": [
+    {
+      "apiver": "3",
+      "data": [
+        {
+          "enable": 0,
+          "handler-id": "handler_id_1"
+        }
+      ],
+      "url": "/eventmgmt/adom/root/config/basic-handler"
+    }
+  ],
+  "jsonrpc": "2.0",
+  "method": "update",
+  "session": "...",
+  "id": "..."
+}
+
+set objects:
+{
+  "params": [
+    {
+      "apiver": "3",
+      "data": [
+        {
+          "enable": 0,
+          "handler-id": "handler_id_1"
+        }
+      ],
+      "url": "/eventmgmt/adom/root/config/basic-handler"
+    }
+  ],
+  "jsonrpc": "2.0",
+  "method": "set",
+  "session": "..."
+  "id": "..."
+}
+
+delete objects:
+{
+  "params": [
+    {
+      "apiver": "3",
+      "url": "/eventmgmt/adom/root/config/basic-handler/handler_id_1"
+    }
+  ],
+  "jsonrpc": "2.0",
+  "method": "delete",
+  "session": "...",
+  "id": "..."
+}
+</pre></div></div></div><h6 id=${eventmgmtconfig.basic-handler.add.resp}.response>Response:</h6><pre>
+{
+  "jsonrpc": "2.0",
+  "id": "...",
+  "result": {
+    "status": {
+      "code": 0,
+      "message": "OK"
+    },
+    "data": [...]
+  }
+}
+</pre><div id="wrapper"> <p><a href="#${eventmgmtconfig.basic-handler.add.resp}">Show example...</a></p></div><div id="${eventmgmtconfig.basic-handler.add.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: support method: add, set, get, update, delete<br>table: /eventmgmt/adom/&lt;adom-name&gt;/config/basic-handler<br>object: /eventmgmt/adom/&lt;adom-name&gt;/config/basic-handler/&lt;handler-id&gt;</i><a class="close" href="#${eventmgmtconfig.basic-handler.add.resp}.response">&times;</a> <div class="content_cmd"><pre>
+get objects:
+{
+  "result": {
+    "data": {
+      "automation-stitch": 0,
+      "content-pack-id": null,
+      "content-pack-uuid": null,
+      "creation-time": 0,
+      "data-selector": "20000",
+      "description": "Default local device event handler",
+      "enable": 0,
+      "enable-time": 0,
+      "handler-id": "handler_id_1",
+      "name": "Local Device Event",
+      "notification": null,
+      "protected": 1,
+      "mitre-info": "{"enterprise":["T1200"]}",
+      "rule": [
+        {
+          "aggregate-expr": "COUNT(*) >= 1",
+          "devtype": 0,
+          "enable": 1,
+          "eventtype": "",
+          "extrainfo": "",
+          "extrainfo-type": 0,
+          "filter": [
+            {
+              "id": 1,
+              "key": "pri",
+              "oper": 2,
+              "value": "4"
+            }
+          ],
+          "filter-relation": 0,
+          "groupby1": "desc",
+          "indicator": null,
+          "logtype": "event",
+          "name": "Critical or important events",
+          "rule-id": "rule_id_1",
+          "severity": 2,
+          "tags": "Default,System,Local",
+          "thres-duration": 30,
+          "utmevent": "_any_"
+        }
+      ],
+      "template-url": "/fazcfg-template/basic-handler/root",
+      "update-time": 0,
+      "uuid": null,
+      "version": 2
+    },
+    "status": {
+      "code": 0,
+      "message": "OK"
+    }
+  },
+  "id": "...",
+  "jsonrpc": "2.0"
+}
+
+add objects:
+{
+  "result": {
+    "data": {
+      "handler-id": "handler_id_1"
+    },
+    "status": {
+      "code": 0,
+      "message": "OK"
+    }
+  },
+  "id": "...",
+  "jsonrpc": "2.0"
+}
+
+update objects:
+{
+  "result": {
+    "data": {
+      "handler-id": "handler_id_1"
+    },
+    "status": {
+      "code": 0,
+      "message": "OK"
+    }
+  },
+  "id": "...",
+  "jsonrpc": "2.0"
+}
+
+set objects:
+{
+  "result": {
+    "data": {
+      "handler-id": "handler_id_1"
+    },
+    "status": {
+      "code": 0,
+      "message": "OK"
+    }
+  },
+  "jsonrpc": "2.0",
+  "id": "...",
+}
+
+delete objects:
+{
+  "result": {
+    "status": {
+      "code": 0,
+      "message": "OK"
+    }
+  },
+  "jsonrpc": "2.0",
+  "id": "..."
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">automation-stitch</td><td class="table_col_desc"><i> </i> (optional) <br/><br/><br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">rule</td><td class="table_col_desc"><i>array </i> <br/><br/>reference: /alert/basic-handler/rule<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=add_eventmgmt_adom__adom-name__config_correlation-handler>/eventmgmt/adom/&lt;adom-name&gt;/config/correlation-handler</h1><h2>add /eventmgmt/adom/&lt;adom-name&gt;/config/correlation-handler</h2><p>support method: add, set, get, update, delete<br>table: /eventmgmt/adom/&lt;adom-name&gt;/config/correlation-handler<br>object: /eventmgmt/adom/&lt;adom-name&gt;/config/correlation-handler/&lt;handler-id&gt;<h6 id=${eventmgmtconfig.correlation-handler.add.req}.request>Request:</h6><pre>
+get objects:
+{
+  "params": [
+    {
+      "url": "eventmgmt/adom/root/config/correlation-handler",
+      "apiver": 3,
+      "filter": [...]
+    }
+  ],
+  "jsonrpc": "2.0",
+  "method": "get",
+  "session": "...",
+  "id": "..."
+}
+
+add objects:
+{
+  "params": [
+    {
+      "url": "eventmgmt/adom/root/config/correlation-handler",
+      "apiver": 3,
+      "data": [
+        {
+           "ATTR1": VALUE1,
+           "ATTR2": VALUE2,
+           ...
+         },
+        ...
+      ]
+    }
+  ],
+  "jsonrpc": "2.0",
+  "method": "add",
+  "session": "...",
+  "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${eventmgmtconfig.correlation-handler.add.req}">Show example...</a></p></div><div id="${eventmgmtconfig.correlation-handler.add.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: support method: add, set, get, update, delete<br>table: /eventmgmt/adom/&lt;adom-name&gt;/config/correlation-handler<br>object: /eventmgmt/adom/&lt;adom-name&gt;/config/correlation-handler/&lt;handler-id&gt;</i><a class="close" href="#${eventmgmtconfig.correlation-handler.add.req}.request">&times;</a> <div class="content_cmd"><pre>
+get objects:
+{
+  "params": [
+    {
+      "url": "eventmgmt/adom/root/config/correlation-handler",
+      "apiver": 3,
+      "filter": [["handler-id","==","handler_id_1"], "||" ,["handler-id","==","handler_id_2"]]
+    }
+  ],
+  "jsonrpc": "2.0",
+  "method": "get",
+  "session": "...",
+  "id": "..."
+}
+
+add objects:
+{
+  "params": [
+    {
+      "url": "/eventmgmt/adom/root/config/correlation-handler",
+      "apiver": 3,
+      "data": [
+        {
+            "automation-stitch": 0,
+            "content-pack-id": "",
+            "content-pack-uuid": "",
+            "creation-time": 0,
+            "data-selector": "",
+            "description": "This handler is to detect if an account login failed many times not followed by a login success for FortiAnalyzer.",
+            "enable": 0,
+            "enable-time": 0,
+            "eventstatus": "auto",
+            "extrainfo-type": 0,
+            "handler-id": "handler_id_1",
+            "indicator": null,
+            "name": "Default-Brute-Force-Account-Login-Attack-FAZ",
+            "notification": "",
+            "protected": 1,
+            "mitre-info": "{"enterprise":["T1200"]}",
+            "rule": [
+                {
+                    "aggregate-expr": "COUNT(*) >= 5",
+                    "devtype": 7,
+                    "filter": [
+                        {
+                            "id": 1,
+                            "key": "operation",
+                            "oper": 0,
+                            "value": "login failed"
+                        }
+                    ],
+                    "filter-expr": "",
+                    "filter-relation": 1,
+                    "groupby1": "devid",
+                    "groupby2": "",
+                    "groupby3": "",
+                    "logtype": "event",
+                    "name": "Login Failed 5 Times",
+                    "rule-id": "rule_id_1",
+                    "utmevent": ""
+                },
+                {
+                    "aggregate-expr": "COUNT(*)>=1",
+                    "devtype": 7,
+                    "filter": [
+                        {
+                            "id": 1,
+                            "key": "operation",
+                            "oper": 0,
+                            "value": "login"
+                        }
+                    ],
+                    "filter-expr": "",
+                    "filter-relation": 1,
+                    "groupby1": "devid",
+                    "groupby2": "",
+                    "groupby3": "",
+                    "logtype": "event",
+                    "name": "Login Success",
+                    "rule-id": "rule_id_2",
+                    "utmevent": ""
+                }
+            ],
+            "rule-relation": "rule_id_1 NOT_FOLLOWED_BY[5m] rule_id_2",
+            "rule-relation-constraint": "rule_id_1.devid=rule_id_2.devid",
+            "severity": 2,
+            "tags": "login,attack",
+            "template-url": "/fazcfg-template/correlation-handler/faz",
+            "thres-duration": 30,
+            "update-time": 0,
+            "uuid": "",
+            "version": 2
+        }
+      ]
+    }
+  ],
+  "jsonrpc": "2.0",
+  "method": "add",
+  "session": "...",
+  "id": "..."
+}
+
+update objects:
+{
+  "params": [
+    {
+      "apiver": "3",
+      "data": [
+        {
+          "enable": 0,
+          "handler-id": "handler_id_1"
+        }
+      ],
+      "url": "/eventmgmt/adom/root/config/correlation-handler"
+    }
+  ],
+  "jsonrpc": "2.0",
+  "method": "update",
+  "session": "...",
+  "id": "..."
+}
+
+set objects:
+{
+  "params": [
+    {
+      "apiver": "3",
+      "data": [
+        {
+          "enable": 0,
+          "handler-id": "handler_id_1"
+        }
+      ],
+      "url": "/eventmgmt/adom/root/config/correlation-handler"
+    }
+  ],
+  "jsonrpc": "2.0",
+  "method": "set",
+  "session": "...",
+  "id": "..."
+}
+
+delete objects:
+{
+  "params": [
+    {
+      "apiver": "3",
+      "url": "/eventmgmt/adom/root/config/correlation-handler/handler_id_1"
+    }
+  ],
+  "jsonrpc": "2.0",
+  "method": "delete",
+  "session": "...",
+  "id": "..."
+}
+
+</pre></div></div></div><h6 id=${eventmgmtconfig.correlation-handler.add.resp}.response>Response:</h6><pre>
+{
+  "jsonrpc": "2.0",
+  "id": "...",
+  "result": {
+    "status": {
+      "code": 0,
+      "message": "OK"
+    },
+    "data": [...]
+  }
+}
+</pre><div id="wrapper"> <p><a href="#${eventmgmtconfig.correlation-handler.add.resp}">Show example...</a></p></div><div id="${eventmgmtconfig.correlation-handler.add.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: support method: add, set, get, update, delete<br>table: /eventmgmt/adom/&lt;adom-name&gt;/config/correlation-handler<br>object: /eventmgmt/adom/&lt;adom-name&gt;/config/correlation-handler/&lt;handler-id&gt;</i><a class="close" href="#${eventmgmtconfig.correlation-handler.add.resp}.response">&times;</a> <div class="content_cmd"><pre>
+get objects:
+{
+  "result": {
+    "data": {
+      "automation-stitch": 0,
+      "content-pack-id": "",
+      "content-pack-uuid": "",
+      "creation-time": 0,
+      "data-selector": "",
+      "description": "This handler is to detect if an account login failed many times not followed by a login success for FortiAnalyzer.",
+      "enable": 0,
+      "enable-time": 0,
+      "eventstatus": "auto",
+      "eventtype": null,
+      "extrainfo": null,
+      "extrainfo-type": 0,
+      "handler-id": "handler_id_1",
+      "indicator": null,
+      "name": "Copy of Default-Brute-Force-Account-Login-Attack-FAZ",
+      "notification": "",
+      "protected": 0,
+      "mitre-info": "{"enterprise":["T1200"]}",
+      "rule": [
+        {
+          "aggregate-expr": "COUNT(*)>=1",
+          "devtype": 7,
+          "filter": [
+            {
+              "id": 1,
+              "key": "operation",
+              "oper": 0,
+              "value": "login"
+            }
+          ],
+          "filter-expr": "",
+          "filter-relation": 1,
+          "groupby1": "devid",
+          "groupby2": "",
+          "groupby3": "",
+          "logtype": "event",
+          "name": "Login Success",
+          "rule-id": "rule_id_1",
+          "utmevent": ""
+        },
+        {
+          "aggregate-expr": "COUNT(*) >= 5",
+          "devtype": 7,
+          "filter": [
+            {
+              "id": 1,
+              "key": "operation",
+              "oper": 0,
+              "value": "login failed"
+            }
+          ],
+          "filter-expr": "",
+          "filter-relation": 1,
+          "groupby1": "devid",
+          "groupby2": "",
+          "groupby3": "",
+          "logtype": "event",
+          "name": "Login Failed 5 Times",
+          "rule-id": "rule_id_2",
+          "utmevent": ""
+        }
+      ],
+      "rule-relation": "rule_id_2 NOT_FOLLOWED_BY[5m] rule_id_1",
+      "rule-relation-constraint": "rule_id_2.devid=rule_id_1.devid",
+      "severity": 2,
+      "subject": null,
+      "tags": "login,attack",
+      "template-url": "/fazcfg-template/correlation-handler/faz",
+      "thres-duration": 30,
+      "update-time": 0,
+      "uuid": "",
+      "version": 2
+    },
+    "status": {
+      "code": 0,
+      "message": "OK"
+    }
+  },
+  "id": "...",
+  "jsonrpc": "2.0"
+}
+
+add objects:
+{
+  "result": {
+    "data": {
+      "handler-id": "handler_id_1"
+    },
+    "status": {
+      "code": 0,
+      "message": "OK"
+    }
+  },
+  "id": "...",
+  "jsonrpc": "2.0"
+}
+
+update objects:
+{
+  "result": {
+    "data": {
+      "handler-id": "handler_id_1"
+    },
+    "status": {
+      "code": 0,
+      "message": "OK"
+    }
+  },
+  "id": "...",
+  "jsonrpc": "2.0"
+}
+
+set objects:
+{
+  "result": {
+    "data": {
+      "handler-id": "handler_id_1"
+    },
+    "status": {
+      "code": 0,
+      "message": "OK"
+    }
+  },
+  "id": "...",
+  "jsonrpc": "2.0"
+}
+
+delete objects:
+{
+  "result": {
+    "status": {
+      "code": 0,
+      "message": "OK"
+    }
+  },
+  "id": "...",
+  "jsonrpc": "2.0"
+}
+
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">automation-stitch</td><td class="table_col_desc"><i> </i> (optional) <br/><br/><br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">indicator</td><td class="table_col_desc"><i>array </i> <br/><br/>reference: /alert/correlation-handler/indicator<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">rule</td><td class="table_col_desc"><i>array </i> <br/><br/>reference: /alert/correlation-handler/rule<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=add_eventmgmt_adom__adom-name__config_data-selector>/eventmgmt/adom/&lt;adom-name&gt;/config/data-selector</h1><h2>add /eventmgmt/adom/&lt;adom-name&gt;/config/data-selector</h2><p>support method: add, set, get, update, delete<br>table: /eventmgmt/adom/&lt;adom-name&gt;/config/data-selector<br>object: /eventmgmt/adom/&lt;adom-name&gt;/config/data-selector/&lt;selector-id&gt;<h6 id=${eventmgmtconfig.data-selector.add.req}.request>Request:</h6><pre>
+get objects:
+{
+  "params": [
+    {
+      "url": "eventmgmt/adom/root/config/data-selector",
+      "apiver": 3,
+      "filter": [...]
+    }
+  ],
+  "jsonrpc": "2.0",
+  "method": "get",
+  "session": "...",
+  "id": "..."
+}
+
+add objects:
+{
+  "params": [
+    {
+      "url": "eventmgmt/adom/root/config/data-selector",
+      "apiver": 3,
+      "data": [
+        {
+           "ATTR1": VALUE1,
+           "ATTR2": VALUE2,
+           ...
+         },
+        ...
+      ]
+    }
+  ],
+  "jsonrpc": "2.0",
+  "method": "add",
+  "session": "...",
+  "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${eventmgmtconfig.data-selector.add.req}">Show example...</a></p></div><div id="${eventmgmtconfig.data-selector.add.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: support method: add, set, get, update, delete<br>table: /eventmgmt/adom/&lt;adom-name&gt;/config/data-selector<br>object: /eventmgmt/adom/&lt;adom-name&gt;/config/data-selector/&lt;selector-id&gt;</i><a class="close" href="#${eventmgmtconfig.data-selector.add.req}.request">&times;</a> <div class="content_cmd"><pre>
+get objects:
+{
+  "params": [
+    {
+      "url": "eventmgmt/adom/root/config/data-selector",
+      "apiver": 3,
+      "filter": [["selector-id","==","selector_id_1"], "||" ,["selector-id","==","selector_id_2"]]
+    }
+  ],
+  "jsonrpc": "2.0",
+  "method": "get",
+  "session": "...",
+  "id": "..."
+}
+
+add objects:
+{
+  "params": [
+    {
+      "url": "/eventmgmt/adom/root/config/data-selector",
+      "apiver": 3,
+      "data": [
+        {
+            "device-specify": 0,
+            "name": "Default-Malicious-File-Detection-By-Threat",
+            "selector-id": "selector_id_1",
+            "device": [
+                {
+                    "id": 1,
+                    "name": "All_FortiGates",
+                    "type": 2
+                }
+            ],
+            "rule": [
+                {
+                    "devtype": 0,
+                    "filter-expr": "logid~\"021100819[2-5]\"",
+                    "filter-relation": 0,
+                    "logtype": "virus",
+                    "name": "Malicious_File",
+                    "rule-id": "1"
+                }
+            ]
+        }
+      ]
+    }
+  ],
+  "jsonrpc": "2.0",
+  "method": "add",
+  "session": "...",
+  "id": "..."
+}
+
+update objects:
+{
+  "params": [
+    {
+      "apiver": "3",
+      "data": [
+        {
+          "name": "demo",
+          "selector-id": "selector_id_1"
+        }
+      ],
+      "url": "/eventmgmt/adom/root/config/data-selector/"
+    }
+  ],
+  "jsonrpc": "2.0",
+  "method": "update",
+  "session": "...",
+  "id": "..."
+}
+
+set objects:
+{
+  "params": [
+    {
+      "apiver": "3",
+      "data": [
+        {
+          "name": "demo",
+          "selector-id": "selector_id_1"
+        }
+      ],
+      "url": "/eventmgmt/adom/root/config/data-selector/"
+    }
+  ],
+  "jsonrpc": "2.0",
+  "method": "set",
+  "session": "...",
+  "id": "..."
+}
+
+delete objects:
+set objects:
+{
+  "params": [
+    {
+      "apiver": "3",
+      "url": "/eventmgmt/adom/root/config/data-selector/selector_id_1"
+    }
+  ],
+  "jsonrpc": "2.0",
+  "method": "delete",
+  "session": "...",
+  "id": "..."
+}
+</pre></div></div></div><h6 id=${eventmgmtconfig.data-selector.add.resp}.response>Response:</h6><pre>
+{
+  "jsonrpc": "2.0",
+  "id": "...",
+  "result": {
+    "status": {
+      "code": 0,
+      "message": "OK"
+    },
+    "data": [...]
+  }
+}
+</pre><div id="wrapper"> <p><a href="#${eventmgmtconfig.data-selector.add.resp}">Show example...</a></p></div><div id="${eventmgmtconfig.data-selector.add.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: support method: add, set, get, update, delete<br>table: /eventmgmt/adom/&lt;adom-name&gt;/config/data-selector<br>object: /eventmgmt/adom/&lt;adom-name&gt;/config/data-selector/&lt;selector-id&gt;</i><a class="close" href="#${eventmgmtconfig.data-selector.add.resp}.response">&times;</a> <div class="content_cmd"><pre>
+get objects:
+{
+  "result": {
+    "data": [
+      {
+        "device-specify": 0,
+        "name": "Default-Malicious-File-Detection-By-Threat",
+        "selector-id": "selector_id_1",
+        "device": [
+          {
+            "id": 1,
+            "name": "All_FortiGates",
+            "type": 2
+          }
+        ],
+        "rule": [
+          {
+            "devtype": 0,
+            "filter-expr": "logid~\"021100819[2-5]\"",
+            "filter-relation": 0,
+            "logtype": "virus",
+            "name": "Malicious_File",
+            "rule-id": "1"
+          }
+        ]
+      }
+    ]
+  },
+  "id": "...",
+  "jsonrpc": "2.0"
+}
+
+add objects:
+{
+  "result": {
+    "data": {
+      "selector-id": "selector__id_1"
+    },
+    "status": {
+      "code": 0,
+      "message": "OK"
+    }
+  },
+  "id": "...",
+  "jsonrpc": "2.0"
+}
+
+update objects:
+{
+  "result": {
+    "data": {
+      "selector-id": "selector__id_1"
+    },
+    "status": {
+      "code": 0,
+      "message": "OK"
+    }
+  },
+  "id": "...",
+  "jsonrpc": "2.0"
+}
+
+set objects:
+{
+  "result": {
+    "data": {
+      "selector-id": "selector__id_1"
+    },
+    "status": {
+      "code": 0,
+      "message": "OK"
+    }
+  },
+  "id": "...",
+  "jsonrpc": "2.0"
+}
+
+delete objects:
+{
+  "result": {
+    "status": {
+      "code": 0,
+      "message": "OK"
+    }
+  },
+  "id": "...",
+  "jsonrpc": "2.0"
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">address-filter</td><td class="table_col_desc"><i>array </i> <br/><br/>reference: /alert/data-selector/address-filter<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">device</td><td class="table_col_desc"><i>array </i> <br/><br/>reference: /alert/data-selector/device<br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">device-specify</td><td class="table_col_desc"><i> </i> (optional) <br/><br/><br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">rule</td><td class="table_col_desc"><i>array </i> <br/><br/>reference: /alert/data-selector/rule<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<div>
+<h1 id=add_eventmgmt_adom__adom-name__config_notification-profile>/eventmgmt/adom/&lt;adom-name&gt;/config/notification-profile</h1><h2>add /eventmgmt/adom/&lt;adom-name&gt;/config/notification-profile</h2><p>support method: add, set, get, update, delete<br>table: /eventmgmt/adom/&lt;adom-name&gt;/config/notification-profile<br>object: /eventmgmt/adom/&lt;adom-name&gt;/config/notification-profile/&lt;profile-id&gt;<h6 id=${eventmgmtconfig.notification-profile.add.req}.request>Request:</h6><pre>
+get objects:
+{
+  "params": [
+    {
+      "url": "eventmgmt/adom/root/config/notification-profile",
+      "apiver": 3,
+      "filter": [...]
+    }
+  ],
+  "jsonrpc": "2.0",
+  "method": "get",
+  "session": "...",
+  "id": "..."
+}
+
+add objects:
+{
+  "params": [
+    {
+      "url": "eventmgmt/adom/root/config/notification-profile",
+      "apiver": 3,
+      "data": [
+        {
+           "ATTR1": VALUE1,
+           "ATTR2": VALUE2,
+           ...
+         },
+        ...
+      ]
+    }
+  ],
+  "jsonrpc": "2.0",
+  "method": "add",
+  "session": "...",
+  "id": "..."
+}
+</pre><div id="wrapper"> <p><a href="#${eventmgmtconfig.notification-profile.add.req}">Show example...</a></p></div><div id="${eventmgmtconfig.notification-profile.add.req}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Request: support method: add, set, get, update, delete<br>table: /eventmgmt/adom/&lt;adom-name&gt;/config/notification-profile<br>object: /eventmgmt/adom/&lt;adom-name&gt;/config/notification-profile/&lt;profile-id&gt;</i><a class="close" href="#${eventmgmtconfig.notification-profile.add.req}.request">&times;</a> <div class="content_cmd"><pre>
+get objects:
+{
+  "params": [
+    {
+      "url": "eventmgmt/adom/root/config/notification-profile",
+      "apiver": 3,
+      "filter": [["profile-id","==",1], "||" ,["profile-id","==",3]]
+    }
+  ],
+  "jsonrpc": "2.0",
+  "method": "get",
+  "session": "...",
+  "id": "..."
+}
+
+add objects:
+{
+  "params": [
+    {
+      "url": "/eventmgmt/adom/root/config/notification-profile",
+      "apiver": 3,
+      "data": [
+        {
+            "email-from": "email_add@fortinet.com",
+            "email-html-format": 0,
+            "email-subject": "email_subject",
+            "email-svr": "email_svr",
+            "email-to": "email_add@gmail.com",
+            "fabric-connector": null,
+            "name": "Default-Malicious-Code-Detection-By-Threat",
+            "notify-bitmap": 143,
+            "profile-id": "profile_id_1",
+            "snmp-community": "snmp_svr",
+            "snmpv3-user": "snmpv3_user",
+            "syslog-svr": "FGC_SYSLOG_SERVER"
+        }
+      ]
+    }
+  ],
+  "jsonrpc": "2.0",
+  "method": "add",
+  "session": "...",
+  "id": "..."
+}
+
+update objects:
+{
+  "params": [
+    {
+      "apiver": "3",
+      "data": [
+        {
+          "name": "demo",
+          "profile-id": "profile_id_1"
+        }
+      ],
+      "url": "/eventmgmt/adom/root/config/notification-profile/"
+    }
+  ],
+  "jsonrpc": "2.0",
+  "method": "update",
+  "session": "...",
+  "id": "..."
+}
+
+set objects:
+{
+  "params": [
+    {
+      "apiver": "3",
+      "data": [
+        {
+          "name": "demo",
+          "profile-id": "profile_id_1"
+        }
+      ],
+      "url": "/eventmgmt/adom/root/config/notification-profile/"
+    }
+  ],
+  "jsonrpc": "2.0",
+  "method": "set",
+  "session": "...",
+  "id": "..."
+}
+
+delete objects:
+set objects:
+{
+  "params": [
+    {
+      "apiver": "3",
+      "url": "/eventmgmt/adom/root/config/notification-profile/profile_id_1"
+    }
+  ],
+  "jsonrpc": "2.0",
+  "method": "delete",
+  "session": "...",
+  "id": "..."
+}
+</pre></div></div></div><h6 id=${eventmgmtconfig.notification-profile.add.resp}.response>Response:</h6><pre>
+{
+  "jsonrpc": "2.0",
+  "id": "...",
+  "result": {
+    "status": {
+      "code": 0,
+      "message": "OK"
+    },
+    "data": [...]
+  }
+}
+</pre><div id="wrapper"> <p><a href="#${eventmgmtconfig.notification-profile.add.resp}">Show example...</a></p></div><div id="${eventmgmtconfig.notification-profile.add.resp}" class="overlay"> <div class="popup"> <h2>Example</h2><p><i>Response: support method: add, set, get, update, delete<br>table: /eventmgmt/adom/&lt;adom-name&gt;/config/notification-profile<br>object: /eventmgmt/adom/&lt;adom-name&gt;/config/notification-profile/&lt;profile-id&gt;</i><a class="close" href="#${eventmgmtconfig.notification-profile.add.resp}.response">&times;</a> <div class="content_cmd"><pre>
+get objects:
+{
+  "result": {
+    "data": [
+      {
+        "email-from": "email_add@fortinet.com",
+        "email-html-format": 0,
+        "email-subject": "email_subject",
+        "email-svr": "email_svr",
+        "email-to": "email_add@gmail.com",
+        "fabric-connector": null,
+        "name": "Default-Malicious-Code-Detection-By-Threat",
+        "notify-bitmap": 143,
+        "profile-id": "profile_id_1",
+        "snmp-community": "snmp_svr",
+        "snmpv3-user": "snmpv3_user",
+        "syslog-svr": "FGC_SYSLOG_SERVER"
+      }
+    ]
+  },
+  "id": "...",
+  "jsonrpc": "2.0"
+}
+
+add objects:
+{
+  "result": {
+    "data": {
+      "profile-id": "profile_id_1"
+    },
+    "status": {
+      "code": 0,
+      "message": "OK"
+    }
+  },
+  "id": "...",
+  "jsonrpc": "2.0"
+}
+
+update objects:
+{
+  "result": {
+    "data": {
+      "profile-id": "profile_id_1"
+    },
+    "status": {
+      "code": 0,
+      "message": "OK"
+    }
+  },
+  "id": "...",
+  "jsonrpc": "2.0"
+}
+
+set objects:
+{
+  "result": {
+    "data": {
+      "profile-id": "profile_id_1"
+    },
+    "status": {
+      "code": 0,
+      "message": "OK"
+    }
+  },
+  "id": "...",
+  "jsonrpc": "2.0"
+}
+
+delete objects:
+{
+  "result": {
+    "status": {
+      "code": 0,
+      "message": "OK"
+    }
+  },
+  "id": "...",
+  "jsonrpc": "2.0"
+}
+</pre></div></div></div></p><br/><table class='param_table'><col class='table_hdr_name' /><col class='table_hdr_desc' /><thead><tr><th class='table_hdr_name'>Request Params</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class='odd_row'><td class="table_col_name">email-from</td><td class="table_col_desc"><i>string </i> <br/><br/><br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">email-html-format</td><td class="table_col_desc"><i>number </i> (optional) <br/><br/><br/><br/></td></tr><tr class='odd_row'><td class="table_col_name">fabric-connector</td><td class="table_col_desc"><i>array </i> <br/><br/>reference: /alert/notification-profile/fabric-connector<br/><br/></td></tr></tbody></table>
+</div>
+
+
+<br/><br/><br/>
+<style>
+    .overlay {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: rgba(0, 0, 0, 0.5);
+        transition: opacity 200ms;
+        visibility: hidden;
+        opacity: 0;
+    }
+    .overlay .cancel {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        cursor: default;
+    }
+    .overlay:target {
+        visibility: visible;
+        opacity: 1;
+    }
+
+    .popup {
+        margin: 75px auto;
+        padding: 20px;
+        background: #fff;
+        border: 1px solid #666;
+        width: 80%;
+        height: 80vh;
+        overflow: auto;
+        box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+        position: relative;
+    }
+    .popup .close {
+        position: absolute;
+        width: 20px;
+        height: 20px;
+        top: 20px;
+        right: 20px;
+        opacity: 0.8;
+        transition: all 200ms;
+        font-size: 24px;
+        font-weight: bold;
+        text-decoration: none;
+        color: #666;
+    }
+    .popup .close:hover {
+        opacity: 1;
+    }
+    .popup .content_cmd {
+        height: 90%;
+        overflow: auto;
+    }
+    .popup .content_cmd pre {
+        width: 90%;
+    }
+    .popup p {
+        margin: 0 0 1em;
+    }
+    .popup p:last-child {
+        margin: 0;
+    }
+</style>
+    <br/>
+</div></body></html>

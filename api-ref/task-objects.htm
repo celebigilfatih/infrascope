@@ -1,0 +1,116 @@
+<!doctype html><html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>FortiAnalyzer 7.4.7 (2685) JSON API Reference-Task Database Objects Reference</title>
+<style>body {
+	font-family: Verdana;
+	color: black;
+	background: #D9D9D9;
+	font-size: 13px;
+}
+h1 {
+	font-size: 20px;
+}
+h2 {
+	font-size: 15px;
+	position: sticky;
+	position: -webkit-sticky;
+	top: 0px;
+	background: #D9D9D9;
+}
+h6 {
+	font-size: 13px;
+	margin-bottom: 8px;
+	margin-left: 12px;
+	font-weight: normal;
+}
+table {
+	width: 95%;
+	font-size: 13px;
+	margin-left: 15px;
+	margin-right: 5px;
+	border-collapse: collapse;
+	margin-bottom: 16px;
+}
+td {
+	vertical-align: top;
+	padding: 5px;
+}
+pre {
+	border: 1px solid black;
+	padding: 10px;
+	font-size: 12px;
+	margin-left: 15px;
+	width: 650px;
+}
+th {
+	text-align: left;
+}
+a {
+}
+a:link {
+	text-decoration: none;
+}
+a:visited {
+}
+a:hover {
+	text-decoration: underline;
+}
+.menu {
+	background: #C0C0C0;
+	border-right: 1px solid;
+	position: fixed;
+	padding: 6px;
+	padding-top: 20px;
+	top: 0px;
+	left: 0px;
+	bottom: 0px;
+	width: 200px;
+	overflow-x: hidden;
+	overflow-y: auto;
+	white-space: nowrap;
+}
+.content {
+	position: absolute;
+	padding: 6px;
+	top: 0px;
+	left: 240px;
+	right: 0px;
+}
+.menu_header {
+	font-weight: bold;
+}
+.param_table {
+	border: 1px solid #A0A0A0;
+}
+.table_hdr_name {
+	width: 160px;
+}
+.table_col_name {
+	font-weight: bold;
+	width: 160px;
+}
+.table_col_desc {
+}
+.param_table > thead > tr > th {
+	background-color: #C0C0C0;
+	border-bottom: 1px solid #A0A0A0;
+	padding: 6px;
+}
+.param_table > tbody > tr:nth-child(even) > td {
+	background-color: #D0D0D0;
+}
+.macro_num {
+	font-weight: bold;
+	width: 50px;
+}
+.macro_val {
+}
+</style>
+</head>
+<body>
+<div class="menu"><span class="menu_header"><a href="index.htm">API Reference Home</a></span><br/><span class="menu_item"><a href="objects.htm">Common Objects</a></span><br/><br/><span class="menu_header">Database Modules</span><br/><span class="menu_item"><a href="dvmdb-main.htm">Device Manager Database</a></span><br/><span class="menu_item"><a href="task-main.htm">Task Database</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof74-2779-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof74-2779-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg74-2779-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof72-1732-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof72-1732-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg72-1732-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof70-662-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof70-662-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg70-662-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof64-2087-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof64-2087-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg64-2087-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof62-1263-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof62-1263-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg62-1263-main.htm">Policy Package</a></span><br/><br/><span class="menu_header">Daemon Modules</span><br/><span class="menu_item"><a href="cmdb-main.htm">CLI Configuration</a></span><br/><span class="menu_item"><a href="dvmcmd-main.htm">Device Manager Command</a></span><br/><span class="menu_item"><a href="um-main.htm">Update Manager</a></span><br/><span class="menu_item"><a href="sys-main.htm">System Commands</a></span><br/><br/><span class="menu_header"><a href="faz-cmd-index.htm">FortiAnalyzer Modules</a></span><br/><span class="menu_item"><a href="faz_eventmgmt.htm">Event Mgmt Commands</a></span><br/><span class="menu_item"><a href="faz_eventmgmtconfig.htm">Event Mgmt Config Commands</a></span><br/><span class="menu_item"><a href="faz_fazsys.htm">FAZ System Commands</a></span><br/><span class="menu_item"><a href="faz_fortiview.htm">FortiView Commands</a></span><br/><span class="menu_item"><a href="faz_incidentmgmt.htm">Incident Mgmt Commands</a></span><br/><span class="menu_item"><a href="faz_logview.htm">LogView Commands</a></span><br/><span class="menu_item"><a href="faz_report.htm">Report Commands</a></span><br/><span class="menu_item"><a href="faz_reportconfig.htm">Report Config Commands</a></span><br/><span class="menu_item"><a href="faz_ioc.htm">IOC Commands</a></span><br/><span class="menu_item"><a href="faz_ueba.htm">UEBA Commands</a></span><br/><span class="menu_item"><a href="faz_soar.htm">SOAR Commands</a></span><br/><br/><span class="menu_header"><a href="obj-index.htm">Index of All Objects</a></span><br/><br/></div>
+<div class="content">
+<h1>Task Database Objects Reference</h1><br/>
+<div id='task'><h2>task (table)</h2><p>Read-only table containing the 10000 most recent tasks of the system. This table can be used for tracking non-blocking tasks initiated by the <a href="dvmcmd-main.htm">Device Manager Command</a> and <a href="securityconsole-main.htm">Security Console</a> modules.</p><p>Supported methods: <a href="task-methods.htm#get-table">get (table)</a>, <a href="task-methods.htm#get-obj">get (object)</a></p><h6>Object URL:</h6><table><tr><td class="table_col_name">Table</td><td class="table_col_desc">/task/task</td></tr><tr><td class="table_col_name">Object</td><td class="table_col_desc">/task/task/&lt;task_id&gt;</td></tr></table><table class='param_table'><col class='table_hdr_name'/><col class='table_hdr_desc'/><thead><tr><th class='table_hdr_name'>Attribute List</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class="odd_row"><td class="table_col_name">adom</td><td class="table_col_desc"><i>datasource</i>, refer to <a href="dvmdb-objects.htm#adom">adom object</a><br/>Default value: 0</td></tr><tr class="even_row"><td class="table_col_name">end_tm</td><td class="table_col_desc"><i>int32</i><br/>Default value: 0</td></tr><tr class="odd_row"><td class="table_col_name">flags</td><td class="table_col_desc"><i>unsigned int32</i><br/>Default value: 0</td></tr><tr class="even_row"><td class="table_col_name">id</td><td class="table_col_desc"><i>sequence</i>, <b>master key</b></td></tr><tr class="odd_row"><td class="table_col_name"><a href="task-objects.htm#task_line">line</a></td><td class="table_col_desc"><i>table</i></td></tr><tr class="even_row"><td class="table_col_name">num_done</td><td class="table_col_desc"><i>int32</i><br/>Default value: 0</td></tr><tr class="odd_row"><td class="table_col_name">num_err</td><td class="table_col_desc"><i>int32</i><br/>Default value: 0</td></tr><tr class="even_row"><td class="table_col_name">num_lines</td><td class="table_col_desc"><i>int32</i><br/>Default value: 0</td></tr><tr class="odd_row"><td class="table_col_name">num_warn</td><td class="table_col_desc"><i>int32</i><br/>Default value: 0</td></tr><tr class="even_row"><td class="table_col_name">percent</td><td class="table_col_desc"><i>unsigned int32</i><br/>Default value: 0</td></tr><tr class="odd_row"><td class="table_col_name">pid</td><td class="table_col_desc"><i>int32</i><br/>Default value: 0</td></tr><tr class="even_row"><td class="table_col_name">src</td><td class="table_col_desc"><i>option</i><table><tr><td class="table_col_name">&quot;device manager&quot;</td><td class="table_col_desc">[<i>Default value</i>]<br/></td></tr><tr><td class="table_col_name">&quot;security console&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;global object&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;config installation&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;script installation&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;check point&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;import objects&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;import interfaces and zones&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;import policy&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;ems policy&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;policy check&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;assignment&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;object assignment&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;cloning package&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;certificate enrollment&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;install objects&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;unknown&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;install device&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;fwm&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;integrity check&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;cloning policy block&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;import config&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;generate controllers&quot;</td><td class="table_col_desc"></td></tr></table></td></tr><tr class="odd_row"><td class="table_col_name">start_tm</td><td class="table_col_desc"><i>int32</i><br/>Default value: 0</td></tr><tr class="even_row"><td class="table_col_name">state</td><td class="table_col_desc"><i>option</i><table><tr><td class="table_col_name">&quot;pending&quot;</td><td class="table_col_desc">[<i>Default value</i>]<br/></td></tr><tr><td class="table_col_name">&quot;running&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;cancelling&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;cancelled&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;done&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;error&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;aborting&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;aborted&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;warning&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;to_continue&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;unknown&quot;</td><td class="table_col_desc"></td></tr></table></td></tr><tr class="odd_row"><td class="table_col_name">title</td><td class="table_col_desc"><i>string</i> (513 bytes)</td></tr><tr class="even_row"><td class="table_col_name">tot_percent</td><td class="table_col_desc"><i>unsigned int32</i><br/>Default value: 0</td></tr><tr class="odd_row"><td class="table_col_name">user</td><td class="table_col_desc"><i>string</i> (37 bytes)</td></tr></tbody></table></div><p>&nbsp;</p><div id='task_line'><h2>task/line (table)</h2><p>Read-only table.<br/><br/>The lines of a task can be unique identify by a combination of "name" and "vdom" attributes. As a result, there could be more than one object with the matching name, and only one of the objects will be returned if name is specified in the URL. It is recommended to apply filter on the table instead.</p><p>Supported methods: <a href="task-methods.htm#get-table">get (table)</a>, <a href="task-methods.htm#get-obj">get (object)</a></p><h6>Object URL:</h6><table><tr><td class="table_col_name">Table</td><td class="table_col_desc">/task/task/&lt;task_id&gt;/line</td></tr><tr><td class="table_col_name">Object</td><td class="table_col_desc">/task/task/&lt;task_id&gt;/line/&lt;line_name&gt;</td></tr></table><table class='param_table'><col class='table_hdr_name'/><col class='table_hdr_desc'/><thead><tr><th class='table_hdr_name'>Attribute List</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class="odd_row"><td class="table_col_name">detail</td><td class="table_col_desc"><i>string</i> (513 bytes)</td></tr><tr class="even_row"><td class="table_col_name">end_tm</td><td class="table_col_desc"><i>int32</i><br/>Default value: 0</td></tr><tr class="odd_row"><td class="table_col_name">err</td><td class="table_col_desc"><i>int32</i><br/>Default value: 0</td></tr><tr class="even_row"><td class="table_col_name"><a href="task-objects.htm#task_line_history">history</a></td><td class="table_col_desc"><i>table</i></td></tr><tr class="odd_row"><td class="table_col_name">ip</td><td class="table_col_desc"><i>string</i> (46 bytes)</td></tr><tr class="even_row"><td class="table_col_name">name</td><td class="table_col_desc"><i>string</i> (128 bytes), <b>master key</b></td></tr><tr class="odd_row"><td class="table_col_name">oid</td><td class="table_col_desc"><i>datasource</i>, refer to <a href="dvmdb-objects.htm#device">device object</a><br/>Default value: 0</td></tr><tr class="even_row"><td class="table_col_name">percent</td><td class="table_col_desc"><i>unsigned int32</i><br/>Default value: 0</td></tr><tr class="odd_row"><td class="table_col_name">poid</td><td class="table_col_desc"><i>unsigned int32</i><br/>Default value: 0</td></tr><tr class="even_row"><td class="table_col_name">start_tm</td><td class="table_col_desc"><i>int32</i><br/>Default value: 0</td></tr><tr class="odd_row"><td class="table_col_name">state</td><td class="table_col_desc"><i>option</i><table><tr><td class="table_col_name">&quot;pending&quot;</td><td class="table_col_desc">[<i>Default value</i>]<br/></td></tr><tr><td class="table_col_name">&quot;running&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;cancelling&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;cancelled&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;done&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;error&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;aborting&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;aborted&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;warning&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;to_continue&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;unknown&quot;</td><td class="table_col_desc"></td></tr></table></td></tr><tr class="even_row"><td class="table_col_name">vdom</td><td class="table_col_desc"><i>datasource</i>, refer to <a href="dvmdb-objects.htm#device_vdom">device vdom object</a> (49 bytes)</td></tr></tbody></table></div><p>&nbsp;</p><div id='task_line_history'><h2>task/line/history (table)</h2><p>Supported methods: <a href="task-methods.htm#get-table">get (table)</a>, <a href="task-methods.htm#get-obj">get (object)</a></p><h6>Object URL:</h6><table><tr><td class="table_col_name">Table</td><td class="table_col_desc">/task/task/&lt;task_id&gt;/line/&lt;line_name&gt;/history</td></tr><tr><td class="table_col_name">Object</td><td class="table_col_desc">/task/task/&lt;task_id&gt;/line/&lt;line_name&gt;/history/&lt;history_name&gt;</td></tr></table><table class='param_table'><col class='table_hdr_name'/><col class='table_hdr_desc'/><thead><tr><th class='table_hdr_name'>Attribute List</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class="odd_row"><td class="table_col_name">detail</td><td class="table_col_desc"><i>string</i> (513 bytes)</td></tr><tr class="even_row"><td class="table_col_name">name</td><td class="table_col_desc"><i>string</i> (128 bytes), <b>master key</b></td></tr><tr class="odd_row"><td class="table_col_name">percent</td><td class="table_col_desc"><i>unsigned int32</i><br/>Default value: 0</td></tr><tr class="even_row"><td class="table_col_name">state</td><td class="table_col_desc"><i>unsigned int32</i><br/>Default value: 0</td></tr><tr class="odd_row"><td class="table_col_name">vdom</td><td class="table_col_desc"><i>datasource</i>, refer to <a href="dvmdb-objects.htm#device_vdom">device vdom object</a> (49 bytes)</td></tr></tbody></table></div><p>&nbsp;</p>
+</div></body></html>

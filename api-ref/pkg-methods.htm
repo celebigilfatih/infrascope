@@ -1,0 +1,370 @@
+<!doctype html><html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>FortiAnalyzer 7.4.7 (2685) JSON API Reference-Policy Package Methods</title>
+<style>body {
+	font-family: Verdana;
+	color: black;
+	background: #D9D9D9;
+	font-size: 13px;
+}
+h1 {
+	font-size: 20px;
+}
+h2 {
+	font-size: 15px;
+	position: sticky;
+	position: -webkit-sticky;
+	top: 0px;
+	background: #D9D9D9;
+}
+h6 {
+	font-size: 13px;
+	margin-bottom: 8px;
+	margin-left: 12px;
+	font-weight: normal;
+}
+table {
+	width: 95%;
+	font-size: 13px;
+	margin-left: 15px;
+	margin-right: 5px;
+	border-collapse: collapse;
+	margin-bottom: 16px;
+}
+td {
+	vertical-align: top;
+	padding: 5px;
+}
+pre {
+	border: 1px solid black;
+	padding: 10px;
+	font-size: 12px;
+	margin-left: 15px;
+	width: 650px;
+}
+th {
+	text-align: left;
+}
+a {
+}
+a:link {
+	text-decoration: none;
+}
+a:visited {
+}
+a:hover {
+	text-decoration: underline;
+}
+.menu {
+	background: #C0C0C0;
+	border-right: 1px solid;
+	position: fixed;
+	padding: 6px;
+	padding-top: 20px;
+	top: 0px;
+	left: 0px;
+	bottom: 0px;
+	width: 200px;
+	overflow-x: hidden;
+	overflow-y: auto;
+	white-space: nowrap;
+}
+.content {
+	position: absolute;
+	padding: 6px;
+	top: 0px;
+	left: 240px;
+	right: 0px;
+}
+.menu_header {
+	font-weight: bold;
+}
+.param_table {
+	border: 1px solid #A0A0A0;
+}
+.table_hdr_name {
+	width: 160px;
+}
+.table_col_name {
+	font-weight: bold;
+	width: 160px;
+}
+.table_col_desc {
+}
+.param_table > thead > tr > th {
+	background-color: #C0C0C0;
+	border-bottom: 1px solid #A0A0A0;
+	padding: 6px;
+}
+.param_table > tbody > tr:nth-child(even) > td {
+	background-color: #D0D0D0;
+}
+.macro_num {
+	font-weight: bold;
+	width: 50px;
+}
+.macro_val {
+}
+</style>
+</head>
+<body>
+<div class="menu"><span class="menu_header"><a href="index.htm">API Reference Home</a></span><br/><span class="menu_item"><a href="objects.htm">Common Objects</a></span><br/><br/><span class="menu_header">Database Modules</span><br/><span class="menu_item"><a href="dvmdb-main.htm">Device Manager Database</a></span><br/><span class="menu_item"><a href="task-main.htm">Task Database</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof74-2779-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof74-2779-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg74-2779-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof72-1732-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof72-1732-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg72-1732-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof70-662-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof70-662-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg70-662-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof64-2087-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof64-2087-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg64-2087-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof62-1263-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof62-1263-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg62-1263-main.htm">Policy Package</a></span><br/><br/><span class="menu_header">Daemon Modules</span><br/><span class="menu_item"><a href="cmdb-main.htm">CLI Configuration</a></span><br/><span class="menu_item"><a href="dvmcmd-main.htm">Device Manager Command</a></span><br/><span class="menu_item"><a href="um-main.htm">Update Manager</a></span><br/><span class="menu_item"><a href="sys-main.htm">System Commands</a></span><br/><br/><span class="menu_header"><a href="faz-cmd-index.htm">FortiAnalyzer Modules</a></span><br/><span class="menu_item"><a href="faz_eventmgmt.htm">Event Mgmt Commands</a></span><br/><span class="menu_item"><a href="faz_eventmgmtconfig.htm">Event Mgmt Config Commands</a></span><br/><span class="menu_item"><a href="faz_fazsys.htm">FAZ System Commands</a></span><br/><span class="menu_item"><a href="faz_fortiview.htm">FortiView Commands</a></span><br/><span class="menu_item"><a href="faz_incidentmgmt.htm">Incident Mgmt Commands</a></span><br/><span class="menu_item"><a href="faz_logview.htm">LogView Commands</a></span><br/><span class="menu_item"><a href="faz_report.htm">Report Commands</a></span><br/><span class="menu_item"><a href="faz_reportconfig.htm">Report Config Commands</a></span><br/><span class="menu_item"><a href="faz_ioc.htm">IOC Commands</a></span><br/><span class="menu_item"><a href="faz_ueba.htm">UEBA Commands</a></span><br/><span class="menu_item"><a href="faz_soar.htm">SOAR Commands</a></span><br/><br/><span class="menu_header"><a href="obj-index.htm">Index of All Objects</a></span><br/><br/></div>
+<div class="content">
+<h1>Policy Package Methods</h1><br/>
+<div id='get-table'><h2>Get method (table)</h2><p><p>Retrieve all objects from a <b>table</b> that matches the criteria.</p></p><h6>Request:</h6><pre>{
+   "method": "get",
+   "params": [ {
+      "url": "...",
+      "option": "...",
+      "attr": "...",
+      "loadsub": ...,
+      "get used": ...,
+      "filter": [ "src", "op", "target", ... ],
+      "fields": [ ... ],
+      "sortings": [ { "field", 1 }, ... ],
+      "range": [ a, n ]
+   } ],
+   "session": "...",
+   "id": 1
+}</pre><h6>Result:</h6><pre>{
+   "method": "get",
+   "result": {
+      "url": "...",
+      "data": [ { ... } ],
+      "status": { "code": 0, "message": "..." }
+   },
+   "id": 1
+}</pre><p>&nbsp;</p><table class='param_table'><col class='table_hdr_name'/><col class='table_hdr_desc'/><thead><tr><th class='table_hdr_name'>Parameter and Returned Values</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class="odd_row"><td class="table_col_name">url</td><td class="table_col_desc"><i>string</i><br/>Path to the table, refer to the <a href="pkg-objects.htm">object list</a>. Do not specify object ID in the URL.<br/></td></tr><tr class="even_row"><td class="table_col_name">option</td><td class="table_col_desc">(optional) <i>string</i><br/>Set fetch option for the request. If no option is specified, by default the attributes of the objects will be returned.<br/><table><tr><td class="table_col_name">&quot;count&quot;</td><td class="table_col_desc">Return the number of matching entries instead of the actual entry data.<br/></td></tr><tr><td class="table_col_name">&quot;scope member&quot;</td><td class="table_col_desc">Return a list of scope members along with other attributes.<br/></td></tr><tr><td class="table_col_name">&quot;datasrc&quot;</td><td class="table_col_desc">Return all objects that can be referenced by an attribute. Require <i>attr</i> parameter.<br/></td></tr><tr><td class="table_col_name">&quot;get reserved&quot;</td><td class="table_col_desc">Also return reserved objects in the result.<br/></td></tr><tr><td class="table_col_name">&quot;syntax&quot;</td><td class="table_col_desc">Return the attribute syntax of a table or an object, instead of the actual entry data. All filter parameters will be ignored.<br/></td></tr></table></td></tr><tr class="odd_row"><td class="table_col_name">attr</td><td class="table_col_desc">(optional) <i>string</i><br/>The name of the attribute to retrieve its datasource. Only used with <i>datasrc</i> option.<br/></td></tr><tr class="even_row"><td class="table_col_name">loadsub</td><td class="table_col_desc">(optional) <i>int16</i><br/>Enable or disable the return of any sub-objects. If not specified, the default is to return all sub-objects.<br/></td></tr><tr class="odd_row"><td class="table_col_name">get used</td><td class="table_col_desc">(optional) <i>int16</i><br/></td></tr><tr class="even_row"><td class="table_col_name">filter</td><td class="table_col_desc">(optional) <i><a href="objects.htm#filter">filter object</a></i><br/>Filter the result according to a set of criteria.<br/></td></tr><tr class="odd_row"><td class="table_col_name">fields</td><td class="table_col_desc">(optional) <i>array</i><br/>Limit the output by returning only the attributes specified in the string array. If none specified, all attributes will be returned.<br/></td></tr><tr class="even_row"><td class="table_col_name">sortings</td><td class="table_col_desc">(optional) <i><a href="objects.htm#sortings">sorting object</a></i><br/>Specify the sorting of the returned result.<br/></td></tr><tr class="odd_row"><td class="table_col_name">range</td><td class="table_col_desc">(optional) <i>range</i><br/>Limit the number of output. For a range of [a, n], the output will contain <i>n</i> elements, starting from the <i>a<sup>th</sup></i> matching result.<br/></td></tr><tr class="even_row"><td class="table_col_name">data</td><td class="table_col_desc">(optional) <i>table</i><br/>Upon success, return an array of objects that matches the criteria. If the count option is used, an integer value is returned instead.<br/></td></tr><tr class="odd_row"><td class="table_col_name">status</td><td class="table_col_desc"><i>result object</i><br/>Error code and message for the command. Refer to the <a href="pkg-errors.htm">error code list</a> for all possible return values.<br/></td></tr></tbody></table></div><p>&nbsp;</p><div id='get-obj'><h2>Get method (object)</h2><p><p>Retrieve an <b>object</b> or <b>table object</b> from the database.</p></p><h6>Request:</h6><pre>{
+   "method": "get",
+   "params": [ {
+      "url": "...",
+      "option": "..."
+   } ],
+   "session": "...",
+   "id": 1
+}</pre><h6>Result:</h6><pre>{
+   "method": "get",
+   "result": {
+      "url": "...",
+      "data": { ... },
+      "status": { "code": 0, "message": "..." }
+   },
+   "id": 1
+}</pre><p>&nbsp;</p><table class='param_table'><col class='table_hdr_name'/><col class='table_hdr_desc'/><thead><tr><th class='table_hdr_name'>Parameter and Returned Values</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class="odd_row"><td class="table_col_name">url</td><td class="table_col_desc"><i>string</i><br/>Path to the object or table object, refer to the <a href="pkg-objects.htm">object list</a>.<br/></td></tr><tr class="even_row"><td class="table_col_name">option</td><td class="table_col_desc">(optional) <i>string</i><br/>Set fetch option for the request. If no option is specified, by default the attributes of the object will be returned.<br/><table><tr><td class="table_col_name">&quot;scope member&quot;</td><td class="table_col_desc">Return a list of scope members along with other attributes.<br/></td></tr><tr><td class="table_col_name">&quot;chksum&quot;</td><td class="table_col_desc">Return the check-sum value instead of attributes.<br/></td></tr><tr><td class="table_col_name">&quot;datasrc&quot;</td><td class="table_col_desc">Return all objects that can be referenced by an attribute. Require <i>attr</i> parameter.<br/></td></tr></table></td></tr><tr class="odd_row"><td class="table_col_name">data</td><td class="table_col_desc">(optional) <i>object</i><br/>Upon success, return the object retrieved by the command. If the chksum option is used, an integer value is returned instead.<br/></td></tr><tr class="even_row"><td class="table_col_name">status</td><td class="table_col_desc"><i>result object</i><br/>Error code and message for the command. Refer to the <a href="pkg-errors.htm">error code list</a> for all possible return values.<br/></td></tr></tbody></table></div><p>&nbsp;</p><div id='get-pkg'><h2>Get method (package/template)</h2><p><p>Retrieve <b>package objects</b> from the database.</p></p><h6>Request:</h6><pre>{
+   "method": "get",
+   "params": [ {
+      "url": "...",
+      "fields": [ ... ]
+   } ],
+   "session": "...",
+   "id": 1
+}</pre><h6>Result:</h6><pre>{
+   "method": "get",
+   "result": {
+      "url": "...",
+      "data": { ... },
+      "status": { "code": 0, "message": "..." }
+   },
+   "id": 1
+}</pre><p>&nbsp;</p><table class='param_table'><col class='table_hdr_name'/><col class='table_hdr_desc'/><thead><tr><th class='table_hdr_name'>Parameter and Returned Values</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class="odd_row"><td class="table_col_name">url</td><td class="table_col_desc"><i>string</i><br/>Path to the package folder or object. This includes ADOM and parent folders.<br/></td></tr><tr class="even_row"><td class="table_col_name">fields</td><td class="table_col_desc">(optional) <i>array</i><br/>Specified fields to retrieve for the package objects. If none specified, only <i>name</i>, <i>type</i>, and <i>sub-objects</i> will be returned.<br/></td></tr><tr class="odd_row"><td class="table_col_name">data</td><td class="table_col_desc">(optional) <i>object</i><br/>Upon success, return all objects under the path specified in the URL.<br/></td></tr><tr class="even_row"><td class="table_col_name">status</td><td class="table_col_desc"><i>result object</i><br/>Error code and message for the command. Refer to the <a href="pkg-errors.htm">error code list</a> for all possible return values.<br/></td></tr></tbody></table></div><p>&nbsp;</p><div id='add'><h2>Add method</h2><p><p>Add new object to a <b>table</b>. An existing entry with the same key must not already exist in the database, otherwise error 2 (Object already exists) will be returned. Use <a href="#set">set method</a> for adding/updating entry regardless of whether it already exists in database or not.</p></p><h6>Request:</h6><pre>{
+   "method": "add",
+   "params": [ {
+      "url": "...",
+      "data": [ { ... } ]
+   } ],
+   "session": "...",
+   "id": 1
+}</pre><h6>Result:</h6><pre>{
+   "method": "add",
+   "result": {
+      "url": "...",
+      "data": { ... },
+      "status": { "code": 0, "message": "..." }
+   },
+   "id": 1
+}</pre><p>&nbsp;</p><table class='param_table'><col class='table_hdr_name'/><col class='table_hdr_desc'/><thead><tr><th class='table_hdr_name'>Parameter and Returned Values</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class="odd_row"><td class="table_col_name">url</td><td class="table_col_desc"><i>string</i><br/>Path to the table or the new object, refer to the <a href="pkg-objects.htm">object list</a>.<br/></td></tr><tr class="even_row"><td class="table_col_name">data</td><td class="table_col_desc"><i>table</i><br/><i><u>In Request:</u></i><br/>A list of attributes and values for the new object.<br/><i><u>In Response:</u></i><br/>If the operation modifies a single object, then the new key will be returned.<br/></td></tr><tr class="odd_row"><td class="table_col_name">status</td><td class="table_col_desc"><i>result object</i><br/>Error code and message for the command. Refer to the <a href="pkg-errors.htm">error code list</a> for all possible return values.<br/></td></tr></tbody></table></div><p>&nbsp;</p><div id='add-pkgscope'><h2>Add method (package/template scope member)</h2><p><p>Add new scope member to package or template assignment.</p></p><h6>Request:</h6><pre>{
+   "method": "add",
+   "params": [ {
+      "url": "...",
+      "data": [ { "name": "...", "vdom": "..." }, ... ]
+   } ],
+   "session": "...",
+   "id": 1
+}</pre><h6>Result:</h6><pre>{
+   "method": "add",
+   "result": {
+      "url": "...",
+      "status": { "code": 0, "message": "..." }
+   },
+   "id": 1
+}</pre><p>&nbsp;</p><table class='param_table'><col class='table_hdr_name'/><col class='table_hdr_desc'/><thead><tr><th class='table_hdr_name'>Parameter and Returned Values</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class="odd_row"><td class="table_col_name">url</td><td class="table_col_desc"><i>string</i><br/>Path to the package folder or object with "/scope member" suffix. This includes ADOM and parent folders.<br/></td></tr><tr class="even_row"><td class="table_col_name">data</td><td class="table_col_desc"><i><a href="objects.htm#scope">scope object</a></i><br/>List of device/vdom scope to be added to the package or template.<br/></td></tr><tr class="odd_row"><td class="table_col_name">status</td><td class="table_col_desc"><i>result object</i><br/>Error code and message for the command. Refer to the <a href="pkg-errors.htm">error code list</a> for all possible return values.<br/></td></tr></tbody></table></div><p>&nbsp;</p><div id='set'><h2>Set method</h2><p><p>Add new or modify existing <b>object</b> or <b>table object</b> in the database. This method can be used regardless of whether the entry already exists or not. Use <a href="#add">add</a> or <a href="#update">update method</a> for more restrictive commands.</p></p><h6>Request:</h6><pre>{
+   "method": "set",
+   "params": [ {
+      "url": "...",
+      "data": [ { ... } ]
+   } ],
+   "session": "...",
+   "id": 1
+}</pre><h6>Result:</h6><pre>{
+   "method": "set",
+   "result": {
+      "url": "...",
+      "data": { ... },
+      "status": { "code": 0, "message": "..." }
+   },
+   "id": 1
+}</pre><p>&nbsp;</p><table class='param_table'><col class='table_hdr_name'/><col class='table_hdr_desc'/><thead><tr><th class='table_hdr_name'>Parameter and Returned Values</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class="odd_row"><td class="table_col_name">url</td><td class="table_col_desc"><i>string</i><br/>Path to the table, object, or table object, refer to the <a href="pkg-objects.htm">object list</a>.<br/></td></tr><tr class="even_row"><td class="table_col_name">data</td><td class="table_col_desc"><i>table</i><br/><i><u>In Request:</u></i><br/>A list of attributes and values for the object to be added or modified.<br/><i><u>In Response:</u></i><br/>If the operation modifies a single object, then the new key will be returned.<br/></td></tr><tr class="odd_row"><td class="table_col_name">status</td><td class="table_col_desc"><i>result object</i><br/>Error code and message for the command. Refer to the <a href="pkg-errors.htm">error code list</a> for all possible return values.<br/></td></tr></tbody></table></div><p>&nbsp;</p><div id='set-pkgscope'><h2>Set method (package/template scope member)</h2><p><p>Set package or template assignment. This scope data from this request will replace existing assignment.<br/>This request is an alias of the <i>update package scope member</i> method.</p></p><h6>Request:</h6><pre>{
+   "method": "set",
+   "params": [ {
+      "url": "...",
+      "data": [ { "name": "...", "vdom": "..." }, ... ]
+   } ],
+   "session": "...",
+   "id": 1
+}</pre><h6>Result:</h6><pre>{
+   "method": "set",
+   "result": {
+      "url": "...",
+      "status": { "code": 0, "message": "..." }
+   },
+   "id": 1
+}</pre><p>&nbsp;</p><table class='param_table'><col class='table_hdr_name'/><col class='table_hdr_desc'/><thead><tr><th class='table_hdr_name'>Parameter and Returned Values</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class="odd_row"><td class="table_col_name">url</td><td class="table_col_desc"><i>string</i><br/>Path to the package folder or object with "/scope member" suffix. This includes ADOM and parent folders.<br/></td></tr><tr class="even_row"><td class="table_col_name">data</td><td class="table_col_desc"><i><a href="objects.htm#scope">scope object</a></i><br/>List of device/vdom scope to be set for package or template assignment.<br/></td></tr><tr class="odd_row"><td class="table_col_name">status</td><td class="table_col_desc"><i>result object</i><br/>Error code and message for the command. Refer to the <a href="pkg-errors.htm">error code list</a> for all possible return values.<br/></td></tr></tbody></table></div><p>&nbsp;</p><div id='set-section'><h2>Set method (section value)</h2><p><p>Set section titles for policy entries.</p></p><h6>Request:</h6><pre>{
+   "method": "set",
+   "params": [ {
+      "url": "...",
+      "data": { "attr": "...", "name": "..." }
+   } ],
+   "session": "...",
+   "id": 1
+}</pre><h6>Result:</h6><pre>{
+   "method": "set",
+   "result": {
+      "url": "...",
+      "status": { "code": 0, "message": "..." }
+   },
+   "id": 1
+}</pre><p>&nbsp;</p><table class='param_table'><col class='table_hdr_name'/><col class='table_hdr_desc'/><thead><tr><th class='table_hdr_name'>Parameter and Returned Values</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class="odd_row"><td class="table_col_name">url</td><td class="table_col_desc"><i>string</i><br/>A special URL pointing to an object: "&lt;object_url&gt;/&lt;object_id&gt;/section value"<br/></td></tr><tr class="even_row"><td class="table_col_name">data</td><td class="table_col_desc"><i><a href="objects.htm#section">section object</a></i><br/>Specify section attribute and label title to set/change.<br/></td></tr><tr class="odd_row"><td class="table_col_name">status</td><td class="table_col_desc"><i>result object</i><br/>Error code and message for the command. Refer to the <a href="pkg-errors.htm">error code list</a> for all possible return values.<br/></td></tr></tbody></table></div><p>&nbsp;</p><div id='update'><h2>Update method</h2><p><p>Modify existing <b>object</b> or <b>table object</b> in the database. An existing entry must already exist in the database to be updated, otherwise error 3 (Object does not exist) will be returned. Use <a href="#set">set method</a> for adding/updating entry regardless of whether it already exists in database or not.</p></p><h6>Request:</h6><pre>{
+   "method": "update",
+   "params": [ {
+      "url": "...",
+      "data": [ { ... } ]
+   } ],
+   "session": "...",
+   "id": 1
+}</pre><h6>Result:</h6><pre>{
+   "method": "update",
+   "result": {
+      "url": "...",
+      "data": { ... },
+      "status": { "code": 0, "message": "..." }
+   },
+   "id": 1
+}</pre><p>&nbsp;</p><table class='param_table'><col class='table_hdr_name'/><col class='table_hdr_desc'/><thead><tr><th class='table_hdr_name'>Parameter and Returned Values</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class="odd_row"><td class="table_col_name">url</td><td class="table_col_desc"><i>string</i><br/>Path to the table, object, or table object, refer to the <a href="pkg-objects.htm">object list</a>.<br/></td></tr><tr class="even_row"><td class="table_col_name">data</td><td class="table_col_desc"><i>table</i><br/><i><u>In Request:</u></i><br/>A list of attributes and values for the object to be modified.<br/><i><u>In Response:</u></i><br/>If the operation modifies a single object, then the new key will be returned.<br/></td></tr><tr class="odd_row"><td class="table_col_name">status</td><td class="table_col_desc"><i>result object</i><br/>Error code and message for the command. Refer to the <a href="pkg-errors.htm">error code list</a> for all possible return values.<br/></td></tr></tbody></table></div><p>&nbsp;</p><div id='update-pkgscope'><h2>Update method (package/template scope member)</h2><p><p>Set package or template assignment. This scope data from this request will replace existing assignment.<br/>This request is an alias of the <i>set package scope member</i> method.</p></p><h6>Request:</h6><pre>{
+   "method": "update",
+   "params": [ {
+      "url": "...",
+      "data": [ { "name": "...", "vdom": "..." }, ... ]
+   } ],
+   "session": "...",
+   "id": 1
+}</pre><h6>Result:</h6><pre>{
+   "method": "update",
+   "result": {
+      "url": "...",
+      "status": { "code": 0, "message": "..." }
+   },
+   "id": 1
+}</pre><p>&nbsp;</p><table class='param_table'><col class='table_hdr_name'/><col class='table_hdr_desc'/><thead><tr><th class='table_hdr_name'>Parameter and Returned Values</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class="odd_row"><td class="table_col_name">url</td><td class="table_col_desc"><i>string</i><br/>Path to the package folder or object with "/scope member" suffix. This includes ADOM and parent folders.<br/></td></tr><tr class="even_row"><td class="table_col_name">data</td><td class="table_col_desc"><i><a href="objects.htm#scope">scope object</a></i><br/>List of device/vdom scope to be set for package or template assignment.<br/></td></tr><tr class="odd_row"><td class="table_col_name">status</td><td class="table_col_desc"><i>result object</i><br/>Error code and message for the command. Refer to the <a href="pkg-errors.htm">error code list</a> for all possible return values.<br/></td></tr></tbody></table></div><p>&nbsp;</p><div id='delete'><h2>Delete method</h2><p><p>Delete an existing object from a <b>table</b>.</p><p>To delete a policy folder, it must not contain any sub-object. Otherwise, error 10129 (Policy folder is not empty) will be returned.</p></p><h6>Request:</h6><pre>{
+   "method": "delete",
+   "params": [ {
+      "url": "..."
+   } ],
+   "session": "...",
+   "id": 1
+}</pre><h6>Result:</h6><pre>{
+   "method": "delete",
+   "result": {
+      "url": "...",
+      "status": { "code": 0, "message": "..." }
+   },
+   "id": 1
+}</pre><p>&nbsp;</p><table class='param_table'><col class='table_hdr_name'/><col class='table_hdr_desc'/><thead><tr><th class='table_hdr_name'>Parameter and Returned Values</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class="odd_row"><td class="table_col_name">url</td><td class="table_col_desc"><i>string</i><br/>Path to the object, refer to the <a href="pkg-objects.htm">object list</a>. The key for the entry to be deleted must be included in the URL, otherwise error 9 (the command is invalid for selected URL) will be returned.<br/></td></tr><tr class="even_row"><td class="table_col_name">status</td><td class="table_col_desc"><i>result object</i><br/>Error code and message for the command. Refer to the <a href="pkg-errors.htm">error code list</a> for all possible return values.<br/></td></tr></tbody></table></div><p>&nbsp;</p><div id='delete-pkgscope'><h2>Delete method (package/template scope member)</h2><p><p>Delete package or template assignment.</p></p><h6>Request:</h6><pre>{
+   "method": "delete",
+   "params": [ {
+      "url": "...",
+      "data": [ { "name": "...", "vdom": "..." }, ... ]
+   } ],
+   "session": "...",
+   "id": 1
+}</pre><h6>Result:</h6><pre>{
+   "method": "delete",
+   "result": {
+      "url": "...",
+      "status": { "code": 0, "message": "..." }
+   },
+   "id": 1
+}</pre><p>&nbsp;</p><table class='param_table'><col class='table_hdr_name'/><col class='table_hdr_desc'/><thead><tr><th class='table_hdr_name'>Parameter and Returned Values</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class="odd_row"><td class="table_col_name">url</td><td class="table_col_desc"><i>string</i><br/>Path to the package folder or object with "/scope member" suffix. This includes ADOM and parent folders.<br/></td></tr><tr class="even_row"><td class="table_col_name">data</td><td class="table_col_desc"><i><a href="objects.htm#scope">scope object</a></i><br/>List of device/vdom scope to be removed from package or template assignment.<br/></td></tr><tr class="odd_row"><td class="table_col_name">status</td><td class="table_col_desc"><i>result object</i><br/>Error code and message for the command. Refer to the <a href="pkg-errors.htm">error code list</a> for all possible return values.<br/></td></tr></tbody></table></div><p>&nbsp;</p><div id='delete-section'><h2>Delete method (section value)</h2><p><p>Delete section titles for policy entries.</p></p><h6>Request:</h6><pre>{
+   "method": "delete",
+   "params": [ {
+      "url": "...",
+      "data": { "attr": "...", "name": "..." }
+   } ],
+   "session": "...",
+   "id": 1
+}</pre><h6>Result:</h6><pre>{
+   "method": "delete",
+   "result": {
+      "url": "...",
+      "status": { "code": 0, "message": "..." }
+   },
+   "id": 1
+}</pre><p>&nbsp;</p><table class='param_table'><col class='table_hdr_name'/><col class='table_hdr_desc'/><thead><tr><th class='table_hdr_name'>Parameter and Returned Values</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class="odd_row"><td class="table_col_name">url</td><td class="table_col_desc"><i>string</i><br/>A special URL pointing to an object: "&lt;object_url&gt;/&lt;object_id&gt;/section value"<br/></td></tr><tr class="even_row"><td class="table_col_name">data</td><td class="table_col_desc"><i><a href="objects.htm#section">section object</a></i><br/>Specify section attribute to remove.<br/></td></tr><tr class="odd_row"><td class="table_col_name">status</td><td class="table_col_desc"><i>result object</i><br/>Error code and message for the command. Refer to the <a href="pkg-errors.htm">error code list</a> for all possible return values.<br/></td></tr></tbody></table></div><p>&nbsp;</p><div id='move'><h2>Move method</h2><p><p>Move an object in a <b>table</b> before or after another object.</p></p><h6>Request:</h6><pre>{
+   "method": "move",
+   "params": [ {
+      "url": "...",
+      "option": "...",
+      "target": "..."
+   } ],
+   "session": "...",
+   "id": 1
+}</pre><h6>Result:</h6><pre>{
+   "method": "move",
+   "result": {
+      "url": "...",
+      "data": { ... },
+      "status": { "code": 0, "message": "..." }
+   },
+   "id": 1
+}</pre><p>&nbsp;</p><table class='param_table'><col class='table_hdr_name'/><col class='table_hdr_desc'/><thead><tr><th class='table_hdr_name'>Parameter and Returned Values</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class="odd_row"><td class="table_col_name">url</td><td class="table_col_desc"><i>string</i><br/>Path to the source entry, refer to the <a href="pkg-objects.htm">object list</a>. The key for the source entry must be included in the URL, otherwise error 9 (the command is invalid for selected URL) will be returned.<br/></td></tr><tr class="even_row"><td class="table_col_name">option</td><td class="table_col_desc"><i>string</i><br/>To move the source before or after the target object.<br/><table><tr><td class="table_col_name">&quot;before&quot;</td><td class="table_col_desc"></td></tr><tr><td class="table_col_name">&quot;after&quot;</td><td class="table_col_desc"></td></tr></table></td></tr><tr class="odd_row"><td class="table_col_name">target</td><td class="table_col_desc"><i>string</i><br/>Key to the target entry.<br/></td></tr><tr class="even_row"><td class="table_col_name">data</td><td class="table_col_desc"><i>object</i><br/>The key of the moved object.<br/></td></tr><tr class="odd_row"><td class="table_col_name">status</td><td class="table_col_desc"><i>result object</i><br/>Error code and message for the command. Refer to the <a href="pkg-errors.htm">error code list</a> for all possible return values.<br/></td></tr></tbody></table></div><p>&nbsp;</p><div id='clone'><h2>Clone method</h2><p><p>Create a duplicate entry of an object in a <b>table</b>, with some or all of its non-key attributes.</p></p><h6>Request:</h6><pre>{
+   "method": "clone",
+   "params": [ {
+      "url": "...",
+      "data": { ... }
+   } ],
+   "session": "...",
+   "id": 1
+}</pre><h6>Result:</h6><pre>{
+   "method": "clone",
+   "result": {
+      "url": "...",
+      "data": { ... },
+      "status": { "code": 0, "message": "..." }
+   },
+   "id": 1
+}</pre><p>&nbsp;</p><table class='param_table'><col class='table_hdr_name'/><col class='table_hdr_desc'/><thead><tr><th class='table_hdr_name'>Parameter and Returned Values</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class="odd_row"><td class="table_col_name">url</td><td class="table_col_desc"><i>string</i><br/>Path to the source object entry, refer to the <a href="pkg-objects.htm">object list</a>. This must point to a single object in a table, which the key for the source object must be included in the URL.<br/></td></tr><tr class="even_row"><td class="table_col_name">data</td><td class="table_col_desc">(optional) <i>object</i><br/><i><u>In Request:</u></i><br/>Contains a list of attributes and values that need to be changed on the cloned object. All other attributes, except for the key, will be copied from the source object.<br/><i><u>In Response:</u></i><br/>The new key of the cloned object.<br/></td></tr><tr class="odd_row"><td class="table_col_name">status</td><td class="table_col_desc"><i>result object</i><br/>Error code and message for the command. Refer to the <a href="pkg-errors.htm">error code list</a> for all possible return values.<br/></td></tr></tbody></table></div><p>&nbsp;</p><div id='unset-pkgscope'><h2>Unset method (package/template scope member)</h2><p><p>Clear all package or template assignment.</p></p><h6>Request:</h6><pre>{
+   "method": "unset",
+   "params": [ {
+      "url": "..."
+   } ],
+   "session": "...",
+   "id": 1
+}</pre><h6>Result:</h6><pre>{
+   "method": "unset",
+   "result": {
+      "url": "...",
+      "status": { "code": 0, "message": "..." }
+   },
+   "id": 1
+}</pre><p>&nbsp;</p><table class='param_table'><col class='table_hdr_name'/><col class='table_hdr_desc'/><thead><tr><th class='table_hdr_name'>Parameter and Returned Values</th><th class='table_hdr_desc'>Descriptions</th></tr></thead><tbody><tr class="odd_row"><td class="table_col_name">url</td><td class="table_col_desc"><i>string</i><br/>Path to the package folder or object with "/scope member" suffix. This includes ADOM and parent folders.<br/></td></tr><tr class="even_row"><td class="table_col_name">status</td><td class="table_col_desc"><i>result object</i><br/>Error code and message for the command. Refer to the <a href="pkg-errors.htm">error code list</a> for all possible return values.<br/></td></tr></tbody></table></div><p>&nbsp;</p>
+</div></body></html>

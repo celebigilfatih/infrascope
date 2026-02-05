@@ -143,6 +143,7 @@ export const Sidebar: React.FC = () => {
       title: 'Security',
       items: [
         { name: 'Firewall Policies', href: '/security/policies', icon: Shield },
+        { name: 'IPsec Tunnels', href: '/network/ipsec', icon: Globe },
         { name: 'Risky Rules', href: '/security/risks', icon: AlertTriangle },
         { name: 'IPS / DoS Events', href: '/security/ips', icon: ShieldAlert },
         { name: 'Public Exposed Assets', href: '/security/exposed', icon: Eye },

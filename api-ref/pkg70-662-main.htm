@@ -1,0 +1,116 @@
+<!doctype html><html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>FortiAnalyzer 7.4.7 (2685) JSON API Reference-Policy Package (For v7.0)</title>
+<style>body {
+	font-family: Verdana;
+	color: black;
+	background: #D9D9D9;
+	font-size: 13px;
+}
+h1 {
+	font-size: 20px;
+}
+h2 {
+	font-size: 15px;
+	position: sticky;
+	position: -webkit-sticky;
+	top: 0px;
+	background: #D9D9D9;
+}
+h6 {
+	font-size: 13px;
+	margin-bottom: 8px;
+	margin-left: 12px;
+	font-weight: normal;
+}
+table {
+	width: 95%;
+	font-size: 13px;
+	margin-left: 15px;
+	margin-right: 5px;
+	border-collapse: collapse;
+	margin-bottom: 16px;
+}
+td {
+	vertical-align: top;
+	padding: 5px;
+}
+pre {
+	border: 1px solid black;
+	padding: 10px;
+	font-size: 12px;
+	margin-left: 15px;
+	width: 650px;
+}
+th {
+	text-align: left;
+}
+a {
+}
+a:link {
+	text-decoration: none;
+}
+a:visited {
+}
+a:hover {
+	text-decoration: underline;
+}
+.menu {
+	background: #C0C0C0;
+	border-right: 1px solid;
+	position: fixed;
+	padding: 6px;
+	padding-top: 20px;
+	top: 0px;
+	left: 0px;
+	bottom: 0px;
+	width: 200px;
+	overflow-x: hidden;
+	overflow-y: auto;
+	white-space: nowrap;
+}
+.content {
+	position: absolute;
+	padding: 6px;
+	top: 0px;
+	left: 240px;
+	right: 0px;
+}
+.menu_header {
+	font-weight: bold;
+}
+.param_table {
+	border: 1px solid #A0A0A0;
+}
+.table_hdr_name {
+	width: 160px;
+}
+.table_col_name {
+	font-weight: bold;
+	width: 160px;
+}
+.table_col_desc {
+}
+.param_table > thead > tr > th {
+	background-color: #C0C0C0;
+	border-bottom: 1px solid #A0A0A0;
+	padding: 6px;
+}
+.param_table > tbody > tr:nth-child(even) > td {
+	background-color: #D0D0D0;
+}
+.macro_num {
+	font-weight: bold;
+	width: 50px;
+}
+.macro_val {
+}
+</style>
+</head>
+<body>
+<div class="menu"><span class="menu_header"><a href="index.htm">API Reference Home</a></span><br/><span class="menu_item"><a href="objects.htm">Common Objects</a></span><br/><br/><span class="menu_header">Database Modules</span><br/><span class="menu_item"><a href="dvmdb-main.htm">Device Manager Database</a></span><br/><span class="menu_item"><a href="task-main.htm">Task Database</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof74-2779-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof74-2779-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg74-2779-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof72-1732-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof72-1732-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg72-1732-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof70-662-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof70-662-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg70-662-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof64-2087-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof64-2087-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg64-2087-main.htm">Policy Package</a></span><br/>&nbsp; <span class="menu_item"><a href="devprof62-1263-main.htm">System Template</a></span><br/>&nbsp; <span class="menu_item"><a href="wanprof62-1263-main.htm">SD-WAN Template</a></span><br/>&nbsp; <span class="menu_item"><a href="pkg62-1263-main.htm">Policy Package</a></span><br/><br/><span class="menu_header">Daemon Modules</span><br/><span class="menu_item"><a href="cmdb-main.htm">CLI Configuration</a></span><br/><span class="menu_item"><a href="dvmcmd-main.htm">Device Manager Command</a></span><br/><span class="menu_item"><a href="um-main.htm">Update Manager</a></span><br/><span class="menu_item"><a href="sys-main.htm">System Commands</a></span><br/><br/><span class="menu_header"><a href="faz-cmd-index.htm">FortiAnalyzer Modules</a></span><br/><span class="menu_item"><a href="faz_eventmgmt.htm">Event Mgmt Commands</a></span><br/><span class="menu_item"><a href="faz_eventmgmtconfig.htm">Event Mgmt Config Commands</a></span><br/><span class="menu_item"><a href="faz_fazsys.htm">FAZ System Commands</a></span><br/><span class="menu_item"><a href="faz_fortiview.htm">FortiView Commands</a></span><br/><span class="menu_item"><a href="faz_incidentmgmt.htm">Incident Mgmt Commands</a></span><br/><span class="menu_item"><a href="faz_logview.htm">LogView Commands</a></span><br/><span class="menu_item"><a href="faz_report.htm">Report Commands</a></span><br/><span class="menu_item"><a href="faz_reportconfig.htm">Report Config Commands</a></span><br/><span class="menu_item"><a href="faz_ioc.htm">IOC Commands</a></span><br/><span class="menu_item"><a href="faz_ueba.htm">UEBA Commands</a></span><br/><span class="menu_item"><a href="faz_soar.htm">SOAR Commands</a></span><br/><br/><span class="menu_header"><a href="obj-index.htm">Index of All Objects</a></span><br/><br/></div>
+<div class="content">
+<h1>Policy Package (For v7.0)</h1><br/>
+This documentation applies to v7.0 devices or ADOM, latest release (build 662).<br/><br/><dl><dt>Policy package manages the different types of policies in device VDOM. All configuration will be copied onto the device during next install.<br/><br/><ul><li>Prefix <b>/pm/pkg/global/</b> and <b>/pm/pkg/adom/</b> are used to access or modify the packages and install targets at global or ADOM level.</li><li>Prefix <b>/pm/config/global/pkg/</b> and <b>/pm/config/adom/pkg/</b> are used to access policies inside a package.</li><li>Prefix <b>/pm/pblock/adom/</b> and <b>/pm/config/adom/pblock/</b> are use to configure policy block and policy inside policy block.</li></ul><br/>This list only contains the policies. All objects that are reference by the policies are shared among the packages, and are listed under <i>ADOM Level Objects</i>.</dt><br/><br/><dt><a href="pkg-methods.htm">Policy Package Methods</a></dt><dd><a href="pkg-methods.htm#get-table">Get method (table)</a></dd><dd><a href="pkg-methods.htm#get-obj">Get method (object)</a></dd><dd><a href="pkg-methods.htm#get-pkg">Get method (package/template)</a></dd><dd><a href="pkg-methods.htm#add">Add method</a></dd><dd><a href="pkg-methods.htm#add-pkgscope">Add method (package/template scope member)</a></dd><dd><a href="pkg-methods.htm#set">Set method</a></dd><dd><a href="pkg-methods.htm#set-pkgscope">Set method (package/template scope member)</a></dd><dd><a href="pkg-methods.htm#set-section">Set method (section value)</a></dd><dd><a href="pkg-methods.htm#update">Update method</a></dd><dd><a href="pkg-methods.htm#update-pkgscope">Update method (package/template scope member)</a></dd><dd><a href="pkg-methods.htm#delete">Delete method</a></dd><dd><a href="pkg-methods.htm#delete-pkgscope">Delete method (package/template scope member)</a></dd><dd><a href="pkg-methods.htm#delete-section">Delete method (section value)</a></dd><dd><a href="pkg-methods.htm#move">Move method</a></dd><dd><a href="pkg-methods.htm#clone">Clone method</a></dd><dd><a href="pkg-methods.htm#unset-pkgscope">Unset method (package/template scope member)</a></dd><p>&nbsp;</p><dt><a href="pkg70-662-objects.htm">Policy Package Objects Reference</a></dt><dd><a href="pkg70-662-objects.htm#pkg-obj">Policy Package Object (table)</a></dd><dd><a href="pkg70-662-objects.htm#schedule">schedule (object)</a></dd><br/><dd><a href="pkg70-662-objects.htm#pblock-obj">Policy Block Object (table)</a></dd><br/><dd><a href="pkg70-662-objects.htm#authentication_rule">authentication/rule (table)</a></dd><dd><a href="pkg70-662-objects.htm#authentication_setting">authentication/setting (object)</a></dd><br/><dd><a href="pkg70-662-objects.htm#central_dnat">central/dnat (table)</a></dd><dd><a href="pkg70-662-objects.htm#central_dnat6">central/dnat6 (table)</a></dd><br/><dd><a href="pkg70-662-objects.htm#firewall_dos-policy">firewall/DoS-policy (table)</a></dd><dd><a href="pkg70-662-objects.htm#firewall_dos-policy_anomaly">firewall/DoS-policy/anomaly (table)</a></dd><dd><a href="pkg70-662-objects.htm#firewall_dos-policy6">firewall/DoS-policy6 (table)</a></dd><dd><a href="pkg70-662-objects.htm#firewall_dos-policy6_anomaly">firewall/DoS-policy6/anomaly (table)</a></dd><dd><a href="pkg70-662-objects.htm#firewall_acl">firewall/acl (table)</a></dd><dd><a href="pkg70-662-objects.htm#firewall_acl6">firewall/acl6 (table)</a></dd><dd><a href="pkg70-662-objects.htm#firewall_central-nat">firewall/central-nat (table)</a></dd><dd><a href="pkg70-662-objects.htm#firewall_central-snat-map">firewall/central-snat-map (table)</a></dd><dd><a href="pkg70-662-objects.htm#firewall_consolidated_policy">firewall/consolidated/policy (table)</a></dd><dd><a href="pkg70-662-objects.htm#firewall_explicit-proxy-policy">firewall/explicit-proxy-policy (table)</a></dd><dd><a href="pkg70-662-objects.htm#firewall_explicit-proxy-policy_identity-based-policy">firewall/explicit-proxy-policy/identity-based-policy (table)</a></dd><dd><a href="pkg70-662-objects.htm#firewall_hyperscale-policy">firewall/hyperscale-policy (table)</a></dd><dd><a href="pkg70-662-objects.htm#firewall_hyperscale-policy46">firewall/hyperscale-policy46 (table)</a></dd><dd><a href="pkg70-662-objects.htm#firewall_hyperscale-policy6">firewall/hyperscale-policy6 (table)</a></dd><dd><a href="pkg70-662-objects.htm#firewall_hyperscale-policy64">firewall/hyperscale-policy64 (table)</a></dd><dd><a href="pkg70-662-objects.htm#firewall_interface-policy">firewall/interface-policy (table)</a></dd><dd><a href="pkg70-662-objects.htm#firewall_interface-policy6">firewall/interface-policy6 (table)</a></dd><dd><a href="pkg70-662-objects.htm#firewall_local-in-policy">firewall/local-in-policy (table)</a></dd><dd><a href="pkg70-662-objects.htm#firewall_local-in-policy6">firewall/local-in-policy6 (table)</a></dd><dd><a href="pkg70-662-objects.htm#firewall_multicast-policy">firewall/multicast-policy (table)</a></dd><dd><a href="pkg70-662-objects.htm#firewall_multicast-policy6">firewall/multicast-policy6 (table)</a></dd><dd><a href="pkg70-662-objects.htm#firewall_policy">firewall/policy (table)</a></dd><dd><a href="pkg70-662-objects.htm#firewall_policy_identity-based-policy">firewall/policy/identity-based-policy (table)</a></dd><dd><a href="pkg70-662-objects.htm#firewall_policy_vpn_dst_node">firewall/policy/vpn_dst_node (table)</a></dd><dd><a href="pkg70-662-objects.htm#firewall_policy_vpn_src_node">firewall/policy/vpn_src_node (table)</a></dd><dd><a href="pkg70-662-objects.htm#firewall_policy46">firewall/policy46 (table)</a></dd><dd><a href="pkg70-662-objects.htm#firewall_policy6">firewall/policy6 (table)</a></dd><dd><a href="pkg70-662-objects.htm#firewall_policy6_identity-based-policy">firewall/policy6/identity-based-policy (table)</a></dd><dd><a href="pkg70-662-objects.htm#firewall_policy64">firewall/policy64 (table)</a></dd><dd><a href="pkg70-662-objects.htm#firewall_proxy-policy">firewall/proxy-policy (table)</a></dd><dd><a href="pkg70-662-objects.htm#firewall_response-shaping-policy">firewall/response-shaping-policy (table)</a></dd><dd><a href="pkg70-662-objects.htm#firewall_security-policy">firewall/security-policy (table)</a></dd><dd><a href="pkg70-662-objects.htm#firewall_shaping-policy">firewall/shaping-policy (table)</a></dd><dd><a href="pkg70-662-objects.htm#firewall_sniff-interface-policy">firewall/sniff-interface-policy (table)</a></dd><dd><a href="pkg70-662-objects.htm#firewall_sniff-interface-policy6">firewall/sniff-interface-policy6 (table)</a></dd><br/><dd><a href="pkg70-662-objects.htm#global_footer_consolidated_policy">global/footer/consolidated/policy (table)</a></dd><dd><a href="pkg70-662-objects.htm#global_footer_policy">global/footer/policy (table)</a></dd><dd><a href="pkg70-662-objects.htm#global_footer_policy_identity-based-policy">global/footer/policy/identity-based-policy (table)</a></dd><dd><a href="pkg70-662-objects.htm#global_footer_policy6">global/footer/policy6 (table)</a></dd><dd><a href="pkg70-662-objects.htm#global_footer_policy6_identity-based-policy6">global/footer/policy6/identity-based-policy6 (table)</a></dd><dd><a href="pkg70-662-objects.htm#global_footer_shaping-policy">global/footer/shaping-policy (table)</a></dd><dd><a href="pkg70-662-objects.htm#global_header_consolidated_policy">global/header/consolidated/policy (table)</a></dd><dd><a href="pkg70-662-objects.htm#global_header_policy">global/header/policy (table)</a></dd><dd><a href="pkg70-662-objects.htm#global_header_policy_identity-based-policy">global/header/policy/identity-based-policy (table)</a></dd><dd><a href="pkg70-662-objects.htm#global_header_policy6">global/header/policy6 (table)</a></dd><dd><a href="pkg70-662-objects.htm#global_header_policy6_identity-based-policy6">global/header/policy6/identity-based-policy6 (table)</a></dd><dd><a href="pkg70-662-objects.htm#global_header_shaping-policy">global/header/shaping-policy (table)</a></dd><br/><dd><a href="pkg70-662-objects.htm#policy_package_settings">policy/package/settings (object)</a></dd><br/><dd><a href="pkg70-662-objects.htm#user_nac-policy">user/nac-policy (table)</a></dd><br/><dd><a href="pkg70-662-objects.htm#videofilter_youtube-key">videofilter/youtube-key (table)</a></dd><br/><dd><a href="pkg70-662-objects.htm#web-proxy_pac-policy">web-proxy/pac-policy (table)</a></dd><p>&nbsp;</p><dt><a href="pkg-errors.htm">Policy Package Error Code List</a></dt><p>&nbsp;</p><dt><a href="pkg-examples.htm">Policy Package Examples</a></dt><dd><a href="pkg-examples.htm#pkg-management">Policy package management</a></dd><p>&nbsp;</p></dl>
+</div></body></html>
