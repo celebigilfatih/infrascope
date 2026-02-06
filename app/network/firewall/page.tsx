@@ -133,12 +133,10 @@ const ITEMS_PER_PAGE = 10;
 export default function FirewallPage() {
   const [status, setStatus] = useState<FortiGateStatus | null>(null);
   const [sslUsers, setSslUsers] = useState<SSLVPNUser[]>([]);
-  const [ipsecTunnels, setIpsecTunnels] = useState<IPsecTunnel[]>([]);
   const [interfaceStats, setInterfaceStats] = useState<InterfaceStats[]>([]);
   const [eventLogs, setEventLogs] = useState<EventLog[]>([]);
   const [fortiAnalyzerStatus, setFortiAnalyzerStatus] = useState<Record<string, unknown> | null>(null);
   const [fortiAnalyzerAdoms, setFortiAnalyzerAdoms] = useState<Array<Record<string, unknown>>>([]);
-  const [faEventLogs, setFaEventLogs] = useState<Array<Record<string, unknown>>>([]);
   const [configRevisions, setConfigRevisions] = useState<{
     hasUnsavedChanges: boolean;
     revisions: ConfigRevision[];
@@ -148,31 +146,21 @@ export default function FirewallPage() {
   // Search and pagination states
   const [sslSearch, setSslSearch] = useState('');
   const [sslPage, setSslPage] = useState(1);
-  const [ipsecSearch, setIpsecSearch] = useState('');
-  const [ipsecPage, setIpsecPage] = useState(1);
   const [interfaceSearch, setInterfaceSearch] = useState('');
   const [interfacePage, setInterfacePage] = useState(1);
 
-  const fetchData = async () => {
+  const fetchFortiGateData = async () => {
     setLoading(true);
     try {
-      const [statusRes, sslRes, ipsecRes, interfaceRes, faStatusRes, faAdomsRes, faEventsRes] = await Promise.all([
+      const [statusRes, sslRes, interfaceRes] = await Promise.all([
         fetch('/api/integrations/fortigate'),
         fetch('/api/integrations/fortigate?vpn=ssl'),
-        fetch('/api/integrations/fortigate?vpn=ipsec'),
         fetch('/api/integrations/fortigate?vpn=interfaces'),
-        fetch('/api/integrations/fortianalyzer?type=status'),
-        fetch('/api/integrations/fortianalyzer?type=adoms'),
-        fetch('/api/integrations/fortianalyzer?type=events'),
       ]);
 
       const statusData = await statusRes.json();
       const sslData = await sslRes.json();
-      const ipsecData = await ipsecRes.json();
       const interfaceData = await interfaceRes.json();
-      const faStatusData = await faStatusRes.json();
-      const faAdomsData = await faAdomsRes.json();
-      const faEventsData = await faEventsRes.json();
 
       if (statusData.connected) {
         setStatus({
@@ -193,13 +181,25 @@ export default function FirewallPage() {
         setSslUsers(sslData.data);
       }
 
-      if (ipsecData.success) {
-        setIpsecTunnels(ipsecData.data);
-      }
-
       if (interfaceData.success) {
         setInterfaceStats(interfaceData.data);
       }
+    } catch (error) {
+      console.error('Failed to fetch FortiGate data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchFortiAnalyzerData = async () => {
+    try {
+      const [faStatusRes, faAdomsRes] = await Promise.all([
+        fetch('/api/integrations/fortianalyzer?type=status'),
+        fetch('/api/integrations/fortianalyzer?type=adoms'),
+      ]);
+
+      const faStatusData = await faStatusRes.json();
+      const faAdomsData = await faAdomsRes.json();
 
       if (faStatusData.success) {
         setFortiAnalyzerStatus(faStatusData.data);
@@ -208,21 +208,24 @@ export default function FirewallPage() {
       if (faAdomsData.success) {
         setFortiAnalyzerAdoms(faAdomsData.data || []);
       }
-
-      if (faEventsData.success) {
-        setFaEventLogs(faEventsData.data || []);
-      }
     } catch (error) {
-      console.error('Failed to fetch data:', error);
-    } finally {
-      setLoading(false);
+      console.error('Failed to fetch FortiAnalyzer data:', error);
     }
   };
 
   useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, 30000);
-    return () => clearInterval(interval);
+    fetchFortiGateData();
+    fetchFortiAnalyzerData();
+    
+    // FortiGate: 5 dakika
+    const fortigateInterval = setInterval(fetchFortiGateData, 300000);
+    // FortiAnalyzer: 15 dakika
+    const fortianalyzerInterval = setInterval(fetchFortiAnalyzerData, 900000);
+    
+    return () => {
+      clearInterval(fortigateInterval);
+      clearInterval(fortianalyzerInterval);
+    };
   }, []);
 
   // Filter and paginate SSL users
@@ -244,26 +247,6 @@ export default function FirewallPage() {
     return filteredSslUsers.slice(start, start + ITEMS_PER_PAGE);
   }, [filteredSslUsers, sslPage]);
 
-  // Filter and paginate IPsec tunnels
-  const filteredIpsecTunnels = useMemo(() => {
-    if (!ipsecSearch) return ipsecTunnels;
-    const term = ipsecSearch.toLowerCase();
-    return ipsecTunnels.filter(
-      (t) =>
-        t.name.toLowerCase().includes(term) ||
-        t.comments.toLowerCase().includes(term) ||
-        t.rgwy.includes(term) ||
-        t.status.toLowerCase().includes(term)
-    );
-  }, [ipsecTunnels, ipsecSearch]);
-
-  const ipsecTotalPages = Math.ceil(filteredIpsecTunnels.length / ITEMS_PER_PAGE);
-  const paginatedIpsecTunnels = useMemo(() => {
-    const start = (ipsecPage - 1) * ITEMS_PER_PAGE;
-    return filteredIpsecTunnels.slice(start, start + ITEMS_PER_PAGE);
-  }, [filteredIpsecTunnels, ipsecPage]);
-
-  // Group revisions by admin
   // Interface filter and pagination
   const filteredInterfaces = useMemo(() => {
     return interfaceStats.filter((iface: InterfaceStats) => {
@@ -343,7 +326,7 @@ export default function FirewallPage() {
           <p className="text-muted-foreground">{status?.hostname} ({status?.serial})</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={fetchData} disabled={loading}>
+          <Button variant="outline" size="icon" onClick={() => { fetchFortiGateData(); fetchFortiAnalyzerData(); }} disabled={loading}>
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </Button>
         </div>
@@ -661,56 +644,6 @@ export default function FirewallPage() {
         </CardContent>
       </Card>
 
-      {/* FortiAnalyzer Event Logs */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5" />
-            FortiAnalyzer Event Logları
-            <Badge variant="secondary">{faEventLogs.length}</Badge>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="flex justify-center py-12">
-              <RefreshCw className="h-8 w-8 animate-spin text-primary" />
-            </div>
-          ) : faEventLogs.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <AlertTriangle className="h-8 w-8 mx-auto mb-2 opacity-50" />
-              <p>Event log'u bulunamadı</p>
-              <p className="text-xs">FortiAnalyzer log arama sonuçları boş</p>
-            </div>
-          ) : (
-            <div className="space-y-3 max-h-96 overflow-y-auto">
-              {faEventLogs.slice(0, 10).map((log: Record<string, unknown>, idx: number) => (
-                <div key={idx} className="p-3 bg-muted rounded-lg border-l-4 border-orange-500">
-                  <div className="flex items-start justify-between mb-2">
-                    <div>
-                      <p className="font-medium text-sm">{log.type as string} - {log.subtype as string}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {log.itime as string} | {log.devname as string}
-                      </p>
-                    </div>
-                    <Badge variant="outline" className="text-xs">
-                      {log.action as string}
-                    </Badge>
-                  </div>
-                  {(log.srcip || log.dstip) && (
-                    <p className="text-sm mb-1 font-mono text-xs">
-                      <span className="text-muted-foreground">Flow:</span> {log.srcip as string} → {log.dstip as string}
-                    </p>
-                  )}
-                  {log.msg && (
-                    <p className="text-sm text-muted-foreground italic">{log.msg as string}</p>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
       {/* SSL-VPN Users Table */}
       <Card>
         <CardHeader>
@@ -807,111 +740,6 @@ export default function FirewallPage() {
                       </React.Fragment>
                     ))}
                     <Button variant="outline" size="icon" onClick={() => setSslPage((p) => Math.min(sslTotalPages, p + 1))} disabled={sslPage === sslTotalPages}>
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* IPsec Tunnels Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Lock className="h-5 w-5" />
-              IPsec Tunnel'ları
-              <Badge variant="secondary">{filteredIpsecTunnels.length}</Badge>
-            </div>
-            <div className="relative w-64">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Tunnel ara..."
-                value={ipsecSearch}
-                onChange={(e) => { setIpsecSearch(e.target.value); setIpsecPage(1); }}
-                className="pl-9"
-              />
-            </div>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="flex justify-center py-12">
-              <RefreshCw className="h-8 w-8 animate-spin text-primary" />
-            </div>
-          ) : (
-            <>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Tunnel Adı</TableHead>
-                    <TableHead>Açıklama</TableHead>
-                    <TableHead>Durum</TableHead>
-                    <TableHead>Gateway</TableHead>
-                    <TableHead className="text-center">Bağlantı</TableHead>
-                    <TableHead className="text-right">Traffic</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {paginatedIpsecTunnels.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                        Tunnel bulunamadı
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    paginatedIpsecTunnels.map((tunnel, idx) => (
-                      <TableRow key={idx}>
-                        <TableCell className="font-medium">{tunnel.name}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">
-                          {tunnel.comments || '-'}
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={tunnel.status === 'up' ? 'success' : 'destructive'}
-                            className="text-xs"
-                          >
-                            {tunnel.status === 'up' ? 'Aktif' : 'Pasif'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="font-mono text-xs">{tunnel.rgwy}</TableCell>
-                        <TableCell className="text-center">{tunnel.connection_count}</TableCell>
-                        <TableCell className="text-right text-xs">
-                          <div>↓ {formatBandwidth(tunnel.incoming_bytes)}</div>
-                          <div>↑ {formatBandwidth(tunnel.outgoing_bytes)}</div>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-              {ipsecTotalPages > 1 && (
-                <div className="flex items-center justify-between mt-4">
-                  <p className="text-sm text-muted-foreground">Sayfa {ipsecPage} / {ipsecTotalPages}</p>
-                  <div className="flex items-center gap-1">
-                    <Button variant="outline" size="icon" onClick={() => setIpsecPage((p) => Math.max(1, p - 1))} disabled={ipsecPage === 1}>
-                      <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    {getPageNumbers(ipsecPage, ipsecTotalPages).map((page, idx) => (
-                      <React.Fragment key={idx}>
-                        {page === 'ellipsis' ? (
-                          <span className="px-2 text-muted-foreground">...</span>
-                        ) : (
-                          <Button
-                            variant={ipsecPage === page ? 'default' : 'outline'}
-                            size="sm"
-                            onClick={() => setIpsecPage(page)}
-                            className="w-9"
-                          >
-                            {page}
-                          </Button>
-                        )}
-                      </React.Fragment>
-                    ))}
-                    <Button variant="outline" size="icon" onClick={() => setIpsecPage((p) => Math.min(ipsecTotalPages, p + 1))} disabled={ipsecPage === ipsecTotalPages}>
                       <ChevronRight className="h-4 w-4" />
                     </Button>
                   </div>

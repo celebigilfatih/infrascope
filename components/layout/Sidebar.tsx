@@ -41,7 +41,8 @@ import {
   AlertOctagon,
   Target,
   History,
-  Key
+  Key,
+  FileText
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -137,6 +138,8 @@ export const Sidebar: React.FC = () => {
         { name: 'VLANs', href: '/network/vlans', icon: Shield },
         { name: 'IPAM', href: '/network/ipam', icon: Target },
         { name: 'Firewall View', href: '/network/firewall', icon: Lock },
+        { name: 'Config Revisions', href: '/network/config-revisions', icon: History },
+        { name: 'FA Event Logs', href: '/network/fa-events', icon: FileText },
       ]
     },
     {

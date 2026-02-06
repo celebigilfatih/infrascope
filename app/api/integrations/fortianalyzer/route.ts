@@ -56,7 +56,8 @@ export async function GET(request: NextRequest) {
     } else if (dataType === 'adoms') {
       data = await service.getAdoms();
     } else if (dataType === 'events') {
-      data = await service.getEventLogs(10);
+      data = await service.getConfigLogs(50);
+      console.log('FortiAnalyzer config logs data:', JSON.stringify(data, null, 2));
     } else if (dataType === 'traffic') {
       const tid = await service.startLogSearch('traffic', 10);
       if (tid) {

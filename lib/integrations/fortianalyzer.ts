@@ -161,6 +161,97 @@ class FortiAnalyzerService {
   }
 
   /**
+   * Get config logs directly (alternative to logsearch)
+   */
+  async getConfigLogs(limit: number = 50): Promise<Array<Record<string, unknown>>> {
+    if (!this.session) {
+      const loggedIn = await this.login();
+      if (!loggedIn) return [];
+    }
+
+    try {
+      // Doğrudan log/config endpoint'ini dene
+      const response = await fetch(this.baseUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'get',
+          params: [{
+            url: '/logview/adom/root/log/config',
+            uri: 'db:root/config',
+            limit: limit,
+          }],
+          session: this.session,
+          id: 15,
+        }),
+      });
+
+      const data = await response.json();
+      console.log('Direct config log response:', JSON.stringify(data, null, 2));
+
+      if (data.error) {
+        console.error('Config log error:', data.error);
+        return [];
+      }
+
+      // Farklı response yapılarına göre veriyi al
+      let logs: Array<Record<string, unknown>> = [];
+      
+      if (Array.isArray(data.result)) {
+        logs = data.result[0]?.data || [];
+      } else if (data.result?.data) {
+        logs = data.result.data;
+      } else if (Array.isArray(data.result)) {
+        logs = data.result;
+      }
+
+      return logs;
+    } catch (error) {
+      console.error('Failed to get config logs:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get devices from ADOM
+   */
+  async getDevices(): Promise<Array<Record<string, unknown>>> {
+    if (!this.session) {
+      const loggedIn = await this.login();
+      if (!loggedIn) return [];
+    }
+
+    try {
+      const response = await fetch(this.baseUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'get',
+          params: [{
+            url: '/dvmdb/adom/root/device',
+            fields: ['name', 'devid', 'ip', 'platform'],
+          }],
+          session: this.session,
+          id: 20,
+        }),
+      });
+
+      const data = await response.json();
+      console.log('Devices raw response:', JSON.stringify(data, null, 2));
+
+      if (data.result && Array.isArray(data.result)) {
+        return data.result[0]?.data || [];
+      }
+      return [];
+    } catch (error) {
+      console.error('Failed to get devices:', error);
+      return [];
+    }
+  }
+
+  /**
    * Start log search and get task ID
    */
   async startLogSearch(logtype: string = 'event', limit: number = 20): Promise<number | null> {
