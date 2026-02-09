@@ -42,7 +42,8 @@ import {
   Target,
   History,
   Key,
-  FileText
+  FileText,
+  ExternalLink
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -137,14 +138,16 @@ export const Sidebar: React.FC = () => {
         { name: 'Ports', href: '/network/ports', icon: Plug },
         { name: 'VLANs', href: '/network/vlans', icon: Shield },
         { name: 'IPAM', href: '/network/ipam', icon: Target },
-        { name: 'Firewall View', href: '/network/firewall', icon: Lock },
-        { name: 'Config Revisions', href: '/network/config-revisions', icon: History },
-        { name: 'FA Event Logs', href: '/network/fa-events', icon: FileText },
       ]
     },
     {
       title: 'Security',
       items: [
+        { name: 'Firewall View', href: '/network/firewall', icon: Lock },
+        { name: 'Config Revisions', href: '/network/config-revisions', icon: History },
+        { name: 'FA Event Logs', href: '/network/fa-events', icon: FileText },
+        { name: 'Virtual IPs', href: '/security/virtual-ips', icon: ExternalLink },
+        { name: 'Web Analitik', href: '/security/web-analytics', icon: Globe },
         { name: 'Firewall Policies', href: '/security/policies', icon: Shield },
         { name: 'IPsec Tunnels', href: '/network/ipsec', icon: Globe },
         { name: 'Risky Rules', href: '/security/risks', icon: AlertTriangle },

@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   Table,
@@ -14,285 +14,275 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import {
-  ChevronLeft,
-  ChevronRight,
-  RefreshCw,
-  Search,
   History,
-  AlertTriangle,
-  Save,
-  ArrowLeft
+  User,
+  Search,
+  RefreshCw,
+  AlertCircle,
+  LogIn,
+  LogOut,
+  Settings,
+  Shield,
+  Server,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
-import Link from 'next/link';
 
-interface ConfigRevision {
-  id: number;
-  time: number;
-  admin: string;
-  comment: string;
-  version: string;
+interface AdminLog {
+  id?: string;
+  date?: string;
+  time?: string;
+  user?: string;
+  action?: string;
+  msg?: string;
+  logdesc?: string;
+  srcip?: string;
+  dstip?: string;
+  status?: string;
+  level?: string;
+  ui?: string;
+  method?: string;
+  profile?: string;
+  devname?: string;
+  devid?: string;
+  reason?: string;
+  cfgpath?: string;
+  cfgattr?: string;
+  cfgobj?: string;
 }
 
-const ITEMS_PER_PAGE = 10;
+const ITEMS_PER_PAGE = 15;
 
 export default function ConfigRevisionsPage() {
-  const [revisions, setRevisions] = useState<ConfigRevision[]>([]);
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [logs, setLogs] = useState<AdminLog[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [page, setPage] = useState(1);
+  const [error, setError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
 
-  const fetchRevisions = async () => {
-    setLoading(true);
+  useEffect(() => {
+    fetchAdminLogs();
+    const interval = setInterval(fetchAdminLogs, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const fetchAdminLogs = async () => {
     try {
-      const response = await fetch('/api/integrations/fortigate?vpn=config');
-      const data = await response.json();
-      if (data.success) {
-        setRevisions(data.data.revisions);
-        setHasUnsavedChanges(data.data.hasUnsavedChanges);
+      setLoading(true);
+      setError(null);
+      const response = await fetch('/api/integrations/fortianalyzer?type=config-revisions');
+      const result = await response.json();
+      if (result.success && Array.isArray(result.data)) {
+        setLogs(result.data);
+      } else {
+        setError(result.error || 'Veri yüklenemedi');
       }
-    } catch (error) {
-      console.error('Failed to fetch config revisions:', error);
+    } catch (err) {
+      setError('Admin logları yüklenemedi');
+      console.error('Failed to fetch admin logs:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchRevisions();
-    // 15 dakikada bir yenile
-    const interval = setInterval(fetchRevisions, 900000);
-    return () => clearInterval(interval);
-  }, []);
+  const filteredLogs = useMemo(() => {
+    if (!searchTerm) return logs;
+    const term = searchTerm.toLowerCase();
+    return logs.filter(log =>
+      (log.user || '').toLowerCase().includes(term) ||
+      (log.action || '').toLowerCase().includes(term) ||
+      (log.logdesc || '').toLowerCase().includes(term) ||
+      (log.devname || '').toLowerCase().includes(term) ||
+      (log.srcip || '').toLowerCase().includes(term)
+    );
+  }, [logs, searchTerm]);
 
-  // Filter and pagination
-  const filteredRevisions = useMemo(() => {
-    return revisions.filter((rev: ConfigRevision) => {
-      const searchLower = search.toLowerCase();
-      return (
-        (rev.admin || '').toLowerCase().includes(searchLower) ||
-        (rev.comment || '').toLowerCase().includes(searchLower) ||
-        (rev.version || '').toLowerCase().includes(searchLower)
-      );
-    });
-  }, [revisions, search]);
+  const totalPages = Math.ceil(filteredLogs.length / ITEMS_PER_PAGE);
+  const paginatedLogs = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredLogs.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredLogs, currentPage]);
 
-  const totalPages = Math.ceil(filteredRevisions.length / ITEMS_PER_PAGE);
-  const paginatedRevisions = filteredRevisions.slice(
-    (page - 1) * ITEMS_PER_PAGE,
-    page * ITEMS_PER_PAGE
-  );
+  const loginCount = useMemo(() => logs.filter(l => l.action === 'login').length, [logs]);
+  const logoutCount = useMemo(() => logs.filter(l => l.action === 'logout').length, [logs]);
+  const configChangeCount = useMemo(() => logs.filter(l =>
+    l.action !== 'login' && l.action !== 'logout' && l.action !== 'perf-stats'
+  ).length, [logs]);
+  const uniqueAdmins = useMemo(() => [...new Set(logs.map(l => l.user).filter(Boolean))], [logs]);
+  const uniqueDevices = useMemo(() => [...new Set(logs.map(l => l.devname).filter(Boolean))], [logs]);
 
-  const formatDate = (timestamp: number) => {
-    return new Date(timestamp * 1000).toLocaleString('tr-TR');
+  const getActionIcon = (action?: string) => {
+    switch (action) {
+      case 'login': return <LogIn className="h-4 w-4 text-green-500" />;
+      case 'logout': return <LogOut className="h-4 w-4 text-orange-500" />;
+      default: return <Settings className="h-4 w-4 text-blue-500" />;
+    }
   };
 
-  // Admin istatistikleri
-  const adminStats = useMemo(() => {
-    const stats: Record<string, number> = {};
-    revisions.forEach((rev) => {
-      stats[rev.admin] = (stats[rev.admin] || 0) + 1;
-    });
-    return Object.entries(stats)
-      .sort(([, a], [, b]) => b - a)
-      .slice(0, 5);
-  }, [revisions]);
+  const actionTranslations: Record<string, { label: string; color: string }> = {
+    'login': { label: 'Giriş', color: 'bg-green-600' },
+    'logout': { label: 'Çıkış', color: 'bg-orange-600' },
+    'Edit': { label: 'Düzenleme', color: 'bg-blue-600' },
+    'Add': { label: 'Ekleme', color: 'bg-emerald-600' },
+    'Delete': { label: 'Silme', color: 'bg-red-600' },
+    'Move': { label: 'Taşıma', color: 'bg-violet-600' },
+    'Clone': { label: 'Kopyalama', color: 'bg-indigo-600' },
+    'backup': { label: 'Yedekleme', color: 'bg-teal-600' },
+    'restore': { label: 'Geri Yükleme', color: 'bg-amber-600' },
+    'upgrade': { label: 'Güncelleme', color: 'bg-cyan-600' },
+    'reboot': { label: 'Yeniden Başlatma', color: 'bg-red-500' },
+    'shutdown': { label: 'Kapatma', color: 'bg-red-700' },
+    'config-change': { label: 'Konfig Değişikliği', color: 'bg-blue-500' },
+  };
+
+  const getActionBadge = (action?: string) => {
+    const tr = action ? actionTranslations[action] : undefined;
+    if (tr) return <Badge className={tr.color}>{tr.label}</Badge>;
+    return <Badge className="bg-slate-600">{action || 'Bilinmiyor'}</Badge>;
+  };
+
+  const getLevelBadge = (level?: string) => {
+    switch (level) {
+      case 'warning': return <Badge variant="destructive">Uyarı</Badge>;
+      case 'alert': return <Badge variant="destructive">Alarm</Badge>;
+      case 'information': return <Badge variant="secondary">Bilgi</Badge>;
+      case 'notice': return <Badge variant="outline">Bildirim</Badge>;
+      default: return <Badge variant="outline">{level || '-'}</Badge>;
+    }
+  };
+
+  const decodeMsg = (msg?: string) => {
+    if (!msg) return '-';
+    try { return decodeURIComponent(msg); } catch { return msg; }
+  };
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Link href="/network/firewall">
-            <Button variant="outline" size="icon">
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-          </Link>
-          <div>
-            <h1 className="text-3xl font-bold flex items-center gap-2">
-              <History className="h-8 w-8" />
-              Konfigürasyon Revizyonları
-            </h1>
-            <p className="text-muted-foreground">
-              FortiGate yapılandırma değişiklikleri ve versiyon geçmişi
-            </p>
-          </div>
+    <div className="p-6 space-y-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-2xl font-bold">Admin İşlem Logları</h1>
+          <p className="text-muted-foreground">
+            FortiGate üzerindeki admin kullanıcı işlemleri (giriş/çıkış, konfigürasyon değişiklikleri)
+          </p>
         </div>
-        <Button onClick={fetchRevisions} disabled={loading}>
+        <Button onClick={fetchAdminLogs} variant="outline" disabled={loading}>
           <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
           Yenile
         </Button>
       </div>
 
-      {/* Unsaved Changes Warning */}
-      {hasUnsavedChanges && (
-        <Card className="border-orange-500 bg-orange-50 dark:bg-orange-950/20">
-          <CardContent className="flex items-center gap-3 py-4">
-            <AlertTriangle className="h-5 w-5 text-orange-600" />
-            <div>
-              <p className="font-medium text-orange-800 dark:text-orange-200">
-                Kaydedilmemiş Değişiklikler Var
-              </p>
-              <p className="text-sm text-orange-600 dark:text-orange-300">
-                Mevcut yapılandırma kaydedilmemiş. Değişiklikleri kaydetmek için FortiGate üzerinden işlem yapın.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <History className="h-4 w-4" /> Toplam Revizyon
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{revisions.length}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Save className="h-4 w-4" /> Son Revizyon
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-lg font-medium">
-              {revisions.length > 0 ? formatDate(revisions[0].time).split(' ')[0] : '-'}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4" /> Durum
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Badge variant={hasUnsavedChanges ? 'destructive' : 'success'}>
-              {hasUnsavedChanges ? 'Kaydedilmemiş' : 'Senkronize'}
-            </Badge>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <History className="h-4 w-4" /> Admin Sayısı
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{adminStats.length}</div>
-          </CardContent>
-        </Card>
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <Card><CardContent className="p-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-full bg-blue-500/20"><History className="h-5 w-5 text-blue-500" /></div>
+            <div><p className="text-sm text-muted-foreground">Toplam Log</p><p className="text-2xl font-bold">{logs.length}</p></div>
+          </div>
+        </CardContent></Card>
+        <Card><CardContent className="p-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-full bg-green-500/20"><LogIn className="h-5 w-5 text-green-500" /></div>
+            <div><p className="text-sm text-muted-foreground">Giriş</p><p className="text-2xl font-bold">{loginCount}</p></div>
+          </div>
+        </CardContent></Card>
+        <Card><CardContent className="p-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-full bg-orange-500/20"><LogOut className="h-5 w-5 text-orange-500" /></div>
+            <div><p className="text-sm text-muted-foreground">Çıkış</p><p className="text-2xl font-bold">{logoutCount}</p></div>
+          </div>
+        </CardContent></Card>
+        <Card><CardContent className="p-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-full bg-purple-500/20"><User className="h-5 w-5 text-purple-500" /></div>
+            <div><p className="text-sm text-muted-foreground">Admin Sayısı</p><p className="text-2xl font-bold">{uniqueAdmins.length}</p></div>
+          </div>
+        </CardContent></Card>
+        <Card><CardContent className="p-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-full bg-cyan-500/20"><Server className="h-5 w-5 text-cyan-500" /></div>
+            <div><p className="text-sm text-muted-foreground">Cihaz</p><p className="text-2xl font-bold">{uniqueDevices.length}</p></div>
+          </div>
+        </CardContent></Card>
       </div>
-
-      {/* Admin Stats */}
-      {adminStats.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium">Değişiklikler (Son 10 Revizyon)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-2">
-              {adminStats.map(([admin, count]) => (
-                <Badge key={admin} variant="secondary" className="text-xs">
-                  {admin}: {count}
-                </Badge>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Search */}
-      <div className="flex items-center gap-4">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Admin, yorum veya versiyon ara..."
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
-            className="pl-10"
-          />
-        </div>
-        <Badge variant="secondary">
-          {filteredRevisions.length} sonuç
-        </Badge>
+      <div className="relative max-w-md">
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input placeholder="Admin, işlem, cihaz veya IP ara..." value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }} className="pl-9" />
       </div>
 
-      {/* Revisions Table */}
+      {/* Log Table */}
       <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Revizyon ID</TableHead>
-                <TableHead>Tarih</TableHead>
-                <TableHead>Admin</TableHead>
-                <TableHead>Versiyon</TableHead>
-                <TableHead>Yorum</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8">
-                    <RefreshCw className="h-8 w-8 animate-spin mx-auto" />
-                  </TableCell>
-                </TableRow>
-              ) : paginatedRevisions.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                    Revizyon bulunamadı
-                  </TableCell>
-                </TableRow>
-              ) : (
-                paginatedRevisions.map((rev: ConfigRevision, idx: number) => (
-                  <TableRow key={idx}>
-                    <TableCell className="font-mono text-xs">#{rev.id}</TableCell>
-                    <TableCell className="text-sm">{formatDate(rev.time)}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="text-xs">
-                        {rev.admin}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="font-mono text-xs">{rev.version}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground max-w-md truncate">
-                      {rev.comment || '-'}
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-          {totalPages > 1 && (
-            <div className="flex items-center justify-center gap-4 py-4">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPage(p => Math.max(1, p - 1))}
-                disabled={page === 1}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <span className="text-sm">
-                Sayfa {page} / {totalPages}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                disabled={page === totalPages}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Shield className="h-5 w-5" />
+            Admin İşlem Geçmişi
+            <Badge variant="secondary">{filteredLogs.length}</Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="flex justify-center py-12"><RefreshCw className="h-8 w-8 animate-spin text-primary" /></div>
+          ) : error ? (
+            <div className="flex items-center gap-2 p-4 bg-destructive/10 rounded-lg">
+              <AlertCircle className="h-5 w-5 text-destructive" />
+              <span className="text-destructive">{error}</span>
             </div>
+          ) : (
+            <>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-20">Tarih</TableHead>
+                    <TableHead className="w-16">Saat</TableHead>
+                    <TableHead>Admin</TableHead>
+                    <TableHead>İşlem</TableHead>
+                    <TableHead>Açıklama</TableHead>
+                    <TableHead>Kaynak IP</TableHead>
+                    <TableHead>Cihaz</TableHead>
+                    <TableHead>Seviye</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paginatedLogs.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Admin logu bulunamadı</TableCell>
+                    </TableRow>
+                  ) : (
+                    paginatedLogs.map((log, idx) => (
+                      <TableRow key={log.id || idx}>
+                        <TableCell className="text-xs">{log.date || '-'}</TableCell>
+                        <TableCell className="text-xs font-mono">{log.time || '-'}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            {getActionIcon(log.action)}
+                            <span className="font-medium">{log.user || '-'}</span>
+                          </div>
+                          {log.ui && <div className="text-xs text-muted-foreground">{log.ui}</div>}
+                        </TableCell>
+                        <TableCell>{getActionBadge(log.action)}</TableCell>
+                        <TableCell className="max-w-xs">
+                          <div className="text-sm truncate" title={decodeMsg(log.msg)}>{decodeMsg(log.msg)}</div>
+                          {log.logdesc && <div className="text-xs text-muted-foreground">{log.logdesc}</div>}
+                        </TableCell>
+                        <TableCell className="text-xs font-mono">{log.srcip || '-'}</TableCell>
+                        <TableCell className="text-xs">{log.devname || '-'}</TableCell>
+                        <TableCell>{getLevelBadge(log.level)}</TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between mt-4">
+                  <p className="text-sm text-muted-foreground">Sayfa {currentPage} / {totalPages} ({filteredLogs.length} kayıt)</p>
+                  <div className="flex items-center gap-1">
+                    <Button variant="outline" size="icon" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}><ChevronLeft className="h-4 w-4" /></Button>
+                    <Button variant="outline" size="icon" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}><ChevronRight className="h-4 w-4" /></Button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>

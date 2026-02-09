@@ -77,6 +77,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: true, data: interfaces });
     }
 
+    if (vpn === 'vip') {
+      const vips = await service.fetchVIPs();
+      return NextResponse.json({ success: true, data: vips });
+    }
+
     // Return system status
     const status = await service.getStatus();
     return NextResponse.json(status);

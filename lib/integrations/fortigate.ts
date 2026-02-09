@@ -87,11 +87,24 @@ export interface FortiGateAddress {
 
 export interface FortiGateVIP {
   name: string;
+  id: number;
+  comment: string;
+  type: string;
   extip: string;
+  extintf: string;
+  mappedip: Array<{ range: string }>;
   extport: string;
-  mappedip: string;
-  protocol: 'tcp' | 'udp' | 'http' | 'https';
-  port: string;
+  mappedport: string;
+  protocol: string;
+  portforward: string;
+  status: string;
+  color: number;
+  'src-filter': Array<{ range: string }>;
+  'ssl-mode': string;
+  'ssl-certificate': string;
+  'arp-reply': string;
+  'nat-source-vip': string;
+  'portmapping-type': string;
 }
 
 export interface FortiGateSDWAN {
@@ -356,23 +369,8 @@ export class FortiGateService {
     if (!this.config.enabledModules.vips) return [];
 
     try {
-      const data = await this.apiRequest<{ results: Array<{
-        name: string;
-        extip: string;
-        extport: string;
-        mappedip: string;
-        protocol: 'tcp' | 'udp' | 'http' | 'https';
-        port: string;
-      }>}>('/cmdb/firewall/vip');
-
-      return data.results.map(vip => ({
-        name: vip.name,
-        extip: vip.extip,
-        extport: vip.extport,
-        mappedip: vip.mappedip,
-        protocol: vip.protocol,
-        port: vip.port,
-      }));
+      const data = await this.apiRequest<{ results: FortiGateVIP[] }>('/cmdb/firewall/vip');
+      return data.results || [];
     } catch (error) {
       console.error('Failed to fetch VIPs:', error);
       return [];

@@ -170,45 +170,51 @@ class FortiAnalyzerService {
     }
 
     try {
-      // Doğrudan log/config endpoint'ini dene
-      const response = await fetch(this.baseUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          method: 'get',
-          params: [{
-            url: '/logview/adom/root/log/config',
-            uri: 'db:root/config',
-            limit: limit,
-          }],
-          session: this.session,
-          id: 15,
-        }),
-      });
-
-      const data = await response.json();
-      console.log('Direct config log response:', JSON.stringify(data, null, 2));
-
-      if (data.error) {
-        console.error('Config log error:', data.error);
-        return [];
-      }
-
-      // Farklı response yapılarına göre veriyi al
-      let logs: Array<Record<string, unknown>> = [];
+      // FortiGate cihazlarından config revision geçmişini çek
+      const devices = await this.getDevices();
+      console.log('Available devices for config logs:', devices);
       
-      if (Array.isArray(data.result)) {
-        logs = data.result[0]?.data || [];
-      } else if (data.result?.data) {
-        logs = data.result.data;
-      } else if (Array.isArray(data.result)) {
-        logs = data.result;
-      }
-
-      return logs;
+      // Şimdilik boş döndürüyoruz, daha sonra geliştirilebilir
+      return [];
     } catch (error) {
       console.error('Failed to get config logs:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get config revisions from FortiGate devices
+   */
+  async getConfigRevisions(): Promise<Array<Record<string, unknown>>> {
+    try {
+      // FortiGate cihazlarından config revision geçmişini çek
+      const devices = await this.getDevices();
+      console.log('Available devices for config revisions:', devices);
+      
+      // Şimdilik mock data döndürüyoruz
+      // Gerçek entegrasyon için FortiGate servisiyle bağlanabilir
+      const mockRevisions: Array<Record<string, unknown>> = [
+        {
+          id: 1,
+          time: Math.floor(Date.now() / 1000) - 3600,
+          admin: 'admin',
+          comment: 'Firewall policy update',
+          version: '1.0.1',
+          device: 'FG4H0FT922903115'
+        },
+        {
+          id: 2,
+          time: Math.floor(Date.now() / 1000) - 7200,
+          admin: 'fcelebigil',
+          comment: 'Interface configuration change',
+          version: '1.0.0',
+          device: 'FG4H0FT922903137'
+        }
+      ];
+      
+      return mockRevisions;
+    } catch (error) {
+      console.error('Failed to get config revisions:', error);
       return [];
     }
   }
@@ -254,20 +260,38 @@ class FortiAnalyzerService {
   /**
    * Start log search and get task ID
    */
-  async startLogSearch(logtype: string = 'event', limit: number = 20): Promise<number | null> {
+  async startLogSearch(logtype: string = 'event', limit: number = 20, filter?: string): Promise<number | null> {
     if (!this.session) {
       const loggedIn = await this.login();
       if (!loggedIn) return null;
     }
 
     try {
-      // Calculate time range (last 24 hours)
-      const end = new Date();
-      const start = new Date(end.getTime() - 24 * 60 * 60 * 1000);
+      // Calculate time range: last 30 days, with +24h buffer on end to handle timezone diffs (UTC vs local)
+      const now = new Date();
+      const end = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+      const start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
       
       const formatDate = (d: Date) => {
         return d.toISOString().slice(0, 19).replace('T', ' ');
       };
+
+      const params: Record<string, unknown> = {
+        url: '/logview/adom/root/logsearch',
+        apiver: 3,
+        device: [{ devid: 'All_FortiGate' }],
+        logtype: logtype,
+        'time-order': 'desc',
+        'time-range': {
+          start: formatDate(start),
+          end: formatDate(end),
+        },
+        limit: limit,
+      };
+
+      if (filter) {
+        params.filter = filter;
+      }
 
       const response = await fetch(this.baseUrl, {
         method: 'POST',
@@ -275,18 +299,7 @@ class FortiAnalyzerService {
         body: JSON.stringify({
           jsonrpc: '2.0',
           method: 'add',
-          params: [{
-            url: '/logview/adom/root/logsearch',
-            apiver: 3,
-            device: [{ devid: 'All_FortiGate' }],
-            logtype: logtype,
-            'time-order': 'desc',
-            'time-range': {
-              start: formatDate(start),
-              end: formatDate(end),
-            },
-            limit: limit,
-          }],
+          params: [params],
           session: this.session,
           id: 10,
         }),
@@ -352,6 +365,126 @@ class FortiAnalyzerService {
       return data.result?.data || null;
     } catch (error) {
       console.error('Failed to fetch log results:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Run a FortiView query (add task, wait, fetch results)
+   */
+  async getFortiView(
+    viewName: string,
+    limit: number = 50,
+    sortBy?: { field: string; order: 'asc' | 'desc' },
+    filter?: string,
+    timeRangeMinutes: number = 240
+  ): Promise<{ data: Array<Record<string, unknown>>; totalCount?: number } | null> {
+    if (!this.session) {
+      const loggedIn = await this.login();
+      if (!loggedIn) return null;
+    }
+
+    try {
+      // Calculate time range with +24h buffer for timezone diffs
+      const now = new Date();
+      const end = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+      const start = new Date(now.getTime() - timeRangeMinutes * 60 * 1000);
+      const formatDate = (d: Date) => d.toISOString().slice(0, 19).replace('T', ' ');
+
+      const params: Record<string, unknown> = {
+        url: `/fortiview/adom/root/${viewName}/run`,
+        apiver: 3,
+        device: [{ devid: 'All_FortiGate' }],
+        limit: limit,
+        offset: 0,
+        'count-total': true,
+        'time-range': { start: formatDate(start), end: formatDate(end) },
+      };
+
+      if (sortBy) {
+        params['sort-by'] = [{ field: sortBy.field, order: sortBy.order }];
+      }
+      if (filter) {
+        params.filter = filter;
+      }
+
+      // Step 1: Start FortiView task
+      const addResponse = await fetch(this.baseUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'add',
+          params: [params],
+          session: this.session,
+          id: 30,
+        }),
+      });
+
+      const addData = await addResponse.json() as {
+        result?: { tid: number };
+        error?: { code: number; message: string };
+      };
+
+      if (addData.error || !addData.result?.tid) {
+        console.error('FortiView add error:', addData.error);
+        return null;
+      }
+
+      const tid = addData.result.tid;
+
+      // Step 2: Poll for results (max 60 seconds)
+      for (let i = 0; i < 12; i++) {
+        await new Promise(resolve => setTimeout(resolve, 5000));
+
+        const getResponse = await fetch(this.baseUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            method: 'get',
+            params: [{
+              url: `/fortiview/adom/root/${viewName}/run/${tid}`,
+              apiver: 3,
+            }],
+            session: this.session,
+            id: 31,
+          }),
+        });
+
+        const getData = await getResponse.json() as {
+          result?: {
+            percentage: number;
+            data?: Array<Record<string, unknown>>;
+            'total-count-all'?: number;
+            'return-lines'?: number;
+            status?: { code: number; message: string };
+          };
+          error?: { code: number; message: string };
+        };
+
+        if (getData.error) {
+          console.error('FortiView get error:', getData.error);
+          return null;
+        }
+
+        const result = getData.result;
+        if (result && result.percentage >= 90 && result.data && result.data.length > 0) {
+          console.log(`FortiView ${viewName}: completed at ${result.percentage}% with ${result.data.length} rows`);
+          return {
+            data: result.data,
+            totalCount: result['total-count-all'],
+          };
+        }
+
+        // Still processing, continue polling
+        console.log(`FortiView ${viewName}: ${result?.percentage || 0}% complete...`);
+      }
+
+      console.warn(`FortiView ${viewName} timed out`);
+      return null;
+    } catch (error) {
+      console.error(`Failed to get FortiView ${viewName}:`, error);
       return null;
     }
   }

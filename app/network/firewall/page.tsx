@@ -26,13 +26,7 @@ import {
   Activity,
   Server,
   Users,
-  Lock,
-  Globe,
-  Clock,
-  FileText,
   AlertTriangle,
-  User,
-  History
 } from 'lucide-react';
 
 interface FortiGateStatus {
@@ -79,16 +73,7 @@ interface SSLVPNUser {
   out_bytes: number;
 }
 
-interface IPsecTunnel {
-  name: string;
-  comments: string;
-  status: string;
-  username: string;
-  rgwy: string;
-  incoming_bytes: number;
-  outgoing_bytes: number;
-  connection_count: number;
-}
+interface IPsecTunnel {}
 
 interface ConfigRevision {
   id: number;
@@ -134,13 +119,8 @@ export default function FirewallPage() {
   const [status, setStatus] = useState<FortiGateStatus | null>(null);
   const [sslUsers, setSslUsers] = useState<SSLVPNUser[]>([]);
   const [interfaceStats, setInterfaceStats] = useState<InterfaceStats[]>([]);
-  const [eventLogs, setEventLogs] = useState<EventLog[]>([]);
   const [fortiAnalyzerStatus, setFortiAnalyzerStatus] = useState<Record<string, unknown> | null>(null);
   const [fortiAnalyzerAdoms, setFortiAnalyzerAdoms] = useState<Array<Record<string, unknown>>>([]);
-  const [configRevisions, setConfigRevisions] = useState<{
-    hasUnsavedChanges: boolean;
-    revisions: ConfigRevision[];
-  }>({ hasUnsavedChanges: false, revisions: [] });
   const [loading, setLoading] = useState(true);
 
   // Search and pagination states
@@ -233,7 +213,7 @@ export default function FirewallPage() {
     if (!sslSearch) return sslUsers;
     const term = sslSearch.toLowerCase();
     return sslUsers.filter(
-      (u) =>
+      (u: SSLVPNUser) =>
         u.user_name.toLowerCase().includes(term) ||
         u.remote_host.includes(term) ||
         u.aip.includes(term) ||
@@ -265,24 +245,24 @@ export default function FirewallPage() {
     interfacePage * ITEMS_PER_PAGE
   );
 
-  // Group revisions by admin
-  const revisionsByAdmin = useMemo(() => {
-    const groups: Record<string, ConfigRevision[]> = {};
-    configRevisions.revisions.forEach((rev: ConfigRevision) => {
-      if (!groups[rev.admin]) {
-        groups[rev.admin] = [];
-      }
-      groups[rev.admin].push(rev);
-    });
-    return groups;
-  }, [configRevisions.revisions]);
+  // Unused: Config revisions moved to dedicated page
+  // const revisionsByAdmin = useMemo(() => {
+  //   const groups: Record<string, ConfigRevision[]> = {};
+  //   configRevisions.revisions.forEach((rev: ConfigRevision) => {
+  //     if (!groups[rev.admin]) {
+  //       groups[rev.admin] = [];
+  //     }
+  //     groups[rev.admin].push(rev);
+  //   });
+  //   return groups;
+  // }, [configRevisions.revisions]);
 
-  // Get manual changes (excluding daemon_admin)
-  const manualChanges = useMemo(() => {
-    return configRevisions.revisions.filter(
-      (rev: ConfigRevision) => rev.admin !== 'daemon_admin'
-    );
-  }, [configRevisions.revisions]);
+  // // Get manual changes (excluding daemon_admin)
+  // const manualChanges = useMemo(() => {
+  //   return configRevisions.revisions.filter(
+  //     (rev: ConfigRevision) => rev.admin !== 'daemon_admin'
+  //   );
+  // }, [configRevisions.revisions]);
 
   const formatBandwidth = (bytes: number) => {
     if (bytes > 1000000000) return `${(bytes / 1000000000).toFixed(2)} GB`;
