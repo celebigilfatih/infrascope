@@ -27,6 +27,7 @@ import {
   Monitor,
   Clock,
   FileCheck,
+  Cloud,
 } from 'lucide-react';
 
 interface WebsiteCategory {
@@ -83,6 +84,22 @@ interface PolicyHit {
   [key: string]: unknown;
 }
 
+interface CloudApp {
+  app_group?: string;
+  appcat?: string;
+  bandwidth?: string;
+  risk?: string;
+  d_risk?: string;
+  sessions?: string;
+  session_block?: string;
+  session_pass?: string;
+  traffic_in?: string;
+  traffic_out?: string;
+  num_users?: string;
+  fortigate?: string;
+  [key: string]: unknown;
+}
+
 function formatBytes(bytesStr?: string): string {
   if (!bytesStr) return '0 B';
   const bytes = parseFloat(bytesStr);
@@ -122,13 +139,16 @@ export default function WebAnalyticsPage() {
   const [websiteData, setWebsiteData] = useState<WebsiteCategory[]>([]);
   const [userData, setUserData] = useState<BrowsingUser[]>([]);
   const [policyData, setPolicyData] = useState<PolicyHit[]>([]);
+  const [cloudData, setCloudData] = useState<CloudApp[]>([]);
   const [loadingWebsites, setLoadingWebsites] = useState(true);
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [loadingPolicies, setLoadingPolicies] = useState(true);
+  const [loadingCloud, setLoadingCloud] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [websiteSearch, setWebsiteSearch] = useState('');
   const [userSearch, setUserSearch] = useState('');
   const [policySearch, setPolicySearch] = useState('');
+  const [cloudSearch, setCloudSearch] = useState('');
   const [activeTab, setActiveTab] = useState('categories');
   const [timeRange, setTimeRange] = useState(240);
 
@@ -138,10 +158,11 @@ export default function WebAnalyticsPage() {
     setLoadingWebsites(true);
     setLoadingUsers(true);
     setLoadingPolicies(true);
+    setLoadingCloud(true);
   
     try {
       const response = await fetch(
-        `/api/integrations/fortianalyzer?type=fortiview-batch&views=top-websites,top-browsing-users,policy-hits&limit=100&sort=bandwidth&range=${range}`
+        `/api/integrations/fortianalyzer?type=fortiview-batch&views=top-websites,top-browsing-users,policy-hits,top-applications&limit=100&sort=bandwidth&range=${range}`
       );
       const result = await response.json();
   
@@ -164,6 +185,10 @@ export default function WebAnalyticsPage() {
       if (r['policy-hits'] && Array.isArray(r['policy-hits'].data)) {
         setPolicyData(r['policy-hits'].data);
       }
+      // Top Applications (Cloud Apps)
+      if (r['top-applications'] && Array.isArray(r['top-applications'].data)) {
+        setCloudData(r['top-applications'].data);
+      }
     } catch (err) {
       console.error('Failed to fetch FortiView batch data:', err);
       setError('FortiView verileri al\u0131namad\u0131');
@@ -171,6 +196,7 @@ export default function WebAnalyticsPage() {
       setLoadingWebsites(false);
       setLoadingUsers(false);
       setLoadingPolicies(false);
+      setLoadingCloud(false);
     }
   }, []);
 
@@ -223,13 +249,23 @@ export default function WebAnalyticsPage() {
     );
   });
 
+  const filteredCloud = cloudData.filter((c: CloudApp) => {
+    if (!cloudSearch) return true;
+    const term = cloudSearch.toLowerCase();
+    return (
+      (c.app_group || '').toLowerCase().includes(term) ||
+      (c.appcat || '').toLowerCase().includes(term) ||
+      (c.fortigate || '').toLowerCase().includes(term)
+    );
+  });
+
   const totalBandwidth = websiteData.reduce((sum: number, w: WebsiteCategory) => sum + (parseFloat(w.bandwidth || '0') || 0), 0);
   const totalSessions = websiteData.reduce((sum: number, w: WebsiteCategory) => sum + (parseInt(w.sessions || '0', 10) || 0), 0);
   const totalThreats = websiteData.reduce((sum: number, w: WebsiteCategory) => sum + (parseInt(w.threat_block || '0', 10) || 0), 0);
-  const loading = loadingWebsites || loadingUsers || loadingPolicies;
+  const loading = loadingWebsites || loadingUsers || loadingPolicies || loadingCloud;
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 max-w-full">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold">Web Analitik</h1>
@@ -309,6 +345,10 @@ export default function WebAnalyticsPage() {
             <FileCheck className="h-4 w-4 mr-2" />
             Policy Hits
           </TabsTrigger>
+          <TabsTrigger value="cloud">
+            <Cloud className="h-4 w-4 mr-2" />
+            Cloud Uygulamaları
+          </TabsTrigger>
         </TabsList>
 
         {/* Top Website Categories */}
@@ -325,10 +365,11 @@ export default function WebAnalyticsPage() {
                 <Badge variant="secondary">{filteredWebsites.length}</Badge>
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-0">
               {loadingWebsites ? (
                 <div className="flex justify-center py-12"><RefreshCw className="h-8 w-8 animate-spin text-primary" /></div>
               ) : (
+                <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -380,6 +421,7 @@ export default function WebAnalyticsPage() {
                     )}
                   </TableBody>
                 </Table>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -399,10 +441,11 @@ export default function WebAnalyticsPage() {
                 <Badge variant="secondary">{filteredUsers.length}</Badge>
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-0">
               {loadingUsers ? (
                 <div className="flex justify-center py-12"><RefreshCw className="h-8 w-8 animate-spin text-primary" /></div>
               ) : (
+                <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -447,6 +490,7 @@ export default function WebAnalyticsPage() {
                     )}
                   </TableBody>
                 </Table>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -466,25 +510,25 @@ export default function WebAnalyticsPage() {
                 <Badge variant="secondary">{filteredPolicies.length}</Badge>
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-0">
               {loadingPolicies ? (
                 <div className="flex justify-center py-12"><RefreshCw className="h-8 w-8 animate-spin text-primary" /></div>
               ) : (
-                <Table>
+                <Table className="w-full" style={{ tableLayout: 'auto' }}>
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-10">#</TableHead>
-                      <TableHead>Policy</TableHead>
-                      <TableHead>Tür</TableHead>
-                      <TableHead><div className="flex items-center gap-1"><ArrowUpDown className="h-3 w-3" />Bant Genişliği</div></TableHead>
-                      <TableHead>Hit Sayısı</TableHead>
-                      <TableHead>İzin Verilen</TableHead>
-                      <TableHead>Engellenen</TableHead>
-                      <TableHead>Gelen Trafik</TableHead>
-                      <TableHead>Giden Trafik</TableHead>
-                      <TableHead>Kaynak Int.</TableHead>
-                      <TableHead>Hedef Int.</TableHead>
-                      <TableHead>Cihaz</TableHead>
+                      <TableHead className="whitespace-nowrap">Policy</TableHead>
+                      <TableHead className="whitespace-nowrap">Tür</TableHead>
+                      <TableHead className="whitespace-nowrap"><div className="flex items-center gap-1"><ArrowUpDown className="h-3 w-3" />Bant Genişliği</div></TableHead>
+                      <TableHead className="whitespace-nowrap">Hit Sayısı</TableHead>
+                      <TableHead className="whitespace-nowrap">İzin Verilen</TableHead>
+                      <TableHead className="whitespace-nowrap">Engellenen</TableHead>
+                      <TableHead className="whitespace-nowrap">Gelen Trafik</TableHead>
+                      <TableHead className="whitespace-nowrap">Giden Trafik</TableHead>
+                      <TableHead className="whitespace-nowrap">Kaynak Int.</TableHead>
+                      <TableHead className="whitespace-nowrap">Hedef Int.</TableHead>
+                      <TableHead className="whitespace-nowrap">Cihaz</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -495,29 +539,109 @@ export default function WebAnalyticsPage() {
                     ) : (
                       filteredPolicies.map((p: PolicyHit, idx: number) => (
                         <TableRow key={idx}>
-                          <TableCell className="text-muted-foreground">{idx + 1}</TableCell>
-                          <TableCell className="font-medium">{p.policy || p.agg_policyid || p.policyid || '-'}</TableCell>
-                          <TableCell className="text-xs">{p.policytype || '-'}</TableCell>
-                          <TableCell className="font-mono text-sm font-semibold">{formatBytes(p.bandwidth)}</TableCell>
-                          <TableCell className="font-mono text-sm">{formatNumber(p.counts)}</TableCell>
-                          <TableCell className="font-mono text-sm text-green-600">{formatNumber(p.count_pass)}</TableCell>
-                          <TableCell>
+                          <TableCell className="text-muted-foreground whitespace-nowrap">{idx + 1}</TableCell>
+                          <TableCell className="font-medium whitespace-nowrap">{p.policy || p.agg_policyid || p.policyid || '-'}</TableCell>
+                          <TableCell className="text-xs whitespace-nowrap">{p.policytype || '-'}</TableCell>
+                          <TableCell className="font-mono text-sm font-semibold whitespace-nowrap">{formatBytes(p.bandwidth)}</TableCell>
+                          <TableCell className="font-mono text-sm whitespace-nowrap">{formatNumber(p.counts)}</TableCell>
+                          <TableCell className="font-mono text-sm text-green-600 whitespace-nowrap">{formatNumber(p.count_pass)}</TableCell>
+                          <TableCell className="whitespace-nowrap">
                             {parseInt(p.count_block || '0', 10) > 0 ? (
                               <Badge variant="destructive">{formatNumber(p.count_block)}</Badge>
                             ) : (
                               <span className="text-muted-foreground">0</span>
                             )}
                           </TableCell>
-                          <TableCell className="font-mono text-xs text-green-600">{formatBytes(p.traffic_in)}</TableCell>
-                          <TableCell className="font-mono text-xs text-blue-600">{formatBytes(p.traffic_out)}</TableCell>
-                          <TableCell className="text-xs">{p.srcintf || '-'}</TableCell>
-                          <TableCell className="text-xs">{p.dstintf || '-'}</TableCell>
-                          <TableCell className="text-xs">{p.fortigate || '-'}</TableCell>
+                          <TableCell className="font-mono text-xs text-green-600 whitespace-nowrap">{formatBytes(p.traffic_in)}</TableCell>
+                          <TableCell className="font-mono text-xs text-blue-600 whitespace-nowrap">{formatBytes(p.traffic_out)}</TableCell>
+                          <TableCell className="text-xs whitespace-nowrap">{p.srcintf || '-'}</TableCell>
+                          <TableCell className="text-xs whitespace-nowrap">{p.dstintf || '-'}</TableCell>
+                          <TableCell className="text-xs whitespace-nowrap">{p.fortigate || '-'}</TableCell>
                         </TableRow>
                       ))
                     )}
                   </TableBody>
                 </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Cloud Applications */}
+        <TabsContent value="cloud" className="space-y-4">
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input placeholder="Uygulama, kategori veya cihaz ara..." value={cloudSearch} onChange={(e) => setCloudSearch(e.target.value)} className="pl-9" />
+          </div>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Cloud className="h-5 w-5" />
+                Top Cloud Uygulamaları
+                <Badge variant="secondary">{filteredCloud.length}</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {loadingCloud ? (
+                <div className="flex justify-center py-12"><RefreshCw className="h-8 w-8 animate-spin text-primary" /></div>
+              ) : (
+                <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-10">#</TableHead>
+                      <TableHead>Uygulama</TableHead>
+                      <TableHead>Kategori</TableHead>
+                      <TableHead>Risk</TableHead>
+                      <TableHead><div className="flex items-center gap-1"><ArrowUpDown className="h-3 w-3" />Bant Genişliği</div></TableHead>
+                      <TableHead>Oturum</TableHead>
+                      <TableHead>İzin Verilen</TableHead>
+                      <TableHead>Engellenen</TableHead>
+                      <TableHead>Gelen Trafik</TableHead>
+                      <TableHead>Giden Trafik</TableHead>
+                      <TableHead>Kullanıcı</TableHead>
+                      <TableHead>Cihaz</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredCloud.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={12} className="text-center py-8 text-muted-foreground">Veri bulunamadı</TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredCloud.map((c: CloudApp, idx: number) => {
+                        const riskLevel = parseInt(c.risk || c.d_risk || '0', 10);
+                        const riskColor = riskLevel >= 4 ? 'bg-red-600' : riskLevel >= 3 ? 'bg-orange-500' : riskLevel >= 2 ? 'bg-yellow-500' : 'bg-green-500';
+                        const riskLabel = riskLevel >= 4 ? 'Kritik' : riskLevel >= 3 ? 'Yüksek' : riskLevel >= 2 ? 'Orta' : 'Düşük';
+                        return (
+                          <TableRow key={idx}>
+                            <TableCell className="text-muted-foreground">{idx + 1}</TableCell>
+                            <TableCell className="font-medium">{c.app_group || '-'}</TableCell>
+                            <TableCell className="text-sm">{c.appcat || '-'}</TableCell>
+                            <TableCell>
+                              <Badge className={`${riskColor} text-white`}>{riskLabel} ({riskLevel})</Badge>
+                            </TableCell>
+                            <TableCell className="font-mono text-sm font-semibold">{formatBytes(c.bandwidth)}</TableCell>
+                            <TableCell className="font-mono text-sm">{formatNumber(c.sessions)}</TableCell>
+                            <TableCell className="font-mono text-sm text-green-600">{formatNumber(c.session_pass)}</TableCell>
+                            <TableCell>
+                              {parseInt(c.session_block || '0', 10) > 0 ? (
+                                <Badge variant="destructive">{formatNumber(c.session_block)}</Badge>
+                              ) : (
+                                <span className="text-muted-foreground">0</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="font-mono text-xs text-green-600">{formatBytes(c.traffic_in)}</TableCell>
+                            <TableCell className="font-mono text-xs text-blue-600">{formatBytes(c.traffic_out)}</TableCell>
+                            <TableCell className="font-mono text-sm">{formatNumber(c.num_users)}</TableCell>
+                            <TableCell className="text-xs">{c.fortigate || '-'}</TableCell>
+                          </TableRow>
+                        );
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+                </div>
               )}
             </CardContent>
           </Card>

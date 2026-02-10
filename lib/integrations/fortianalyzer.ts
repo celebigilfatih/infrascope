@@ -422,16 +422,33 @@ class FortiAnalyzerService {
       });
 
       const addData = await addResponse.json() as {
-        result?: { tid: number };
+        result?: { tid: number } | Array<{ tid?: number; status?: { code: number; message: string } }>;
         error?: { code: number; message: string };
       };
 
-      if (addData.error || !addData.result?.tid) {
-        console.error('FortiView add error:', addData.error);
+      // Handle both response formats: {result: {tid}} and {result: [{tid, status}]}
+      let tid: number | null = null;
+      if (addData.error) {
+        console.error(`FortiView ${viewName} add error:`, addData.error);
+        return null;
+      }
+      if (Array.isArray(addData.result)) {
+        const first = addData.result[0];
+        if (first?.status && first.status.code !== 0) {
+          console.error(`FortiView ${viewName} add status error:`, first.status);
+          return null;
+        }
+        tid = first?.tid ?? null;
+      } else if (addData.result && 'tid' in addData.result) {
+        tid = addData.result.tid;
+      }
+
+      if (!tid) {
+        console.error(`FortiView ${viewName} add: no tid in response:`, JSON.stringify(addData));
         return null;
       }
 
-      const tid = addData.result.tid;
+      console.log(`FortiView ${viewName}: task started with tid=${tid}`);
 
       // Step 2: Poll for results (max 60 seconds)
       for (let i = 0; i < 12; i++) {
@@ -485,6 +502,110 @@ class FortiAnalyzerService {
       return null;
     } catch (error) {
       console.error(`Failed to get FortiView ${viewName}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Get MITRE ATT&CK Matrix data
+   */
+  async getMitreAttackMatrix(options: { domain?: string; timeRange?: { start: string; end: string }; adom?: string } = {}): Promise<any> {
+    if (!this.session) {
+      const loggedIn = await this.login();
+      if (!loggedIn) return null;
+    }
+
+    const { domain = 'enterprise', timeRange, adom = 'root' } = options;
+
+    try {
+      const params: Record<string, unknown> = {
+        url: `/eventmgmt/adom/${adom}/mitre-attack-matrix`,
+        apiver: 3,
+        'mitre-domain': domain,
+        option: ['metadata', 'event-count', 'incident-count', 'handler-count'],
+      };
+
+      if (timeRange) {
+        params['time-range'] = {
+          start: timeRange.start,
+          end: timeRange.end
+        };
+      }
+
+      const requestBody = {
+        jsonrpc: '2.0',
+        method: 'get',
+        params: [params],
+        session: this.session,
+        id: 40,
+      };
+
+      const response = await fetch(this.baseUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody),
+      });
+
+      const data = await response.json();
+      if (data.error) {
+        console.error('[MITRE] Error in response:', data.error);
+        return null;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('[MITRE] Exception:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get details for a specific MITRE technique
+   */
+  async getMitreTechniqueDetails(techId: string, options: { domain?: string; timeRange?: { start: string; end: string }; adom?: string } = {}): Promise<any> {
+    if (!this.session) {
+      const loggedIn = await this.login();
+      if (!loggedIn) return null;
+    }
+
+    const { domain = 'enterprise', timeRange, adom = 'root' } = options;
+
+    try {
+      const params: Record<string, unknown> = {
+        url: `/eventmgmt/adom/${adom}/mitre-attack-matrix/technique/${techId}`,
+        apiver: 3,
+        'mitre-domain': domain,
+        option: ['metadata', 'handler-summary'],
+      };
+
+      if (timeRange) {
+        params['time-range'] = {
+          start: timeRange.start,
+          end: timeRange.end
+        };
+      }
+
+      const response = await fetch(this.baseUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'get',
+          params: [params],
+          session: this.session,
+          id: 41,
+        }),
+      });
+
+      const data = await response.json();
+      if (data.error) {
+        console.error(`MITRE Technique ${techId} get error:`, data.error);
+        return null;
+      }
+
+      return data.result;
+    } catch (error) {
+      console.error(`Failed to get MITRE Technique ${techId}:`, error);
       return null;
     }
   }

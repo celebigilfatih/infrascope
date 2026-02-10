@@ -74,6 +74,25 @@ export async function GET(request: NextRequest) {
         await new Promise(resolve => setTimeout(resolve, 1000));
         data = await service.fetchLogResults(tid, 0, 10);
       }
+    } else if (dataType === 'ips-critical') {
+      // IPS attack logs - critical severity only
+      const limit = parseInt(searchParams.get('limit') || '500', 10);
+
+      const tid = await service.startLogSearch('attack', limit, 'severity == critical');
+      if (tid) {
+        // Poll for results (max 30s)
+        for (let i = 0; i < 6; i++) {
+          await new Promise(resolve => setTimeout(resolve, 5000));
+          const logs = await service.fetchLogResults(tid, 0, limit);
+          if (logs && logs.length > 0) {
+            return NextResponse.json({ success: true, data: logs, type: dataType, count: logs.length });
+          }
+        }
+        // Return whatever we have after timeout
+        const logs = await service.fetchLogResults(tid, 0, limit);
+        return NextResponse.json({ success: true, data: logs || [], type: dataType, count: (logs || []).length });
+      }
+      return NextResponse.json({ success: true, data: [], type: dataType, count: 0 });
     } else if (dataType === 'fortiview') {
       // Single FortiView query
       const viewName = searchParams.get('view') || 'top-websites';

@@ -148,6 +148,8 @@ export const Sidebar: React.FC = () => {
         { name: 'FA Event Logs', href: '/network/fa-events', icon: FileText },
         { name: 'Virtual IPs', href: '/security/virtual-ips', icon: ExternalLink },
         { name: 'Web Analitik', href: '/security/web-analytics', icon: Globe },
+        { name: 'MITRE ATT&CK', href: '/security/mitre-attack', icon: ShieldAlert },
+        { name: 'IoC Hosts', href: '/security/ioc-hosts', icon: AlertOctagon },
         { name: 'Firewall Policies', href: '/security/policies', icon: Shield },
         { name: 'IPsec Tunnels', href: '/network/ipsec', icon: Globe },
         { name: 'Risky Rules', href: '/security/risks', icon: AlertTriangle },
