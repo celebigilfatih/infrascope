@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -13,300 +13,500 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { RefreshCw, Plus, Clock, Trash2, RotateCcw, Search, Database } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import {
+  RefreshCw,
+  Camera,
+  Trash2,
+  RotateCcw,
+  Plus,
+  AlertTriangle,
+  Clock,
+  HardDrive,
+  Search,
+} from 'lucide-react';
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
+import { format, differenceInDays } from 'date-fns';
+import { tr } from 'date-fns/locale';
 
 interface Snapshot {
   id: string;
-  name: string;
+  vmId: string;
   vmName: string;
+  name: string;
   description: string;
-  createdAt: string;
-  sizeGB: number;
-  type: 'manual' | 'scheduled' | 'backup';
+  createTime: string;
+  state: string;
+  size: number;
 }
 
-const ITEMS_PER_PAGE = 10;
+interface VM {
+  id: string;
+  name: string;
+}
 
 export default function SnapshotsPage() {
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
+  const [vms, setVms] = useState<VM[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  // Create snapshot dialog
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [selectedVmId, setSelectedVmId] = useState('');
+  const [newSnapshotName, setNewSnapshotName] = useState('');
+  const [newSnapshotDesc, setNewSnapshotDesc] = useState('');
+  const [creating, setCreating] = useState(false);
+
+  // Confirm dialog
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean;
+    title: string;
+    description: string;
+    onConfirm: () => void;
+  }>({ open: false, title: '', description: '', onConfirm: () => {} });
+
+  const fetchSnapshots = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Fetch VMs list for create dialog
+      const vmRes = await fetch('/api/integrations/vmware?type=vms');
+      const vmJson = await vmRes.json();
+      
+      if (vmJson.error) {
+        setError(vmJson.error);
+        return;
+      }
+      
+      setVms(vmJson.vms || []);
+      
+      // Fetch all snapshots in one call (batch operation)
+      const snapRes = await fetch('/api/integrations/vmware?type=snapshots');
+      const snapJson = await snapRes.json();
+      
+      if (snapJson.error) {
+        setError(snapJson.error);
+        return;
+      }
+      
+      setSnapshots(snapJson.snapshots || []);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    setTimeout(() => {
-      setSnapshots([
-        { id: '1', name: 'Before-Update-2024-01-15', vmName: 'WEB-SERVER-01', description: 'System update öncesi snapshot', createdAt: '2024-01-15 10:30', sizeGB: 12.5, type: 'manual' },
-        { id: '2', name: 'Weekly-Backup-2024-01-14', vmName: 'DB-SERVER-01', description: 'Haftalık otomatik yedekleme', createdAt: '2024-01-14 02:00', sizeGB: 45.2, type: 'scheduled' },
-        { id: '3', name: 'Pre-Migration-Backup', vmName: 'APP-SERVER-01', description: 'Migration öncesi yedek', createdAt: '2024-01-10 14:15', sizeGB: 28.7, type: 'backup' },
-        { id: '4', name: 'Before-Patch-2024-01-08', vmName: 'WEB-SERVER-01', description: 'Security patch öncesi', createdAt: '2024-01-08 09:00', sizeGB: 11.3, type: 'manual' },
-        { id: '5', name: 'Dev-Test-Snapshot', vmName: 'TEST-VM-01', description: 'Test ortamı snapshot', createdAt: '2024-01-05 16:20', sizeGB: 5.8, type: 'manual' },
-        { id: '6', name: 'Monthly-Backup-Jan', vmName: 'CACHE-SERVER-01', description: 'Aylık yedekleme', createdAt: '2024-01-01 00:00', sizeGB: 32.1, type: 'backup' },
-        { id: '7', name: 'Before-Upgrade-DB', vmName: 'DB-SERVER-01', description: 'Database upgrade öncesi', createdAt: '2023-12-28 11:00', sizeGB: 52.3, type: 'manual' },
-        { id: '8', name: 'Daily-Backup-2023-12-27', vmName: 'WEB-SERVER-02', description: 'Günlük otomatik yedekleme', createdAt: '2023-12-27 02:00', sizeGB: 18.9, type: 'scheduled' },
-        { id: '9', name: 'Pre-Config-Change', vmName: 'APP-SERVER-02', description: 'Yapılandırma değişikliği öncesi', createdAt: '2023-12-25 14:30', sizeGB: 8.4, type: 'manual' },
-        { id: '10', name: 'Weekly-Backup-2023-12-24', vmName: 'DB-SERVER-02', description: 'Haftalık otomatik yedekleme', createdAt: '2023-12-24 02:00', sizeGB: 67.5, type: 'scheduled' },
-        { id: '11', name: 'Before-Hotfix', vmName: 'WEB-SERVER-01', description: 'Hotfix uygulama öncesi', createdAt: '2023-12-20 08:00', sizeGB: 14.2, type: 'manual' },
-        { id: '12', name: 'Quarterly-Full-Backup', vmName: 'DB-SERVER-01', description: 'Çeyreklik tam yedekleme', createdAt: '2023-12-15 00:00', sizeGB: 125.8, type: 'backup' },
-      ]);
-      setLoading(false);
-    }, 500);
+    fetchSnapshots();
+    const interval = setInterval(fetchSnapshots, 60000);
+    return () => clearInterval(interval);
   }, []);
 
-  const filteredSnapshots = useMemo(() => {
-    if (!searchTerm) return snapshots;
-    const term = searchTerm.toLowerCase();
-    return snapshots.filter(
-      (s) =>
-        s.name.toLowerCase().includes(term) ||
-        s.vmName.toLowerCase().includes(term) ||
-        s.description.toLowerCase().includes(term) ||
-        s.type.toLowerCase().includes(term)
+  // Filter snapshots
+  const filteredSnapshots = snapshots.filter(snap => {
+    return (
+      snap.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      snap.vmName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      snap.description?.toLowerCase().includes(searchTerm.toLowerCase())
     );
-  }, [snapshots, searchTerm]);
+  });
 
-  const totalPages = Math.ceil(filteredSnapshots.length / ITEMS_PER_PAGE);
-  const paginatedSnapshots = useMemo(() => {
-    const start = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filteredSnapshots.slice(start, start + ITEMS_PER_PAGE);
-  }, [filteredSnapshots, currentPage]);
-
-  useEffect(() => {
-    if (currentPage > totalPages && totalPages > 0) {
-      setCurrentPage(1);
-    }
-  }, [totalPages, currentPage]);
-
-  const getTypeBadge = (type: string) => {
-    switch (type) {
-      case 'manual':
-        return <Badge variant="outline">Manuel</Badge>;
-      case 'scheduled':
-        return <Badge variant="secondary">Zamanlanmış</Badge>;
-      case 'backup':
-        return <Badge variant="default">Yedek</Badge>;
-      default:
-        return <Badge variant="outline">{type}</Badge>;
-    }
+  const formatSize = (bytes: number): string => {
+    if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(1)} GB`;
+    if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(1)} MB`;
+    return `${bytes} B`;
   };
 
-  const getPageNumbers = () => {
-    const pages: (number | 'ellipsis')[] = [];
-    const maxVisible = 5;
+  const getAgeWarning = (createTime: string) => {
+    const days = differenceInDays(new Date(), new Date(createTime));
+    if (days > 30) {
+      return <Badge className="bg-red-100 text-red-800">{days} gun (Eski!)</Badge>;
+    }
+    if (days > 7) {
+      return <Badge className="bg-yellow-100 text-yellow-800">{days} gun</Badge>;
+    }
+    return <Badge className="bg-green-100 text-green-800">{days} gun</Badge>;
+  };
+
+  // Create snapshot
+  const handleCreateSnapshot = async () => {
+    if (!selectedVmId || !newSnapshotName) return;
     
-    if (totalPages <= maxVisible) {
-      for (let i = 1; i <= totalPages; i++) pages.push(i);
-    } else {
-      pages.push(1);
-      if (currentPage > 3) pages.push('ellipsis');
+    setCreating(true);
+    try {
+      const res = await fetch('/api/integrations/vmware', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'snapshot-create',
+          vmId: selectedVmId,
+          name: newSnapshotName,
+          description: newSnapshotDesc,
+        }),
+      });
       
-      const start = Math.max(2, currentPage - 1);
-      const end = Math.min(totalPages - 1, currentPage + 1);
-      
-      for (let i = start; i <= end; i++) pages.push(i);
-      
-      if (currentPage < totalPages - 2) pages.push('ellipsis');
-      pages.push(totalPages);
+      const json = await res.json();
+      if (json.success) {
+        setCreateDialogOpen(false);
+        setSelectedVmId('');
+        setNewSnapshotName('');
+        setNewSnapshotDesc('');
+        setTimeout(fetchSnapshots, 2000);
+      } else {
+        alert(`Snapshot olusturulamadi: ${json.error || 'Bilinmeyen hata'}`);
+      }
+    } catch (err) {
+      alert(`Hata: ${(err as Error).message}`);
+    } finally {
+      setCreating(false);
     }
-    return pages;
   };
+
+  // Delete snapshot
+  const handleDeleteSnapshot = async (vmId: string, snapshotId: string) => {
+    setActionLoading(snapshotId);
+    try {
+      const res = await fetch('/api/integrations/vmware', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'snapshot-delete',
+          vmId,
+          snapshotId,
+        }),
+      });
+      
+      const json = await res.json();
+      if (json.success) {
+        setTimeout(fetchSnapshots, 2000);
+      } else {
+        alert(`Snapshot silinemedi: ${json.error || 'Bilinmeyen hata'}`);
+      }
+    } catch (err) {
+      alert(`Hata: ${(err as Error).message}`);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Revert snapshot
+  const handleRevertSnapshot = async (vmId: string, snapshotId: string) => {
+    setActionLoading(snapshotId);
+    try {
+      const res = await fetch('/api/integrations/vmware', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'snapshot-revert',
+          vmId,
+          snapshotId,
+        }),
+      });
+      
+      const json = await res.json();
+      if (json.success) {
+        setTimeout(fetchSnapshots, 2000);
+      } else {
+        alert(`Snapshot geri yukleme basarisiz: ${json.error || 'Bilinmeyen hata'}`);
+      }
+    } catch (err) {
+      alert(`Hata: ${(err as Error).message}`);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const confirmAction = (action: 'delete' | 'revert', vmId: string, snapshotId: string, snapshotName: string) => {
+    const titles = {
+      delete: 'Snapshot Sil',
+      revert: 'Snapshot\'a Geri Don',
+    };
+    const descriptions = {
+      delete: `"${snapshotName}" snapshot\'ini silmek istediginizden emin misiniz? Bu islem geri alinamaz.`,
+      revert: `"${snapshotName}" snapshot\'ina geri donmek istediginizden emin misiniz? Mevcut degisiklikler kaybolacaktir.`,
+    };
+
+    setConfirmDialog({
+      open: true,
+      title: titles[action],
+      description: descriptions[action],
+      onConfirm: () => {
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+        if (action === 'delete') {
+          handleDeleteSnapshot(vmId, snapshotId);
+        } else {
+          handleRevertSnapshot(vmId, snapshotId);
+        }
+      },
+    });
+  };
+
+  // Summary
+  const totalSize = snapshots.reduce((sum, s) => sum + (s.size || 0), 0);
+  const oldSnapshots = snapshots.filter(s => differenceInDays(new Date(), new Date(s.createTime)) > 7).length;
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2 text-red-600">
+              <AlertTriangle className="h-5 w-5" />
+              <span>vCenter baglantisi basarisiz: {error}</span>
+            </div>
+            <Button onClick={fetchSnapshots} className="mt-4" variant="outline">
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Tekrar Dene
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Snapshots</h1>
-          <p className="text-muted-foreground">VM snapshot yönetimi</p>
+          <h1 className="text-2xl font-bold">Snapshot Yonetimi</h1>
+          <p className="text-muted-foreground">
+            VM snapshot listesi ve yonetimi
+          </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon">
-            <RefreshCw className="h-4 w-4" />
-          </Button>
-          <Button>
+          <Button onClick={() => setCreateDialogOpen(true)} variant="default">
             <Plus className="h-4 w-4 mr-2" />
-            Snapshot Al
+            Yeni Snapshot
+          </Button>
+          <Button onClick={fetchSnapshots} disabled={loading} variant="outline">
+            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            Yenile
           </Button>
         </div>
       </div>
 
-      {/* Stats */}
+      {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-blue-500/20">
-                <Clock className="h-5 w-5 text-blue-500" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Toplam</p>
-                <p className="text-2xl font-bold">{snapshots.length}</p>
-              </div>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Toplam Snapshot</CardTitle>
+            <Camera className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{snapshots.length}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Toplam Boyut</CardTitle>
+            <HardDrive className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{formatSize(totalSize)}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">VM ile Snapshot</CardTitle>
+            <Camera className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {new Set(snapshots.map(s => s.vmId)).size}
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-green-500/20">
-                <Clock className="h-5 w-5 text-green-500" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Manuel</p>
-                <p className="text-2xl font-bold">{snapshots.filter((s) => s.type === 'manual').length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-purple-500/20">
-                <Clock className="h-5 w-5 text-purple-500" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Zamanlanmış</p>
-                <p className="text-2xl font-bold">{snapshots.filter((s) => s.type === 'scheduled').length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-orange-500/20">
-                <Database className="h-5 w-5 text-orange-500" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Toplam Boyut</p>
-                <p className="text-2xl font-bold">{snapshots.reduce((acc, s) => acc + s.sizeGB, 0).toFixed(1)} GB</p>
-              </div>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Eski Snapshot (7+ gun)</CardTitle>
+            <Clock className="h-4 w-4 text-yellow-500" />
+          </CardHeader>
+          <CardContent>
+            <div className={`text-2xl font-bold ${oldSnapshots > 0 ? 'text-yellow-600' : 'text-green-600'}`}>
+              {oldSnapshots}
             </div>
           </CardContent>
         </Card>
       </div>
 
       {/* Search */}
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          placeholder="Snapshot ara... (isim, VM, açıklama, tip)"
-          value={searchTerm}
-          onChange={(e) => {
-            setSearchTerm(e.target.value);
-            setCurrentPage(1);
-          }}
-          className="pl-9"
-        />
-      </div>
-
-      {/* Snapshots Table */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Clock className="h-5 w-5" />
-            Snapshots
-            <Badge variant="secondary">{filteredSnapshots.length}</Badge>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="flex justify-center py-12">
-              <RefreshCw className="h-8 w-8 animate-spin text-primary" />
+        <CardContent className="pt-6">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Snapshot adi, VM adi veya aciklama ile ara..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Snapshot Table */}
+      <Card>
+        <CardContent className="pt-6">
+          {loading && snapshots.length === 0 ? (
+            <div className="flex items-center justify-center h-32">
+              <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           ) : (
-            <>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Tip</TableHead>
-                    <TableHead>Snapshot Adı</TableHead>
-                    <TableHead>VM</TableHead>
-                    <TableHead>Açıklama</TableHead>
-                    <TableHead>Oluşturulma</TableHead>
-                    <TableHead className="text-right">Boyut (GB)</TableHead>
-                    <TableHead className="text-right">İşlemler</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {paginatedSnapshots.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                        Snapshot bulunamadı
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    paginatedSnapshots.map((snapshot) => (
-                      <TableRow key={snapshot.id}>
-                        <TableCell>{getTypeBadge(snapshot.type)}</TableCell>
-                        <TableCell className="font-medium">{snapshot.name}</TableCell>
-                        <TableCell>{snapshot.vmName}</TableCell>
-                        <TableCell className="max-w-xs truncate">{snapshot.description}</TableCell>
-                        <TableCell>{snapshot.createdAt}</TableCell>
-                        <TableCell className="text-right">{snapshot.sizeGB}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-1">
-                            <Button variant="ghost" size="sm">
-                              <RotateCcw className="h-4 w-4 mr-1" />
-                              Geri Yükle
-                            </Button>
-                            <Button variant="ghost" size="sm" className="text-destructive">
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-
-              {/* Custom Pagination */}
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between mt-4">
-                  <p className="text-sm text-muted-foreground">
-                    Sayfa {currentPage} / {totalPages}
-                  </p>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                      disabled={currentPage === 1}
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    {getPageNumbers().map((page, idx) => (
-                      <React.Fragment key={idx}>
-                        {page === 'ellipsis' ? (
-                          <span className="px-2 text-muted-foreground">...</span>
-                        ) : (
-                          <Button
-                            variant={currentPage === page ? 'default' : 'outline'}
-                            size="sm"
-                            onClick={() => setCurrentPage(page)}
-                            className="w-9"
-                          >
-                            {page}
-                          </Button>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>VM</TableHead>
+                  <TableHead>Snapshot Adi</TableHead>
+                  <TableHead>Aciklama</TableHead>
+                  <TableHead>Olusturma Tarihi</TableHead>
+                  <TableHead>Yas</TableHead>
+                  <TableHead>Boyut</TableHead>
+                  <TableHead className="text-right">Islemler</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredSnapshots.map((snap) => (
+                  <TableRow key={`${snap.vmId}-${snap.id}`}>
+                    <TableCell className="font-medium">{snap.vmName}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Camera className="h-4 w-4 text-muted-foreground" />
+                        {snap.name}
+                      </div>
+                    </TableCell>
+                    <TableCell className="max-w-[200px] truncate" title={snap.description}>
+                      {snap.description || '-'}
+                    </TableCell>
+                    <TableCell>
+                      {format(new Date(snap.createTime), 'dd MMM yyyy HH:mm', { locale: tr })}
+                    </TableCell>
+                    <TableCell>{getAgeWarning(snap.createTime)}</TableCell>
+                    <TableCell>{formatSize(snap.size)}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => confirmAction('revert', snap.vmId, snap.id, snap.name)}
+                          disabled={actionLoading === snap.id}
+                          title="Geri Don"
+                        >
+                          <RotateCcw className="h-4 w-4 text-blue-500" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => confirmAction('delete', snap.vmId, snap.id, snap.name)}
+                          disabled={actionLoading === snap.id}
+                          title="Sil"
+                        >
+                          <Trash2 className="h-4 w-4 text-red-500" />
+                        </Button>
+                        {actionLoading === snap.id && (
+                          <RefreshCw className="h-4 w-4 animate-spin" />
                         )}
-                      </React.Fragment>
-                    ))}
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                      disabled={currentPage === totalPages}
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+
+          {filteredSnapshots.length === 0 && !loading && (
+            <p className="text-center text-muted-foreground py-8">
+              {searchTerm ? 'Filtrelere uygun snapshot bulunamadi' : 'Snapshot bulunamadi'}
+            </p>
           )}
         </CardContent>
       </Card>
+
+      {/* Create Snapshot Dialog */}
+      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Yeni Snapshot Olustur</DialogTitle>
+            <DialogDescription>
+              Secili VM icin yeni bir snapshot olusturun.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>VM Sec</Label>
+              <select
+                className="w-full p-2 border rounded-md"
+                value={selectedVmId}
+                onChange={(e) => setSelectedVmId(e.target.value)}
+              >
+                <option value="">-- VM Secin --</option>
+                {vms.map(vm => (
+                  <option key={vm.id} value={vm.id}>{vm.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label>Snapshot Adi</Label>
+              <Input
+                placeholder="Snapshot adi girin"
+                value={newSnapshotName}
+                onChange={(e) => setNewSnapshotName(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Aciklama (Opsiyonel)</Label>
+              <Input
+                placeholder="Snapshot aciklamasi"
+                value={newSnapshotDesc}
+                onChange={(e) => setNewSnapshotDesc(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
+              Iptal
+            </Button>
+            <Button 
+              onClick={handleCreateSnapshot} 
+              disabled={!selectedVmId || !newSnapshotName || creating}
+            >
+              {creating ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  Olusturuluyor...
+                </>
+              ) : (
+                <>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Olustur
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirm Dialog */}
+      <ConfirmDialog
+        open={confirmDialog.open}
+        onOpenChange={(open) => setConfirmDialog(prev => ({ ...prev, open }))}
+        title={confirmDialog.title}
+        description={confirmDialog.description}
+        onConfirm={confirmDialog.onConfirm}
+      />
     </div>
   );
 }

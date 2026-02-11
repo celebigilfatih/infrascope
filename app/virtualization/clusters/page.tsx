@@ -1,225 +1,240 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Layers, Server, HardDrive, RefreshCw, MoreHorizontal } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  RefreshCw,
+  Server,
+  Cpu,
+  HardDrive,
+  Layers,
+  AlertTriangle,
+  Download,
+} from 'lucide-react';
 
 interface Cluster {
   id: string;
   name: string;
   hostCount: number;
-  vmCount: number;
+  effectiveHosts: number;
   totalCpu: number;
-  usedCpu: number;
-  totalRam: number;
-  usedRam: number;
-  status: 'healthy' | 'warning' | 'critical';
+  cpuCores: number;
+  totalMemoryGB: number;
 }
 
 export default function ClustersPage() {
   const [clusters, setClusters] = useState<Cluster[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    setTimeout(() => {
-      setClusters([
-        {
-          id: '1',
-          name: 'PROD-CLUSTER-01',
-          hostCount: 4,
-          vmCount: 48,
-          totalCpu: 128,
-          usedCpu: 92,
-          totalRam: 512,
-          usedRam: 384,
-          status: 'healthy',
-        },
-        {
-          id: '2',
-          name: 'PROD-CLUSTER-02',
-          hostCount: 3,
-          vmCount: 32,
-          totalCpu: 96,
-          usedCpu: 78,
-          totalRam: 384,
-          usedRam: 320,
-          status: 'warning',
-        },
-        {
-          id: '3',
-          name: 'DEV-CLUSTER-01',
-          hostCount: 2,
-          vmCount: 16,
-          totalCpu: 32,
-          usedCpu: 18,
-          totalRam: 128,
-          usedRam: 64,
-          status: 'healthy',
-        },
-      ]);
+  const fetchClusters = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const res = await fetch('/api/integrations/vmware?type=clusters');
+      const json = await res.json();
+      
+      if (json.error) {
+        setError(json.error);
+        return;
+      }
+      
+      setClusters(json.clusters || []);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
       setLoading(false);
-    }, 500);
-  }, []);
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'healthy': return <Badge variant="success">Sağlıklı</Badge>;
-      case 'warning': return <Badge className="bg-orange-500">Uyarı</Badge>;
-      case 'critical': return <Badge variant="destructive">Kritik</Badge>;
-      default: return <Badge variant="outline">{status}</Badge>;
     }
   };
 
+  useEffect(() => {
+    fetchClusters();
+    const interval = setInterval(fetchClusters, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Export CSV
+  const exportCSV = () => {
+    const headers = ['Ad', 'Host Sayisi', 'Aktif Host', 'CPU Cores', 'Bellek (GB)'];
+    const rows = clusters.map(c => [
+      c.name,
+      c.hostCount,
+      c.effectiveHosts,
+      c.cpuCores,
+      c.totalMemoryGB,
+    ]);
+    
+    const csv = [headers, ...rows].map(row => row.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `clusters_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Summary
+  const totalHosts = clusters.reduce((sum, c) => sum + (c.hostCount || 0), 0);
+  const totalCpuCores = clusters.reduce((sum, c) => sum + (c.cpuCores || 0), 0);
+  const totalMemoryTB = clusters.reduce((sum, c) => sum + (c.totalMemoryGB || 0), 0) / 1024;
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2 text-red-600">
+              <AlertTriangle className="h-5 w-5" />
+              <span>vCenter baglantisi basarisiz: {error}</span>
+            </div>
+            <Button onClick={fetchClusters} className="mt-4" variant="outline">
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Tekrar Dene
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="p-6 space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Clusters</h1>
-          <p className="text-muted-foreground">VMware/Proxmox cluster yönetimi</p>
+          <h1 className="text-2xl font-bold">Cluster</h1>
+          <p className="text-muted-foreground">
+            vCenter uzerindeki cluster yapilari
+          </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon">
-            <RefreshCw className="h-4 w-4" />
+          <Button onClick={exportCSV} variant="outline" size="sm">
+            <Download className="h-4 w-4 mr-2" />
+            CSV
           </Button>
-          <Button>
-            <Plus className="h-4 w-4 mr-2" />
-            Yeni Cluster Ekle
+          <Button onClick={fetchClusters} disabled={loading} variant="outline">
+            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            Yenile
           </Button>
         </div>
       </div>
 
-      {/* Stats */}
+      {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-blue-500/20">
-                <Layers className="h-5 w-5 text-blue-500" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Toplam Cluster</p>
-                <p className="text-2xl font-bold">{clusters.length}</p>
-              </div>
-            </div>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Toplam Cluster</CardTitle>
+            <Layers className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{clusters.length}</div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-green-500/20">
-                <Server className="h-5 w-5 text-green-500" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Toplam Host</p>
-                <p className="text-2xl font-bold">{clusters.reduce((acc, c) => acc + c.hostCount, 0)}</p>
-              </div>
-            </div>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Toplam Host</CardTitle>
+            <Server className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{totalHosts}</div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-purple-500/20">
-                <Layers className="h-5 w-5 text-purple-500" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Toplam VM</p>
-                <p className="text-2xl font-bold">{clusters.reduce((acc, c) => acc + c.vmCount, 0)}</p>
-              </div>
-            </div>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Toplam CPU</CardTitle>
+            <Cpu className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{totalCpuCores}</div>
+            <p className="text-xs text-muted-foreground">CPU cekirdegi</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-orange-500/20">
-                <HardDrive className="h-5 w-5 text-orange-500" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Toplam CPU</p>
-                <p className="text-2xl font-bold">{clusters.reduce((acc, c) => acc + c.totalCpu, 0)} Cores</p>
-              </div>
-            </div>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Toplam Bellek</CardTitle>
+            <HardDrive className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{totalMemoryTB.toFixed(1)} TB</div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Clusters List */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {loading ? (
-          <div className="col-span-full flex justify-center py-12">
-            <RefreshCw className="h-8 w-8 animate-spin text-primary" />
-          </div>
-        ) : (
-          clusters.map((cluster) => (
-            <Card key={cluster.id} className="hover:border-primary/50 transition-colors">
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <CardTitle className="text-lg">{cluster.name}</CardTitle>
-                      {getStatusBadge(cluster.status)}
-                    </div>
-                    <CardDescription>
-                      {cluster.hostCount} host, {cluster.vmCount} VM
-                    </CardDescription>
-                  </div>
-                  <Button variant="ghost" size="icon" className="h-8 w-8">
-                    <MoreHorizontal className="h-4 w-4" />
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* CPU Usage */}
-                <div>
-                  <div className="flex items-center justify-between text-sm mb-1">
-                    <span className="text-muted-foreground">CPU Kullanımı</span>
-                    <span className="font-medium">{Math.round((cluster.usedCpu / cluster.totalCpu) * 100)}%</span>
-                  </div>
-                  <div className="h-2 bg-muted rounded-full overflow-hidden">
-                    <div
-                      className={cn("h-full transition-all bg-blue-500")}
-                      style={{ width: `${(cluster.usedCpu / cluster.totalCpu) * 100}%` }}
-                    />
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {cluster.usedCpu} / {cluster.totalCpu} Cores
-                  </p>
-                </div>
+      {/* Cluster Table */}
+      <Card>
+        <CardContent className="pt-6">
+          {loading && clusters.length === 0 ? (
+            <div className="flex items-center justify-center h-32">
+              <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Cluster Adi</TableHead>
+                  <TableHead className="text-center">Host Sayisi</TableHead>
+                  <TableHead className="text-center">Aktif Host</TableHead>
+                  <TableHead className="text-center">CPU Cores</TableHead>
+                  <TableHead className="text-center">Bellek</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {clusters.map((cluster) => (
+                  <TableRow key={cluster.id}>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Layers className="h-4 w-4 text-muted-foreground" />
+                        <span className="font-medium">{cluster.name}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Badge className="bg-blue-100 text-blue-800">
+                        {cluster.hostCount} Host
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {cluster.effectiveHosts === cluster.hostCount ? (
+                        <Badge className="bg-green-100 text-green-800">
+                          {cluster.effectiveHosts} Aktif
+                        </Badge>
+                      ) : (
+                        <Badge className="bg-yellow-100 text-yellow-800">
+                          {cluster.effectiveHosts} / {cluster.hostCount} Aktif
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {cluster.cpuCores} Core
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {cluster.totalMemoryGB >= 1024 
+                        ? `${(cluster.totalMemoryGB / 1024).toFixed(1)} TB` 
+                        : `${cluster.totalMemoryGB} GB`}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
 
-                {/* RAM Usage */}
-                <div>
-                  <div className="flex items-center justify-between text-sm mb-1">
-                    <span className="text-muted-foreground">RAM Kullanımı</span>
-                    <span className="font-medium">{Math.round((cluster.usedRam / cluster.totalRam) * 100)}%</span>
-                  </div>
-                  <div className="h-2 bg-muted rounded-full overflow-hidden">
-                    <div
-                      className={cn("h-full transition-all bg-purple-500")}
-                      style={{ width: `${(cluster.usedRam / cluster.totalRam) * 100}%` }}
-                    />
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {cluster.usedRam} / {cluster.totalRam} GB
-                  </p>
-                </div>
-
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" className="flex-1">
-                    Host Listesi
-                  </Button>
-                  <Button variant="outline" size="sm" className="flex-1">
-                    VM Listesi
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))
-        )}
-      </div>
+          {clusters.length === 0 && !loading && (
+            <p className="text-center text-muted-foreground py-8">
+              Cluster bulunamadi
+            </p>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

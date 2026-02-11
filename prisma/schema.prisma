@@ -870,3 +870,81 @@ enum TaskType {
   CLEANUP
   CUSTOM
 }
+
+// ============================================================================
+// ALARM MANAGEMENT SYSTEM
+// ============================================================================
+
+/// Alarm rule definition
+model AlarmDefinition {
+  id              String        @id @default(cuid())
+  code            String        @unique  // e.g. "FW_POLICY_CHANGED"
+  name            String
+  description     String?
+  category        AlarmCategory
+  severity        AlarmSeverity2
+  enabled         Boolean       @default(true)
+  detectionLogic  Json          // {logtype, filter, threshold, timeWindowMinutes}
+  cooldownMinutes Int           @default(15)
+  notifyEmail     Boolean       @default(true)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  alarmEvents     AlarmEvent[]
+
+  @@map("alarm_definitions")
+}
+
+/// Alarm event instance
+model AlarmEvent {
+  id              String          @id @default(cuid())
+  alarmId         String
+  severity        AlarmSeverity2
+  title           String
+  message         String
+  rawData         Json?
+  sourceIp        String?
+  destIp          String?
+  deviceName      String?
+  acknowledged    Boolean         @default(false)
+  acknowledgedBy  String?
+  acknowledgedAt  DateTime?
+  notifiedAt      DateTime?
+  notifyChannel   String?         // "email"
+  createdAt       DateTime        @default(now())
+  alarm           AlarmDefinition @relation(fields: [alarmId], references: [id])
+
+  @@index([alarmId])
+  @@index([createdAt])
+  @@index([severity])
+  @@map("alarm_events")
+}
+
+/// Notification channel configuration
+model NotificationConfig {
+  id          String   @id @default(cuid())
+  channel     String   // "email", "telegram"
+  enabled     Boolean  @default(true)
+  config      Json     // {smtpHost, smtpPort, smtpUser, smtpPass, recipients[]}
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([channel])
+  @@map("notification_configs")
+}
+
+enum AlarmCategory {
+  CONFIG_ACCESS
+  SECURITY
+  RISK_ANOMALY
+  OPERATIONAL
+  SOC_CORRELATION
+}
+
+/// Using AlarmSeverity2 to avoid conflict with existing AlertSeverity
+enum AlarmSeverity2 {
+  ALARM_CRITICAL
+  ALARM_HIGH
+  ALARM_MEDIUM
+  ALARM_LOW
+  ALARM_INFO
+}

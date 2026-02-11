@@ -62,6 +62,17 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: true, data: users });
     }
 
+    if (vpn === 'ssl-summary') {
+      const users = await service.getSSLVPNUsers();
+      const summary = {
+        total_users: users.length,
+        active_sessions: users.length,
+        total_in_bytes: users.reduce((sum, u) => sum + (u.in_bytes || 0), 0),
+        total_out_bytes: users.reduce((sum, u) => sum + (u.out_bytes || 0), 0),
+      };
+      return NextResponse.json({ success: true, data: summary });
+    }
+
     if (vpn === 'ipsec') {
       const tunnels = await service.getIPsecTunnels();
       return NextResponse.json({ success: true, data: tunnels });

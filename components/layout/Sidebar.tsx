@@ -123,8 +123,9 @@ export const Sidebar: React.FC = () => {
     {
       title: 'Virtualization',
       items: [
+        { name: 'vCenter Dashboard', href: '/virtualization', icon: LayoutDashboard },
         { name: 'Clusters', href: '/virtualization/clusters', icon: Layers },
-        { name: 'Hosts', href: '/virtualization/hosts', icon: Server },
+        { name: 'ESXi Hosts', href: '/virtualization/hosts', icon: Server },
         { name: 'Virtual Machines', href: '/virtualization/vms', icon: Cpu },
         { name: 'Datastores', href: '/virtualization/datastores', icon: HardDrive },
         { name: 'Snapshots', href: '/virtualization/snapshots', icon: Database },
@@ -152,6 +153,7 @@ export const Sidebar: React.FC = () => {
         { name: 'IoC Hosts', href: '/security/ioc-hosts', icon: AlertOctagon },
         { name: 'Firewall Policies', href: '/security/policies', icon: Shield },
         { name: 'IPsec Tunnels', href: '/network/ipsec', icon: Globe },
+        { name: 'SSL-VPN', href: '/network/ssl-vpn', icon: Users },
         { name: 'Risky Rules', href: '/security/risks', icon: AlertTriangle },
         { name: 'IPS / DoS Events', href: '/security/ips', icon: ShieldAlert },
         { name: 'Public Exposed Assets', href: '/security/exposed', icon: Eye },

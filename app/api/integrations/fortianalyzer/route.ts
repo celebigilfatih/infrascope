@@ -93,6 +93,24 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ success: true, data: logs || [], type: dataType, count: (logs || []).length });
       }
       return NextResponse.json({ success: true, data: [], type: dataType, count: 0 });
+    } else if (dataType === 'log-search') {
+      // Generic log search for debugging
+      const logtype = searchParams.get('logtype') || 'event';
+      const filter = searchParams.get('filter') || '';
+      const limit = parseInt(searchParams.get('limit') || '50', 10);
+      const tid = await service.startLogSearch(logtype, limit, filter || undefined);
+      if (tid) {
+        for (let i = 0; i < 4; i++) {
+          await new Promise(resolve => setTimeout(resolve, 5000));
+          const logs = await service.fetchLogResults(tid, 0, limit);
+          if (logs && logs.length > 0) {
+            return NextResponse.json({ success: true, data: logs, count: logs.length });
+          }
+        }
+        const logs = await service.fetchLogResults(tid, 0, limit);
+        return NextResponse.json({ success: true, data: logs || [], count: (logs || []).length });
+      }
+      return NextResponse.json({ success: true, data: [], count: 0 });
     } else if (dataType === 'fortiview') {
       // Single FortiView query
       const viewName = searchParams.get('view') || 'top-websites';

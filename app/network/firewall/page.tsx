@@ -73,16 +73,6 @@ interface SSLVPNUser {
   out_bytes: number;
 }
 
-interface IPsecTunnel {}
-
-interface ConfigRevision {
-  id: number;
-  time: number;
-  admin: string;
-  comment: string;
-  version: string;
-}
-
 interface InterfaceStats {
   id: string;
   name: string;
@@ -97,20 +87,6 @@ interface InterfaceStats {
   rx_bytes: number;
   tx_errors: number;
   rx_errors: number;
-}
-
-interface EventLog {
-  id: string;
-  eventtime: number;
-  logid: string;
-  type: string;
-  subtype: string;
-  action: string;
-  level: string;
-  user: string;
-  srcip: string;
-  dstip: string;
-  msg: string;
 }
 
 const ITEMS_PER_PAGE = 10;
@@ -240,29 +216,11 @@ export default function FirewallPage() {
   }, [interfaceStats, interfaceSearch]);
 
   const interfaceTotalPages = Math.ceil(filteredInterfaces.length / ITEMS_PER_PAGE);
-  const paginatedInterfaces = filteredInterfaces.slice(
-    (interfacePage - 1) * ITEMS_PER_PAGE,
-    interfacePage * ITEMS_PER_PAGE
-  );
 
-  // Unused: Config revisions moved to dedicated page
-  // const revisionsByAdmin = useMemo(() => {
-  //   const groups: Record<string, ConfigRevision[]> = {};
-  //   configRevisions.revisions.forEach((rev: ConfigRevision) => {
-  //     if (!groups[rev.admin]) {
-  //       groups[rev.admin] = [];
-  //     }
-  //     groups[rev.admin].push(rev);
-  //   });
-  //   return groups;
-  // }, [configRevisions.revisions]);
-
-  // // Get manual changes (excluding daemon_admin)
-  // const manualChanges = useMemo(() => {
-  //   return configRevisions.revisions.filter(
-  //     (rev: ConfigRevision) => rev.admin !== 'daemon_admin'
-  //   );
-  // }, [configRevisions.revisions]);
+  const paginatedInterfaces = useMemo(() => {
+    const start = (interfacePage - 1) * ITEMS_PER_PAGE;
+    return filteredInterfaces.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredInterfaces, interfacePage]);
 
   const formatBandwidth = (bytes: number) => {
     if (bytes > 1000000000) return `${(bytes / 1000000000).toFixed(2)} GB`;
@@ -274,7 +232,7 @@ export default function FirewallPage() {
   const formatDuration = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
     const mins = Math.floor((seconds % 3600) / 60);
-    return `${hours}s ${mins}d`;
+    return `${hours}h ${mins}m`;
   };
 
   const formatDate = (timestamp: number) => {

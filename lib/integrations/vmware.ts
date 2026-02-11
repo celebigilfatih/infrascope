@@ -199,14 +199,39 @@ export class VMwareService {
    * Alternative: Use REST API for vCenter 6.5+
    */
   private async restRequest<T>(endpoint: string, options?: RequestInit): Promise<T> {
-    const response = await fetch(`https://${this.config.host}/rest/${endpoint}`, {
+    // Disable SSL verification for self-signed certificates
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+
+    // Try vSphere 7+ API first (/api/)
+    let response = await fetch(`https://${this.config.host}/api/${endpoint}`, {
       ...options,
       headers: {
         'Content-Type': 'application/json',
-        'vmware-use-header-authn': this.sessionCookie || '',
+        'vmware-api-session-id': this.sessionCookie || '',
         ...options?.headers,
       },
     });
+
+    if (response.ok) {
+      return response.json();
+    }
+
+    // If 404, try legacy /rest/ endpoint
+    if (response.status === 404) {
+      console.log(`[VMware] Trying legacy endpoint for ${endpoint}`);
+      response = await fetch(`https://${this.config.host}/rest/${endpoint}`, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          'vmware-use-header-authn': this.sessionCookie || '',
+          ...options?.headers,
+        },
+      });
+
+      if (response.ok) {
+        return response.json();
+      }
+    }
 
     if (!response.ok) {
       throw new Error(`VMware REST API error: ${response.statusText}`);
@@ -220,8 +245,32 @@ export class VMwareService {
    */
   async authenticate(): Promise<boolean> {
     try {
-      // Try REST API authentication first (vCenter 6.5+)
-      const response = await fetch(`https://${this.config.host}/rest/com/vmware/cis/session`, {
+      // Disable SSL verification for self-signed certificates (common in vCenter)
+      process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+
+      // Try vSphere 7+ REST API authentication first (/api/session)
+      console.log(`[VMware] Authenticating to ${this.config.host} as ${this.config.username}`);
+      
+      let response = await fetch(`https://${this.config.host}/api/session`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${Buffer.from(`${this.config.username}:${this.config.password}`).toString('base64')}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const sessionId = await response.text();
+        // vSphere 7 returns session ID as plain text with quotes
+        this.sessionCookie = sessionId.replace(/"/g, '');
+        console.log('[VMware] Authentication successful (vSphere 7+ API)');
+        return true;
+      }
+
+      console.log(`[VMware] vSphere 7 API failed (${response.status}), trying legacy endpoint...`);
+
+      // Try legacy REST API authentication (vCenter 6.5-6.7)
+      response = await fetch(`https://${this.config.host}/rest/com/vmware/cis/session`, {
         method: 'POST',
         headers: {
           'Authorization': `Basic ${Buffer.from(`${this.config.username}:${this.config.password}`).toString('base64')}`,
@@ -231,19 +280,16 @@ export class VMwareService {
       if (response.ok) {
         const data = await response.json() as { value: string };
         this.sessionCookie = data.value;
+        console.log('[VMware] Authentication successful (legacy API)');
         return true;
       }
 
-      // Fall back to SOAP API
-      const soapResponse = await this.soapRequest<{ value: string }>('Login', {
-        userName: this.config.username,
-        password: this.config.password,
-      });
-
-      this.sessionCookie = soapResponse.value;
-      return true;
+      console.error(`[VMware] Authentication failed: ${response.status} ${response.statusText}`);
+      const errorBody = await response.text();
+      console.error(`[VMware] Error body: ${errorBody}`);
+      return false;
     } catch (error) {
-      console.error('VMware authentication failed:', error);
+      console.error('[VMware] Authentication error:', error);
       return false;
     }
   }
@@ -265,21 +311,19 @@ export class VMwareService {
    * Fetch clusters
    */
   async fetchClusters(): Promise<VMwareCluster[]> {
-    const result = await this.restRequest<{ value: Array<{
-      cluster: { value: string };
+    // vSphere 7 returns array directly
+    const result = await this.restRequest<Array<{
+      cluster: string;
       name: string;
-      resourcePool?: { value: string };
-      host?: Array<{ value: string }>;
-      summary?: {
-        totalCpu?: number;
-        totalMemory?: number;
-        numCpuCores?: number;
-        numHosts?: number;
-      };
-    }>}>('vcenter/cluster');
+      ha_enabled?: boolean;
+      drs_enabled?: boolean;
+    }>>('vcenter/cluster');
 
-    return result.value.map(c => ({
-      cluster: c.cluster,
+    // Handle both vSphere 7 array format and legacy { value: [...] } format
+    const clusters = Array.isArray(result) ? result : (result as any).value || [];
+
+    return clusters.map((c: any) => ({
+      cluster: { value: c.cluster || c.cluster?.value },
       name: c.name,
       resourcePool: c.resourcePool,
       host: c.host,
@@ -296,29 +340,27 @@ export class VMwareService {
    * Fetch ESXi hosts
    */
   async fetchHosts(): Promise<VMwareHost[]> {
-    const result = await this.restRequest<{ value: Array<{
-      host: { value: string };
+    // vSphere 7 returns array directly with snake_case fields
+    const result = await this.restRequest<Array<{
+      host: string;  // e.g., "host-1001"
       name: string;
-      parent?: { value: string };
-      summary?: {
-        vendor?: string;
-        model?: string;
-        numCpuCores?: number;
-        cpuTotal?: number;
-        memoryTotal?: number;
-        overallStatus?: string;
-        connectionState?: string;
-      };
-      config?: {
-        product?: { version?: string; build?: string; name?: string };
-      };
-    }>}>('vcenter/host');
+      connection_state?: string;
+      power_state?: string;
+    }>>('vcenter/host');
 
-    return result.value.map(h => ({
-      host: h.host,
+    // Handle both vSphere 7 array format and legacy { value: [...] } format
+    const hosts = Array.isArray(result) ? result : (result as any).value || [];
+
+    return hosts.map((h: any) => ({
+      host: { value: h.host || h.host?.value },
       name: h.name,
       parent: h.parent,
-      summary: h.summary,
+      summary: {
+        connectionState: h.connection_state || h.summary?.connectionState,
+        overallStatus: h.power_state === 'POWERED_ON' ? 'green' : 'yellow',
+        numCpuCores: h.cpu_count || h.summary?.numCpuCores,
+        memoryTotal: h.memory_size_MiB ? h.memory_size_MiB * 1048576 : h.summary?.memoryTotal,
+      },
       config: h.config,
     }));
   }
@@ -327,28 +369,31 @@ export class VMwareService {
    * Fetch virtual machines
    */
   async fetchVMs(): Promise<VMwareVM[]> {
-    const result = await this.restRequest<{ value: Array<{
-      vm: { value: string };
+    // vSphere 7 returns array directly with snake_case fields
+    const result = await this.restRequest<Array<{
+      vm: string;  // e.g., "vm-1234"
       name: string;
-      parent?: { value: string };
-      summary?: {
-        guestFullName?: string;
-        numCpu?: number;
-        memorySizeMB?: number;
-        overallStatus?: string;
-        connectionState?: string;
-        guestId?: string;
-        guestState?: string;
-        ipAddress?: string;
-        storage?: { committed: number; uncommitted: number };
-      };
-    }>}>('vcenter/vm');
+      power_state?: string;
+      cpu_count?: number;
+      memory_size_MiB?: number;
+    }>>('vcenter/vm');
 
-    return result.value.map(v => ({
-      vm: v.vm,
+    // Handle both vSphere 7 array format and legacy { value: [...] } format
+    const vms = Array.isArray(result) ? result : (result as any).value || [];
+
+    return vms.map((v: any) => ({
+      vm: { value: v.vm || v.vm?.value },
       name: v.name,
       parent: v.parent,
-      summary: v.summary,
+      summary: {
+        numCpu: v.cpu_count || v.summary?.numCpu,
+        memorySizeMB: v.memory_size_MiB || v.summary?.memorySizeMB,
+        guestState: v.power_state === 'POWERED_ON' ? 'running' : 'notRunning',
+        connectionState: v.power_state === 'POWERED_ON' ? 'connected' : 'disconnected',
+        overallStatus: v.power_state === 'POWERED_ON' ? 'green' : 'gray',
+        guestFullName: v.guest_OS || v.summary?.guestFullName,
+        ipAddress: v.summary?.ipAddress,
+      },
     }));
   }
 
@@ -356,20 +401,30 @@ export class VMwareService {
    * Fetch datastores
    */
   async fetchDatastores(): Promise<VMwareDatastore[]> {
-    const result = await this.restRequest<{ value: Array<{
-      datastore: { value: string };
+    // vSphere 7 returns array directly
+    const result = await this.restRequest<Array<{
+      datastore: string;
       name: string;
-      parent?: { value: string };
-      info?: { url?: string; type?: string };
-      summary?: { capacity?: number; freeSpace?: number; uncommitted?: number; accessible?: boolean };
-    }>}>('vcenter/datastore');
+      type?: string;
+      capacity?: number;
+      free_space?: number;
+    }>>('vcenter/datastore');
 
-    return result.value.map(d => ({
-      datastore: d.datastore,
+    // Handle both vSphere 7 array format and legacy { value: [...] } format
+    const datastores = Array.isArray(result) ? result : (result as any).value || [];
+
+    return datastores.map((d: any) => ({
+      datastore: { value: d.datastore || d.datastore?.value },
       name: d.name,
       parent: d.parent,
-      info: d.info,
-      summary: d.summary,
+      info: {
+        type: d.type || d.info?.type,
+      },
+      summary: {
+        capacity: d.capacity || d.summary?.capacity,
+        freeSpace: d.free_space || d.summary?.freeSpace,
+        accessible: d.accessible ?? d.summary?.accessible ?? true,
+      },
     }));
   }
 
@@ -642,6 +697,262 @@ export class VMwareService {
       return { connected: true };
     } catch (error) {
       return { connected: false, error: (error as Error).message };
+    }
+  }
+
+  // ============================================================================
+  // VM POWER CONTROL
+  // ============================================================================
+
+  /**
+   * Power on a VM
+   */
+  async powerOnVM(vmId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await fetch(`https://${this.config.host}/rest/vcenter/vm/${vmId}/power/start`, {
+        method: 'POST',
+        headers: {
+          'vmware-api-session-id': this.sessionCookie || '',
+        },
+      });
+      return { success: response.ok };
+    } catch (error) {
+      return { success: false, error: (error as Error).message };
+    }
+  }
+
+  /**
+   * Power off a VM (graceful shutdown)
+   */
+  async powerOffVM(vmId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      // Try graceful shutdown first
+      const response = await fetch(`https://${this.config.host}/rest/vcenter/vm/${vmId}/guest/power?action=shutdown`, {
+        method: 'POST',
+        headers: {
+          'vmware-api-session-id': this.sessionCookie || '',
+        },
+      });
+      return { success: response.ok };
+    } catch (error) {
+      return { success: false, error: (error as Error).message };
+    }
+  }
+
+  /**
+   * Force power off a VM (hard stop)
+   */
+  async forceStopVM(vmId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await fetch(`https://${this.config.host}/rest/vcenter/vm/${vmId}/power/stop`, {
+        method: 'POST',
+        headers: {
+          'vmware-api-session-id': this.sessionCookie || '',
+        },
+      });
+      return { success: response.ok };
+    } catch (error) {
+      return { success: false, error: (error as Error).message };
+    }
+  }
+
+  /**
+   * Suspend a VM
+   */
+  async suspendVM(vmId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await fetch(`https://${this.config.host}/rest/vcenter/vm/${vmId}/power/suspend`, {
+        method: 'POST',
+        headers: {
+          'vmware-api-session-id': this.sessionCookie || '',
+        },
+      });
+      return { success: response.ok };
+    } catch (error) {
+      return { success: false, error: (error as Error).message };
+    }
+  }
+
+  /**
+   * Reset a VM
+   */
+  async resetVM(vmId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await fetch(`https://${this.config.host}/rest/vcenter/vm/${vmId}/power/reset`, {
+        method: 'POST',
+        headers: {
+          'vmware-api-session-id': this.sessionCookie || '',
+        },
+      });
+      return { success: response.ok };
+    } catch (error) {
+      return { success: false, error: (error as Error).message };
+    }
+  }
+
+  // ============================================================================
+  // SNAPSHOT MANAGEMENT
+  // ============================================================================
+
+  /**
+   * Get all snapshots for all VMs (batch operation)
+   */
+  async fetchAllSnapshots(): Promise<Array<{
+    id: string;
+    vmId: string;
+    vmName: string;
+    name: string;
+    description: string;
+    createTime: string;
+    state: string;
+    size: number;
+  }>> {
+    try {
+      // First get all VMs
+      const vms = await this.fetchVMs();
+      const allSnapshots: Array<{
+        id: string;
+        vmId: string;
+        vmName: string;
+        name: string;
+        description: string;
+        createTime: string;
+        state: string;
+        size: number;
+      }> = [];
+
+      // Process in batches of 20 to avoid overwhelming the API
+      const batchSize = 20;
+      for (let i = 0; i < vms.length; i += batchSize) {
+        const batch = vms.slice(i, i + batchSize);
+        const results = await Promise.all(
+          batch.map(async (vm) => {
+            const snapshots = await this.getSnapshots(vm.vm.value);
+            return snapshots.map(s => ({
+              ...s,
+              vmId: vm.vm.value,
+              vmName: vm.name,
+            }));
+          })
+        );
+        allSnapshots.push(...results.flat());
+      }
+
+      return allSnapshots;
+    } catch (error) {
+      console.error('Error fetching all snapshots:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get snapshots for a VM
+   */
+  async getSnapshots(vmId: string): Promise<Array<{
+    id: string;
+    name: string;
+    description: string;
+    createTime: string;
+    state: string;
+    size: number;
+  }>> {
+    try {
+      const response = await fetch(`https://${this.config.host}/rest/vcenter/vm/${vmId}/snapshot`, {
+        headers: {
+          'vmware-api-session-id': this.sessionCookie || '',
+        },
+      });
+
+      if (!response.ok) {
+        return [];
+      }
+
+      const data = await response.json() as { value: Array<{
+        snapshot: string;
+        name?: string;
+        description?: string;
+        create_time?: string;
+        state?: string;
+        size?: number;
+      }> };
+
+      return (data.value || []).map(s => ({
+        id: s.snapshot,
+        name: s.name || 'Unnamed',
+        description: s.description || '',
+        createTime: s.create_time || new Date().toISOString(),
+        state: s.state || 'unknown',
+        size: s.size || 0,
+      }));
+    } catch (error) {
+      console.error('Error fetching snapshots:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Create a snapshot
+   */
+  async createSnapshot(vmId: string, name: string, description?: string, memory?: boolean): Promise<{ success: boolean; snapshotId?: string; error?: string }> {
+    try {
+      const response = await fetch(`https://${this.config.host}/rest/vcenter/vm/${vmId}/snapshot`, {
+        method: 'POST',
+        headers: {
+          'vmware-api-session-id': this.sessionCookie || '',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          spec: {
+            name,
+            description: description || '',
+            memory: memory || false,
+            quiesce: true,
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        return { success: false, error: `HTTP ${response.status}` };
+      }
+
+      const data = await response.json() as { value: string };
+      return { success: true, snapshotId: data.value };
+    } catch (error) {
+      return { success: false, error: (error as Error).message };
+    }
+  }
+
+  /**
+   * Delete a snapshot
+   */
+  async deleteSnapshot(vmId: string, snapshotId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await fetch(`https://${this.config.host}/rest/vcenter/vm/${vmId}/snapshot/${snapshotId}`, {
+        method: 'DELETE',
+        headers: {
+          'vmware-api-session-id': this.sessionCookie || '',
+        },
+      });
+      return { success: response.ok };
+    } catch (error) {
+      return { success: false, error: (error as Error).message };
+    }
+  }
+
+  /**
+   * Revert to a snapshot
+   */
+  async revertSnapshot(vmId: string, snapshotId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await fetch(`https://${this.config.host}/rest/vcenter/vm/${vmId}/snapshot/${snapshotId}?action=revert`, {
+        method: 'POST',
+        headers: {
+          'vmware-api-session-id': this.sessionCookie || '',
+        },
+      });
+      return { success: response.ok };
+    } catch (error) {
+      return { success: false, error: (error as Error).message };
     }
   }
 }
