@@ -227,16 +227,57 @@ export class AlarmDetectionEngine {
       });
 
       if (correlatedLogs.length >= logic.threshold) {
-        const enrichedLogs = correlatedLogs.map((log) => ({
-          ...log,
-          _correlation_precursors: precursorEvents
+        const enrichedLogs = correlatedLogs.map((log) => {
+          const relatedPrecursors = precursorEvents
             .filter((e: PrecursorEvent) => {
               const ip = rules.matchField === 'destIp' ? e.destIp : e.sourceIp;
               return ip === ((log[matchField] as string) || (log.srcip as string));
+            });
+
+          const precCodes = relatedPrecursors.map((e: PrecursorEvent) => e.alarm.code).join(', ');
+          const precDetails = relatedPrecursors
+            .map((e: PrecursorEvent) => {
+              const ip = e.sourceIp || e.destIp || 'unknown';
+              const raw = (e as any).rawData as any;
+              let country: string | undefined;
+              let ts: string;
+
+              if (Array.isArray(raw) && raw.length > 0) {
+                const log0 = raw[0] as any;
+                country =
+                  (log0 &&
+                    (log0.country ||
+                      log0.src_country ||
+                      log0.dst_country ||
+                      log0.src_country_code ||
+                      log0.dst_country_code)) || undefined;
+                if (log0 && log0.date && log0.time) {
+                  const tz = log0.tz ? ` ${log0.tz}` : '';
+                  ts = `${log0.date} ${log0.time}${tz}`;
+                } else if (log0 && log0.itime) {
+                  ts = String(log0.itime);
+                } else {
+                  ts = e.createdAt.toISOString();
+                }
+              } else {
+                ts = e.createdAt.toISOString();
+              }
+
+              const label = this.getAlarmCodeLabel(e.alarm.code);
+              const parts = [label, ip];
+              if (country) parts.push(country);
+              parts.push(ts);
+
+              return parts.join(' @ ');
             })
-            .map((e: PrecursorEvent) => e.alarm.code)
-            .join(', '),
-        }));
+            .join(' | ');
+
+          return {
+            ...log,
+            _correlation_precursors: precCodes,
+            _correlation_precursor_details: precDetails,
+          };
+        });
 
         await this.fireAlarm(alarm, enrichedLogs as Array<Record<string, unknown>>);
         return { alarmCode: alarm.code, triggered: true, matchCount: correlatedLogs.length, events: correlatedLogs.slice(0, 5) };
@@ -344,6 +385,11 @@ export class AlarmDetectionEngine {
       filteredLogs = this.filterOffHours(recentLogs);
     } else if (logic.clientCheck === 'brute-force-group') {
       filteredLogs = this.filterBruteForce(recentLogs, logic.threshold);
+    }
+
+    // Alarm-specific exclusions (service accounts, etc.)
+    if (alarm.code === 'ADMIN_NEW_GEO') {
+      filteredLogs = filteredLogs.filter((log) => (log.user as string) !== 'siem');
     }
 
     const matchCount = filteredLogs.length;
@@ -534,6 +580,28 @@ export class AlarmDetectionEngine {
   }
 
   /**
+   * Map alarm code to human-readable (Turkish) label
+   */
+  private getAlarmCodeLabel(code: string): string {
+    switch (code) {
+      case 'ADMIN_NEW_GEO':
+        return 'Yeni ülkeden admin girişi';
+      case 'VPN_LOGIN_OFF_HOURS':
+        return 'Mesai dışı VPN oturumu';
+      case 'VPN_NEW_USER':
+        return 'İlk kez VPN kullanan kullanıcı';
+      case 'MULTI_SECURITY_EVENTS':
+        return 'Aynı kaynaktan çoklu güvenlik olayı';
+      case 'CONFIG_THEN_SPIKE':
+        return 'Config değişikliği sonrası trafik artışı';
+      case 'IPS_THEN_OUTBOUND':
+        return 'IPS alarmı sonrası dışa bağlantı';
+      default:
+        return code;
+    }
+  }
+
+  /**
    * Build alarm title from alarm definition and matching logs
    */
   private buildAlarmTitle(alarm: AlarmDef, logs: Array<Record<string, unknown>>): string {
@@ -561,6 +629,14 @@ export class AlarmDetectionEngine {
     sections.push(alarm.description || alarm.name);
     sections.push(`Tespit edilen olay sayisi: ${logs.length}`);
 
+    // Correlation precursor info (for SOC correlation alarms)
+    if (firstLog._correlation_precursors) {
+      sections.push(`Onceki Alarmlar: ${firstLog._correlation_precursors}`);
+    }
+    if (firstLog._correlation_precursor_details) {
+      sections.push(`Onceki Alarm Detaylari: ${firstLog._correlation_precursor_details}`);
+    }
+
     // Event details from first log
     const details: string[] = [];
     if (firstLog.msg) details.push(`Mesaj: ${this.decodeMsg(firstLog.msg)}`);
@@ -568,6 +644,8 @@ export class AlarmDetectionEngine {
     if (firstLog.user) details.push(`Kullanici: ${firstLog.user}`);
     if (firstLog.srcip) details.push(`Kaynak IP: ${firstLog.srcip}`);
     if (firstLog.dstip) details.push(`Hedef IP: ${firstLog.dstip}`);
+    if (firstLog.sentbyte) details.push(`Gonderilen: ${this.formatBytes(Number(firstLog.sentbyte))}`);
+    if (firstLog.rcvdbyte) details.push(`Alinan: ${this.formatBytes(Number(firstLog.rcvdbyte))}`);
     if (firstLog.cfgpath) details.push(`Config Yolu: ${firstLog.cfgpath}`);
     if (firstLog.cfgobj) details.push(`Nesne: ${firstLog.cfgobj}`);
     if (firstLog.cfgattr) details.push(`Degisiklik: ${this.decodeMsg(firstLog.cfgattr)}`);
@@ -586,5 +664,12 @@ export class AlarmDetectionEngine {
     sections.push(`Onerilen Aksiyon: ${alarm.detectionLogic.recommendedAction}`);
 
     return sections.join('\n\n');
+  }
+
+  private formatBytes(bytes: number): string {
+    if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(2)} GB`;
+    if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(2)} MB`;
+    if (bytes >= 1024) return `${(bytes / 1024).toFixed(2)} KB`;
+    return `${bytes} B`;
   }
 }

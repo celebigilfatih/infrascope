@@ -8,7 +8,8 @@ import { History, GitCommit, User, Clock, Filter, RefreshCw, ChevronRight } from
 
 interface Change {
   id: string;
-  type: 'create' | 'update' | 'delete';
+  type: 'create' | 'update' | 'delete' | 'config';
+  source: 'firewall' | 'vmware';
   entity: string;
   entityName: string;
   field: string;
@@ -16,6 +17,7 @@ interface Change {
   newValue: string;
   user: string;
   timestamp: string;
+  description?: string;
 }
 
 export default function ChangesPage() {
@@ -23,67 +25,28 @@ export default function ChangesPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
 
-  useEffect(() => {
-    setTimeout(() => {
-      setChanges([
-        {
-          id: '1',
-          type: 'update',
-          entity: 'device',
-          entityName: 'SRV-DB-01',
-          field: 'status',
-          oldValue: 'INACTIVE',
-          newValue: 'ACTIVE',
-          user: 'admin@infrascope.io',
-          timestamp: new Date().toISOString(),
-        },
-        {
-          id: '2',
-          type: 'create',
-          entity: 'device',
-          entityName: 'SRV-WEB-03',
-          field: '-',
-          oldValue: '-',
-          newValue: 'Yeni cihaz eklendi',
-          user: 'admin@infrascope.io',
-          timestamp: new Date(Date.now() - 1800000).toISOString(),
-        },
-        {
-          id: '3',
-          type: 'delete',
-          entity: 'connection',
-          entityName: 'CONN-045',
-          field: '-',
-          oldValue: '-',
-          newValue: 'Bağlantı silindi',
-          user: 'network-admin@infrascope.io',
-          timestamp: new Date(Date.now() - 3600000).toISOString(),
-        },
-        {
-          id: '4',
-          type: 'update',
-          entity: 'rack',
-          entityName: 'RACK-A-12',
-          field: 'location',
-          oldValue: 'Floor 1',
-          newValue: 'Floor 2',
-          user: 'admin@infrascope.io',
-          timestamp: new Date(Date.now() - 7200000).toISOString(),
-        },
-        {
-          id: '5',
-          type: 'update',
-          entity: 'device',
-          entityName: 'FW-EDGE-01',
-          field: 'firmware',
-          oldValue: '7.0.1',
-          newValue: '7.2.0',
-          user: 'network-admin@infrascope.io',
-          timestamp: new Date(Date.now() - 14400000).toISOString(),
-        },
-      ]);
+  const fetchChanges = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch('/api/changes?limit=30');
+      const result = await response.json();
+      
+      if (result.success) {
+        setChanges(result.data || []);
+      } else {
+        console.error('Failed to fetch changes:', result.error);
+        setChanges([]);
+      }
+    } catch (error) {
+      console.error('Error fetching changes:', error);
+      setChanges([]);
+    } finally {
       setLoading(false);
-    }, 500);
+    }
+  };
+
+  useEffect(() => {
+    fetchChanges();
   }, []);
 
   const getChangeIcon = (type: string) => {
@@ -91,6 +54,7 @@ export default function ChangesPage() {
       case 'create': return <div className="p-1.5 rounded-full bg-green-500/20"><GitCommit className="h-4 w-4 text-green-500" /></div>;
       case 'update': return <div className="p-1.5 rounded-full bg-blue-500/20"><GitCommit className="h-4 w-4 text-blue-500" /></div>;
       case 'delete': return <div className="p-1.5 rounded-full bg-red-500/20"><GitCommit className="h-4 w-4 text-red-500" /></div>;
+      case 'config': return <div className="p-1.5 rounded-full bg-orange-500/20"><GitCommit className="h-4 w-4 text-orange-500" /></div>;
       default: return <div className="p-1.5 rounded-full bg-gray-500/20"><GitCommit className="h-4 w-4 text-gray-500" /></div>;
     }
   };
@@ -100,6 +64,7 @@ export default function ChangesPage() {
       case 'create': return <Badge className="bg-green-500">Oluşturma</Badge>;
       case 'update': return <Badge variant="default">Güncelleme</Badge>;
       case 'delete': return <Badge variant="destructive">Silme</Badge>;
+      case 'config': return <Badge className="bg-orange-500">Config</Badge>;
       default: return <Badge variant="outline">{type}</Badge>;
     }
   };
@@ -114,10 +79,10 @@ export default function ChangesPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Son Değişiklikler</h1>
-          <p className="text-muted-foreground">Sistem değişiklik kaydı ve denetim izi</p>
+          <p className="text-muted-foreground">Firewall ve VMware değişiklik kaydı</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon">
+          <Button variant="outline" size="icon" onClick={fetchChanges}>
             <RefreshCw className="h-4 w-4" />
           </Button>
           <Button variant="outline">
@@ -185,14 +150,14 @@ export default function ChangesPage() {
 
       {/* Filter Tabs */}
       <div className="flex gap-2">
-        {['all', 'create', 'update', 'delete'].map((f) => (
+        {['all', 'create', 'update', 'delete', 'config'].map((f) => (
           <Button
             key={f}
             variant={filter === f ? 'default' : 'outline'}
             size="sm"
             onClick={() => setFilter(f)}
           >
-            {f === 'all' ? 'Tümü' : f === 'create' ? 'Oluşturma' : f === 'update' ? 'Güncelleme' : 'Silme'}
+            {f === 'all' ? 'Tümü' : f === 'create' ? 'Oluşturma' : f === 'update' ? 'Güncelleme' : f === 'delete' ? 'Silme' : 'Config'}
           </Button>
         ))}
       </div>
@@ -225,6 +190,9 @@ export default function ChangesPage() {
                     <div className="flex items-center gap-2 mb-1">
                       {getChangeBadge(change.type)}
                       <Badge variant="outline">{change.entity}</Badge>
+                      {change.source && (
+                        <Badge variant="secondary">{change.source === 'firewall' ? '🔥 Firewall' : '☁️ VMware'}</Badge>
+                      )}
                     </div>
                     <h4 className="font-semibold">{change.entityName}</h4>
                     {change.type === 'update' ? (
@@ -235,7 +203,7 @@ export default function ChangesPage() {
                         <span className="text-green-500 font-medium">{change.newValue}</span>
                       </div>
                     ) : (
-                      <p className="text-sm text-muted-foreground mt-1">{change.newValue}</p>
+                      <p className="text-sm text-muted-foreground mt-1">{change.description || change.newValue}</p>
                     )}
                     <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1">

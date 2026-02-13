@@ -44,6 +44,7 @@ interface DashboardData {
   };
   hosts: Array<{ id: string; name: string; status: string }>;
   datastores: Array<{ id: string; name: string; capacityGB: number; freeGB: number; usedPercent: number }>;
+  oldSnapshots?: Array<{ vmName: string; name: string; ageInDays: number; sizeGB: number }>;
 }
 
 export default function VirtualizationDashboard() {
@@ -297,38 +298,40 @@ export default function VirtualizationDashboard() {
               </CardContent>
             </Card>
 
-            {/* Host Status */}
+            {/* Old Snapshots */}
             <Card className="border-border/50 shadow-sm bg-card">
               <CardHeader>
-                <CardTitle className="text-sm font-bold">ESXi Host Durumu</CardTitle>
-                <div className="text-2xl font-black mt-2">{data?.summary.hosts || 0}</div>
-                <CardDescription className="text-[10px] font-bold text-emerald-500">Toplam fiziksel sunucu</CardDescription>
+                <CardTitle className="text-sm font-bold">Eski Snapshotlar</CardTitle>
+                <div className="text-2xl font-black mt-2">{data?.oldSnapshots?.length || 0}</div>
+                <CardDescription className="text-[10px] font-bold text-orange-500">7 günden eski snapshot</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {data?.hosts.slice(0, 6).map((host: { id: string; name: string; status: string }) => (
-                  <div key={host.id} className="flex items-center justify-between">
+                {data?.oldSnapshots?.slice(0, 6).map((snapshot, idx) => (
+                  <div key={idx} className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className={cn(
                         "w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold",
-                        host.status === 'CONNECTED' ? "bg-emerald-500/10 text-emerald-600" : "bg-rose-500/10 text-rose-600"
+                        snapshot.ageInDays > 30 ? "bg-rose-500/10 text-rose-600" : "bg-orange-500/10 text-orange-600"
                       )}>
-                        {host.status === 'CONNECTED' ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+                        <AlertTriangle className="h-4 w-4" />
                       </div>
                       <div className="flex flex-col">
-                        <span className="text-xs font-bold truncate max-w-[140px]">{host.name}</span>
-                        <span className="text-[10px] text-muted-foreground font-medium uppercase">ESXi</span>
+                        <span className="text-xs font-bold truncate max-w-[140px]">{snapshot.vmName}</span>
+                        <span className="text-[10px] text-muted-foreground font-medium">{snapshot.sizeGB.toFixed(1)} GB</span>
                       </div>
                     </div>
-                    <Badge variant={host.status === 'CONNECTED' ? 'success' : 'destructive'} className="text-[9px]">
-                      {host.status === 'CONNECTED' ? 'Online' : 'Offline'}
+                    <Badge variant="secondary" className="text-[9px]">
+                      {snapshot.ageInDays} gün
                     </Badge>
                   </div>
                 ))}
-                {(data?.hosts.length || 0) > 6 && (
-                  <Link href="/virtualization/hosts" className="text-xs text-primary hover:underline block text-center pt-2">
-                    +{(data?.hosts.length || 0) - 6} daha göster
+                {!data?.oldSnapshots || data.oldSnapshots.length === 0 ? (
+                  <p className="text-xs text-muted-foreground text-center py-4">Eski snapshot yok</p>
+                ) : data.oldSnapshots.length > 6 ? (
+                  <Link href="/virtualization/snapshots" className="text-xs text-primary hover:underline block text-center pt-2">
+                    +{data.oldSnapshots.length - 6} daha göster
                   </Link>
-                )}
+                ) : null}
               </CardContent>
             </Card>
           </div>

@@ -32,6 +32,7 @@ export interface AlarmDefinitionSeed {
   category: 'CONFIG_ACCESS' | 'SECURITY' | 'RISK_ANOMALY' | 'OPERATIONAL' | 'SOC_CORRELATION';
   severity: 'ALARM_CRITICAL' | 'ALARM_HIGH' | 'ALARM_MEDIUM' | 'ALARM_LOW' | 'ALARM_INFO';
   cooldownMinutes: number;
+  notifyEmail?: boolean;
   detectionLogic: AlarmDetectionLogic;
 }
 
@@ -148,10 +149,10 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
     severity: 'ALARM_HIGH',
     cooldownMinutes: 30,
     detectionLogic: {
-      logtype: 'event',
-      filter: 'subtype == vpn and action != negotiate',
+      logtype: 'traffic',
+      filter: 'tunneltype == ssl-web',
       threshold: 1,
-      timeWindowMinutes: 10,
+      timeWindowMinutes: 60,
       clientCheck: 'off-hours',
       description: 'Detects successful SSL-VPN connections outside business hours (08:00-18:00 weekdays). Weekend and holiday logins flagged as higher risk.',
       recommendedAction: 'Verify VPN user identity and authorization. Check if remote work was planned. Review accessed resources during off-hours session. Contact user if unexpected.',
@@ -632,11 +633,11 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
     cooldownMinutes: 30,
     detectionLogic: {
       logtype: 'dns',
-      filter: '',
+      filter: '(srcip != 10.5.2.1 and srcip != 10.5.2.2) and (dstip != 8.8.8.8 and dstip != 8.8.4.4 and dstip != 1.1.1.1 and dstip != 1.0.0.1 and dstip != 208.67.222.222 and dstip != 208.67.220.220 and dstip != 195.175.39.39 and dstip != 195.175.39.40)',
       threshold: 50,
       timeWindowMinutes: 15,
       clientCheck: 'brute-force-group',
-      description: 'Tek bir domaine asiri DNS sorgusunu tespit eder. Yuksek sorgu hacmi DNS tunelleme veya C2 haberlesme gostergesi olabilir.',
+      description: 'Tek bir domaine asiri DNS sorgusunu tespit eder. Bilindik DNS sunuculari (Google, Cloudflare, OpenDNS) ve dahili DNS sunuculari (10.5.2.1, 10.5.2.2) haric tutulur. Yuksek sorgu hacmi DNS tunelleme veya C2 haberlesme gostergesi olabilir.',
       recommendedAction: 'Sorgulanan domaini ve kaynak hostu belirleyin. DNS tunelleme araclari kontrol edin. Suphe yaratan domaini engelleyin. Endpoint i malware taramasindan gecirin.',
     },
   },
@@ -842,7 +843,7 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
         precursorCodes: ['WEBFILTER_HIGH_RISK', 'DNS_MALICIOUS'],
         lookbackMinutes: 30,
         secondaryLogtype: 'dns',
-        secondaryFilter: '',
+        secondaryFilter: 'qtype == TXT or qtype == NULL or qname like %.%',
         matchField: 'sourceIp',
       },
       description: 'WebFilter veya DNS engeli alan hosttan devam eden DNS tunelleme aktivitesi tespit eder. Guvenlik kontrollerini atlama girisimi.',
@@ -866,7 +867,7 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
         precursorCodes: ['ADMIN_NEW_GEO', 'VPN_LOGIN_OFF_HOURS', 'VPN_NEW_USER'],
         lookbackMinutes: 60,
         secondaryLogtype: 'traffic',
-        secondaryFilter: '',
+        secondaryFilter: 'sentbyte > 10000000 or rcvdbyte > 10000000',
         matchField: 'sourceIp',
       },
       description: 'Suphe yaratan VPN baglantisi (yeni geo, mesai disi, yeni kullanici) ardindan buyuk veri transferi tespit eder.',
@@ -1029,6 +1030,116 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
       timeWindowMinutes: 15,
       description: 'Datastore bos alan yuzdesini izler. %5 altina dustugunde kritik alarm uretir.',
       recommendedAction: 'ACIL: Snapshot lari derhal silin. Gereksiz dosyalari temizleyin. VM leri baska datastore a tasiyin. Yeni storage ekleyin.',
+    },
+  },
+  // ============================================================================
+  // VMWARE - CLUSTER & HA RISKS
+  // ============================================================================
+  {
+    code: 'CLUSTER_HA_RISK',
+    name: 'HA Failover Kapasitesi Yetersiz',
+    description: '1 host down senaryosunda CPU veya RAM kapasitesi %100 asacak. HA failover riski.',
+    category: 'OPERATIONAL',
+    severity: 'ALARM_CRITICAL',
+    cooldownMinutes: 120,
+    notifyEmail: true,
+    detectionLogic: {
+      logtype: 'vmware',
+      filter: 'haFailoverRisk == true',
+      threshold: 1,
+      timeWindowMinutes: 60,
+      description: 'HA cluster da 1 host kaybi durumunda kalan hostlarin CPU veya RAM kapasitesinin %100 u asip asmayacagini kontrol eder. Asarsa kritik alarm uretir.',
+      recommendedAction: 'ACIL: Cluster a yeni host ekleyin veya VM leri baska cluster a tasiyin. HA admission control ayarlarini gozden gecirin. VM resource ayarlarini optimize edin.',
+    },
+  },
+  {
+    code: 'SNAPSHOT_DISK_GROWTH',
+    name: 'Snapshot Disk Sismesi',
+    description: 'Snapshot disk buyumesi son 24 saatte %20 yi asti. Disk alani riski.',
+    category: 'OPERATIONAL',
+    severity: 'ALARM_CRITICAL',
+    cooldownMinutes: 240,
+    notifyEmail: true,
+    detectionLogic: {
+      logtype: 'vmware',
+      filter: 'snapshotGrowthPercent24h > 20',
+      threshold: 1,
+      timeWindowMinutes: 60,
+      description: 'VM snapshot larinin son 24 saatteki disk buyume oranini izler. %20 yi asarsa kritik alarm uretir.',
+      recommendedAction: 'Snapshot lari derhal kontrol edin. Eski ve gereksiz snapshot lari silin. Snapshot retention policy gozden gecirin. Datastore bos alanini kontrol edin.',
+    },
+  },
+  {
+    code: 'DRS_IMBALANCE',
+    name: 'DRS Dengesizligi',
+    description: 'Cluster icinde host CPU farki %25 i asti. DRS load balancing calismadi.',
+    category: 'OPERATIONAL',
+    severity: 'ALARM_MEDIUM',
+    cooldownMinutes: 60,
+    notifyEmail: false,
+    detectionLogic: {
+      logtype: 'vmware',
+      filter: 'drsImbalance > 25',
+      threshold: 1,
+      timeWindowMinutes: 60,
+      description: 'Cluster daki host lar arasinda CPU kullanim farkini izler. %25 ten buyukse DRS dengesizligi alarmini uretir.',
+      recommendedAction: 'DRS ayarlarini kontrol edin (automation level, migration threshold). VM affinity/anti-affinity kurallari gozden gecirin. Manuel vMotion ile dengeleme yapin.',
+    },
+  },
+  // ============================================================================
+  // VMWARE - SECURITY & OPERATIONS
+  // ============================================================================
+  {
+    code: 'ESXI_MAINTENANCE_OUT_OF_HOURS',
+    name: 'Mesai Disi Maintenance Mode',
+    description: 'ESXi host 22:00-06:00 arasi maintenance mode a alindi. MITRE Impact/Persistence.',
+    category: 'SECURITY',
+    severity: 'ALARM_CRITICAL',
+    cooldownMinutes: 30,
+    notifyEmail: true,
+    detectionLogic: {
+      logtype: 'vmware',
+      filter: 'maintenanceMode == true',
+      threshold: 1,
+      timeWindowMinutes: 15,
+      clientCheck: 'off-hours',
+      description: 'ESXi host un maintenance mode a alinmasini izler. 22:00-06:00 arasi olanlar kritik alarm uretir. MITRE ATT&CK: Impact ve Persistence kategorisinde.',
+      recommendedAction: 'ACIL: Maintenance i kim yapti kontrol edin. Yetkisiz mudahale ise host u inceleyin. Change management sureci takip edilmis mi dogrulayin.',
+    },
+  },
+  {
+    code: 'VM_DELETED',
+    name: 'VM Silindi',
+    description: 'VM delete event tespit edildi. SOC entegrasyonu icin altin alarm.',
+    category: 'SECURITY',
+    severity: 'ALARM_CRITICAL',
+    cooldownMinutes: 15,
+    notifyEmail: true,
+    detectionLogic: {
+      logtype: 'vmware',
+      filter: 'vmDeleted == true',
+      threshold: 1,
+      timeWindowMinutes: 10,
+      description: 'VM silme islemini izler. Hangi VM, kim tarafindan, ne zaman silindigini kaydeder. SOC forensics icin kritik veri.',
+      recommendedAction: 'ACIL: VM i kim sildi kontrol edin. Yetkisiz islem ise forensic inceleme baslatın. Yedekten geri yukleme gerekebilir. Change ticket kontrol edin.',
+    },
+  },
+  {
+    code: 'CONFIG_CHANGE_AFTER_HOURS',
+    name: 'Mesai Disi Konfig Degisikligi',
+    description: 'Host veya Cluster config degisikligi mesai disi yapildi.',
+    category: 'CONFIG_ACCESS',
+    severity: 'ALARM_MEDIUM',
+    cooldownMinutes: 30,
+    notifyEmail: true,
+    detectionLogic: {
+      logtype: 'vmware',
+      filter: 'configChange == true',
+      threshold: 1,
+      timeWindowMinutes: 15,
+      clientCheck: 'off-hours',
+      description: 'ESXi host veya vCenter cluster ayarlarindaki degisiklikleri izler. 18:00-08:00 ve hafta sonu degisiklikleri orta seviye alarm uretir.',
+      recommendedAction: 'Degisiklik kim tarafindan yapildi kontrol edin. Change management sureci takip edildi mi dogrulayin. Kritik config degisimleri varsa geri alin.',
     },
   },
 ];

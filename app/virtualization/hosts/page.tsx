@@ -318,17 +318,21 @@ export default function HostsPage() {
                     <TableCell className="font-medium">{host.name}</TableCell>
                     <TableCell>{host.cluster}</TableCell>
                     <TableCell>
-                      <div className="text-sm">{host.vendor}</div>
-                      <div className="text-xs text-muted-foreground">{host.model}</div>
+                      <div className="text-sm">{host.vendor === 'Unknown' ? <span className="text-muted-foreground">Veri yok</span> : host.vendor}</div>
+                      <div className="text-xs text-muted-foreground">{host.model === 'Unknown' ? '-' : host.model}</div>
                     </TableCell>
-                    <TableCell>{host.cpuCores} Core</TableCell>
+                    <TableCell>{host.cpuCores === 0 ? <span className="text-muted-foreground">Veri yok</span> : `${host.cpuCores} Core`}</TableCell>
                     <TableCell>
-                      {host.memoryGB >= 1024 
-                        ? `${(host.memoryGB / 1024).toFixed(1)} TB` 
-                        : `${host.memoryGB} GB`}
+                      {host.memoryGB === 0 ? (
+                        <span className="text-muted-foreground">Veri yok</span>
+                      ) : host.memoryGB >= 1024 ? (
+                        `${(host.memoryGB / 1024).toFixed(1)} TB`
+                      ) : (
+                        `${host.memoryGB} GB`
+                      )}
                     </TableCell>
                     <TableCell>
-                      <div className="text-sm">{host.version}</div>
+                      <div className="text-sm">{host.version === 'Unknown' ? <span className="text-muted-foreground">Veri yok</span> : host.version}</div>
                       {host.build && (
                         <div className="text-xs text-muted-foreground">Build: {host.build}</div>
                       )}

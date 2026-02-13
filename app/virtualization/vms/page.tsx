@@ -353,7 +353,7 @@ export default function VMsPage() {
                   {paginatedVMs.map((vm) => (
                     <TableRow key={vm.id}>
                       <TableCell className="font-medium">{vm.name}</TableCell>
-                      <TableCell>{vm.host}</TableCell>
+                      <TableCell>{vm.host === 'Unknown' ? <span className="text-muted-foreground">Veri yok</span> : vm.host}</TableCell>
                       <TableCell className="font-mono text-sm">{vm.ip}</TableCell>
                       <TableCell>{vm.cpuCores} vCPU</TableCell>
                       <TableCell>{vm.ramMB >= 1024 ? `${(vm.ramMB / 1024).toFixed(1)} GB` : `${vm.ramMB} MB`}</TableCell>

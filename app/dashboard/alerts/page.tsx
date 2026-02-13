@@ -60,6 +60,8 @@ export default function AlertsDashboardPage() {
   const [checking, setChecking] = useState(false);
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
   const fetchEvents = useCallback(async () => {
@@ -179,6 +181,12 @@ export default function AlertsDashboardPage() {
     );
   });
 
+  // Pagination
+  const totalPages = Math.ceil(filteredEvents.length / pageSize);
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = startIndex + pageSize;
+  const paginatedEvents = filteredEvents.slice(startIndex, endIndex);
+
   const criticalCount = stats['ALARM_CRITICAL'] || 0;
   const highCount = stats['ALARM_HIGH'] || 0;
   const totalUnacked = Object.values(stats).reduce((sum: number, v: number) => sum + v, 0);
@@ -268,7 +276,7 @@ export default function AlertsDashboardPage() {
             Alarm Olaylari
             <Badge variant="secondary">{total}</Badge>
           </CardTitle>
-          <CardDescription>{filteredEvents.length} alarm gosteriliyor</CardDescription>
+          <CardDescription>{startIndex + 1}-{Math.min(endIndex, filteredEvents.length)} / {filteredEvents.length} alarm gosteriliyor</CardDescription>
         </CardHeader>
         <CardContent className="p-0">
           {loading ? (
@@ -298,7 +306,7 @@ export default function AlertsDashboardPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredEvents.map((event: AlarmEventData) => {
+                  {paginatedEvents.map((event: AlarmEventData) => {
                     const sev = SEVERITY_CONFIG[event.severity] || SEVERITY_CONFIG['ALARM_INFO'];
                     const Icon = sev.icon;
                     return (
@@ -358,6 +366,68 @@ export default function AlertsDashboardPage() {
             </div>
           )}
         </CardContent>
+        
+        {/* Pagination Controls */}
+        {filteredEvents.length > 0 && (
+          <div className="flex items-center justify-between px-6 py-4 border-t">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">
+                {startIndex + 1}-{Math.min(endIndex, filteredEvents.length)} / {filteredEvents.length} kayit
+              </span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="border rounded px-2 py-1 text-sm"
+              >
+                <option value="10">10</option>
+                <option value="25">25</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+              </select>
+            </div>
+            
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(1)}
+                disabled={currentPage === 1}
+              >
+                Ilk
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+              >
+                Onceki
+              </Button>
+              <span className="text-sm px-3">
+                {currentPage} / {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+              >
+                Sonraki
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={currentPage === totalPages}
+              >
+                Son
+              </Button>
+            </div>
+          </div>
+        )}
       </Card>
     </div>
   );

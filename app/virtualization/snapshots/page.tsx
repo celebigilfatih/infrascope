@@ -59,6 +59,8 @@ export default function SnapshotsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   // Create snapshot dialog
@@ -123,6 +125,12 @@ export default function SnapshotsPage() {
       snap.description?.toLowerCase().includes(searchTerm.toLowerCase())
     );
   });
+
+  // Pagination
+  const totalPages = Math.ceil(filteredSnapshots.length / pageSize);
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = startIndex + pageSize;
+  const paginatedSnapshots = filteredSnapshots.slice(startIndex, endIndex);
 
   const formatSize = (bytes: number): string => {
     if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(1)} GB`;
@@ -379,7 +387,7 @@ export default function SnapshotsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredSnapshots.map((snap) => (
+                {paginatedSnapshots.map((snap) => (
                   <TableRow key={`${snap.vmId}-${snap.id}`}>
                     <TableCell className="font-medium">{snap.vmName}</TableCell>
                     <TableCell>
@@ -431,6 +439,68 @@ export default function SnapshotsPage() {
             <p className="text-center text-muted-foreground py-8">
               {searchTerm ? 'Filtrelere uygun snapshot bulunamadi' : 'Snapshot bulunamadi'}
             </p>
+          )}
+
+          {/* Pagination Controls */}
+          {filteredSnapshots.length > 0 && (
+            <div className="flex items-center justify-between mt-4 border-t pt-4">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">
+                  {startIndex + 1}-{Math.min(endIndex, filteredSnapshots.length)} / {filteredSnapshots.length} kayit
+                </span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="border rounded px-2 py-1 text-sm"
+                >
+                  <option value="10">10</option>
+                  <option value="25">25</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                </select>
+              </div>
+              
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(1)}
+                  disabled={currentPage === 1}
+                >
+                  Ilk
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                >
+                  Onceki
+                </Button>
+                <span className="text-sm px-3">
+                  {currentPage} / {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  Sonraki
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(totalPages)}
+                  disabled={currentPage === totalPages}
+                >
+                  Son
+                </Button>
+              </div>
+            </div>
           )}
         </CardContent>
       </Card>

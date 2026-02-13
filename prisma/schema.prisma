@@ -663,6 +663,21 @@ model VMwareDatastore {
   @@map("vmware_datastores")
 }
 
+/// Capacity Metrics Time Series
+model CapacityMetric {
+  id              String   @id @default(cuid())
+  resourceType    String   // 'cluster', 'host', 'datastore'
+  resourceId      String   // vCenter moref or DB id
+  resourceName    String
+  metricType      String   // 'cpu', 'memory', 'disk'
+  value           Float    // Usage percentage or absolute value
+  total           Float?   // Total capacity
+  timestamp       DateTime @default(now())
+  
+  @@index([resourceType, resourceId, metricType, timestamp])
+  @@map("capacity_metrics")
+}
+
 /// VM Snapshot
 model VmSnapshot {
   id          String   @id @default(cuid())

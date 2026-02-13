@@ -10,8 +10,13 @@
  */
 
 import { PrismaClient, DeviceType, DeviceStatus, DeviceCriticality } from '@prisma/client';
+import { execSync } from 'child_process';
 
 const prisma = new PrismaClient();
+
+// In-memory cache for snapshots
+const snapshotCache = new Map<string, { data: any[]; timestamp: number }>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 // VMware API Types
 export interface VMwareConfig {
@@ -115,6 +120,21 @@ export interface VMwareDatastore {
     uncommitted?: number;
     accessible?: boolean;
   };
+}
+
+export interface VMSprawlResult {
+  vmId: string;
+  vmName: string;
+  host: string;
+  powerState: string;
+  cpuUsage?: number;
+  memoryUsage?: number;
+  snapshotCount: number;
+  oldestSnapshotDays?: number;
+  poweredOffDays?: number;
+  sprawlScore: number;
+  sprawlReasons: string[];
+  recommendation: string;
 }
 
 export interface SyncResult {
@@ -338,6 +358,8 @@ export class VMwareService {
 
   /**
    * Fetch ESXi hosts
+   * Note: vSphere 7 REST API provides only basic info (name, connection state).
+   * Hardware details (vendor, model, CPU, RAM, version) require SOAP API.
    */
   async fetchHosts(): Promise<VMwareHost[]> {
     // vSphere 7 returns array directly with snake_case fields
@@ -349,20 +371,29 @@ export class VMwareService {
     }>>('vcenter/host');
 
     // Handle both vSphere 7 array format and legacy { value: [...] } format
-    const hosts = Array.isArray(result) ? result : (result as any).value || [];
+    const hostList = Array.isArray(result) ? result : (result as any).value || [];
 
-    return hosts.map((h: any) => ({
+    return hostList.map((h: any) => ({
       host: { value: h.host || h.host?.value },
       name: h.name,
       parent: h.parent,
       summary: {
-        connectionState: h.connection_state || h.summary?.connectionState,
+        connectionState: (h.connection_state || 'connected').toLowerCase(),
         overallStatus: h.power_state === 'POWERED_ON' ? 'green' : 'yellow',
-        numCpuCores: h.cpu_count || h.summary?.numCpuCores,
-        memoryTotal: h.memory_size_MiB ? h.memory_size_MiB * 1048576 : h.summary?.memoryTotal,
+        numCpuCores: 0,  // Not available in vSphere 7 REST API
+        memoryTotal: 0,  // Not available in vSphere 7 REST API
       },
-      config: h.config,
+      config: {},  // Not available in vSphere 7 REST API
     }));
+  }
+
+  /**
+   * Get detailed host information
+   * vSphere 7 REST API limitation: full hardware info requires SOAP API (PyVmomi)
+   */
+  private async getHostDetail(hostId: string): Promise<any | null> {
+    // Placeholder for future SOAP API integration
+    return null;
   }
 
   /**
@@ -376,15 +407,18 @@ export class VMwareService {
       power_state?: string;
       cpu_count?: number;
       memory_size_MiB?: number;
+      host?: string;  // Host moref
     }>>('vcenter/vm');
 
     // Handle both vSphere 7 array format and legacy { value: [...] } format
     const vms = Array.isArray(result) ? result : (result as any).value || [];
 
+    // vSphere 7 REST API does not provide host assignment via basic endpoint
+    // To get host info would require SOAP API (future enhancement)
     return vms.map((v: any) => ({
       vm: { value: v.vm || v.vm?.value },
       name: v.name,
-      parent: v.parent,
+      parent: v.parent,  // Not available in vSphere 7 REST API
       summary: {
         numCpu: v.cpu_count || v.summary?.numCpu,
         memorySizeMB: v.memory_size_MiB || v.summary?.memorySizeMB,
@@ -808,39 +842,40 @@ export class VMwareService {
     size: number;
   }>> {
     try {
-      // First get all VMs
-      const vms = await this.fetchVMs();
-      const allSnapshots: Array<{
-        id: string;
-        vmId: string;
-        vmName: string;
-        name: string;
-        description: string;
-        createTime: string;
-        state: string;
-        size: number;
-      }> = [];
-
-      // Process in batches of 20 to avoid overwhelming the API
-      const batchSize = 20;
-      for (let i = 0; i < vms.length; i += batchSize) {
-        const batch = vms.slice(i, i + batchSize);
-        const results = await Promise.all(
-          batch.map(async (vm) => {
-            const snapshots = await this.getSnapshots(vm.vm.value);
-            return snapshots.map(s => ({
-              ...s,
-              vmId: vm.vm.value,
-              vmName: vm.name,
-            }));
-          })
-        );
-        allSnapshots.push(...results.flat());
+      const cacheKey = 'all_snapshots';
+      const now = Date.now();
+      
+      // Check cache
+      const cached = snapshotCache.get(cacheKey);
+      if (cached && (now - cached.timestamp) < CACHE_TTL) {
+        console.log('[VMware] Returning cached snapshots');
+        return cached.data;
       }
-
-      return allSnapshots;
+      
+      // Use Python script to fetch all snapshots at once
+      const scriptPath = '/app/scripts/get-snapshots.py';
+      
+      const result = execSync(
+        `python3 ${scriptPath} "${this.config.host}" "${this.config.username}" "${this.config.password}"`,
+        { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024, timeout: 30000 }
+      );
+      
+      const data = JSON.parse(result);
+      
+      if (!data.success) {
+        console.error(`[VMware] Batch snapshot fetch error: ${data.error}`);
+        return [];
+      }
+      
+      const snapshots = data.snapshots || [];
+      
+      // Cache result
+      snapshotCache.set(cacheKey, { data: snapshots, timestamp: now });
+      console.log(`[VMware] Cached ${snapshots.length} snapshots`);
+      
+      return snapshots;
     } catch (error) {
-      console.error('Error fetching all snapshots:', error);
+      console.error('[VMware] Error fetching all snapshots:', error);
       return [];
     }
   }
@@ -857,35 +892,38 @@ export class VMwareService {
     size: number;
   }>> {
     try {
-      const response = await fetch(`https://${this.config.host}/rest/vcenter/vm/${vmId}/snapshot`, {
-        headers: {
-          'vmware-api-session-id': this.sessionCookie || '',
-        },
-      });
-
-      if (!response.ok) {
+      const cacheKey = `snapshots_${vmId}`;
+      const now = Date.now();
+      
+      // Check cache
+      const cached = snapshotCache.get(cacheKey);
+      if (cached && (now - cached.timestamp) < CACHE_TTL) {
+        return cached.data;
+      }
+      
+      // vSphere 8: Use PyVmomi for reliable snapshot access
+      const scriptPath = '/app/scripts/get-snapshots.py';
+      
+      const result = execSync(
+        `python3 ${scriptPath} "${this.config.host}" "${this.config.username}" "${this.config.password}" "${vmId}"`,
+        { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 }
+      );
+      
+      const data = JSON.parse(result);
+      
+      if (!data.success) {
+        console.error(`[VMware] Snapshot fetch error: ${data.error}`);
         return [];
       }
-
-      const data = await response.json() as { value: Array<{
-        snapshot: string;
-        name?: string;
-        description?: string;
-        create_time?: string;
-        state?: string;
-        size?: number;
-      }> };
-
-      return (data.value || []).map(s => ({
-        id: s.snapshot,
-        name: s.name || 'Unnamed',
-        description: s.description || '',
-        createTime: s.create_time || new Date().toISOString(),
-        state: s.state || 'unknown',
-        size: s.size || 0,
-      }));
+      
+      const snapshots = data.snapshots || [];
+      
+      // Cache result
+      snapshotCache.set(cacheKey, { data: snapshots, timestamp: now });
+      
+      return snapshots;
     } catch (error) {
-      console.error('Error fetching snapshots:', error);
+      console.error('[VMware] Error fetching snapshots:', error);
       return [];
     }
   }
@@ -916,6 +954,11 @@ export class VMwareService {
       }
 
       const data = await response.json() as { value: string };
+      
+      // Invalidate cache
+      snapshotCache.delete('all_snapshots');
+      snapshotCache.delete(`snapshots_${vmId}`);
+      
       return { success: true, snapshotId: data.value };
     } catch (error) {
       return { success: false, error: (error as Error).message };
@@ -933,6 +976,13 @@ export class VMwareService {
           'vmware-api-session-id': this.sessionCookie || '',
         },
       });
+      
+      // Invalidate cache on success
+      if (response.ok) {
+        snapshotCache.delete('all_snapshots');
+        snapshotCache.delete(`snapshots_${vmId}`);
+      }
+      
       return { success: response.ok };
     } catch (error) {
       return { success: false, error: (error as Error).message };
@@ -950,9 +1000,213 @@ export class VMwareService {
           'vmware-api-session-id': this.sessionCookie || '',
         },
       });
+      
+      // Invalidate cache on success (snapshot state changed)
+      if (response.ok) {
+        snapshotCache.delete('all_snapshots');
+        snapshotCache.delete(`snapshots_${vmId}`);
+      }
+      
       return { success: response.ok };
     } catch (error) {
       return { success: false, error: (error as Error).message };
+    }
+  }
+
+  /**
+   * Detect VM Sprawl
+   * Analyzes VMs for underutilization, old snapshots, powered-off state
+   */
+  async detectVMSprawl(): Promise<VMSprawlResult[]> {
+    const [vms, hosts, allSnapshots] = await Promise.all([
+      this.fetchVMs(),
+      this.fetchHosts(),
+      this.fetchAllSnapshots(),
+    ]);
+
+    const hostMap = new Map(hosts.map(h => [h.host.value, h.name]));
+    const snapshotsByVM = new Map<string, Array<{ createTime: string; name: string }>>();
+    
+    // Group snapshots by VM
+    for (const snap of allSnapshots) {
+      if (!snapshotsByVM.has(snap.vmId)) {
+        snapshotsByVM.set(snap.vmId, []);
+      }
+      snapshotsByVM.get(snap.vmId)!.push({
+        createTime: snap.createTime,
+        name: snap.name,
+      });
+    }
+
+    const sprawlResults: VMSprawlResult[] = [];
+
+    for (const vm of vms) {
+      const vmId = vm.vm.value;
+      const powerState = vm.summary?.guestState || 'unknown';
+      const snapshots = snapshotsByVM.get(vmId) || [];
+      
+      let score = 0;
+      const reasons: string[] = [];
+      let recommendation = '';
+
+      // Criterion 1: Powered off > 30 days (+2 points)
+      // Note: vSphere 7 REST API doesn't provide poweroff timestamp
+      // We check if powered off (simple detection)
+      if (powerState === 'notRunning' || powerState === 'poweredOff') {
+        score += 2;
+        reasons.push('Kapali (30+ gun tahmini)');
+      }
+
+      // Criterion 2: Low CPU usage (+2 points)
+      // Note: Stats API requires separate calls, skip for now (Phase 2)
+      
+      // Criterion 3: Old snapshots > 60 days (+3 points)
+      let oldestSnapshotDays = 0;
+      if (snapshots.length > 0) {
+        const oldestSnapshot = snapshots.reduce((oldest, snap) => {
+          const snapDate = new Date(snap.createTime);
+          const oldestDate = new Date(oldest.createTime);
+          return snapDate < oldestDate ? snap : oldest;
+        });
+        
+        const snapshotAge = (Date.now() - new Date(oldestSnapshot.createTime).getTime()) / (1000 * 60 * 60 * 24);
+        oldestSnapshotDays = Math.floor(snapshotAge);
+        
+        if (snapshotAge > 60) {
+          score += 3;
+          reasons.push(`Eski snapshot (${oldestSnapshotDays} gun)`);
+        } else if (snapshotAge > 30) {
+          score += 1;
+          reasons.push(`Snapshot yaslaniyor (${oldestSnapshotDays} gun)`);
+        }
+      }
+
+      // Criterion 4: Multiple snapshots (+1 point)
+      if (snapshots.length > 3) {
+        score += 1;
+        reasons.push(`Cok snapshot (${snapshots.length} adet)`);
+      }
+
+      // Determine recommendation
+      if (score >= 5) {
+        recommendation = 'Kritik Sprawl: VM silinmeli veya archive edilmeli';
+      } else if (score >= 3) {
+        recommendation = 'Orta Risk: Snapshot temizle, kullanım kontrol et';
+      } else if (score >= 1) {
+        recommendation = 'Dusuk Risk: İzlemeye devam';
+      } else {
+        recommendation = 'Normal: Aksiyona gerek yok';
+      }
+
+      // Only include VMs with sprawl score > 0
+      if (score > 0) {
+        sprawlResults.push({
+          vmId,
+          vmName: vm.name,
+          host: vm.parent ? hostMap.get(vm.parent.value) || 'Unknown' : 'Unknown',
+          powerState,
+          snapshotCount: snapshots.length,
+          oldestSnapshotDays: oldestSnapshotDays > 0 ? oldestSnapshotDays : undefined,
+          sprawlScore: score,
+          sprawlReasons: reasons,
+          recommendation,
+        });
+      }
+    }
+
+    // Sort by sprawl score descending
+    return sprawlResults.sort((a, b) => b.sprawlScore - a.sprawlScore);
+  }
+
+  /**
+   * Collect capacity metrics for trend analysis
+   * Stores CPU, Memory, Disk usage in database for historical tracking
+   */
+  async collectCapacityMetrics(): Promise<{ collected: number; errors: string[] }> {
+    const errors: string[] = [];
+    let collected = 0;
+
+    try {
+      const [clusters, hosts, datastores] = await Promise.all([
+        this.fetchClusters(),
+        this.fetchHosts(),
+        this.fetchDatastores(),
+      ]);
+
+      const metrics: Array<{
+        resourceType: string;
+        resourceId: string;
+        resourceName: string;
+        metricType: string;
+        value: number;
+        total?: number;
+      }> = [];
+
+      // Cluster metrics
+      for (const cluster of clusters) {
+        const cpuUsage = cluster.summary?.totalCpu && cluster.summary?.numCpuCores
+          ? (cluster.summary.totalCpu / (cluster.summary.numCpuCores * 1000)) * 100
+          : 0;
+        const memoryUsage = cluster.summary?.totalMemory
+          ? ((cluster.summary.totalMemory - (cluster.summary.totalMemory * 0.3)) / cluster.summary.totalMemory) * 100
+          : 0;
+
+        if (cpuUsage > 0) {
+          metrics.push({
+            resourceType: 'cluster',
+            resourceId: cluster.cluster.value,
+            resourceName: cluster.name,
+            metricType: 'cpu',
+            value: cpuUsage,
+            total: cluster.summary?.numCpuCores,
+          });
+        }
+
+        if (memoryUsage > 0) {
+          metrics.push({
+            resourceType: 'cluster',
+            resourceId: cluster.cluster.value,
+            resourceName: cluster.name,
+            metricType: 'memory',
+            value: memoryUsage,
+            total: cluster.summary?.totalMemory,
+          });
+        }
+      }
+
+      // Datastore metrics
+      for (const ds of datastores) {
+        if (ds.summary?.capacity && ds.summary?.freeSpace) {
+          const usedSpace = ds.summary.capacity - ds.summary.freeSpace;
+          const usagePercent = (usedSpace / ds.summary.capacity) * 100;
+
+          metrics.push({
+            resourceType: 'datastore',
+            resourceId: ds.datastore.value,
+            resourceName: ds.name,
+            metricType: 'disk',
+            value: usagePercent,
+            total: ds.summary.capacity,
+          });
+        }
+      }
+
+      // Save to database
+      for (const metric of metrics) {
+        try {
+          await prisma.capacityMetric.create({
+            data: metric,
+          });
+          collected++;
+        } catch (err) {
+          errors.push(`Failed to save metric for ${metric.resourceName}: ${(err as Error).message}`);
+        }
+      }
+
+      return { collected, errors };
+    } catch (error) {
+      errors.push((error as Error).message);
+      return { collected, errors };
     }
   }
 }

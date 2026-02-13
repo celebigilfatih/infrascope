@@ -213,21 +213,24 @@ export async function GET(request: NextRequest) {
       ]);
 
       // Fetch snapshots from database
-      const snapshotsRaw = await prisma.vMSnapshot.findMany({
+      const snapshots = await prisma.vMSnapshot.findMany({
         select: {
+          vmName: true,
           name: true,
-          createdAt: true,
-          size: true,
-        },
-        include: {
-          vM: {
-            select: {
-              name: true,
-            },
-          },
+          createTime: true,
+          sizeGB: true,
         },
       });
 
+      // Fetch snapshots from database
+      const snapshots = await prisma.vMSnapshot.findMany({
+        select: {
+          vmName: true,
+          name: true,
+          createTime: true,
+          sizeGB: true,
+        },
+      });
 
       // Calculate VM status counts
       const vmRunning = vms.filter(v => v.summary?.guestState === 'running').length;
@@ -254,25 +257,25 @@ export async function GET(request: NextRequest) {
 
       // Calculate old snapshots (> 7 days)
       const now = Date.now();
-      const oldSnapshots = (snapshotsRaw || [])
+      const oldSnapshots = (snapshots || [])
         .filter((s: any) => {
-          const ageMs = now - new Date(s.createdAt).getTime();
+          const ageMs = now - new Date(s.createTime).getTime();
           const ageDays = ageMs / (1000 * 60 * 60 * 24);
           return ageDays > 7;
         })
         .sort((a: any, b: any) => {
-          const ageA = now - new Date(a.createdAt).getTime();
-          const ageB = now - new Date(b.createdAt).getTime();
+          const ageA = now - new Date(a.createTime).getTime();
+          const ageB = now - new Date(b.createTime).getTime();
           return ageB - ageA; // Oldest first
         })
         .map((s: any) => {
-          const ageMs = now - new Date(s.createdAt).getTime();
+          const ageMs = now - new Date(s.createTime).getTime();
           const ageDays = Math.floor(ageMs / (1000 * 60 * 60 * 24));
           return {
-            vmName: s.vM?.name || 'Unknown',
+            vmName: s.vmName,
             name: s.name,
             ageInDays: ageDays,
-            sizeGB: (s.size || 0) / 1073741824,
+            sizeGB: s.sizeGB || 0,
           };
         });
 
