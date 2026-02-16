@@ -41,75 +41,84 @@ export class AlarmDetectionEngine {
   async evaluateAllAlarms(): Promise<EvaluationResult[]> {
     const results: EvaluationResult[] = [];
 
-    // Get all enabled alarm definitions
-    const alarms = await prisma.alarmDefinition.findMany({
-      where: { enabled: true },
-    });
+    try {
+      // Get all enabled alarm definitions
+      const alarms = await prisma.alarmDefinition.findMany({
+        where: { enabled: true },
+      });
 
-    if (alarms.length === 0) {
-      console.log('[AlarmEngine] No enabled alarms found');
-      return results;
-    }
-
-    console.log(`[AlarmEngine] Evaluating ${alarms.length} enabled alarms...`);
-
-    // Login once for all evaluations
-    const loggedIn = await this.service.login();
-    if (!loggedIn) {
-      console.error('[AlarmEngine] Failed to login to FortiAnalyzer');
-      return results;
-    }
-
-    // Separate correlation alarms from regular alarms
-    const correlationAlarms: AlarmDef[] = [];
-    const regularAlarms = alarms;
-
-    // Group regular alarms by logtype to batch searches
-    const logTypeGroups = new Map<string, AlarmDef[]>();
-    for (const alarm of regularAlarms) {
-      const logic = alarm.detectionLogic as unknown as AlarmDetectionLogic;
-      const logtype = logic.logtype || 'event';
-      const alarmDef: AlarmDef = { ...alarm, detectionLogic: logic };
-
-      if (logic.clientCheck === 'correlation') {
-        correlationAlarms.push(alarmDef);
-        continue;
+      if (alarms.length === 0) {
+        console.log('[AlarmEngine] No enabled alarms found');
+        return results;
       }
 
-      if (!logTypeGroups.has(logtype)) {
-        logTypeGroups.set(logtype, []);
-      }
-      logTypeGroups.get(logtype)!.push(alarmDef);
-    }
+      console.log(`[AlarmEngine] Evaluating ${alarms.length} enabled alarms...`);
 
-    // Evaluate each logtype group
-    for (const [logtype, groupAlarms] of logTypeGroups) {
-      try {
-        const groupResults = await this.evaluateLogTypeGroup(logtype, groupAlarms);
-        results.push(...groupResults);
-      } catch (error) {
-        console.error(`[AlarmEngine] Error evaluating ${logtype} group:`, error);
-        for (const a of groupAlarms) {
-          results.push({ alarmCode: a.code, triggered: false, matchCount: 0, events: [], error: (error as Error).message });
+      // Login once for all evaluations
+      const loggedIn = await this.service.login();
+      if (!loggedIn) {
+        console.error('[AlarmEngine] Failed to login to FortiAnalyzer');
+        return results;
+      }
+
+      // Separate correlation alarms from regular alarms
+      const correlationAlarms: AlarmDef[] = [];
+      const regularAlarms = alarms;
+
+      // Group regular alarms by logtype to batch searches
+      const logTypeGroups = new Map<string, AlarmDef[]>();
+      for (const alarm of regularAlarms) {
+        const logic = alarm.detectionLogic as unknown as AlarmDetectionLogic;
+        const logtype = logic.logtype || 'event';
+        const alarmDef: AlarmDef = { ...alarm, detectionLogic: logic };
+
+        if (logic.clientCheck === 'correlation') {
+          correlationAlarms.push(alarmDef);
+          continue;
         }
-      }
-    }
 
-    // Evaluate correlation alarms (after regular alarms, so precursor events exist)
-    if (correlationAlarms.length > 0) {
-      console.log(`[AlarmEngine] Evaluating ${correlationAlarms.length} correlation alarms...`);
-      for (const alarm of correlationAlarms) {
+        if (!logTypeGroups.has(logtype)) {
+          logTypeGroups.set(logtype, []);
+        }
+        logTypeGroups.get(logtype)!.push(alarmDef);
+      }
+
+      // Evaluate each logtype group
+      for (const [logtype, groupAlarms] of logTypeGroups) {
         try {
-          const result = await this.evaluateCorrelationAlarm(alarm);
-          results.push(result);
+          const groupResults = await this.evaluateLogTypeGroup(logtype, groupAlarms);
+          results.push(...groupResults);
         } catch (error) {
-          console.error(`[AlarmEngine] Correlation error ${alarm.code}:`, error);
-          results.push({ alarmCode: alarm.code, triggered: false, matchCount: 0, events: [], error: (error as Error).message });
+          console.error(`[AlarmEngine] Error evaluating ${logtype} group:`, error);
+          // Continue with other groups instead of stopping entirely
+          for (const a of groupAlarms) {
+            results.push({ alarmCode: a.code, triggered: false, matchCount: 0, events: [], error: (error as Error).message });
+          }
         }
       }
-    }
 
-    return results;
+      // Evaluate correlation alarms (after regular alarms, so precursor events exist)
+      if (correlationAlarms.length > 0) {
+        console.log(`[AlarmEngine] Evaluating ${correlationAlarms.length} correlation alarms...`);
+        for (const alarm of correlationAlarms) {
+          try {
+            const result = await this.evaluateCorrelationAlarm(alarm);
+            results.push(result);
+          } catch (error) {
+            console.error(`[AlarmEngine] Correlation error ${alarm.code}:`, error);
+            // Continue with next correlation alarm instead of stopping
+            results.push({ alarmCode: alarm.code, triggered: false, matchCount: 0, events: [], error: (error as Error).message });
+          }
+        }
+      }
+
+      console.log(`[AlarmEngine] Evaluation complete: ${results.filter(r => r.triggered).length} triggered, ${results.filter(r => r.error).length} errors`);
+      return results;
+    } catch (error) {
+      console.error('[AlarmEngine] Critical error in evaluateAllAlarms:', error);
+      // Return results so far instead of crashing
+      return results;
+    }
   }
 
   /**

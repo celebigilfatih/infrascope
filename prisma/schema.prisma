@@ -934,6 +934,22 @@ model AlarmEvent {
   @@map("alarm_events")
 }
 
+/// Alarm check log for monitoring
+model AlarmCheckLog {
+  id             String   @id @default(cuid())
+  checkTime      DateTime
+  totalAlarms    Int
+  triggeredCount Int
+  errorCount     Int
+  durationMs     Int
+  status         String   // "SUCCESS", "PARTIAL", "FAILED"
+  createdAt      DateTime @default(now())
+
+  @@index([checkTime])
+  @@index([status])
+  @@map("alarm_check_logs")
+}
+
 /// Notification channel configuration
 model NotificationConfig {
   id          String   @id @default(cuid())

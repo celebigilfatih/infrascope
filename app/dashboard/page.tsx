@@ -36,6 +36,10 @@ export default function DashboardPage() {
     runningServices: 0,
     totalBuildings: 0,
     criticalIssues: 0,
+    totalVMs: 0,
+    runningVMs: 0,
+    totalHosts: 0,
+    onlineHosts: 0,
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -59,10 +63,11 @@ export default function DashboardPage() {
       setLoading(true);
       setError(null);
 
-      const [devicesRes, servicesRes, buildingsRes]: [ApiResponse<Device[]>, ApiResponse<Service[]>, ApiResponse<any[]>] = await Promise.all([
+      const [devicesRes, servicesRes, buildingsRes, vmwareRes]: [ApiResponse<Device[]>, ApiResponse<Service[]>, ApiResponse<any[]>, any] = await Promise.all([
         apiGet('/api/devices'),
         apiGet('/api/services'),
         apiGet('/api/buildings'),
+        fetch('/api/integrations/vmware?type=dashboard').then(r => r.json()).catch(() => ({ summary: { vms: 0, vmRunning: 0, hosts: 0, hostsOnline: 0 } })),
       ]);
 
       if (devicesRes.success && servicesRes.success && buildingsRes.success) {
@@ -79,6 +84,10 @@ export default function DashboardPage() {
           runningServices: services.filter(s => s.status === 'RUNNING').length,
           totalBuildings: buildings.length,
           criticalIssues: devices.filter(d => d.criticality === 'CRITICAL' && d.status !== 'ACTIVE').length,
+          totalVMs: vmwareRes?.summary?.vms || 0,
+          runningVMs: vmwareRes?.summary?.vmRunning || 0,
+          totalHosts: vmwareRes?.summary?.hosts || 0,
+          onlineHosts: vmwareRes?.summary?.hostsOnline || 0,
         });
       } else {
         setError('Panel istatistikleri yüklenemedi');
@@ -127,16 +136,24 @@ export default function DashboardPage() {
     { 
       label: 'Altyapı Düğümleri', 
       value: stats.totalDevices.toLocaleString(), 
-      subValue: 'Toplam fiziksel/sanal', 
+      subValue: `${stats.activeDevices} aktif / ${stats.totalDevices} toplam`, 
       trend: `%${((stats.activeDevices / (stats.totalDevices || 1)) * 100).toFixed(1)}`, 
       trendType: 'up', 
       icon: Monitor 
     },
     { 
-      label: 'Çalışan Servisler', 
-      value: stats.runningServices.toLocaleString(), 
-      subValue: `${stats.totalServices} servis arasından aktif`, 
-      trend: stats.runningServices > 0 ? '+%100' : '%0', 
+      label: 'Sanal Makineler', 
+      value: stats.totalVMs.toLocaleString(), 
+      subValue: `${stats.runningVMs} çalışan / ${stats.totalVMs} toplam`, 
+      trend: `%${((stats.runningVMs / (stats.totalVMs || 1)) * 100).toFixed(1)}`, 
+      trendType: 'up', 
+      icon: Monitor 
+    },
+    { 
+      label: 'ESXi Hostlar', 
+      value: stats.totalHosts.toLocaleString(), 
+      subValue: `${stats.onlineHosts} çevrimiçi / ${stats.totalHosts} toplam`, 
+      trend: stats.onlineHosts === stats.totalHosts ? 'Tümü Aktif' : `${stats.onlineHosts} Online`, 
       trendType: 'up', 
       icon: Settings 
     },
@@ -208,20 +225,7 @@ export default function DashboardPage() {
               </Card>
             )}
             {/* Navigation Tabs Mock */}
-            <div className="flex items-center gap-1 border-b border-border/50 pb-0 mb-2">
-              <Button variant="ghost" size="sm" className="h-8 px-4 rounded-none border-b-2 border-primary text-xs font-bold bg-muted/30 flex items-center gap-2">
-                <Activity className="h-3.5 w-3.5" /> Genel Bakış
-              </Button>
-              <Button variant="ghost" size="sm" className="h-8 px-4 rounded-none border-b-2 border-transparent text-xs font-bold text-muted-foreground hover:text-foreground flex items-center gap-2">
-                <Activity className="h-3.5 w-3.5" /> Analitik
-              </Button>
-              <Button variant="ghost" size="sm" className="h-8 px-4 rounded-none border-b-2 border-transparent text-xs font-bold text-muted-foreground hover:text-foreground flex items-center gap-2">
-                <Activity className="h-3.5 w-3.5" /> Raporlar
-              </Button>
-              <Button variant="ghost" size="sm" className="h-8 px-4 rounded-none border-b-2 border-transparent text-xs font-bold text-muted-foreground hover:text-foreground flex items-center gap-2">
-                <Activity className="h-3.5 w-3.5" /> Bildirimler
-              </Button>
-            </div>
+            {/* Removed: Genel Bakış, Analitik, Raporlar, Bildirimler tabs */}
 
             {/* Stats Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
@@ -258,7 +262,7 @@ export default function DashboardPage() {
                             key={i} 
                             className={cn(
                               "w-1.5 rounded-t-sm",
-                              card.trendType === 'up' ? "bg-primary/20" : "bg-rose-500/20"
+                              card.trendType === 'up' ? "bg-emerald-500/30" : "bg-rose-500/20"
                             )} 
                             style={{ height: `${h}%` }}
                           />
@@ -268,37 +272,6 @@ export default function DashboardPage() {
                   </CardContent>
                 </Card>
               ))}
-
-              {/* Total Revenue Card -> Infrastructure Health */}
-              <Card className="border-border/50 shadow-sm bg-card lg:col-span-1">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Altyapı Sağlığı</CardTitle>
-                </CardHeader>
-                <CardContent className="p-6 pt-0">
-                  <div className="flex flex-col gap-1 mb-6">
-                    <span className="text-2xl font-black tracking-tighter">{stats.criticalIssues} Kritik</span>
-                    <p className="text-[10px] text-rose-500 font-bold">Acil müdahale gerektiren sorunlar</p>
-                  </div>
-                  {/* Revenue Curve Mock -> Health Chart */}
-                  <div className="h-24 w-full relative mt-4">
-                    <svg className="w-full h-full" viewBox="0 0 200 60">
-                      <path 
-                        d="M0,30 Q40,32 60,28 T100,35 T140,30 T180,33 T200,30" 
-                        fill="none" 
-                        stroke="currentColor" 
-                        strokeWidth="2"
-                        className={cn(stats.criticalIssues > 0 ? "text-rose-500" : "text-emerald-500")}
-                      />
-                      <circle cx="10" cy="30" r="1.5" fill="currentColor" />
-                      <circle cx="50" cy="32" r="1.5" fill="currentColor" />
-                      <circle cx="90" cy="28" r="1.5" fill="currentColor" />
-                      <circle cx="130" cy="35" r="1.5" fill="currentColor" />
-                      <circle cx="170" cy="30" r="1.5" fill="currentColor" />
-                      <circle cx="195" cy="30" r="1.5" fill="currentColor" />
-                    </svg>
-                  </div>
-                </CardContent>
-              </Card>
             </div>
 
             {/* Support Expiration Alert Section */}
@@ -402,19 +375,19 @@ export default function DashboardPage() {
                     <svg className="w-full h-full" viewBox="0 0 500 200" preserveAspectRatio="none">
                       <defs>
                         <linearGradient id="grad1" x1="0%" y1="0%" x2="0%" y2="100%">
-                          <stop offset="0%" style={{ stopColor: 'oklch(0.646 0.222 41.116)', stopOpacity: 0.2 }} />
-                          <stop offset="100%" style={{ stopColor: 'oklch(0.646 0.222 41.116)', stopOpacity: 0 }} />
+                          <stop offset="0%" style={{ stopColor: 'rgb(16, 185, 129)', stopOpacity: 0.25 }} />
+                          <stop offset="100%" style={{ stopColor: 'rgb(16, 185, 129)', stopOpacity: 0 }} />
                         </linearGradient>
                         <linearGradient id="grad2" x1="0%" y1="0%" x2="0%" y2="100%">
-                          <stop offset="0%" style={{ stopColor: 'oklch(0.6 0.118 184.704)', stopOpacity: 0.2 }} />
-                          <stop offset="100%" style={{ stopColor: 'oklch(0.6 0.118 184.704)', stopOpacity: 0 }} />
+                          <stop offset="0%" style={{ stopColor: 'rgb(20, 184, 166)', stopOpacity: 0.2 }} />
+                          <stop offset="100%" style={{ stopColor: 'rgb(20, 184, 166)', stopOpacity: 0 }} />
                         </linearGradient>
                       </defs>
                       <path d="M0,150 Q100,100 200,120 T400,110 T500,115 V200 H0 Z" fill="url(#grad1)" />
-                      <path d="M0,150 Q100,100 200,120 T400,110 T500,115" fill="none" stroke="oklch(0.646 0.222 41.116)" strokeWidth="2" />
+                      <path d="M0,150 Q100,100 200,120 T400,110 T500,115" fill="none" stroke="rgb(16, 185, 129)" strokeWidth="2" />
                       
                       <path d="M0,180 Q100,160 200,170 T400,140 T500,145 V200 H0 Z" fill="url(#grad2)" />
-                      <path d="M0,180 Q100,160 200,170 T400,140 T500,145" fill="none" stroke="oklch(0.6 0.118 184.704)" strokeWidth="2" />
+                      <path d="M0,180 Q100,160 200,170 T400,140 T500,145" fill="none" stroke="rgb(20, 184, 166)" strokeWidth="2" />
                     </svg>
                     <div className="absolute bottom-4 left-0 right-0 px-8 flex justify-between text-[10px] text-muted-foreground font-bold">
                       <span>Oca</span>
@@ -441,7 +414,7 @@ export default function DashboardPage() {
                       key={i} 
                       className={cn(
                         "flex-1 rounded-sm transition-all hover:opacity-80",
-                        i % 2 === 0 ? "bg-chart-1" : "bg-chart-2"
+                        i % 2 === 0 ? "bg-emerald-500/70" : "bg-teal-500/70"
                       )} 
                       style={{ height: `${h}%` }}
                     />

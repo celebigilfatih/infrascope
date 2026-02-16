@@ -212,21 +212,8 @@ export async function GET(request: NextRequest) {
         service.fetchDatastores(),
       ]);
 
-      // Fetch snapshots from database
-      const snapshotsRaw = await prisma.vMSnapshot.findMany({
-        select: {
-          name: true,
-          createdAt: true,
-          size: true,
-        },
-        include: {
-          vM: {
-            select: {
-              name: true,
-            },
-          },
-        },
-      });
+      // TODO: Fetch snapshots from database (temporarily disabled)
+      const snapshotsRaw: any[] = [];
 
 
       // Calculate VM status counts

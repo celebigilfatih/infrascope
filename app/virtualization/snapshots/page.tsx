@@ -84,7 +84,10 @@ export default function SnapshotsPage() {
       setError(null);
       
       // Fetch VMs list for create dialog
-      const vmRes = await fetch('/api/integrations/vmware?type=vms');
+      const vmRes = await fetch('/api/integrations/vmware?type=vms', {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' },
+      });
       const vmJson = await vmRes.json();
       
       if (vmJson.error) {
@@ -95,7 +98,10 @@ export default function SnapshotsPage() {
       setVms(vmJson.vms || []);
       
       // Fetch all snapshots in one call (batch operation)
-      const snapRes = await fetch('/api/integrations/vmware?type=snapshots');
+      const snapRes = await fetch('/api/integrations/vmware?type=snapshots', {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' },
+      });
       const snapJson = await snapRes.json();
       
       if (snapJson.error) {
@@ -113,7 +119,7 @@ export default function SnapshotsPage() {
 
   useEffect(() => {
     fetchSnapshots();
-    const interval = setInterval(fetchSnapshots, 60000);
+    const interval = setInterval(fetchSnapshots, 15000); // 15 saniye
     return () => clearInterval(interval);
   }, []);
 

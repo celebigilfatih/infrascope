@@ -24,7 +24,7 @@ export async function seedAlarmDefinitions(): Promise<{ created: number; updated
           description: def.description,
           category: def.category,
           severity: def.severity,
-          detectionLogic: def.detectionLogic as unknown as Record<string, unknown>,
+          detectionLogic: def.detectionLogic as any,
         },
       });
       updated++;
@@ -37,9 +37,9 @@ export async function seedAlarmDefinitions(): Promise<{ created: number; updated
           category: def.category,
           severity: def.severity,
           cooldownMinutes: def.cooldownMinutes,
-          detectionLogic: def.detectionLogic as unknown as Record<string, unknown>,
+          detectionLogic: def.detectionLogic as any,
           enabled: true,
-          notifyEmail: true,
+          notifyEmail: def.notifyEmail ?? true,
         },
       });
       created++;
