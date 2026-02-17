@@ -5,6 +5,22 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   Table,
   TableBody,
@@ -13,51 +29,244 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { ChevronLeft, ChevronRight, RefreshCw, Search, GitBranch, Link, AlertTriangle, CheckCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, RefreshCw, Search, GitBranch, Link, AlertTriangle, CheckCircle, Plus, Edit, Trash2 } from 'lucide-react';
+import { useToast } from '@/components/ui/use-toast';
 
 interface ServiceDependency {
   id: string;
-  source: string;
-  target: string;
-  type: 'synchronous' | 'asynchronous' | 'database' | 'cache' | 'external';
-  status: 'healthy' | 'degraded' | 'critical' | 'unknown';
-  latency: number;
-  errorRate: number;
-  lastChecked: string;
+  sourceServiceId: string;
+  targetDeviceId: string;
+  type: string;
+  criticality: string;
+  description: string | null;
+  sourceService: {
+    id: string;
+    name: string;
+    type: string;
+  };
+  targetDevice: {
+    id: string;
+    name: string;
+    type: string;
+  };
+  createdAt: string;
+}
+
+interface Service {
+  id: string;
+  name: string;
+  type: string;
+}
+
+interface Device {
+  id: string;
+  name: string;
+  type: string;
 }
 
 const ITEMS_PER_PAGE = 10;
 
 export default function DependenciesPage() {
   const [dependencies, setDependencies] = useState<ServiceDependency[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
+  const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingDep, setEditingDep] = useState<ServiceDependency | null>(null);
+  const [formData, setFormData] = useState({
+    sourceServiceId: '',
+    targetDeviceId: '',
+    type: 'DEPENDS_ON',
+    criticality: 'MEDIUM',
+    description: '',
+  });
+  const { toast } = useToast();
+
+  const fetchDependencies = async () => {
+    try {
+      const response = await fetch('/api/services/dependencies');
+      const data = await response.json();
+      if (data.success) {
+        setDependencies(data.dependencies || []);
+      }
+    } catch (error) {
+      console.error('Error fetching dependencies:', error);
+      toast({
+        title: 'Hata',
+        description: 'Bağımlılıklar yüklenemedi',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchServices = async () => {
+    try {
+      const response = await fetch('/api/services');
+      const data = await response.json();
+      if (data.success) {
+        setServices(data.services || []);
+      }
+    } catch (error) {
+      console.error('Error fetching services:', error);
+    }
+  };
+
+  const fetchDevices = async () => {
+    try {
+      const response = await fetch('/api/devices');
+      const data = await response.json();
+      if (data.success) {
+        setDevices(data.devices || []);
+      }
+    } catch (error) {
+      console.error('Error fetching devices:', error);
+    }
+  };
 
   useEffect(() => {
-    setTimeout(() => {
-      setDependencies([
-        { id: '1', source: 'API Gateway', target: 'Auth Service', type: 'synchronous', status: 'healthy', latency: 15, errorRate: 0.1, lastChecked: '2024-01-15 10:30' },
-        { id: '2', source: 'API Gateway', target: 'User Database', type: 'database', status: 'healthy', latency: 8, errorRate: 0.0, lastChecked: '2024-01-15 10:30' },
-        { id: '3', source: 'Auth Service', target: 'Cache Redis', type: 'cache', status: 'healthy', latency: 2, errorRate: 0.0, lastChecked: '2024-01-15 10:30' },
-        { id: '4', source: 'Auth Service', target: 'User Database', type: 'database', status: 'healthy', latency: 12, errorRate: 0.2, lastChecked: '2024-01-15 10:29' },
-        { id: '5', source: 'Notification Service', target: 'Message Queue', type: 'asynchronous', status: 'degraded', latency: 145, errorRate: 2.5, lastChecked: '2024-01-15 10:25' },
-        { id: '6', source: 'Analytics Engine', target: 'Message Queue', type: 'asynchronous', status: 'critical', latency: 890, errorRate: 8.3, lastChecked: '2024-01-15 09:15' },
-        { id: '7', source: 'Analytics Engine', target: 'Search Engine', type: 'synchronous', status: 'healthy', latency: 45, errorRate: 0.5, lastChecked: '2024-01-15 10:28' },
-        { id: '8', source: 'API Gateway', target: 'Payment Service', type: 'external', status: 'degraded', latency: 230, errorRate: 1.2, lastChecked: '2024-01-15 10:30' },
-        { id: '9', source: 'Search Engine', target: 'User Database', type: 'database', status: 'healthy', latency: 18, errorRate: 0.1, lastChecked: '2024-01-15 10:30' },
-        { id: '10', source: 'File Storage', target: 'User Database', type: 'database', status: 'healthy', latency: 25, errorRate: 0.0, lastChecked: '2024-01-15 10:29' },
-        { id: '11', source: 'ML Pipeline', target: 'Analytics Engine', type: 'synchronous', status: 'healthy', latency: 320, errorRate: 0.8, lastChecked: '2024-01-15 10:20' },
-        { id: '12', source: 'API Gateway', target: 'ML Pipeline', type: 'synchronous', status: 'healthy', latency: 450, errorRate: 0.3, lastChecked: '2024-01-15 10:30' },
-      ]);
-      setLoading(false);
-    }, 500);
+    fetchDependencies();
+    fetchServices();
+    fetchDevices();
   }, []);
+
+  const handleCreate = async () => {
+    try {
+      const response = await fetch('/api/services/dependencies', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+      const data = await response.json();
+      
+      if (data.success) {
+        toast({
+          title: 'Başarılı',
+          description: 'Bağımlılık oluşturuldu',
+        });
+        setIsDialogOpen(false);
+        resetForm();
+        fetchDependencies();
+      } else {
+        toast({
+          title: 'Hata',
+          description: data.error || 'Bağımlılık oluşturulamadı',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Hata',
+        description: 'Bağımlılık oluşturulamadı',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleUpdate = async () => {
+    if (!editingDep) return;
+    
+    try {
+      const response = await fetch('/api/services/dependencies', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...formData, id: editingDep.id }),
+      });
+      const data = await response.json();
+      
+      if (data.success) {
+        toast({
+          title: 'Başarılı',
+          description: 'Bağımlılık güncellendi',
+        });
+        setIsDialogOpen(false);
+        resetForm();
+        fetchDependencies();
+      } else {
+        toast({
+          title: 'Hata',
+          description: 'Bağımlılık güncellenemedi',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Hata',
+        description: 'Bağımlılık güncellenemedi',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Bu bağımlılığı silmek istediğinizden emin misiniz?')) return;
+    
+    try {
+      const response = await fetch(`/api/services/dependencies?id=${id}`, {
+        method: 'DELETE',
+      });
+      const data = await response.json();
+      
+      if (data.success) {
+        toast({
+          title: 'Başarılı',
+          description: 'Bağımlılık silindi',
+        });
+        fetchDependencies();
+      } else {
+        toast({
+          title: 'Hata',
+          description: 'Bağımlılık silinemedi',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Hata',
+        description: 'Bağımlılık silinemedi',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const openCreateDialog = () => {
+    resetForm();
+    setEditingDep(null);
+    setIsDialogOpen(true);
+  };
+
+  const openEditDialog = (dep: ServiceDependency) => {
+    setEditingDep(dep);
+    setFormData({
+      sourceServiceId: dep.sourceServiceId,
+      targetDeviceId: dep.targetDeviceId,
+      type: dep.type,
+      criticality: dep.criticality,
+      description: dep.description || '',
+    });
+    setIsDialogOpen(true);
+  };
+
+  const resetForm = () => {
+    setFormData({
+      sourceServiceId: '',
+      targetDeviceId: '',
+      type: 'DEPENDS_ON',
+      criticality: 'MEDIUM',
+      description: '',
+    });
+  };
 
   const filteredDeps = useMemo(() => {
     if (!searchTerm) return dependencies;
     const term = searchTerm.toLowerCase();
-    return dependencies.filter(dep => dep.source.toLowerCase().includes(term) || dep.target.toLowerCase().includes(term));
+    return dependencies.filter(dep => 
+      dep.sourceService.name.toLowerCase().includes(term) || 
+      dep.targetDevice.name.toLowerCase().includes(term)
+    );
   }, [dependencies, searchTerm]);
 
   const totalPages = Math.ceil(filteredDeps.length / ITEMS_PER_PAGE);
@@ -67,41 +276,6 @@ export default function DependenciesPage() {
   }, [filteredDeps, currentPage]);
 
   useEffect(() => { if (currentPage > totalPages && totalPages > 0) setCurrentPage(1); }, [totalPages, currentPage]);
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'healthy': return <Badge className="bg-green-500">Healthy</Badge>;
-      case 'degraded': return <Badge className="bg-orange-500">Degraded</Badge>;
-      case 'critical': return <Badge variant="destructive">Critical</Badge>;
-      default: return <Badge variant="secondary">Unknown</Badge>;
-    }
-  };
-
-  const getTypeBadge = (type: string) => {
-    switch (type) {
-      case 'synchronous': return <Badge variant="outline">Sync</Badge>;
-      case 'asynchronous': return <Badge variant="outline">Async</Badge>;
-      case 'database': return <Badge className="bg-blue-500/20 text-blue-500">DB</Badge>;
-      case 'cache': return <Badge className="bg-purple-500/20 text-purple-500">Cache</Badge>;
-      case 'external': return <Badge className="bg-red-500/20 text-red-500">External</Badge>;
-      default: return <Badge variant="secondary">{type}</Badge>;
-    }
-  };
-
-  const getTypeIcon = (type: string) => {
-    switch (type) {
-      case 'database': return <Link className="h-4 w-4 text-blue-500" />;
-      case 'cache': return <Link className="h-4 w-4 text-purple-500" />;
-      case 'external': return <Link className="h-4 w-4 text-red-500" />;
-      default: return <GitBranch className="h-4 w-4 text-gray-500" />;
-    }
-  };
-
-  const getLatencyColor = (latency: number) => {
-    if (latency < 50) return 'text-green-500';
-    if (latency < 200) return 'text-orange-500';
-    return 'text-red-500';
-  };
 
   const getPageNumbers = () => {
     const pages: (number | 'ellipsis')[] = [];
@@ -119,9 +293,8 @@ export default function DependenciesPage() {
     return pages;
   };
 
-  const healthyCount = dependencies.filter(d => d.status === 'healthy').length;
-  const criticalCount = dependencies.filter(d => d.status === 'critical').length;
-  const avgLatency = Math.round(dependencies.reduce((acc, d) => acc + d.latency, 0) / dependencies.length);
+  const healthyCount = dependencies.filter(d => d.criticality === 'LOW').length;
+  const criticalCount = dependencies.filter(d => d.criticality === 'CRITICAL').length;
 
   return (
     <div className="p-6 space-y-6">
@@ -131,8 +304,8 @@ export default function DependenciesPage() {
           <p className="text-muted-foreground">Servis bağımlılıkları ve iletişim haritası</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon"><RefreshCw className="h-4 w-4" /></Button>
-          <Button><GitBranch className="h-4 w-4 mr-2" />Yenile</Button>
+          <Button variant="outline" size="icon" onClick={fetchDependencies}><RefreshCw className="h-4 w-4" /></Button>
+          <Button onClick={openCreateDialog}><Plus className="h-4 w-4 mr-2" />Yeni Bağımlılık</Button>
         </div>
       </div>
 
@@ -149,7 +322,7 @@ export default function DependenciesPage() {
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-full bg-green-500/20"><CheckCircle className="h-5 w-5 text-green-500" /></div>
-              <div><p className="text-sm text-muted-foreground">Sağlıklı</p><p className="text-2xl font-bold">{healthyCount}</p></div>
+              <div><p className="text-sm text-muted-foreground">Düşük Kritiklik</p><p className="text-2xl font-bold">{healthyCount}</p></div>
             </div>
           </CardContent>
         </Card>
@@ -157,15 +330,15 @@ export default function DependenciesPage() {
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-full bg-red-500/20"><AlertTriangle className="h-5 w-5 text-red-500" /></div>
-              <div><p className="text-sm text-muted-foreground">Kritik</p><p className="text-2xl font-bold">{criticalCount}</p></div>
+              <div><p className="text-sm text-muted-foreground">Yüksek Kritiklik</p><p className="text-2xl font-bold">{criticalCount}</p></div>
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-purple-500/20"><Link className="h-5 w-5 text-purple-500" /></div>
-              <div><p className="text-sm text-muted-foreground">Ort. Gecikme</p><p className="text-2xl font-bold">{avgLatency}ms</p></div>
+              <div className="p-2 rounded-full bg-blue-500/20"><Link className="h-5 w-5 text-blue-500" /></div>
+              <div><p className="text-sm text-muted-foreground">Toplam Servis</p><p className="text-2xl font-bold">{services.length}</p></div>
             </div>
           </CardContent>
         </Card>
@@ -188,32 +361,36 @@ export default function DependenciesPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Kaynak</TableHead>
-                    <TableHead></TableHead>
-                    <TableHead>Hedef</TableHead>
+                    <TableHead>Kaynak Servis</TableHead>
+                    <TableHead>Hedef Cihaz/Servis</TableHead>
                     <TableHead>Tip</TableHead>
-                    <TableHead>Durum</TableHead>
-                    <TableHead className="text-center">Gecikme</TableHead>
-                    <TableHead className="text-center">Hata Oranı</TableHead>
-                    <TableHead>Son Kontrol</TableHead>
+                    <TableHead>Kritiklik</TableHead>
+                    <TableHead>Açıklama</TableHead>
+                    <TableHead className="text-right">İşlemler</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {paginatedDeps.length === 0 ? (
-                    <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Sonuç bulunamadı</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Sonuç bulunamadı</TableCell></TableRow>
                   ) : (
                     paginatedDeps.map((dep) => (
                       <TableRow key={dep.id}>
-                        <TableCell className="font-medium">{dep.source}</TableCell>
-                        <TableCell className="text-center">{getTypeIcon(dep.type)}</TableCell>
-                        <TableCell className="font-medium">{dep.target}</TableCell>
-                        <TableCell>{getTypeBadge(dep.type)}</TableCell>
-                        <TableCell>{getStatusBadge(dep.status)}</TableCell>
-                        <TableCell className={`text-center font-mono ${getLatencyColor(dep.latency)}`}>{dep.latency}ms</TableCell>
-                        <TableCell className="text-center">
-                          <span className={dep.errorRate > 1 ? 'text-red-500 font-mono' : 'text-green-500 font-mono'}>{dep.errorRate.toFixed(1)}%</span>
+                        <TableCell className="font-medium">{dep.sourceService.name}</TableCell>
+                        <TableCell className="font-medium">{dep.targetDevice.name}</TableCell>
+                        <TableCell><Badge>{dep.type}</Badge></TableCell>
+                        <TableCell>
+                          {dep.criticality === 'CRITICAL' && <Badge>Kritik</Badge>}
+                          {dep.criticality === 'HIGH' && <Badge>Yüksek</Badge>}
+                          {dep.criticality === 'MEDIUM' && <Badge>Orta</Badge>}
+                          {dep.criticality === 'LOW' && <Badge>Düşük</Badge>}
                         </TableCell>
-                        <TableCell className="text-muted-foreground">{dep.lastChecked}</TableCell>
+                        <TableCell className="text-muted-foreground text-sm">{dep.description || '-'}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <Button variant="outline" size="icon" onClick={() => openEditDialog(dep)}><Edit className="h-4 w-4" /></Button>
+                            <Button variant="outline" size="icon" onClick={() => handleDelete(dep.id)}><Trash2 className="h-4 w-4" /></Button>
+                          </div>
+                        </TableCell>
                       </TableRow>
                     ))
                   )}
@@ -239,6 +416,103 @@ export default function DependenciesPage() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>{editingDep ? 'Bağımlılık Düzenle' : 'Yeni Bağımlılık Ekle'}</DialogTitle>
+            <DialogDescription>
+              Servis bağımlılıklarını tanımlayın
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="sourceService">Kaynak Servis</Label>
+              <Select 
+                value={formData.sourceServiceId} 
+                onValueChange={(value) => setFormData({ ...formData, sourceServiceId: value })}
+                disabled={!!editingDep}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Servis seçin" />
+                </SelectTrigger>
+                <SelectContent>
+                  {services.map((service) => (
+                    <SelectItem key={service.id} value={service.id}>
+                      {service.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="targetDevice">Hedef Cihaz/Servis</Label>
+              <Select 
+                value={formData.targetDeviceId} 
+                onValueChange={(value) => setFormData({ ...formData, targetDeviceId: value })}
+                disabled={!!editingDep}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Cihaz seçin" />
+                </SelectTrigger>
+                <SelectContent>
+                  {devices.map((device) => (
+                    <SelectItem key={device.id} value={device.id}>
+                      {device.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="type">Bağımlılık Tipi</Label>
+              <Select value={formData.type} onValueChange={(value) => setFormData({ ...formData, type: value })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="DEPENDS_ON">Bağımlı</SelectItem>
+                  <SelectItem value="REQUIRES">Gerektirir</SelectItem>
+                  <SelectItem value="PROVIDES">Sağlar</SelectItem>
+                  <SelectItem value="COMMUNICATES_WITH">İletişim</SelectItem>
+                  <SelectItem value="DEPLOYED_ON">Deploy Edildi</SelectItem>
+                  <SelectItem value="HOSTED_ON">Host Ediliyor</SelectItem>
+                  <SelectItem value="CONNECTED_TO">Bağlı</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="criticality">Kritiklik</Label>
+              <Select value={formData.criticality} onValueChange={(value) => setFormData({ ...formData, criticality: value })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="CRITICAL">Kritik</SelectItem>
+                  <SelectItem value="HIGH">Yüksek</SelectItem>
+                  <SelectItem value="MEDIUM">Orta</SelectItem>
+                  <SelectItem value="LOW">Düşük</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="description">Açıklama</Label>
+              <Input
+                id="description"
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                placeholder="Bağımlılık hakkında açıklama..."
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>İptal</Button>
+            <Button onClick={editingDep ? handleUpdate : handleCreate}>
+              {editingDep ? 'Güncelle' : 'Oluştur'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

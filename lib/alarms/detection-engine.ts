@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import FortiAnalyzerService from '@/lib/integrations/fortianalyzer';
+import { VMwareService } from '@/lib/integrations/vmware';
 import { sendAlarmEmail } from '@/lib/notifications/email';
 import type { AlarmDetectionLogic, CorrelationRule } from './alarm-definitions';
 
@@ -30,9 +31,56 @@ interface EvaluationResult {
  */
 export class AlarmDetectionEngine {
   private service: FortiAnalyzerService;
+  private vmwareService: VMwareService | null = null;
+  private vmwareInitialized: boolean = false;
 
   constructor(service: FortiAnalyzerService) {
     this.service = service;
+  }
+
+  private async initializeVMware() {
+    try {
+      console.log('[AlarmEngine] Initializing VMware service...');
+      const vmwareConfig = await prisma.integrationConfig.findFirst({
+        where: { type: 'VMWARE_VCENTER', enabled: true },
+      });
+      
+      if (!vmwareConfig) {
+        console.log('[AlarmEngine] No enabled VMware integration found in database');
+        return;
+      }
+      
+      console.log(`[AlarmEngine] Found VMware config: ${vmwareConfig.name}`);
+      
+      if (vmwareConfig && vmwareConfig.config) {
+        const config = vmwareConfig.config as any;
+        this.vmwareService = new VMwareService({
+          host: config.host,
+          username: config.username,
+          password: config.password,
+          pollingInterval: config.pollingInterval || 15,
+          enabledModules: config.enabledModules || {
+            datacenters: true,
+            clusters: true,
+            hosts: true,
+            vms: true,
+            datastores: true,
+          },
+        });
+        
+        // Authenticate
+        const authenticated = await this.vmwareService.authenticate();
+        if (!authenticated) {
+          console.error('[AlarmEngine] VMware authentication failed');
+          this.vmwareService = null;
+        } else {
+          console.log('[AlarmEngine] VMware service initialized and authenticated');
+        }
+      }
+    } catch (error) {
+      console.error('[AlarmEngine] Error initializing VMware service:', error);
+      this.vmwareService = null;
+    }
   }
 
   /**
@@ -42,6 +90,12 @@ export class AlarmDetectionEngine {
     const results: EvaluationResult[] = [];
 
     try {
+      // Initialize VMware service on first run
+      if (!this.vmwareInitialized) {
+        await this.initializeVMware();
+        this.vmwareInitialized = true;
+      }
+
       // Get all enabled alarm definitions
       const alarms = await prisma.alarmDefinition.findMany({
         where: { enabled: true },
@@ -316,8 +370,19 @@ export class AlarmDetectionEngine {
   private async evaluateLogTypeGroup(logtype: string, alarms: AlarmDef[]): Promise<EvaluationResult[]> {
     const results: EvaluationResult[] = [];
 
-    // Find the widest time window needed
-    const maxWindowMinutes = Math.max(...alarms.map((a) => a.detectionLogic.timeWindowMinutes));
+    // Handle VMware alarms separately
+    if (logtype === 'vmware') {
+      for (const alarm of alarms) {
+        try {
+          const result = await this.evaluateVMwareAlarm(alarm);
+          results.push(result);
+        } catch (error) {
+          console.error(`[AlarmEngine] Error evaluating VMware alarm ${alarm.code}:`, error);
+          results.push({ alarmCode: alarm.code, triggered: false, matchCount: 0, events: [], error: (error as Error).message });
+        }
+      }
+      return results;
+    }
 
     // For alarms with specific filters, search individually
     for (const alarm of alarms) {
@@ -394,6 +459,8 @@ export class AlarmDetectionEngine {
       filteredLogs = this.filterOffHours(recentLogs);
     } else if (logic.clientCheck === 'brute-force-group') {
       filteredLogs = this.filterBruteForce(recentLogs, logic.threshold);
+    } else if (logic.clientCheck === 'geo-anomaly') {
+      filteredLogs = this.filterGeoAnomaly(recentLogs);
     }
 
     // Alarm-specific exclusions (service accounts, etc.)
@@ -414,6 +481,278 @@ export class AlarmDetectionEngine {
       matchCount,
       events: filteredLogs.slice(0, 5), // Keep only first 5 for response
     };
+  }
+
+  /**
+   * Evaluate a VMware alarm against current VMware state
+   */
+  private async evaluateVMwareAlarm(alarm: AlarmDef): Promise<EvaluationResult> {
+    const logic = alarm.detectionLogic;
+
+    // Check cooldown
+    const cooldownThreshold = new Date(Date.now() - alarm.cooldownMinutes * 60 * 1000);
+    const recentEvent = await prisma.alarmEvent.findFirst({
+      where: {
+        alarmId: alarm.id,
+        createdAt: { gte: cooldownThreshold },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (recentEvent) {
+      return { alarmCode: alarm.code, triggered: false, matchCount: 0, events: [], error: 'cooldown-active' };
+    }
+
+    // Check if VMware service is available
+    if (!this.vmwareService) {
+      console.warn(`[AlarmEngine] VMware service not available for alarm ${alarm.code}`);
+      return { alarmCode: alarm.code, triggered: false, matchCount: 0, events: [], error: 'vmware-service-unavailable' };
+    }
+
+    try {
+      console.log(`[AlarmEngine] Evaluating VMware alarm ${alarm.code}: filter="${logic.filter}"`);
+
+      // Fetch VMware data based on alarm type
+      let vmwareData: Array<Record<string, unknown>> = [];
+      
+      // Determine what data to fetch based on filter fields
+      const filter = logic.filter || '';
+      
+      // VM Lifecycle Events (using Tasks API)
+      if (alarm.code === 'VM_CREATED' || alarm.code === 'VM_DELETED' || 
+          alarm.code === 'VM_RESTARTED') {
+        const lifecycleEvents = await this.vmwareService.fetchVMLifecycleEvents(logic.timeWindowMinutes);
+        
+        // Filter by event type
+        let targetEventType: 'created' | 'deleted' | 'restarted' | null = null;
+        if (alarm.code === 'VM_CREATED') targetEventType = 'created';
+        else if (alarm.code === 'VM_DELETED') targetEventType = 'deleted';
+        else if (alarm.code === 'VM_RESTARTED') targetEventType = 'restarted';
+        
+        vmwareData = lifecycleEvents
+          .filter(evt => evt.eventType === targetEventType)
+          .map(evt => ({
+            type: 'vm_lifecycle',
+            eventType: evt.eventType,
+            vmId: evt.vmId,
+            vmName: evt.vmName,
+            userName: evt.userName,
+            eventTime: evt.eventTime,
+            taskState: evt.taskState,
+          }));
+      }
+      // Snapshot Events - SNAPSHOT_CREATED uses snapshot list, others use SOAP events
+      else if (alarm.code === 'SNAPSHOT_CREATED') {
+        // Use snapshot list to detect recently created snapshots (more reliable than SOAP events)
+        const recentSnapshots = await this.vmwareService.fetchRecentlyCreatedSnapshots(logic.timeWindowMinutes);
+        vmwareData = recentSnapshots.map(snap => ({
+          type: 'snapshot_created',
+          snapshotCreated: 'true',  // String for filter matching (filter uses string comparison)
+          eventType: 'created',
+          vmId: snap.vmId,
+          vmName: snap.vmName,
+          snapshotId: snap.snapshotId,
+          snapshotName: snap.snapshotName,
+          description: snap.description,
+          createTime: snap.createTime,
+          ageMinutes: snap.ageMinutes,
+        }));
+      }
+      else if (alarm.code === 'SNAPSHOT_DELETED' || alarm.code === 'SNAPSHOT_REVERTED') {
+        // For delete/revert, still use SOAP events as there's no other way to detect them
+        const snapshotEvents = await this.vmwareService.fetchSnapshotEvents(logic.timeWindowMinutes);
+        
+        // Filter by event type
+        let targetEventType: 'created' | 'deleted' | 'reverted' | null = null;
+        if (alarm.code === 'SNAPSHOT_DELETED') targetEventType = 'deleted';
+        else if (alarm.code === 'SNAPSHOT_REVERTED') targetEventType = 'reverted';
+        
+        vmwareData = snapshotEvents
+          .filter(evt => evt.eventType === targetEventType)
+          .map(evt => ({
+            type: 'snapshot_event',
+            eventType: evt.eventType,
+            vmName: evt.vmName,
+            snapshotName: evt.snapshotName,
+            userName: evt.userName,
+            eventTime: evt.eventTime,
+            taskState: evt.taskState,
+          }));
+      }
+      // VM Power State Events
+      else if (filter.includes('powerState') || filter.includes('cpuUsage') || filter.includes('memoryUsage')) {
+        // VM-related alarms
+        
+        // For off-hours power-on detection, use Events API to get recent power-on events
+        if (alarm.code === 'VM_POWERED_ON_OFF_HOURS') {
+          const events = await this.vmwareService.fetchRecentPowerOnEvents(logic.timeWindowMinutes);
+          vmwareData = events.map(evt => ({
+            type: 'vm',
+            vmId: evt.vmId,
+            vmName: evt.vmName,
+            powerState: 'poweredOn',
+            userName: evt.userName,
+            eventTime: evt.eventTime,
+            eventDescription: evt.description,
+          }));
+        } else if (alarm.code === 'VM_POWERED_OFF') {
+          // For unexpected power-off detection, use Events API to get recent power-off events
+          const events = await this.vmwareService.fetchRecentPowerOffEvents(logic.timeWindowMinutes);
+          vmwareData = events.map(evt => ({
+            type: 'vm',
+            vmId: evt.vmId,
+            vmName: evt.vmName,
+            powerState: 'poweredOff',
+            userName: evt.userName,
+            eventTime: evt.eventTime,
+            eventDescription: evt.description,
+            isGracefulShutdown: evt.isGracefulShutdown,
+          }));
+        } else {
+          // Default: fetch current VM state
+          const vms = await this.vmwareService.fetchVMs();
+          vmwareData = vms.map(vm => ({
+            type: 'vm',
+            vmId: vm.vm.value,
+            vmName: vm.name,
+            powerState: vm.summary?.guestState === 'running' ? 'poweredOn' : 'poweredOff',
+            cpuUsage: 0, // TODO: Requires performance stats API
+            memoryUsage: 0, // TODO: Requires performance stats API
+            numCpu: vm.summary?.numCpu || 0,
+            memoryMB: vm.summary?.memorySizeMB || 0,
+            guestOS: vm.summary?.guestFullName || '',
+            ipAddress: vm.summary?.ipAddress || '',
+            connectionState: vm.summary?.connectionState || 'unknown',
+          }));
+        }
+      } else if (filter.includes('hostCpuUsage') || filter.includes('hostMemoryUsage') ||
+                 filter.includes('connectionState')) {
+        // Host-related alarms
+        const hosts = await this.vmwareService.fetchHosts();
+        vmwareData = hosts.map(host => ({
+          type: 'host',
+          hostId: host.host.value,
+          hostName: host.name,
+          connectionState: host.summary?.connectionState || 'unknown',
+          hostCpuUsage: 0, // TODO: Requires performance stats API
+          hostMemoryUsage: 0, // TODO: Requires performance stats API
+          numCpuCores: host.summary?.numCpuCores || 0,
+          memoryTotal: host.summary?.memoryTotal || 0,
+          overallStatus: host.summary?.overallStatus || 'unknown',
+        }));
+      } else if (filter.includes('datastoreFreePercent') || filter.includes('datastore')) {
+        // Datastore-related alarms
+        const datastores = await this.vmwareService.fetchDatastores();
+        vmwareData = datastores.map(ds => {
+          const capacity = Number(ds.summary?.capacity || 0);
+          const freeSpace = Number(ds.summary?.freeSpace || 0);
+          const freePercent = capacity > 0 ? (freeSpace / capacity) * 100 : 100;
+          
+          return {
+            type: 'datastore',
+            datastoreId: ds.datastore.value,
+            datastoreName: ds.name,
+            datastoreType: ds.info?.type || 'unknown',
+            datastoreCapacity: capacity,
+            datastoreFreeSpace: freeSpace,
+            datastoreFreePercent: freePercent,
+            accessible: ds.summary?.accessible ?? true,
+          };
+        });
+      } else if (filter.includes('snapshot')) {
+        // Snapshot-related alarms
+        const snapshots = await this.vmwareService.fetchAllSnapshots();
+        vmwareData = snapshots.map(snap => {
+          const createTime = new Date(snap.createTime);
+          const ageHours = (Date.now() - createTime.getTime()) / (1000 * 60 * 60);
+          const ageDays = ageHours / 24;
+          
+          return {
+            type: 'snapshot',
+            snapshotId: snap.id,
+            snapshotName: snap.name,
+            vmId: snap.vmId,
+            vmName: snap.vmName,
+            createTime: snap.createTime,
+            snapshotAgeDays: ageDays,
+            snapshotSize: snap.size || 0,
+            description: snap.description || '',
+          };
+        });
+      }
+
+      if (vmwareData.length === 0) {
+        console.log(`[AlarmEngine] No VMware data found for ${alarm.code}`);
+        return { alarmCode: alarm.code, triggered: false, matchCount: 0, events: [] };
+      }
+
+      // Apply filter to data
+      const matchingData = this.applyVMwareFilter(vmwareData, logic.filter || '');
+
+      const matchCount = matchingData.length;
+      const triggered = matchCount >= logic.threshold;
+
+      if (triggered) {
+        console.log(`[AlarmEngine] VMware alarm ${alarm.code} triggered: ${matchCount} matches`);
+        await this.fireAlarm(alarm, matchingData);
+      }
+
+      return {
+        alarmCode: alarm.code,
+        triggered,
+        matchCount,
+        events: matchingData.slice(0, 5),
+      };
+    } catch (error) {
+      console.error(`[AlarmEngine] Error evaluating VMware alarm ${alarm.code}:`, error);
+      return { alarmCode: alarm.code, triggered: false, matchCount: 0, events: [], error: (error as Error).message };
+    }
+  }
+
+  /**
+   * Apply VMware filter expression to data
+   * Simple expression parser for filters like "cpuUsage > 90" or "powerState == poweredOff"
+   */
+  private applyVMwareFilter(data: Array<Record<string, unknown>>, filter: string): Array<Record<string, unknown>> {
+    if (!filter) return data;
+
+    return data.filter(item => {
+      try {
+        // Parse simple comparison expressions
+        // Supported: field > value, field < value, field == value, field != value
+        const comparison = filter.match(/(\w+)\s*(==|!=|>|<|>=|<=)\s*(\w+|\d+\.?\d*)/);        
+        if (!comparison) {
+          console.warn(`[AlarmEngine] Could not parse VMware filter: ${filter}`);
+          return false;
+        }
+
+        const [, field, operator, valueStr] = comparison;
+        const itemValue = item[field];
+        
+        // Convert value to number if it's numeric
+        const value = isNaN(Number(valueStr)) ? valueStr : Number(valueStr);
+
+        switch (operator) {
+          case '==':
+            return itemValue == value;
+          case '!=':
+            return itemValue != value;
+          case '>':
+            return Number(itemValue) > Number(value);
+          case '<':
+            return Number(itemValue) < Number(value);
+          case '>=':
+            return Number(itemValue) >= Number(value);
+          case '<=':
+            return Number(itemValue) <= Number(value);
+          default:
+            return false;
+        }
+      } catch (error) {
+        console.error(`[AlarmEngine] Error applying VMware filter "${filter}":`, error);
+        return false;
+      }
+    });
   }
 
   /**
@@ -450,6 +789,30 @@ export class AlarmDetectionEngine {
     const title = this.buildAlarmTitle(alarm, matchingLogs);
     const message = this.buildAlarmMessage(alarm, matchingLogs);
 
+    // Extract metadata based on log type
+    let sourceIp: string | null = null;
+    let destIp: string | null = null;
+    let deviceName: string | null = null;
+
+    if (firstLog.type && ['vm', 'host', 'datastore', 'snapshot', 'snapshot_created', 'snapshot_event', 'vm_lifecycle'].includes(firstLog.type as string)) {
+      // VMware alarm metadata
+      if (firstLog.type === 'vm' || firstLog.type === 'vm_lifecycle') {
+        deviceName = (firstLog.vmName as string) || null;
+        sourceIp = (firstLog.ipAddress as string) || null;
+      } else if (firstLog.type === 'host') {
+        deviceName = (firstLog.hostName as string) || null;
+      } else if (firstLog.type === 'datastore') {
+        deviceName = (firstLog.datastoreName as string) || null;
+      } else if (firstLog.type === 'snapshot' || firstLog.type === 'snapshot_created' || firstLog.type === 'snapshot_event') {
+        deviceName = `${firstLog.vmName} - ${firstLog.snapshotName}` || null;
+      }
+    } else {
+      // FortiAnalyzer log metadata
+      sourceIp = (firstLog.srcip as string) || (firstLog.remote_host as string) || null;
+      destIp = (firstLog.dstip as string) || null;
+      deviceName = (firstLog.devname as string) || (firstLog.fortigate as string) || null;
+    }
+
     // Create alarm event in DB
     const alarmEvent = await prisma.alarmEvent.create({
       data: {
@@ -458,9 +821,9 @@ export class AlarmDetectionEngine {
         title,
         message,
         rawData: matchingLogs.slice(0, 10) as unknown as Record<string, unknown>,
-        sourceIp: (firstLog.srcip as string) || (firstLog.remote_host as string) || null,
-        destIp: (firstLog.dstip as string) || null,
-        deviceName: (firstLog.devname as string) || (firstLog.fortigate as string) || null,
+        sourceIp,
+        destIp,
+        deviceName,
       },
     });
 
@@ -577,6 +940,34 @@ export class AlarmDetectionEngine {
   }
 
   /**
+   * Geo-anomaly filter: ignore admin logins from internal/private networks
+   */
+  private filterGeoAnomaly(logs: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
+    return logs.filter((log) => {
+      const srcip = (log.srcip as string) || (log.remip as string) || this.extractIpFromUi(log.ui as string) || '';
+      if (!srcip) return false;
+      // Skip private / internal ranges (local admin logins)
+      if (this.isPrivateIp(srcip)) return false;
+      return true;
+    });
+  }
+
+  private isPrivateIp(ip: string): boolean {
+    if (!ip) return false;
+    if (ip.startsWith('10.')) return true;
+    if (ip.startsWith('192.168.')) return true;
+    if (/^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(ip)) return true;
+    if (ip.startsWith('127.')) return true;
+    return false;
+  }
+
+  private extractIpFromUi(ui: unknown): string | null {
+    if (!ui) return null;
+    const match = String(ui).match(/(\d{1,3}(?:\.\d{1,3}){3})/);
+    return match ? match[1] : null;
+  }
+
+  /**
    * Decode URL-encoded FortiAnalyzer message text
    */
   private decodeMsg(text: unknown): string {
@@ -638,6 +1029,114 @@ export class AlarmDetectionEngine {
     sections.push(alarm.description || alarm.name);
     sections.push(`Tespit edilen olay sayisi: ${logs.length}`);
 
+    // Special handling for VMware alarms
+    if (firstLog.type && ['vm', 'host', 'datastore', 'snapshot', 'vm_lifecycle', 'snapshot_event', 'snapshot_created'].includes(firstLog.type as string)) {
+      const vmwareDetails: string[] = [];
+      
+      // VM Lifecycle Events
+      if (firstLog.type === 'vm_lifecycle') {
+        vmwareDetails.push(`VM Adi: ${firstLog.vmName || 'N/A'}`);  
+        vmwareDetails.push(`Islem: ${firstLog.eventType || 'N/A'}`);  
+        if (firstLog.userName) vmwareDetails.push(`Kullanici: ${firstLog.userName}`);
+        if (firstLog.eventTime) vmwareDetails.push(`Olay Zamani: ${new Date(firstLog.eventTime as string).toLocaleString('tr-TR')}`);
+      }
+      // Snapshot Created (from snapshot list - more reliable detection)
+      else if (firstLog.type === 'snapshot_created') {
+        vmwareDetails.push(`VM Adi: ${firstLog.vmName || 'N/A'}`);
+        vmwareDetails.push(`Snapshot Adi: ${firstLog.snapshotName || 'N/A'}`);
+        if (firstLog.description) vmwareDetails.push(`Aciklama: ${firstLog.description}`);
+        if (firstLog.createTime) vmwareDetails.push(`Olusturulma Zamani: ${new Date(firstLog.createTime as string).toLocaleString('tr-TR')}`);
+        if (firstLog.ageMinutes !== undefined) vmwareDetails.push(`Yas: ${firstLog.ageMinutes} dakika once`);
+      }
+      // Snapshot Events (from SOAP API)
+      else if (firstLog.type === 'snapshot_event') {
+        vmwareDetails.push(`VM Adi: ${firstLog.vmName || 'N/A'}`);
+        vmwareDetails.push(`Snapshot Adi: ${firstLog.snapshotName || 'N/A'}`);
+        vmwareDetails.push(`Islem: ${firstLog.eventType || 'N/A'}`);
+        if (firstLog.userName) vmwareDetails.push(`Kullanici: ${firstLog.userName}`);
+        if (firstLog.eventTime) vmwareDetails.push(`Olay Zamani: ${new Date(firstLog.eventTime as string).toLocaleString('tr-TR')}`);
+      }
+      // Regular VM state
+      else if (firstLog.type === 'vm') {
+        vmwareDetails.push(`VM Adi: ${firstLog.vmName || 'N/A'}`);
+        vmwareDetails.push(`Guc Durumu: ${firstLog.powerState || 'N/A'}`);
+        if (firstLog.userName) vmwareDetails.push(`Kullanici: ${firstLog.userName}`);
+        if (firstLog.eventTime) vmwareDetails.push(`Olay Zamani: ${new Date(firstLog.eventTime as string).toLocaleString('tr-TR')}`);
+        if (firstLog.cpuUsage) vmwareDetails.push(`CPU Kullanimi: ${firstLog.cpuUsage}%`);
+        if (firstLog.memoryUsage) vmwareDetails.push(`Bellek Kullanimi: ${firstLog.memoryUsage}%`);
+        if (firstLog.numCpu) vmwareDetails.push(`vCPU Sayisi: ${firstLog.numCpu}`);
+        if (firstLog.memoryMB) vmwareDetails.push(`Bellek: ${Math.round(Number(firstLog.memoryMB) / 1024)}GB`);
+        if (firstLog.guestOS) vmwareDetails.push(`Isletim Sistemi: ${firstLog.guestOS}`);
+        if (firstLog.ipAddress) vmwareDetails.push(`IP Adresi: ${firstLog.ipAddress}`);
+      } else if (firstLog.type === 'host') {
+        vmwareDetails.push(`Host Adi: ${firstLog.hostName || 'N/A'}`);
+        vmwareDetails.push(`Baglanti Durumu: ${firstLog.connectionState || 'N/A'}`);
+        if (firstLog.hostCpuUsage) vmwareDetails.push(`CPU Kullanimi: ${firstLog.hostCpuUsage}%`);
+        if (firstLog.hostMemoryUsage) vmwareDetails.push(`Bellek Kullanimi: ${firstLog.hostMemoryUsage}%`);
+        if (firstLog.numCpuCores) vmwareDetails.push(`CPU Core: ${firstLog.numCpuCores}`);
+        if (firstLog.overallStatus) vmwareDetails.push(`Genel Durum: ${firstLog.overallStatus}`);
+      } else if (firstLog.type === 'datastore') {
+        vmwareDetails.push(`Datastore Adi: ${firstLog.datastoreName || 'N/A'}`);
+        vmwareDetails.push(`Tip: ${firstLog.datastoreType || 'N/A'}`);
+        if (firstLog.datastoreFreePercent !== undefined) {
+          vmwareDetails.push(`Bos Alan: ${Number(firstLog.datastoreFreePercent).toFixed(1)}%`);
+        }
+        if (firstLog.datastoreCapacity) {
+          const capacityGB = Number(firstLog.datastoreCapacity) / (1024 * 1024 * 1024);
+          const freeGB = Number(firstLog.datastoreFreeSpace || 0) / (1024 * 1024 * 1024);
+          vmwareDetails.push(`Kapasite: ${capacityGB.toFixed(1)}GB (bos: ${freeGB.toFixed(1)}GB)`);
+        }
+      } else if (firstLog.type === 'snapshot') {
+        vmwareDetails.push(`Snapshot Adi: ${firstLog.snapshotName || 'N/A'}`);
+        vmwareDetails.push(`VM: ${firstLog.vmName || 'N/A'}`);
+        if (firstLog.snapshotAgeDays !== undefined) {
+          vmwareDetails.push(`Yas: ${Math.floor(Number(firstLog.snapshotAgeDays))} gun`);
+        }
+        if (firstLog.createTime) {
+          vmwareDetails.push(`Olusturulma: ${new Date(firstLog.createTime as string).toLocaleString('tr-TR')}`);
+        }
+        if (firstLog.snapshotSize) {
+          vmwareDetails.push(`Boyut: ${this.formatBytes(Number(firstLog.snapshotSize))}`);
+        }
+      }
+
+      sections.push(vmwareDetails.join('\n'));
+
+      // List other affected resources
+      if (logs.length > 1) {
+        const otherResources = logs.slice(1, 6).map((l) => {
+          if (l.type === 'vm_lifecycle') {
+            const user = l.userName ? ` - ${l.userName}` : '';
+            return `- VM: ${l.vmName} (${l.eventType}${user})`;
+          }
+          if (l.type === 'snapshot_created') {
+            const time = l.createTime ? new Date(l.createTime as string).toLocaleString('tr-TR') : '';
+            return `- ${l.vmName}: "${l.snapshotName}" (${time})`;
+          }
+          if (l.type === 'snapshot_event') {
+            const user = l.userName ? ` - ${l.userName}` : '';
+            return `- Snapshot: ${l.snapshotName} on ${l.vmName} (${l.eventType}${user})`;
+          }
+          if (l.type === 'vm') {
+            const user = l.userName ? ` - ${l.userName}` : '';
+            return `- VM: ${l.vmName} (${l.powerState}${user})`;
+          }
+          if (l.type === 'host') return `- Host: ${l.hostName} (${l.connectionState})`;
+          if (l.type === 'datastore') return `- Datastore: ${l.datastoreName} (${Number(l.datastoreFreePercent || 0).toFixed(1)}% bos)`;
+          if (l.type === 'snapshot') return `- Snapshot: ${l.snapshotName} (${l.vmName}, ${Math.floor(Number(l.snapshotAgeDays || 0))} gun)`;
+          return `- ${l.type || 'Unknown'}`;
+        }).join('\n');
+        sections.push(
+          `Diger etkilenen kaynaklar:\n${otherResources}${
+            logs.length > 6 ? `\n- ... ve ${logs.length - 6} daha` : ''
+          }`
+        );
+      }
+
+      sections.push(`Onerilen Aksiyon: ${alarm.detectionLogic.recommendedAction}`);
+      return sections.join('\n\n');
+    }
+
     // Correlation precursor info (for SOC correlation alarms)
     if (firstLog._correlation_precursors) {
       sections.push(`Onceki Alarmlar: ${firstLog._correlation_precursors}`);
@@ -646,7 +1145,127 @@ export class AlarmDetectionEngine {
       sections.push(`Onceki Alarm Detaylari: ${firstLog._correlation_precursor_details}`);
     }
 
-    // Event details from first log
+    // Special handling for FortiView top-sources data (DATA_EXFIL_SUSPECT)
+    if (alarm.code === 'DATA_EXFIL_SUSPECT') {
+      const toNumber = (val: unknown): number => {
+        const n = parseInt(String(val ?? '0'), 10);
+        return Number.isNaN(n) ? 0 : n;
+      };
+
+      const primary = firstLog;
+      const srcip = (primary.srcip as string) || 'N/A';
+      const srcintf = (primary.srcintf as string) || '';
+      const fortigate = (primary.fortigate as string) || '';
+      const devInfo = (primary.dev_src_agg as string) || (primary.mac_devtype_agg as string) || '';
+
+      const sessions = toNumber(primary.sessions);
+      const bandwidth = toNumber(primary.bandwidth);
+      const outBytes = toNumber(primary.traffic_out);
+      const inBytes = toNumber(primary.traffic_in);
+      const weight = toNumber(primary.threatweight);
+      const sessionBlock = toNumber(primary.session_block);
+      const sessionPass = toNumber(primary.session_pass);
+
+      const exfilDetails: string[] = [];
+      exfilDetails.push(
+        `Kaynak host: ${srcip}` +
+          (srcintf ? ` (arayüz: ${srcintf})` : '') +
+          (fortigate ? `, cihaz: ${fortigate}` : '')
+      );
+      if (devInfo) {
+        exfilDetails.push(`Cihaz bilgisi: ${devInfo}`);
+      }
+      exfilDetails.push(
+        `Oturum sayisi: ${sessions} (bloklanan: ${sessionBlock}, izin verilen: ${sessionPass})`
+      );
+      exfilDetails.push(
+        `Trafik: giden ${this.formatBytes(outBytes)}, gelen ${this.formatBytes(inBytes)}, toplam ${this.formatBytes(bandwidth)}`
+      );
+      if (weight) {
+        exfilDetails.push(`Tehdit skoru: ${weight}`);
+      }
+
+      sections.push(exfilDetails.join('\n'));
+
+      if (logs.length > 1) {
+        const otherSources = logs.slice(1, 6).map((l) => {
+          const ip = (l.srcip as string) || 'N/A';
+          const s = toNumber(l.sessions);
+          const out = toNumber(l.traffic_out);
+          const bw = toNumber(l.bandwidth);
+          const parts: string[] = [ip];
+          parts.push(`oturum: ${s}`);
+          if (out) parts.push(`giden: ${this.formatBytes(out)}`);
+          if (bw) parts.push(`toplam: ${this.formatBytes(bw)}`);
+          return `- ${parts.join(', ')}`;
+        }).join('\n');
+        sections.push(
+          `Diger kaynak hostlar:\n${otherSources}${
+            logs.length > 6 ? `\n- ... ve ${logs.length - 6} daha` : ''
+          }`
+        );
+      }
+
+      sections.push(`Onerilen Aksiyon: ${alarm.detectionLogic.recommendedAction}`);
+      return sections.join('\n\n');
+    }
+
+    // Special handling for FortiView top-threats data (TOP_THREAT_WEIGHT)
+    if (firstLog.threat && firstLog.threatweight) {
+      const fortiDetails: string[] = [];
+      const threat = (firstLog.threat as string) || 'N/A';
+      const threatType = (firstLog.threattype as string) || 'N/A';
+      const level = (firstLog.level_s as string) || (firstLog.threatlevel as string) || 'N/A';
+      const weight = (firstLog.threatweight as string) || '0';
+      const blockCount = (firstLog.threat_block as string) || '0';
+      const passCount = (firstLog.threat_pass as string) || '0';
+      const incidents = (firstLog.incidents as string) || '0';
+      const incidentBlock = (firstLog.incident_block as string) || '0';
+      const incidentPass = (firstLog.incident_pass as string) || '0';
+      const fortigate = (firstLog.fortigate as string) || '';
+      const obfUrl = (firstLog.obf_url as string) || '';
+
+      fortiDetails.push(`En kritik tehdit: ${threat} (tip: ${threatType}, seviye: ${level})`);
+      fortiDetails.push(`Tehdit skoru: ${weight} (bloklanan: ${blockCount}, izin verilen: ${passCount})`);
+      fortiDetails.push(`Olay sayisi: ${incidents} (bloklanan: ${incidentBlock}, izin verilen: ${incidentPass})`);
+      if (fortigate) {
+        fortiDetails.push(`Cihaz(lar): ${fortigate}`);
+      }
+      if (obfUrl) {
+        fortiDetails.push(`Hedef: ${obfUrl}`);
+      }
+
+      if (fortiDetails.length > 0) {
+        sections.push(fortiDetails.join('\n'));
+      }
+
+      if (logs.length > 1) {
+        const otherThreats = logs.slice(1, 5).map((l) => {
+          const t = (l.threat as string) || 'N/A';
+          const tt = (l.threattype as string) || '';
+          const lvl = (l.level_s as string) || (l.threatlevel as string) || '';
+          const score = (l.threatweight as string) || '';
+          const cnt = (l.incidents as string) || '';
+          const parts: string[] = [t];
+          if (tt) parts.push(`tip: ${tt}`);
+          if (lvl) parts.push(`seviye: ${lvl}`);
+          if (score) parts.push(`skor: ${score}`);
+          if (cnt) parts.push(`olay: ${cnt}`);
+          return `- ${parts.join(', ')}`;
+        }).join('\n');
+        sections.push(
+          `Diger tehditler:\n${otherThreats}${
+            logs.length > 5 ? `\n- ... ve ${logs.length - 5} daha` : ''
+          }`
+        );
+      }
+
+      // Recommended action
+      sections.push(`Onerilen Aksiyon: ${alarm.detectionLogic.recommendedAction}`);
+      return sections.join('\n\n');
+    }
+
+    // Event details from first log (generic path)
     const details: string[] = [];
     if (firstLog.msg) details.push(`Mesaj: ${this.decodeMsg(firstLog.msg)}`);
     if (firstLog.action) details.push(`Aksiyon: ${firstLog.action}`);

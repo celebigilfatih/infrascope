@@ -436,6 +436,53 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ forecast });
     }
 
+    // Test Events API availability
+    if (type === 'test-events-api') {
+      const result = await service.testEventsAPI();
+      return NextResponse.json(result);
+    }
+
+    // Test SOAP Events
+    if (type === 'test-soap-events') {
+      const soapAuth = await service.authenticateSOAP();
+      if (!soapAuth) {
+        return NextResponse.json({ error: 'SOAP authentication failed' }, { status: 401 });
+      }
+      
+      // Get time window from query params (default: 120 minutes for better detection)
+      const timeWindow = parseInt(request.nextUrl.searchParams.get('minutes') || '120');
+      
+      // Query all events to see what's available
+      const allEvents = await service.queryEventsSOAP(timeWindow);
+      
+      // Count by event type
+      const eventTypeCounts: Record<string, number> = {};
+      for (const evt of allEvents) {
+        eventTypeCounts[evt.eventType] = (eventTypeCounts[evt.eventType] || 0) + 1;
+      }
+      
+      // Query lifecycle events
+      const lifecycleEvents = await service.fetchVMLifecycleEvents(timeWindow);
+      
+      // Query snapshot events
+      const snapshotEvents = await service.fetchSnapshotEvents(timeWindow);
+      
+      return NextResponse.json({ 
+        success: true, 
+        timeWindowMinutes: timeWindow,
+        totalEvents: allEvents.length,
+        eventTypes: eventTypeCounts,
+        lifecycleEvents: {
+          count: lifecycleEvents.length,
+          events: lifecycleEvents.slice(0, 10)
+        },
+        snapshotEvents: {
+          count: snapshotEvents.length,
+          events: snapshotEvents.slice(0, 10)
+        }
+      });
+    }
+
     // Default: return status
     const status = await service.getStatus();
     return NextResponse.json(status);

@@ -924,7 +924,7 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
   {
     code: 'VM_POWERED_OFF',
     name: 'VM Beklenmedik Kapanma',
-    description: 'Sanal makine beklenmedik sekilde kapandi. Uygulama veya sistem hatasi olabilir.',
+    description: 'Sanal makine son 15 dakikada kapandi. Sadece kullanici tarafindan yapilan kapanmalar alarm uretir (backup/servis hesaplari haric).',
     category: 'OPERATIONAL',
     severity: 'ALARM_HIGH',
     cooldownMinutes: 15,
@@ -933,8 +933,8 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
       filter: 'powerState == poweredOff',
       threshold: 1,
       timeWindowMinutes: 15,
-      description: 'vCenter API uzerinden VM power state degisikliklerini izler. PoweredOff durumuna gecisi tespit eder.',
-      recommendedAction: 'VM durumunu kontrol edin. Event loglarini inceleyin. Gerekirse VM yi yeniden baslatin. Tekrarlayan kapanmalarda root cause analizi yapin.',
+      description: 'vCenter Events API uzerinden VmPoweredOffEvent ve VmGuestShutdownEvent olaylarini izler. Backup/servis hesaplari filtrelenir.',
+      recommendedAction: 'VM durumunu ve event loglarini kontrol edin. Graceful shutdown mu yoksa unexpected power-off mu oldugunu inceleyin. Gerekirse VM yi yeniden baslatin. Tekrarlayan kapanmalarda root cause analizi yapin.',
     },
   },
   {
@@ -1238,7 +1238,7 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
     category: 'OPERATIONAL',
     severity: 'ALARM_INFO',
     cooldownMinutes: 30,
-    notifyEmail: false,
+    notifyEmail: true,
     detectionLogic: {
       logtype: 'vmware',
       filter: 'snapshotCreated == true',
@@ -1255,7 +1255,7 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
     category: 'OPERATIONAL',
     severity: 'ALARM_INFO',
     cooldownMinutes: 30,
-    notifyEmail: false,
+    notifyEmail: true,
     detectionLogic: {
       logtype: 'vmware',
       filter: 'snapshotDeleted == true',
