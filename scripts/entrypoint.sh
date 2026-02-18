@@ -40,5 +40,23 @@ fi
 echo "✅ Database ready!"
 echo "🌐 Starting Next.js application on port $PORT..."
 
+# Start alarm scheduler in background after server is ready
+(
+  echo "⏰ Waiting for server to be ready before starting alarm scheduler..."
+  sleep 15  # Wait for Next.js to compile and start
+  
+  # Wait for health endpoint to respond
+  for i in $(seq 1 30); do
+    if curl -s http://localhost:3000/api/health > /dev/null 2>&1; then
+      echo "✅ Server is ready! Starting alarm scheduler..."
+      curl -s -X POST http://localhost:3000/api/alarms/scheduler > /dev/null 2>&1
+      echo "⏰ Alarm scheduler started (5 minute interval)"
+      break
+    fi
+    echo "   Waiting for server... Attempt $i/30"
+    sleep 2
+  done
+) &
+
 # Execute the main application
 exec "$@"

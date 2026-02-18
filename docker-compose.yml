@@ -66,6 +66,7 @@ services:
       retries: 3
       start_period: 40s
     restart: unless-stopped
+    entrypoint: /app/scripts/entrypoint.sh
     command: npm run dev
 
   # Optional: Redis for caching and WebSocket support (future)
