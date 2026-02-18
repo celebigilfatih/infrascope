@@ -107,7 +107,7 @@ export const Sidebar: React.FC = () => {
       items: [
         { name: 'Genel Saglik', href: '/dashboard', icon: LayoutDashboard },
         { name: 'Kritik Alarmlar', href: '/dashboard/alerts', icon: AlertTriangle },
-        { name: 'Riskli Assetler', href: '/dashboard/risks', icon: AlertOctagon },
+        // { name: 'Riskli Assetler', href: '/dashboard/risks', icon: AlertOctagon },
         { name: 'Son Degisiklikler', href: '/dashboard/changes', icon: History },
       ]
     },
@@ -117,7 +117,7 @@ export const Sidebar: React.FC = () => {
         { name: 'Locations', href: '/locations', icon: MapPin },
         { name: 'Racks', href: '/racks', icon: Grid },
         { name: 'Devices', href: '/devices', icon: Monitor },
-        { name: 'Power / Capacity', href: '/infrastructure/capacity', icon: Zap },
+        // { name: 'Power / Capacity', href: '/infrastructure/capacity', icon: Zap },
       ]
     },
     {
@@ -148,7 +148,7 @@ export const Sidebar: React.FC = () => {
         { name: 'Config Revisions', href: '/network/config-revisions', icon: History },
         { name: 'FA Event Logs', href: '/network/fa-events', icon: FileText },
         { name: 'Virtual IPs', href: '/security/virtual-ips', icon: ExternalLink },
-        { name: 'Web Analitik', href: '/security/web-analytics', icon: Globe },
+        { name: 'Web Analytics', href: '/security/web-analytics', icon: Globe },
         { name: 'MITRE ATT&CK', href: '/security/mitre-attack', icon: ShieldAlert },
         { name: 'IoC Hosts', href: '/security/ioc-hosts', icon: AlertOctagon },
         { name: 'Firewall Policies', href: '/security/policies', icon: Shield },

@@ -212,8 +212,13 @@ export async function GET(request: NextRequest) {
         service.fetchDatastores(),
       ]);
 
-      // TODO: Fetch snapshots from database (temporarily disabled)
-      const snapshotsRaw: any[] = [];
+      // Fetch all snapshots from vCenter
+      let snapshotsRaw: any[] = [];
+      try {
+        snapshotsRaw = await service.fetchAllSnapshots();
+      } catch (err) {
+        console.warn('[VMware API] Failed to fetch snapshots:', err);
+      }
 
 
       // Calculate VM status counts
@@ -243,20 +248,20 @@ export async function GET(request: NextRequest) {
       const now = Date.now();
       const oldSnapshots = (snapshotsRaw || [])
         .filter((s: any) => {
-          const ageMs = now - new Date(s.createdAt).getTime();
+          const ageMs = now - new Date(s.createTime).getTime();
           const ageDays = ageMs / (1000 * 60 * 60 * 24);
           return ageDays > 7;
         })
         .sort((a: any, b: any) => {
-          const ageA = now - new Date(a.createdAt).getTime();
-          const ageB = now - new Date(b.createdAt).getTime();
+          const ageA = now - new Date(a.createTime).getTime();
+          const ageB = now - new Date(b.createTime).getTime();
           return ageB - ageA; // Oldest first
         })
         .map((s: any) => {
-          const ageMs = now - new Date(s.createdAt).getTime();
+          const ageMs = now - new Date(s.createTime).getTime();
           const ageDays = Math.floor(ageMs / (1000 * 60 * 60 * 24));
           return {
-            vmName: s.vM?.name || 'Unknown',
+            vmName: s.vmName || 'Unknown',
             name: s.name,
             ageInDays: ageDays,
             sizeGB: (s.size || 0) / 1073741824,

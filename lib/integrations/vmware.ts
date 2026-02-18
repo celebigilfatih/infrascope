@@ -927,18 +927,56 @@ export class VMwareService {
     // Handle both vSphere 7 array format and legacy { value: [...] } format
     const hostList = Array.isArray(result) ? result : (result as any).value || [];
 
-    return hostList.map((h: any) => ({
-      host: { value: h.host || h.host?.value },
-      name: h.name,
-      parent: h.parent,
-      summary: {
-        connectionState: (h.connection_state || 'connected').toLowerCase(),
-        overallStatus: h.power_state === 'POWERED_ON' ? 'green' : 'yellow',
-        numCpuCores: 0,  // Not available in vSphere 7 REST API
-        memoryTotal: 0,  // Not available in vSphere 7 REST API
-      },
-      config: {},  // Not available in vSphere 7 REST API
-    }));
+    // Try to get detailed host info via Python/PyVmomi (best effort)
+    let hostDetails: any[] = [];
+    try {
+      const scriptPath = '/app/scripts/get-host-details.py';
+      const pyResult = execSync(
+        `python3 "${scriptPath}" "${this.config.host}" "${this.config.username}" "${this.config.password}"`,
+        { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024, timeout: 15000 }  // Short timeout
+      );
+      const data = JSON.parse(pyResult);
+      if (data.success && data.hosts) {
+        hostDetails = data.hosts;
+        console.log(`[VMware] Fetched detailed info for ${hostDetails.length} hosts via PyVmomi`);
+      } else if (data.error) {
+        console.warn('[VMware] PyVmomi host details error:', data.error);
+      }
+    } catch (err) {
+      // PyVmomi failed - will use REST API fallback
+      console.warn('[VMware] PyVmomi host details unavailable, using REST API fallback');
+    }
+
+    // Create a map for quick lookup by name
+    const hostDetailsMap = new Map<string, any>();
+    for (const hd of hostDetails) {
+      hostDetailsMap.set(hd.name, hd);
+    }
+
+    // Map to VMwareHost interface
+    return hostList.map((h: any) => {
+      const details = hostDetailsMap.get(h.name) || {};
+      return {
+        host: { value: h.host || h.host?.value },
+        name: h.name,
+        parent: h.parent,
+        summary: {
+          vendor: details.vendor || 'Unknown',
+          model: details.model || 'Unknown',
+          numCpuCores: details.cpu_cores || 0,
+          memoryTotal: (details.memory_size_mb || 0) * 1024 * 1024,
+          connectionState: (h.connection_state || 'connected').toLowerCase(),
+          overallStatus: h.power_state === 'POWERED_ON' ? 'green' : 'yellow',
+        },
+        config: {
+          product: {
+            version: details.esxi_version || 'Unknown',
+            build: details.esxi_build || '',
+            name: details.esxi_full_name || 'VMware ESXi',
+          },
+        },
+      };
+    });
   }
 
   /**
@@ -1141,22 +1179,62 @@ export class VMwareService {
     // Handle both vSphere 7 array format and legacy { value: [...] } format
     const vms = Array.isArray(result) ? result : (result as any).value || [];
 
-    // vSphere 7 REST API does not provide host assignment via basic endpoint
-    // To get host info would require SOAP API (future enhancement)
-    return vms.map((v: any) => ({
-      vm: { value: v.vm || v.vm?.value },
-      name: v.name,
-      parent: v.parent,  // Not available in vSphere 7 REST API
-      summary: {
-        numCpu: v.cpu_count || v.summary?.numCpu,
-        memorySizeMB: v.memory_size_MiB || v.summary?.memorySizeMB,
-        guestState: v.power_state === 'POWERED_ON' ? 'running' : 'notRunning',
-        connectionState: v.power_state === 'POWERED_ON' ? 'connected' : 'disconnected',
-        overallStatus: v.power_state === 'POWERED_ON' ? 'green' : 'gray',
-        guestFullName: v.guest_OS || v.summary?.guestFullName,
-        ipAddress: v.summary?.ipAddress,
-      },
-    }));
+    // Build VM->Host mapping by querying each host's VMs
+    // This is more efficient than querying each VM individually
+    const vmToHostMap = new Map<string, string>();
+    try {
+      const hosts = await this.fetchHosts();
+      for (const host of hosts) {
+        try {
+          const hostVMs = await this.restRequest<Array<{ vm: string }>>(`vcenter/vm?hosts=${host.host.value}`);
+          for (const vm of hostVMs) {
+            vmToHostMap.set(vm.vm, host.host.value);
+          }
+        } catch (err) {
+          console.warn(`[VMware] Failed to fetch VMs for host ${host.name}:`, (err as Error).message);
+        }
+      }
+      console.log(`[VMware] Built VM->Host mapping for ${vmToHostMap.size} VMs`);
+    } catch (err) {
+      console.warn('[VMware] Failed to build VM->Host mapping:', (err as Error).message);
+    }
+
+    // Fetch detailed info for VMs (IP address from guest identity)
+    // Note: This makes multiple API calls but provides complete data
+    const vmsWithDetails = await Promise.all(
+      vms.map(async (v: any) => {
+        const vmId = v.vm || v.vm?.value;
+        
+        // Get host from mapping
+        const hostMoref = vmToHostMap.get(vmId);
+        
+        // Try to get guest identity for IP address (requires VMware Tools)
+        let guestIP: string | undefined;
+        try {
+          const guestIdentity = await this.restRequest<any>(`vcenter/vm/${vmId}/guest/identity`);
+          guestIP = guestIdentity?.ip_address || guestIdentity?.primary_ip_address;
+        } catch (err) {
+          // Guest identity not available (VMware Tools not running or not installed)
+        }
+
+        return {
+          vm: { value: vmId },
+          name: v.name,
+          parent: hostMoref ? { value: hostMoref } : undefined,
+          summary: {
+            numCpu: v.cpu_count || v.summary?.numCpu,
+            memorySizeMB: v.memory_size_MiB || v.summary?.memorySizeMB,
+            guestState: v.power_state === 'POWERED_ON' ? 'running' : (v.power_state === 'SUSPENDED' ? 'suspended' : 'notRunning'),
+            connectionState: v.power_state === 'POWERED_ON' ? 'connected' : 'disconnected',
+            overallStatus: v.power_state === 'POWERED_ON' ? 'green' : 'gray',
+            guestFullName: v.guest_OS || v.summary?.guestFullName,
+            ipAddress: guestIP,
+          },
+        };
+      })
+    );
+
+    return vmsWithDetails;
   }
 
   /**
