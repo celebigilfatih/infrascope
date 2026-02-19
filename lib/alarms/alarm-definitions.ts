@@ -1234,7 +1234,7 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
   {
     code: 'SNAPSHOT_CREATED',
     name: 'Snapshot Olusturuldu',
-    description: 'VM snapshot alindi. Disk alani takibi ve yedekleme sureci izleme.',
+    description: 'VM snapshot alindi. Disk alani takibi ve yedekleme sureci izleme. Veeam backup snapshot lari haric tutulur.',
     category: 'OPERATIONAL',
     severity: 'ALARM_INFO',
     cooldownMinutes: 30,
@@ -1244,7 +1244,7 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
       filter: 'snapshotCreated == true',
       threshold: 1,
       timeWindowMinutes: 15,
-      description: 'Snapshot olusturma islemlerini izler. Hangi VM, snapshot adi ve boyutunu kaydeder.',
+      description: 'Snapshot olusturma islemlerini izler. Hangi VM, snapshot adi ve boyutunu kaydeder. Veeam kullanici ve "VEEAM BACKUP TEMPORARY SNAPSHOT" iceren snapshot lar filtrelenir.',
       recommendedAction: 'Snapshot amacini kontrol edin (backup, test, patch oncesi). Datastore bos alanini dogrulayin. Snapshot retention policy hatirlatın.',
     },
   },

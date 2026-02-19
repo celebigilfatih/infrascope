@@ -467,6 +467,17 @@ export class AlarmDetectionEngine {
     if (alarm.code === 'ADMIN_NEW_GEO') {
       filteredLogs = filteredLogs.filter((log) => (log.user as string) !== 'siem');
     }
+    if (alarm.code === 'ADMIN_LOGIN_OFF_HOURS') {
+      filteredLogs = filteredLogs.filter((log) => (log.user as string) !== 'siem');
+    }
+    if (alarm.code === 'SNAPSHOT_CREATED') {
+      filteredLogs = filteredLogs.filter((log) => {
+        const userName = (log.userName as string || '').toLowerCase();
+        const snapshotName = (log.snapshotName as string || '').toUpperCase();
+        // Exclude Veeam backup snapshots
+        return userName !== 'veeam' && !snapshotName.includes('VEEAM BACKUP TEMPORARY SNAPSHOT');
+      });
+    }
 
     const matchCount = filteredLogs.length;
     const triggered = matchCount >= logic.threshold;
