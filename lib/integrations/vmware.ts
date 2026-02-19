@@ -933,7 +933,7 @@ export class VMwareService {
       const scriptPath = '/app/scripts/get-host-details.py';
       const pyResult = execSync(
         `python3 "${scriptPath}" "${this.config.host}" "${this.config.username}" "${this.config.password}"`,
-        { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024, timeout: 15000 }  // Short timeout
+        { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024, timeout: 15000, killSignal: 'SIGKILL' }
       );
       const data = JSON.parse(pyResult);
       if (data.success && data.hosts) {
@@ -1804,7 +1804,7 @@ export class VMwareService {
       
       const result = execSync(
         `python3 ${scriptPath} "${this.config.host}" "${this.config.username}" "${this.config.password}"`,
-        { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024, timeout: 30000 }
+        { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024, timeout: 30000, killSignal: 'SIGKILL' }
       );
       
       const data = JSON.parse(result);
@@ -1853,7 +1853,7 @@ export class VMwareService {
       
       const result = execSync(
         `python3 ${scriptPath} "${this.config.host}" "${this.config.username}" "${this.config.password}" "${vmId}"`,
-        { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 }
+        { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024, timeout: 30000, killSignal: 'SIGKILL' }
       );
       
       const data = JSON.parse(result);
