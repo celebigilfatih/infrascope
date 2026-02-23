@@ -293,6 +293,10 @@ class FortiAnalyzerService {
         params.filter = filter;
       }
 
+      // Add timeout for fetch request
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
       const response = await fetch(this.baseUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -303,7 +307,16 @@ class FortiAnalyzerService {
           session: this.session,
           id: 10,
         }),
+        signal: controller.signal,
+      }).catch((err) => {
+        clearTimeout(timeoutId);
+        console.error(`FortiAnalyzer ${logtype} search failed:`, err.message);
+        return null;
       });
+
+      clearTimeout(timeoutId);
+
+      if (!response) return null;
 
       const data = await response.json() as {
         result?: { tid: number };

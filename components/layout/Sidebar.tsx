@@ -146,7 +146,6 @@ export const Sidebar: React.FC = () => {
       items: [
         { name: 'Firewall View', href: '/network/firewall', icon: Lock },
         { name: 'Config Revisions', href: '/network/config-revisions', icon: History },
-        { name: 'FA Event Logs', href: '/network/fa-events', icon: FileText },
         { name: 'Virtual IPs', href: '/security/virtual-ips', icon: ExternalLink },
         { name: 'Web Analytics', href: '/security/web-analytics', icon: Globe },
         { name: 'MITRE ATT&CK', href: '/security/mitre-attack', icon: ShieldAlert },
@@ -268,17 +267,21 @@ export const Sidebar: React.FC = () => {
                   <Button
                     variant="ghost"
                     className={cn(
-                      "w-full h-9 hover:bg-accent hover:text-accent-foreground flex items-center transition-all",
+                      "w-full h-9 hover:bg-accent hover:text-accent-foreground flex items-center transition-all relative group",
                       isCollapsed ? "justify-center px-0" : "justify-start px-2",
-                      isActive && "bg-accent text-accent-foreground font-bold"
+                      isActive && "bg-primary/10 text-primary font-semibold border-l-2 border-primary shadow-sm",
+                      !isActive && "border-l-2 border-transparent"
                     )}
                     asChild
                     title={isCollapsed ? item.name : undefined}
                   >
                     <Link href={item.href}>
                       <div className={cn("flex items-center", isCollapsed ? "justify-center" : "gap-3")}>
-                        <Icon className={cn("h-4 w-4 shrink-0", isActive ? "text-primary" : "text-muted-foreground")} />
-                        {!isCollapsed && <span className="text-xs truncate">{item.name}</span>}
+                        <Icon className={cn(
+                          "h-4 w-4 shrink-0 transition-all", 
+                          isActive ? "text-primary scale-110" : "text-muted-foreground group-hover:text-foreground"
+                        )} />
+                        {!isCollapsed && <span className={cn("text-xs truncate", isActive && "font-semibold")}>{item.name}</span>}
                       </div>
                       {!isCollapsed && (item.subItems || item.hasArrow) && (
                         <ChevronDown className="h-3 w-3 text-muted-foreground/50 ml-auto" />

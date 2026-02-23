@@ -60,8 +60,8 @@ export async function GET(request: NextRequest) {
       data = await service.getEventLogs(50);
       console.log('FortiAnalyzer event logs data:', JSON.stringify(data, null, 2));
     } else if (dataType === 'config-revisions') {
-      // Admin system logs from FortiAnalyzer (login/logout, config changes - exclude perf-stats)
-      const tid = await service.startLogSearch('event', 1000, 'subtype == system and action != perf-stats');
+      // Admin system logs from FortiAnalyzer (login/logout, config changes - exclude perf-stats and empty users)
+      const tid = await service.startLogSearch('event', 1000, 'subtype == system and action != perf-stats and user != ""');
       if (tid) {
         await new Promise(resolve => setTimeout(resolve, 6000));
         data = await service.fetchLogResults(tid, 0, 500);
@@ -117,14 +117,41 @@ export async function GET(request: NextRequest) {
       const limit = parseInt(searchParams.get('limit') || '50', 10);
       const sortField = searchParams.get('sort') || 'bandwidth';
       const rangeMinutes = parseInt(searchParams.get('range') || '240', 10);
+      
+      // Generate cache key
+      const cacheKey = `fortiview_single_${viewName}_${limit}_${sortField}_${rangeMinutes}`;
+      const globalCache = globalThis as any;
+      if (!globalCache.fortiviewCache) globalCache.fortiviewCache = {};
+      
+      // Check cache (5 minute TTL)
+      const now = Date.now();
+      const cached = globalCache.fortiviewCache[cacheKey];
+      if (cached && (now - cached.timestamp) < 300000) {
+        return NextResponse.json({
+          success: true,
+          data: cached.data.data,
+          totalCount: cached.data.totalCount,
+          type: dataType,
+          view: viewName,
+          cached: true
+        });
+      }
+      
       const result = await service.getFortiView(viewName, limit, { field: sortField, order: 'desc' }, undefined, rangeMinutes);
       if (result) {
+        // Cache the result
+        globalCache.fortiviewCache[cacheKey] = {
+          data: result,
+          timestamp: now
+        };
+        
         return NextResponse.json({
           success: true,
           data: result.data,
           totalCount: result.totalCount,
           type: dataType,
           view: viewName,
+          cached: false
         });
       }
       return NextResponse.json({ success: true, data: [], type: dataType, view: viewName });
@@ -136,6 +163,18 @@ export async function GET(request: NextRequest) {
       const sortField = searchParams.get('sort') || 'bandwidth';
       const rangeMinutes = parseInt(searchParams.get('range') || '240', 10);
 
+      // Generate cache key from parameters
+      const cacheKey = `fortiview_batch_${viewsParam}_${limit}_${sortField}_${rangeMinutes}`;
+      const globalCache = globalThis as any;
+      if (!globalCache.fortiviewCache) globalCache.fortiviewCache = {};
+      
+      // Check cache (5 minute TTL)
+      const now = Date.now();
+      const cached = globalCache.fortiviewCache[cacheKey];
+      if (cached && (now - cached.timestamp) < 300000) {
+        return NextResponse.json({ success: true, results: cached.data, type: dataType, cached: true });
+      }
+
       const results: Record<string, { data: Array<Record<string, unknown>>; totalCount?: number }> = {};
       for (const viewName of views) {
         try {
@@ -146,7 +185,14 @@ export async function GET(request: NextRequest) {
           results[viewName.trim()] = { data: [] };
         }
       }
-      return NextResponse.json({ success: true, results, type: dataType });
+      
+      // Cache the results
+      globalCache.fortiviewCache[cacheKey] = {
+        data: results,
+        timestamp: now
+      };
+      
+      return NextResponse.json({ success: true, results, type: dataType, cached: false });
     } else {
       return NextResponse.json(
         { success: false, error: 'Invalid data type' },

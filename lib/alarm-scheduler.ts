@@ -16,7 +16,7 @@ export function startAlarmScheduler() {
     return;
   }
 
-  // Schedule: Every 5 minutes (300000 milliseconds)
+  // Schedule: Every 15 minutes (900000 milliseconds) - increased from 5 minutes due to performance
   schedulerInterval = setInterval(async () => {
     try {
       console.log('[AlarmScheduler] Starting scheduled alarm check...');
@@ -39,9 +39,9 @@ export function startAlarmScheduler() {
     } catch (error) {
       console.error('[AlarmScheduler] ❌ Error during scheduled check:', error);
     }
-  }, 300000); // 5 minutes = 300000ms
+  }, 900000); // 15 minutes = 900000ms
 
-  console.log('[AlarmScheduler] ✅ Started - alarm checks will run every 5 minutes');
+  console.log('[AlarmScheduler] ✅ Started - alarm checks will run every 15 minutes');
 }
 
 /**
@@ -61,7 +61,7 @@ export function stopAlarmScheduler() {
 export function getSchedulerStatus() {
   return {
     running: schedulerInterval !== null,
-    intervalMs: 300000,
-    intervalMinutes: 5,
+    intervalMs: 900000,
+    intervalMinutes: 15,
   };
 }

@@ -1,9 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
+// Cache for 60 seconds to prevent database overload
+let cachedOrganizations: any = null;
+let cacheTimestamp: number = 0;
+const CACHE_TTL = 60000; // 60 seconds
+
 export async function GET(_request: NextRequest) {
   try {
-    // Temporarily exclude racks to avoid coordX column error
+    // Return cached data if available and not expired
+    const now = Date.now();
+    if (cachedOrganizations && (now - cacheTimestamp) < CACHE_TTL) {
+      return NextResponse.json({
+        success: true,
+        data: cachedOrganizations,
+        timestamp: new Date(),
+        cached: true
+      });
+    }
+
+    // Optimized query: use select and _count to avoid loading all nested data
     const organizations = await prisma.organization.findMany({
       include: {
         buildings: {
@@ -13,23 +29,49 @@ export async function GET(_request: NextRequest) {
                 rooms: {
                   include: {
                     racks: {
-                      include: {
-                        devices: true
+                      select: {
+                        id: true,
+                        name: true,
+                        type: true,
+                        maxUnits: true,
+                        roomId: true,
+                        operationalStatus: true,
+                        coordX: true,
+                        coordY: true,
+                        coordZ: true,
+                        rotation: true,
+                        _count: {
+                          select: { devices: true }
+                        }
                       }
                     }
                   }
                 }
+              },
+              orderBy: {
+                floorNumber: 'asc'
               }
             }
+          },
+          orderBy: {
+            name: 'asc'
           }
         }
+      },
+      orderBy: {
+        name: 'asc'
       }
     });
+
+    // Update cache
+    cachedOrganizations = organizations;
+    cacheTimestamp = now;
 
     return NextResponse.json({
       success: true,
       data: organizations,
-      timestamp: new Date()
+      timestamp: new Date(),
+      cached: false
     });
   } catch (error: any) {
     console.error('Error fetching organizations details:', {

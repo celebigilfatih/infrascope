@@ -1,23 +1,65 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
+// Cache for 60 seconds
+let cachedRooms: any = null;
+let cacheTimestamp: number = 0;
+const CACHE_TTL = 60000;
+
 export async function GET(_request: NextRequest) {
   try {
+    // Return cached data if available
+    const now = Date.now();
+    if (cachedRooms && (now - cacheTimestamp) < CACHE_TTL) {
+      return NextResponse.json({
+        success: true,
+        data: cachedRooms,
+        timestamp: new Date(),
+        cached: true
+      });
+    }
+
     const rooms = await prisma.room.findMany({
       include: {
         floor: {
-          include: {
-            building: true
+          select: {
+            id: true,
+            name: true,
+            floorNumber: true,
+            building: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
           }
         },
-        racks: true
+        racks: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            operationalStatus: true,
+            _count: {
+              select: { devices: true }
+            }
+          }
+        }
+      },
+      orderBy: {
+        name: 'asc'
       }
     });
+
+    // Update cache
+    cachedRooms = rooms;
+    cacheTimestamp = now;
 
     return NextResponse.json({
       success: true,
       data: rooms,
-      timestamp: new Date()
+      timestamp: new Date(),
+      cached: false
     });
   } catch (error: any) {
     console.error('Error fetching rooms:', error);

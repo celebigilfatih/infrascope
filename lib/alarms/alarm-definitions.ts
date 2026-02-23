@@ -150,7 +150,7 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
     cooldownMinutes: 30,
     detectionLogic: {
       logtype: 'event',
-      filter: 'subtype == vpn and tunneltype == ssl-web and action == tunnel-up',
+      filter: 'subtype == auth and action == auth-logon',
       threshold: 1,
       timeWindowMinutes: 60,
       clientCheck: 'off-hours',
@@ -580,7 +580,7 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
       threshold: 1,
       timeWindowMinutes: 30,
       fortiviewQuery: 'top-countries',
-      clientCheck: 'anomaly',
+      clientCheck: 'geo-anomaly',
       description: 'Baseline disinda kalan ulkelere/ulkelerden gelen trafigi tespit eder. Ele gecirilmis host veya yetkisiz iletisim gostergesi olabilir.',
       recommendedAction: 'Hedef ulkeleri inceleyin. Is gereksinimiyle uyumlu olup olmadigini kontrol edin. Suphe yaratan ulke trafigini geo-IP politikalariyla engelleyin.',
     },

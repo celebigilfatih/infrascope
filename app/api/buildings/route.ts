@@ -1,32 +1,72 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
+// Cache for 60 seconds to prevent database overload
+let cachedBuildings: any = null;
+let cacheTimestamp: number = 0;
+const CACHE_TTL = 60000; // 60 seconds
+
 export async function GET(_request: NextRequest) {
   try {
-    // Temporarily exclude racks to avoid coordX column error
+    // Return cached data if available and not expired
+    const now = Date.now();
+    if (cachedBuildings && (now - cacheTimestamp) < CACHE_TTL) {
+      return NextResponse.json({
+        success: true,
+        data: cachedBuildings,
+        timestamp: new Date(),
+        cached: true
+      });
+    }
+
+    // Optimized query: only fetch necessary data, not all nested devices
     const buildings = await prisma.building.findMany({
       include: {
-        organization: true,
+        organization: {
+          select: {
+            id: true,
+            name: true,
+            code: true
+          }
+        },
         floors: {
           include: {
             rooms: {
               include: {
                 racks: {
-                  include: {
-                    devices: true
+                  select: {
+                    id: true,
+                    name: true,
+                    type: true,
+                    maxUnits: true,
+                    operationalStatus: true,
+                    _count: {
+                      select: { devices: true }
+                    }
                   }
                 }
               }
             }
+          },
+          orderBy: {
+            floorNumber: 'asc'
           }
         }
+      },
+      orderBy: {
+        name: 'asc'
       }
     });
+
+    // Update cache
+    cachedBuildings = buildings;
+    cacheTimestamp = now;
 
     return NextResponse.json({
       success: true,
       data: buildings,
-      timestamp: new Date()
+      timestamp: new Date(),
+      cached: false
     });
   } catch (error: any) {
     console.error('Error fetching buildings:', error);

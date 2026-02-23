@@ -189,6 +189,19 @@ export async function GET(request: NextRequest) {
     const type = searchParams.get('type');
     const vmId = searchParams.get('vmId');
 
+    // Cache key based on request type
+    const cacheKey = `vmware_${type}_${vmId || ''}`;
+    const cachedData = globalThis as any;
+    if (!cachedData.vmwareCache) cachedData.vmwareCache = {};
+    
+    // Return cached data if available (5 minute TTL for dashboard, 1 minute for others)
+    const now = Date.now();
+    const cacheEntry = cachedData.vmwareCache[cacheKey];
+    const cacheTTL = type === 'dashboard' ? 300000 : 60000; // 5 min or 1 min
+    if (cacheEntry && (now - cacheEntry.timestamp) < cacheTTL) {
+      return NextResponse.json(cacheEntry.data);
+    }
+
     const service = await getVMwareService();
     if (!service) {
       return NextResponse.json({
@@ -268,7 +281,7 @@ export async function GET(request: NextRequest) {
           };
         });
 
-      return NextResponse.json({
+      const dashboardData = {
         summary: {
           clusters: clusters.length,
           hosts: hosts.length,
@@ -308,7 +321,17 @@ export async function GET(request: NextRequest) {
           vmCount: c.host?.length || 0,
         })),
         oldSnapshots,
-      });
+      };
+
+      // Cache the result
+      const cachedData = globalThis as any;
+      if (!cachedData.vmwareCache) cachedData.vmwareCache = {};
+      cachedData.vmwareCache[cacheKey] = {
+        data: dashboardData,
+        timestamp: Date.now()
+      };
+
+      return NextResponse.json(dashboardData);
     }
 
     // Get all VMs
@@ -321,7 +344,7 @@ export async function GET(request: NextRequest) {
       // Map hosts by moref for quick lookup
       const hostMap = new Map(hosts.map(h => [h.host.value, h.name]));
 
-      return NextResponse.json({
+      const vmsData = {
         vms: vms.map(v => ({
           id: v.vm.value,
           name: v.name,
@@ -336,7 +359,17 @@ export async function GET(request: NextRequest) {
             : 'unknown',
           overallStatus: v.summary?.overallStatus || 'unknown',
         })),
-      });
+      };
+
+      // Cache the result
+      const cachedData = globalThis as any;
+      if (!cachedData.vmwareCache) cachedData.vmwareCache = {};
+      cachedData.vmwareCache[cacheKey] = {
+        data: vmsData,
+        timestamp: Date.now()
+      };
+
+      return NextResponse.json(vmsData);
     }
 
     // Get all hosts
@@ -349,7 +382,7 @@ export async function GET(request: NextRequest) {
       // Map clusters by moref
       const clusterMap = new Map(clusters.map(c => [c.cluster.value, c.name]));
 
-      return NextResponse.json({
+      const hostsData = {
         hosts: hosts.map(h => ({
           id: h.host.value,
           name: h.name,
@@ -363,14 +396,24 @@ export async function GET(request: NextRequest) {
           status: (h.summary?.connectionState || 'unknown').toLowerCase(),
           overallStatus: (h.summary?.overallStatus || 'unknown').toLowerCase(),
         })),
-      });
+      };
+
+      // Cache the result
+      const cachedData = globalThis as any;
+      if (!cachedData.vmwareCache) cachedData.vmwareCache = {};
+      cachedData.vmwareCache[cacheKey] = {
+        data: hostsData,
+        timestamp: Date.now()
+      };
+
+      return NextResponse.json(hostsData);
     }
 
     // Get all clusters
     if (type === 'clusters') {
       const clusters = await service.fetchClusters();
 
-      return NextResponse.json({
+      const clustersData = {
         clusters: clusters.map(c => ({
           id: c.cluster.value,
           name: c.name,
@@ -380,14 +423,24 @@ export async function GET(request: NextRequest) {
           cpuCores: c.summary?.numCpuCores || 0,
           totalMemoryGB: Math.round((c.summary?.totalMemory || 0) / 1073741824),
         })),
-      });
+      };
+
+      // Cache the result
+      const cachedData = globalThis as any;
+      if (!cachedData.vmwareCache) cachedData.vmwareCache = {};
+      cachedData.vmwareCache[cacheKey] = {
+        data: clustersData,
+        timestamp: Date.now()
+      };
+
+      return NextResponse.json(clustersData);
     }
 
     // Get all datastores
     if (type === 'datastores') {
       const datastores = await service.fetchDatastores();
 
-      return NextResponse.json({
+      const datastoresData = {
         datastores: datastores.map(d => ({
           id: d.datastore.value,
           name: d.name,
@@ -400,7 +453,17 @@ export async function GET(request: NextRequest) {
             : 0,
           accessible: d.summary?.accessible ?? true,
         })),
-      });
+      };
+
+      // Cache the result
+      const cachedData = globalThis as any;
+      if (!cachedData.vmwareCache) cachedData.vmwareCache = {};
+      cachedData.vmwareCache[cacheKey] = {
+        data: datastoresData,
+        timestamp: Date.now()
+      };
+
+      return NextResponse.json(datastoresData);
     }
 
     // Get snapshots for a VM or all snapshots
@@ -410,8 +473,17 @@ export async function GET(request: NextRequest) {
         const snapshots = await service.getSnapshots(vmId);
         return NextResponse.json({ snapshots });
       } else {
-        // Get all snapshots from all VMs (batch operation)
+        // Get all snapshots from all VMs (batch operation) - SLOW, needs caching
         const snapshots = await service.fetchAllSnapshots();
+        
+        // Cache the result
+        const cachedData = globalThis as any;
+        if (!cachedData.vmwareCache) cachedData.vmwareCache = {};
+        cachedData.vmwareCache[cacheKey] = {
+          data: { snapshots },
+          timestamp: Date.now()
+        };
+        
         return NextResponse.json({ snapshots });
       }
     }

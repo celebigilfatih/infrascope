@@ -131,14 +131,18 @@ export class AlarmDetectionEngine {
           continue;
         }
 
+        console.log(`[AlarmEngine] Grouping alarm ${alarm.code} -> logtype=${logtype}`);
         if (!logTypeGroups.has(logtype)) {
           logTypeGroups.set(logtype, []);
         }
         logTypeGroups.get(logtype)!.push(alarmDef);
       }
 
+      console.log(`[AlarmEngine] LogTypeGroups: ${JSON.stringify([...logTypeGroups.keys()])}`);
+
       // Evaluate each logtype group
       for (const [logtype, groupAlarms] of logTypeGroups) {
+        console.log(`[AlarmEngine] Now evaluating ${logtype} group with ${groupAlarms.length} alarms...`);
         try {
           const groupResults = await this.evaluateLogTypeGroup(logtype, groupAlarms);
           results.push(...groupResults);
@@ -369,6 +373,7 @@ export class AlarmDetectionEngine {
    */
   private async evaluateLogTypeGroup(logtype: string, alarms: AlarmDef[]): Promise<EvaluationResult[]> {
     const results: EvaluationResult[] = [];
+    console.log(`[AlarmEngine] Evaluating ${logtype} group with ${alarms.length} alarms...`);
 
     // Handle VMware alarms separately
     if (logtype === 'vmware') {
@@ -420,7 +425,13 @@ export class AlarmDetectionEngine {
 
     // FortiView-based alarms
     if (logic.fortiviewQuery) {
-      return this.evaluateFortiViewAlarm(alarm, logic);
+      // Add timeout for FortiView queries
+      return Promise.race([
+        this.evaluateFortiViewAlarm(alarm, logic),
+        new Promise<EvaluationResult>((resolve) =>
+          setTimeout(() => resolve({ alarmCode: alarm.code, triggered: false, matchCount: 0, events: [], error: 'fortiview-timeout' }), 20000)
+        ),
+      ]);
     }
 
     // LogView-based alarms
@@ -428,27 +439,22 @@ export class AlarmDetectionEngine {
     const limit = Math.max(logic.threshold * 2, 50);
 
     console.log(`[AlarmEngine] Searching ${alarm.code}: logtype=${logtype} filter="${filter}"`);
-    const tid = await this.service.startLogSearch(logtype, limit, filter || undefined);
-    if (!tid) {
-      console.warn(`[AlarmEngine] Search failed for ${alarm.code} (logtype=${logtype}, filter="${filter}")`);
-      return { alarmCode: alarm.code, triggered: false, matchCount: 0, events: [], error: 'search-failed' };
-    }
-
-    // Poll for results (max 15s for alarm checks)
-    let logs: Array<Record<string, unknown>> | null = null;
-    for (let i = 0; i < 3; i++) {
-      await new Promise((resolve) => setTimeout(resolve, 5000));
-      logs = await this.service.fetchLogResults(tid, 0, limit);
-      if (logs && logs.length > 0) break;
-    }
-
-    if (!logs || logs.length === 0) {
-      return { alarmCode: alarm.code, triggered: false, matchCount: 0, events: [] };
+    
+    // Add timeout for log search
+    const searchResult = await Promise.race([
+      this.performLogSearch(alarm, logtype, filter, limit),
+      new Promise<{ tid: string | null; logs: Array<Record<string, unknown>> }>((resolve) =>
+        setTimeout(() => resolve({ tid: null, logs: [] }), 15000)
+      ),
+    ]);
+    
+    if (!searchResult.tid || searchResult.logs.length === 0) {
+      return { alarmCode: alarm.code, triggered: false, matchCount: 0, events: [], error: searchResult.tid ? 'no-logs' : 'search-timeout' };
     }
 
     // Filter by time window (client-side)
     const cutoff = new Date(Date.now() - logic.timeWindowMinutes * 60 * 1000);
-    const recentLogs = logs.filter((log) => {
+    const recentLogs = searchResult.logs.filter((log) => {
       const logTime = this.parseLogTime(log);
       return logTime && logTime >= cutoff;
     });
@@ -492,6 +498,32 @@ export class AlarmDetectionEngine {
       matchCount,
       events: filteredLogs.slice(0, 5), // Keep only first 5 for response
     };
+  }
+
+  /**
+   * Helper method to perform log search with polling
+   */
+  private async performLogSearch(
+    alarm: AlarmDef,
+    logtype: string,
+    filter: string,
+    limit: number
+  ): Promise<{ tid: string | null; logs: Array<Record<string, unknown>> }> {
+    const tid = await this.service.startLogSearch(logtype, limit, filter || undefined);
+    if (!tid) {
+      console.warn(`[AlarmEngine] Search failed for ${alarm.code}`);
+      return { tid: null, logs: [] };
+    }
+
+    // Poll for results (max 15s for alarm checks)
+    let logs: Array<Record<string, unknown>> | null = null;
+    for (let i = 0; i < 3; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+      logs = await this.service.fetchLogResults(tid, 0, limit);
+      if (logs && logs.length > 0) break;
+    }
+
+    return { tid, logs: logs || [] };
   }
 
   /**
@@ -698,7 +730,15 @@ export class AlarmDetectionEngine {
       }
 
       // Apply filter to data
-      const matchingData = this.applyVMwareFilter(vmwareData, logic.filter || '');
+      let matchingData = this.applyVMwareFilter(vmwareData, logic.filter || '');
+
+      // SNAPSHOT_CREATED: Filter out Veeam backup snapshots
+      if (alarm.code === 'SNAPSHOT_CREATED') {
+        matchingData = matchingData.filter((item) => {
+          const snapshotName = (item.snapshotName as string || '').toUpperCase();
+          return !snapshotName.includes('VEEAM BACKUP TEMPORARY SNAPSHOT');
+        });
+      }
 
       const matchCount = matchingData.length;
       const triggered = matchCount >= logic.threshold;
@@ -1212,6 +1252,51 @@ export class AlarmDetectionEngine {
         }).join('\n');
         sections.push(
           `Diger kaynak hostlar:\n${otherSources}${
+            logs.length > 6 ? `\n- ... ve ${logs.length - 6} daha` : ''
+          }`
+        );
+      }
+
+      sections.push(`Onerilen Aksiyon: ${alarm.detectionLogic.recommendedAction}`);
+      return sections.join('\n\n');
+    }
+
+    // Special handling for FortiView top-countries data (UNUSUAL_COUNTRY_TRAFFIC)
+    if (alarm.code === 'UNUSUAL_COUNTRY_TRAFFIC' && firstLog.country) {
+      const countryDetails: string[] = [];
+      const country = (firstLog.country as string) || 'N/A';
+      const countryFullname = (firstLog.country_fullname as string) || country;
+      const incidents = parseInt(String(firstLog.incidents ?? '0'), 10);
+      const bandwidth = parseInt(String(firstLog.bandwidth ?? '0'), 10);
+      const sessions = parseInt(String(firstLog.sessions ?? '0'), 10);
+      const bytesOut = parseInt(String(firstLog.traffic_out ?? '0'), 10);
+      const bytesIn = parseInt(String(firstLog.traffic_in ?? '0'), 10);
+
+      countryDetails.push(`Ulke: ${countryFullname} (${country})`);
+      if (incidents > 0) countryDetails.push(`Trafik olaylari: ${incidents}`);
+      if (sessions > 0) countryDetails.push(`Oturum sayisi: ${sessions}`);
+      if (bandwidth > 0) countryDetails.push(`Bant genisligi: ${this.formatBytes(bandwidth)}`);
+      if (bytesOut > 0 || bytesIn > 0) {
+        countryDetails.push(`Trafik: giden ${this.formatBytes(bytesOut)}, gelen ${this.formatBytes(bytesIn)}`);
+      }
+
+      if (countryDetails.length > 0) {
+        sections.push(countryDetails.join('\n'));
+      }
+
+      // List other countries
+      if (logs.length > 1) {
+        const otherCountries = logs.slice(1, 6).map((l) => {
+          const c = (l.country_fullname as string) || (l.country as string) || 'N/A';
+          const inc = parseInt(String(l.incidents ?? '0'), 10);
+          const bw = parseInt(String(l.bandwidth ?? '0'), 10);
+          const parts: string[] = [c];
+          if (inc > 0) parts.push(`olay: ${inc}`);
+          if (bw > 0) parts.push(`bant: ${this.formatBytes(bw)}`);
+          return `- ${parts.join(', ')}`;
+        }).join('\n');
+        sections.push(
+          `Diger ulkeler:\n${otherCountries}${
             logs.length > 6 ? `\n- ... ve ${logs.length - 6} daha` : ''
           }`
         );

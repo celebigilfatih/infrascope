@@ -1,8 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
+// Cache for 30 seconds to prevent database overload
+let cachedRacks: any = null;
+let cacheTimestamp: number = 0;
+const CACHE_TTL = 30000; // 30 seconds
+
 export async function GET(_request: NextRequest) {
   try {
+    // Return cached data if available and not expired
+    const now = Date.now();
+    if (cachedRacks && (now - cacheTimestamp) < CACHE_TTL) {
+      return NextResponse.json({
+        success: true,
+        data: cachedRacks,
+        timestamp: new Date(),
+        cached: true
+      });
+    }
+
     const racks = await prisma.rack.findMany({
       include: {
         room: {
@@ -14,14 +30,28 @@ export async function GET(_request: NextRequest) {
             }
           }
         },
-        devices: true
+        devices: {
+          select: {
+            id: true,
+            name: true,
+            deviceType: true
+          }
+        }
+      },
+      orderBy: {
+        name: 'asc'
       }
     });
+
+    // Update cache
+    cachedRacks = racks;
+    cacheTimestamp = now;
 
     return NextResponse.json({
       success: true,
       data: racks,
-      timestamp: new Date()
+      timestamp: new Date,
+      cached: false
     });
   } catch (error: any) {
     console.error('Error fetching racks:', error);
