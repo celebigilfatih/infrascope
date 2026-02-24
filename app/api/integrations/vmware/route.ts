@@ -488,6 +488,58 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Get configuration
+    if (type === 'config') {
+      const vmwareConfig = await prisma.integrationConfig.findFirst({
+        where: { type: 'VMWARE_VCENTER' as any, enabled: true },
+      });
+      
+      if (vmwareConfig) {
+        const configData = vmwareConfig.config as any;
+        return NextResponse.json({
+          config: {
+            host: configData.host || '',
+            username: configData.username || '',
+            thumbprint: configData.thumbprint || '',
+            pollingInterval: configData.pollingInterval || 10,
+            enabledModules: configData.enabledModules || {
+              datacenters: true,
+              clusters: true,
+              hosts: true,
+              vms: true,
+              datastores: true,
+            },
+            lastSyncAt: vmwareConfig.lastSyncAt,
+            lastSyncStatus: vmwareConfig.lastSyncStatus,
+          }
+        });
+      }
+      
+      return NextResponse.json({ config: null });
+    }
+
+    // Check connection status
+    if (type === 'status') {
+      const vmwareConfig = await prisma.integrationConfig.findFirst({
+        where: { type: 'VMWARE_VCENTER' as any, enabled: true },
+      });
+      
+      if (!vmwareConfig) {
+        return NextResponse.json({ connected: false, error: 'VMware integration not configured' });
+      }
+      
+      try {
+        const authenticated = await service.authenticate();
+        if (authenticated) {
+          return NextResponse.json({ connected: true });
+        } else {
+          return NextResponse.json({ connected: false, error: 'Authentication failed' });
+        }
+      } catch (error) {
+        return NextResponse.json({ connected: false, error: (error as Error).message });
+      }
+    }
+
     // Get VM sprawl analysis
     if (type === 'sprawl') {
       const sprawlResults = await service.detectVMSprawl();

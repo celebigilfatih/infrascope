@@ -22,18 +22,22 @@ export default function StatusPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setTimeout(() => {
-      setIntegrations([
-        { id: '1', name: 'Zabbix Server', type: 'monitoring', status: 'connected', lastSync: '2 dakika', message: 'Tüm hostlar izleniyor', healthScore: 98 },
-        { id: '2', name: 'VMware vCenter', type: 'monitoring', status: 'syncing', lastSync: '5 dakika', message: 'VM envanteri senkronize ediliyor', healthScore: 95 },
-        { id: '3', name: 'FortiGate Firewall', type: 'security', status: 'connected', lastSync: '5 dakika', message: 'Policy listesi güncel', healthScore: 100 },
-        { id: '4', name: 'Veeam Backup', type: 'backup', status: 'connected', lastSync: '1 saat', message: 'Son yedekleme başarılı', healthScore: 99 },
-        { id: '5', name: 'AWS Console', type: 'cloud', status: 'connected', lastSync: '10 dakika', message: 'EC2 durumu güncel', healthScore: 92 },
-        { id: '6', name: 'NetBox CMDB', type: 'cmdb', status: 'error', lastSync: '2 saat', message: 'API bağlantı hatası', healthScore: 45 },
-        { id: '7', name: 'Azure AD', type: 'cloud', status: 'disconnected', lastSync: '-', message: 'Entegrasyon yapılandırılmadı', healthScore: 0 },
-      ]);
-      setLoading(false);
-    }, 500);
+    const fetchIntegrations = async () => {
+      setLoading(true);
+      try {
+        const response = await fetch('/api/integrations/status');
+        const result = await response.json();
+        if (result.success && result.data) {
+          setIntegrations(result.data);
+        }
+      } catch (error) {
+        console.error('Error fetching integration status:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchIntegrations();
   }, []);
 
   const getStatusBadge = (status: string) => {

@@ -24,6 +24,35 @@ model Organization {
   @@map("organizations")
 }
 
+/// User model for authentication and role management
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  password      String?
+  role          UserRole  @default(VIEWER)
+  status        UserStatus @default(ACTIVE)
+  lastLoginAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([email])
+  @@index([status])
+  @@map("users")
+}
+
+enum UserRole {
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
 /// Physical building location
 model Building {
   id                String               @id @default(cuid())

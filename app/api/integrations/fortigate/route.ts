@@ -15,11 +15,130 @@ export async function GET(request: NextRequest) {
     // Get query params
     const { searchParams } = new URL(request.url);
     const vpn = searchParams.get('vpn');
+    const type = searchParams.get('type');
 
     // Get FortiGate configuration from database
     const config = await prisma.integrationConfig.findFirst({
       where: { type: 'FORTIGATE', enabled: true },
     });
+
+    // Return config if requested
+    if (type === 'config') {
+      if (!config) {
+        return NextResponse.json({ config: null });
+      }
+      const fortiConfig = config.config as any;
+      return NextResponse.json({
+        config: {
+          host: fortiConfig.host || '',
+          accessToken: '',
+          snmp: fortiConfig.snmp || { community: 'public', version: '2c' },
+          pollingInterval: fortiConfig.pollingInterval || 15,
+          syncMode: fortiConfig.syncMode || 'rest',
+          enabledModules: fortiConfig.enabledModules || {
+            interfaces: true,
+            vlans: true,
+            policies: true,
+            addresses: true,
+            vips: false,
+            sdwan: false,
+          },
+          lastSyncAt: config.lastSyncAt,
+          lastSyncStatus: config.lastSyncStatus,
+        }
+      });
+    }
+
+    // Check connection status
+    if (type === 'status') {
+      if (!config) {
+        return NextResponse.json({ connected: false, error: 'FortiGate integration not configured' });
+      }
+      
+      try {
+        const fortiConfig = config.config as any;
+        const service = new FortiGateService({
+          host: fortiConfig.host,
+          accessToken: fortiConfig.accessToken,
+          snmp: fortiConfig.snmp,
+          pollingInterval: fortiConfig.pollingInterval || 15,
+          syncMode: fortiConfig.syncMode || 'rest',
+          enabledModules: fortiConfig.enabledModules,
+        });
+        const status = await service.getStatus();
+        return NextResponse.json({ connected: status.connected, version: status.version });
+      } catch (error) {
+        return NextResponse.json({ connected: false, error: (error as Error).message });
+      }
+    }
+
+    // Get sync status - real data from database
+    if (type === 'sync-status') {
+      const fortiConfig = config?.config as any;
+      
+      // First try to get from database
+      const deviceId = config?.id;
+      
+      let policyCount = 0;
+      let addressCount = 0;
+      let interfaceCount = 0;
+      let vlanCount = 0;
+      let syncLog = null;
+      
+      if (deviceId) {
+        [policyCount, addressCount, interfaceCount, vlanCount, syncLog] = await Promise.all([
+          prisma.firewallPolicy.count({ where: { deviceId } }),
+          prisma.firewallAddress.count({ where: { deviceId } }),
+          prisma.networkInterface.count({ where: { deviceId } }),
+          prisma.vlan.count(),
+          prisma.integrationSyncLog.findFirst({
+            where: { configId: deviceId },
+            orderBy: { startedAt: 'desc' },
+          }),
+        ]);
+      }
+      
+      // If database is empty, fetch directly from FortiGate
+      if (policyCount === 0 && fortiConfig?.host) {
+        try {
+          const service = new FortiGateService({
+            host: fortiConfig.host,
+            accessToken: fortiConfig.accessToken,
+            snmp: fortiConfig.snmp,
+            pollingInterval: fortiConfig.pollingInterval || 15,
+            syncMode: fortiConfig.syncMode || 'rest',
+            enabledModules: fortiConfig.enabledModules,
+          });
+          
+          // Fetch counts from FortiGate directly
+          const [policies, addresses] = await Promise.all([
+            service.fetchFirewallPolicies(),
+            service.fetchAddressObjects(),
+          ]);
+          
+          policyCount = policies.length;
+          addressCount = addresses.length;
+        } catch (e) {
+          console.error('Failed to fetch from FortiGate:', e);
+        }
+      }
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          interfacesProcessed: interfaceCount,
+          vlansProcessed: vlanCount,
+          policiesProcessed: policyCount,
+          addressesProcessed: addressCount,
+          errors: syncLog?.errorDetails || [],
+          duration: syncLog?.completedAt && syncLog?.startedAt 
+            ? new Date(syncLog.completedAt).getTime() - new Date(syncLog.startedAt).getTime()
+            : 0,
+          lastSync: syncLog?.startedAt || null,
+          status: syncLog?.status || (policyCount > 0 ? 'success' : 'unknown'),
+        }
+      });
+    }
 
     if (!config) {
       return NextResponse.json({

@@ -155,8 +155,6 @@ export const Sidebar: React.FC = () => {
         { name: 'SSL-VPN', href: '/network/ssl-vpn', icon: Users },
         { name: 'Risky Rules', href: '/security/risks', icon: AlertTriangle },
         { name: 'IPS / DoS Events', href: '/security/ips', icon: ShieldAlert },
-        { name: 'Public Exposed Assets', href: '/security/exposed', icon: Eye },
-        { name: 'Asset Risk Scores', href: '/security/scores', icon: Target },
       ]
     },
     {
@@ -165,15 +163,6 @@ export const Sidebar: React.FC = () => {
         { name: 'Applications', href: '/services/apps', icon: Box },
         { name: 'Services', href: '/services', icon: Puzzle },
         { name: 'Dependencies', href: '/services/dependencies', icon: GitBranch },
-        { name: 'Impact Analysis', href: '/services/impact', icon: BarChart3 },
-      ]
-    },
-    {
-      title: 'Changes & Audit',
-      items: [
-        { name: 'Change Log', href: '/audit/changes', icon: ClipboardList },
-        { name: 'Configuration Drift', href: '/audit/drift', icon: History },
-        { name: 'Timeline View', href: '/audit/timeline', icon: Clock },
       ]
     },
     {

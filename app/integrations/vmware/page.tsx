@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -68,10 +68,76 @@ export default function VMwareIntegrationPage() {
   
   const [status, setStatus] = useState<{ connected: boolean; version?: string; error?: string } | null>(null);
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
+  const [dashboardData, setDashboardData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('config');
+
+  // Load config and status on mount
+  useEffect(() => {
+    const loadConfig = async () => {
+      setLoading(true);
+      try {
+        // Fetch saved config
+        const configRes = await fetch('/api/integrations/vmware?type=config');
+        const configData = await configRes.json();
+        if (configData.config) {
+          setConfig({
+            host: configData.config.host || '',
+            username: configData.config.username || '',
+            password: '',
+            thumbprint: configData.config.thumbprint || '',
+            pollingInterval: configData.config.pollingInterval || 10,
+            enabledModules: configData.config.enabledModules || {
+              datacenters: true,
+              clusters: true,
+              hosts: true,
+              vms: true,
+              datastores: true,
+            },
+          });
+        }
+        
+        // Check connection status from config (without auth)
+        setStatus({
+          connected: !!configData.config?.host,
+          version: configData.config?.host ? 'Connected' : undefined,
+          error: configData.config?.host ? undefined : 'Not configured'
+        });
+
+        // Fetch dashboard data for sync tab
+        try {
+          const dashRes = await fetch('/api/integrations/vmware?type=dashboard');
+          const dashData = await dashRes.json();
+          if (dashData.summary) {
+            setDashboardData(dashData);
+            // Set sync result from dashboard data
+            setSyncResult({
+              success: true,
+              clustersCreated: 0,
+              clustersUpdated: dashData.summary.clusters || 0,
+              hostsCreated: 0,
+              hostsUpdated: dashData.summary.hostsOnline || 0,
+              vmsCreated: 0,
+              vmsUpdated: dashData.summary.vmRunning || 0,
+              datastoresProcessed: dashData.summary.datastores || 0,
+              errors: [],
+              duration: 0
+            });
+          }
+        } catch (e) {
+          console.error('Failed to load dashboard:', e);
+        }
+      } catch (error) {
+        console.error('Failed to load config:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadConfig();
+  }, []);
 
   const testConnection = async () => {
     setLoading(true);

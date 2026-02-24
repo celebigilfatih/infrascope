@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -78,6 +78,67 @@ export default function FortiGateIntegrationPage() {
   const [syncing, setSyncing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('config');
+
+  // Load config and status on mount
+  useEffect(() => {
+    const loadConfig = async () => {
+      setLoading(true);
+      try {
+        // Fetch saved config
+        const configRes = await fetch('/api/integrations/fortigate?type=config');
+        const configData = await configRes.json();
+        if (configData.config) {
+          setConfig({
+            host: configData.config.host || '',
+            accessToken: '',
+            snmp: configData.config.snmp || { community: 'public', version: '2c' },
+            pollingInterval: configData.config.pollingInterval || 15,
+            syncMode: configData.config.syncMode || 'rest',
+            enabledModules: configData.config.enabledModules || {
+              interfaces: true,
+              vlans: true,
+              policies: true,
+              addresses: true,
+              vips: false,
+              sdwan: false,
+            },
+          });
+        }
+        
+        // Check connection status from config (without auth)
+        setStatus({
+          connected: !!configData.config?.host,
+          version: configData.config?.host ? 'Connected' : undefined,
+          error: configData.config?.host ? undefined : 'Not configured'
+        });
+
+        // Fetch sync status from database
+        try {
+          const syncRes = await fetch('/api/integrations/fortigate?type=sync-status');
+          const syncData = await syncRes.json();
+          if (syncData.success && syncData.data) {
+            setSyncResult({
+              success: syncData.data.status === 'success',
+              interfacesProcessed: syncData.data.interfacesProcessed || 0,
+              vlansProcessed: syncData.data.vlansProcessed || 0,
+              policiesProcessed: syncData.data.policiesProcessed || 0,
+              addressesProcessed: syncData.data.addressesProcessed || 0,
+              errors: syncData.data.errors || [],
+              duration: syncData.data.duration || 0,
+            });
+          }
+        } catch (e) {
+          console.error('Failed to load sync status:', e);
+        }
+      } catch (error) {
+        console.error('Failed to load config:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadConfig();
+  }, []);
 
   const testConnection = async () => {
     setLoading(true);
