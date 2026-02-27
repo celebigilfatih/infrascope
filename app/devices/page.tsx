@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { apiGet, apiDelete, apiPost, apiPut } from '../../lib/api';
 import { Device, ApiResponse } from '../../types';
 import { getVendorLogo } from '../../lib/formatting';
@@ -25,7 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, Plus, Edit, Trash2, RefreshCcw, X } from 'lucide-react';
+import { Search, Plus, Edit, Trash2, RefreshCcw, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export default function DevicesPage() {
@@ -35,7 +35,14 @@ export default function DevicesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterType, setFilterType] = useState('all');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [filterType, setFilterType] = useState('manual');
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
   
   // Modal states
   const [showAddModal, setShowAddModal] = useState(false);
@@ -46,18 +53,32 @@ export default function DevicesPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deviceToDelete, setDeviceToDelete] = useState<{id: string, name: string} | null>(null);
 
+  // Debounce search input by 400ms
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchQuery), 400);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
+
   useEffect(() => {
     loadDevices();
     loadRacks();
-  }, []);
+  }, [currentPage, pageSize, filterType, debouncedSearch]);
 
   const loadDevices = async () => {
     try {
       setLoading(true);
       setError(null);
-      const response: ApiResponse<Device[]> = await apiGet('/api/devices');
+      const params = new URLSearchParams({
+        page: currentPage.toString(),
+        limit: pageSize.toString(),
+        filterType,
+      });
+      if (debouncedSearch) params.set('search', debouncedSearch);
+      const response: any = await apiGet(`/api/devices?${params}`);
       if (response.success) {
         setDevices(response.data || []);
+        setTotal(response.total || 0);
+        setTotalPages(response.totalPages || 0);
       } else {
         setError('Cihazlar yüklenemedi');
       }
@@ -168,12 +189,13 @@ export default function DevicesPage() {
     }
   };
 
-  const filteredDevices = devices.filter(device => {
-    const matchesSearch = device.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                         device.serialNumber?.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesType = filterType === 'all' || device.type === filterType;
-    return matchesSearch && matchesType;
-  });
+  // Reset to page 1 when search or filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearch, filterType]);
+
+  // Server-side filtering: devices returned are already filtered
+  const filteredDevices = devices;
 
   const formatDate = (date: string | Date | undefined) => {
     if (!date) return '-';
@@ -225,13 +247,17 @@ export default function DevicesPage() {
                 <SelectValue placeholder="Cihaz Tipi" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tüm Cihaz Tipleri</SelectItem>
+                <SelectItem value="manual">Manuel Eklenen</SelectItem>
+                <SelectItem value="all">Tüm Cihazlar</SelectItem>
                 <SelectItem value="PHYSICAL_SERVER">Fiziksel Sunucular</SelectItem>
                 <SelectItem value="VIRTUAL_MACHINE">Sanal Makineler</SelectItem>
+                <SelectItem value="VIRTUAL_HOST">Sanal Hostlar</SelectItem>
                 <SelectItem value="SWITCH">Switchler</SelectItem>
                 <SelectItem value="ROUTER">Routerlar</SelectItem>
                 <SelectItem value="FIREWALL">Güvenlik Duvarları</SelectItem>
                 <SelectItem value="STORAGE">Depolama</SelectItem>
+                <SelectItem value="PDU">PDU</SelectItem>
+                <SelectItem value="PATCH_PANEL">Patch Panel</SelectItem>
               </SelectContent>
             </Select>
             <Button variant="outline" size="icon" onClick={loadDevices} title="Yenile">
@@ -346,6 +372,67 @@ export default function DevicesPage() {
             </div>
           </Card>
         )}
+
+          {/* Pagination Controls */}
+          {totalPages > 0 && (
+            <div className="flex items-center justify-between mt-4 px-2">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <span>Sayfa başı:</span>
+                <Select value={pageSize.toString()} onValueChange={(v) => { setPageSize(parseInt(v)); setCurrentPage(1); }}>
+                  <SelectTrigger className="w-[80px] h-8">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="25">25</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                  </SelectContent>
+                </Select>
+                <span className="ml-4">
+                  {((currentPage - 1) * pageSize) + 1}-{Math.min(currentPage * pageSize, total)} / {total}
+                </span>
+              </div>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let pageNum = i + 1;
+                  if (totalPages > 5) {
+                    if (currentPage > 3) {
+                      pageNum = currentPage - 3 + i;
+                      if (pageNum > totalPages) pageNum = totalPages - 4 + i;
+                    }
+                  }
+                  return (
+                    <Button
+                      key={pageNum}
+                      variant={currentPage === pageNum ? "default" : "outline"}
+                      size="sm"
+                      className="w-8 h-8 p-0"
+                      onClick={() => setCurrentPage(pageNum)}
+                    >
+                      {pageNum}
+                    </Button>
+                  );
+                })}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage >= totalPages}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
 
         <ConfirmDialog
           open={deleteDialogOpen}

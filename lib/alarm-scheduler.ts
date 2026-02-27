@@ -22,7 +22,11 @@ export function startAlarmScheduler() {
       console.log('[AlarmScheduler] Starting scheduled alarm check...');
       const startTime = Date.now();
 
-      const response = await fetch('http://localhost:3000/api/alarms/check', {
+      // Use INTERNAL_API_URL env var (set in docker-compose.yml)
+      // Falls back to PORT env var, then default 3000 (container internal port)
+      // NEVER hardcode host-mapped port (e.g. 8170) here - that's the external port
+      const baseUrl = process.env.INTERNAL_API_URL || `http://localhost:${process.env.PORT || '3000'}`;
+      const response = await fetch(`${baseUrl}/api/alarms/check`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -4,7 +4,9 @@ import { analyzePolicyRisks } from '@/lib/security/riskAnalyzer';
 export async function GET() {
   try {
     // Fetch firewall policies from our existing API
-    const response = await fetch('http://localhost:3000/api/firewall-policies');
+    // Use INTERNAL_API_URL to avoid host-mapped port confusion in Docker
+    const baseUrl = process.env.INTERNAL_API_URL || `http://localhost:${process.env.PORT || '3000'}`;
+    const response = await fetch(`${baseUrl}/api/firewall-policies`);
     
     if (!response.ok) {
       console.error('Failed to fetch firewall policies');

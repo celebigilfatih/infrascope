@@ -9,8 +9,16 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
   AlertTriangle, AlertCircle, AlertOctagon, CheckCircle, Clock, RefreshCw,
-  Search, Play, Shield, Bell,
+  Search, Play, Shield, Bell, Trash2, BarChart3,
 } from 'lucide-react';
 
 interface AlarmEventData {
@@ -64,6 +72,15 @@ export default function AlertsDashboardPage() {
   const [pageSize, setPageSize] = useState(25);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
+  // Cleanup states
+  const [cleanupStatsOpen, setCleanupStatsOpen] = useState(false);
+  const [cleanupStats, setCleanupStats] = useState<any>(null);
+  const [cleanupOpen, setCleanupOpen] = useState(false);
+  const [cleanupDays, setCleanupDays] = useState(7);
+  const [cleanupAcknowledgedOnly, setCleanupAcknowledgedOnly] = useState(true);
+  const [cleanupLoading, setCleanupLoading] = useState(false);
+  const [cleanupDryRun, setCleanupDryRun] = useState(true);
+
   const fetchEvents = useCallback(async () => {
     setLoading(true);
     try {
@@ -86,6 +103,57 @@ export default function AlertsDashboardPage() {
   }, [filter]);
 
   useEffect(() => { fetchEvents(); }, [fetchEvents]);
+
+  // Fetch cleanup statistics
+  const fetchCleanupStats = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/alarms/cleanup?daysOld=${cleanupDays}`, { method: 'GET' });
+      const data = await res.json();
+      if (data.success) {
+        setCleanupStats(data.stats);
+      }
+    } catch (err) {
+      console.error('Failed to fetch cleanup stats:', err);
+    }
+  }, [cleanupDays]);
+
+  // Run cleanup
+  const runCleanup = async () => {
+    setCleanupLoading(true);
+    try {
+      const params = new URLSearchParams({
+        daysOld: cleanupDays.toString(),
+        acknowledged: cleanupAcknowledgedOnly.toString(),
+        dryRun: cleanupDryRun.toString(),
+      });
+
+      const res = await fetch(`/api/alarms/cleanup?${params}`, { method: 'POST' });
+      const data = await res.json();
+
+      if (data.success) {
+        const deletedCount = cleanupDryRun ? data.wouldDelete : data.deleted;
+        setMessage({
+          text: cleanupDryRun
+            ? `Would delete ${deletedCount} alarms (dry run)`
+            : `Deleted ${deletedCount} alarms successfully`,
+          type: 'success',
+        });
+
+        if (!cleanupDryRun) {
+          fetchEvents();
+          setCleanupOpen(false);
+        } else {
+          setCleanupStats(data);
+        }
+      } else {
+        setMessage({ text: `Error: ${data.error}`, type: 'error' });
+      }
+    } catch (err) {
+      setMessage({ text: 'Cleanup failed', type: 'error' });
+    } finally {
+      setCleanupLoading(false);
+    }
+  };
 
   // Auto-refresh events every 60 seconds
   useEffect(() => {
@@ -199,6 +267,25 @@ export default function AlertsDashboardPage() {
           <p className="text-muted-foreground">Sistem uyarilari ve alarm yonetimi</p>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              fetchCleanupStats();
+              setCleanupStatsOpen(true);
+            }}
+          >
+            <BarChart3 className="h-4 w-4 mr-2" />
+            Cleanup Stats
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCleanupOpen(true)}
+          >
+            <Trash2 className="h-4 w-4 mr-2" />
+            Cleanup
+          </Button>
           <Button variant="outline" onClick={runAlarmCheck} disabled={checking}>
             {checking ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Play className="h-4 w-4 mr-2" />}
             {checking ? 'Taraniyor...' : 'Alarm Tara'}
@@ -429,6 +516,156 @@ export default function AlertsDashboardPage() {
           </div>
         )}
       </Card>
+
+      {/* Cleanup Statistics Dialog */}
+      <Dialog open={cleanupStatsOpen} onOpenChange={setCleanupStatsOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Alarm Cleanup Statistics</DialogTitle>
+            <DialogDescription>
+              Storage and data retention information
+            </DialogDescription>
+          </DialogHeader>
+
+          {cleanupStats ? (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-900">
+                  <p className="text-xs text-muted-foreground">Total Alarms</p>
+                  <p className="text-2xl font-bold">{cleanupStats?.total || 0}</p>
+                </div>
+                <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-900">
+                  <p className="text-xs text-muted-foreground">Old Alarms</p>
+                  <p className="text-2xl font-bold">{cleanupStats?.old || 0}</p>
+                </div>
+                <div className="p-3 rounded-lg bg-green-50 dark:bg-green-900/20">
+                  <p className="text-xs text-muted-foreground">Acknowledged</p>
+                  <p className="text-2xl font-bold text-green-600">{cleanupStats?.oldAcknowledged || 0}</p>
+                </div>
+                <div className="p-3 rounded-lg bg-orange-50 dark:bg-orange-900/20">
+                  <p className="text-xs text-muted-foreground">Unacknowledged</p>
+                  <p className="text-2xl font-bold text-orange-600">{cleanupStats?.oldUnacknowledged || 0}</p>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-900">
+                <p className="text-sm font-medium mb-2">Storage Usage</p>
+                <p className="text-2xl font-bold">{cleanupStats?.estimatedStorageMB || '0'} MB</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {cleanupStats?.percentOld || '0'}% of total alarms are older than {cleanupStats?.daysOld || 7} days
+                </p>
+              </div>
+
+              <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-900">
+                <p className="text-sm font-medium mb-2">Breakdown by Severity</p>
+                <div className="space-y-1 text-sm">
+                  {cleanupStats?.severityBreakdown && Object.entries(cleanupStats.severityBreakdown).map(([severity, count]: [string, any]) => (
+                    <div key={severity} className="flex justify-between">
+                      <span>{severity}</span>
+                      <span className="font-mono font-medium">{count}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <RefreshCw className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCleanupStatsOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cleanup Dialog */}
+      <Dialog open={cleanupOpen} onOpenChange={setCleanupOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Clean Up Old Alarms</DialogTitle>
+            <DialogDescription>
+              Remove alarms older than specified days to reclaim storage and improve performance
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-2">
+                Delete alarms older than (days)
+              </label>
+              <Input
+                type="number"
+                min="1"
+                max="365"
+                value={cleanupDays}
+                onChange={(e) => setCleanupDays(Math.max(1, parseInt(e.target.value) || 7))}
+              />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="ackOnly"
+                checked={cleanupAcknowledgedOnly}
+                onChange={(e) => setCleanupAcknowledgedOnly(e.target.checked)}
+                className="rounded border-gray-300"
+              />
+              <label htmlFor="ackOnly" className="text-sm">
+                Only delete acknowledged alarms
+              </label>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="dryRun"
+                checked={cleanupDryRun}
+                onChange={(e) => setCleanupDryRun(e.target.checked)}
+                className="rounded border-gray-300"
+              />
+              <label htmlFor="dryRun" className="text-sm font-medium">
+                Dry run (preview what would be deleted)
+              </label>
+            </div>
+
+            {cleanupStats && cleanupDryRun && (
+              <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-sm">
+                <p className="font-medium text-blue-900 dark:text-blue-200 mb-1">Preview</p>
+                <p className="text-blue-700 dark:text-blue-300">
+                  Would delete {cleanupStats.wouldDelete} alarms
+                </p>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setCleanupOpen(false)}
+              disabled={cleanupLoading}
+            >
+              Cancel
+            </Button>
+            {cleanupDryRun ? (
+              <Button onClick={runCleanup} disabled={cleanupLoading}>
+                {cleanupLoading ? 'Previewing...' : 'Preview'}
+              </Button>
+            ) : (
+              <Button
+                variant="destructive"
+                onClick={runCleanup}
+                disabled={cleanupLoading}
+              >
+                {cleanupLoading ? 'Deleting...' : 'Confirm Delete'}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

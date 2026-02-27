@@ -436,7 +436,8 @@ export class AlarmDetectionEngine {
 
     // LogView-based alarms
     const filter = logic.filter || '';
-    const limit = Math.max(logic.threshold * 2, 50);
+    // Cap limit at 1000 max (FortiAnalyzer API constraint)
+    const limit = Math.min(Math.max(logic.threshold * 2, 50), 1000);
 
     console.log(`[AlarmEngine] Searching ${alarm.code}: logtype=${logtype} filter="${filter}"`);
     

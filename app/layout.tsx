@@ -11,6 +11,10 @@ export const metadata: Metadata = {
   title: 'InfraScope - Kurumsal Altyapı Yönetimi',
   description: 'BT operasyonları ve altyapı yönetimi için merkezi platform',
   keywords: ['altyapı', 'DCIM', 'ağ topolojisi', 'envanter', 'yönetim'],
+  icons: {
+    icon: '/images/favicon.ico',
+    apple: '/images/favicon.svg',
+  },
 };
 
 export default function RootLayout({

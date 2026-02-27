@@ -1,39 +1,67 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
-export async function GET(_request: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
-    const services = await prisma.service.findMany({
-      include: {
-        device: {
-          include: {
-            rack: {
-              include: {
-                room: {
-                  include: {
-                    floor: {
-                      include: {
-                        building: true
-                      }
-                    }
+    const { searchParams } = new URL(request.url);
+    const page = parseInt(searchParams.get('page') || '1', 10);
+    const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10), 500);
+    const offset = (page - 1) * limit;
+    // 'minimal' skips heavy nested joins (used by dashboard)
+    // 'full' (default) returns all relations for other pages
+    const mode = searchParams.get('mode') || 'full';
+
+    const selectMinimal = {
+      id: true,
+      name: true,
+      type: true,
+      displayName: true,
+      status: true,
+      port: true,
+      protocol: true,
+      criticality: true,
+      createdAt: true,
+      device: {
+        select: { id: true, name: true, type: true }
+      },
+    };
+
+    const includeFull = {
+      device: {
+        include: {
+          rack: {
+            include: {
+              room: {
+                include: {
+                  floor: {
+                    include: { building: true }
                   }
                 }
               }
             }
           }
-        },
-        application: true,
-        dependencies: {
-          include: {
-            targetDevice: true
-          }
         }
+      },
+      application: true,
+      dependencies: {
+        include: { targetDevice: true }
       }
-    });
+    };
+
+    const [services, total] = await Promise.all([
+      mode === 'full'
+        ? prisma.service.findMany({ skip: offset, take: limit, include: includeFull, orderBy: { name: 'asc' } })
+        : prisma.service.findMany({ skip: offset, take: limit, select: selectMinimal, orderBy: { name: 'asc' } }),
+      prisma.service.count()
+    ]);
 
     return NextResponse.json({
       success: true,
       data: services,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
       timestamp: new Date()
     });
   } catch (error: any) {

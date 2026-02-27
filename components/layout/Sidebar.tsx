@@ -138,7 +138,6 @@ export const Sidebar: React.FC = () => {
         { name: 'Switches', href: '/network/switches', icon: Globe },
         { name: 'Ports', href: '/network/ports', icon: Plug },
         { name: 'VLANs', href: '/network/vlans', icon: Shield },
-        { name: 'IPAM', href: '/network/ipam', icon: Target },
       ]
     },
     {
@@ -170,7 +169,6 @@ export const Sidebar: React.FC = () => {
       items: [
         { name: 'Capacity Trends', href: '/analytics/capacity', icon: TrendingUp },
         { name: 'Growth Forecast', href: '/analytics/forecast', icon: TrendingUp },
-        { name: 'Network Utilization', href: '/analytics/network', icon: BarChart3 },
         { name: 'VM Sprawl', href: '/analytics/sprawl', icon: Cpu },
       ]
     },
@@ -189,7 +187,6 @@ export const Sidebar: React.FC = () => {
         { name: 'Organizations', href: '/settings/organizations', icon: Building2 },
         { name: 'Users & Roles', href: '/settings/users', icon: Users },
         { name: 'Alert Rules', href: '/settings/alerts', icon: AlertTriangle },
-        { name: 'Thresholds', href: '/settings/thresholds', icon: Target },
         { name: 'API Keys', href: '/settings/keys', icon: Key },
       ]
     },

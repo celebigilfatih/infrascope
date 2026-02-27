@@ -34,7 +34,10 @@ export async function GET(_request: NextRequest) {
           select: {
             id: true,
             name: true,
-            deviceType: true
+            type: true,
+            status: true,
+            criticality: true,
+            rackUnitPosition: true
           }
         }
       },
