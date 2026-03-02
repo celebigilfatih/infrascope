@@ -1,55 +1,61 @@
 /**
- * Alarm Background Monitor
- * Automatically checks alarms at regular intervals
- * Ensures continuous monitoring even if errors occur
+ * Alarm Background Monitor - WATCHDOG MODE
+ *
+ * Architecture:
+ * - AlarmScheduler (lib/alarm-scheduler.ts): Primary evaluation, every 15 minutes
+ * - AlarmMonitor (this file): Watchdog — only triggers if scheduler is behind schedule
+ *
+ * The monitor checks every 10 minutes:
+ *  - If last successful check was within 20 minutes: do nothing (scheduler is on time)
+ *  - If last successful check was > 20 minutes ago: trigger the check endpoint
+ *
+ * This prevents concurrent evaluation while ensuring alarm checks never fall too far behind.
+ * Does NOT run immediately at startup (waits 3 minutes) to avoid startup race with scheduler.
  */
 
 import { prisma } from '@/lib/prisma';
-import FortiAnalyzerService from '@/lib/integrations/fortianalyzer';
-import { AlarmDetectionEngine } from './detection-engine';
+
+const WATCHDOG_INTERVAL_MINUTES = 10;       // How often to check if scheduler is on time
+const WATCHDOG_MAX_GAP_MINUTES = 20;        // If last check was > 20 min ago, trigger manually
+const WATCHDOG_STARTUP_DELAY_MINUTES = 3;   // Don't run immediately at startup
 
 export class AlarmMonitor {
   private intervalId: NodeJS.Timeout | null = null;
+  private startupTimeoutId: NodeJS.Timeout | null = null;
   private isRunning = false;
   private checkIntervalMinutes: number;
   private lastCheckTime: Date | null = null;
   private consecutiveErrors = 0;
-  private readonly MAX_CONSECUTIVE_ERRORS = 5;
+  private readonly MAX_CONSECUTIVE_ERRORS = 10;
+  private recoveryTimeoutId: NodeJS.Timeout | null = null;
 
-  constructor(checkIntervalMinutes = 5) {
+  constructor(checkIntervalMinutes = WATCHDOG_INTERVAL_MINUTES) {
     this.checkIntervalMinutes = checkIntervalMinutes;
   }
 
-  /**
-   * Start the alarm monitoring service
-   */
   start() {
     if (this.isRunning) {
       console.log('[AlarmMonitor] Already running');
       return;
     }
 
-    console.log(`[AlarmMonitor] Starting with ${this.checkIntervalMinutes} minute interval`);
+    console.log(`[AlarmMonitor] Starting watchdog (${this.checkIntervalMinutes} min interval, ${WATCHDOG_STARTUP_DELAY_MINUTES} min startup delay)`);
     this.isRunning = true;
+    this.consecutiveErrors = 0;
 
-    // Run immediately on start
-    this.runCheck().catch((error) => {
-      console.error('[AlarmMonitor] Initial check failed:', error);
-    });
-
-    // Schedule periodic checks
-    this.intervalId = setInterval(() => {
+    // Delayed first check — avoids startup race with AlarmScheduler
+    this.startupTimeoutId = setTimeout(() => {
       if (!this.isRunning) return;
-      
-      this.runCheck().catch((error) => {
-        console.error('[AlarmMonitor] Scheduled check failed:', error);
-      });
-    }, this.checkIntervalMinutes * 60 * 1000);
+      this.runWatchdog().catch((err) => console.error('[AlarmMonitor] Startup watchdog check failed:', err));
+
+      // After the first delayed run, schedule periodic runs
+      this.intervalId = setInterval(() => {
+        if (!this.isRunning) return;
+        this.runWatchdog().catch((err) => console.error('[AlarmMonitor] Scheduled watchdog check failed:', err));
+      }, this.checkIntervalMinutes * 60 * 1000);
+    }, WATCHDOG_STARTUP_DELAY_MINUTES * 60 * 1000);
   }
 
-  /**
-   * Stop the alarm monitoring service
-   */
   stop() {
     if (!this.isRunning) {
       console.log('[AlarmMonitor] Not running');
@@ -59,15 +65,31 @@ export class AlarmMonitor {
     console.log('[AlarmMonitor] Stopping...');
     this.isRunning = false;
 
+    if (this.startupTimeoutId) {
+      clearTimeout(this.startupTimeoutId);
+      this.startupTimeoutId = null;
+    }
+
     if (this.intervalId) {
       clearInterval(this.intervalId);
       this.intervalId = null;
     }
+
+    if (this.recoveryTimeoutId) {
+      clearTimeout(this.recoveryTimeoutId);
+      this.recoveryTimeoutId = null;
+    }
   }
 
-  /**
-   * Get monitor status
-   */
+  private scheduleRecovery() {
+    const RECOVERY_DELAY_MS = 10 * 60 * 1000;
+    console.log('[AlarmMonitor] Scheduling auto-recovery in 10 minutes...');
+    this.recoveryTimeoutId = setTimeout(() => {
+      console.log('[AlarmMonitor] Auto-recovery: attempting restart...');
+      this.start();
+    }, RECOVERY_DELAY_MS);
+  }
+
   getStatus() {
     return {
       running: this.isRunning,
@@ -78,81 +100,71 @@ export class AlarmMonitor {
   }
 
   /**
-   * Run alarm check with error recovery
+   * Watchdog: only triggers an alarm check if the scheduler is behind schedule.
    */
-  private async runCheck(): Promise<void> {
+  private async runWatchdog(): Promise<void> {
     try {
-      console.log('[AlarmMonitor] Running alarm check...');
-      const startTime = Date.now();
-
-      // Get FortiAnalyzer config
-      const config = await prisma.integrationConfig.findFirst({
-        where: { type: 'FORTIANALYZER', enabled: true },
+      // Check when the last alarm evaluation happened (from DB log)
+      const lastLog = await prisma.alarmCheckLog.findFirst({
+        where: { status: { in: ['SUCCESS', 'PARTIAL'] } },
+        orderBy: { checkTime: 'desc' },
       });
 
-      if (!config) {
-        console.warn('[AlarmMonitor] FortiAnalyzer not configured, skipping check');
+      const maxGapMs = WATCHDOG_MAX_GAP_MINUTES * 60 * 1000;
+      const lastCheckMs = lastLog?.checkTime ? Date.now() - lastLog.checkTime.getTime() : Infinity;
+
+      if (lastCheckMs < maxGapMs) {
+        const minutesAgo = Math.round(lastCheckMs / 60000);
+        console.log(`[AlarmMonitor] Watchdog OK — last check ${minutesAgo}m ago (threshold: ${WATCHDOG_MAX_GAP_MINUTES}m)`);
         return;
       }
 
-      const faConfig = config.config as { host: string; username?: string; password?: string };
-      const service = new FortiAnalyzerService({
-        host: faConfig.host,
-        username: faConfig.username || 'fcelebigil',
-        password: faConfig.password || 'Thor.7485-a',
+      // Scheduler is behind — trigger a check
+      const minutesAgo = lastLog ? Math.round(lastCheckMs / 60000) : '∞';
+      console.warn(`[AlarmMonitor] Watchdog: last check ${minutesAgo}m ago, triggering recovery check...`);
+
+      const baseUrl = process.env.INTERNAL_API_URL || `http://localhost:${process.env.PORT || '3000'}`;
+      const response = await fetch(`${baseUrl}/api/alarms/check`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
       });
 
-      // Run detection engine
-      const engine = new AlarmDetectionEngine(service);
-      const results = await engine.evaluateAllAlarms();
+      if (!response.ok) {
+        throw new Error(`Alarm check endpoint returned ${response.status}`);
+      }
 
-      const triggered = results.filter((r) => r.triggered);
-      const errors = results.filter((r) => r.error && r.error !== 'cooldown-active');
-      const duration = Date.now() - startTime;
+      const result = await response.json() as {
+        success: boolean;
+        summary?: { triggered: number; errors: number; total: number };
+      };
+
+      const triggeredCount = result.summary?.triggered ?? 0;
+      const errorsCount = result.summary?.errors ?? 0;
 
       this.lastCheckTime = new Date();
-      this.consecutiveErrors = 0; // Reset error counter on success
+      this.consecutiveErrors = 0;
 
-      console.log(
-        `[AlarmMonitor] Check complete in ${duration}ms: ${triggered.length} triggered, ${errors.length} errors`
-      );
-
-      // Log to database for audit trail
-      try {
-        await prisma.alarmCheckLog.create({
-          data: {
-            checkTime: this.lastCheckTime,
-            totalAlarms: results.length,
-            triggeredCount: triggered.length,
-            errorCount: errors.length,
-            durationMs: duration,
-            status: errors.length === 0 ? 'SUCCESS' : 'PARTIAL',
-          },
-        });
-      } catch (logError) {
-        console.error('[AlarmMonitor] Failed to log check result:', logError);
-        // Don't throw - logging failure shouldn't stop monitoring
-      }
+      console.log(`[AlarmMonitor] Watchdog recovery check done: ${triggeredCount} triggered, ${errorsCount} errors`);
     } catch (error) {
       this.consecutiveErrors++;
       console.error(
-        `[AlarmMonitor] Check failed (${this.consecutiveErrors}/${this.MAX_CONSECUTIVE_ERRORS}):`,
+        `[AlarmMonitor] Watchdog check failed (${this.consecutiveErrors}/${this.MAX_CONSECUTIVE_ERRORS}):`,
         error
       );
 
-      // If too many consecutive errors, stop monitoring and alert
       if (this.consecutiveErrors >= this.MAX_CONSECUTIVE_ERRORS) {
         console.error('[AlarmMonitor] Too many consecutive errors, stopping monitor');
         this.stop();
+        this.scheduleRecovery();
 
-        // Try to create critical alarm event
         try {
           await prisma.alarmEvent.create({
             data: {
               alarmId: 'system-alarm-monitor-failed',
-              severity: 'CRITICAL',
+              severity: 'ALARM_CRITICAL',
+              title: 'Alarm Monitor Service Failed',
               message: `Alarm monitoring service failed after ${this.consecutiveErrors} consecutive errors`,
-              eventData: {
+              rawData: {
                 error: (error as Error).message,
                 timestamp: new Date().toISOString(),
               },
@@ -163,49 +175,34 @@ export class AlarmMonitor {
           console.error('[AlarmMonitor] Failed to create failure alarm:', alarmError);
         }
       }
-
-      // Continue running despite error (unless max errors reached)
     }
   }
 
-  /**
-   * Force an immediate check (manual trigger)
-   */
   async forceCheck(): Promise<void> {
     if (!this.isRunning) {
       throw new Error('Monitor is not running');
     }
-
-    console.log('[AlarmMonitor] Force check requested');
-    await this.runCheck();
+    console.log('[AlarmMonitor] Force watchdog check requested');
+    await this.runWatchdog();
   }
 }
 
 // Singleton instance
 let monitorInstance: AlarmMonitor | null = null;
 
-/**
- * Get or create the global alarm monitor instance
- */
-export function getAlarmMonitor(checkIntervalMinutes = 5): AlarmMonitor {
+export function getAlarmMonitor(checkIntervalMinutes = WATCHDOG_INTERVAL_MINUTES): AlarmMonitor {
   if (!monitorInstance) {
     monitorInstance = new AlarmMonitor(checkIntervalMinutes);
   }
   return monitorInstance;
 }
 
-/**
- * Start the global alarm monitor
- */
-export function startAlarmMonitor(checkIntervalMinutes = 5): AlarmMonitor {
+export function startAlarmMonitor(checkIntervalMinutes = WATCHDOG_INTERVAL_MINUTES): AlarmMonitor {
   const monitor = getAlarmMonitor(checkIntervalMinutes);
   monitor.start();
   return monitor;
 }
 
-/**
- * Stop the global alarm monitor
- */
 export function stopAlarmMonitor(): void {
   if (monitorInstance) {
     monitorInstance.stop();

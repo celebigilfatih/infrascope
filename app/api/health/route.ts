@@ -1,42 +1,53 @@
 /**
  * GET /api/health
- * Health check endpoint - also starts alarm services on first call
+ * Health check endpoint - starts and monitors alarm services
+ * Auto-restarts services if they've stopped
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { startAlarmScheduler } from '@/lib/alarm-scheduler';
-import { startAlarmMonitor } from '@/lib/alarms/alarm-monitor';
+import { startAlarmScheduler, getSchedulerStatus } from '@/lib/alarm-scheduler';
+import { startAlarmMonitor, getAlarmMonitor } from '@/lib/alarms/alarm-monitor';
 
-// Track if services have been initialized
-let servicesInitialized = false;
-
-function initializeAlarmServices() {
-  if (servicesInitialized) return;
+/**
+ * Ensure alarm services are running - starts them if stopped
+ */
+function ensureAlarmServicesRunning() {
+  const schedulerStatus = getSchedulerStatus();
+  const monitorStatus = getAlarmMonitor().getStatus();
   
-  console.log('[Health] Initializing alarm services...');
+  let schedulerOk = schedulerStatus.running;
+  let monitorOk = monitorStatus.running;
   
-  try {
-    // Start scheduler (runs every 15 minutes)
-    startAlarmScheduler();
-    console.log('[Health] Alarm scheduler started');
-  } catch (err) {
-    console.error('[Health] Failed to start scheduler:', err);
+  // Start scheduler if not running
+  if (!schedulerOk) {
+    console.log('[Health] Scheduler not running, starting...');
+    try {
+      startAlarmScheduler();
+      schedulerOk = true;
+      console.log('[Health] Alarm scheduler (re)started');
+    } catch (err) {
+      console.error('[Health] Failed to start scheduler:', err);
+    }
   }
   
-  try {
-    // Start monitor (runs every 5 minutes)
-    startAlarmMonitor(5);
-    console.log('[Health] Alarm monitor started');
-  } catch (err) {
-    console.error('[Health] Failed to start monitor:', err);
+  // Start monitor if not running
+  if (!monitorOk) {
+    console.log('[Health] Monitor not running, starting...');
+    try {
+      startAlarmMonitor(5);
+      monitorOk = true;
+      console.log('[Health] Alarm monitor (re)started');
+    } catch (err) {
+      console.error('[Health] Failed to start monitor:', err);
+    }
   }
   
-  servicesInitialized = true;
+  return { schedulerOk, monitorOk };
 }
 
 export async function GET(_request: NextRequest) {
-  // Initialize alarm services on first health check
-  initializeAlarmServices();
+  // Ensure alarm services are running (auto-restart if stopped)
+  const { schedulerOk, monitorOk } = ensureAlarmServicesRunning();
   
   return NextResponse.json(
     {
@@ -45,8 +56,8 @@ export async function GET(_request: NextRequest) {
       timestamp: new Date(),
       version: '1.0.0',
       services: {
-        scheduler: true,
-        monitor: true,
+        scheduler: schedulerOk,
+        monitor: monitorOk,
       },
     },
     { status: 200 }

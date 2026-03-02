@@ -623,8 +623,9 @@ export class VMwareService {
 
   /**
    * Alternative: Use REST API for vCenter 6.5+
+   * Auto-refreshes session on 401 Unauthorized
    */
-  private async restRequest<T>(endpoint: string, options?: RequestInit): Promise<T> {
+  private async restRequest<T>(endpoint: string, options?: RequestInit, _retried = false): Promise<T> {
     // Disable SSL verification for self-signed certificates
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
@@ -642,6 +643,15 @@ export class VMwareService {
       return response.json();
     }
 
+    // If 401 Unauthorized and haven't retried, refresh session and retry once
+    if (response.status === 401 && !_retried) {
+      console.log('[VMware] Session expired, re-authenticating...');
+      const authSuccess = await this.authenticate();
+      if (authSuccess) {
+        return this.restRequest<T>(endpoint, options, true);
+      }
+    }
+
     // If 404, try legacy /rest/ endpoint
     if (response.status === 404) {
       console.log(`[VMware] Trying legacy endpoint for ${endpoint}`);
@@ -656,6 +666,15 @@ export class VMwareService {
 
       if (response.ok) {
         return response.json();
+      }
+
+      // Also retry legacy endpoint on 401
+      if (response.status === 401 && !_retried) {
+        console.log('[VMware] Legacy session expired, re-authenticating...');
+        const authSuccess = await this.authenticate();
+        if (authSuccess) {
+          return this.restRequest<T>(endpoint, options, true);
+        }
       }
     }
 

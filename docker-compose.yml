@@ -62,10 +62,10 @@ services:
       - /app/.next
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
-      interval: 30s
-      timeout: 3s
+      interval: 60s
+      timeout: 5s
       retries: 3
-      start_period: 40s
+      start_period: 60s
     restart: unless-stopped
     entrypoint: /app/scripts/entrypoint.sh
     command: npm run dev

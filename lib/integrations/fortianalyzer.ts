@@ -48,16 +48,32 @@ class FortiAnalyzerService {
   constructor(config: FortiAnalyzerConfig) {
     this.config = config;
     this.baseUrl = `https://${config.host}/jsonrpc`;
+    // If accessToken provided, use directly as session (API key auth - no login needed)
+    if (config.accessToken) {
+      this.session = config.accessToken;
+    }
   }
 
   /**
-   * Login with username/password
+   * Login with username/password (with 15s timeout)
    */
   async login(): Promise<boolean> {
+    // If using API key (accessToken), no login needed
+    if (this.config.accessToken) {
+      this.session = this.config.accessToken;
+      return true;
+    }
+
     try {
+      console.log(`[FortiAnalyzer] Logging in as ${this.config.username}...`);
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+
       const response = await fetch(this.baseUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify({
           jsonrpc: '2.0',
           method: 'exec',
@@ -70,20 +86,31 @@ class FortiAnalyzerService {
           }],
           id: 1,
         }),
+      }).catch((err) => {
+        clearTimeout(timeoutId);
+        console.error('[FortiAnalyzer] Login request failed:', err.message);
+        return null;
       });
+
+      clearTimeout(timeoutId);
+      if (!response) return false;
 
       const data = await response.json() as {
         result?: Array<{ status: { code: number; message: string } }>;
         session?: string;
       };
 
-      if (data.result && data.result[0].status.code === 0 && data.session) {
+      const status = data.result?.[0]?.status;
+      if (status?.code === 0 && data.session) {
         this.session = data.session;
+        console.log('[FortiAnalyzer] Login successful');
         return true;
       }
+
+      console.error(`[FortiAnalyzer] Login failed: code=${status?.code} msg=${status?.message}`);
       return false;
     } catch (error) {
-      console.error('FortiAnalyzer login failed:', error);
+      console.error('[FortiAnalyzer] Login failed:', error);
       return false;
     }
   }
@@ -345,9 +372,14 @@ class FortiAnalyzerService {
     }
 
     try {
+      // Add AbortController timeout to prevent hanging fetch (was causing isCheckRunning to stay stuck)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+
       const response = await fetch(this.baseUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify({
           jsonrpc: '2.0',
           method: 'get',
@@ -360,15 +392,35 @@ class FortiAnalyzerService {
           session: this.session,
           id: 11,
         }),
+      }).catch((err) => {
+        clearTimeout(timeoutId);
+        if (err.name === 'AbortError') {
+          console.warn(`[FortiAnalyzer] fetchLogResults timed out (tid=${tid})`);
+        } else {
+          console.error('Failed to fetch log results:', err.message);
+        }
+        return null;
       });
 
-      const data = await response.json() as {
-        result?: {
-          data: Array<Record<string, unknown>>;
-          status: { code: number; message: string };
-        };
-        error?: { code: number; message: string };
-      };
+      clearTimeout(timeoutId);
+      if (!response) return null;
+
+      // Also timeout the JSON parsing in case response body is truncated/slow
+      const data = await Promise.race([
+        response.json() as Promise<{
+          result?: {
+            data: Array<Record<string, unknown>>;
+            status: { code: number; message: string };
+          };
+          error?: { code: number; message: string };
+        }>,
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 10000)),
+      ]);
+
+      if (!data) {
+        console.warn(`[FortiAnalyzer] fetchLogResults JSON parse timed out (tid=${tid})`);
+        return null;
+      }
 
       if (data.error) {
         console.error('Fetch logs error:', data.error);
