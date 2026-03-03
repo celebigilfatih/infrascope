@@ -2,22 +2,22 @@
  * Alarm Background Monitor - WATCHDOG MODE
  *
  * Architecture:
- * - AlarmScheduler (lib/alarm-scheduler.ts): Primary evaluation, every 15 minutes
+ * - AlarmScheduler (lib/alarm-scheduler.ts): Primary evaluation, every 20 minutes
  * - AlarmMonitor (this file): Watchdog — only triggers if scheduler is behind schedule
  *
- * The monitor checks every 10 minutes:
- *  - If last successful check was within 20 minutes: do nothing (scheduler is on time)
- *  - If last successful check was > 20 minutes ago: trigger the check endpoint
+ * The monitor checks every 15 minutes:
+ *  - If last successful check was within 30 minutes: do nothing (scheduler is on time)
+ *  - If last successful check was > 30 minutes ago: trigger the check endpoint
  *
  * This prevents concurrent evaluation while ensuring alarm checks never fall too far behind.
- * Does NOT run immediately at startup (waits 3 minutes) to avoid startup race with scheduler.
+ * Does NOT run immediately at startup (waits 5 minutes) to avoid startup race with scheduler.
  */
 
 import { prisma } from '@/lib/prisma';
 
-const WATCHDOG_INTERVAL_MINUTES = 10;       // How often to check if scheduler is on time
-const WATCHDOG_MAX_GAP_MINUTES = 20;        // If last check was > 20 min ago, trigger manually
-const WATCHDOG_STARTUP_DELAY_MINUTES = 3;   // Don't run immediately at startup
+const WATCHDOG_INTERVAL_MINUTES = 15;       // How often to check if scheduler is on time
+const WATCHDOG_MAX_GAP_MINUTES = 30;        // If last check was > 30 min ago, trigger manually
+const WATCHDOG_STARTUP_DELAY_MINUTES = 5;   // Don't run immediately at startup
 
 export class AlarmMonitor {
   private intervalId: NodeJS.Timeout | null = null;

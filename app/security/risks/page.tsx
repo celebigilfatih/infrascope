@@ -55,9 +55,14 @@ export default function RisksPage() {
   }, []);
 
   const filteredRisks = useMemo(() => {
-    if (!searchTerm) return risks;
+    // Filter to show only critical and high severity risks
+    const criticalAndHighRisks = risks.filter(r => 
+      r.severity === 'critical' || r.severity === 'high'
+    );
+    
+    if (!searchTerm) return criticalAndHighRisks;
     const term = searchTerm.toLowerCase();
-    return risks.filter(r => 
+    return criticalAndHighRisks.filter(r => 
       r.title.toLowerCase().includes(term) || 
       r.category.toLowerCase().includes(term) || 
       r.owner.toLowerCase().includes(term)
@@ -123,8 +128,8 @@ export default function RisksPage() {
                 <AlertTriangle className="h-5 w-5 text-red-500" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Total Risks</p>
-                <p className="text-2xl font-bold">{risks.length}</p>
+                <p className="text-sm text-muted-foreground">Critical/High Risks</p>
+                <p className="text-2xl font-bold">{filteredRisks.length}</p>
               </div>
             </div>
           </CardContent>
@@ -196,7 +201,7 @@ export default function RisksPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <AlertTriangle className="h-5 w-5" />
-            Detected Risks
+            Critical & High Severity Risks
             <Badge variant="secondary">{filteredRisks.length}</Badge>
           </CardTitle>
         </CardHeader>
@@ -207,7 +212,7 @@ export default function RisksPage() {
             </div>
           ) : paginatedRisks.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
-              No risks detected. Firewall policies are properly configured.
+              No critical or high severity risks detected. Firewall policies are properly configured.
             </div>
           ) : (
             <>

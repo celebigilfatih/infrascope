@@ -7,7 +7,7 @@ let schedulerInterval: NodeJS.Timeout | null = null;
 
 /**
  * Start the alarm scheduler
- * Runs alarm check every 5 minutes (300000ms)
+ * Runs alarm check every 20 minutes (1200000ms)
  */
 export function startAlarmScheduler() {
   // Prevent multiple scheduler instances
@@ -16,7 +16,7 @@ export function startAlarmScheduler() {
     return;
   }
 
-  // Schedule: Every 15 minutes (900000 milliseconds) - increased from 5 minutes due to performance
+  // Schedule: Every 20 minutes (1200000 milliseconds) - allows 15-min checks to complete
   schedulerInterval = setInterval(async () => {
     try {
       console.log('[AlarmScheduler] Starting scheduled alarm check...');
@@ -43,9 +43,9 @@ export function startAlarmScheduler() {
     } catch (error) {
       console.error('[AlarmScheduler] ❌ Error during scheduled check:', error);
     }
-  }, 900000); // 15 minutes = 900000ms
+  }, 1200000); // 20 minutes = 1200000ms
 
-  console.log('[AlarmScheduler] ✅ Started - alarm checks will run every 15 minutes');
+  console.log('[AlarmScheduler] ✅ Started - alarm checks will run every 20 minutes');
 }
 
 /**
@@ -65,7 +65,7 @@ export function stopAlarmScheduler() {
 export function getSchedulerStatus() {
   return {
     running: schedulerInterval !== null,
-    intervalMs: 900000,
-    intervalMinutes: 15,
+    intervalMs: 1200000,
+    intervalMinutes: 20,
   };
 }

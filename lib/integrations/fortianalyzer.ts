@@ -68,7 +68,7 @@ class FortiAnalyzerService {
       console.log(`[FortiAnalyzer] Logging in as ${this.config.username}...`);
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout (increased for slow authentication)
 
       const response = await fetch(this.baseUrl, {
         method: 'POST',
@@ -322,7 +322,7 @@ class FortiAnalyzerService {
 
       // Add timeout for fetch request
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 45000); // 45s timeout (increased for large datasets)
 
       const response = await fetch(this.baseUrl, {
         method: 'POST',
@@ -374,7 +374,7 @@ class FortiAnalyzerService {
     try {
       // Add AbortController timeout to prevent hanging fetch (was causing isCheckRunning to stay stuck)
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout (increased for complex queries)
 
       const response = await fetch(this.baseUrl, {
         method: 'POST',
@@ -414,7 +414,7 @@ class FortiAnalyzerService {
           };
           error?: { code: number; message: string };
         }>,
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), 10000)),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 30000)), // 30s for large result sets
       ]);
 
       if (!data) {

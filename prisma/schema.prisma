@@ -979,6 +979,42 @@ model AlarmCheckLog {
   @@map("alarm_check_logs")
 }
 
+/// Cached FortiAnalyzer events for fast alarm evaluation
+model CachedEvent {
+  id          String   @id @default(cuid())
+  logtype     String   // event, dns, traffic, webfilter, app-ctrl, attack, virus
+  logId       String   // Original FortiAnalyzer log ID
+  eventTime   DateTime // When the event occurred
+  srcIp       String?
+  dstIp       String?
+  srcPort     Int?
+  dstPort     Int?
+  proto       Int?
+  user        String?
+  action      String?
+  level       String?
+  subtype     String?
+  vdom        String?
+  devname     String?
+  policyid    Int?
+  service     String?
+  app         String?
+  appcat      String?
+  apprisk     String?
+  srccountry  String?
+  dstcountry  String?
+  msg         String?
+  rawLog      Json     // Complete original log entry
+  createdAt   DateTime @default(now())
+
+  @@unique([logtype, logId])
+  @@index([logtype, eventTime])
+  @@index([eventTime])
+  @@index([logtype, srcIp, eventTime])
+  @@index([logtype, dstIp, eventTime])
+  @@map("cached_events")
+}
+
 /// Notification channel configuration
 model NotificationConfig {
   id          String   @id @default(cuid())

@@ -12,8 +12,8 @@ import { prisma } from '@/lib/prisma';
 import FortiAnalyzerService from '@/lib/integrations/fortianalyzer';
 import { AlarmDetectionEngine } from '@/lib/alarms/detection-engine';
 
-// Timestamp-based mutex: auto-expires after 5 minutes (prevents permanent lock on crash/SIGTERM)
-const MAX_CHECK_DURATION_MS = 5 * 60 * 1000; // 5 minutes
+// Timestamp-based mutex: auto-expires after 20 minutes (prevents permanent lock on crash/SIGTERM)
+const MAX_CHECK_DURATION_MS = 20 * 60 * 1000; // 20 minutes (allows 15 min global timeout + buffer)
 let checkStartTime: number | null = null;
 let lastCheckResult: {
   success: boolean;
@@ -59,21 +59,44 @@ async function runAlarmCheck() {
 
     const engine = new AlarmDetectionEngine(service);
 
-    // Global 4-minute timeout for the entire evaluation
-    const GLOBAL_TIMEOUT_MS = 4 * 60 * 1000;
+    // OPTIMIZED: Global 8-minute timeout (down from 15 min) - optimized engine should complete in <5 min
+    const GLOBAL_TIMEOUT_MS = 8 * 60 * 1000;
+    
+    console.log(`[AlarmCheck] Starting alarm evaluation with ${GLOBAL_TIMEOUT_MS / 1000}s timeout...`);
+    const startTime = Date.now();
+    
     const results = await Promise.race([
       engine.evaluateAllAlarms(),
       new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Alarm check global timeout (4 minutes)')), GLOBAL_TIMEOUT_MS)
+        setTimeout(() => reject(new Error('Alarm check global timeout (8 minutes)')), GLOBAL_TIMEOUT_MS)
       ),
     ]);
 
     const triggered = results.filter((r) => r.triggered);
     const errors = results.filter((r) => r.error && r.error !== 'cooldown-active');
     const cooldowns = results.filter((r) => r.error === 'cooldown-active');
-    const durationSec = Math.round((Date.now() - checkStartTime) / 1000);
+    const durationSec = Math.round((Date.now() - startTime) / 1000);
+    const durationMs = Date.now() - startTime;
 
-    console.log(`[AlarmCheck] Completed in ${durationSec}s: ${triggered.length} triggered, ${errors.length} errors, ${cooldowns.length} cooldowns`);
+    console.log(`[AlarmCheck] ✅ Completed in ${durationSec}s: ${triggered.length} triggered, ${errors.length} errors, ${cooldowns.length} cooldowns`);
+    console.log(`[AlarmCheck] Performance: ${(results.length / (durationMs / 1000)).toFixed(1)} alarms/sec`);
+
+    // Write to AlarmCheckLog for watchdog monitoring
+    try {
+      await prisma.alarmCheckLog.create({
+        data: {
+          checkTime: new Date(),
+          totalAlarms: results.length,
+          triggeredCount: triggered.length,
+          errorCount: errors.length,
+          durationMs: durationMs,
+          status: errors.length > 0 ? (triggered.length > 0 ? 'PARTIAL' : 'PARTIAL') : 'SUCCESS',
+        },
+      });
+      console.log(`[AlarmCheck] Logged to AlarmCheckLog`);
+    } catch (logError) {
+      console.error('[AlarmCheck] Failed to write AlarmCheckLog:', logError);
+    }
 
     lastCheckResult = {
       success: true,
@@ -94,6 +117,25 @@ async function runAlarmCheck() {
     return lastCheckResult;
   } catch (error) {
     console.error('[AlarmCheck] Critical error:', error);
+    
+    // Log failed checks to AlarmCheckLog (timeout, crash, etc.)
+    const durationMs = checkStartTime ? Date.now() - checkStartTime : 0;
+    try {
+      await prisma.alarmCheckLog.create({
+        data: {
+          checkTime: new Date(),
+          totalAlarms: 0,
+          triggeredCount: 0,
+          errorCount: 1,
+          durationMs: durationMs,
+          status: 'FAILED',
+        },
+      });
+      console.log(`[AlarmCheck] Logged FAILED check to AlarmCheckLog (${durationMs}ms)`);
+    } catch (logError) {
+      console.error('[AlarmCheck] Failed to write AlarmCheckLog:', logError);
+    }
+    
     return {
       success: false,
       error: (error as Error).message,

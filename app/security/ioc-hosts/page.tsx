@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, Fragment } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -18,6 +18,8 @@ import {
   Bug,
   AlertOctagon,
   Activity,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 
 // Interfaces
@@ -61,6 +63,13 @@ const TIME_RANGES = [
   { label: '7 gün', value: 10080 },
 ];
 
+const ITEMS_PER_PAGE_OPTIONS = [
+  { label: '10', value: 10 },
+  { label: '25', value: 25 },
+  { label: '50', value: 50 },
+  { label: '100', value: 100 },
+];
+
 const formatBytes = (bytes: string | number | undefined): string => {
   if (!bytes) return '0 B';
   const b = typeof bytes === 'string' ? parseFloat(bytes) : bytes;
@@ -87,6 +96,10 @@ export default function IoCHostsPage() {
   const [threatSearch, setThreatSearch] = useState('');
   const [timeRange, setTimeRange] = useState(240);
   const [activeTab, setActiveTab] = useState('hosts');
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(25);
 
   const fetchAllData = useCallback(async (range: number) => {
     setError(null);
@@ -121,6 +134,12 @@ export default function IoCHostsPage() {
 
   const handleTimeRangeChange = (value: number) => {
     setTimeRange(value);
+    setCurrentPage(1); // Reset pagination on time range change
+  };
+
+  const handleItemsPerPageChange = (value: number) => {
+    setItemsPerPage(value);
+    setCurrentPage(1); // Reset to first page when changing page size
   };
 
   const getThreatLevelBadge = (weight: string | number | undefined) => {
@@ -164,10 +183,37 @@ export default function IoCHostsPage() {
     );
   }, [threatsData, threatSearch]);
 
+  // Pagination calculations
+  const totalHostPages = Math.ceil(filteredHosts.length / itemsPerPage);
+  const totalThreatPages = Math.ceil(filteredThreats.length / itemsPerPage);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [hostSearch, threatSearch, activeTab]);
+
+  // Get page numbers for pagination
+  const getPageNumbers = (totalPages: number) => {
+    const pages: (number | 'ellipsis')[] = [];
+    const maxVisible = 5;
+    
+    if (totalPages <= maxVisible) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      pages.push(1);
+      if (currentPage > 3) pages.push('ellipsis');
+      const start = Math.max(2, currentPage - 1);
+      const end = Math.min(totalPages - 1, currentPage + 1);
+      for (let i = start; i <= end; i++) pages.push(i);
+      if (currentPage < totalPages - 2) pages.push('ellipsis');
+      pages.push(totalPages);
+    }
+    return pages;
+  };
+
   // Stats
   const totalThreats = hostsData.reduce((sum, h) => sum + parseFloat(h.threatweight || '0'), 0);
   const totalBlocked = hostsData.reduce((sum, h) => sum + parseFloat(h.threat_block || '0'), 0);
-  const totalPassed = hostsData.reduce((sum, h) => sum + parseFloat(h.threat_pass || '0'), 0);
   const criticalHosts = hostsData.filter(h => parseFloat(h.threatweight || '0') >= 50).length;
 
   return (
@@ -287,19 +333,32 @@ export default function IoCHostsPage() {
         <TabsContent value="hosts">
           <Card>
             <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-4">
                 <CardTitle className="text-lg flex items-center gap-2">
                   <AlertOctagon className="h-5 w-5 text-red-500" />
                   Tehdit Altındaki Host&apos;lar (Top Sources)
                 </CardTitle>
-                <div className="relative w-64">
-                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="IP, kullanıcı, cihaz ara..."
-                    className="pl-8 h-9"
-                    value={hostSearch}
-                    onChange={(e) => setHostSearch(e.target.value)}
-                  />
+                <div className="flex items-center gap-2">
+                  <select
+                    value={itemsPerPage}
+                    onChange={(e) => handleItemsPerPageChange(Number(e.target.value))}
+                    className="h-9 px-3 py-1 text-sm border rounded-md bg-background"
+                  >
+                    {ITEMS_PER_PAGE_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label} satır
+                      </option>
+                    ))}
+                  </select>
+                  <div className="relative w-64">
+                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="IP, kullanıcı, cihaz ara..."
+                      className="pl-8 h-9"
+                      value={hostSearch}
+                      onChange={(e) => setHostSearch(e.target.value)}
+                    />
+                  </div>
                 </div>
               </div>
             </CardHeader>
@@ -360,6 +419,49 @@ export default function IoCHostsPage() {
                   </TableBody>
                 </Table>
               )}
+              {filteredHosts.length > itemsPerPage && (
+                <div className="flex items-center justify-between px-4 py-3 border-t">
+                  <p className="text-sm text-muted-foreground">
+                    Sayfa {currentPage} / {totalHostPages} ({filteredHosts.length} host)
+                  </p>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    {getPageNumbers(totalHostPages).map((page, idx) => (
+                      <Fragment key={idx}>
+                        {page === 'ellipsis' ? (
+                          <span className="px-2 text-muted-foreground">...</span>
+                        ) : (
+                          <Button
+                            variant={currentPage === page ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => setCurrentPage(page)}
+                            className="w-9 h-8"
+                          >
+                            {page}
+                          </Button>
+                        )}
+                      </Fragment>
+                    ))}
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => setCurrentPage((p) => Math.min(totalHostPages, p + 1))}
+                      disabled={currentPage === totalHostPages}
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -368,19 +470,32 @@ export default function IoCHostsPage() {
         <TabsContent value="threats">
           <Card>
             <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-4">
                 <CardTitle className="text-lg flex items-center gap-2">
                   <Bug className="h-5 w-5 text-orange-500" />
                   Top Tehditler
                 </CardTitle>
-                <div className="relative w-64">
-                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Tehdit adı, tür, seviye ara..."
-                    className="pl-8 h-9"
-                    value={threatSearch}
-                    onChange={(e) => setThreatSearch(e.target.value)}
-                  />
+                <div className="flex items-center gap-2">
+                  <select
+                    value={itemsPerPage}
+                    onChange={(e) => handleItemsPerPageChange(Number(e.target.value))}
+                    className="h-9 px-3 py-1 text-sm border rounded-md bg-background"
+                  >
+                    {ITEMS_PER_PAGE_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label} satır
+                      </option>
+                    ))}
+                  </select>
+                  <div className="relative w-64">
+                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Tehdit adı, tür, seviye ara..."
+                      className="pl-8 h-9"
+                      value={threatSearch}
+                      onChange={(e) => setThreatSearch(e.target.value)}
+                    />
+                  </div>
                 </div>
               </div>
             </CardHeader>
@@ -447,6 +562,49 @@ export default function IoCHostsPage() {
                     )}
                   </TableBody>
                 </Table>
+              )}
+              {filteredThreats.length > itemsPerPage && (
+                <div className="flex items-center justify-between px-4 py-3 border-t">
+                  <p className="text-sm text-muted-foreground">
+                    Sayfa {currentPage} / {totalThreatPages} ({filteredThreats.length} tehdit)
+                  </p>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    {getPageNumbers(totalThreatPages).map((page, idx) => (
+                      <Fragment key={idx}>
+                        {page === 'ellipsis' ? (
+                          <span className="px-2 text-muted-foreground">...</span>
+                        ) : (
+                          <Button
+                            variant={currentPage === page ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => setCurrentPage(page)}
+                            className="w-9 h-8"
+                          >
+                            {page}
+                          </Button>
+                        )}
+                      </Fragment>
+                    ))}
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => setCurrentPage((p) => Math.min(totalThreatPages, p + 1))}
+                      disabled={currentPage === totalThreatPages}
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
               )}
             </CardContent>
           </Card>
