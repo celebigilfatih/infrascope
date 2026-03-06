@@ -148,6 +148,7 @@ export const Sidebar: React.FC = () => {
         { name: 'Virtual IPs', href: '/security/virtual-ips', icon: ExternalLink },
         { name: 'Web Analytics', href: '/security/web-analytics', icon: Globe },
         { name: 'IoC Hosts', href: '/security/ioc-hosts', icon: AlertOctagon },
+        { name: 'Quarantine', href: '/security/quarantine', icon: Lock },
         { name: 'Firewall Policies', href: '/security/policies', icon: Shield },
         { name: 'IPsec Tunnels', href: '/network/ipsec', icon: Globe },
         { name: 'SSL-VPN', href: '/network/ssl-vpn', icon: Users },

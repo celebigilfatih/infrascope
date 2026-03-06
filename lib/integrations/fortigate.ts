@@ -961,6 +961,103 @@ export class FortiGateService {
       return [];
     }
   }
+
+  /**
+   * Fetch quarantined (banned) IPs from FortiGate
+   * GET /api/v2/monitor/user/banned
+   */
+  async fetchQuarantinedIPs(): Promise<FortiGateQuarantinedIP[]> {
+    try {
+      const data = await this.apiRequest<{
+        http_method: string;
+        results: Array<{
+          ip_address?: string;
+          ip_v4_address?: string;
+          ip_v6_address?: string;
+          ipv6?: string | number;
+          created?: number;
+          expires?: number;
+          source?: string;
+          service?: string;
+          comment?: string;
+          status?: string;
+          vd?: string;
+          interface?: string;
+        }>;
+        http_status: number;
+        serial: string;
+        vdom: string;
+        path: string;
+        name: string;
+      }>('/monitor/user/banned');
+
+      if (!data.results) return [];
+
+      return data.results.map((entry, idx) => ({
+        id: `quarantine-${idx}`,
+        ip: entry.ip_address || entry.ip_v4_address || entry.ip_v6_address || 'unknown',
+        ipv6: typeof entry.ipv6 === 'string' && entry.ipv6 ? entry.ipv6 : undefined,
+        created: entry.created ? new Date(entry.created * 1000).toISOString() : null,
+        expires: entry.expires ? new Date(entry.expires * 1000).toISOString() : null,
+        source: entry.source || 'manual',
+        service: entry.service || '-',
+        comment: entry.comment || '',
+        status: entry.status || 'banned',
+        vdom: entry.vd || 'root',
+        interface: entry.interface || '-',
+      }));
+    } catch (error) {
+      console.error('Failed to fetch quarantined IPs:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Release (unban) a quarantined IP
+   * POST /api/v2/monitor/user/banned/clear_users
+   */
+  async releaseQuarantinedIP(ip: string): Promise<boolean> {
+    try {
+      await this.apiRequest('/monitor/user/banned/clear_users', 'POST', {
+        ip_addresses: [ip],
+      });
+      return true;
+    } catch (error) {
+      console.error(`Failed to release quarantine for ${ip}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Add an IP to quarantine
+   * POST /api/v2/monitor/user/banned/add_users
+   */
+  async addToQuarantine(ip: string, expiry_seconds?: number, comment?: string): Promise<boolean> {
+    try {
+      const payload: Record<string, unknown> = { ip_addresses: [ip] };
+      if (expiry_seconds) payload.expiry = expiry_seconds;
+      if (comment) payload.comment = comment;
+      await this.apiRequest('/monitor/user/banned/add_users', 'POST', payload);
+      return true;
+    } catch (error) {
+      console.error(`Failed to add ${ip} to quarantine:`, error);
+      return false;
+    }
+  }
+}
+
+export interface FortiGateQuarantinedIP {
+  id: string;
+  ip: string;
+  ipv6?: string;
+  created: string | null;
+  expires: string | null;
+  source: string;
+  service: string;
+  comment: string;
+  status: string;
+  vdom: string;
+  interface: string;
 }
 
 export default FortiGateService;

@@ -42,6 +42,7 @@ export default function DashboardPage() {
     onlineHosts: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [vmwareLoading, setVmwareLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -58,25 +59,43 @@ export default function DashboardPage() {
     buildings: [],
   });
 
+  const loadVmwareStats = async () => {
+    try {
+      setVmwareLoading(true);
+      // type=summary: lightweight endpoint — only fetchVMs() + fetchHosts()
+      // skips clusters/datastores/snapshots for ~3x faster response
+      const vmwareRes = await fetch('/api/integrations/vmware?type=summary')
+        .then(r => r.json())
+        .catch(() => ({ summary: { vms: 0, vmRunning: 0, hosts: 0, hostsOnline: 0 } }));
+      setStats(prev => ({
+        ...prev,
+        totalVMs: vmwareRes?.summary?.vms || 0,
+        runningVMs: vmwareRes?.summary?.vmRunning || 0,
+        totalHosts: vmwareRes?.summary?.hosts || 0,
+        onlineHosts: vmwareRes?.summary?.hostsOnline || 0,
+      }));
+    } finally {
+      setVmwareLoading(false);
+    }
+  };
+
   const loadDashboardData = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      // Fetch data in parallel with error handling
+      // Fetch core data in parallel — fast APIs only (~150-200ms)
       // mode=minimal: skips deep nested joins (4-level rack/room/floor/building)
-      // giving ~10x faster response for dashboard summary use case
+      // VMware stats are loaded separately (non-blocking) to avoid 9.6s cold-start delay
       const results = await Promise.allSettled([
         apiGet('/api/devices?limit=100&filterType=manual&mode=minimal'),
         apiGet('/api/services?limit=50&mode=minimal'),
         apiGet('/api/buildings'),
-        fetch('/api/integrations/vmware?type=dashboard').then(r => r.json()).catch(() => ({ summary: { vms: 0, vmRunning: 0, hosts: 0, hostsOnline: 0 } })),
       ]);
 
       const devicesRes = results[0].status === 'fulfilled' ? results[0].value : { success: false, data: [] };
       const servicesRes = results[1].status === 'fulfilled' ? results[1].value : { success: false, data: [] };
       const buildingsRes = results[2].status === 'fulfilled' ? results[2].value : { success: false, data: [] };
-      const vmwareRes = results[3].status === 'fulfilled' ? results[3].value : { summary: { vms: 0, vmRunning: 0, hosts: 0, hostsOnline: 0 } };
 
       if (devicesRes.success && servicesRes.success && buildingsRes.success) {
         const devices = devicesRes.data || [];
@@ -85,18 +104,15 @@ export default function DashboardPage() {
 
         setData({ devices, services, buildings });
         
-        setStats({
+        setStats(prev => ({
+          ...prev,
           totalDevices: devicesRes.total || devices.length,
           activeDevices: devices.filter((d: Device) => d.status === 'ACTIVE').length,
           totalServices: servicesRes.total || services.length,
           runningServices: services.filter((s: Service) => s.status === 'RUNNING').length,
           totalBuildings: buildings.length,
           criticalIssues: devices.filter((d: Device) => d.criticality === 'CRITICAL' && d.status !== 'ACTIVE').length,
-          totalVMs: vmwareRes?.summary?.vms || 0,
-          runningVMs: vmwareRes?.summary?.vmRunning || 0,
-          totalHosts: vmwareRes?.summary?.hosts || 0,
-          onlineHosts: vmwareRes?.summary?.hostsOnline || 0,
-        });
+        }));
       } else {
         setError('Panel istatistikleri yüklenemedi');
       }
@@ -105,6 +121,9 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
+
+    // Load VMware stats separately (non-blocking) — does NOT delay main render
+    loadVmwareStats();
   };
 
   const getExpiringDevices = () => {
@@ -147,23 +166,26 @@ export default function DashboardPage() {
       subValue: `${stats.activeDevices} aktif / ${stats.totalDevices} toplam`, 
       trend: `%${((stats.activeDevices / (stats.totalDevices || 1)) * 100).toFixed(1)}`, 
       trendType: 'up', 
-      icon: Monitor 
+      icon: Monitor,
+      isLoading: loading,
     },
     { 
       label: 'Sanal Makineler', 
-      value: stats.totalVMs.toLocaleString(), 
-      subValue: `${stats.runningVMs} çalışan / ${stats.totalVMs} toplam`, 
-      trend: `%${((stats.runningVMs / (stats.totalVMs || 1)) * 100).toFixed(1)}`, 
+      value: vmwareLoading ? '...' : stats.totalVMs.toLocaleString(), 
+      subValue: vmwareLoading ? 'Yükleniyor...' : `${stats.runningVMs} çalışan / ${stats.totalVMs} toplam`, 
+      trend: vmwareLoading ? '—' : `%${((stats.runningVMs / (stats.totalVMs || 1)) * 100).toFixed(1)}`, 
       trendType: 'up', 
-      icon: Monitor 
+      icon: Monitor,
+      isLoading: vmwareLoading,
     },
     { 
       label: 'ESXi Hostlar', 
-      value: stats.totalHosts.toLocaleString(), 
-      subValue: `${stats.onlineHosts} çevrimiçi / ${stats.totalHosts} toplam`, 
-      trend: stats.onlineHosts === stats.totalHosts ? 'Tümü Aktif' : `${stats.onlineHosts} Online`, 
+      value: vmwareLoading ? '...' : stats.totalHosts.toLocaleString(), 
+      subValue: vmwareLoading ? 'Yükleniyor...' : `${stats.onlineHosts} çevrimiçi / ${stats.totalHosts} toplam`, 
+      trend: vmwareLoading ? '—' : (stats.onlineHosts === stats.totalHosts ? 'Tümü Aktif' : `${stats.onlineHosts} Online`), 
       trendType: 'up', 
-      icon: Settings 
+      icon: Settings,
+      isLoading: vmwareLoading,
     },
     { 
       label: 'Yönetilen Binalar', 
@@ -171,7 +193,8 @@ export default function DashboardPage() {
       subValue: 'Organizasyonlardaki sahalar', 
       trend: 'Aktif', 
       trendType: 'up', 
-      icon: Building2 
+      icon: Building2,
+      isLoading: loading,
     }
   ];
 

@@ -27,6 +27,14 @@ interface EvaluationResult {
 }
 
 /**
+ * Module-level EventCache singleton — prevents duplicate background syncs
+ * accumulating across concurrent check cycles and Next.js hot reloads.
+ * A single EventCacheService is shared for the lifetime of the process.
+ */
+let _sharedEventCache: EventCacheService | null = null;
+let _sharedCacheInitialized = false;
+
+/**
  * Alarm Detection Engine
  * Evaluates alarm rules against FortiAnalyzer logs and triggers notifications.
  */
@@ -149,24 +157,36 @@ export class AlarmDetectionEngine {
 
   private async initializeEventCache() {
     if (this.cacheInitialized) return;
+
+    // Use module-level singleton to prevent multiple background syncs accumulating
+    // across concurrent check cycles and hot reloads.
+    if (_sharedCacheInitialized && _sharedEventCache) {
+      this.eventCache = _sharedEventCache;
+      this.cacheInitialized = true;
+      console.log('[AlarmEngine] ✅ Reusing shared Event Cache (already initialized)');
+      return;
+    }
     
     try {
-      console.log('[AlarmEngine] Initializing Event Cache service...');
-      this.eventCache = new EventCacheService(this.service);
+      console.log('[AlarmEngine] Initializing shared Event Cache service...');
+      _sharedEventCache = new EventCacheService(this.service);
+      this.eventCache = _sharedEventCache;
       
-      // Start background sync immediately
-      this.eventCache.startBackgroundSync();
+      // Start background sync ONCE — singleton ensures only one setInterval exists
+      _sharedEventCache.startBackgroundSync();
       
       // Wait for initial sync to complete (max 30 seconds)
       console.log('[AlarmEngine] Waiting for initial event cache sync...');
       await new Promise(resolve => setTimeout(resolve, 30000));
       
+      _sharedCacheInitialized = true;
       this.cacheInitialized = true;
-      console.log('[AlarmEngine] ✅ Event cache initialized');
+      console.log('[AlarmEngine] ✅ Shared Event cache initialized');
     } catch (error) {
       console.error('[AlarmEngine] Failed to initialize event cache:', error);
       // Continue without cache (fallback to live API)
       this.eventCache = null;
+      _sharedEventCache = null;
     }
   }
 
@@ -296,11 +316,76 @@ export class AlarmDetectionEngine {
       }
 
       console.log(`[AlarmEngine] Evaluation complete: ${results.filter(r => r.triggered).length} triggered, ${results.filter(r => r.error).length} errors`);
+      
+      // Retry any failed notifications from previous cycles
+      await this.retryFailedNotifications();
+      
       return results;
     } catch (error) {
       console.error('[AlarmEngine] Critical error in evaluateAllAlarms:', error);
       // Return results so far instead of crashing
       return results;
+    }
+  }
+
+  /**
+   * Retry sending email notifications for alarms that were created but failed to notify.
+   * This handles cases where the process was interrupted (container restart, crash, etc.)
+   * after creating the alarm_event but before sending/confirming the email.
+   * 
+   * Only retries alarms from the last 24 hours with notifyEmail=true and notifiedAt=NULL.
+   */
+  private async retryFailedNotifications(): Promise<void> {
+    try {
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      
+      const failedAlarms = await prisma.alarmEvent.findMany({
+        where: {
+          notifiedAt: null,
+          createdAt: { gte: twentyFourHoursAgo },
+          alarm: { notifyEmail: true },
+        },
+        include: { alarm: true },
+        take: 10, // Limit batch size to avoid overwhelming SMTP
+      });
+      
+      if (failedAlarms.length === 0) {
+        return; // No failed notifications to retry
+      }
+      
+      console.log(`[AlarmEngine] Retrying ${failedAlarms.length} failed notifications...`);
+      
+      for (const event of failedAlarms) {
+        try {
+          // Bypass email cooldown for retries — these are legitimate notifications
+          // that failed due to process interruption, not duplicates
+          const sent = await sendAlarmEmail({
+            alarmCode: event.alarm.code,
+            alarmName: event.alarm.name,
+            severity: event.alarm.severity,
+            category: event.alarm.category,
+            title: event.title,
+            message: event.message,
+            sourceIp: event.sourceIp || undefined,
+            destIp: event.destIp || undefined,
+            deviceName: event.deviceName || undefined,
+            timestamp: event.createdAt,
+          }, { bypassCooldown: true });
+          
+          if (sent) {
+            await prisma.alarmEvent.update({
+              where: { id: event.id },
+              data: { notifiedAt: new Date(), notifyChannel: 'email' },
+            });
+            console.log(`[AlarmEngine] ✅ Retry successful for ${event.alarm.code} (${event.id})`);
+          }
+        } catch (retryErr) {
+          console.error(`[AlarmEngine] Retry failed for ${event.alarm.code}:`, retryErr);
+        }
+      }
+    } catch (error) {
+      console.error('[AlarmEngine] Error in retryFailedNotifications:', error);
+      // Don't throw - this is a best-effort retry, shouldn't break the main flow
     }
   }
 
@@ -1220,7 +1305,7 @@ export class AlarmDetectionEngine {
       }
     } else {
       // FortiAnalyzer log metadata
-      sourceIp = (firstLog.srcip as string) || (firstLog.remote_host as string) || null;
+      sourceIp = (firstLog.srcip as string) || (firstLog.remip as string) || (firstLog.remote_host as string) || null;
       destIp = (firstLog.dstip as string) || null;
       deviceName = (firstLog.devname as string) || (firstLog.fortigate as string) || null;
     }
@@ -1335,7 +1420,8 @@ export class AlarmDetectionEngine {
     // Group by source IP
     const groups = new Map<string, Array<Record<string, unknown>>>();
     for (const log of logs) {
-      const srcip = (log.srcip as string) || (log.remote_host as string) || 'unknown';
+      const srcip = (log.srcip as string) || (log.remip as string) || (log.remote_host as string) || 'unknown';
+      // Note: SSL-VPN ssl-login-fail events use 'remip' (not srcip) for source IP
       if (!groups.has(srcip)) groups.set(srcip, []);
       groups.get(srcip)!.push(log);
     }

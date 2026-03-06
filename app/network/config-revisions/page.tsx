@@ -73,7 +73,11 @@ export default function ConfigRevisionsPage() {
       const response = await fetch('/api/integrations/fortianalyzer?type=config-revisions');
       const result = await response.json();
       if (result.success && Array.isArray(result.data)) {
-        setLogs(result.data);
+        // Exclude siem service account — automated log collection noise
+        const EXCLUDED_USERS = ['siem'];
+        setLogs(result.data.filter((log: AdminLog) =>
+          !EXCLUDED_USERS.includes((log.user || '').toLowerCase())
+        ));
       } else {
         setError(result.error || 'Veri yüklenemedi');
       }

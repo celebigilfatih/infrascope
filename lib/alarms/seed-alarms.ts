@@ -16,7 +16,7 @@ export async function seedAlarmDefinitions(): Promise<{ created: number; updated
     });
 
     if (existing) {
-      // Update detection logic and metadata, keep user settings (enabled, cooldown, notifyEmail)
+      // Update detection logic, metadata, and notification settings
       await prisma.alarmDefinition.update({
         where: { code: def.code },
         data: {
@@ -25,6 +25,7 @@ export async function seedAlarmDefinitions(): Promise<{ created: number; updated
           category: def.category,
           severity: def.severity,
           detectionLogic: def.detectionLogic as any,
+          notifyEmail: def.notifyEmail ?? true,
         },
       });
       updated++;

@@ -197,7 +197,7 @@ export async function GET(request: NextRequest) {
     // Return cached data if available (5 minute TTL for dashboard, 1 minute for others)
     const now = Date.now();
     const cacheEntry = cachedData.vmwareCache[cacheKey];
-    const cacheTTL = type === 'dashboard' ? 300000 : 60000; // 5 min or 1 min
+    const cacheTTL = (type === 'dashboard' || type === 'summary') ? 300000 : 60000; // 5 min or 1 min
     if (cacheEntry && (now - cacheEntry.timestamp) < cacheTTL) {
       return NextResponse.json(cacheEntry.data);
     }
@@ -214,6 +214,40 @@ export async function GET(request: NextRequest) {
     const authenticated = await service.authenticate();
     if (!authenticated) {
       return NextResponse.json({ error: 'vCenter authentication failed' }, { status: 401 });
+    }
+
+    // Lightweight summary — only VMs + Hosts, no clusters/datastores/snapshots
+    // Designed for dashboard widget: returns only summary counts, ~2-3s vs 9.6s
+    if (type === 'summary') {
+      const [vms, hosts] = await Promise.all([
+        service.fetchVMs(),
+        service.fetchHosts(),
+      ]);
+
+      const vmRunning = vms.filter(v => v.summary?.guestState === 'running').length;
+      const hostsOnline = hosts.filter(h => h.summary?.connectionState === 'connected').length;
+
+      const summaryData = {
+        summary: {
+          vms: vms.length,
+          vmRunning,
+          vmStopped: vms.filter(v => v.summary?.guestState === 'notRunning').length,
+          vmSuspended: vms.filter(v => v.summary?.guestState === 'suspended').length,
+          hosts: hosts.length,
+          hostsOnline,
+          hostsOffline: hosts.filter(h => h.summary?.connectionState !== 'connected').length,
+        },
+      };
+
+      // Cache with 5-minute TTL (same as dashboard)
+      const cachedData = globalThis as any;
+      if (!cachedData.vmwareCache) cachedData.vmwareCache = {};
+      cachedData.vmwareCache[cacheKey] = {
+        data: summaryData,
+        timestamp: Date.now(),
+      };
+
+      return NextResponse.json(summaryData);
     }
 
     // Dashboard summary

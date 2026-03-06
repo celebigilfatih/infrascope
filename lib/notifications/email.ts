@@ -401,17 +401,18 @@ function buildAlarmEmailHtml(data: AlarmEmailData): string {
  * - Alarm in cooldown (duplicate prevention)
  * - SMTP error (logged)
  */
-export async function sendAlarmEmail(data: AlarmEmailData): Promise<boolean> {
+export async function sendAlarmEmail(data: AlarmEmailData, options?: { bypassCooldown?: boolean }): Promise<boolean> {
   const startTime = Date.now();
+  const bypassCooldown = options?.bypassCooldown ?? false;
   
-  // Check hourly rate limit
+  // Check hourly rate limit (never bypassed for safety)
   if (isHourlyLimitExceeded()) {
     console.log(`[Email] ⏸️ Hourly limit (${MAX_EMAILS_PER_HOUR}) exceeded, skipping: ${data.alarmCode}`);
     return false;
   }
   
-  // Check per-alarm cooldown
-  if (isAlarmInCooldown(data.alarmCode)) {
+  // Check per-alarm cooldown (can be bypassed for retries of failed notifications)
+  if (!bypassCooldown && isAlarmInCooldown(data.alarmCode)) {
     console.log(`[Email] ⏸️ Alarm in cooldown, skipping: ${data.alarmCode}`);
     return false;
   }
