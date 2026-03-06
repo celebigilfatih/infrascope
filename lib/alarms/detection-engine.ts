@@ -202,7 +202,20 @@ export class AlarmDetectionEngine {
         return results;
       }
 
-      console.log(`[AlarmEngine] Evaluating ${alarms.length} enabled alarms...`);
+      // Sort alarms by priority (CRITICAL/HIGH first, then MEDIUM, then LOW/INFO)
+      const priorityOrder: Record<string, number> = {
+        'ALARM_CRITICAL': 0,
+        'ALARM_HIGH': 1,
+        'ALARM_MEDIUM': 2,
+        'ALARM_LOW': 3,
+        'ALARM_INFO': 4,
+      };
+      
+      const sortedAlarms = alarms.sort((a, b) => {
+        return (priorityOrder[a.severity] || 5) - (priorityOrder[b.severity] || 5);
+      });
+
+      console.log(`[AlarmEngine] Evaluating ${sortedAlarms.length} enabled alarms (sorted by priority)...`);
 
       // Login once for all evaluations
       const loggedIn = await this.service.login();
@@ -213,7 +226,7 @@ export class AlarmDetectionEngine {
 
       // Separate correlation alarms from regular alarms
       const correlationAlarms: AlarmDef[] = [];
-      const regularAlarms = alarms;
+      const regularAlarms = sortedAlarms;
 
       // Group regular alarms by logtype to batch searches
       const logTypeGroups = new Map<string, AlarmDef[]>();
@@ -540,22 +553,31 @@ export class AlarmDetectionEngine {
 
       if (!searchResult.tid || searchResult.logs.length === 0) {
         // No logs found - all alarms in this batch are not triggered
+        const errorReason = searchResult.tid === 'cache-empty' 
+          ? undefined  // cache says clean - not an error, just no events
+          : (searchResult.tid ? 'no-logs' : 'search-timeout');
         return filterAlarms.map(alarm => ({
           alarmCode: alarm.code,
           triggered: false,
           matchCount: 0,
           events: [],
-          error: searchResult.tid ? 'no-logs' : 'search-timeout'
+          error: errorReason
         }));
       }
 
       // Step 3: Evaluate each alarm against the fetched logs
-      return filterAlarms.map(alarm => {
+      return await Promise.all(filterAlarms.map(async alarm => {
         const logic = alarm.detectionLogic;
         
-        // Check cooldown
+        // Check cooldown — skip if alarm fired recently
         const cooldownThreshold = new Date(Date.now() - alarm.cooldownMinutes * 60 * 1000);
-        // Skip if in cooldown (would need DB check here - keeping simple for now)
+        const recentEvent = await prisma.alarmEvent.findFirst({
+          where: { alarmId: alarm.id, createdAt: { gte: cooldownThreshold } },
+          orderBy: { createdAt: 'desc' },
+        });
+        if (recentEvent) {
+          return { alarmCode: alarm.code, triggered: false, matchCount: 0, events: [], error: 'cooldown-active' as string };
+        }
         
         // Filter by time window
         const cutoff = new Date(Date.now() - logic.timeWindowMinutes * 60 * 1000);
@@ -574,23 +596,69 @@ export class AlarmDetectionEngine {
           filteredLogs = this.filterGeoAnomaly(recentLogs);
         }
 
-        // Alarm-specific exclusions
-        if (alarm.code === 'ADMIN_NEW_GEO') {
-          filteredLogs = filteredLogs.filter((log) => (log.user as string) !== 'siem');
+        // Alarm-specific exclusions (False Positive Filtering)
+        if (alarm.code === 'ADMIN_NEW_GEO' || alarm.code === 'ADMIN_LOGIN_OFF_HOURS' || alarm.code === 'ADMIN_PRIVILEGE_CHANGE') {
+          // Exclude service accounts and known system users
+          const excludedUsers = ['siem', 'admin', 'system', 'root', 'backup', 'monitoring', 'nagios', 'zabbix'];
+          filteredLogs = filteredLogs.filter((log) => {
+            const user = (log.user as string || '').toLowerCase();
+            return !excludedUsers.some(excluded => user.includes(excluded));
+          });
         }
-        if (alarm.code === 'ADMIN_LOGIN_OFF_HOURS') {
-          filteredLogs = filteredLogs.filter((log) => (log.user as string) !== 'siem');
-        }
-        if (alarm.code === 'SNAPSHOT_CREATED') {
+        
+        if (alarm.code === 'SNAPSHOT_CREATED' || alarm.code === 'SNAPSHOT_DELETED') {
+          // Exclude backup software snapshots
           filteredLogs = filteredLogs.filter((log) => {
             const userName = (log.userName as string || '').toLowerCase();
             const snapshotName = (log.snapshotName as string || '').toUpperCase();
-            return userName !== 'veeam' && !snapshotName.includes('VEEAM BACKUP TEMPORARY SNAPSHOT');
+            const excludedPatterns = ['VEEAM', 'BACKUP', 'COMMVAULT', 'VEM', 'NETBACKUP'];
+            return !excludedPatterns.some(pattern => 
+              userName.includes(pattern.toLowerCase()) || snapshotName.includes(pattern)
+            );
+          });
+        }
+        
+        if (alarm.code === 'VPN_LOGIN_OFF_HOURS' || alarm.code === 'VPN_NEW_USER' || alarm.code === 'VPN_BRUTE_FORCE') {
+          // Exclude known service accounts and internal systems
+          const excludedUsers = ['service', 'backup', 'monitor', 'sync', 'replication'];
+          filteredLogs = filteredLogs.filter((log) => {
+            const user = (log.user as string || '').toLowerCase();
+            return !excludedUsers.some(excluded => user.includes(excluded));
+          });
+        }
+        
+        if (alarm.code === 'FW_POLICY_CHANGED' || alarm.code === 'CORE_CONFIG_CHANGE') {
+          // Exclude changes made by automation tools
+          const excludedUsers = ['ansible', 'puppet', 'chef', 'terraform', 'automation', 'script'];
+          filteredLogs = filteredLogs.filter((log) => {
+            const user = (log.user as string || '').toLowerCase();
+            const msg = (log.msg as string || '').toLowerCase();
+            return !excludedUsers.some(excluded => 
+              user.includes(excluded) || msg.includes(excluded)
+            );
+          });
+        }
+        
+        if (alarm.code === 'VM_POWERED_ON' || alarm.code === 'VM_CREATED' || alarm.code === 'VM_POWERED_ON_OFF_HOURS') {
+          // Exclude automated provisioning and backup operations
+          filteredLogs = filteredLogs.filter((log) => {
+            const userName = (log.userName as string || '').toLowerCase();
+            const vmName = (log.vmName as string || '').toLowerCase();
+            const excludedUserPatterns = ['vcenter', 'vra', 'terraform', 'ansible', 'automation', 'veeam', 'system'];
+            const excludedVmPatterns = ['veeam'];
+            return (
+              !excludedUserPatterns.some(pattern => userName.includes(pattern)) &&
+              !excludedVmPatterns.some(pattern => vmName.includes(pattern))
+            );
           });
         }
 
         const matchCount = filteredLogs.length;
         const triggered = matchCount >= logic.threshold;
+
+        if (triggered) {
+          await this.fireAlarm(alarm, filteredLogs);
+        }
 
         return {
           alarmCode: alarm.code,
@@ -598,7 +666,7 @@ export class AlarmDetectionEngine {
           matchCount,
           events: triggered ? filteredLogs.slice(0, 5) : [],
         };
-      });
+      }));
     });
 
     // Execute all batch evaluations in parallel
@@ -674,7 +742,7 @@ export class AlarmDetectionEngine {
       return Promise.race([
         this.evaluateFortiViewAlarm(alarm, logic),
         new Promise<EvaluationResult>((resolve) =>
-          setTimeout(() => resolve({ alarmCode: alarm.code, triggered: false, matchCount: 0, events: [], error: 'fortiview-timeout' }), 20000)
+          setTimeout(() => resolve({ alarmCode: alarm.code, triggered: false, matchCount: 0, events: [], error: 'fortiview-timeout' }), 45000)
         ),
       ]);
     }
@@ -690,12 +758,19 @@ export class AlarmDetectionEngine {
     const searchResult = await Promise.race([
       this.performLogSearch(alarm, logtype, filter, limit),
       new Promise<{ tid: string | null; logs: Array<Record<string, unknown>> }>((resolve) =>
-        setTimeout(() => resolve({ tid: null, logs: [] }), 15000)
+        setTimeout(() => resolve({ tid: null, logs: [] }), 30000)
       ),
     ]);
     
     if (!searchResult.tid || searchResult.logs.length === 0) {
-      return { alarmCode: alarm.code, triggered: false, matchCount: 0, events: [], error: searchResult.tid ? 'no-logs' : 'search-timeout' };
+      const isCleanCache = searchResult.tid === 'cache-empty';
+      return { 
+        alarmCode: alarm.code, 
+        triggered: false, 
+        matchCount: 0, 
+        events: [], 
+        error: isCleanCache ? undefined : (searchResult.tid ? 'no-logs' : 'search-timeout')
+      };
     }
 
     // Filter by time window (client-side)
@@ -762,8 +837,6 @@ export class AlarmDetectionEngine {
     // Try cache first
     if (this.eventCache && this.cacheInitialized) {
       try {
-        console.log(`[AlarmEngine] Using cache for ${logtype} (filter: "${filter.substring(0, 50)}...")`);
-        
         const cachedLogs = await this.eventCache.queryCachedEvents({
           logtype,
           filter,
@@ -773,18 +846,21 @@ export class AlarmDetectionEngine {
         });
 
         if (cachedLogs.length > 0) {
-          console.log(`[AlarmEngine] ✅ Cache returned ${cachedLogs.length} events for ${logtype}`);
+          console.log(`[AlarmEngine] ✅ Cache hit: ${cachedLogs.length} events for ${alarm.code}`);
           return { tid: 'cache', logs: cachedLogs };
         }
 
-        console.log(`[AlarmEngine] Cache empty for ${logtype}, falling back to live API...`);
+        // Cache is initialized but empty = no events in time window = alarm should not fire
+        // Skip live FA fallback to avoid timeouts when cache is authoritative
+        console.log(`[AlarmEngine] Cache clean for ${alarm.code} (${logtype}) — no events in window, skipping FA`);
+        return { tid: 'cache-empty', logs: [] };
       } catch (cacheError) {
-        console.warn('[AlarmEngine] Cache query failed, using live API:', cacheError);
+        console.warn('[AlarmEngine] Cache query failed, falling back to live API:', cacheError);
       }
     }
 
-    // Fallback to live FortiAnalyzer API
-    console.log(`[AlarmEngine] Performing live FortiAnalyzer search for ${logtype}...`);
+    // Fallback to live FortiAnalyzer API (only when cache is NOT initialized)
+    console.log(`[AlarmEngine] Cache not ready, performing live FA search for ${alarm.code}...`);
     
     try {
       const tid = await this.service.startLogSearch(logtype, limit, filter || undefined);
@@ -794,9 +870,9 @@ export class AlarmDetectionEngine {
         return { tid: null, logs: [] };
       }
 
-      // Poll for results (max 15s for alarm checks)
+      // Poll for results (max 30s for alarm checks)
       let logs: Array<Record<string, unknown>> | null = null;
-      for (let i = 0; i < 3; i++) {
+      for (let i = 0; i < 6; i++) {
         await new Promise((resolve) => setTimeout(resolve, 5000));
         logs = await this.service.fetchLogResults(tid, 0, limit);
         if (logs && logs.length > 0) break;
@@ -911,7 +987,8 @@ export class AlarmDetectionEngine {
         // VM-related alarms
         
         // For off-hours power-on detection, use Events API to get recent power-on events
-        if (alarm.code === 'VM_POWERED_ON_OFF_HOURS') {
+        if (alarm.code === 'VM_POWERED_ON' || alarm.code === 'VM_POWERED_ON_OFF_HOURS') {
+          // Use Events API to get actual power-on events (not current VM state snapshot)
           const events = await this.vmwareService.fetchRecentPowerOnEvents(logic.timeWindowMinutes);
           vmwareData = events.map(evt => ({
             type: 'vm',

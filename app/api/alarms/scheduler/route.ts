@@ -3,6 +3,9 @@
  * GET  /api/alarms/scheduler - Get scheduler status
  * POST /api/alarms/scheduler/start - Start the scheduler
  * POST /api/alarms/scheduler/stop - Stop the scheduler
+ * 
+ * NOTE: Scheduler is auto-started in /api/health endpoint on server startup.
+ * This route is for manual management only.
  */
 
 import { NextResponse } from 'next/server';

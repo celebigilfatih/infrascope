@@ -6,6 +6,63 @@ interface FortiAnalyzerConfig {
   pollingInterval?: number;
 }
 
+/**
+ * Retry configuration for API calls
+ */
+interface RetryConfig {
+  maxRetries: number;
+  baseDelay: number;
+  maxDelay: number;
+  retryableErrors: string[];
+}
+
+const DEFAULT_RETRY_CONFIG: RetryConfig = {
+  maxRetries: 3,
+  baseDelay: 1000, // 1 second
+  maxDelay: 10000, // 10 seconds
+  retryableErrors: ['AbortError', 'TypeError', 'fetch failed', 'timeout', 'ECONNRESET', 'ETIMEDOUT'],
+};
+
+/**
+ * Execute async function with retry logic
+ */
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  config: Partial<RetryConfig> = {}
+): Promise<T> {
+  const retryConfig = { ...DEFAULT_RETRY_CONFIG, ...config };
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt < retryConfig.maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error as Error;
+      const errorMessage = lastError.message || '';
+      
+      // Check if error is retryable
+      const isRetryable = retryConfig.retryableErrors.some(retryable =>
+        errorMessage.includes(retryable) || lastError?.name === retryable
+      );
+      
+      if (!isRetryable || attempt === retryConfig.maxRetries - 1) {
+        throw lastError;
+      }
+      
+      // Exponential backoff with jitter
+      const delay = Math.min(
+        retryConfig.baseDelay * Math.pow(2, attempt) + Math.random() * 1000,
+        retryConfig.maxDelay
+      );
+      
+      console.log(`[Retry] Attempt ${attempt + 1}/${retryConfig.maxRetries} failed, retrying in ${Math.round(delay)}ms...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  
+  throw lastError;
+}
+
 interface EventLog {
   id: string;
   eventtime: number;
@@ -44,6 +101,10 @@ class FortiAnalyzerService {
   private baseUrl: string;
   private config: FortiAnalyzerConfig;
   private session: string | null = null;
+  private lastLoginTime: number = 0;
+  private readonly SESSION_TTL_MS = 30 * 60 * 1000; // 30 minutes session TTL
+  private isConnecting: boolean = false;
+  private connectionQueue: Array<() => void> = [];
 
   constructor(config: FortiAnalyzerConfig) {
     this.config = config;
@@ -51,11 +112,42 @@ class FortiAnalyzerService {
     // If accessToken provided, use directly as session (API key auth - no login needed)
     if (config.accessToken) {
       this.session = config.accessToken;
+      this.lastLoginTime = Date.now();
     }
   }
 
   /**
-   * Login with username/password (with 15s timeout)
+   * Check if session is valid (not expired)
+   */
+  private isSessionValid(): boolean {
+    if (!this.session) return false;
+    if (this.config.accessToken) return true; // API keys don't expire
+    return (Date.now() - this.lastLoginTime) < this.SESSION_TTL_MS;
+  }
+
+  /**
+   * Wait for connection to be established (prevents concurrent login race)
+   */
+  private async waitForConnection(): Promise<void> {
+    if (!this.isConnecting) return;
+    
+    return new Promise((resolve) => {
+      this.connectionQueue.push(resolve);
+    });
+  }
+
+  /**
+   * Notify all waiting connections
+   */
+  private notifyConnections(): void {
+    while (this.connectionQueue.length > 0) {
+      const resolve = this.connectionQueue.shift();
+      resolve?.();
+    }
+  }
+
+  /**
+   * Login with username/password (with connection pooling and race condition protection)
    */
   async login(): Promise<boolean> {
     // If using API key (accessToken), no login needed
@@ -64,11 +156,26 @@ class FortiAnalyzerService {
       return true;
     }
 
+    // Return existing valid session
+    if (this.isSessionValid()) {
+      return true;
+    }
+
+    // Wait if another connection is in progress
+    if (this.isConnecting) {
+      console.log('[FortiAnalyzer] Waiting for existing login...');
+      await this.waitForConnection();
+      return this.isSessionValid();
+    }
+
+    // Start new connection
+    this.isConnecting = true;
+
     try {
-      console.log(`[FortiAnalyzer] Logging in as ${this.config.username}...`);
+      console.log(`[FortiAnalyzer] 🔑 Logging in as ${this.config.username} at ${new Date().toISOString()}...`);
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout (increased for slow authentication)
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
 
       const response = await fetch(this.baseUrl, {
         method: 'POST',
@@ -93,7 +200,11 @@ class FortiAnalyzerService {
       });
 
       clearTimeout(timeoutId);
-      if (!response) return false;
+      if (!response) {
+        this.isConnecting = false;
+        this.notifyConnections();
+        return false;
+      }
 
       const data = await response.json() as {
         result?: Array<{ status: { code: number; message: string } }>;
@@ -103,14 +214,21 @@ class FortiAnalyzerService {
       const status = data.result?.[0]?.status;
       if (status?.code === 0 && data.session) {
         this.session = data.session;
+        this.lastLoginTime = Date.now();
         console.log('[FortiAnalyzer] Login successful');
+        this.isConnecting = false;
+        this.notifyConnections();
         return true;
       }
 
-      console.error(`[FortiAnalyzer] Login failed: code=${status?.code} msg=${status?.message}`);
+      console.error(`[FortiAnalyzer] ❌ Login failed at ${new Date().toISOString()}: code=${status?.code} msg=${status?.message}`);
+      this.isConnecting = false;
+      this.notifyConnections();
       return false;
     } catch (error) {
-      console.error('[FortiAnalyzer] Login failed:', error);
+      console.error(`[FortiAnalyzer] ❌ Login failed at ${new Date().toISOString()}:`, error);
+      this.isConnecting = false;
+      this.notifyConnections();
       return false;
     }
   }
@@ -293,7 +411,8 @@ class FortiAnalyzerService {
       if (!loggedIn) return null;
     }
 
-    try {
+    // Use retry mechanism for transient failures
+    return withRetry(async () => {
       // Calculate time range: last 30 days, with +24h buffer on end to handle timezone diffs (UTC vs local)
       const now = new Date();
       const end = new Date(now.getTime() + 24 * 60 * 60 * 1000);
@@ -322,44 +441,43 @@ class FortiAnalyzerService {
 
       // Add timeout for fetch request
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 45000); // 45s timeout (increased for large datasets)
+      const timeoutId = setTimeout(() => controller.abort(), 90000); // 90s timeout (increased for large datasets)
 
-      const response = await fetch(this.baseUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          method: 'add',
-          params: [params],
-          session: this.session,
-          id: 10,
-        }),
-        signal: controller.signal,
-      }).catch((err) => {
+      try {
+        const response = await fetch(this.baseUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            method: 'add',
+            params: [params],
+            session: this.session,
+            id: 10,
+          }),
+          signal: controller.signal,
+        });
+
         clearTimeout(timeoutId);
-        console.error(`FortiAnalyzer ${logtype} search failed:`, err.message);
-        return null;
-      });
 
-      clearTimeout(timeoutId);
+        if (!response) {
+          throw new Error('No response from FortiAnalyzer');
+        }
 
-      if (!response) return null;
+        const data = await response.json() as {
+          result?: { tid: number };
+          error?: { code: number; message: string };
+        };
 
-      const data = await response.json() as {
-        result?: { tid: number };
-        error?: { code: number; message: string };
-      };
+        if (data.error) {
+          throw new Error(`Log search error: ${data.error.message}`);
+        }
 
-      if (data.error) {
-        console.error('Log search error:', data.error);
-        return null;
+        return data.result?.tid || null;
+      } catch (err) {
+        clearTimeout(timeoutId);
+        throw err; // Re-throw for retry mechanism
       }
-
-      return data.result?.tid || null;
-    } catch (error) {
-      console.error('Failed to start log search:', error);
-      return null;
-    }
+    }, { maxRetries: 3, baseDelay: 2000 });
   }
 
   /**
@@ -371,67 +489,63 @@ class FortiAnalyzerService {
       if (!loggedIn) return null;
     }
 
-    try {
+    // Use retry mechanism for transient failures
+    return withRetry(async () => {
       // Add AbortController timeout to prevent hanging fetch (was causing isCheckRunning to stay stuck)
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout (increased for complex queries)
+      const timeoutId = setTimeout(() => controller.abort(), 120000); // 120s timeout (increased for complex queries)
 
-      const response = await fetch(this.baseUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        signal: controller.signal,
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          method: 'get',
-          params: [{
-            url: `/logview/adom/root/logsearch/${tid}`,
-            apiver: 3,
-            offset: offset,
-            limit: limit,
-          }],
-          session: this.session,
-          id: 11,
-        }),
-      }).catch((err) => {
+      try {
+        const response = await fetch(this.baseUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            method: 'get',
+            params: [{
+              url: `/logview/adom/root/logsearch/${tid}`,
+              apiver: 3,
+              offset: offset,
+              limit: limit,
+            }],
+            session: this.session,
+            id: 11,
+          }),
+        });
+
         clearTimeout(timeoutId);
-        if (err.name === 'AbortError') {
-          console.warn(`[FortiAnalyzer] fetchLogResults timed out (tid=${tid})`);
-        } else {
-          console.error('Failed to fetch log results:', err.message);
+
+        if (!response) {
+          throw new Error('No response from FortiAnalyzer');
         }
-        return null;
-      });
 
-      clearTimeout(timeoutId);
-      if (!response) return null;
+        // Also timeout the JSON parsing in case response body is truncated/slow
+        const data = await Promise.race([
+          response.json() as Promise<{
+            result?: {
+              data: Array<Record<string, unknown>>;
+              status: { code: number; message: string };
+            };
+            error?: { code: number; message: string };
+          }>,
+          new Promise<null>((_, reject) => setTimeout(() => reject(new Error('JSON parse timeout')), 30000)), // 30s for large result sets
+        ]);
 
-      // Also timeout the JSON parsing in case response body is truncated/slow
-      const data = await Promise.race([
-        response.json() as Promise<{
-          result?: {
-            data: Array<Record<string, unknown>>;
-            status: { code: number; message: string };
-          };
-          error?: { code: number; message: string };
-        }>,
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), 30000)), // 30s for large result sets
-      ]);
+        if (!data) {
+          throw new Error(`fetchLogResults JSON parse timed out (tid=${tid})`);
+        }
 
-      if (!data) {
-        console.warn(`[FortiAnalyzer] fetchLogResults JSON parse timed out (tid=${tid})`);
-        return null;
+        if (data.error) {
+          throw new Error(`Fetch logs error: ${data.error.message}`);
+        }
+
+        return data.result?.data || null;
+      } catch (err) {
+        clearTimeout(timeoutId);
+        throw err; // Re-throw for retry mechanism
       }
-
-      if (data.error) {
-        console.error('Fetch logs error:', data.error);
-        return null;
-      }
-
-      return data.result?.data || null;
-    } catch (error) {
-      console.error('Failed to fetch log results:', error);
-      return null;
-    }
+    }, { maxRetries: 3, baseDelay: 2000 });
   }
 
   /**
@@ -691,3 +805,28 @@ class FortiAnalyzerService {
 }
 
 export default FortiAnalyzerService;
+
+/**
+ * Singleton FortiAnalyzerService instance factory.
+ * Returns a shared instance to prevent concurrent login limit issues.
+ * All services sharing this instance benefit from session pooling.
+ */
+let _sharedInstance: FortiAnalyzerService | null = null;
+
+export function getSharedFortiAnalyzerService(): FortiAnalyzerService | null {
+  // If already initialized, return the cached instance
+  if (_sharedInstance) return _sharedInstance;
+
+  // Construct from env/DB config is done lazily at call sites via initSharedFortiAnalyzerService
+  return null;
+}
+
+export function initSharedFortiAnalyzerService(config: FortiAnalyzerConfig): FortiAnalyzerService {
+  if (_sharedInstance) {
+    // Already initialized - return existing (session pooling kicks in)
+    return _sharedInstance;
+  }
+  _sharedInstance = new FortiAnalyzerService(config);
+  console.log('[FortiAnalyzer] Shared singleton instance created');
+  return _sharedInstance;
+}

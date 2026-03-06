@@ -187,6 +187,9 @@ export default function IoCHostsPage() {
   const totalHostPages = Math.ceil(filteredHosts.length / itemsPerPage);
   const totalThreatPages = Math.ceil(filteredThreats.length / itemsPerPage);
 
+  const paginatedHosts = filteredHosts.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const paginatedThreats = filteredThreats.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
@@ -398,9 +401,9 @@ export default function IoCHostsPage() {
                         </TableCell>
                       </TableRow>
                     ) : (
-                      filteredHosts.map((h: CompromisedHost, idx: number) => (
+                      paginatedHosts.map((h: CompromisedHost, idx: number) => (
                         <TableRow key={idx}>
-                          <TableCell className="text-muted-foreground whitespace-nowrap">{idx + 1}</TableCell>
+                          <TableCell className="text-muted-foreground whitespace-nowrap">{(currentPage - 1) * itemsPerPage + idx + 1}</TableCell>
                           <TableCell className="font-medium font-mono whitespace-nowrap">{h.srcip || '-'}</TableCell>
                           <TableCell className="whitespace-nowrap">{h.f_user || '-'}</TableCell>
                           <TableCell className="whitespace-nowrap">{getThreatLevelBadge(h.threatweight)}</TableCell>
@@ -419,7 +422,7 @@ export default function IoCHostsPage() {
                   </TableBody>
                 </Table>
               )}
-              {filteredHosts.length > itemsPerPage && (
+              {filteredHosts.length > 0 && totalHostPages > 1 && (
                 <div className="flex items-center justify-between px-4 py-3 border-t">
                   <p className="text-sm text-muted-foreground">
                     Sayfa {currentPage} / {totalHostPages} ({filteredHosts.length} host)
@@ -532,11 +535,11 @@ export default function IoCHostsPage() {
                         </TableCell>
                       </TableRow>
                     ) : (
-                      filteredThreats.map((t: ThreatEntry, idx: number) => {
+                      paginatedThreats.map((t: ThreatEntry, idx: number) => {
                         const levelClass = getThreatLevelColor(t.threatlevel);
                         return (
                           <TableRow key={idx}>
-                            <TableCell className="text-muted-foreground whitespace-nowrap">{idx + 1}</TableCell>
+                            <TableCell className="text-muted-foreground whitespace-nowrap">{(currentPage - 1) * itemsPerPage + idx + 1}</TableCell>
                             <TableCell className="font-medium whitespace-nowrap max-w-[300px] truncate" title={t.threat || ''}>
                               {t.threat || '-'}
                             </TableCell>
@@ -563,7 +566,7 @@ export default function IoCHostsPage() {
                   </TableBody>
                 </Table>
               )}
-              {filteredThreats.length > itemsPerPage && (
+              {filteredThreats.length > 0 && totalThreatPages > 1 && (
                 <div className="flex items-center justify-between px-4 py-3 border-t">
                   <p className="text-sm text-muted-foreground">
                     Sayfa {currentPage} / {totalThreatPages} ({filteredThreats.length} tehdit)

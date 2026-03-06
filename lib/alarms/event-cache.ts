@@ -72,10 +72,10 @@ export class EventCacheService {
     ];
 
     const now = new Date();
-    // Fetch last 15 minutes to ensure we capture delayed events
-    const startTime = new Date(Date.now() - 15 * 60 * 1000);
+    // Fetch last 24 hours - covers all alarm time windows (most alarms check 30-120 min, longest is 24h)
+    const startTime = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-    console.log(`[EventCache] Starting sync: ${logtypes.length} logtypes, last 15 minutes...`);
+    console.log(`[EventCache] Starting sync: ${logtypes.length} logtypes, last 24 hours...`);
 
     for (const logtype of logtypes) {
       try {
@@ -85,8 +85,22 @@ export class EventCacheService {
       }
     }
 
+    // Cleanup: remove events older than 24 hours to keep DB size manageable
+    try {
+      const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const deleted = await prisma.cachedEvent.deleteMany({
+        where: { eventTime: { lt: cutoff } },
+      });
+      if (deleted.count > 0) {
+        console.log(`[EventCache] Cleaned up ${deleted.count} expired events`);
+      }
+    } catch (cleanupError) {
+      console.warn('[EventCache] Cleanup failed:', cleanupError);
+    }
+
     this.syncInProgress = false;
   }
+
 
   /**
    * Sync a single log type
@@ -107,37 +121,69 @@ export class EventCacheService {
       return;
     }
 
-    // Fetch results with pagination
-    let offset = 0;
-    const limit = 1000;
-    let totalFetched = 0;
-
-    while (totalFetched < 5000) { // Max 5000 events per logtype
-      const logs = await this.faService.fetchLogResults(tid, offset, limit);
-      
-      if (!logs || logs.length === 0) {
-        console.log(`[EventCache] ${logtype}: Fetched ${totalFetched} events`);
+    // CRITICAL: Poll for results - FortiAnalyzer processes searches asynchronously
+    // Must wait for FA to finish indexing before fetching results
+    let initialLogs: Array<Record<string, unknown>> | null = null;
+    for (let attempt = 0; attempt < 8; attempt++) {
+      await new Promise(resolve => setTimeout(resolve, 5000)); // wait 5s between polls
+      initialLogs = await this.faService.fetchLogResults(tid, 0, 1000);
+      if (initialLogs && initialLogs.length > 0) {
+        console.log(`[EventCache] ${logtype}: Got results after ${attempt + 1} poll(s)`);
         break;
       }
-
-      // Filter by time range and save to DB
-      const recentLogs = logs.filter(log => {
-        const eventTime = this.parseEventTime(log);
-        return eventTime && eventTime >= startTime && eventTime <= endTime;
-      });
-
-      if (recentLogs.length > 0) {
-        await this.saveEvents(logtype, recentLogs);
-        totalFetched += recentLogs.length;
-        console.log(`[EventCache] ${logtype}: Saved ${recentLogs.length} events (${totalFetched} total)`);
-      }
-
-      if (logs.length < limit) {
-        break; // No more results
-      }
-
-      offset += limit;
+      console.log(`[EventCache] ${logtype}: Poll ${attempt + 1}/8 - waiting for FA...`);
     }
+
+    if (!initialLogs || initialLogs.length === 0) {
+      console.log(`[EventCache] ${logtype}: No results after polling, skipping`);
+      return;
+    }
+
+    // Process first batch
+    const recentLogsFirst = initialLogs.filter(log => {
+      const eventTime = this.parseEventTime(log);
+      return eventTime && eventTime >= startTime && eventTime <= endTime;
+    });
+    if (recentLogsFirst.length > 0) {
+      await this.saveEvents(logtype, recentLogsFirst);
+      console.log(`[EventCache] ${logtype}: Saved ${recentLogsFirst.length} events`);
+    }
+
+    let totalFetched = recentLogsFirst.length;
+
+    // Continue pagination if more results available
+    if (initialLogs.length >= 1000) {
+      let offset = 1000;
+      const limit = 1000;
+
+      while (totalFetched < 5000) {
+        const logs = await this.faService.fetchLogResults(tid, offset, limit);
+        
+        if (!logs || logs.length === 0) {
+          break;
+        }
+
+        // Filter by time range and save to DB
+        const recentLogs = logs.filter(log => {
+          const eventTime = this.parseEventTime(log);
+          return eventTime && eventTime >= startTime && eventTime <= endTime;
+        });
+
+        if (recentLogs.length > 0) {
+          await this.saveEvents(logtype, recentLogs);
+          totalFetched += recentLogs.length;
+          console.log(`[EventCache] ${logtype}: Saved ${recentLogs.length} more events (${totalFetched} total)`);
+        }
+
+        if (logs.length < limit) {
+          break; // No more results
+        }
+
+        offset += limit;
+      }
+    }
+
+    console.log(`[EventCache] ${logtype}: Sync complete - ${totalFetched} events saved`);
   }
 
   /**
@@ -192,14 +238,30 @@ export class EventCacheService {
    */
   private parseEventTime(log: Record<string, unknown>): Date | null {
     const eventTime = log.eventtime;
-    if (!eventTime) return null;
+    if (!eventTime) {
+      // Fallback: try itime field (format: "YYYY-MM-DD HH:MM:SS")
+      const itime = log.itime as string | undefined;
+      if (itime) return new Date(itime.replace(' ', 'T') + 'Z');
+      return null;
+    }
 
-    // FortiAnalyzer uses Unix timestamp (seconds or milliseconds)
-    const timestamp = typeof eventTime === 'number' 
-      ? eventTime > 1e12 ? eventTime : eventTime * 1000
-      : new Date(eventTime as string).getTime();
+    // FortiAnalyzer eventtime is in NANOSECONDS (19-digit number)
+    // e.g. 1772619793970881411 → divide by 1e6 to get milliseconds
+    const raw = typeof eventTime === 'number' ? eventTime : Number(eventTime);
+    let ms: number;
 
-    return new Date(timestamp);
+    if (raw > 1e15) {
+      // Nanoseconds → milliseconds
+      ms = raw / 1e6;
+    } else if (raw > 1e12) {
+      // Already milliseconds
+      ms = raw;
+    } else {
+      // Seconds → milliseconds
+      ms = raw * 1000;
+    }
+
+    return new Date(ms);
   }
 
   /**
@@ -207,6 +269,10 @@ export class EventCacheService {
    */
   async queryCachedEvents(filters: CachedEventFilters): Promise<Array<Record<string, unknown>>> {
     const { logtype, filter, startTime, endTime, limit = 1000 } = filters;
+    // For cache queries, always fetch up to 1000 events regardless of the caller's limit.
+    // The caller's limit was designed for live FA API calls (slow); for the local DB cache
+    // (fast) we need all events in the window so the in-memory filter can find matches.
+    const dbLimit = Math.max(limit, 1000);
 
     console.log(`[EventCache] Query: ${logtype} from ${startTime.toISOString()} to ${endTime.toISOString()}`);
 
@@ -222,14 +288,16 @@ export class EventCacheService {
         orderBy: {
           eventTime: 'desc',
         },
-        take: limit,
+        take: dbLimit,
       });
 
       console.log(`[EventCache] Found ${events.length} cached events for ${logtype}`);
 
       // Apply client-side filter if provided
       if (filter) {
-        return this.applyFilter(events, filter);
+        const filtered = this.applyFilter(events, filter);
+        console.log(`[EventCache] Filter matched ${filtered.length}/${events.length} for ${logtype} | filter: ${filter.substring(0, 60)}`);
+        return filtered;
       }
 
       return events.map((e: any) => e.rawLog);
@@ -246,19 +314,33 @@ export class EventCacheService {
     events: Array<any>,
     filter: string
   ): Array<any> {
-    // Simple filter parser (supports basic operators)
-    // Example: "level=3 && action=logon"
-    // Example: "qtype == TXT or qtype == NULL"
-    
+    // Filter parser — supports: ==, =, !=, <>, <, <=, >, >=, like, not like
+    // AND can be written as "&&" or "and", OR as "or"
+    // LIKE wildcards: %value% (contains), value% (startsWith), %value (endsWith)
+    // Example: "subtype == system and logdesc like %attribute%"
+    // Example: "cfgpath like %firewall.policy% and action != delete"
+
     return events.filter(event => {
       const rawLog = event.rawLog;
-      
-      // Parse filter conditions
-      const conditions = filter.split(/&&|and/i).map(c => c.trim());
-      
+
+      // Split into AND-clauses
+      const conditions = filter.split(/&&|\band\b/i).map(c => c.trim());
+
       return conditions.every(condition => {
         const orConditions = condition.split(/\bor\b/i).map(c => c.trim());
         return orConditions.some(cond => {
+          // Try LIKE / NOT LIKE first (two-word operator)
+          const likeMatch = cond.match(/(\w+)\s+(not\s+like|like)\s+["']?(%?[^"'\s%]+%?)["']?/i);
+          if (likeMatch) {
+            const [, field, op, pattern] = likeMatch;
+            const eventValue = String(rawLog[field] ?? '').toLowerCase();
+            // Strip % wildcards to get the raw search term
+            const term = pattern.replace(/%/g, '').toLowerCase();
+            const contains = eventValue.includes(term);
+            return op.toLowerCase().includes('not') ? !contains : contains;
+          }
+
+          // Standard comparison operators
           const match = cond.match(/(\w+)\s*(==|=|!=|<>|<=|>=|<|>)\s*["']?([^"'\s]+)["']?/);
           if (!match) return false;
 
@@ -285,7 +367,8 @@ export class EventCacheService {
           }
         });
       });
-    });
+    // Return rawLog objects (not Prisma model objects) — consistent with the no-filter path
+    }).map((e: any) => e.rawLog);
   }
 
   /**

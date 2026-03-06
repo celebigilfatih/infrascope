@@ -1,5 +1,24 @@
+/**
+ * InfraScope Email Notification Service
+ * 
+ * Production-grade email delivery for alarm notifications.
+ * Architecture: Immediate send (no batching) for Next.js serverless compatibility.
+ * 
+ * Features:
+ * - Immediate email delivery (no setTimeout dependency)
+ * - Hourly rate limiting (configurable MAX_EMAILS_PER_HOUR)
+ * - Per-alarm cooldown tracking (prevents duplicate alerts)
+ * - SMTP connection pooling via nodemailer
+ * - Rich HTML templates with severity-based styling
+ * - Fallback to default config if DB unavailable
+ */
+
 import nodemailer from 'nodemailer';
 import { prisma } from '@/lib/prisma';
+
+// ============================================================================
+// TYPES
+// ============================================================================
 
 interface EmailConfig {
   smtpHost: string;
@@ -10,7 +29,7 @@ interface EmailConfig {
   recipients: string[];
 }
 
-interface AlarmEmailData {
+export interface AlarmEmailData {
   alarmCode: string;
   alarmName: string;
   severity: string;
@@ -24,6 +43,10 @@ interface AlarmEmailData {
   rawData?: Record<string, unknown>;
 }
 
+// ============================================================================
+// CONFIGURATION
+// ============================================================================
+
 const DEFAULT_EMAIL_CONFIG: EmailConfig = {
   smtpHost: 'mail.webmahsul.com.tr',
   smtpPort: 587,
@@ -33,84 +56,219 @@ const DEFAULT_EMAIL_CONFIG: EmailConfig = {
   recipients: ['alert@webmahsul.com.tr'],
 };
 
+// Rate limiting constants
+const MAX_EMAILS_PER_HOUR = 50;           // Maximum emails per hour (safety limit)
+const ALARM_COOLDOWN_MS = 5 * 60 * 1000;  // 5 minutes cooldown per alarm code
+
+// ============================================================================
+// STATE MANAGEMENT
+// ============================================================================
+
+// Hourly rate limiter
+let emailCountThisHour = 0;
+let hourlyResetTime = Date.now() + 60 * 60 * 1000;
+
+// Per-alarm cooldown tracker (prevents duplicate emails for same alarm)
+const alarmCooldowns = new Map<string, number>();
+
+// Cached SMTP transporter (connection pooling)
+let cachedTransporter: any = null;
+let transporterConfig: string | null = null;
+
+// ============================================================================
+// HELPERS: Configuration
+// ============================================================================
+
 /**
- * Get email config from DB or use defaults
+ * Get email configuration from database or fallback to defaults
  */
 export async function getEmailConfig(): Promise<EmailConfig> {
   try {
     const config = await prisma.notificationConfig.findUnique({
       where: { channel: 'email' },
     });
-    if (config && config.enabled) {
+    if (config?.enabled && config.config) {
       return config.config as unknown as EmailConfig;
     }
   } catch (error) {
-    console.error('Failed to load email config from DB:', error);
+    console.error('[Email] Failed to load config from DB, using defaults:', error);
   }
   return DEFAULT_EMAIL_CONFIG;
 }
 
 /**
- * Get severity color for email template
+ * Get or create SMTP transporter (connection pooling)
  */
-function getSeverityColor(severity: string): string {
-  switch (severity) {
-    case 'ALARM_CRITICAL': return '#dc2626';
-    case 'ALARM_HIGH': return '#ea580c';
-    case 'ALARM_MEDIUM': return '#ca8a04';
-    case 'ALARM_LOW': return '#2563eb';
-    case 'ALARM_INFO': return '#6b7280';
-    default: return '#6b7280';
+async function getTransporter(): Promise<any> {
+  const config = await getEmailConfig();
+  const configKey = `${config.smtpHost}:${config.smtpPort}:${config.smtpUser}`;
+  
+  // Reuse existing transporter if config hasn't changed
+  if (cachedTransporter && transporterConfig === configKey) {
+    return cachedTransporter;
   }
+  
+  // Create new transporter
+  cachedTransporter = nodemailer.createTransport({
+    host: config.smtpHost,
+    port: config.smtpPort,
+    secure: config.smtpSecure || false,
+    auth: {
+      user: config.smtpUser,
+      pass: config.smtpPass,
+    },
+    tls: {
+      rejectUnauthorized: false, // Allow self-signed certs
+    },
+    pool: true,                  // Enable connection pooling
+    maxConnections: 3,           // Max concurrent connections
+    maxMessages: 100,            // Messages per connection before reconnect
+  });
+  
+  transporterConfig = configKey;
+  console.log('[Email] SMTP transporter created (pooled)');
+  return cachedTransporter;
+}
+
+// ============================================================================
+// HELPERS: Rate Limiting
+// ============================================================================
+
+/**
+ * Check if we've exceeded hourly email limit
+ */
+function isHourlyLimitExceeded(): boolean {
+  const now = Date.now();
+  
+  // Reset counter if hour has passed
+  if (now > hourlyResetTime) {
+    emailCountThisHour = 0;
+    hourlyResetTime = now + 60 * 60 * 1000;
+    console.log('[Email] Hourly counter reset');
+  }
+  
+  return emailCountThisHour >= MAX_EMAILS_PER_HOUR;
+}
+
+/**
+ * Check if specific alarm is in cooldown (prevents duplicate emails)
+ */
+function isAlarmInCooldown(alarmCode: string): boolean {
+  const lastSent = alarmCooldowns.get(alarmCode);
+  if (!lastSent) return false;
+  
+  const elapsed = Date.now() - lastSent;
+  return elapsed < ALARM_COOLDOWN_MS;
+}
+
+/**
+ * Record that an alarm email was sent
+ */
+function recordAlarmSent(alarmCode: string): void {
+  alarmCooldowns.set(alarmCode, Date.now());
+  emailCountThisHour++;
+  
+  // Cleanup old cooldowns (memory management)
+  if (alarmCooldowns.size > 200) {
+    const cutoff = Date.now() - ALARM_COOLDOWN_MS;
+    for (const [code, time] of alarmCooldowns) {
+      if (time < cutoff) alarmCooldowns.delete(code);
+    }
+  }
+}
+
+// ============================================================================
+// HELPERS: Severity & Category Labels
+// ============================================================================
+
+const SEVERITY_COLORS: Record<string, string> = {
+  'ALARM_CRITICAL': '#dc2626',
+  'ALARM_HIGH': '#ea580c',
+  'ALARM_MEDIUM': '#ca8a04',
+  'ALARM_LOW': '#2563eb',
+  'ALARM_INFO': '#6b7280',
+};
+
+const SEVERITY_LABELS: Record<string, string> = {
+  'ALARM_CRITICAL': 'KRİTİK',
+  'ALARM_HIGH': 'YÜKSEK',
+  'ALARM_MEDIUM': 'ORTA',
+  'ALARM_LOW': 'DÜŞÜK',
+  'ALARM_INFO': 'BİLGİ',
+};
+
+const CATEGORY_LABELS: Record<string, string> = {
+  'CONFIG_ACCESS': 'Konfigürasyon & Erişim',
+  'SECURITY': 'Güvenlik',
+  'RISK_ANOMALY': 'Risk & Anomali',
+  'OPERATIONAL': 'Operasyonel',
+  'SOC_CORRELATION': 'SOC Korelasyon',
+};
+
+function getSeverityColor(severity: string): string {
+  return SEVERITY_COLORS[severity] || '#6b7280';
 }
 
 function getSeverityLabel(severity: string): string {
-  switch (severity) {
-    case 'ALARM_CRITICAL': return 'CRITICAL';
-    case 'ALARM_HIGH': return 'HIGH';
-    case 'ALARM_MEDIUM': return 'MEDIUM';
-    case 'ALARM_LOW': return 'LOW';
-    case 'ALARM_INFO': return 'INFO';
-    default: return severity;
-  }
+  return SEVERITY_LABELS[severity] || severity;
 }
 
 function getCategoryLabel(category: string): string {
-  switch (category) {
-    case 'CONFIG_ACCESS': return 'Config & Access';
-    case 'SECURITY': return 'Security';
-    case 'RISK_ANOMALY': return 'Risk & Anomaly';
-    case 'OPERATIONAL': return 'Operational';
-    case 'SOC_CORRELATION': return 'SOC Correlation';
-    default: return category;
-  }
+  return CATEGORY_LABELS[category] || category;
+}
+
+// ============================================================================
+// HELPERS: Message Parsing
+// ============================================================================
+
+interface MessageSections {
+  description: string;
+  count: string;
+  details: string[];
+  otherEvents: string[];
+  action: string;
 }
 
 /**
  * Parse structured alarm message into sections for email rendering
  */
-function parseMessageSections(message: string): { description: string; count: string; details: string[]; otherEvents: string[]; action: string } {
+function parseMessageSections(message: string): MessageSections {
   const blocks = message.split('\n\n');
-  const result = { description: '', count: '', details: [] as string[], otherEvents: [] as string[], action: '' };
+  const result: MessageSections = {
+    description: '',
+    count: '',
+    details: [],
+    otherEvents: [],
+    action: '',
+  };
 
   for (const block of blocks) {
     if (block.startsWith('Tespit edilen')) {
       result.count = block;
     } else if (block.startsWith('Onerilen Aksiyon:')) {
       result.action = block.replace('Onerilen Aksiyon: ', '');
-    } else if (block.startsWith('Diger olaylar:')) {
-      result.otherEvents = block.replace('Diger olaylar:\n', '').split('\n').map(l => l.replace(/^- /, ''));
+    } else if (block.startsWith('Diger olaylar:') || block.startsWith('Diger etkilenen')) {
+      result.otherEvents = block
+        .replace(/^Diger [^\n]+\n/, '')
+        .split('\n')
+        .map(l => l.replace(/^- /, ''))
+        .filter(Boolean);
     } else if (block.includes(': ') && block.includes('\n')) {
       result.details = block.split('\n').filter(Boolean);
     } else if (!result.description) {
       result.description = block;
     }
   }
+  
   return result;
 }
 
+// ============================================================================
+// HTML TEMPLATE
+// ============================================================================
+
 /**
- * Build HTML email for alarm notification
+ * Build professional HTML email for alarm notification
  */
 function buildAlarmEmailHtml(data: AlarmEmailData): string {
   const severityColor = getSeverityColor(data.severity);
@@ -119,86 +277,91 @@ function buildAlarmEmailHtml(data: AlarmEmailData): string {
   const timestamp = data.timestamp.toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' });
   const sections = parseMessageSections(data.message);
 
-  // Build detail rows HTML
-  const detailRowsHtml = sections.details.map(line => {
-    const idx = line.indexOf(': ');
-    if (idx === -1) return '';
-    const label = line.substring(0, idx);
-    const value = line.substring(idx + 2);
-    return `
-      <tr>
-        <td style="padding:6px 12px;font-size:13px;color:#64748b;white-space:nowrap;vertical-align:top;">${label}</td>
-        <td style="padding:6px 12px;font-size:13px;color:#1e293b;word-break:break-word;">${value}</td>
-      </tr>`;
-  }).join('');
+  // Build detail rows
+  const detailRowsHtml = sections.details
+    .map(line => {
+      const idx = line.indexOf(': ');
+      if (idx === -1) return '';
+      const label = line.substring(0, idx);
+      const value = line.substring(idx + 2);
+      return `
+        <tr>
+          <td style="padding:8px 12px;font-size:13px;color:#64748b;white-space:nowrap;vertical-align:top;font-weight:500;">${label}</td>
+          <td style="padding:8px 12px;font-size:13px;color:#1e293b;word-break:break-word;">${value}</td>
+        </tr>`;
+    })
+    .join('');
 
-  // Build other events HTML
-  const otherEventsHtml = sections.otherEvents.length > 0 ? `
-    <div style="margin-top:16px;">
-      <div style="font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Diger Olaylar</div>
-      ${sections.otherEvents.map(e => `<div style="font-size:13px;color:#475569;padding:4px 0;border-bottom:1px solid #f1f5f9;">&#8226; ${e}</div>`).join('')}
-    </div>` : '';
+  // Build other events list
+  const otherEventsHtml = sections.otherEvents.length > 0
+    ? `<div style="margin-top:16px;">
+        <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;font-weight:600;">Diğer Olaylar</div>
+        ${sections.otherEvents.map(e => `<div style="font-size:13px;color:#475569;padding:4px 0;border-bottom:1px solid #f1f5f9;">• ${e}</div>`).join('')}
+      </div>`
+    : '';
 
-  return `
-<!DOCTYPE html>
+  return `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
-<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;margin:0;padding:0;background:#f8fafc;">
-  <div style="max-width:600px;margin:20px auto;background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;margin:0;padding:0;background:#f1f5f9;">
+  <div style="max-width:640px;margin:20px auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1),0 2px 4px -2px rgba(0,0,0,0.1);">
+    
     <!-- Header -->
-    <div style="background:${severityColor};color:white;padding:20px 24px;">
-      <h1 style="margin:0;font-size:18px;font-weight:600;">InfraScope Alarm: ${data.alarmName}</h1>
-      <div style="display:inline-block;background:rgba(255,255,255,0.2);padding:2px 8px;border-radius:4px;font-size:12px;margin-top:8px;">${severityLabel} - ${categoryLabel}</div>
+    <div style="background:${severityColor};color:white;padding:24px;">
+      <h1 style="margin:0 0 8px 0;font-size:20px;font-weight:600;">🚨 ${data.alarmName}</h1>
+      <div style="display:inline-block;background:rgba(255,255,255,0.2);padding:4px 10px;border-radius:4px;font-size:12px;font-weight:500;">${severityLabel} • ${categoryLabel}</div>
     </div>
 
     <div style="padding:24px;">
-      <!-- Alarm Title -->
-      <div style="margin-bottom:16px;">
-        <div style="font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Alarm</div>
-        <div style="font-size:15px;color:#1e293b;font-weight:600;">${data.title}</div>
+      
+      <!-- Title -->
+      <div style="margin-bottom:20px;">
+        <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;font-weight:600;">Alarm Başlığı</div>
+        <div style="font-size:16px;color:#0f172a;font-weight:600;">${data.title}</div>
       </div>
 
       <!-- Description -->
-      <div style="margin-bottom:16px;">
-        <div style="font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Aciklama</div>
-        <div style="font-size:14px;color:#334155;line-height:1.5;">${sections.description}</div>
-        ${sections.count ? `<div style="font-size:13px;color:#64748b;margin-top:4px;">${sections.count}</div>` : ''}
+      <div style="margin-bottom:20px;">
+        <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;font-weight:600;">Açıklama</div>
+        <div style="font-size:14px;color:#334155;line-height:1.6;">${sections.description}</div>
+        ${sections.count ? `<div style="font-size:13px;color:#64748b;margin-top:6px;font-style:italic;">${sections.count}</div>` : ''}
       </div>
 
-      <!-- Event Details Table -->
+      <!-- Details Table -->
       ${detailRowsHtml ? `
-      <div style="margin-bottom:16px;">
-        <div style="font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Olay Detaylari</div>
-        <table style="width:100%;border-collapse:collapse;background:#f8fafc;border-radius:6px;overflow:hidden;">
+      <div style="margin-bottom:20px;">
+        <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;font-weight:600;">Olay Detayları</div>
+        <table style="width:100%;border-collapse:collapse;background:#f8fafc;border-radius:8px;overflow:hidden;">
           ${detailRowsHtml}
         </table>
       </div>` : ''}
 
-      <!-- Info Grid -->
-      <table style="width:100%;border-collapse:separate;border-spacing:8px 0;margin:-4px;">
+      <!-- Metadata Grid -->
+      <table style="width:100%;border-collapse:separate;border-spacing:8px 0;margin:-4px 0 16px -4px;">
         <tr>
-          <td style="background:#f1f5f9;padding:10px 12px;border-radius:6px;width:50%;">
-            <div style="font-size:11px;color:#64748b;text-transform:uppercase;">Kod</div>
-            <div style="font-size:13px;color:#1e293b;font-weight:500;margin-top:2px;">${data.alarmCode}</div>
+          <td style="background:#f1f5f9;padding:12px;border-radius:8px;width:50%;">
+            <div style="font-size:10px;color:#64748b;text-transform:uppercase;font-weight:600;">Alarm Kodu</div>
+            <div style="font-size:13px;color:#0f172a;font-weight:600;margin-top:4px;font-family:monospace;">${data.alarmCode}</div>
           </td>
-          <td style="background:#f1f5f9;padding:10px 12px;border-radius:6px;width:50%;">
-            <div style="font-size:11px;color:#64748b;text-transform:uppercase;">Zaman</div>
-            <div style="font-size:13px;color:#1e293b;font-weight:500;margin-top:2px;">${timestamp}</div>
+          <td style="background:#f1f5f9;padding:12px;border-radius:8px;width:50%;">
+            <div style="font-size:10px;color:#64748b;text-transform:uppercase;font-weight:600;">Zaman</div>
+            <div style="font-size:13px;color:#0f172a;font-weight:500;margin-top:4px;">${timestamp}</div>
           </td>
         </tr>
         ${(data.sourceIp || data.deviceName) ? `
         <tr>
           ${data.sourceIp ? `
-          <td style="background:#f1f5f9;padding:10px 12px;border-radius:6px;padding-top:10px;">
-            <div style="font-size:11px;color:#64748b;text-transform:uppercase;">Kaynak IP</div>
-            <div style="font-size:13px;color:#1e293b;font-weight:500;margin-top:2px;">${data.sourceIp}</div>
+          <td style="background:#f1f5f9;padding:12px;border-radius:8px;">
+            <div style="font-size:10px;color:#64748b;text-transform:uppercase;font-weight:600;">Kaynak IP</div>
+            <div style="font-size:13px;color:#0f172a;font-weight:500;margin-top:4px;font-family:monospace;">${data.sourceIp}</div>
           </td>` : '<td></td>'}
           ${data.deviceName ? `
-          <td style="background:#f1f5f9;padding:10px 12px;border-radius:6px;padding-top:10px;">
-            <div style="font-size:11px;color:#64748b;text-transform:uppercase;">Cihaz</div>
-            <div style="font-size:13px;color:#1e293b;font-weight:500;margin-top:2px;">${data.deviceName}</div>
+          <td style="background:#f1f5f9;padding:12px;border-radius:8px;">
+            <div style="font-size:10px;color:#64748b;text-transform:uppercase;font-weight:600;">Cihaz</div>
+            <div style="font-size:13px;color:#0f172a;font-weight:500;margin-top:4px;">${data.deviceName}</div>
           </td>` : '<td></td>'}
         </tr>` : ''}
       </table>
@@ -207,59 +370,90 @@ function buildAlarmEmailHtml(data: AlarmEmailData): string {
 
       <!-- Recommended Action -->
       ${sections.action ? `
-      <div style="margin-top:16px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:12px 16px;">
-        <div style="font-size:12px;color:#92400e;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;font-weight:600;">Onerilen Aksiyon</div>
-        <div style="font-size:13px;color:#78350f;line-height:1.5;">${sections.action}</div>
+      <div style="margin-top:20px;background:#fef3c7;border:1px solid #fbbf24;border-radius:8px;padding:16px;">
+        <div style="font-size:11px;color:#92400e;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;font-weight:700;">⚡ Önerilen Aksiyon</div>
+        <div style="font-size:14px;color:#78350f;line-height:1.5;">${sections.action}</div>
       </div>` : ''}
     </div>
 
     <!-- Footer -->
-    <div style="padding:16px 24px;background:#f8fafc;border-top:1px solid #e2e8f0;font-size:12px;color:#94a3b8;text-align:center;">
-      InfraScope Alarm Management System &bull; ${timestamp}
+    <div style="padding:16px 24px;background:#f8fafc;border-top:1px solid #e2e8f0;text-align:center;">
+      <div style="font-size:11px;color:#94a3b8;">InfraScope Alarm Management System</div>
+      <div style="font-size:10px;color:#cbd5e1;margin-top:4px;">${timestamp}</div>
     </div>
   </div>
 </body>
 </html>`;
 }
 
+// ============================================================================
+// MAIN API: Send Alarm Email
+// ============================================================================
+
 /**
- * Send alarm notification email
+ * Send alarm notification email IMMEDIATELY (no batching)
+ * 
+ * @param data - Alarm data to send
+ * @returns true if email was sent, false if skipped/failed
+ * 
+ * Skip reasons:
+ * - Hourly limit exceeded (rate limiting)
+ * - Alarm in cooldown (duplicate prevention)
+ * - SMTP error (logged)
  */
 export async function sendAlarmEmail(data: AlarmEmailData): Promise<boolean> {
+  const startTime = Date.now();
+  
+  // Check hourly rate limit
+  if (isHourlyLimitExceeded()) {
+    console.log(`[Email] ⏸️ Hourly limit (${MAX_EMAILS_PER_HOUR}) exceeded, skipping: ${data.alarmCode}`);
+    return false;
+  }
+  
+  // Check per-alarm cooldown
+  if (isAlarmInCooldown(data.alarmCode)) {
+    console.log(`[Email] ⏸️ Alarm in cooldown, skipping: ${data.alarmCode}`);
+    return false;
+  }
+  
   try {
+    console.log(`[Email] 📧 Sending email for ${data.alarmCode}...`);
+    
     const config = await getEmailConfig();
-
-    const transporter = nodemailer.createTransport({
-      host: config.smtpHost,
-      port: config.smtpPort,
-      secure: config.smtpSecure || false,
-      auth: {
-        user: config.smtpUser,
-        pass: config.smtpPass,
-      },
-      tls: {
-        rejectUnauthorized: false,
-      },
-    });
-
-    const severityLabel = getSeverityLabel(data.severity);
-    const subject = `[${severityLabel}] InfraScope Alarm: ${data.alarmName} - ${data.title}`;
+    const transporter = await getTransporter();
+    
+    const subject = `[${getSeverityLabel(data.severity)}] ${data.alarmName}`;
     const html = buildAlarmEmailHtml(data);
-
+    
     const info = await transporter.sendMail({
       from: `"InfraScope Alerts" <${config.smtpUser}>`,
       to: config.recipients.join(', '),
       subject,
       html,
     });
-
-    console.log(`Alarm email sent: ${info.messageId}`);
+    
+    // Record successful send
+    recordAlarmSent(data.alarmCode);
+    
+    const elapsed = Date.now() - startTime;
+    console.log(`[Email] ✅ Sent in ${elapsed}ms: ${info.messageId} (${data.alarmCode})`);
+    
     return true;
   } catch (error) {
-    console.error('Failed to send alarm email:', error);
+    const elapsed = Date.now() - startTime;
+    console.error(`[Email] ❌ Failed after ${elapsed}ms for ${data.alarmCode}:`, error);
+    
+    // Clear cached transporter on error (force reconnect next time)
+    cachedTransporter = null;
+    transporterConfig = null;
+    
     return false;
   }
 }
+
+// ============================================================================
+// UTILITY: Test Email
+// ============================================================================
 
 /**
  * Send a test email to verify SMTP configuration
@@ -282,25 +476,60 @@ export async function sendTestEmail(configOverride?: Partial<EmailConfig>): Prom
       },
     });
 
+    // Verify connection
     await transporter.verify();
 
-    await transporter.sendMail({
+    // Send test email
+    const info = await transporter.sendMail({
       from: `"InfraScope Alerts" <${config.smtpUser}>`,
       to: config.recipients.join(', '),
-      subject: 'InfraScope - Test Email',
+      subject: '✅ InfraScope - Email Testi Başarılı',
       html: `
-        <div style="font-family: sans-serif; padding: 20px;">
-          <h2 style="color: #16a34a;">InfraScope Email Test Basarili</h2>
-          <p>Bu bir test emailidir. Alarm bildirimleri bu adrese gonderilecektir.</p>
-          <p style="color: #64748b; font-size: 12px;">Zaman: ${new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' })}</p>
+        <div style="font-family:system-ui,sans-serif;max-width:500px;margin:0 auto;padding:32px;">
+          <div style="background:#10b981;color:white;padding:20px;border-radius:8px 8px 0 0;text-align:center;">
+            <h2 style="margin:0;font-size:20px;">✅ Email Testi Başarılı</h2>
+          </div>
+          <div style="background:#f8fafc;padding:24px;border-radius:0 0 8px 8px;border:1px solid #e2e8f0;border-top:none;">
+            <p style="margin:0 0 16px 0;color:#334155;">Bu bir test e-postasıdır. Alarm bildirimleri bu adrese gönderilecektir.</p>
+            <div style="background:#e0f2fe;padding:12px;border-radius:6px;font-size:13px;color:#0369a1;">
+              <strong>SMTP Server:</strong> ${config.smtpHost}:${config.smtpPort}
+            </div>
+            <p style="margin:16px 0 0 0;font-size:12px;color:#94a3b8;">
+              Zaman: ${new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' })}
+            </p>
+          </div>
         </div>
       `,
     });
 
+    console.log(`[Email] ✅ Test email sent: ${info.messageId}`);
     return { success: true };
   } catch (error) {
     const errMsg = (error as Error).message || 'Unknown error';
-    console.error('Test email failed:', errMsg);
+    console.error('[Email] ❌ Test email failed:', errMsg);
     return { success: false, error: errMsg };
   }
+}
+
+// ============================================================================
+// UTILITY: Get Email Statistics
+// ============================================================================
+
+/**
+ * Get current email service statistics (for monitoring/debugging)
+ */
+export function getEmailStats(): {
+  emailsThisHour: number;
+  maxPerHour: number;
+  hourlyResetIn: number;
+  activeCooldowns: number;
+  transporterActive: boolean;
+} {
+  return {
+    emailsThisHour: emailCountThisHour,
+    maxPerHour: MAX_EMAILS_PER_HOUR,
+    hourlyResetIn: Math.max(0, Math.round((hourlyResetTime - Date.now()) / 1000 / 60)),
+    activeCooldowns: alarmCooldowns.size,
+    transporterActive: cachedTransporter !== null,
+  };
 }

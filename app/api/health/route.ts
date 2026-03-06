@@ -1,12 +1,117 @@
 /**
  * GET /api/health
- * Health check endpoint - starts and monitors alarm services
+ * Advanced Health check endpoint with per-datasource monitoring
  * Auto-restarts services if they've stopped
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { startAlarmScheduler, getSchedulerStatus } from '@/lib/alarm-scheduler';
 import { startAlarmMonitor, getAlarmMonitor } from '@/lib/alarms/alarm-monitor';
+import { prisma } from '@/lib/prisma';
+import { getSharedFortiAnalyzerService } from '@/lib/integrations/fortianalyzer';
+
+interface HealthStatus {
+  status: 'healthy' | 'degraded' | 'unhealthy';
+  timestamp: Date;
+  version: string;
+  services: {
+    scheduler: boolean;
+    monitor: boolean;
+  };
+  datasources: {
+    database: { status: 'healthy' | 'unhealthy'; responseTimeMs: number };
+    fortianalyzer: { status: 'healthy' | 'unhealthy' | 'unknown'; responseTimeMs?: number; error?: string };
+    vmware: { status: 'healthy' | 'unhealthy' | 'unknown'; responseTimeMs?: number; error?: string };
+  };
+  alarms: {
+    totalDefinitions: number;
+    enabledDefinitions: number;
+    recentEvents: number;
+    recentErrors: number;
+  };
+}
+
+/**
+ * Check database health
+ */
+async function checkDatabaseHealth(): Promise<{ status: 'healthy' | 'unhealthy'; responseTimeMs: number }> {
+  const startTime = Date.now();
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    return { status: 'healthy', responseTimeMs: Date.now() - startTime };
+  } catch (error) {
+    return { status: 'unhealthy', responseTimeMs: Date.now() - startTime };
+  }
+}
+
+/**
+ * Check FortiAnalyzer health using shared singleton
+ */
+async function checkFortiAnalyzerHealth(): Promise<{ status: 'healthy' | 'unhealthy'; responseTimeMs: number; error?: string }> {
+  const startTime = Date.now();
+  try {
+    // Use shared singleton (if available) to avoid creating competing login sessions
+    const service = getSharedFortiAnalyzerService();
+    if (!service) {
+      return { status: 'unknown' as 'unhealthy', responseTimeMs: 0, error: 'Not initialized' };
+    }
+    
+    const loggedIn = await service.login();
+    if (!loggedIn) {
+      return { status: 'unhealthy', responseTimeMs: Date.now() - startTime, error: 'Login failed' };
+    }
+    
+    return { status: 'healthy', responseTimeMs: Date.now() - startTime };
+  } catch (error) {
+    return { status: 'unhealthy', responseTimeMs: Date.now() - startTime, error: (error as Error).message };
+  }
+}
+
+/**
+ * Check VMware health (if configured)
+ */
+async function checkVMwareHealth(): Promise<{ status: 'healthy' | 'unhealthy' | 'unknown'; responseTimeMs?: number; error?: string }> {
+  const vmwareHost = process.env.VMWARE_HOST;
+  if (!vmwareHost) {
+    return { status: 'unknown', error: 'Not configured' };
+  }
+  
+  const startTime = Date.now();
+  try {
+    const { VMwareService } = await import('@/lib/integrations/vmware');
+    const service = new VMwareService({
+      host: vmwareHost,
+      username: process.env.VMWARE_USERNAME || '',
+      password: process.env.VMWARE_PASSWORD || '',
+    });
+    
+    await service.connect();
+    return { status: 'healthy', responseTimeMs: Date.now() - startTime };
+  } catch (error) {
+    return { status: 'unhealthy', responseTimeMs: Date.now() - startTime, error: (error as Error).message };
+  }
+}
+
+/**
+ * Get alarm statistics
+ */
+async function getAlarmStats(): Promise<{ totalDefinitions: number; enabledDefinitions: number; recentEvents: number; recentErrors: number }> {
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+  
+  const [totalDefs, enabledDefs, recentEvents, recentErrors] = await Promise.all([
+    prisma.alarmDefinition.count(),
+    prisma.alarmDefinition.count({ where: { enabled: true } }),
+    prisma.alarmEvent.count({ where: { createdAt: { gte: oneHourAgo } } }),
+    prisma.alarmCheckLog.count({ where: { checkTime: { gte: oneHourAgo }, errorCount: { gt: 0 } } }),
+  ]);
+  
+  return {
+    totalDefinitions: totalDefs,
+    enabledDefinitions: enabledDefs,
+    recentEvents,
+    recentErrors,
+  };
+}
 
 /**
  * Ensure alarm services are running - starts them if stopped
@@ -49,17 +154,41 @@ export async function GET(_request: NextRequest) {
   // Ensure alarm services are running (auto-restart if stopped)
   const { schedulerOk, monitorOk } = ensureAlarmServicesRunning();
   
-  return NextResponse.json(
-    {
-      success: true,
-      status: 'healthy',
-      timestamp: new Date(),
-      version: '1.0.0',
-      services: {
-        scheduler: schedulerOk,
-        monitor: monitorOk,
-      },
+  // Check all datasources
+  const [dbHealth, fazHealth, vmwareHealth, alarmStats] = await Promise.all([
+    checkDatabaseHealth(),
+    checkFortiAnalyzerHealth(),
+    checkVMwareHealth(),
+    getAlarmStats(),
+  ]);
+  
+  // Determine overall status
+  let overallStatus: 'healthy' | 'degraded' | 'unhealthy' = 'healthy';
+  const unhealthyCount = [dbHealth, fazHealth, vmwareHealth].filter(h => h.status === 'unhealthy').length;
+  
+  if (unhealthyCount >= 2 || !schedulerOk || !monitorOk) {
+    overallStatus = 'unhealthy';
+  } else if (unhealthyCount === 1 || alarmStats.recentErrors > 5) {
+    overallStatus = 'degraded';
+  }
+  
+  const healthStatus: HealthStatus = {
+    status: overallStatus,
+    timestamp: new Date(),
+    version: '1.0.0',
+    services: {
+      scheduler: schedulerOk,
+      monitor: monitorOk,
     },
-    { status: 200 }
-  );
+    datasources: {
+      database: dbHealth,
+      fortianalyzer: fazHealth,
+      vmware: vmwareHealth,
+    },
+    alarms: alarmStats,
+  };
+  
+  const httpStatus = overallStatus === 'healthy' ? 200 : overallStatus === 'degraded' ? 200 : 503;
+  
+  return NextResponse.json(healthStatus, { status: httpStatus });
 }
