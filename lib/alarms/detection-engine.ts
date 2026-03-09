@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import FortiAnalyzerService from '@/lib/integrations/fortianalyzer';
 import { VMwareService } from '@/lib/integrations/vmware';
-import { sendAlarmEmail } from '@/lib/notifications/email';
+import { sendAlarmEmail, getEmailStats } from '@/lib/notifications/email';
 import type { AlarmDetectionLogic, CorrelationRule } from './alarm-definitions';
 import { EventCacheService } from './event-cache';
 
@@ -212,6 +212,16 @@ export class AlarmDetectionEngine {
         await this.initializeEventCache();
       }
 
+      // Log email service state — makes rate-limit/cooldown/SMTP issues immediately visible
+      const emailStats = getEmailStats();
+      console.log(`[AlarmEngine] Email state: ${emailStats.emailsThisHour}/${emailStats.maxPerHour} this hour, cooldowns: ${emailStats.activeCooldowns}, transporter: ${emailStats.transporterActive}, reset in: ${emailStats.hourlyResetIn}min`);
+
+      // Log cache state
+      if (this.eventCache) {
+        const cacheStatus = this.eventCache.getCacheStatus();
+        console.log(`[AlarmEngine] Cache state: lastSync=${cacheStatus.lastSyncTime?.toISOString() ?? 'never'}, fresh=${cacheStatus.isFresh}, syncInProgress=${cacheStatus.syncInProgress}`);
+      }
+
       // Get all enabled alarm definitions
       const alarms = await prisma.alarmDefinition.findMany({
         where: { enabled: true },
@@ -315,7 +325,7 @@ export class AlarmDetectionEngine {
         }
       }
 
-      console.log(`[AlarmEngine] Evaluation complete: ${results.filter(r => r.triggered).length} triggered, ${results.filter(r => r.error).length} errors`);
+      console.log(`[AlarmEngine] Evaluation complete: ${results.filter(r => r.triggered).length} triggered, ${results.filter(r => r.error && r.error !== 'cooldown-active' && r.error !== 'cache-empty').length} errors, ${results.filter(r => r.error === 'cooldown-active').length} on-cooldown, ${results.filter(r => r.error === 'cache-empty').length} cache-empty`);
       
       // Retry any failed notifications from previous cycles
       await this.retryFailedNotifications();
@@ -359,7 +369,7 @@ export class AlarmDetectionEngine {
         try {
           // Bypass email cooldown for retries — these are legitimate notifications
           // that failed due to process interruption, not duplicates
-          const sent = await sendAlarmEmail({
+                    const sent = await sendAlarmEmail({
             alarmCode: event.alarm.code,
             alarmName: event.alarm.name,
             severity: event.alarm.severity,
@@ -370,7 +380,8 @@ export class AlarmDetectionEngine {
             destIp: event.destIp || undefined,
             deviceName: event.deviceName || undefined,
             timestamp: event.createdAt,
-          }, { bypassCooldown: true });
+            alarmEventId: event.id,
+          }, { bypassCooldown: true, skipDLQ: true }); // Skip DLQ for retries — they're already in retry logic
           
           if (sent) {
             await prisma.alarmEvent.update({
@@ -935,17 +946,24 @@ export class AlarmDetectionEngine {
           return { tid: 'cache', logs: cachedLogs };
         }
 
-        // Cache is initialized but empty = no events in time window = alarm should not fire
-        // Skip live FA fallback to avoid timeouts when cache is authoritative
-        console.log(`[AlarmEngine] Cache clean for ${alarm.code} (${logtype}) — no events in window, skipping FA`);
-        return { tid: 'cache-empty', logs: [] };
+        // Cache initialized and returned zero — check if cache itself has any events
+        // for this logtype at all (guards against stale/empty cache after sync failure)
+        const cacheStatus = this.eventCache.getCacheStatus();
+        if (!cacheStatus.isFresh) {
+          // Cache is stale (last sync >5min ago) — fall through to live FA as safety net
+          console.warn(`[AlarmEngine] Cache is stale (last sync: ${cacheStatus.lastSyncTime?.toISOString() ?? 'never'}) — falling back to live FA for ${alarm.code}`);
+        } else {
+          // Cache is fresh and has zero matching events — authoritative empty result
+          console.log(`[AlarmEngine] Cache clean for ${alarm.code} (${logtype}) — no events in window, skipping FA`);
+          return { tid: 'cache-empty', logs: [], error: 'cache-empty' };
+        }
       } catch (cacheError) {
         console.warn('[AlarmEngine] Cache query failed, falling back to live API:', cacheError);
       }
     }
 
-    // Fallback to live FortiAnalyzer API (only when cache is NOT initialized)
-    console.log(`[AlarmEngine] Cache not ready, performing live FA search for ${alarm.code}...`);
+    // Fallback to live FortiAnalyzer API — used when cache is not initialized OR stale
+    console.log(`[AlarmEngine] Live FA search for ${alarm.code} (${logtype})...`);
     
     try {
       const tid = await this.service.startLogSearch(logtype, limit, filter || undefined);
@@ -1329,7 +1347,7 @@ export class AlarmDetectionEngine {
     // Send email notification
     if (alarm.notifyEmail) {
       try {
-        const sent = await sendAlarmEmail({
+                const sent = await sendAlarmEmail({
           alarmCode: alarm.code,
           alarmName: alarm.name,
           severity: alarm.severity,
@@ -1340,6 +1358,7 @@ export class AlarmDetectionEngine {
           destIp: alarmEvent.destIp || undefined,
           deviceName: alarmEvent.deviceName || undefined,
           timestamp: alarmEvent.createdAt,
+          alarmEventId: alarmEvent.id, // Enable DLQ retry on failure
         });
 
         if (sent) {

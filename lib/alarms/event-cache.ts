@@ -60,6 +60,7 @@ export class EventCacheService {
    */
   private async syncAllEventTypes() {
     this.syncInProgress = true;
+    const syncStart = Date.now();
     
     const logtypes = [
       'event',
@@ -77,28 +78,37 @@ export class EventCacheService {
 
     console.log(`[EventCache] Starting sync: ${logtypes.length} logtypes, last 24 hours...`);
 
-    for (const logtype of logtypes) {
-      try {
-        await this.syncLogType(logtype, startTime, now);
-      } catch (error) {
-        console.error(`[EventCache] Failed to sync ${logtype}:`, error);
-      }
-    }
-
-    // Cleanup: remove events older than 24 hours to keep DB size manageable
     try {
-      const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
-      const deleted = await prisma.cachedEvent.deleteMany({
-        where: { eventTime: { lt: cutoff } },
-      });
-      if (deleted.count > 0) {
-        console.log(`[EventCache] Cleaned up ${deleted.count} expired events`);
+      for (const logtype of logtypes) {
+        try {
+          const logtypeStart = Date.now();
+          await this.syncLogType(logtype, startTime, now);
+          console.log(`[EventCache] ${logtype}: Sync took ${Date.now() - logtypeStart}ms`);
+        } catch (error) {
+          console.error(`[EventCache] Failed to sync ${logtype}:`, error);
+        }
       }
-    } catch (cleanupError) {
-      console.warn('[EventCache] Cleanup failed:', cleanupError);
-    }
 
-    this.syncInProgress = false;
+      // Cleanup: remove events older than 24 hours to keep DB size manageable
+      try {
+        const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        const deleted = await prisma.cachedEvent.deleteMany({
+          where: { eventTime: { lt: cutoff } },
+        });
+        if (deleted.count > 0) {
+          console.log(`[EventCache] Cleaned up ${deleted.count} expired events`);
+        }
+      } catch (cleanupError) {
+        console.warn('[EventCache] Cleanup failed:', cleanupError);
+      }
+
+      console.log(`[EventCache] Full sync completed in ${Math.round((Date.now() - syncStart) / 1000)}s`);
+    } finally {
+      // CRITICAL: always release the lock, even if an unexpected error escapes all inner catches.
+      // Without finally, any uncaught exception leaves syncInProgress=true forever,
+      // silently killing all future sync cycles.
+      this.syncInProgress = false;
+    }
   }
 
 
@@ -213,7 +223,7 @@ export class EventCacheService {
       srccountry: String(log.srccountry || ''),
       dstcountry: String(log.dstcountry || ''),
       msg: String(log.msg || ''),
-      rawLog: log,
+      rawLog: log as any,
     }));
 
     // Bulk insert with upsert (avoid duplicates)

@@ -3,6 +3,8 @@
  * Automatically triggers alarm evaluation at regular intervals
  */
 
+import { prisma } from '@/lib/prisma';
+
 let schedulerInterval: NodeJS.Timeout | null = null;
 
 /**
@@ -16,11 +18,11 @@ export function startAlarmScheduler() {
     return;
   }
 
-  // Schedule: Every 20 minutes (1200000 milliseconds) - allows 15-min checks to complete
+  // Schedule: Every 10 minutes (600000 milliseconds) - faster detection for critical alarms
   schedulerInterval = setInterval(async () => {
+    const tickStart = Date.now();
     try {
       console.log('[AlarmScheduler] Starting scheduled alarm check...');
-      const startTime = Date.now();
 
       // Use INTERNAL_API_URL env var (set in docker-compose.yml)
       // Falls back to PORT env var, then default 3000 (container internal port)
@@ -31,21 +33,33 @@ export function startAlarmScheduler() {
         headers: {
           'Content-Type': 'application/json',
         },
+        signal: AbortSignal.timeout(25 * 60 * 1000), // 25-min hard timeout — prevents hung goroutines
       });
 
-      const duration = Date.now() - startTime;
-      
-      if (response.ok) {
+      const duration = Date.now() - tickStart;
+      const ok = response.ok;
+
+      if (ok) {
         console.log(`[AlarmScheduler] ✅ Check completed successfully (${duration}ms)`);
       } else {
         console.error(`[AlarmScheduler] ❌ Check failed: ${response.status} (${duration}ms)`);
       }
-    } catch (error) {
-      console.error('[AlarmScheduler] ❌ Error during scheduled check:', error);
-    }
-  }, 1200000); // 20 minutes = 1200000ms
 
-  console.log('[AlarmScheduler] ✅ Started - alarm checks will run every 20 minutes');
+      // Write heartbeat to DB so external monitors / health endpoints can detect scheduler death
+      try {
+        await (prisma as any).systemConfig?.upsert?.({
+          where: { key: 'scheduler_last_tick' },
+          update: { value: JSON.stringify({ ts: new Date().toISOString(), ok, durationMs: duration }) },
+          create: { key: 'scheduler_last_tick', value: JSON.stringify({ ts: new Date().toISOString(), ok, durationMs: duration }) },
+        }).catch(() => {/* silently ignore if table doesn't exist */});
+      } catch { /* never crash scheduler over heartbeat write */ }
+    } catch (error) {
+      const duration = Date.now() - tickStart;
+      console.error(`[AlarmScheduler] ❌ Error during scheduled check (${duration}ms):`, error);
+    }
+  }, 600000); // 10 minutes = 600000ms
+
+  console.log('[AlarmScheduler] ✅ Started - alarm checks will run every 10 minutes');
 }
 
 /**

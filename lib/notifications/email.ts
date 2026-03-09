@@ -41,6 +41,7 @@ export interface AlarmEmailData {
   deviceName?: string;
   timestamp: Date;
   rawData?: Record<string, unknown>;
+  alarmEventId?: string; // Required for DLQ retry
 }
 
 // ============================================================================
@@ -401,9 +402,10 @@ function buildAlarmEmailHtml(data: AlarmEmailData): string {
  * - Alarm in cooldown (duplicate prevention)
  * - SMTP error (logged)
  */
-export async function sendAlarmEmail(data: AlarmEmailData, options?: { bypassCooldown?: boolean }): Promise<boolean> {
+export async function sendAlarmEmail(data: AlarmEmailData, options?: { bypassCooldown?: boolean; skipDLQ?: boolean }): Promise<boolean> {
   const startTime = Date.now();
   const bypassCooldown = options?.bypassCooldown ?? false;
+  const skipDLQ = options?.skipDLQ ?? false;
   
   // Check hourly rate limit (never bypassed for safety)
   if (isHourlyLimitExceeded()) {
@@ -442,11 +444,23 @@ export async function sendAlarmEmail(data: AlarmEmailData, options?: { bypassCoo
     return true;
   } catch (error) {
     const elapsed = Date.now() - startTime;
+    const errorMsg = (error as Error).message || 'Unknown error';
     console.error(`[Email] ❌ Failed after ${elapsed}ms for ${data.alarmCode}:`, error);
     
     // Clear cached transporter on error (force reconnect next time)
     cachedTransporter = null;
     transporterConfig = null;
+    
+    // Add to DLQ for retry (only if alarmEventId is provided and not already a DLQ retry)
+    if (!skipDLQ && data.alarmEventId) {
+      try {
+        // Dynamic import to avoid circular dependency and graceful fallback if DLQ not available
+        const { addToDLQ } = await import('./dlq-worker');
+        await addToDLQ(data.alarmEventId, data, errorMsg);
+      } catch (dlqError) {
+        console.error(`[Email] Failed to add to DLQ:`, dlqError);
+      }
+    }
     
     return false;
   }

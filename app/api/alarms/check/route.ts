@@ -11,6 +11,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import FortiAnalyzerService, { initSharedFortiAnalyzerService } from '@/lib/integrations/fortianalyzer';
 import { AlarmDetectionEngine } from '@/lib/alarms/detection-engine';
+import { processDLQ, cleanupDLQ, getDLQStats } from '@/lib/notifications/dlq-worker';
 
 // Timestamp-based mutex: auto-expires after 20 minutes (prevents permanent lock on crash/SIGTERM)
 const MAX_CHECK_DURATION_MS = 20 * 60 * 1000; // 20 minutes (allows 15 min global timeout + buffer)
@@ -134,6 +135,20 @@ async function runAlarmCheck() {
       console.log(`[AlarmCheck] Logged to AlarmCheckLog`);
     } catch (logError) {
       console.error('[AlarmCheck] Failed to write AlarmCheckLog:', logError);
+    }
+
+    // Process DLQ: retry failed notifications with exponential backoff
+    try {
+      const dlqStats = await getDLQStats();
+      if (dlqStats.pending > 0) {
+        console.log(`[AlarmCheck] DLQ has ${dlqStats.pending} pending notifications, processing...`);
+        const dlqResult = await processDLQ();
+        console.log(`[AlarmCheck] DLQ processed: ${dlqResult.succeeded} delivered, ${dlqResult.failed} retrying, ${dlqResult.permanentlyFailed} failed`);
+      }
+      // Periodic cleanup of old DLQ entries (7 day retention)
+      await cleanupDLQ();
+    } catch (dlqError) {
+      console.error('[AlarmCheck] DLQ processing error (non-fatal):', dlqError);
     }
 
     lastCheckResult = {

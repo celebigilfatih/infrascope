@@ -46,7 +46,7 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
     description: 'Firewall kurallarinda ekleme, duzenleme veya silme tespit edildi. Kim tarafindan, nereden ve ne degistirildigini izler.',
     category: 'CONFIG_ACCESS',
     severity: 'ALARM_CRITICAL',
-    cooldownMinutes: 5,
+    cooldownMinutes: 120, // Must match timeWindowMinutes
     detectionLogic: {
       logtype: 'event',
       filter: 'subtype == system and logdesc like %attribute% and cfgpath like %firewall.policy%',
@@ -95,7 +95,7 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
     description: 'Interface, routing, HA veya system-level degisiklikler tespit edildi. Risk etkisi yuksek.',
     category: 'CONFIG_ACCESS',
     severity: 'ALARM_CRITICAL',
-    cooldownMinutes: 5,
+    cooldownMinutes: 120, // Must match timeWindowMinutes to prevent duplicate triggers
     detectionLogic: {
       logtype: 'event',
       filter: 'subtype == system and logdesc like %attribute% or logdesc like %changed%',
@@ -267,7 +267,7 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
     description: 'Yeni IP, subnet veya FQDN nesnesi olusturuldu.',
     category: 'RISK_ANOMALY',
     severity: 'ALARM_MEDIUM',
-    cooldownMinutes: 30,
+    cooldownMinutes: 60, // Must match timeWindowMinutes
     detectionLogic: {
       logtype: 'event',
       filter: 'subtype == system and logdesc like %attribute% and cfgpath like %firewall.address% and action == Add',
@@ -283,7 +283,7 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
     description: 'Mevcut IP, subnet veya FQDN nesnesi duzenlendi veya silindi. Politika etkisi incelenmeli.',
     category: 'CONFIG_ACCESS',
     severity: 'ALARM_HIGH',
-    cooldownMinutes: 15,
+    cooldownMinutes: 60, // Must match timeWindowMinutes
     detectionLogic: {
       logtype: 'event',
       filter: 'subtype == system and logdesc like %attribute% and cfgpath like %firewall.address%',
@@ -1413,13 +1413,13 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
     description: 'VM snapshot alindi. Disk alani takibi ve yedekleme sureci izleme. Veeam backup snapshot lari haric tutulur.',
     category: 'OPERATIONAL',
     severity: 'ALARM_INFO',
-    cooldownMinutes: 30,
+    cooldownMinutes: 75, // Must be > timeWindowMinutes to prevent duplicate triggers
     notifyEmail: true,
     detectionLogic: {
       logtype: 'vmware',
       filter: 'snapshotCreated == true',
       threshold: 1,
-      timeWindowMinutes: 15,
+      timeWindowMinutes: 60, // Increased from 15 to catch snapshots within 1-hour window
       description: 'Snapshot olusturma islemlerini izler. Hangi VM, snapshot adi ve boyutunu kaydeder. Veeam kullanici ve "VEEAM BACKUP TEMPORARY SNAPSHOT" iceren snapshot lar filtrelenir.',
       recommendedAction: 'Snapshot amacini kontrol edin (backup, test, patch oncesi). Datastore bos alanini dogrulayin. Snapshot retention policy hatirlatın.',
     },

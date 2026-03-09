@@ -940,7 +940,7 @@ model AlarmDefinition {
 
 /// Alarm event instance
 model AlarmEvent {
-  id              String          @id @default(cuid())
+  id              String            @id @default(cuid())
   alarmId         String
   severity        AlarmSeverity2
   title           String
@@ -949,13 +949,14 @@ model AlarmEvent {
   sourceIp        String?
   destIp          String?
   deviceName      String?
-  acknowledged    Boolean         @default(false)
+  acknowledged    Boolean           @default(false)
   acknowledgedBy  String?
   acknowledgedAt  DateTime?
   notifiedAt      DateTime?
-  notifyChannel   String?         // "email"
-  createdAt       DateTime        @default(now())
-  alarm           AlarmDefinition @relation(fields: [alarmId], references: [id])
+  notifyChannel   String?           // "email"
+  createdAt       DateTime          @default(now())
+  alarm           AlarmDefinition   @relation(fields: [alarmId], references: [id])
+  dlqEntries      NotificationDLQ[]
 
   @@index([alarmId])
   @@index([createdAt])
@@ -1043,4 +1044,38 @@ enum AlarmSeverity2 {
   ALARM_MEDIUM
   ALARM_LOW
   ALARM_INFO
+}
+
+/// System configuration key-value store for scheduler heartbeat, feature flags, etc.
+model SystemConfig {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String   // JSON-serialized value
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  @@map("system_configs")
+}
+
+/// Notification Dead-Letter Queue for failed email/notification retries
+/// Failed notifications are queued here with exponential backoff retry.
+model NotificationDLQ {
+  id           String    @id @default(cuid())
+  alarmEventId String    // FK to AlarmEvent
+  channel      String    // "email", "slack", "webhook"
+  payload      Json      // Full notification payload (alarmCode, title, message, etc.)
+  attempts     Int       @default(0)
+  maxAttempts  Int       @default(5)
+  lastAttempt  DateTime?
+  nextRetry    DateTime  // Exponential backoff: 1m, 5m, 30m, 2h, 12h
+  lastError    String?
+  status       String    @default("pending") // "pending", "delivered", "failed_permanent"
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  alarmEvent   AlarmEvent @relation(fields: [alarmEventId], references: [id])
+
+  @@index([status, nextRetry])
+  @@index([alarmEventId])
+  @@map("notification_dlq")
 }
