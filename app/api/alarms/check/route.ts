@@ -13,8 +13,10 @@ import FortiAnalyzerService, { initSharedFortiAnalyzerService } from '@/lib/inte
 import { AlarmDetectionEngine } from '@/lib/alarms/detection-engine';
 import { processDLQ, cleanupDLQ, getDLQStats } from '@/lib/notifications/dlq-worker';
 
-// Timestamp-based mutex: auto-expires after 20 minutes (prevents permanent lock on crash/SIGTERM)
-const MAX_CHECK_DURATION_MS = 20 * 60 * 1000; // 20 minutes (allows 15 min global timeout + buffer)
+// Timestamp-based mutex: auto-expires after 9 minutes.
+// Must match the GLOBAL_TIMEOUT_MS (8 min) + 1 min buffer.
+// DO NOT set higher than the global timeout — a stuck check must be auto-cleared before the next scheduler tick (10 min).
+const MAX_CHECK_DURATION_MS = 9 * 60 * 1000; // 9 minutes = global timeout (8m) + 1m buffer
 let checkStartTime: number | null = null;
 let lastCheckResult: {
   success: boolean;
@@ -43,8 +45,8 @@ async function runAlarmCheck() {
         errors: [],
       };
     }
-    // Stale lock: previous check ran > 5 minutes — force reset
-    console.warn(`[AlarmCheck] 🔄 Stale lock detected (${Math.round(elapsed / 1000)}s > ${MAX_CHECK_DURATION_MS / 1000}s), force resetting`);
+    // Stale lock: previous check exceeded max duration — force reset
+    console.warn(`[AlarmCheck] 🔄 Stale lock detected (${Math.round(elapsed / 1000)}s > ${MAX_CHECK_DURATION_MS / 1000}s), force resetting. This indicates the previous check hung or crashed without releasing the lock.`);
   }
 
   checkStartTime = Date.now();

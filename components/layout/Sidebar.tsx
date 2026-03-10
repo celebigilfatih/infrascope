@@ -33,7 +33,6 @@ import {
   TrendingUp,
   BarChart3,
   Plug,
-  RefreshCw,
   ShieldAlert,
   Globe,
   Lock,
@@ -175,7 +174,6 @@ export const Sidebar: React.FC = () => {
     {
       title: 'Integrations',
       items: [
-        { name: 'Zabbix', href: '/integrations/zabbix', icon: RefreshCw },
         { name: 'VMware', href: '/integrations/vmware', icon: Server },
         { name: 'Firewall', href: '/integrations/firewall', icon: Shield },
         { name: 'Sync Status', href: '/integrations/status', icon: Activity },

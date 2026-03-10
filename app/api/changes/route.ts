@@ -39,7 +39,13 @@ export async function GET(request: NextRequest) {
         const revisions = await fgService.getConfigRevisions();
         
         if (revisions && Array.isArray(revisions)) {
-          revisions.slice(0, Math.floor(limit / 2)).forEach((rev: any, idx: number) => {
+          const EXCLUDED_AUTHORS = ['siem', 'ansible', 'puppet', 'chef', 'terraform', 'automation'];
+          revisions
+            .filter((rev: any) => {
+              const author = (rev.author || '').toLowerCase();
+              return !EXCLUDED_AUTHORS.some(excluded => author.includes(excluded));
+            })
+            .slice(0, Math.floor(limit / 2)).forEach((rev: any, idx: number) => {
             changes.push({
               id: `fg-${rev.serial || idx}`,
               type: 'config',
@@ -94,7 +100,14 @@ export async function GET(request: NextRequest) {
               const logs = await faService.fetchLogResults(tid, 0, limit);
 
               if (logs && Array.isArray(logs)) {
-                logs.forEach((log: any, idx: number) => {
+                // Exclude automated service accounts from change history
+                const EXCLUDED_USERS = ['siem', 'ansible', 'puppet', 'chef', 'terraform', 'automation'];
+                const filteredLogs = logs.filter((log: any) => {
+                  const user = (log.user || log.admin || '').toLowerCase();
+                  return !EXCLUDED_USERS.some(excluded => user.includes(excluded));
+                });
+
+                filteredLogs.forEach((log: any, idx: number) => {
                   const action = log.action || 'unknown';
                   let type: 'create' | 'update' | 'delete' | 'config' = 'config';
                   let description = log.msg ? decodeURIComponent(String(log.msg).replace(/%20/g, ' ')) : log.logdesc;

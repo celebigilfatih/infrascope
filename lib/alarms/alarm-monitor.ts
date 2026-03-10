@@ -101,6 +101,8 @@ export class AlarmMonitor {
 
   /**
    * Watchdog: only triggers an alarm check if the scheduler is behind schedule.
+   * Also verifies that the triggered check actually wrote to alarm_check_logs
+   * (detects stuck mutex scenarios where the check returns a cached result without running).
    */
   private async runWatchdog(): Promise<void> {
     try {
@@ -123,6 +125,8 @@ export class AlarmMonitor {
       const minutesAgo = lastLog ? Math.round(lastCheckMs / 60000) : '∞';
       console.warn(`[AlarmMonitor] Watchdog: last check ${minutesAgo}m ago, triggering recovery check...`);
 
+      const preCheckTimestamp = lastLog?.checkTime ?? null;
+
       const baseUrl = process.env.INTERNAL_API_URL || `http://localhost:${process.env.PORT || '3000'}`;
       const response = await fetch(`${baseUrl}/api/alarms/check`, {
         method: 'POST',
@@ -140,6 +144,32 @@ export class AlarmMonitor {
 
       const triggeredCount = result.summary?.triggered ?? 0;
       const errorsCount = result.summary?.errors ?? 0;
+
+      // --- Stuck mutex detection ---
+      // If the response was suspiciously fast (< 5 seconds), the check likely returned a
+      // cached mutex-blocked result without actually running. Verify by checking the DB.
+      const newLog = await prisma.alarmCheckLog.findFirst({
+        orderBy: { checkTime: 'desc' },
+      });
+      const dbUpdated = newLog && (
+        !preCheckTimestamp ||
+        newLog.checkTime.getTime() > preCheckTimestamp.getTime()
+      );
+
+      if (!dbUpdated) {
+        // The check returned success but did NOT write a new alarm_check_log entry.
+        // This is a strong indicator that the mutex was stuck (cached result returned).
+        // The next watchdog run will detect the same stale gap and try again.
+        // With MAX_CHECK_DURATION_MS = 9 min, the stale lock will auto-expire by then.
+        console.warn(
+          `[AlarmMonitor] ⚠️ Stuck mutex detected! Check returned success in <5s but NO new alarm_check_log was written. ` +
+          `The check mutex is likely stuck. It will auto-expire in up to 9 minutes. ` +
+          `Pre-check last log: ${preCheckTimestamp?.toISOString() ?? 'none'}`
+        );
+        // Don’t count this as a successful check — don’t update lastCheckTime
+        this.consecutiveErrors++;
+        return;
+      }
 
       this.lastCheckTime = new Date();
       this.consecutiveErrors = 0;
