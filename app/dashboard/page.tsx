@@ -2,266 +2,348 @@
 
 import React, { useState, useEffect } from 'react';
 import { apiGet } from '../../lib/api';
-import { Device, Service, ApiResponse } from '../../types';
+import { Device } from '../../types';
 import { getVendorLogo } from '../../lib/formatting';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { 
-  Activity, 
+import { Progress } from '@/components/ui/progress';
+import {
+  Activity,
   ArrowUpRight,
   Search,
-  Download,
-  Calendar,
   PanelLeft,
   Bell,
   Sun,
   Monitor,
-  Settings,
-  Building2,
+  Server,
+  Database,
+  Layers,
   RefreshCcw,
-  CheckCircle2,
   AlertCircle,
+  AlertTriangle,
+  HardDrive,
   Clock,
-  AlertTriangle
+  Shield,
+  Wifi,
+  Lock,
+  Globe,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import Link from 'next/link';
+
+interface VMwareDashboardData {
+  summary: {
+    clusters: number;
+    hosts: number;
+    hostsOnline: number;
+    hostsOffline: number;
+    vms: number;
+    vmRunning: number;
+    vmStopped: number;
+    vmSuspended: number;
+    datastores: number;
+    totalCpuCores: number;
+    totalMemoryGB: number;
+    totalStorageTB: number;
+    usedStorageTB: number;
+  };
+  hosts: Array<{
+    id: string;
+    name: string;
+    status: string;
+    cpuCores?: number;
+    memoryGB?: number;
+  }>;
+  datastores: Array<{
+    id: string;
+    name: string;
+    capacityGB: number;
+    freeGB: number;
+    usedPercent: number;
+    accessible: boolean;
+  }>;
+  vmsByCluster: Array<{ name: string; vmCount: number }>;
+  oldSnapshots: Array<{ vmName: string; name: string; ageInDays: number; sizeGB: number }>;
+}
+
+interface FirewallData {
+  policies: number;
+  addresses: number;
+  interfaces: number;
+  vlans: number;
+  lastSync: string | null;
+  sslVpnSessions: number;
+  sslInBytes: number;
+  sslOutBytes: number;
+  ipsecTunnels: Array<{ name: string; status: string; rgwy: string; incoming_bytes: number; outgoing_bytes: number }>;
+  quarantineCount: number;
+}
 
 export default function DashboardPage() {
-  const [stats, setStats] = useState({
-    totalDevices: 0,
-    activeDevices: 0,
-    totalServices: 0,
-    runningServices: 0,
-    totalBuildings: 0,
-    criticalIssues: 0,
-    totalVMs: 0,
-    runningVMs: 0,
-    totalHosts: 0,
-    onlineHosts: 0,
-  });
-  const [loading, setLoading] = useState(true);
+  const [devices, setDevices] = useState<Device[]>([]);
+  const [coreLoading, setCoreLoading] = useState(true);
+
+  const [vmware, setVmware] = useState<VMwareDashboardData | null>(null);
   const [vmwareLoading, setVmwareLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [vmwareError, setVmwareError] = useState<string | null>(null);
+  const [coreError, setCoreError] = useState<string | null>(null);
+
+  const [firewall, setFirewall] = useState<FirewallData | null>(null);
+  const [firewallLoading, setFirewallLoading] = useState(true);
 
   useEffect(() => {
-    loadDashboardData();
+    loadCoreData();
+    loadVmwareData();
+    loadFirewallData();
   }, []);
 
-  const [data, setData] = useState<{
-    devices: Device[];
-    services: Service[];
-    buildings: any[];
-  }>({
-    devices: [],
-    services: [],
-    buildings: [],
-  });
+  const loadCoreData = async () => {
+    try {
+      setCoreLoading(true);
+      setCoreError(null);
+      const res = await apiGet('/api/devices?limit=200&filterType=manual&mode=minimal').catch(() => ({
+        success: false,
+        data: [],
+      }));
+      if (res.success) setDevices(res.data || []);
+    } catch {
+      setCoreError('Cihaz verileri yüklenemedi');
+    } finally {
+      setCoreLoading(false);
+    }
+  };
 
-  const loadVmwareStats = async () => {
+  const loadVmwareData = async () => {
     try {
       setVmwareLoading(true);
-      // type=summary: lightweight endpoint — only fetchVMs() + fetchHosts()
-      // skips clusters/datastores/snapshots for ~3x faster response
-      const vmwareRes = await fetch('/api/integrations/vmware?type=summary')
-        .then(r => r.json())
-        .catch(() => ({ summary: { vms: 0, vmRunning: 0, hosts: 0, hostsOnline: 0 } }));
-      setStats(prev => ({
-        ...prev,
-        totalVMs: vmwareRes?.summary?.vms || 0,
-        runningVMs: vmwareRes?.summary?.vmRunning || 0,
-        totalHosts: vmwareRes?.summary?.hosts || 0,
-        onlineHosts: vmwareRes?.summary?.hostsOnline || 0,
-      }));
+      setVmwareError(null);
+      const res = await fetch('/api/integrations/vmware?type=dashboard');
+      const json = await res.json();
+      if (json.error) {
+        setVmwareError(json.error);
+        return;
+      }
+      setVmware(json);
+    } catch (err) {
+      setVmwareError((err as Error).message);
     } finally {
       setVmwareLoading(false);
     }
   };
 
-  const loadDashboardData = async () => {
+  const loadFirewallData = async () => {
     try {
-      setLoading(true);
-      setError(null);
-
-      // Fetch core data in parallel — fast APIs only (~150-200ms)
-      // mode=minimal: skips deep nested joins (4-level rack/room/floor/building)
-      // VMware stats are loaded separately (non-blocking) to avoid 9.6s cold-start delay
-      const results = await Promise.allSettled([
-        apiGet('/api/devices?limit=100&filterType=manual&mode=minimal'),
-        apiGet('/api/services?limit=50&mode=minimal'),
-        apiGet('/api/buildings'),
+      setFirewallLoading(true);
+      const [syncRes, sslRes, ipsecRes, quarantineRes] = await Promise.allSettled([
+        fetch('/api/integrations/fortigate?type=sync-status').then((r) => r.json()),
+        fetch('/api/integrations/fortigate?vpn=ssl-summary').then((r) => r.json()),
+        fetch('/api/integrations/fortigate?vpn=ipsec').then((r) => r.json()),
+        fetch('/api/security/quarantine').then((r) => r.json()),
       ]);
-
-      const devicesRes = results[0].status === 'fulfilled' ? results[0].value : { success: false, data: [] };
-      const servicesRes = results[1].status === 'fulfilled' ? results[1].value : { success: false, data: [] };
-      const buildingsRes = results[2].status === 'fulfilled' ? results[2].value : { success: false, data: [] };
-
-      if (devicesRes.success && servicesRes.success && buildingsRes.success) {
-        const devices = devicesRes.data || [];
-        const services = servicesRes.data || [];
-        const buildings = buildingsRes.data || [];
-
-        setData({ devices, services, buildings });
-        
-        setStats(prev => ({
-          ...prev,
-          totalDevices: devicesRes.total || devices.length,
-          activeDevices: devices.filter((d: Device) => d.status === 'ACTIVE').length,
-          totalServices: servicesRes.total || services.length,
-          runningServices: services.filter((s: Service) => s.status === 'RUNNING').length,
-          totalBuildings: buildings.length,
-          criticalIssues: devices.filter((d: Device) => d.criticality === 'CRITICAL' && d.status !== 'ACTIVE').length,
-        }));
-      } else {
-        setError('Panel istatistikleri yüklenemedi');
-      }
-    } catch (err: any) {
-      setError(err.message || 'Veri yüklenirken bir hata oluştu');
+      const sync = syncRes.status === 'fulfilled' ? syncRes.value?.data : null;
+      const ssl = sslRes.status === 'fulfilled' ? sslRes.value?.data : null;
+      const ipsecData = ipsecRes.status === 'fulfilled' ? ipsecRes.value?.data : [];
+      const qData = quarantineRes.status === 'fulfilled' ? quarantineRes.value : null;
+      setFirewall({
+        policies: sync?.policiesProcessed || 0,
+        addresses: sync?.addressesProcessed || 0,
+        interfaces: sync?.interfacesProcessed || 0,
+        vlans: sync?.vlansProcessed || 0,
+        lastSync: sync?.lastSync || null,
+        sslVpnSessions: ssl?.active_sessions || 0,
+        sslInBytes: ssl?.total_in_bytes || 0,
+        sslOutBytes: ssl?.total_out_bytes || 0,
+        ipsecTunnels: Array.isArray(ipsecData) ? ipsecData : [],
+        quarantineCount: qData?.count || 0,
+      });
     } finally {
-      setLoading(false);
+      setFirewallLoading(false);
     }
-
-    // Load VMware stats separately (non-blocking) — does NOT delay main render
-    loadVmwareStats();
   };
 
+  /* ── Support expiration helpers ─────────────────────────── */
   const getExpiringDevices = () => {
     const today = new Date();
-    const thirtyDaysFromNow = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
-    const ninetyDaysAgo = new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000);
-    
-    return data.devices
-      .filter(device => {
-        if (!device.supportDate) return false;
-        const supportDate = new Date(device.supportDate);
-        // Show devices that are expired or expiring within 30 days (or have already been expired for less than 90 days)
-        return (supportDate >= ninetyDaysAgo && supportDate <= thirtyDaysFromNow);
+    const in30 = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const ago90 = new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000);
+    return devices
+      .filter((d) => {
+        if (!d.supportDate) return false;
+        const sd = new Date(d.supportDate);
+        return sd >= ago90 && sd <= in30;
       })
       .sort((a, b) => new Date(a.supportDate || 0).getTime() - new Date(b.supportDate || 0).getTime())
       .slice(0, 4);
   };
 
-  const getDaysUntilExpiration = (supportDate: string | Date | null | undefined) => {
-    if (!supportDate) return null;
-    const today = new Date();
-    const expDate = supportDate instanceof Date ? supportDate : new Date(supportDate);
-    const diffTime = expDate.getTime() - today.getTime();
-    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  const getDaysLeft = (sd: string | Date | null | undefined) => {
+    if (!sd) return null;
+    return Math.ceil((new Date(sd).getTime() - Date.now()) / 86_400_000);
   };
 
-  const getExpirationColor = (days: number | null) => {
+  const expirationColor = (days: number | null) => {
     if (!days) return 'text-muted-foreground';
     if (days <= 7) return 'text-rose-500';
     if (days <= 14) return 'text-amber-500';
     return 'text-yellow-500';
   };
 
+  /* ── Derived VMware values ──────────────────────────────── */
+  const summary = vmware?.summary;
+  const storageUsedPct = summary?.totalStorageTB
+    ? Math.round((summary.usedStorageTB / summary.totalStorageTB) * 100)
+    : 0;
+  const vmRunPct = summary?.vms
+    ? Math.round(((summary.vmRunning || 0) / summary.vms) * 100)
+    : 0;
+  const criticalDatastores = vmware?.datastores.filter((d) => d.usedPercent >= 85) || [];
   const expiringDevices = getExpiringDevices();
 
-  const statCards = [ 
-    { 
-      label: 'Altyapı Düğümleri', 
-      value: stats.totalDevices.toLocaleString(), 
-      subValue: `${stats.activeDevices} aktif / ${stats.totalDevices} toplam`, 
-      trend: `%${((stats.activeDevices / (stats.totalDevices || 1)) * 100).toFixed(1)}`, 
-      trendType: 'up', 
+  /* ── Stat cards ─────────────────────────────────────────── */
+  const statCards = [
+    {
+      label: 'Sanal Makineler',
+      value: vmwareLoading ? '...' : (summary?.vms || 0).toLocaleString(),
+      subValue: vmwareLoading
+        ? 'Yükleniyor...'
+        : `${summary?.vmRunning || 0} çalışıyor · ${summary?.vmStopped || 0} kapalı`,
+      trend: vmwareLoading ? '—' : `%${vmRunPct} aktif`,
+      trendType: vmRunPct >= 80 ? 'up' : 'down',
       icon: Monitor,
-      isLoading: loading,
+      href: '/virtualization/vms',
     },
-    { 
-      label: 'Sanal Makineler', 
-      value: vmwareLoading ? '...' : stats.totalVMs.toLocaleString(), 
-      subValue: vmwareLoading ? 'Yükleniyor...' : `${stats.runningVMs} çalışan / ${stats.totalVMs} toplam`, 
-      trend: vmwareLoading ? '—' : `%${((stats.runningVMs / (stats.totalVMs || 1)) * 100).toFixed(1)}`, 
-      trendType: 'up', 
-      icon: Monitor,
-      isLoading: vmwareLoading,
+    {
+      label: 'ESXi Hostlar',
+      value: vmwareLoading ? '...' : (summary?.hosts || 0).toLocaleString(),
+      subValue: vmwareLoading
+        ? 'Yükleniyor...'
+        : `${summary?.hostsOnline || 0} çevrimiçi · ${summary?.hostsOffline || 0} çevrimdışı`,
+      trend: vmwareLoading
+        ? '—'
+        : (summary?.hostsOffline ?? 0) === 0
+        ? 'Tümü Aktif'
+        : `${summary?.hostsOffline} Offline`,
+      trendType: (summary?.hostsOffline ?? 0) === 0 ? 'up' : 'down',
+      icon: Server,
+      href: '/virtualization/hosts',
     },
-    { 
-      label: 'ESXi Hostlar', 
-      value: vmwareLoading ? '...' : stats.totalHosts.toLocaleString(), 
-      subValue: vmwareLoading ? 'Yükleniyor...' : `${stats.onlineHosts} çevrimiçi / ${stats.totalHosts} toplam`, 
-      trend: vmwareLoading ? '—' : (stats.onlineHosts === stats.totalHosts ? 'Tümü Aktif' : `${stats.onlineHosts} Online`), 
-      trendType: 'up', 
-      icon: Settings,
-      isLoading: vmwareLoading,
+    {
+      label: 'Datastore',
+      value: vmwareLoading ? '...' : (summary?.datastores || 0).toLocaleString(),
+      subValue: vmwareLoading
+        ? 'Yükleniyor...'
+        : `${summary?.totalStorageTB?.toFixed(1) || 0} TB toplam · %${storageUsedPct} dolu`,
+      trend: vmwareLoading ? '—' : `%${storageUsedPct} kullanım`,
+      trendType: storageUsedPct > 80 ? 'down' : 'up',
+      icon: Database,
+      href: '/virtualization/datastores',
     },
-    { 
-      label: 'Yönetilen Binalar', 
-      value: stats.totalBuildings.toLocaleString(), 
-      subValue: 'Organizasyonlardaki sahalar', 
-      trend: 'Aktif', 
-      trendType: 'up', 
-      icon: Building2,
-      isLoading: loading,
-    }
+    {
+      label: 'Cluster',
+      value: vmwareLoading ? '...' : (summary?.clusters || 0).toLocaleString(),
+      subValue: vmwareLoading
+        ? 'Yükleniyor...'
+        : `${summary?.totalCpuCores || 0} CPU çekirdeği · ${summary?.totalMemoryGB?.toFixed(0) || 0} GB RAM`,
+      trend: vmwareLoading ? '—' : 'Sağlıklı',
+      trendType: 'up',
+      icon: Layers,
+      href: '/virtualization',
+    },
   ];
 
   return (
     <>
-      {/* Top Header */}
+      {/* ── Top Header ─────────────────────────────────────── */}
       <header className="h-14 border-b border-border flex items-center justify-between px-6 bg-card/50 backdrop-blur-sm sticky top-0 z-10">
-          <div className="flex items-center gap-4 flex-1">
-            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground">
-              <PanelLeft className="h-4 w-4" />
-            </Button>
-            <div className="relative max-w-md w-full hidden md:block">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-              <Input 
-                placeholder="Ara..." 
-                className="pl-9 h-8 bg-muted/30 border-none focus-visible:ring-1 focus-visible:ring-primary/50 text-xs w-64"
-              />
-              <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-50">
-                <span className="text-[10px] font-bold border rounded px-1">⌘</span>
-                <span className="text-[10px] font-bold border rounded px-1">K</span>
-              </div>
+        <div className="flex items-center gap-4 flex-1">
+          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground">
+            <PanelLeft className="h-4 w-4" />
+          </Button>
+          <div className="relative max-w-md w-full hidden md:block">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <Input
+              placeholder="Ara..."
+              className="pl-9 h-8 bg-muted/30 border-none focus-visible:ring-1 focus-visible:ring-primary/50 text-xs w-64"
+            />
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-50">
+              <span className="text-[10px] font-bold border rounded px-1">⌘</span>
+              <span className="text-[10px] font-bold border rounded px-1">K</span>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground">
-              <Sun className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground">
-              <Bell className="h-4 w-4" />
-            </Button>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground">
+            <Sun className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground">
+            <Bell className="h-4 w-4" />
+          </Button>
+        </div>
+      </header>
+
+      {/* ── Main Content ────────────────────────────────────── */}
+      <main className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+        <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Kontrol Paneli</h1>
+            <p className="text-sm text-muted-foreground">VMware altyapısı kritik metrikler</p>
           </div>
-        </header>
+          <Button
+            variant="outline"
+            size="sm"
+            className="bg-card font-bold px-4 h-9 border-border"
+            onClick={() => {
+              loadCoreData();
+              loadVmwareData();
+              loadFirewallData();
+            }}
+            disabled={vmwareLoading || firewallLoading}
+          >
+            <RefreshCcw className={cn('mr-2 h-4 w-4', vmwareLoading && 'animate-spin')} />
+            Yenile
+          </Button>
+        </div>
 
-        {/* Main Content Area */}
-        <main className="flex-1 overflow-y-auto p-8 custom-scrollbar">
-          <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight">Kontrol Paneli</h1>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button size="sm" className="bg-foreground text-background hover:bg-foreground/90 font-bold px-4 h-9">
-                <Download className="mr-2 h-4 w-4" />
-                İndir
-              </Button>
-              <Button variant="outline" size="sm" className="bg-card font-bold px-4 h-9 border-border">
-                <Calendar className="mr-2 h-4 w-4" />
-                Tarih Seç
-              </Button>
-            </div>
-          </div>
+        <div className="flex flex-col gap-6">
+          {/* Error banners */}
+          {(coreError || vmwareError) && (
+            <Card className="border-destructive/20 bg-destructive/5 shadow-none">
+              <CardContent className="p-4 flex items-center gap-3 text-destructive">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span className="text-xs font-bold">{coreError || vmwareError}</span>
+              </CardContent>
+            </Card>
+          )}
 
-          <div className="flex flex-col gap-6">
-            {error && (
-              <Card className="border-destructive/20 bg-destructive/5 shadow-none">
-                <CardContent className="p-4 flex items-center gap-3 text-destructive">
-                  <AlertCircle className="h-4 w-4" />
-                  <span className="text-xs font-bold">{error}</span>
-                </CardContent>
-              </Card>
-            )}
-            {/* Navigation Tabs Mock */}
-            {/* Removed: Genel Bakış, Analitik, Raporlar, Bildirimler tabs */}
+          {/* Critical datastore inline alert */}
+          {criticalDatastores.length > 0 && (
+            <Card className="border-amber-500/30 bg-amber-500/5 shadow-none">
+              <CardContent className="p-3 flex flex-wrap items-center gap-3">
+                <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
+                <span className="text-xs font-bold text-amber-700">
+                  {criticalDatastores.length} datastore %85 üzerinde kapasite kullanıyor
+                </span>
+                <div className="flex gap-1 flex-wrap">
+                  {criticalDatastores.slice(0, 4).map((d) => (
+                    <Badge
+                      key={d.id}
+                      className="bg-amber-500/20 text-amber-700 border-amber-500/40 text-[9px]"
+                    >
+                      {d.name} %{d.usedPercent}
+                    </Badge>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
-            {/* Stats Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-              {statCards.map((card) => (
-                <Card key={card.label} className="border-border/50 shadow-sm overflow-hidden bg-card">
+          {/* ── Stat Cards ─────────────────────────────────── */}
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            {statCards.map((card) => (
+              <Link key={card.label} href={card.href}>
+                <Card className="border-border/50 shadow-sm overflow-hidden bg-card hover:shadow-md transition-shadow cursor-pointer">
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-2">
@@ -274,27 +356,31 @@ export default function DashboardPage() {
                       <span className="text-3xl font-black tracking-tighter">{card.value}</span>
                       <p className="text-[11px] text-muted-foreground font-medium">{card.subValue}</p>
                     </div>
-                    
                     <div className="mt-6 flex items-end justify-between">
                       <div className="flex flex-col">
-                        <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Detaylar</span>
-                        <div className={cn(
-                          "text-[10px] font-bold flex items-center gap-1 mt-0.5",
-                          card.trendType === 'up' ? 'text-emerald-500' : 'text-rose-500'
-                        )}>
+                        <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">
+                          Durum
+                        </span>
+                        <div
+                          className={cn(
+                            'text-[10px] font-bold flex items-center gap-1 mt-0.5',
+                            card.trendType === 'up' ? 'text-emerald-500' : 'text-rose-500'
+                          )}
+                        >
                           {card.trend}
-                          <ArrowUpRight className={cn("h-3 w-3", card.trendType === 'down' && "rotate-90")} />
+                          <ArrowUpRight
+                            className={cn('h-3 w-3', card.trendType === 'down' && 'rotate-90')}
+                          />
                         </div>
                       </div>
-                      {/* Simple Sparkline Mock */}
                       <div className="flex items-end gap-1 h-8">
                         {[40, 70, 45, 90, 65, 80].map((h, i) => (
-                          <div 
-                            key={i} 
+                          <div
+                            key={i}
                             className={cn(
-                              "w-1.5 rounded-t-sm",
-                              card.trendType === 'up' ? "bg-emerald-500/30" : "bg-rose-500/20"
-                            )} 
+                              'w-1.5 rounded-t-sm',
+                              card.trendType === 'up' ? 'bg-primary/20' : 'bg-rose-500/20'
+                            )}
                             style={{ height: `${h}%` }}
                           />
                         ))}
@@ -302,249 +388,503 @@ export default function DashboardPage() {
                     </div>
                   </CardContent>
                 </Card>
-              ))}
-            </div>
+              </Link>
+            ))}
+          </div>
 
-            {/* Support Expiration Alert Section */}
-            {expiringDevices.length > 0 && (
-              <Card className="border-border/50 shadow-sm overflow-hidden">
-                <CardHeader className="border-b border-border/50">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <AlertTriangle className="h-5 w-5 text-rose-500" />
-                      <div>
-                        <CardTitle className="text-sm font-bold">Support Tarihi Uyarısı</CardTitle>
-                        <CardDescription className="text-xs mt-1">30 gün içinde sonu çalan destekler</CardDescription>
-                      </div>
-                    </div>
-                    <Badge className="bg-rose-500/20 text-rose-700 border-rose-500/50">{expiringDevices.length}</Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="p-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {expiringDevices.map((device) => {
-                      const daysLeft = getDaysUntilExpiration(device.supportDate);
-                      return (
-                        <div key={device.id} className="border border-border/50 rounded-lg p-4 bg-white hover:bg-slate-50 transition-colors">
-                          {/* Header with Icon and Status */}
-                          <div className="flex items-start justify-between mb-3">
-                            <div className="flex items-center gap-2">
-                              <Clock className={cn("h-4 w-4", getExpirationColor(daysLeft))} />
-                              <Badge 
-                                variant="destructive"
-                                className="text-[9px] font-bold"
-                              >
-                                {daysLeft} gün
-                              </Badge>
-                            </div>
-                          </div>
-
-                          {/* Device Name */}
-                          <div className="flex items-center gap-2 mb-2">
-                            {getVendorLogo(device.vendor) && (
-                              <img 
-                                src={getVendorLogo(device.vendor)!} 
-                                alt={device.vendor} 
-                                className="h-5 w-5 object-contain"
-                              />
-                            )}
-                            <h4 className="font-bold text-sm line-clamp-2">{device.name}</h4>
-                          </div>
-
-                          {/* Device Details */}
-                          <div className="space-y-2 mb-3">
-                            <div className="flex items-center justify-between text-[11px]">
-                              <span className="text-muted-foreground">Tip:</span>
-                              <span className="font-medium">{device.type.replace(/_/g, ' ')}</span>
-                            </div>
-                            <div className="flex items-center justify-between text-[11px]">
-                              <span className="text-muted-foreground">Durum:</span>
-                              <Badge 
-                                variant={device.status === 'ACTIVE' ? 'success' : 'secondary'} 
-                                className="text-[8px]"
-                              >
-                                {device.status}
-                              </Badge>
-                            </div>
-                            <div className="flex items-center justify-between text-[11px]">
-                              <span className="text-muted-foreground">Bitiş Tarihi:</span>
-                              <span className={cn("font-bold", getExpirationColor(daysLeft))}>
-                                {device.supportDate ? new Date(device.supportDate).toLocaleDateString('tr-TR') : 'N/A'}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Criticality */}
-                          {device.criticality && (
-                            <div className="pt-3 border-t border-border/30">
-                              <Badge variant="destructive" className="text-[8px] w-full justify-center">
-                                {device.criticality === 'CRITICAL' && '🔴 Kritik'}
-                                {device.criticality === 'HIGH' && '🔴 Yüksek'}
-                                {device.criticality === 'MEDIUM' && '🔴 Orta'}
-                                {device.criticality === 'LOW' && '🔴 Düşük'}
-                              </Badge>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Sale Activity Large Card -> Inventory Distribution */}
-              <Card className="lg:col-span-2 border-border/50 shadow-sm bg-card overflow-hidden">
-                <CardHeader className="border-b border-border/50">
-                  <CardTitle className="text-sm font-bold">Envanter Hareketliliği - Cihazlar & Servisler</CardTitle>
-                  <CardDescription className="text-xs">Veri merkezleri genelinde çalışma süresi ve dağıtım büyümesi</CardDescription>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <div className="h-64 w-full relative bg-muted/10">
-                    {/* Activity Area Chart Mock */}
-                    <svg className="w-full h-full" viewBox="0 0 500 200" preserveAspectRatio="none">
-                      <defs>
-                        <linearGradient id="grad1" x1="0%" y1="0%" x2="0%" y2="100%">
-                          <stop offset="0%" style={{ stopColor: 'rgb(16, 185, 129)', stopOpacity: 0.25 }} />
-                          <stop offset="100%" style={{ stopColor: 'rgb(16, 185, 129)', stopOpacity: 0 }} />
-                        </linearGradient>
-                        <linearGradient id="grad2" x1="0%" y1="0%" x2="0%" y2="100%">
-                          <stop offset="0%" style={{ stopColor: 'rgb(20, 184, 166)', stopOpacity: 0.2 }} />
-                          <stop offset="100%" style={{ stopColor: 'rgb(20, 184, 166)', stopOpacity: 0 }} />
-                        </linearGradient>
-                      </defs>
-                      <path d="M0,150 Q100,100 200,120 T400,110 T500,115 V200 H0 Z" fill="url(#grad1)" />
-                      <path d="M0,150 Q100,100 200,120 T400,110 T500,115" fill="none" stroke="rgb(16, 185, 129)" strokeWidth="2" />
-                      
-                      <path d="M0,180 Q100,160 200,170 T400,140 T500,145 V200 H0 Z" fill="url(#grad2)" />
-                      <path d="M0,180 Q100,160 200,170 T400,140 T500,145" fill="none" stroke="rgb(20, 184, 166)" strokeWidth="2" />
-                    </svg>
-                    <div className="absolute bottom-4 left-0 right-0 px-8 flex justify-between text-[10px] text-muted-foreground font-bold">
-                      <span>Oca</span>
-                      <span>Şub</span>
-                      <span>Mar</span>
-                      <span>Nis</span>
-                      <span>May</span>
-                      <span>Haz</span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Subscriptions Bar Chart -> Location Breakdown */}
-              <Card className="border-border/50 shadow-sm bg-card">
-                <CardHeader>
-                  <CardTitle className="text-sm font-bold">Altyapı Yükü</CardTitle>
-                  <div className="text-2xl font-black mt-2">{(stats.totalDevices + stats.totalServices).toLocaleString()}</div>
-                  <CardDescription className="text-[10px] font-bold text-emerald-500">Toplam takip edilen varlık</CardDescription>
-                </CardHeader>
-                <CardContent className="h-48 flex items-end justify-between gap-2 px-6">
-                  {[30, 60, 45, 90, 70, 50, 80, 100, 60, 40, 75, 55].map((h, i) => (
-                    <div 
-                      key={i} 
-                      className={cn(
-                        "flex-1 rounded-sm transition-all hover:opacity-80",
-                        i % 2 === 0 ? "bg-emerald-500/70" : "bg-teal-500/70"
-                      )} 
-                      style={{ height: `${h}%` }}
-                    />
-                  ))}
-                </CardContent>
-              </Card>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Inventory Table */}
-              <Card className="lg:col-span-2 border-border/50 shadow-sm bg-card overflow-hidden">
-                <CardHeader className="flex flex-row items-center justify-between">
+          {/* ── ESXi Hosts + Old Snapshots ─────────────────── */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* ESXi Hosts table */}
+            <Card className="lg:col-span-2 border-border/50 shadow-sm bg-card overflow-hidden">
+              <CardHeader className="border-b border-border/50">
+                <div className="flex items-center justify-between">
                   <div>
-                    <CardTitle className="text-sm font-bold">Son Envanter Hareketleri</CardTitle>
-                    <CardDescription className="text-xs">Sisteme en son eklenen cihazlar.</CardDescription>
+                    <CardTitle className="text-sm font-bold">ESXi Hostlar</CardTitle>
+                    <CardDescription className="text-xs">Bağlantı ve kaynak durumu</CardDescription>
                   </div>
-                  <Button variant="outline" size="sm" className="h-8 text-xs font-bold" onClick={loadDashboardData}>Yenile <RefreshCcw className={cn("ml-1 h-3 w-3", loading && "animate-spin")} /></Button>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <div className="px-6 pb-4">
-                    <Input placeholder="Envanterde ara..." className="h-8 bg-muted/20 border-border text-xs max-w-sm" />
-                  </div>
+                  <Link href="/virtualization/hosts">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-[10px] font-bold text-muted-foreground"
+                    >
+                      Tümünü Gör <ArrowUpRight className="h-3 w-3 ml-1" />
+                    </Button>
+                  </Link>
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                {vmwareLoading ? (
+                  <div className="p-8 text-xs text-muted-foreground text-center">Yükleniyor...</div>
+                ) : (
                   <div className="table-responsive">
                     <table className="table">
                       <thead>
                         <tr>
-                          <th className="w-12"><div className="w-4 h-4 border border-border rounded" /></th>
-                          <th>Cihaz Adı</th>
-                          <th>Tip</th>
+                          <th>Host</th>
+                          <th>CPU Çekirdeği</th>
+                          <th>Bellek</th>
                           <th className="text-right">Durum</th>
-                          <th className="w-12"></th>
                         </tr>
                       </thead>
                       <tbody className="text-xs font-medium">
-                        {data.devices
-                          .slice()
-                          .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
-                          .slice(0, 5)
-                          .map((device) => (
-                          <tr key={device.id}>
-                            <td><div className="w-4 h-4 border border-border rounded" /></td>
-                            <td className="font-bold">{device.name}</td>
-                            <td><Badge variant="outline" className="text-[10px]">{device.type.replace(/_/g, ' ')}</Badge></td>
+                        {vmware?.hosts.slice(0, 10).map((host) => (
+                          <tr key={host.id}>
+                            <td className="font-bold">
+                              <div className="flex items-center gap-2">
+                                <div
+                                  className={cn(
+                                    'w-1.5 h-1.5 rounded-full shrink-0',
+                                    host.status === 'connected'
+                                      ? 'bg-emerald-500'
+                                      : 'bg-rose-500'
+                                  )}
+                                />
+                                <span className="truncate max-w-[200px]">{host.name}</span>
+                              </div>
+                            </td>
+                            <td className="text-muted-foreground">{host.cpuCores ?? '—'}</td>
+                            <td className="text-muted-foreground">
+                              {host.memoryGB ? `${host.memoryGB} GB` : '—'}
+                            </td>
                             <td className="text-right">
-                              <Badge 
-                                variant={device.status === 'ACTIVE' ? 'success' : 'secondary'}
+                              <Badge
+                                variant={
+                                  host.status === 'connected' ? 'success' : 'destructive'
+                                }
                                 className="text-[9px]"
                               >
-                                {device.status}
+                                {host.status === 'connected'
+                                  ? 'Bağlı'
+                                  : host.status === 'disconnected'
+                                  ? 'Bağlantı Kesik'
+                                  : host.status}
                               </Badge>
                             </td>
-                            <td><Activity className="h-3 w-3 text-muted-foreground opacity-30" /></td>
                           </tr>
                         ))}
-                        {data.devices.length === 0 && (
+                        {(!vmware?.hosts || vmware.hosts.length === 0) && (
                           <tr>
-                            <td colSpan={5} className="text-center py-8 text-muted-foreground">Cihaz bulunamadı</td>
+                            <td colSpan={4} className="text-center py-8 text-muted-foreground">
+                              Host bulunamadı
+                            </td>
                           </tr>
                         )}
                       </tbody>
                     </table>
                   </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Old Snapshots */}
+            <Card className="border-border/50 shadow-sm bg-card">
+              <CardHeader>
+                <CardTitle className="text-sm font-bold flex items-center gap-2">
+                  <HardDrive className="h-4 w-4 text-orange-500" />
+                  Eski Snapshotlar
+                </CardTitle>
+                <div className="text-2xl font-black mt-2">
+                  {vmwareLoading ? '...' : vmware?.oldSnapshots?.length || 0}
+                </div>
+                <CardDescription className="text-[10px] font-bold text-orange-500">
+                  7 günden eski snapshot
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3 pt-0">
+                {vmwareLoading ? (
+                  <div className="text-xs text-muted-foreground text-center py-4">
+                    Yükleniyor...
+                  </div>
+                ) : (
+                  <>
+                    {vmware?.oldSnapshots?.slice(0, 6).map((snap, idx) => (
+                      <div key={idx} className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div
+                            className={cn(
+                              'w-7 h-7 rounded-full flex items-center justify-center shrink-0',
+                              snap.ageInDays > 30
+                                ? 'bg-rose-500/10 text-rose-600'
+                                : 'bg-orange-500/10 text-orange-600'
+                            )}
+                          >
+                            <AlertTriangle className="h-3.5 w-3.5" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold truncate">{snap.vmName}</p>
+                            <p className="text-[10px] text-muted-foreground">
+                              {snap.sizeGB.toFixed(1)} GB
+                            </p>
+                          </div>
+                        </div>
+                        <Badge variant="secondary" className="text-[9px] shrink-0">
+                          {snap.ageInDays}g
+                        </Badge>
+                      </div>
+                    ))}
+                    {(!vmware?.oldSnapshots || vmware.oldSnapshots.length === 0) && (
+                      <p className="text-xs text-muted-foreground text-center py-4">
+                        Eski snapshot yok ✓
+                      </p>
+                    )}
+                    {vmware?.oldSnapshots && vmware.oldSnapshots.length > 6 && (
+                      <Link
+                        href="/virtualization/snapshots"
+                        className="text-xs text-primary hover:underline block text-center pt-2"
+                      >
+                        +{vmware.oldSnapshots.length - 6} daha göster
+                      </Link>
+                    )}
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* ── Datastore Capacity (full width) ─────────── */}
+          <Card className="border-border/50 shadow-sm bg-card overflow-hidden">
+              <CardHeader className="border-b border-border/50">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-sm font-bold">Depolama Kapasitesi</CardTitle>
+                    <CardDescription className="text-xs">
+                      {vmwareLoading
+                        ? 'Yükleniyor...'
+                        : `${summary?.usedStorageTB?.toFixed(1) || 0} TB kullanılan / ${
+                            summary?.totalStorageTB?.toFixed(1) || 0
+                          } TB toplam`}
+                    </CardDescription>
+                  </div>
+                  <Link href="/virtualization/datastores">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-[10px] font-bold text-muted-foreground"
+                    >
+                      Detay <ArrowUpRight className="h-3 w-3 ml-1" />
+                    </Button>
+                  </Link>
+                </div>
+              </CardHeader>
+              <CardContent className="p-6">
+                {vmwareLoading ? (
+                  <div className="text-xs text-muted-foreground text-center py-8">
+                    Yükleniyor...
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-2xl font-black">{storageUsedPct}%</span>
+                      <span className="text-xs text-muted-foreground">toplam kullanım</span>
+                    </div>
+                    <Progress value={storageUsedPct} className="h-2 mb-6" />
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-8 gap-y-3">
+                      {vmware?.datastores
+                        .slice()
+                        .sort((a, b) => b.usedPercent - a.usedPercent)
+                        .map((ds) => (
+                          <div key={ds.id} className="flex items-center gap-3">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex justify-between text-[11px] mb-1">
+                                <span className="font-medium truncate">{ds.name}</span>
+                                <span
+                                  className={cn(
+                                    'font-bold shrink-0 ml-2',
+                                    ds.usedPercent >= 90
+                                      ? 'text-rose-500'
+                                      : ds.usedPercent >= 80
+                                      ? 'text-amber-500'
+                                      : 'text-muted-foreground'
+                                  )}
+                                >
+                                  %{ds.usedPercent}
+                                </span>
+                              </div>
+                              <Progress value={ds.usedPercent} className="h-1.5" />
+                            </div>
+                            <span className="text-[10px] text-muted-foreground shrink-0 w-14 text-right">
+                              {(ds.capacityGB / 1024).toFixed(1)} TB
+                            </span>
+                          </div>
+                        ))}
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
+          {/* ── Güvenlik Duvarı (Firewall) ───────────────────── */}
+          <div>
+            <div className="flex items-center gap-2 mb-4">
+              <Shield className="h-4 w-4 text-primary" />
+              <h2 className="text-sm font-bold tracking-tight">Güvenlik Duvarı</h2>
+              {!firewallLoading && firewall?.lastSync && (
+                <span className="text-[10px] text-muted-foreground">
+                  Son sync: {new Date(firewall.lastSync).toLocaleString('tr-TR')}
+                </span>
+              )}
+            </div>
+
+            {/* Firewall stat cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+              {[
+                {
+                  label: 'Güvenlik Kuralları',
+                  value: firewallLoading ? '...' : (firewall?.policies || 0).toLocaleString(),
+                  sub: firewallLoading ? '' : `${firewall?.addresses || 0} adres nesnesi`,
+                  icon: Shield,
+                  href: '/security/policies',
+                  color: 'text-blue-500',
+                  bg: 'bg-blue-500/10',
+                },
+                {
+                  label: 'SSL-VPN Oturumu',
+                  value: firewallLoading ? '...' : (firewall?.sslVpnSessions || 0).toLocaleString(),
+                  sub: firewallLoading
+                    ? ''
+                    : firewall?.sslVpnSessions
+                    ? `${((firewall.sslInBytes + firewall.sslOutBytes) / 1_073_741_824).toFixed(1)} GB trafik`
+                    : 'Aktif oturum yok',
+                  icon: Wifi,
+                  href: '/network/ssl-vpn',
+                  color: 'text-emerald-500',
+                  bg: 'bg-emerald-500/10',
+                },
+                {
+                  label: 'IPSec Tüneli',
+                  value: firewallLoading
+                    ? '...'
+                    : (() => {
+                        const up = firewall?.ipsecTunnels.filter((t) => t.status === 'up').length || 0;
+                        const total = firewall?.ipsecTunnels.length || 0;
+                        return `${up} / ${total}`;
+                      })(),
+                  sub: firewallLoading
+                    ? ''
+                    : (() => {
+                        const down = (firewall?.ipsecTunnels || []).filter((t) => t.status !== 'up').length;
+                        return down > 0 ? `${down} tünel kapalı` : 'Tüm tüneller aktif';
+                      })(),
+                  icon: Globe,
+                  href: '/network/ipsec',
+                  color:
+                    (firewall?.ipsecTunnels || []).some((t) => t.status !== 'up')
+                      ? 'text-rose-500'
+                      : 'text-emerald-500',
+                  bg:
+                    (firewall?.ipsecTunnels || []).some((t) => t.status !== 'up')
+                      ? 'bg-rose-500/10'
+                      : 'bg-emerald-500/10',
+                },
+                {
+                  label: 'Karantina',
+                  value: firewallLoading ? '...' : (firewall?.quarantineCount || 0).toLocaleString(),
+                  sub: firewallLoading
+                    ? ''
+                    : firewall?.quarantineCount
+                    ? 'Engellenen IP adresi'
+                    : 'Karantinada IP yok',
+                  icon: Lock,
+                  href: '/security/quarantine',
+                  color: (firewall?.quarantineCount || 0) > 0 ? 'text-rose-500' : 'text-muted-foreground',
+                  bg: (firewall?.quarantineCount || 0) > 0 ? 'bg-rose-500/10' : 'bg-muted',
+                },
+              ].map((card) => (
+                <Link key={card.label} href={card.href}>
+                  <Card className="border-border/50 shadow-sm bg-card hover:shadow-md transition-shadow cursor-pointer">
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center', card.bg)}>
+                          <card.icon className={cn('h-4 w-4', card.color)} />
+                        </div>
+                        <span className="text-xs font-bold text-muted-foreground">{card.label}</span>
+                      </div>
+                      <div className="text-2xl font-black tracking-tighter">{card.value}</div>
+                      <p className="text-[10px] text-muted-foreground mt-1">{card.sub}</p>
+                    </CardContent>
+                  </Card>
+                </Link>
+              ))}
+            </div>
+
+            {/* IPSec tunnel list + VPN/Interfaces detail */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* IPSec tunnels */}
+              <Card className="lg:col-span-2 border-border/50 shadow-sm bg-card overflow-hidden">
+                <CardHeader className="border-b border-border/50">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-sm font-bold">IPSec Tünelleri</CardTitle>
+                      <CardDescription className="text-xs">Site-to-site VPN tünel durumları</CardDescription>
+                    </div>
+                    <Link href="/network/ipsec">
+                      <Button variant="ghost" size="sm" className="h-7 text-[10px] font-bold text-muted-foreground">
+                        Tümünü Gör <ArrowUpRight className="h-3 w-3 ml-1" />
+                      </Button>
+                    </Link>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                  {firewallLoading ? (
+                    <div className="p-8 text-xs text-muted-foreground text-center">Yükleniyor...</div>
+                  ) : !firewall?.ipsecTunnels.length ? (
+                    <div className="p-8 text-xs text-muted-foreground text-center">IPSec tünel bulunamadı</div>
+                  ) : (
+                    <div className="table-responsive">
+                      <table className="table">
+                        <thead>
+                          <tr>
+                            <th>Tünel Adı</th>
+                            <th>Uzak Gateway</th>
+                            <th>Gelen / Giden</th>
+                            <th className="text-right">Durum</th>
+                          </tr>
+                        </thead>
+                        <tbody className="text-xs font-medium">
+                          {firewall.ipsecTunnels.slice(0, 10).map((tunnel, idx) => (
+                            <tr key={idx}>
+                              <td className="font-bold">
+                                <div className="flex items-center gap-2">
+                                  <div
+                                    className={cn(
+                                      'w-1.5 h-1.5 rounded-full shrink-0',
+                                      tunnel.status === 'up' ? 'bg-emerald-500' : 'bg-rose-500'
+                                    )}
+                                  />
+                                  <span className="truncate max-w-[180px]">{tunnel.name}</span>
+                                </div>
+                              </td>
+                              <td className="text-muted-foreground truncate max-w-[120px]">{tunnel.rgwy || '—'}</td>
+                              <td className="text-muted-foreground">
+                                {tunnel.incoming_bytes || tunnel.outgoing_bytes
+                                  ? `${(tunnel.incoming_bytes / 1_048_576).toFixed(1)} / ${(tunnel.outgoing_bytes / 1_048_576).toFixed(1)} MB`
+                                  : '—'}
+                              </td>
+                              <td className="text-right">
+                                <Badge
+                                  variant={tunnel.status === 'up' ? 'success' : 'destructive'}
+                                  className="text-[9px]"
+                                >
+                                  {tunnel.status === 'up' ? 'Aktif' : 'Kapalı'}
+                                </Badge>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
-              {/* Running Services List */}
+              {/* Firewall overview card */}
               <Card className="border-border/50 shadow-sm bg-card">
                 <CardHeader>
-                  <CardTitle className="text-sm font-bold">Aktif Servisler</CardTitle>
-                  <CardDescription className="text-xs">Kritik servislerin durumunu izleyin.</CardDescription>
+                  <CardTitle className="text-sm font-bold">Firewall Özeti</CardTitle>
+                  <CardDescription className="text-xs">Senkronizasyon ve arayüz bilgileri</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-6">
-                  {data.services.slice(0, 5).map((service) => (
-                    <div key={service.id} className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className={cn(
-                          "w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold",
-                          service.status === 'RUNNING' ? "bg-emerald-500/10 text-emerald-600" : "bg-muted text-muted-foreground"
-                        )}>
-                          {service.status === 'RUNNING' ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+                <CardContent className="space-y-4">
+                  {firewallLoading ? (
+                    <div className="text-xs text-muted-foreground text-center py-4">Yükleniyor...</div>
+                  ) : (
+                    <>
+                      {[
+                        { label: 'Güvenlik Kuralı', value: firewall?.policies || 0, icon: Shield, color: 'text-blue-500', bg: 'bg-blue-500/10' },
+                        { label: 'Adres Nesnesi', value: firewall?.addresses || 0, icon: Globe, color: 'text-violet-500', bg: 'bg-violet-500/10' },
+                        { label: 'Ağ Arayüzü', value: firewall?.interfaces || 0, icon: Server, color: 'text-teal-500', bg: 'bg-teal-500/10' },
+                        { label: 'VLAN', value: firewall?.vlans || 0, icon: Layers, color: 'text-indigo-500', bg: 'bg-indigo-500/10' },
+                        { label: 'SSL-VPN Oturumu', value: firewall?.sslVpnSessions || 0, icon: Wifi, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
+                        { label: 'Karantina IP', value: firewall?.quarantineCount || 0, icon: Lock, color: (firewall?.quarantineCount || 0) > 0 ? 'text-rose-500' : 'text-muted-foreground', bg: (firewall?.quarantineCount || 0) > 0 ? 'bg-rose-500/10' : 'bg-muted' },
+                      ].map((item) => (
+                        <div key={item.label} className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className={cn('w-7 h-7 rounded-md flex items-center justify-center', item.bg)}>
+                              <item.icon className={cn('h-3.5 w-3.5', item.color)} />
+                            </div>
+                            <span className="text-xs font-medium">{item.label}</span>
+                          </div>
+                          <span className="text-sm font-bold">{item.value.toLocaleString()}</span>
                         </div>
-                        <div className="flex flex-col">
-                          <span className="text-xs font-bold">{service.name}</span>
-                          <span className="text-[10px] text-muted-foreground font-medium uppercase">{service.type.replace(/_/g, ' ')}</span>
-                        </div>
-                      </div>
-                      <Badge variant={service.status === 'RUNNING' ? 'success' : 'secondary'} className="text-[9px]">
-                        {service.status === 'RUNNING' ? 'ÇALIŞIYOR' : 'DURDU'}
-                      </Badge>
-                    </div>
-                  ))}
-                  {data.services.length === 0 && (
-                    <div className="text-center py-8 text-muted-foreground text-xs">Takip edilen servis yok</div>
+                      ))}
+                    </>
                   )}
                 </CardContent>
               </Card>
             </div>
           </div>
-        </main>
+
+          {/* ── Support Expiration Alert ────────────────────── */}
+          {!coreLoading && expiringDevices.length > 0 && (
+            <Card className="border-border/50 shadow-sm overflow-hidden">
+              <CardHeader className="border-b border-border/50">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <AlertTriangle className="h-5 w-5 text-rose-500" />
+                    <div>
+                      <CardTitle className="text-sm font-bold">Support Tarihi Uyarısı</CardTitle>
+                      <CardDescription className="text-xs mt-1">
+                        30 gün içinde sonu çalan destekler
+                      </CardDescription>
+                    </div>
+                  </div>
+                  <Badge className="bg-rose-500/20 text-rose-700 border-rose-500/50">
+                    {expiringDevices.length}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="p-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {expiringDevices.map((device) => {
+                    const daysLeft = getDaysLeft(device.supportDate);
+                    return (
+                      <div
+                        key={device.id}
+                        className="border border-border/50 rounded-lg p-4 bg-white hover:bg-slate-50 transition-colors"
+                      >
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <Clock className={cn('h-4 w-4', expirationColor(daysLeft))} />
+                            <Badge variant="destructive" className="text-[9px] font-bold">
+                              {daysLeft} gün
+                            </Badge>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 mb-2">
+                          {getVendorLogo(device.vendor) && (
+                            <img
+                              src={getVendorLogo(device.vendor)!}
+                              alt={device.vendor}
+                              className="h-5 w-5 object-contain"
+                            />
+                          )}
+                          <h4 className="font-bold text-sm line-clamp-2">{device.name}</h4>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="text-muted-foreground">Tip:</span>
+                            <span className="font-medium">
+                              {device.type.replace(/_/g, ' ')}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="text-muted-foreground">Bitiş:</span>
+                            <span className={cn('font-bold', expirationColor(daysLeft))}>
+                              {device.supportDate
+                                ? new Date(device.supportDate).toLocaleDateString('tr-TR')
+                                : 'N/A'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </main>
     </>
   );
 }

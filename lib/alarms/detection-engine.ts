@@ -172,12 +172,21 @@ export class AlarmDetectionEngine {
       _sharedEventCache = new EventCacheService(this.service);
       this.eventCache = _sharedEventCache;
       
-      // Start background sync ONCE — singleton ensures only one setInterval exists
-      _sharedEventCache.startBackgroundSync();
-      
-      // Wait for initial sync to complete (max 30 seconds)
-      console.log('[AlarmEngine] Waiting for initial event cache sync...');
-      await new Promise(resolve => setTimeout(resolve, 30000));
+      // startBackgroundSync() is async — it awaits the initial sync then schedules
+      // recurring syncs in the background. We race it against a 3-minute timeout so
+      // we don't block alarm evaluation forever if FA is very slow or unreachable.
+      console.log('[AlarmEngine] Waiting for initial event cache sync (timeout: 3 min)...');
+      const SYNC_TIMEOUT_MS = 3 * 60 * 1000;
+      const syncCount = await Promise.race([
+        _sharedEventCache.startBackgroundSync(),
+        new Promise<number>((resolve) => setTimeout(() => resolve(-1), SYNC_TIMEOUT_MS)),
+      ]);
+
+      if (syncCount === -1) {
+        console.warn('[AlarmEngine] ⚠️ Initial event cache sync timed out after 3 min — proceeding (cache may be stale)');
+      } else {
+        console.log(`[AlarmEngine] ✅ Initial event cache sync done: ${syncCount}/7 logtypes succeeded`);
+      }
       
       _sharedCacheInitialized = true;
       this.cacheInitialized = true;
@@ -251,7 +260,7 @@ export class AlarmDetectionEngine {
       const loggedIn = await this.service.login();
       if (!loggedIn) {
         console.error('[AlarmEngine] Failed to login to FortiAnalyzer');
-        return results;
+        throw new Error('FortiAnalyzer login failed — cannot evaluate alarms');
       }
 
       // Separate correlation alarms from regular alarms
@@ -278,29 +287,55 @@ export class AlarmDetectionEngine {
 
       console.log(`[AlarmEngine] LogTypeGroups: ${JSON.stringify([...logTypeGroups.keys()])}`);
 
-      // OPTIMIZATION: Evaluate logtype groups in PARALLEL (not sequential)
-      // This reduces total time from sum(all groups) to max(single group)
-      const groupPromises = Array.from(logTypeGroups.entries()).map(async ([logtype, groupAlarms]) => {
-        console.log(`[AlarmEngine] Starting parallel evaluation: ${logtype} group (${groupAlarms.length} alarms)...`);
-        try {
-          const groupResults = await this.evaluateLogTypeGroupOptimized(logtype, groupAlarms);
-          return { logtype, results: groupResults, error: null };
-        } catch (error) {
-          console.error(`[AlarmEngine] Error evaluating ${logtype} group:`, error);
-          // Return error results for all alarms in this group
-          const errorResults = groupAlarms.map(a => ({ 
-            alarmCode: a.code, 
-            triggered: false, 
-            matchCount: 0, 
-            events: [], 
-            error: (error as Error).message 
-          }));
-          return { logtype, results: errorResults, error: (error as Error).message };
-        }
-      });
+      // Check overall cache freshness to decide how to run logtype groups:
+      //  - Cache FRESH  → full parallel (all groups + all filter batches at once = fast DB reads, zero FA load)
+      //  - Cache STALE  → run logtype groups SEQUENTIALLY; each group is still limited to
+      //    5 concurrent filter batches (see evaluateLogTypeGroupOptimized).
+      //    This keeps the global live-FA concurrency at ≤ 5 at any point in time,
+      //    preventing the "40 simultaneous requests" cascade that caused 53 errors.
+      const overallCacheStatus = this.eventCache?.getCacheStatus();
+      const overallCacheFresh = overallCacheStatus?.isFresh ?? false;
 
-      // Wait for all groups to complete in parallel
-      const groupResults = await Promise.all(groupPromises);
+      const groupEntries = Array.from(logTypeGroups.entries());
+      const groupResults: Array<{ logtype: string; results: EvaluationResult[]; error: string | null }> = [];
+
+      if (overallCacheFresh) {
+        // FAST PATH: All logtype groups in full parallel — cache serves all queries
+        const groupPromises = groupEntries.map(async ([logtype, groupAlarms]) => {
+          console.log(`[AlarmEngine] Starting parallel evaluation: ${logtype} group (${groupAlarms.length} alarms)...`);
+          try {
+            const groupResult = await this.evaluateLogTypeGroupOptimized(logtype, groupAlarms);
+            return { logtype, results: groupResult, error: null };
+          } catch (error) {
+            console.error(`[AlarmEngine] Error evaluating ${logtype} group:`, error);
+            const errorResults = groupAlarms.map(a => ({
+              alarmCode: a.code, triggered: false, matchCount: 0, events: [],
+              error: (error as Error).message,
+            }));
+            return { logtype, results: errorResults, error: (error as Error).message };
+          }
+        });
+        groupResults.push(...await Promise.all(groupPromises));
+      } else {
+        // SAFE PATH: Run logtype groups one-at-a-time; each group caps itself at 5 concurrent
+        // live FA calls via runWithConcurrency inside evaluateLogTypeGroupOptimized.
+        // Global max live-FA concurrency = 5 (avoids overwhelming FortiAnalyzer).
+        console.warn(`[AlarmEngine] Cache stale — running logtype groups SEQUENTIALLY to limit FA load`);
+        for (const [logtype, groupAlarms] of groupEntries) {
+          console.log(`[AlarmEngine] Starting sequential evaluation: ${logtype} group (${groupAlarms.length} alarms)...`);
+          try {
+            const groupResult = await this.evaluateLogTypeGroupOptimized(logtype, groupAlarms);
+            groupResults.push({ logtype, results: groupResult, error: null });
+          } catch (error) {
+            console.error(`[AlarmEngine] Error evaluating ${logtype} group:`, error);
+            const errorResults = groupAlarms.map(a => ({
+              alarmCode: a.code, triggered: false, matchCount: 0, events: [],
+              error: (error as Error).message,
+            }));
+            groupResults.push({ logtype, results: errorResults, error: (error as Error).message });
+          }
+        }
+      }
       
       // Collect results from all groups
       for (const { logtype, results: groupResult, error } of groupResults) {
@@ -332,8 +367,14 @@ export class AlarmDetectionEngine {
       
       return results;
     } catch (error) {
+      const msg = (error as Error).message || '';
+      // Login failures and other infrastructure errors should propagate to alarm-runner
+      // (alarm-runner's catch block will log it as FAILED and write to DB correctly)
+      if (msg.includes('login failed') || msg.includes('cannot evaluate')) {
+        throw error;
+      }
       console.error('[AlarmEngine] Critical error in evaluateAllAlarms:', error);
-      // Return results so far instead of crashing
+      // Return results collected so far for non-critical partial failures
       return results;
     }
   }
@@ -632,48 +673,67 @@ export class AlarmDetectionEngine {
 
     console.log(`[AlarmEngine] ${logtype} group has ${filterMap.size} unique filters`);
 
+    // Determine concurrency limit:
+    // - Cache fresh → all batches run in parallel (fast DB queries, no FA load)
+    // - Cache stale → limit to 5 concurrent batches to avoid overwhelming FA
+    //   with 30+ simultaneous live API calls (causes "Invalid filter" / timeout cascade)
+    const cacheStatus = this.eventCache?.getCacheStatus();
+    const isCacheFresh = cacheStatus?.isFresh ?? false;
+    const concurrencyLimit = isCacheFresh ? Infinity : 5;
+    if (!isCacheFresh && filterMap.size > 0) {
+      console.warn(`[AlarmEngine] Cache stale for ${logtype} — using live FA fallback with concurrency=${concurrencyLimit}`);
+    }
+
     // Step 2: For each unique filter, fetch logs ONCE and evaluate all alarms
-    const batchPromises = Array.from(filterMap.entries()).map(async ([filter, filterAlarms]) => {
-      // Fetch logs once for this filter
-      const limit = Math.min(Math.max(...filterAlarms.map(a => a.detectionLogic.threshold * 2)), 1000);
-      
-      console.log(`[AlarmEngine] Batch fetching ${logtype} logs: filter="${filter}", limit=${limit}`);
-      
-      // Single log search for entire batch
-      const searchResult = await Promise.race([
-        this.performLogSearch(filterAlarms[0], logtype, filter, limit),
-        new Promise<{ tid: string | null; logs: Array<Record<string, unknown>> }>((resolve) =>
-          setTimeout(() => resolve({ tid: null, logs: [] }), 15000)
-        ),
-      ]);
-
-      if (!searchResult.tid || searchResult.logs.length === 0) {
-        // No logs found - all alarms in this batch are not triggered
-        const errorReason = searchResult.tid === 'cache-empty' 
-          ? undefined  // cache says clean - not an error, just no events
-          : (searchResult.tid ? 'no-logs' : 'search-timeout');
-        return filterAlarms.map(alarm => ({
-          alarmCode: alarm.code,
-          triggered: false,
-          matchCount: 0,
-          events: [],
-          error: errorReason
-        }));
-      }
-
-      // Step 3: Evaluate each alarm against the fetched logs
-      return await Promise.all(filterAlarms.map(async alarm => {
-        const logic = alarm.detectionLogic;
+    // Tasks are LAZY (wrapped in a function) so concurrency can be controlled.
+    const batchTasks = Array.from(filterMap.entries()).map(([filter, filterAlarms]) => async () => {
+      try {
+        // Fetch logs once for this filter
+        const limit = Math.min(Math.max(...filterAlarms.map(a => a.detectionLogic.threshold * 2)), 1000);
         
-        // Check cooldown — skip if alarm fired recently
-        const cooldownThreshold = new Date(Date.now() - alarm.cooldownMinutes * 60 * 1000);
-        const recentEvent = await prisma.alarmEvent.findFirst({
-          where: { alarmId: alarm.id, createdAt: { gte: cooldownThreshold } },
-          orderBy: { createdAt: 'desc' },
-        });
-        if (recentEvent) {
-          return { alarmCode: alarm.code, triggered: false, matchCount: 0, events: [], error: 'cooldown-active' as string };
+        console.log(`[AlarmEngine] Batch fetching ${logtype} logs (limit=${limit}): filter="${filter}"`);
+        
+        // Single log search for entire batch
+        const searchResult = await Promise.race([
+          this.performLogSearch(filterAlarms[0], logtype, filter, limit),
+          new Promise<{ tid: string | null; logs: Array<Record<string, unknown>> }>((resolve) =>
+            setTimeout(() => resolve({ tid: null, logs: [] }), 15000)
+          ),
+        ]);
+
+        if (!searchResult.tid || searchResult.logs.length === 0) {
+          // No logs found — determine whether this is a real failure or just no events
+          const errorReason = searchResult.tid === 'cache-empty'
+            ? undefined  // cache says clean — not an error, just no events
+            : (searchResult.tid
+                ? undefined  // FA queried OK but found 0 matching logs — alarm not triggered (normal)
+                : 'search-timeout');  // FA returned no TID — real failure (session error, invalid filter, etc.)
+          if (errorReason === 'search-timeout') {
+            console.warn(`[AlarmEngine] ⚠️ Batch search failed (no TID) for ${logtype} filter: "${filter.substring(0, 120)}" — ${filterAlarms.length} alarm(s) affected`);
+          }
+          return filterAlarms.map(alarm => ({
+            alarmCode: alarm.code,
+            triggered: false,
+            matchCount: 0,
+            events: [],
+            error: errorReason
+          }));
         }
+
+        // Step 3: Evaluate each alarm against the fetched logs (each alarm isolated)
+        const alarmResults = await Promise.all(filterAlarms.map(async alarm => {
+          try {
+            const logic = alarm.detectionLogic;
+            
+            // Check cooldown — skip if alarm fired recently
+            const cooldownThreshold = new Date(Date.now() - alarm.cooldownMinutes * 60 * 1000);
+            const recentEvent = await prisma.alarmEvent.findFirst({
+              where: { alarmId: alarm.id, createdAt: { gte: cooldownThreshold } },
+              orderBy: { createdAt: 'desc' },
+            });
+            if (recentEvent) {
+              return { alarmCode: alarm.code, triggered: false, matchCount: 0, events: [], error: 'cooldown-active' as string };
+            }
         
         // Filter by time window
         const cutoff = new Date(Date.now() - logic.timeWindowMinutes * 60 * 1000);
@@ -756,23 +816,67 @@ export class AlarmDetectionEngine {
           await this.fireAlarm(alarm, filteredLogs);
         }
 
-        return {
+            return {
+              alarmCode: alarm.code,
+              triggered,
+              matchCount,
+              events: triggered ? filteredLogs.slice(0, 5) : [],
+            };
+          } catch (alarmErr) {
+            console.error(`[AlarmEngine] Error evaluating alarm ${alarm.code}:`, alarmErr);
+            return { alarmCode: alarm.code, triggered: false, matchCount: 0, events: [], error: (alarmErr as Error).message };
+          }
+        }));
+        return alarmResults;
+      } catch (batchErr) {
+        console.error(`[AlarmEngine] Batch failed for filter "${filter}" (${logtype}):`, batchErr);
+        return filterAlarms.map(alarm => ({
           alarmCode: alarm.code,
-          triggered,
-          matchCount,
-          events: triggered ? filteredLogs.slice(0, 5) : [],
-        };
-      }));
+          triggered: false,
+          matchCount: 0,
+          events: [],
+          error: `batch-error: ${(batchErr as Error).message}`,
+        }));
+      }
     });
 
-    // Execute all batch evaluations in parallel
-    const batchResults = await Promise.all(batchPromises);
-    
-    // Flatten results
-    for (const batchResult of batchResults) {
-      results.push(...batchResult);
+    // Execute batch tasks with controlled concurrency.
+    // Full parallel when cache is fresh; limited when falling back to live FA.
+    const settled = await this.runWithConcurrency(batchTasks, concurrencyLimit);
+    for (const outcome of settled) {
+      if (outcome.status === 'fulfilled') {
+        results.push(...outcome.value);
+      } else {
+        // This should never happen now that each batch has try/catch,
+        // but just in case: mark all alarms in the group as errors
+        console.error(`[AlarmEngine] Unexpected batch rejection (${logtype}):`, outcome.reason);
+      }
     }
 
+    return results;
+  }
+
+  /**
+   * Run async tasks with a maximum concurrency limit.
+   * When limit is Infinity, all tasks run in parallel (equivalent to Promise.allSettled).
+   * When limit is N, tasks run in groups of N sequentially.
+   * Each task is a zero-arg async factory: () => Promise<T>
+   */
+  private async runWithConcurrency<T>(
+    tasks: Array<() => Promise<T>>,
+    maxConcurrent: number
+  ): Promise<PromiseSettledResult<T>[]> {
+    if (maxConcurrent === Infinity || tasks.length <= maxConcurrent) {
+      // Full parallel — no chunking needed
+      return Promise.allSettled(tasks.map(t => t()));
+    }
+
+    const results: PromiseSettledResult<T>[] = [];
+    for (let i = 0; i < tasks.length; i += maxConcurrent) {
+      const chunk = tasks.slice(i, i + maxConcurrent);
+      const chunkResults = await Promise.allSettled(chunk.map(t => t()));
+      results.push(...chunkResults);
+    }
     return results;
   }
 
@@ -865,7 +969,7 @@ export class AlarmDetectionEngine {
         triggered: false, 
         matchCount: 0, 
         events: [], 
-        error: isCleanCache ? undefined : (searchResult.tid ? 'no-logs' : 'search-timeout')
+        error: isCleanCache ? undefined : (searchResult.tid ? undefined : 'search-timeout')
       };
     }
 
@@ -955,7 +1059,7 @@ export class AlarmDetectionEngine {
         } else {
           // Cache is fresh and has zero matching events — authoritative empty result
           console.log(`[AlarmEngine] Cache clean for ${alarm.code} (${logtype}) — no events in window, skipping FA`);
-          return { tid: 'cache-empty', logs: [], error: 'cache-empty' };
+          return { tid: 'cache-empty', logs: [] };
         }
       } catch (cacheError) {
         console.warn('[AlarmEngine] Cache query failed, falling back to live API:', cacheError);

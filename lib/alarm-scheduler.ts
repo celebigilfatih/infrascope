@@ -1,69 +1,89 @@
 /**
- * Alarm Scheduler
- * Automatically triggers alarm evaluation at regular intervals
+ * Alarm Scheduler — triggers alarm evaluation every 10 minutes.
+ *
+ * Calls runAlarmCheck() directly (in-process) instead of HTTP POST.
+ *
+ * WHY DIRECT (NOT HTTP)
+ * ─────────────────────
+ * The old implementation sent an HTTP POST to /api/alarms/check. When the
+ * HTTP connection was dropped mid-execution (timeout, Node/Next.js pressure),
+ * the route handler's finally block could be skipped — leaving the mutex
+ * locked and the DB unwritten. This caused multi-hour detection blackouts.
+ *
+ * Direct calls are executed inside the Node.js event loop as regular async
+ * functions. The event loop guarantees the finally block always runs.
  */
 
 import { prisma } from '@/lib/prisma';
+import { runAlarmCheck } from '@/lib/alarms/alarm-runner';
 
 let schedulerInterval: NodeJS.Timeout | null = null;
 
 /**
- * Start the alarm scheduler
- * Runs alarm check every 20 minutes (1200000ms)
+ * Start the alarm scheduler.
+ * Runs alarm check every 10 minutes.
  */
 export function startAlarmScheduler() {
-  // Prevent multiple scheduler instances
   if (schedulerInterval) {
     console.log('[AlarmScheduler] Already running, skipping initialization');
     return;
   }
 
-  // Schedule: Every 10 minutes (600000 milliseconds) - faster detection for critical alarms
   schedulerInterval = setInterval(async () => {
     const tickStart = Date.now();
     try {
       console.log('[AlarmScheduler] Starting scheduled alarm check...');
 
-      // Use INTERNAL_API_URL env var (set in docker-compose.yml)
-      // Falls back to PORT env var, then default 3000 (container internal port)
-      // NEVER hardcode host-mapped port (e.g. 8170) here - that's the external port
-      const baseUrl = process.env.INTERNAL_API_URL || `http://localhost:${process.env.PORT || '3000'}`;
-      const response = await fetch(`${baseUrl}/api/alarms/check`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        signal: AbortSignal.timeout(25 * 60 * 1000), // 25-min hard timeout — prevents hung goroutines
-      });
-
+      const result = await runAlarmCheck();
       const duration = Date.now() - tickStart;
-      const ok = response.ok;
 
-      if (ok) {
-        console.log(`[AlarmScheduler] ✅ Check completed successfully (${duration}ms)`);
+      if (result.success) {
+        console.log(
+          `[AlarmScheduler] ✅ Check completed: ${result.summary.triggered} triggered, ` +
+            `${result.summary.errors} errors (${duration}ms)`
+        );
       } else {
-        console.error(`[AlarmScheduler] ❌ Check failed: ${response.status} (${duration}ms)`);
+        console.error(
+          `[AlarmScheduler] ❌ Check failed: ${result.error} (${duration}ms)`
+        );
       }
 
-      // Write heartbeat to DB so external monitors / health endpoints can detect scheduler death
+      // Write heartbeat so the health endpoint can detect scheduler death
+      const ok = result.success;
       try {
         await (prisma as any).systemConfig?.upsert?.({
           where: { key: 'scheduler_last_tick' },
-          update: { value: JSON.stringify({ ts: new Date().toISOString(), ok, durationMs: duration }) },
-          create: { key: 'scheduler_last_tick', value: JSON.stringify({ ts: new Date().toISOString(), ok, durationMs: duration }) },
+          update: {
+            value: JSON.stringify({
+              ts: new Date().toISOString(),
+              ok,
+              durationMs: duration,
+            }),
+          },
+          create: {
+            key: 'scheduler_last_tick',
+            value: JSON.stringify({
+              ts: new Date().toISOString(),
+              ok,
+              durationMs: duration,
+            }),
+          },
         }).catch(() => {/* silently ignore if table doesn't exist */});
-      } catch { /* never crash scheduler over heartbeat write */ }
+      } catch { /* never crash the scheduler over a heartbeat write */ }
     } catch (error) {
       const duration = Date.now() - tickStart;
-      console.error(`[AlarmScheduler] ❌ Error during scheduled check (${duration}ms):`, error);
+      console.error(
+        `[AlarmScheduler] ❌ Unexpected error (${duration}ms):`,
+        error
+      );
     }
-  }, 600000); // 10 minutes = 600000ms
+  }, 600_000); // 10 minutes
 
-  console.log('[AlarmScheduler] ✅ Started - alarm checks will run every 10 minutes');
+  console.log('[AlarmScheduler] ✅ Started — checks will run every 10 minutes');
 }
 
 /**
- * Stop the alarm scheduler
+ * Stop the alarm scheduler.
  */
 export function stopAlarmScheduler() {
   if (schedulerInterval) {
@@ -74,12 +94,12 @@ export function stopAlarmScheduler() {
 }
 
 /**
- * Get scheduler status
+ * Get current scheduler status.
  */
 export function getSchedulerStatus() {
   return {
     running: schedulerInterval !== null,
-    intervalMs: 1200000,
-    intervalMinutes: 20,
+    intervalMs: 600_000,
+    intervalMinutes: 10,
   };
 }

@@ -17,50 +17,115 @@ export interface CachedEventFilters {
 
 export class EventCacheService {
   private faService: FortiAnalyzerService;
-  private readonly CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+  private readonly BASE_SYNC_INTERVAL_MS = 5 * 60 * 1000;  // Base interval: 5 minutes
+  private readonly FRESH_THRESHOLD_MS = 8 * 60 * 1000; // Consider cache fresh for 8 min
+  private readonly MAX_BACKOFF_MS = 60 * 60 * 1000;     // Max backoff: 60 minutes
+  // FRESH_THRESHOLD > BASE_SYNC_INTERVAL gives a 3-min buffer so alarm checks never
+  // see a stale cache just because both timers fired at the same moment.
   private lastSyncTime: Date | null = null;
   private syncInProgress = false;
+  private consecutiveSyncFailures = 0;
 
   constructor(faService: FortiAnalyzerService) {
     this.faService = faService;
   }
 
   /**
-   * Start background sync job
-   * Runs every 5 minutes to fetch fresh events
+   * Compute next sync delay with exponential backoff on consecutive failures.
+   * Failure 0 (success) → base interval (5 min)
+   * Failure 1 → 10 min, Failure 2 → 20 min, Failure 3 → 40 min, Failure 4+ → 60 min
    */
-  startBackgroundSync() {
-    console.log('[EventCache] Starting background sync job (every 5 minutes)...');
-    
-    // Initial sync
-    this.syncAllEventTypes().then(() => {
-      console.log('[EventCache] ✅ Initial sync completed');
-      this.lastSyncTime = new Date();
-    });
+  private nextSyncDelayMs(): number {
+    if (this.consecutiveSyncFailures === 0) return this.BASE_SYNC_INTERVAL_MS;
+    const backoff = this.BASE_SYNC_INTERVAL_MS * Math.pow(2, this.consecutiveSyncFailures);
+    return Math.min(backoff, this.MAX_BACKOFF_MS);
+  }
 
-    // Schedule recurring sync
-    setInterval(async () => {
+  /**
+   * Start background sync job.
+   * Uses dynamic setTimeout (not fixed setInterval) so the interval backs off
+   * exponentially when FA is unreachable, preventing login-block hammering.
+   * Returns a Promise that resolves with the initial sync success count so callers
+   * can await the first sync before evaluating alarms against the cache.
+   */
+  async startBackgroundSync(): Promise<number> {
+    console.log('[EventCache] Starting background sync job (base interval: 5 minutes, with backoff)...');
+
+    // Initial sync — await it so callers can wait for a warm cache
+    let initialSuccessCount = 0;
+    try {
+      initialSuccessCount = await this.syncAllEventTypes();
+      if (initialSuccessCount > 0) {
+        this.lastSyncTime = new Date();
+        this.consecutiveSyncFailures = 0;
+        console.log(`[EventCache] ✅ Initial sync completed (${initialSuccessCount}/7 logtypes)`);
+      } else {
+        this.consecutiveSyncFailures++;
+        console.error('[EventCache] ❌ Initial sync — all logtypes failed, cache NOT marked fresh');
+      }
+    } catch (err) {
+      this.consecutiveSyncFailures++;
+      console.error('[EventCache] ❌ Initial sync threw:', err);
+    }
+
+    // Schedule recurring syncs in the background (non-blocking)
+    this.scheduleNextSync();
+
+    return initialSuccessCount;
+  }
+
+  /**
+   * Schedule the next sync using exponential backoff.
+   * Called recursively after each sync completes.
+   */
+  private scheduleNextSync() {
+    const delayMs = this.nextSyncDelayMs();
+    const delayMin = Math.round(delayMs / 60000);
+    console.log(`[EventCache] Next sync in ${delayMin}m (consecutive failures: ${this.consecutiveSyncFailures})`);
+
+    setTimeout(async () => {
       if (this.syncInProgress) {
-        console.warn('[EventCache] Previous sync still running, skipping...');
+        console.warn('[EventCache] Previous sync still running, skipping this cycle...');
+        this.consecutiveSyncFailures++;
+        this.scheduleNextSync();
         return;
       }
 
       try {
-        await this.syncAllEventTypes();
-        this.lastSyncTime = new Date();
-        console.log(`[EventCache] ✅ Sync completed at ${new Date().toISOString()}`);
+        const successCount = await this.syncAllEventTypes();
+        if (successCount > 0) {
+          this.lastSyncTime = new Date();
+          this.consecutiveSyncFailures = 0;
+          console.log(`[EventCache] ✅ Sync completed at ${new Date().toISOString()} (${successCount}/7 logtypes) — failure counter reset`);
+        } else {
+          // All logtypes failed — do NOT update lastSyncTime.
+          // The cache will become stale after FRESH_THRESHOLD_MS, forcing alarm checks
+          // to use live FA queries (which will correctly fail and be reported as FAILED).
+          this.consecutiveSyncFailures++;
+          console.error(`[EventCache] ❌ Sync at ${new Date().toISOString()} — all logtypes failed, backing off (failure #${this.consecutiveSyncFailures})`);
+        }
       } catch (error) {
-        console.error('[EventCache] ❌ Sync failed:', error);
+        this.consecutiveSyncFailures++;
+        console.error('[EventCache] ❌ Sync threw unexpectedly (failure #' + this.consecutiveSyncFailures + '):', error);
       }
-    }, this.CACHE_TTL_MS);
+
+      this.scheduleNextSync();
+    }, delayMs);
   }
 
   /**
-   * Sync all event types used by alarms
+   * Sync all event types used by alarms.
+   * Returns the number of logtypes that synced successfully.
+   * Caller must only update lastSyncTime when successCount > 0,
+   * otherwise the cache would appear fresh despite having stale/empty data.
+   *
+   * Pre-flight: attempts login ONCE before the loop. If login fails, aborts
+   * immediately (avoids N separate login attempts, each resetting FA's block timer).
    */
-  private async syncAllEventTypes() {
+  private async syncAllEventTypes(): Promise<number> {
     this.syncInProgress = true;
     const syncStart = Date.now();
+    let successCount = 0;
     
     const logtypes = [
       'event',
@@ -79,11 +144,24 @@ export class EventCacheService {
     console.log(`[EventCache] Starting sync: ${logtypes.length} logtypes, last 24 hours...`);
 
     try {
+      // Pre-flight login check — one attempt before touching any logtype.
+      // If FA is blocked/unreachable, abort the entire sync immediately instead of
+      // making N separate login calls (each of which resets FA's block timer).
+      console.log('[EventCache] Pre-flight login check...');
+      const canLogin = await this.faService.login();
+      if (!canLogin) {
+        const elapsedS = Math.round((Date.now() - syncStart) / 1000);
+        console.error(`[EventCache] ❌ Pre-flight login failed — aborting sync (${elapsedS}s). FA may be rate-limiting logins.`);
+        return 0;
+      }
+      console.log('[EventCache] ✅ Pre-flight login OK — starting logtype sync...');
+
       for (const logtype of logtypes) {
         try {
           const logtypeStart = Date.now();
           await this.syncLogType(logtype, startTime, now);
           console.log(`[EventCache] ${logtype}: Sync took ${Date.now() - logtypeStart}ms`);
+          successCount++;
         } catch (error) {
           console.error(`[EventCache] Failed to sync ${logtype}:`, error);
         }
@@ -102,7 +180,8 @@ export class EventCacheService {
         console.warn('[EventCache] Cleanup failed:', cleanupError);
       }
 
-      console.log(`[EventCache] Full sync completed in ${Math.round((Date.now() - syncStart) / 1000)}s`);
+      console.log(`[EventCache] Full sync completed in ${Math.round((Date.now() - syncStart) / 1000)}s — ${successCount}/${logtypes.length} logtypes succeeded`);
+      return successCount;
     } finally {
       // CRITICAL: always release the lock, even if an unexpected error escapes all inner catches.
       // Without finally, any uncaught exception leaves syncInProgress=true forever,
@@ -385,12 +464,15 @@ export class EventCacheService {
    * Get cache status
    */
   getCacheStatus() {
+    const nextDelayMs = this.nextSyncDelayMs();
     return {
       lastSyncTime: this.lastSyncTime,
       isFresh: this.lastSyncTime 
-        ? Date.now() - this.lastSyncTime.getTime() < this.CACHE_TTL_MS
+        ? Date.now() - this.lastSyncTime.getTime() < this.FRESH_THRESHOLD_MS
         : false,
       syncInProgress: this.syncInProgress,
+      consecutiveSyncFailures: this.consecutiveSyncFailures,
+      nextSyncDelayMin: Math.round(nextDelayMs / 60000),
     };
   }
 }

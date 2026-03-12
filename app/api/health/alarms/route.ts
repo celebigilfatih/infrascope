@@ -86,6 +86,8 @@ export async function GET() {
     const cacheHealthy = cacheAgoMins !== null && cacheAgoMins < CACHE_STALE_THRESHOLD && cacheEventCount > 0;
 
     // 3. Check last detection cycle
+    // A check that ran (even if FAILED) is NOT stale — it means the engine is
+    // alive but having evaluation errors. STALE means no check ran at all.
     let lastCheck: { checkTime: Date; status: string } | null = null;
     try {
       lastCheck = await prisma.alarmCheckLog.findFirst({
@@ -95,7 +97,8 @@ export async function GET() {
     } catch { /* ignore */ }
 
     const detectionAgoMins = minutesAgo(lastCheck?.checkTime);
-    const detectionHealthy = detectionAgoMins !== null && detectionAgoMins < DETECTION_STALE_THRESHOLD && lastCheck?.status !== 'FAILED';
+    // Healthy = ran recently regardless of status (FAILED means errors, not stale)
+    const detectionHealthy = detectionAgoMins !== null && detectionAgoMins < DETECTION_STALE_THRESHOLD;
 
     // 4. Check email service
     const emailStats = getEmailStats();
@@ -142,8 +145,10 @@ export async function GET() {
           healthy: detectionHealthy,
           lastCheckAgo: formatMinutes(detectionAgoMins),
           lastStatus: lastCheck?.status ?? 'UNKNOWN',
+          // STALE = no check has run in too long
+          // ERROR = check is running but consistently failing (engine is alive)
           ...(detectionAgoMins !== null && detectionAgoMins >= DETECTION_STALE_THRESHOLD ? { alert: 'STALE' } : {}),
-          ...(lastCheck?.status === 'FAILED' ? { alert: 'FAILED' } : {}),
+          ...(detectionAgoMins !== null && detectionAgoMins < DETECTION_STALE_THRESHOLD && lastCheck?.status === 'FAILED' ? { alert: 'ERROR' } : {}),
         },
         email: {
           healthy: emailHealthy,

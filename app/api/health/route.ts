@@ -45,8 +45,17 @@ async function checkDatabaseHealth(): Promise<{ status: 'healthy' | 'unhealthy';
 }
 
 /**
- * Check FortiAnalyzer health using shared singleton
+ * Check FortiAnalyzer health using shared singleton.
+ * Caches the last result for 5 minutes to avoid hammering FA with login attempts
+ * when it is rate-limiting/blocking logins (code=-22).  Continuous login attempts
+ * keep the block active indefinitely, so we must back off.
  */
+let _lastFAHealth: {
+  result: { status: 'healthy' | 'unhealthy'; responseTimeMs: number; error?: string };
+  time: number;
+} | null = null;
+const FA_HEALTH_CACHE_MS = 5 * 60 * 1000; // 5-minute cache for failed health checks
+
 async function checkFortiAnalyzerHealth(): Promise<{ status: 'healthy' | 'unhealthy'; responseTimeMs: number; error?: string }> {
   const startTime = Date.now();
   try {
@@ -55,15 +64,32 @@ async function checkFortiAnalyzerHealth(): Promise<{ status: 'healthy' | 'unheal
     if (!service) {
       return { status: 'unknown' as 'unhealthy', responseTimeMs: 0, error: 'Not initialized' };
     }
+
+    // Return cached UNHEALTHY result if last check failed recently.
+    // Without this backoff, each health check (every 30s) retries a login, which
+    // keeps the FA account block (code=-22) alive indefinitely.
+    if (
+      _lastFAHealth &&
+      _lastFAHealth.result.status === 'unhealthy' &&
+      Date.now() - _lastFAHealth.time < FA_HEALTH_CACHE_MS
+    ) {
+      return _lastFAHealth.result;
+    }
     
     const loggedIn = await service.login();
     if (!loggedIn) {
-      return { status: 'unhealthy', responseTimeMs: Date.now() - startTime, error: 'Login failed' };
+      const result = { status: 'unhealthy' as const, responseTimeMs: Date.now() - startTime, error: 'Login failed' };
+      _lastFAHealth = { result, time: Date.now() };
+      return result;
     }
     
+    // Success — clear the cache so next health check validates fresh
+    _lastFAHealth = null;
     return { status: 'healthy', responseTimeMs: Date.now() - startTime };
   } catch (error) {
-    return { status: 'unhealthy', responseTimeMs: Date.now() - startTime, error: (error as Error).message };
+    const result = { status: 'unhealthy' as const, responseTimeMs: Date.now() - startTime, error: (error as Error).message };
+    _lastFAHealth = { result, time: Date.now() };
+    return result;
   }
 }
 
