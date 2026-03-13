@@ -93,13 +93,20 @@ export default function IPSPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+
+  // 200ms debounce — avoids per-keystroke filter re-runs over 200 records
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchTerm), 200);
+    return () => clearTimeout(t);
+  }, [searchTerm]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch('/api/integrations/fortianalyzer?type=ips-critical&limit=200');
+      const response = await fetch('/api/integrations/fortianalyzer?type=ips-critical&limit=100');
       const result = await response.json();
       if (!result.success) {
         setError(result.error || 'IPS verileri alınamadı');
@@ -119,8 +126,8 @@ export default function IPSPage() {
   }, [fetchData]);
 
   const filteredEvents = useMemo(() => {
-    if (!searchTerm) return events;
-    const term = searchTerm.toLowerCase();
+    if (!debouncedSearch) return events;
+    const term = debouncedSearch.toLowerCase();
     return events.filter((e: IPSEvent) =>
       (e.attack || '').toLowerCase().includes(term) ||
       (e.srcip || '').toLowerCase().includes(term) ||
@@ -130,7 +137,7 @@ export default function IPSPage() {
       (e.srcintf || '').toLowerCase().includes(term) ||
       (e.srccountry || '').toLowerCase().includes(term)
     );
-  }, [events, searchTerm]);
+  }, [events, debouncedSearch]);
 
   const totalPages = Math.ceil(filteredEvents.length / ITEMS_PER_PAGE);
   const paginatedEvents = useMemo(() => {
@@ -142,11 +149,13 @@ export default function IPSPage() {
     if (currentPage > totalPages && totalPages > 0) setCurrentPage(1);
   }, [totalPages, currentPage]);
 
-  // Stats
-  const droppedCount = events.filter((e: IPSEvent) => e.action === 'dropped').length;
-  const detectedCount = events.filter((e: IPSEvent) => e.action === 'detected').length;
-  const uniqueAttacks = useMemo(() => new Set(events.map((e: IPSEvent) => e.attack)).size, [events]);
-  const uniqueSources = useMemo(() => new Set(events.map((e: IPSEvent) => e.srcip)).size, [events]);
+  // Stats — all memoized so they don't recalculate on pagination/UI interactions
+  const { droppedCount, detectedCount, uniqueAttacks, uniqueSources } = useMemo(() => ({
+    droppedCount: events.filter((e: IPSEvent) => e.action === 'dropped').length,
+    detectedCount: events.filter((e: IPSEvent) => e.action === 'detected').length,
+    uniqueAttacks: new Set(events.map((e: IPSEvent) => e.attack)).size,
+    uniqueSources: new Set(events.map((e: IPSEvent) => e.srcip)).size,
+  }), [events]);
 
   const getActionBadge = (action: string | undefined) => {
     switch (action) {

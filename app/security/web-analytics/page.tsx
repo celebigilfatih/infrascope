@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -24,6 +24,7 @@ import {
   ArrowUpDown,
   TrendingUp,
   Shield,
+  ShieldAlert,
   Monitor,
   Clock,
   FileCheck,
@@ -227,7 +228,9 @@ export default function WebAnalyticsPage() {
     );
   });
 
-  const filteredUsers = userData.filter((u: BrowsingUser) => {
+  const filteredUsers = userData
+    .slice(0, 20)
+    .filter((u: BrowsingUser) => {
     if (!userSearch) return true;
     const term = userSearch.toLowerCase();
     return (
@@ -264,11 +267,19 @@ export default function WebAnalyticsPage() {
   const totalThreats = websiteData.reduce((sum: number, w: WebsiteCategory) => sum + (parseInt(w.threat_block || '0', 10) || 0), 0);
   const loading = loadingWebsites || loadingUsers || loadingPolicies || loadingCloud;
 
+  // Top 20 sites by threat score (threatweight > 0, sorted desc)
+  const topThreatSites = useMemo(() =>
+    websiteData
+      .filter((w: WebsiteCategory) => parseInt(w.threatweight || '0', 10) > 0)
+      .sort((a, b) => parseInt(b.threatweight || '0', 10) - parseInt(a.threatweight || '0', 10))
+      .slice(0, 20),
+  [websiteData]);
+
   return (
     <div className="p-6 space-y-6 max-w-full">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Web Analitik</h1>
+          <h1 className="text-2xl font-bold">Web Analytics</h1>
           <p className="text-muted-foreground">
             FortiAnalyzer FortiView - Top Web Sitesi Kategorileri ve Kullanıcı Aktivitesi
           </p>
@@ -336,6 +347,13 @@ export default function WebAnalyticsPage() {
           <TabsTrigger value="categories">
             <Globe className="h-4 w-4 mr-2" />
             Top Web Siteleri
+          </TabsTrigger>
+          <TabsTrigger value="threats">
+            <ShieldAlert className="h-4 w-4 mr-2" />
+            Yüksek Tehdit
+            {topThreatSites.length > 0 && (
+              <Badge variant="destructive" className="ml-2 text-xs">{topThreatSites.length}</Badge>
+            )}
           </TabsTrigger>
           <TabsTrigger value="users">
             <Users className="h-4 w-4 mr-2" />
@@ -421,6 +439,92 @@ export default function WebAnalyticsPage() {
                     )}
                   </TableBody>
                 </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* High Threat Sites — Top 20 by threatweight */}
+        <TabsContent value="threats" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <ShieldAlert className="h-5 w-5 text-red-500" />
+                Tehdit Skoru Yüksek Top 20 Web Sitesi
+                <Badge variant="destructive">{topThreatSites.length}</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {loadingWebsites ? (
+                <div className="flex justify-center py-12"><RefreshCw className="h-8 w-8 animate-spin text-primary" /></div>
+              ) : topThreatSites.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <ShieldAlert className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                  <p>Seçilen zaman aralığında tehdit skoru olan site bulunamadı</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table className="w-full" style={{ tableLayout: 'auto' }}>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-10">#</TableHead>
+                        <TableHead className="whitespace-nowrap">Kategori / Domain</TableHead>
+                        <TableHead className="whitespace-nowrap">
+                          <div className="flex items-center gap-1 text-red-600 font-semibold">
+                            <ShieldAlert className="h-3 w-3" />Tehdit Skoru
+                          </div>
+                        </TableHead>
+                        <TableHead className="whitespace-nowrap">Engellenen</TableHead>
+                        <TableHead className="whitespace-nowrap">Geçen</TableHead>
+                        <TableHead className="whitespace-nowrap">Oturum</TableHead>
+                        <TableHead className="whitespace-nowrap">Bant Genişliği</TableHead>
+                        <TableHead className="whitespace-nowrap">Gelen Trafik</TableHead>
+                        <TableHead className="whitespace-nowrap">Giden Trafik</TableHead>
+                        <TableHead className="whitespace-nowrap">Gezinti Süresi</TableHead>
+                        <TableHead className="whitespace-nowrap">Cihaz</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {topThreatSites.map((w: WebsiteCategory, idx: number) => {
+                        const score = parseInt(w.threatweight || '0', 10);
+                        const blocked = parseInt(w.threat_block || '0', 10);
+                        const scoreColor =
+                          score >= 50000 ? 'bg-red-700 text-white' :
+                          score >= 10000 ? 'bg-red-500 text-white' :
+                          score >= 1000  ? 'bg-orange-500 text-white' :
+                                          'bg-yellow-500 text-white';
+                        return (
+                          <TableRow key={idx} className={blocked > 0 ? 'bg-red-50/30' : ''}>
+                            <TableCell className="text-muted-foreground whitespace-nowrap font-semibold">{idx + 1}</TableCell>
+                            <TableCell className="whitespace-nowrap">
+                              <div className="font-semibold">{w.catdesc || w.domain || w.agg_webcat || '-'}</div>
+                              {w.domain && w.catdesc && <div className="text-xs text-muted-foreground">{w.domain}</div>}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap">
+                              <Badge className={scoreColor}>{score.toLocaleString('tr-TR')}</Badge>
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap">
+                              {blocked > 0 ? (
+                                <Badge className="bg-red-600 text-white">{blocked.toLocaleString('tr-TR')}</Badge>
+                              ) : (
+                                <span className="text-muted-foreground">0</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="font-mono text-sm whitespace-nowrap">
+                              {parseInt(w.threat_pass || '0', 10).toLocaleString('tr-TR')}
+                            </TableCell>
+                            <TableCell className="font-mono text-sm whitespace-nowrap">{formatNumber(w.sessions)}</TableCell>
+                            <TableCell className="font-mono text-sm font-semibold whitespace-nowrap">{formatBytes(w.bandwidth)}</TableCell>
+                            <TableCell className="font-mono text-xs text-green-600 whitespace-nowrap">{formatBytes(w.traffic_in)}</TableCell>
+                            <TableCell className="font-mono text-xs text-blue-600 whitespace-nowrap">{formatBytes(w.traffic_out)}</TableCell>
+                            <TableCell className="text-sm whitespace-nowrap">{formatDuration(w.browsetime)}</TableCell>
+                            <TableCell className="text-xs whitespace-nowrap">{w.fortigate || '-'}</TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
                 </div>
               )}
             </CardContent>

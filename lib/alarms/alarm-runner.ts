@@ -170,8 +170,8 @@ export async function runAlarmCheck(): Promise<AlarmCheckResult> {
 
     const service = initSharedFortiAnalyzerService({
       host: faConfig.host,
-      username: faConfig.username || 'fcelebigil',
-      password: faConfig.password || 'Thor.7485-a',
+      username: faConfig.username || 'infrascope',
+      password: faConfig.password || 'Thor.7485-app',
     });
 
     const engine = new AlarmDetectionEngine(service);

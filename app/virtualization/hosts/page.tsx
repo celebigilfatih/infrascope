@@ -77,7 +77,7 @@ export default function HostsPage() {
 
   useEffect(() => {
     fetchHosts();
-    const interval = setInterval(fetchHosts, 30000);
+    const interval = setInterval(fetchHosts, 300000); // 5 min — matches server cache TTL
     return () => clearInterval(interval);
   }, []);
 
@@ -295,8 +295,19 @@ export default function HostsPage() {
       <Card>
         <CardContent className="pt-6">
           {loading && hosts.length === 0 ? (
-            <div className="flex items-center justify-center h-32">
-              <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+            <div className="space-y-2">
+              <div className="grid grid-cols-8 gap-2 px-2 pb-2 border-b text-xs font-medium text-muted-foreground">
+                {['Ad', 'Cluster', 'Vendor / Model', 'CPU', 'Bellek', 'ESXi Version', 'Durum', 'Sağlık'].map((h, i) => (
+                  <div key={i}>{h}</div>
+                ))}
+              </div>
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="grid grid-cols-8 gap-2 px-2 py-2 border-b border-border/20 animate-pulse">
+                  {Array.from({ length: 8 }).map((_, j) => (
+                    <div key={j} className="h-4 bg-muted rounded" style={{ opacity: 0.4 + (j % 3) * 0.2 }} />
+                  ))}
+                </div>
+              ))}
             </div>
           ) : (
             <Table>

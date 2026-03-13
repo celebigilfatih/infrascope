@@ -97,14 +97,40 @@ interface EventLog {
   msg: string;
 }
 
+// ── Global FA login state ────────────────────────────────────────────────────
+// Shared across ALL module instances (hot reloads, code splitting).
+// Keyed by host so multiple FA instances are supported.
+interface FAGlobalLoginState {
+  session: string | null;
+  lastLoginTime: number;
+  isConnecting: boolean;
+  connectionQueue: Array<(session: string | null) => void>;
+  consecutiveFailures: number;
+  backoffUntil: number; // epoch ms — login suppressed until this time
+}
+
+function getGlobalLoginState(host: string): FAGlobalLoginState {
+  const g = globalThis as any;
+  if (!g._fazGlobalState) g._fazGlobalState = {};
+  if (!g._fazGlobalState[host]) {
+    g._fazGlobalState[host] = {
+      session: null,
+      lastLoginTime: 0,
+      isConnecting: false,
+      connectionQueue: [],
+      consecutiveFailures: 0,
+      backoffUntil: 0,
+    };
+  }
+  return g._fazGlobalState[host];
+}
+
 class FortiAnalyzerService {
   private baseUrl: string;
   private config: FortiAnalyzerConfig;
   private session: string | null = null;
   private lastLoginTime: number = 0;
   private readonly SESSION_TTL_MS = 30 * 60 * 1000; // 30 minutes session TTL
-  private isConnecting: boolean = false;
-  private connectionQueue: Array<() => void> = [];
 
   constructor(config: FortiAnalyzerConfig) {
     this.config = config;
@@ -117,65 +143,99 @@ class FortiAnalyzerService {
   }
 
   /**
-   * Check if session is valid (not expired)
+   * Exponential backoff in ms for consecutive login failures.
+   * 1 → 1min, 2 → 2min, 3 → 4min, 4 → 8min, 5 → 16min, 6+ → 60min
+   */
+  private calcBackoffMs(failures: number): number {
+    return Math.min(60_000 * Math.pow(2, failures - 1), 60 * 60 * 1000);
+  }
+
+  /**
+   * Check if local session is valid (not expired).
+   * Also syncs from global state in case another module instance logged in.
    */
   private isSessionValid(): boolean {
-    if (!this.session) return false;
     if (this.config.accessToken) return true; // API keys don't expire
+
+    // Sync from global state (covers multi-instance / hot-reload scenarios)
+    const state = getGlobalLoginState(this.config.host);
+    if (state.session && (Date.now() - state.lastLoginTime) < this.SESSION_TTL_MS) {
+      this.session = state.session;
+      this.lastLoginTime = state.lastLoginTime;
+      return true;
+    }
+
+    if (!this.session) return false;
     return (Date.now() - this.lastLoginTime) < this.SESSION_TTL_MS;
   }
 
   /**
-   * Wait for connection to be established (prevents concurrent login race)
-   */
-  private async waitForConnection(): Promise<void> {
-    if (!this.isConnecting) return;
-    
-    return new Promise((resolve) => {
-      this.connectionQueue.push(resolve);
-    });
-  }
-
-  /**
-   * Notify all waiting connections
-   */
-  private notifyConnections(): void {
-    while (this.connectionQueue.length > 0) {
-      const resolve = this.connectionQueue.shift();
-      resolve?.();
-    }
-  }
-
-  /**
-   * Login with username/password (with connection pooling and race condition protection)
+   * Login with username/password.
+   *
+   * Uses a globalThis-level mutex so concurrent logins from ANY module instance
+   * (hot reloads, code splitting, EventCache + AlarmEngine startup race) are
+   * serialised into a single network request.
+   *
+   * Exponential backoff is applied after each failure to prevent FA account
+   * lock-out storms (code=-22 from too many consecutive bad logins).
    */
   async login(): Promise<boolean> {
-    // If using API key (accessToken), no login needed
+    // API key auth — no login needed
     if (this.config.accessToken) {
       this.session = this.config.accessToken;
       return true;
     }
 
-    // Return existing valid session
-    if (this.isSessionValid()) {
-      return true;
+    // Return existing valid session (also syncs from global)
+    if (this.isSessionValid()) return true;
+
+    const state = getGlobalLoginState(this.config.host);
+
+    // ── Backoff guard ────────────────────────────────────────────────────────
+    // Suppress login entirely while backoff window is active.
+    // This prevents the lockout storm where hundreds of failed attempts in quick
+    // succession cause FA to permanently lock the account.
+    if (Date.now() < state.backoffUntil) {
+      const waitSec = Math.round((state.backoffUntil - Date.now()) / 1000);
+      console.warn(
+        `[FortiAnalyzer] 🚫 Login suppressed — backoff active ` +
+        `(${waitSec}s remaining, ${state.consecutiveFailures} consecutive failure(s)). ` +
+        `Account may be locked on FA; unlock via System → Administrators → fazapi → Unlock.`
+      );
+      return false;
     }
 
-    // Wait if another connection is in progress
-    if (this.isConnecting) {
-      console.log('[FortiAnalyzer] Waiting for existing login...');
-      await this.waitForConnection();
-      return this.isSessionValid();
+    // ── Global login mutex ───────────────────────────────────────────────────
+    // If another instance is already logging in, wait for its result instead
+    // of firing a second simultaneous login request.
+    if (state.isConnecting) {
+      console.log('[FortiAnalyzer] Waiting for in-progress login from another instance...');
+      const sess = await new Promise<string | null>((resolve) =>
+        state.connectionQueue.push(resolve)
+      );
+      if (sess) {
+        this.session = sess;
+        this.lastLoginTime = state.lastLoginTime;
+        return true;
+      }
+      return false;
     }
 
-    // Start new connection
-    this.isConnecting = true;
+    // ── Acquire global lock ──────────────────────────────────────────────────
+    state.isConnecting = true;
+
+    const releaseWithSession = (sess: string | null) => {
+      state.isConnecting = false;
+      while (state.connectionQueue.length > 0) {
+        state.connectionQueue.shift()!(sess);
+      }
+    };
 
     try {
       console.log(`[FortiAnalyzer] 🔑 Logging in as ${this.config.username} at ${new Date().toISOString()}...`);
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
+      const timeoutId = setTimeout(() => controller.abort(), 60000);
 
       const response = await fetch(this.baseUrl, {
         method: 'POST',
@@ -186,10 +246,7 @@ class FortiAnalyzerService {
           method: 'exec',
           params: [{
             url: '/sys/login/user',
-            data: {
-              user: this.config.username,
-              passwd: this.config.password,
-            },
+            data: { user: this.config.username, passwd: this.config.password },
           }],
           id: 1,
         }),
@@ -200,9 +257,14 @@ class FortiAnalyzerService {
       });
 
       clearTimeout(timeoutId);
+
       if (!response) {
-        this.isConnecting = false;
-        this.notifyConnections();
+        state.consecutiveFailures++;
+        const bMs = this.calcBackoffMs(state.consecutiveFailures);
+        state.backoffUntil = Date.now() + bMs;
+        state.session = null;
+        console.error(`[FortiAnalyzer] ❌ Login request failed (failure #${state.consecutiveFailures}). Backoff: ${Math.round(bMs / 60000)}min`);
+        releaseWithSession(null);
         return false;
       }
 
@@ -212,23 +274,41 @@ class FortiAnalyzerService {
       };
 
       const status = data.result?.[0]?.status;
+
       if (status?.code === 0 && data.session) {
-        this.session = data.session;
-        this.lastLoginTime = Date.now();
-        console.log('[FortiAnalyzer] Login successful');
-        this.isConnecting = false;
-        this.notifyConnections();
+        // ── Success ─────────────────────────────────────────────────────────
+        state.session = data.session;
+        state.lastLoginTime = Date.now();
+        state.consecutiveFailures = 0;
+        state.backoffUntil = 0;
+        this.session = state.session;
+        this.lastLoginTime = state.lastLoginTime;
+        console.log('[FortiAnalyzer] ✅ Login successful — failure counter reset');
+        releaseWithSession(state.session);
         return true;
       }
 
-      console.error(`[FortiAnalyzer] ❌ Login failed at ${new Date().toISOString()}: code=${status?.code} msg=${status?.message}`);
-      this.isConnecting = false;
-      this.notifyConnections();
+      // ── Failure ──────────────────────────────────────────────────────────
+      state.consecutiveFailures++;
+      const bMs = this.calcBackoffMs(state.consecutiveFailures);
+      state.backoffUntil = Date.now() + bMs;
+      state.session = null;
+      this.session = null;
+      console.error(
+        `[FortiAnalyzer] ❌ Login failed at ${new Date().toISOString()}: ` +
+        `code=${status?.code} msg=${status?.message} ` +
+        `(failure #${state.consecutiveFailures}, next attempt in ${Math.round(bMs / 60000)}min)`
+      );
+      releaseWithSession(null);
       return false;
     } catch (error) {
-      console.error(`[FortiAnalyzer] ❌ Login failed at ${new Date().toISOString()}:`, error);
-      this.isConnecting = false;
-      this.notifyConnections();
+      state.consecutiveFailures++;
+      const bMs = this.calcBackoffMs(state.consecutiveFailures);
+      state.backoffUntil = Date.now() + bMs;
+      state.session = null;
+      this.session = null;
+      console.error(`[FortiAnalyzer] ❌ Login threw at ${new Date().toISOString()} (failure #${state.consecutiveFailures}):`, error);
+      releaseWithSession(null);
       return false;
     }
   }

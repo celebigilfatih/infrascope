@@ -194,12 +194,20 @@ export async function GET(request: NextRequest) {
     const cachedData = globalThis as any;
     if (!cachedData.vmwareCache) cachedData.vmwareCache = {};
     
-    // Return cached data if available (5 minute TTL for dashboard, 1 minute for others)
+    // Return cached data if available
+    // vms/hosts/clusters/datastores: 5 min TTL (heavy vCenter calls)
+    // dashboard/summary: 5 min TTL
+    // others: 2 min TTL
     const now = Date.now();
     const cacheEntry = cachedData.vmwareCache[cacheKey];
-    const cacheTTL = (type === 'dashboard' || type === 'summary') ? 300000 : 60000; // 5 min or 1 min
+    const cacheTTL = ['dashboard', 'summary', 'vms', 'hosts', 'clusters', 'datastores'].includes(type || '')
+      ? 300000  // 5 minutes
+      : 120000; // 2 minutes
     if (cacheEntry && (now - cacheEntry.timestamp) < cacheTTL) {
-      return NextResponse.json(cacheEntry.data);
+      const res = NextResponse.json(cacheEntry.data);
+      res.headers.set('X-Cache', 'HIT');
+      res.headers.set('X-Cache-Age', String(Math.round((now - cacheEntry.timestamp) / 1000)));
+      return res;
     }
 
     const service = await getVMwareService();
@@ -396,12 +404,84 @@ export async function GET(request: NextRequest) {
       };
 
       // Cache the result
-      const cachedData = globalThis as any;
-      if (!cachedData.vmwareCache) cachedData.vmwareCache = {};
-      cachedData.vmwareCache[cacheKey] = {
-        data: vmsData,
-        timestamp: Date.now()
-      };
+      const cacheStore = globalThis as any;
+      if (!cacheStore.vmwareCache) cacheStore.vmwareCache = {};
+      cacheStore.vmwareCache[cacheKey] = { data: vmsData, timestamp: Date.now() };
+
+      // Cross-warm: also cache a lightweight hosts snapshot from the already-fetched hosts
+      // This makes the Hosts page instant for users who visit VMs first
+      const hostsLiteKey = 'vmware_hosts_';
+      if (!cacheStore.vmwareCache[hostsLiteKey] || (Date.now() - cacheStore.vmwareCache[hostsLiteKey].timestamp) >= 300000) {
+        const hostsLiteData = {
+          hosts: hosts.map(h => ({
+            id: h.host.value,
+            name: h.name,
+            cluster: 'Standalone', // cluster name enriched when type=hosts is explicitly fetched
+            vendor: h.summary?.vendor || 'Unknown',
+            model: h.summary?.model || 'Unknown',
+            cpuCores: h.summary?.numCpuCores || 0,
+            memoryGB: Math.round((h.summary?.memoryTotal || 0) / 1073741824),
+            version: h.config?.product?.version || 'Unknown',
+            build: h.config?.product?.build || '',
+            status: (h.summary?.connectionState || 'unknown').toLowerCase(),
+            overallStatus: (h.summary?.overallStatus || 'unknown').toLowerCase(),
+          })),
+        };
+        cacheStore.vmwareCache[hostsLiteKey] = { data: hostsLiteData, timestamp: Date.now() };
+      }
+
+      // Background-warm clusters + datastores if their caches are cold
+      const bgWarmTypes = ['clusters', 'datastores'] as const;
+      for (const bgType of bgWarmTypes) {
+        const bgKey = `vmware_${bgType}_`;
+        const bgEntry = cacheStore.vmwareCache[bgKey];
+        if (!bgEntry || (Date.now() - bgEntry.timestamp) >= 300000) {
+          // Fire-and-forget: don't await — let it warm in the background
+          (async () => {
+            try {
+              if (bgType === 'clusters') {
+                const clusters = await service.fetchClusters();
+                cacheStore.vmwareCache[bgKey] = {
+                  data: {
+                    clusters: clusters.map(c => ({
+                      id: c.cluster.value,
+                      name: c.name,
+                      hostCount: c.summary?.numHosts || 0,
+                      effectiveHosts: c.summary?.numEffectiveHosts || 0,
+                      totalCpu: c.summary?.totalCpu || 0,
+                      cpuCores: c.summary?.numCpuCores || 0,
+                      totalMemoryGB: Math.round((c.summary?.totalMemory || 0) / 1073741824),
+                    })),
+                  },
+                  timestamp: Date.now(),
+                };
+              } else if (bgType === 'datastores') {
+                const ds = await service.fetchDatastores();
+                cacheStore.vmwareCache[bgKey] = {
+                  data: {
+                    datastores: ds.map(d => ({
+                      id: d.datastore.value,
+                      name: d.name,
+                      type: d.info?.type || 'Unknown',
+                      capacityGB: Math.round((d.summary?.capacity || 0) / 1073741824),
+                      freeGB: Math.round((d.summary?.freeSpace || 0) / 1073741824),
+                      usedGB: Math.round(((d.summary?.capacity || 0) - (d.summary?.freeSpace || 0)) / 1073741824),
+                      usedPercent: d.summary?.capacity
+                        ? Math.round(((d.summary.capacity - (d.summary.freeSpace || 0)) / d.summary.capacity) * 100)
+                        : 0,
+                      accessible: d.summary?.accessible ?? true,
+                    })),
+                  },
+                  timestamp: Date.now(),
+                };
+              }
+              console.log(`[VMware Cache] ✅ Background warmed: ${bgType}`);
+            } catch (e) {
+              console.warn(`[VMware Cache] ⚠️ Background warm failed for ${bgType}:`, (e as Error).message);
+            }
+          })();
+        }
+      }
 
       return NextResponse.json(vmsData);
     }

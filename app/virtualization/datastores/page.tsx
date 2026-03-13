@@ -38,6 +38,8 @@ export default function DatastoresPage() {
   const [datastores, setDatastores] = useState<Datastore[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 20;
 
   const fetchDatastores = async () => {
     try {
@@ -61,7 +63,7 @@ export default function DatastoresPage() {
 
   useEffect(() => {
     fetchDatastores();
-    const interval = setInterval(fetchDatastores, 60000);
+    const interval = setInterval(fetchDatastores, 300000); // 5 min — matches server cache TTL
     return () => clearInterval(interval);
   }, []);
 
@@ -92,13 +94,7 @@ export default function DatastoresPage() {
     URL.revokeObjectURL(url);
   };
 
-  const getUsageColor = (percent: number): string => {
-    if (percent >= 90) return 'bg-red-500';
-    if (percent >= 75) return 'bg-yellow-500';
-    return 'bg-green-500';
-  };
-
-  const getUsageTextColor = (percent: number): string => {
+const getUsageTextColor = (percent: number): string => {
     if (percent >= 90) return 'text-red-600';
     if (percent >= 75) return 'text-yellow-600';
     return 'text-green-600';
@@ -113,6 +109,13 @@ export default function DatastoresPage() {
     : 0;
   const criticalCount = datastores.filter((d: Datastore) => d.usedPercent >= 90).length;
   const warningCount = datastores.filter((d: Datastore) => d.usedPercent >= 75 && d.usedPercent < 90).length;
+
+  // Pagination
+  const totalPages = Math.ceil(datastores.length / ITEMS_PER_PAGE);
+  const paginatedDatastores = datastores.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
 
   if (error) {
     return (
@@ -163,7 +166,9 @@ export default function DatastoresPage() {
             <Database className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{datastores.length}</div>
+            {loading && datastores.length === 0
+              ? <div className="h-8 w-12 bg-muted animate-pulse rounded" />
+              : <div className="text-2xl font-bold">{datastores.length}</div>}
           </CardContent>
         </Card>
         <Card>
@@ -172,7 +177,9 @@ export default function DatastoresPage() {
             <HardDrive className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalCapacityTB.toFixed(1)} TB</div>
+            {loading && datastores.length === 0
+              ? <div className="h-8 w-24 bg-muted animate-pulse rounded" />
+              : <div className="text-2xl font-bold">{totalCapacityTB.toFixed(1)} TB</div>}
           </CardContent>
         </Card>
         <Card>
@@ -181,10 +188,17 @@ export default function DatastoresPage() {
             <HardDrive className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalUsedTB.toFixed(1)} TB</div>
-            <p className="text-xs text-muted-foreground">
-              Ortalama %{avgUsage} dolu
-            </p>
+            {loading && datastores.length === 0 ? (
+              <>
+                <div className="h-8 w-24 bg-muted animate-pulse rounded" />
+                <div className="h-3 w-28 bg-muted animate-pulse rounded mt-1" />
+              </>
+            ) : (
+              <>
+                <div className="text-2xl font-bold">{totalUsedTB.toFixed(1)} TB</div>
+                <p className="text-xs text-muted-foreground">Ortalama %{avgUsage} dolu</p>
+              </>
+            )}
           </CardContent>
         </Card>
         <Card>
@@ -193,7 +207,9 @@ export default function DatastoresPage() {
             <HardDrive className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">{totalFreeTB.toFixed(1)} TB</div>
+            {loading && datastores.length === 0
+              ? <div className="h-8 w-24 bg-muted animate-pulse rounded" />
+              : <div className="text-2xl font-bold text-green-600">{totalFreeTB.toFixed(1)} TB</div>}
           </CardContent>
         </Card>
         <Card>
@@ -202,17 +218,21 @@ export default function DatastoresPage() {
             <AlertTriangle className="h-4 w-4 text-yellow-500" />
           </CardHeader>
           <CardContent>
-            <div className="flex gap-2">
-              {criticalCount > 0 && (
-                <Badge className="bg-red-100 text-red-800">{criticalCount} Kritik</Badge>
-              )}
-              {warningCount > 0 && (
-                <Badge className="bg-yellow-100 text-yellow-800">{warningCount} Uyari</Badge>
-              )}
-              {criticalCount === 0 && warningCount === 0 && (
-                <Badge className="bg-green-100 text-green-800">Tumu Saglikli</Badge>
-              )}
-            </div>
+            {loading && datastores.length === 0 ? (
+              <div className="h-6 w-20 bg-muted animate-pulse rounded" />
+            ) : (
+              <div className="flex gap-2">
+                {criticalCount > 0 && (
+                  <Badge className="bg-red-100 text-red-800">{criticalCount} Kritik</Badge>
+                )}
+                {warningCount > 0 && (
+                  <Badge className="bg-yellow-100 text-yellow-800">{warningCount} Uyari</Badge>
+                )}
+                {criticalCount === 0 && warningCount === 0 && (
+                  <Badge className="bg-green-100 text-green-800">Tumu Saglikli</Badge>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -221,8 +241,19 @@ export default function DatastoresPage() {
       <Card>
         <CardContent className="pt-6">
           {loading && datastores.length === 0 ? (
-            <div className="flex items-center justify-center h-32">
-              <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+            <div className="space-y-2">
+              <div className="grid grid-cols-6 gap-2 px-2 pb-2 border-b text-xs font-medium text-muted-foreground">
+                {['Datastore Adı', 'Tip', 'Kapasite', 'Boş', 'Kullanım', 'Durum'].map((h, i) => (
+                  <div key={i}>{h}</div>
+                ))}
+              </div>
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="grid grid-cols-6 gap-2 px-2 py-2 border-b border-border/20 animate-pulse">
+                  {Array.from({ length: 6 }).map((_, j) => (
+                    <div key={j} className="h-4 bg-muted rounded" style={{ opacity: 0.4 + (j % 3) * 0.2 }} />
+                  ))}
+                </div>
+              ))}
             </div>
           ) : (
             <Table>
@@ -237,7 +268,7 @@ export default function DatastoresPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {datastores.map((ds) => (
+                {paginatedDatastores.map((ds) => (
                   <TableRow key={ds.id}>
                     <TableCell>
                       <div className="flex items-center gap-2">
@@ -287,6 +318,55 @@ export default function DatastoresPage() {
             <p className="text-center text-muted-foreground py-8">
               Datastore bulunamadi
             </p>
+          )}
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between mt-4 pt-4 border-t border-border/50">
+              <p className="text-sm text-muted-foreground">
+                Toplam {datastores.length} datastore &mdash; Sayfa {currentPage} / {totalPages}
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                >
+                  Önceki
+                </Button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
+                  .reduce<(number | string)[]>((acc, p, idx, arr) => {
+                    if (idx > 0 && (p as number) - (arr[idx - 1] as number) > 1) acc.push('...');
+                    acc.push(p);
+                    return acc;
+                  }, [])
+                  .map((item, idx) =>
+                    item === '...' ? (
+                      <span key={`ellipsis-${idx}`} className="text-sm text-muted-foreground px-1">&hellip;</span>
+                    ) : (
+                      <Button
+                        key={item}
+                        variant={currentPage === item ? 'default' : 'outline'}
+                        size="sm"
+                        className="w-8 h-8 p-0"
+                        onClick={() => setCurrentPage(item as number)}
+                      >
+                        {item}
+                      </Button>
+                    )
+                  )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  Sonraki
+                </Button>
+              </div>
+            </div>
           )}
         </CardContent>
       </Card>

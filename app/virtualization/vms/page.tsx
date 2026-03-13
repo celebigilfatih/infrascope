@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -28,9 +28,6 @@ import {
   Pause,
   RotateCcw,
   Search,
-  Server,
-  Cpu,
-  HardDrive,
   Monitor,
   Download,
   AlertTriangle,
@@ -66,7 +63,7 @@ export default function VMsPage() {
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 20;
+  const itemsPerPage = 10;
 
   const fetchVMs = async () => {
     try {
@@ -90,7 +87,7 @@ export default function VMsPage() {
 
   useEffect(() => {
     fetchVMs();
-    const interval = setInterval(fetchVMs, 30000);
+    const interval = setInterval(fetchVMs, 300000); // 5 min — matches server cache TTL
     return () => clearInterval(interval);
   }, []);
 
@@ -117,7 +114,7 @@ export default function VMsPage() {
   );
 
   // Power control
-  const handlePowerAction = async (vmId: string, operation: string, vmName: string) => {
+  const handlePowerAction = async (vmId: string, operation: string, _vmName: string) => {
     setActionLoading(vmId);
     try {
       const res = await fetch('/api/integrations/vmware', {
@@ -263,7 +260,9 @@ export default function VMsPage() {
             <Monitor className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{vms.length}</div>
+            {loading && vms.length === 0
+              ? <div className="h-8 w-12 bg-muted animate-pulse rounded" />
+              : <div className="text-2xl font-bold">{vms.length}</div>}
           </CardContent>
         </Card>
         <Card>
@@ -272,7 +271,9 @@ export default function VMsPage() {
             <Power className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">{vmRunning}</div>
+            {loading && vms.length === 0
+              ? <div className="h-8 w-12 bg-muted animate-pulse rounded" />
+              : <div className="text-2xl font-bold text-green-600">{vmRunning}</div>}
           </CardContent>
         </Card>
         <Card>
@@ -281,7 +282,9 @@ export default function VMsPage() {
             <Square className="h-4 w-4 text-gray-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-gray-600">{vmStopped}</div>
+            {loading && vms.length === 0
+              ? <div className="h-8 w-12 bg-muted animate-pulse rounded" />
+              : <div className="text-2xl font-bold text-gray-600">{vmStopped}</div>}
           </CardContent>
         </Card>
         <Card>
@@ -290,7 +293,9 @@ export default function VMsPage() {
             <Pause className="h-4 w-4 text-yellow-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">{vmSuspended}</div>
+            {loading && vms.length === 0
+              ? <div className="h-8 w-12 bg-muted animate-pulse rounded" />
+              : <div className="text-2xl font-bold text-yellow-600">{vmSuspended}</div>}
           </CardContent>
         </Card>
       </div>
@@ -330,8 +335,20 @@ export default function VMsPage() {
       <Card>
         <CardContent className="pt-6">
           {loading && vms.length === 0 ? (
-            <div className="flex items-center justify-center h-32">
-              <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+            // Skeleton rows — show structure immediately instead of full-page spinner
+            <div className="space-y-2">
+              <div className="grid grid-cols-9 gap-2 px-2 pb-2 border-b text-xs font-medium text-muted-foreground">
+                {['Ad', 'Host', 'IP', 'CPU', 'RAM', 'OS', 'Durum', 'Sağlık', ''].map((h, i) => (
+                  <div key={i}>{h}</div>
+                ))}
+              </div>
+              {Array.from({ length: 10 }).map((_, i) => (
+                <div key={i} className="grid grid-cols-9 gap-2 px-2 py-2 border-b border-border/20 animate-pulse">
+                  {Array.from({ length: 9 }).map((_, j) => (
+                    <div key={j} className="h-4 bg-muted rounded" style={{ opacity: 0.4 + (j % 3) * 0.2 }} />
+                  ))}
+                </div>
+              ))}
             </div>
           ) : (
             <>

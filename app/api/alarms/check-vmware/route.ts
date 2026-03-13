@@ -22,8 +22,8 @@ async function runVMwareAlarmCheck() {
     const config = faConfig.config as { host: string; username?: string; password?: string };
     const service = new FortiAnalyzerService({
       host: config.host,
-      username: config.username || 'fcelebigil',
-      password: config.password || 'Thor.7485-a',
+      username: config.username || 'infrascope',
+      password: config.password || 'Thor.7485-app',
     });
 
     // Create alarm engine

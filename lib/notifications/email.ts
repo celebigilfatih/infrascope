@@ -447,9 +447,23 @@ export async function sendAlarmEmail(data: AlarmEmailData, options?: { bypassCoo
     const errorMsg = (error as Error).message || 'Unknown error';
     console.error(`[Email] ❌ Failed after ${elapsed}ms for ${data.alarmCode}:`, error);
     
-    // Clear cached transporter on error (force reconnect next time)
-    cachedTransporter = null;
-    transporterConfig = null;
+    // Only clear the cached transporter for connection/auth errors.
+    // Temporary message-delivery failures (recipient unknown, relay issues)
+    // do NOT require a new SMTP connection — the pool is still valid.
+    const isConnectionError = (
+      errorMsg.includes('ECONNREFUSED') ||
+      errorMsg.includes('ECONNRESET') ||
+      errorMsg.includes('ETIMEDOUT') ||
+      errorMsg.includes('ENOTFOUND') ||
+      errorMsg.includes('authentication') ||
+      errorMsg.includes('535') ||
+      errorMsg.includes('Invalid login')
+    );
+    if (isConnectionError) {
+      cachedTransporter = null;
+      transporterConfig = null;
+      console.warn('[Email] Connection/auth error — transporter cleared for reconnect');
+    }
     
     // Add to DLQ for retry (only if alarmEventId is provided and not already a DLQ retry)
     if (!skipDLQ && data.alarmEventId) {

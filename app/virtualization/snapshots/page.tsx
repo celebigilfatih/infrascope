@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -59,6 +59,7 @@ export default function SnapshotsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -78,65 +79,67 @@ export default function SnapshotsPage() {
     onConfirm: () => void;
   }>({ open: false, title: '', description: '', onConfirm: () => {} });
 
-  const fetchSnapshots = async () => {
+  // Debounce search to avoid re-render on every keystroke
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchTerm), 200);
+    return () => clearTimeout(t);
+  }, [searchTerm]);
+
+  const fetchSnapshots = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      
-      // Fetch VMs list for create dialog
-      const vmRes = await fetch('/api/integrations/vmware?type=vms', {
-        cache: 'no-store',
-        headers: { 'Cache-Control': 'no-cache' },
-      });
-      const vmJson = await vmRes.json();
-      
-      if (vmJson.error) {
-        setError(vmJson.error);
-        return;
-      }
-      
+
+      // Fetch VMs and snapshots in parallel; use server cache (no cache: 'no-store')
+      const [vmRes, snapRes] = await Promise.all([
+        fetch('/api/integrations/vmware?type=vms'),
+        fetch('/api/integrations/vmware?type=snapshots'),
+      ]);
+      const [vmJson, snapJson] = await Promise.all([vmRes.json(), snapRes.json()]);
+
+      if (vmJson.error) { setError(vmJson.error); return; }
+      if (snapJson.error) { setError(snapJson.error); return; }
+
       setVms(vmJson.vms || []);
-      
-      // Fetch all snapshots in one call (batch operation)
-      const snapRes = await fetch('/api/integrations/vmware?type=snapshots', {
-        cache: 'no-store',
-        headers: { 'Cache-Control': 'no-cache' },
-      });
-      const snapJson = await snapRes.json();
-      
-      if (snapJson.error) {
-        setError(snapJson.error);
-        return;
-      }
-      
       setSnapshots(snapJson.snapshots || []);
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchSnapshots();
-    const interval = setInterval(fetchSnapshots, 15000); // 15 saniye
+    const interval = setInterval(fetchSnapshots, 300000); // 5 min — matches server cache TTL
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchSnapshots]);
 
-  // Filter snapshots
-  const filteredSnapshots = snapshots.filter(snap => {
-    return (
-      snap.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      snap.vmName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      snap.description?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  });
+  // Filter snapshots — memoized so re-filter only happens when data or search term changes
+  const filteredSnapshots = useMemo(() => snapshots.filter(snap =>
+    snap.name?.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+    snap.vmName?.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+    snap.description?.toLowerCase().includes(debouncedSearch.toLowerCase())
+  ), [snapshots, debouncedSearch]);
+
+  // Reset to first page when filter changes
+  useEffect(() => { setCurrentPage(1); }, [debouncedSearch]);
 
   // Pagination
   const totalPages = Math.ceil(filteredSnapshots.length / pageSize);
   const startIndex = (currentPage - 1) * pageSize;
   const endIndex = startIndex + pageSize;
-  const paginatedSnapshots = filteredSnapshots.slice(startIndex, endIndex);
+  const paginatedSnapshots = useMemo(
+    () => filteredSnapshots.slice(startIndex, endIndex),
+    [filteredSnapshots, startIndex, endIndex]
+  );
+
+  // Summary stats — memoized, avoid recalculating on every unrelated render
+  const { totalSize, oldSnapshotCount, uniqueVmCount } = useMemo(() => ({
+    totalSize: snapshots.reduce((sum, s) => sum + (s.size || 0), 0),
+    oldSnapshotCount: snapshots.filter(s => differenceInDays(new Date(), new Date(s.createTime)) > 7).length,
+    uniqueVmCount: new Set(snapshots.map(s => s.vmId)).size,
+  }), [snapshots]);
 
   const formatSize = (bytes: number): string => {
     if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(1)} GB`;
@@ -144,16 +147,22 @@ export default function SnapshotsPage() {
     return `${bytes} B`;
   };
 
-  const getAgeWarning = (createTime: string) => {
-    const days = differenceInDays(new Date(), new Date(createTime));
-    if (days > 30) {
-      return <Badge className="bg-red-100 text-red-800">{days} gun (Eski!)</Badge>;
+  // Pre-compute age data per snapshot once — avoids differenceInDays call per render per row
+  const snapshotAgeMap = useMemo(() => {
+    const now = new Date();
+    const map = new Map<string, number>();
+    for (const s of snapshots) {
+      map.set(s.id, differenceInDays(now, new Date(s.createTime)));
     }
-    if (days > 7) {
-      return <Badge className="bg-yellow-100 text-yellow-800">{days} gun</Badge>;
-    }
-    return <Badge className="bg-green-100 text-green-800">{days} gun</Badge>;
-  };
+    return map;
+  }, [snapshots]);
+
+  const getAgeWarning = useCallback((snapId: string) => {
+    const days = snapshotAgeMap.get(snapId) ?? 0;
+    if (days > 30) return <Badge className="bg-red-100 text-red-800">{days} gün (Eski!)</Badge>;
+    if (days > 7)  return <Badge className="bg-yellow-100 text-yellow-800">{days} gün</Badge>;
+    return <Badge className="bg-green-100 text-green-800">{days} gün</Badge>;
+  }, [snapshotAgeMap]);
 
   // Create snapshot
   const handleCreateSnapshot = async () => {
@@ -269,8 +278,7 @@ export default function SnapshotsPage() {
   };
 
   // Summary
-  const totalSize = snapshots.reduce((sum, s) => sum + (s.size || 0), 0);
-  const oldSnapshots = snapshots.filter(s => differenceInDays(new Date(), new Date(s.createTime)) > 7).length;
+  const oldSnapshots = oldSnapshotCount;
 
   if (error) {
     return (
@@ -340,7 +348,7 @@ export default function SnapshotsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {new Set(snapshots.map(s => s.vmId)).size}
+              {uniqueVmCount}
             </div>
           </CardContent>
         </Card>
@@ -376,8 +384,19 @@ export default function SnapshotsPage() {
       <Card>
         <CardContent className="pt-6">
           {loading && snapshots.length === 0 ? (
-            <div className="flex items-center justify-center h-32">
-              <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+            <div className="space-y-2">
+              <div className="grid grid-cols-7 gap-2 px-2 pb-2 border-b text-xs font-medium text-muted-foreground">
+                {['VM', 'Snapshot Adı', 'Açıklama', 'Oluşturma Tarihi', 'Yaş', 'Boyut', ''].map((h, i) => (
+                  <div key={i}>{h}</div>
+                ))}
+              </div>
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="grid grid-cols-7 gap-2 px-2 py-2 border-b border-border/20 animate-pulse">
+                  {Array.from({ length: 7 }).map((_, j) => (
+                    <div key={j} className="h-4 bg-muted rounded" style={{ opacity: 0.4 + (j % 3) * 0.2 }} />
+                  ))}
+                </div>
+              ))}
             </div>
           ) : (
             <Table>
@@ -408,7 +427,7 @@ export default function SnapshotsPage() {
                     <TableCell>
                       {format(new Date(snap.createTime), 'dd MMM yyyy HH:mm', { locale: tr })}
                     </TableCell>
-                    <TableCell>{getAgeWarning(snap.createTime)}</TableCell>
+                    <TableCell>{getAgeWarning(snap.id)}</TableCell>
                     <TableCell>{formatSize(snap.size)}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">

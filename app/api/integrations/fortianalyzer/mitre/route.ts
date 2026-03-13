@@ -39,8 +39,8 @@ export async function GET(request: NextRequest) {
 
     const service = new FortiAnalyzerService({
       host: faConfig.host,
-      username: faConfig.username || 'fcelebigil',
-      password: faConfig.password || 'Thor.7485-a',
+      username: faConfig.username || 'infrascope',
+      password: faConfig.password || 'Thor.7485-app',
     });
 
     // Login first

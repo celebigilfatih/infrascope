@@ -65,24 +65,53 @@ export const Sidebar: React.FC = () => {
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [mounted, setMounted] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     setMounted(true);
-    // Check if dark mode is enabled
     const isDark = document.documentElement.classList.contains('dark');
     setTheme(isDark ? 'dark' : 'light');
-    
-    // Load sidebar state from localStorage if available
+
     const savedState = localStorage.getItem('sidebarCollapsed');
-    if (savedState !== null) {
-      setIsCollapsed(savedState === 'true');
+    if (savedState !== null) setIsCollapsed(savedState === 'true');
+
+    const savedSections = localStorage.getItem('sidebarSections');
+    if (savedSections) {
+      try { setCollapsedSections(JSON.parse(savedSections)); } catch {}
     }
   }, []);
+
+  // Auto-expand the section that contains the active page
+  useEffect(() => {
+    if (!mounted) return;
+    sections.forEach((section) => {
+      const hasActive = section.items.some((item) => pathname === item.href || pathname.startsWith(item.href + '/'));
+      if (hasActive) {
+        setCollapsedSections((prev) => {
+          if (prev[section.title]) {
+            const next = { ...prev, [section.title]: false };
+            localStorage.setItem('sidebarSections', JSON.stringify(next));
+            return next;
+          }
+          return prev;
+        });
+      }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname, mounted]);
 
   const toggleSidebar = () => {
     const newState = !isCollapsed;
     setIsCollapsed(newState);
     localStorage.setItem('sidebarCollapsed', String(newState));
+  };
+
+  const toggleSection = (title: string) => {
+    setCollapsedSections((prev) => {
+      const next = { ...prev, [title]: !prev[title] };
+      localStorage.setItem('sidebarSections', JSON.stringify(next));
+      return next;
+    });
   };
 
   const toggleTheme = () => {
@@ -122,7 +151,6 @@ export const Sidebar: React.FC = () => {
     {
       title: 'Virtualization',
       items: [
-        { name: 'vCenter Dashboard', href: '/virtualization', icon: LayoutDashboard },
         { name: 'Clusters', href: '/virtualization/clusters', icon: Layers },
         { name: 'ESXi Hosts', href: '/virtualization/hosts', icon: Server },
         { name: 'Virtual Machines', href: '/virtualization/vms', icon: Cpu },
@@ -163,19 +191,21 @@ export const Sidebar: React.FC = () => {
         { name: 'Dependencies', href: '/services/dependencies', icon: GitBranch },
       ]
     },
-    {
-      title: 'Analytics',
-      items: [
-        { name: 'Capacity Trends', href: '/analytics/capacity', icon: TrendingUp },
-        { name: 'Growth Forecast', href: '/analytics/forecast', icon: TrendingUp },
-        { name: 'VM Sprawl', href: '/analytics/sprawl', icon: Cpu },
-      ]
-    },
+    // TEMPORARILY DISABLED - Analytics menu
+    // {
+    //   title: 'Analytics',
+    //   items: [
+    //     { name: 'Capacity Trends', href: '/analytics/capacity', icon: TrendingUp },
+    //     { name: 'Growth Forecast', href: '/analytics/forecast', icon: TrendingUp },
+    //     { name: 'VM Sprawl', href: '/analytics/sprawl', icon: Cpu },
+    //   ]
+    // },
     {
       title: 'Integrations',
       items: [
         { name: 'VMware', href: '/integrations/vmware', icon: Server },
         { name: 'Firewall', href: '/integrations/firewall', icon: Shield },
+        { name: 'FortiAnalyzer', href: '/integrations/fortianalyzer', icon: Activity },
         { name: 'Sync Status', href: '/integrations/status', icon: Activity },
       ]
     },
@@ -239,11 +269,20 @@ export const Sidebar: React.FC = () => {
         {sections.map((section) => (
           <div key={section.title} className="space-y-1">
             {!isCollapsed && (
-              <h3 className="px-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">
-                {section.title}
-              </h3>
+              <button
+                onClick={() => toggleSection(section.title)}
+                className="w-full flex items-center justify-between px-2 mb-1 group cursor-pointer"
+              >
+                <h3 className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider group-hover:text-foreground transition-colors">
+                  {section.title}
+                </h3>
+                <ChevronDown className={cn(
+                  "h-3 w-3 text-muted-foreground/60 transition-transform duration-200 group-hover:text-foreground",
+                  collapsedSections[section.title] ? "-rotate-90" : "rotate-0"
+                )} />
+              </button>
             )}
-            {section.items.map((item) => {
+            {(!collapsedSections[section.title] || isCollapsed) && section.items.map((item) => {
               const isActive = pathname === item.href;
               const Icon = item.icon;
               return (
