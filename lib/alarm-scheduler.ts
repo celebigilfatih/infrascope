@@ -15,7 +15,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
-import { runAlarmCheck } from '@/lib/alarms/alarm-runner';
+import { runAlarmCheck, initializeAlarmRunner } from '@/lib/alarms/alarm-runner';
 
 let schedulerInterval: NodeJS.Timeout | null = null;
 
@@ -28,6 +28,11 @@ export function startAlarmScheduler() {
     console.log('[AlarmScheduler] Already running, skipping initialization');
     return;
   }
+
+  // Clean up any RUNNING locks left by a previous process before starting
+  initializeAlarmRunner().catch((err) =>
+    console.warn('[AlarmScheduler] initializeAlarmRunner failed (non-fatal):', err)
+  );
 
   schedulerInterval = setInterval(async () => {
     const tickStart = Date.now();

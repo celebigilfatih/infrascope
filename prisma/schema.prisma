@@ -972,7 +972,7 @@ model AlarmCheckLog {
   triggeredCount Int
   errorCount     Int
   durationMs     Int
-  status         String   // "SUCCESS", "PARTIAL", "FAILED"
+  status         String   // "RUNNING", "SUCCESS", "PARTIAL", "FAILED", "ORPHANED"
   createdAt      DateTime @default(now())
 
   @@index([checkTime])

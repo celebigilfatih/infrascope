@@ -48,55 +48,72 @@ export const BuildingNode = memo(({ data, selected }: NodeProps<BuildingNodeData
         transformOrigin: 'center',
       }}
     >
-      {/* Single centered handles — edges draw from icon center, appearing to come from behind */}
-      <Handle
-        type="source"
-        position={Position.Top}
-        id="top-source"
-        style={{ left: '50%', top: '50%', transform: 'translate(-50%, -50%)', opacity: 0, width: 0, height: 0, border: 'none', minWidth: 0, minHeight: 0 }}
-      />
-      <Handle
-        type="target"
-        position={Position.Top}
-        id="top-target"
-        style={{ left: '50%', top: '50%', transform: 'translate(-50%, -50%)', opacity: 0, width: 0, height: 0, border: 'none', minWidth: 0, minHeight: 0 }}
-      />
-      <Handle
-        type="source"
-        position={Position.Right}
-        id="right-source"
-        style={{ left: '50%', top: '50%', transform: 'translate(-50%, -50%)', opacity: 0, width: 0, height: 0, border: 'none', minWidth: 0, minHeight: 0 }}
-      />
-      <Handle
-        type="target"
-        position={Position.Right}
-        id="right-target"
-        style={{ left: '50%', top: '50%', transform: 'translate(-50%, -50%)', opacity: 0, width: 0, height: 0, border: 'none', minWidth: 0, minHeight: 0 }}
-      />
-      <Handle
-        type="source"
-        position={Position.Bottom}
-        id="bottom-source"
-        style={{ left: '50%', top: '50%', transform: 'translate(-50%, -50%)', opacity: 0, width: 0, height: 0, border: 'none', minWidth: 0, minHeight: 0 }}
-      />
-      <Handle
-        type="target"
-        position={Position.Bottom}
-        id="bottom-target"
-        style={{ left: '50%', top: '50%', transform: 'translate(-50%, -50%)', opacity: 0, width: 0, height: 0, border: 'none', minWidth: 0, minHeight: 0 }}
-      />
-      <Handle
-        type="source"
-        position={Position.Left}
-        id="left-source"
-        style={{ left: '50%', top: '50%', transform: 'translate(-50%, -50%)', opacity: 0, width: 0, height: 0, border: 'none', minWidth: 0, minHeight: 0 }}
-      />
-      <Handle
-        type="target"
-        position={Position.Left}
-        id="left-target"
-        style={{ left: '50%', top: '50%', transform: 'translate(-50%, -50%)', opacity: 0, width: 0, height: 0, border: 'none', minWidth: 0, minHeight: 0 }}
-      />
+      {/* Connection handles positioned at icon edges - invisible until hover */}
+      <div className="absolute inset-0 pointer-events-none">
+        {/* Top handle */}
+        <Handle
+          type="source"
+          position={Position.Top}
+          id="top-source"
+          className="!w-0 !h-0 !border-0 opacity-0 group-hover:opacity-100 transition-opacity"
+          style={{ left: '50%', top: 0, transform: 'translate(-50%, -50%)' }}
+        />
+        <Handle
+          type="target"
+          position={Position.Top}
+          id="top-target"
+          className="!w-0 !h-0 !border-0 opacity-0 group-hover:opacity-100 transition-opacity"
+          style={{ left: '50%', top: 0, transform: 'translate(-50%, -50%)' }}
+        />
+        
+        {/* Right handle */}
+        <Handle
+          type="source"
+          position={Position.Right}
+          id="right-source"
+          className="!w-0 !h-0 !border-0 opacity-0 group-hover:opacity-100 transition-opacity"
+          style={{ right: 0, top: '50%', transform: 'translate(50%, -50%)' }}
+        />
+        <Handle
+          type="target"
+          position={Position.Right}
+          id="right-target"
+          className="!w-0 !h-0 !border-0 opacity-0 group-hover:opacity-100 transition-opacity"
+          style={{ right: 0, top: '50%', transform: 'translate(50%, -50%)' }}
+        />
+        
+        {/* Bottom handle */}
+        <Handle
+          type="source"
+          position={Position.Bottom}
+          id="bottom-source"
+          className="!w-0 !h-0 !border-0 opacity-0 group-hover:opacity-100 transition-opacity"
+          style={{ left: '50%', bottom: 0, transform: 'translate(-50%, 50%)' }}
+        />
+        <Handle
+          type="target"
+          position={Position.Bottom}
+          id="bottom-target"
+          className="!w-0 !h-0 !border-0 opacity-0 group-hover:opacity-100 transition-opacity"
+          style={{ left: '50%', bottom: 0, transform: 'translate(-50%, 50%)' }}
+        />
+        
+        {/* Left handle */}
+        <Handle
+          type="source"
+          position={Position.Left}
+          id="left-source"
+          className="!w-0 !h-0 !border-0 opacity-0 group-hover:opacity-100 transition-opacity"
+          style={{ left: 0, top: '50%', transform: 'translate(-50%, -50%)' }}
+        />
+        <Handle
+          type="target"
+          position={Position.Left}
+          id="left-target"
+          className="!w-0 !h-0 !border-0 opacity-0 group-hover:opacity-100 transition-opacity"
+          style={{ left: 0, top: '50%', transform: 'translate(-50%, -50%)' }}
+        />
+      </div>
 
       {/* Simplified Building Node - Icon + Name */}
       <div

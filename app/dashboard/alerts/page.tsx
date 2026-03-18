@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/dialog';
 import {
   AlertTriangle, AlertCircle, AlertOctagon, CheckCircle, Clock, RefreshCw,
-  Search, Play, Shield, Bell, Trash2, BarChart3,
+  Search, Play, Shield, Bell, Trash2, BarChart3, Eye, User,
 } from 'lucide-react';
 
 interface AlarmEventData {
@@ -44,12 +44,12 @@ interface AlarmEventData {
   };
 }
 
-const SEVERITY_CONFIG: Record<string, { label: string; color: string; bgColor: string; icon: typeof AlertOctagon }> = {
-  ALARM_CRITICAL: { label: 'Kritik', color: 'text-red-500', bgColor: 'bg-red-500/20', icon: AlertOctagon },
-  ALARM_HIGH: { label: 'Yuksek', color: 'text-orange-500', bgColor: 'bg-orange-500/20', icon: AlertTriangle },
-  ALARM_MEDIUM: { label: 'Orta', color: 'text-yellow-500', bgColor: 'bg-yellow-500/20', icon: AlertCircle },
-  ALARM_LOW: { label: 'Dusuk', color: 'text-blue-500', bgColor: 'bg-blue-500/20', icon: Bell },
-  ALARM_INFO: { label: 'Bilgi', color: 'text-gray-400', bgColor: 'bg-gray-400/20', icon: Bell },
+const SEVERITY_CONFIG: Record<string, { label: string; color: string; bgColor: string; headerBg: string; icon: typeof AlertOctagon }> = {
+  ALARM_CRITICAL: { label: 'Kritik', color: 'text-red-500', bgColor: 'bg-red-500/20', headerBg: 'bg-red-600', icon: AlertOctagon },
+  ALARM_HIGH: { label: 'Yuksek', color: 'text-orange-500', bgColor: 'bg-orange-500/20', headerBg: 'bg-orange-500', icon: AlertTriangle },
+  ALARM_MEDIUM: { label: 'Orta', color: 'text-yellow-500', bgColor: 'bg-yellow-500/20', headerBg: 'bg-amber-500', icon: AlertCircle },
+  ALARM_LOW: { label: 'Dusuk', color: 'text-blue-500', bgColor: 'bg-blue-500/20', headerBg: 'bg-blue-500', icon: Bell },
+  ALARM_INFO: { label: 'Bilgi', color: 'text-gray-400', bgColor: 'bg-gray-400/20', headerBg: 'bg-slate-500', icon: Bell },
 };
 
 const CATEGORY_MAP: Record<string, string> = {
@@ -59,6 +59,77 @@ const CATEGORY_MAP: Record<string, string> = {
   OPERATIONAL: 'Operational',
   SOC_CORRELATION: 'SOC Correlation',
 };
+
+const CATEGORY_EMOJI: Record<string, string> = {
+  CONFIG_ACCESS: '🔧',
+  SECURITY: '🛡️',
+  RISK_ANOMALY: '⚡',
+  OPERATIONAL: '⚙️',
+  SOC_CORRELATION: '🔍',
+};
+
+interface ParsedAlarmMessage {
+  description: string;
+  eventCount: string;
+  keyValueRows: { key: string; value: string }[];
+  bodySections: { title: string; lines: string[] }[];
+  otherEvents: string[];
+  recommendedAction: string;
+}
+
+function parseAlarmMessage(message: string, alarmDescription?: string): ParsedAlarmMessage {
+  const result: ParsedAlarmMessage = {
+    description: '',
+    eventCount: '',
+    keyValueRows: [],
+    bodySections: [],
+    otherEvents: [],
+    recommendedAction: '',
+  };
+  if (!message) return result;
+
+  const paragraphs = message.split(/\n\n+/).map((p) => p.trim()).filter(Boolean);
+
+  for (let i = 0; i < paragraphs.length; i++) {
+    const para = paragraphs[i];
+
+    // Skip paragraph that matches the alarm description (already shown separately)
+    if (alarmDescription && para.trim() === alarmDescription.trim()) continue;
+
+    if (para.startsWith('Onerilen Aksiyon:')) {
+      result.recommendedAction = para.replace(/^Onerilen Aksiyon:\s*/, '').trim();
+      continue;
+    }
+    if (para.match(/^Tespit edilen olay sayisi:/)) {
+      result.eventCount = para.trim();
+      continue;
+    }
+    if (para.match(/^Diger (olaylar|kullanicilar|islemler):/)) {
+      const lines = para.split('\n').slice(1);
+      result.otherEvents = lines.map((l) => l.replace(/^[-•·]\s*/, '').trim()).filter(Boolean);
+      continue;
+    }
+
+    const lines = para.split('\n');
+    // Section with a titled header (first line ends with ':')
+    if (lines.length > 1 && lines[0].trim().match(/.*\(.*\):$|.*:$/)) {
+      result.bodySections.push({ title: lines[0].trim().replace(/:$/, ''), lines: lines.slice(1) });
+      continue;
+    }
+    // Key-value pairs: majority of lines match "Key: Value"
+    const kvLines = lines.filter((l) => { const ci = l.indexOf(': '); return ci > 0 && ci < 35; });
+    if (kvLines.length >= 2 && kvLines.length >= lines.length * 0.55) {
+      for (const line of lines) {
+        const ci = line.indexOf(': ');
+        if (ci > 0 && ci < 35) result.keyValueRows.push({ key: line.slice(0, ci).trim(), value: line.slice(ci + 2).trim() });
+      }
+      continue;
+    }
+    // Fallback: description
+    if (!result.description) result.description = para;
+  }
+  return result;
+}
 
 export default function AlertsDashboardPage() {
   const [events, setEvents] = useState<AlarmEventData[]>([]);
@@ -80,6 +151,12 @@ export default function AlertsDashboardPage() {
   const [cleanupAcknowledgedOnly, setCleanupAcknowledgedOnly] = useState(true);
   const [cleanupLoading, setCleanupLoading] = useState(false);
   const [cleanupDryRun, setCleanupDryRun] = useState(true);
+
+  // Detail view state
+  const [selectedEvent, setSelectedEvent] = useState<AlarmEventData | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+  // Track which event IDs are currently being acknowledged
+  const [acknowledgingIds, setAcknowledgingIds] = useState<Set<string>>(new Set());
 
   const fetchEvents = useCallback(async () => {
     setLoading(true);
@@ -202,22 +279,37 @@ export default function AlertsDashboardPage() {
   };
 
   const acknowledgeEvent = async (id: string) => {
+    setAcknowledgingIds(prev => new Set(prev).add(id));
     try {
       const res = await fetch('/api/alarms', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: [id], acknowledged: true }),
+        body: JSON.stringify({ ids: [id], acknowledged: true, acknowledgedBy: 'admin' }),
       });
       const data = await res.json();
       if (data.success) {
+        // Update local state immediately
         setEvents((prev: AlarmEventData[]) =>
           prev.map((e: AlarmEventData) =>
             e.id === id ? { ...e, acknowledged: true, acknowledgedAt: new Date().toISOString(), acknowledgedBy: 'admin' } : e
           )
         );
+        setMessage({ text: 'Alarm onaylandi', type: 'success' });
+        setTimeout(() => setMessage(null), 3000);
+        // Also refresh from server to ensure consistency
+        fetchEvents();
+      } else {
+        setMessage({ text: `Onaylama hatasi: ${data.error || 'Bilinmeyen hata'}`, type: 'error' });
       }
     } catch (err) {
       console.error('Acknowledge error:', err);
+      setMessage({ text: 'Onaylama baglanti hatasi', type: 'error' });
+    } finally {
+      setAcknowledgingIds(prev => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
     }
   };
 
@@ -381,13 +473,14 @@ export default function AlertsDashboardPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="whitespace-nowrap">Seviye</TableHead>
+                    <TableHead className="whitespace-nowrap">Zaman</TableHead>
                     <TableHead className="whitespace-nowrap">Alarm</TableHead>
                     <TableHead className="whitespace-nowrap">Kategori</TableHead>
+                    <TableHead className="whitespace-nowrap">Seviye</TableHead>
                     <TableHead className="whitespace-nowrap">Kaynak IP</TableHead>
                     <TableHead className="whitespace-nowrap">Cihaz</TableHead>
-                    <TableHead className="whitespace-nowrap">Zaman</TableHead>
                     <TableHead className="whitespace-nowrap">Durum</TableHead>
+                    <TableHead className="whitespace-nowrap">Onaylayan</TableHead>
                     <TableHead className="whitespace-nowrap">Bildirim</TableHead>
                     <TableHead className="whitespace-nowrap"></TableHead>
                   </TableRow>
@@ -398,14 +491,14 @@ export default function AlertsDashboardPage() {
                     const Icon = sev.icon;
                     return (
                       <TableRow key={event.id} className={event.acknowledged ? 'opacity-60' : ''}>
-                        <TableCell>
-                          <Badge className={`${sev.bgColor} ${sev.color} border-0 text-xs`}>
-                            <Icon className="h-3 w-3 mr-1" />
-                            {sev.label}
-                          </Badge>
+                        <TableCell className="text-xs whitespace-nowrap">
+                          <div className="flex items-center gap-1 text-muted-foreground">
+                            <Clock className="h-3 w-3" />
+                            {new Date(event.createdAt).toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' })}
+                          </div>
                         </TableCell>
                         <TableCell>
-                          <div className="max-w-xs">
+                          <div className="max-w-md">
                             <p className="font-medium text-sm truncate">{event.title}</p>
                             <p className="text-xs text-muted-foreground font-mono">{event.alarm?.code}</p>
                           </div>
@@ -413,14 +506,14 @@ export default function AlertsDashboardPage() {
                         <TableCell>
                           <Badge variant="outline" className="text-xs">{CATEGORY_MAP[event.alarm?.category] || event.alarm?.category}</Badge>
                         </TableCell>
-                        <TableCell className="font-mono text-xs">{event.sourceIp || '-'}</TableCell>
-                        <TableCell className="text-xs">{event.deviceName || '-'}</TableCell>
-                        <TableCell className="text-xs whitespace-nowrap">
-                          <div className="flex items-center gap-1">
-                            <Clock className="h-3 w-3 text-muted-foreground" />
-                            {new Date(event.createdAt).toLocaleString('tr-TR')}
-                          </div>
+                        <TableCell>
+                          <Badge className={`${sev.bgColor} ${sev.color} border-0 text-xs`}>
+                            <Icon className="h-3 w-3 mr-1" />
+                            {sev.label}
+                          </Badge>
                         </TableCell>
+                        <TableCell className="font-mono text-xs">{event.sourceIp || '-'}</TableCell>
+                        <TableCell className="text-xs max-w-[150px] truncate" title={event.deviceName || '-'}>{event.deviceName || '-'}</TableCell>
                         <TableCell>
                           {event.acknowledged ? (
                             <Badge variant="outline" className="text-green-500 text-xs">
@@ -432,6 +525,16 @@ export default function AlertsDashboardPage() {
                           )}
                         </TableCell>
                         <TableCell>
+                          {event.acknowledgedBy ? (
+                            <div className="flex items-center gap-1 text-xs">
+                              <User className="h-3 w-3 text-muted-foreground" />
+                              <span>{event.acknowledgedBy}</span>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
                           {event.notifiedAt ? (
                             <Badge variant="outline" className="text-xs">Email</Badge>
                           ) : (
@@ -439,11 +542,36 @@ export default function AlertsDashboardPage() {
                           )}
                         </TableCell>
                         <TableCell>
-                          {!event.acknowledged && (
-                            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => acknowledgeEvent(event.id)}>
-                              Onayla
+                          <div className="flex items-center gap-1">
+                            {!event.acknowledged && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 w-8 p-0"
+                                disabled={acknowledgingIds.has(event.id)}
+                                onClick={() => acknowledgeEvent(event.id)}
+                                title="Onayla"
+                              >
+                                {acknowledgingIds.has(event.id) ? (
+                                  <RefreshCw className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <CheckCircle className="h-4 w-4" />
+                                )}
+                              </Button>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0"
+                              onClick={() => {
+                                setSelectedEvent(event);
+                                setDetailOpen(true);
+                              }}
+                              title="Detayları Göster"
+                            >
+                              <Eye className="h-4 w-4" />
                             </Button>
-                          )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     );
@@ -664,6 +792,187 @@ export default function AlertsDashboardPage() {
               </Button>
             )}
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Alarm Detail Dialog — redesigned */}
+      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-0">
+          {/* Hidden accessible title */}
+          <DialogTitle className="sr-only">Alarm Detaylari</DialogTitle>
+          <DialogDescription className="sr-only">{selectedEvent?.alarm?.code}</DialogDescription>
+
+          {selectedEvent && (() => {
+            const sev = SEVERITY_CONFIG[selectedEvent.severity] || SEVERITY_CONFIG['ALARM_INFO'];
+            const Icon = sev.icon;
+            const parsed = parseAlarmMessage(selectedEvent.message || '', selectedEvent.alarm?.description || '');
+            const emoji = CATEGORY_EMOJI[selectedEvent.alarm?.category] || '🔔';
+
+            return (
+              <div>
+                {/* Colored header band */}
+                <div className={`${sev.headerBg} text-white px-6 py-5 rounded-t-lg`}>
+                  <h2 className="text-xl font-bold">{emoji} {selectedEvent.alarm?.name}</h2>
+                  <div className="mt-2">
+                    <span className="inline-flex items-center gap-1.5 bg-white/25 text-white text-xs font-semibold px-2.5 py-1 rounded">
+                      <Icon className="h-3 w-3" />
+                      {sev.label} &bull; {CATEGORY_MAP[selectedEvent.alarm?.category] || selectedEvent.alarm?.category}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="px-6 py-5 space-y-5">
+
+                  {/* Alarm Basligı */}
+                  <section>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Alarm Başlığı</p>
+                    <p className="font-semibold text-sm leading-snug">{selectedEvent.title}</p>
+                  </section>
+
+                  {/* Açıklama — first as requested */}
+                  {(selectedEvent.alarm?.description || parsed.description) && (
+                    <section>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Açıklama</p>
+                      <p className="text-sm">{selectedEvent.alarm?.description || parsed.description}</p>
+                      {parsed.eventCount && (
+                        <p className="text-xs italic text-muted-foreground mt-1">{parsed.eventCount}</p>
+                      )}
+                    </section>
+                  )}
+
+                  {/* Olay Detayları — key-value table */}
+                  {parsed.keyValueRows.length > 0 && (
+                    <section>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Olay Detayları</p>
+                      <div className="rounded-lg border overflow-hidden">
+                        <table className="w-full text-sm">
+                          <tbody>
+                            {parsed.keyValueRows.map(({ key, value }, i) => (
+                              <tr key={i} className="border-b last:border-0">
+                                <td className="px-4 py-2.5 text-muted-foreground w-[38%] bg-muted/20 align-top">{key}</td>
+                                <td className="px-4 py-2.5 break-words">{value}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </section>
+                  )}
+
+                  {/* Body sections (config change / webfilter structured content) */}
+                  {parsed.bodySections.map((section, i) => (
+                    <section key={i}>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">{section.title}</p>
+                      <div className="text-xs leading-relaxed bg-muted/20 rounded-lg px-4 py-3 font-mono whitespace-pre-wrap">
+                        {section.lines.join('\n')}
+                      </div>
+                    </section>
+                  ))}
+
+                  {/* Metadata 2x2 grid */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="p-3 rounded-lg bg-muted/30">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Alarm Kodu</p>
+                      <p className="font-mono text-sm font-bold">{selectedEvent.alarm?.code}</p>
+                    </div>
+                    <div className="p-3 rounded-lg bg-muted/30">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Zaman</p>
+                      <p className="text-sm font-bold">{new Date(selectedEvent.createdAt).toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' })}</p>
+                    </div>
+                    <div className="p-3 rounded-lg bg-muted/30">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Kaynak IP</p>
+                      <p className="font-mono text-sm font-bold">{selectedEvent.sourceIp || '-'}</p>
+                    </div>
+                    <div className="p-3 rounded-lg bg-muted/30">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Cihaz</p>
+                      <p className="text-sm font-bold">{selectedEvent.deviceName || '-'}</p>
+                    </div>
+                  </div>
+
+                  {/* Diger Olaylar */}
+                  {parsed.otherEvents.length > 0 && (
+                    <section>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Diğer Olaylar</p>
+                      <ul className="space-y-1">
+                        {parsed.otherEvents.map((evt, i) => (
+                          <li key={i} className="flex items-start gap-2 text-sm">
+                            <span className="text-muted-foreground shrink-0 mt-0.5">&bull;</span>
+                            <span>{evt}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </section>
+                  )}
+
+                  {/* Bildirim + Onay */}
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div className="p-3 rounded-lg bg-muted/30">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Bildirim Durumu</p>
+                      {selectedEvent.notifiedAt ? (
+                        <div className="space-y-0.5">
+                          <p><span className="text-muted-foreground text-xs">Kanal:</span> {selectedEvent.notifyChannel || 'email'}</p>
+                          <p><span className="text-muted-foreground text-xs">Zaman:</span> {new Date(selectedEvent.notifiedAt).toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' })}</p>
+                        </div>
+                      ) : (
+                        <p className="text-muted-foreground text-xs">Bildirim gonderilmedi</p>
+                      )}
+                    </div>
+                    <div className={`p-3 rounded-lg ${
+                      selectedEvent.acknowledged ? 'bg-green-50 dark:bg-green-900/20' : 'bg-orange-50 dark:bg-orange-900/20'
+                    }`}>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Onay Durumu</p>
+                      {selectedEvent.acknowledged ? (
+                        <div className="space-y-0.5">
+                          <p className="text-green-700 dark:text-green-300 text-xs font-semibold">✓ Onaylandi</p>
+                          {selectedEvent.acknowledgedBy && (
+                            <p className="text-xs"><span className="text-muted-foreground">Onaylayan:</span> {selectedEvent.acknowledgedBy}</p>
+                          )}
+                          {selectedEvent.acknowledgedAt && (
+                            <p className="text-xs"><span className="text-muted-foreground">Zaman:</span> {new Date(selectedEvent.acknowledgedAt).toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' })}</p>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="text-orange-600 text-xs font-semibold">Henuz onaylanmadi</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Onerilen Aksiyon — amber highlight box */}
+                  {parsed.recommendedAction && (
+                    <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-sm">⚡</span>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-amber-800 dark:text-amber-300">Önerilen Aksiyon</p>
+                      </div>
+                      <p className="text-sm text-amber-700 dark:text-amber-200">{parsed.recommendedAction}</p>
+                    </div>
+                  )}
+
+                  {/* Footer branding */}
+                  <div className="text-center text-xs text-muted-foreground pt-3 border-t">
+                    <p>InfraScope Alarm Management System</p>
+                    <p>{new Date(selectedEvent.createdAt).toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' })}</p>
+                  </div>
+                </div>
+
+                {/* Action buttons */}
+                <div className="flex justify-end gap-2 px-6 pb-5">
+                  {!selectedEvent.acknowledged && (
+                    <Button
+                      onClick={() => {
+                        acknowledgeEvent(selectedEvent.id);
+                        setSelectedEvent({ ...selectedEvent, acknowledged: true, acknowledgedAt: new Date().toISOString(), acknowledgedBy: 'admin' });
+                      }}
+                    >
+                      <CheckCircle className="h-4 w-4 mr-2" />
+                      Onayla
+                    </Button>
+                  )}
+                  <Button variant="outline" onClick={() => setDetailOpen(false)}>Kapat</Button>
+                </div>
+              </div>
+            );
+          })()}
         </DialogContent>
       </Dialog>
     </div>

@@ -136,6 +136,12 @@ export class EventCacheService {
       'attack',
       'virus',
     ];
+    
+    // Targeted filters for high-priority alarm types that may get crowded out in general sync
+    const targetedEventFilters = [
+      'subtype == user',    // SSL-VPN auth-logon/auth-logout events
+      'subtype == system',  // Config changes: policy, address objects, interfaces, routing, etc.
+    ];
 
     const now = new Date();
     // Fetch last 24 hours - covers all alarm time windows (most alarms check 30-120 min, longest is 24h)
@@ -164,6 +170,18 @@ export class EventCacheService {
           successCount++;
         } catch (error) {
           console.error(`[EventCache] Failed to sync ${logtype}:`, error);
+        }
+      }
+
+      // Sync targeted event filters for high-priority alarms (auth-logon, etc.)
+      // These events may get crowded out by high-volume event types in the general sync
+      for (const filter of targetedEventFilters) {
+        try {
+          const filterStart = Date.now();
+          await this.syncLogTypeWithFilter('event', filter, startTime, now);
+          console.log(`[EventCache] event (${filter}): Targeted sync took ${Date.now() - filterStart}ms`);
+        } catch (error) {
+          console.error(`[EventCache] Failed to sync event with filter "${filter}":`, error);
         }
       }
 
@@ -273,6 +291,56 @@ export class EventCacheService {
     }
 
     console.log(`[EventCache] ${logtype}: Sync complete - ${totalFetched} events saved`);
+  }
+
+  /**
+   * Sync a single log type with a specific filter (targeted sync for high-priority events)
+   */
+  private async syncLogTypeWithFilter(logtype: string, filter: string, startTime: Date, endTime: Date) {
+    console.log(`[EventCache] Syncing ${logtype} with filter: ${filter}...`);
+
+    // Login to FortiAnalyzer
+    const loggedIn = await this.faService.login();
+    if (!loggedIn) {
+      throw new Error('FortiAnalyzer login failed');
+    }
+
+    // Start log search with filter (limit: 1000 events - FortiAnalyzer max)
+    const tid = await this.faService.startLogSearch(logtype, 1000, filter);
+    if (!tid) {
+      console.warn(`[EventCache] No results for ${logtype} with filter "${filter}", skipping...`);
+      return;
+    }
+
+    // Poll for results
+    let logs: Array<Record<string, unknown>> | null = null;
+    for (let attempt = 0; attempt < 6; attempt++) {
+      await new Promise(resolve => setTimeout(resolve, 3000)); // wait 3s between polls
+      logs = await this.faService.fetchLogResults(tid, 0, 1000);
+      if (logs && logs.length > 0) {
+        console.log(`[EventCache] ${logtype} (${filter}): Got ${logs.length} results after ${attempt + 1} poll(s)`);
+        break;
+      }
+      console.log(`[EventCache] ${logtype} (${filter}): Poll ${attempt + 1}/6 - waiting for FA...`);
+    }
+
+    if (!logs || logs.length === 0) {
+      console.log(`[EventCache] ${logtype} (${filter}): No results after polling, skipping`);
+      return;
+    }
+
+    // Filter by time range and save
+    const recentLogs = logs.filter(log => {
+      const eventTime = this.parseEventTime(log);
+      return eventTime && eventTime >= startTime && eventTime <= endTime;
+    });
+
+    if (recentLogs.length > 0) {
+      await this.saveEvents(logtype, recentLogs);
+      console.log(`[EventCache] ${logtype} (${filter}): Saved ${recentLogs.length} targeted events`);
+    } else {
+      console.log(`[EventCache] ${logtype} (${filter}): No events in time range`);
+    }
   }
 
   /**
@@ -458,6 +526,44 @@ export class EventCacheService {
       });
     // Return rawLog objects (not Prisma model objects) — consistent with the no-filter path
     }).map((e: any) => e.rawLog);
+  }
+
+  /**
+   * Force an immediate sync if the cache is stale.
+   * - If a sync is already running: wait for it to finish (max 3 min) then return.
+   * - Otherwise: trigger a full sync now and await it (max 3 min timeout).
+   * Non-throwing: logs warnings but never propagates errors to the caller.
+   */
+  async forceSync(): Promise<void> {
+    if (this.syncInProgress) {
+      console.log('[EventCache] forceSync: sync already in progress — waiting for completion (max 3 min)...');
+      const deadline = Date.now() + 3 * 60 * 1000;
+      while (this.syncInProgress && Date.now() < deadline) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+      if (this.syncInProgress) {
+        console.warn('[EventCache] forceSync: timed out waiting for running sync');
+      } else {
+        console.log('[EventCache] forceSync: running sync completed');
+      }
+      return;
+    }
+
+    console.log('[EventCache] forceSync: triggering immediate sync...');
+    try {
+      const successCount = await this.syncAllEventTypes();
+      if (successCount > 0) {
+        this.lastSyncTime = new Date();
+        this.consecutiveSyncFailures = 0;
+        console.log(`[EventCache] forceSync: ✅ completed (${successCount}/7 logtypes)`);
+      } else {
+        this.consecutiveSyncFailures++;
+        console.warn('[EventCache] forceSync: ⚠️ all logtypes failed — cache remains stale');
+      }
+    } catch (err) {
+      this.consecutiveSyncFailures++;
+      console.warn('[EventCache] forceSync: ❌ threw unexpectedly:', err);
+    }
   }
 
   /**

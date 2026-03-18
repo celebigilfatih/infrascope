@@ -276,6 +276,29 @@ export class AlarmDetectionEngine {
       if (this.eventCache) {
         const cacheStatus = this.eventCache.getCacheStatus();
         console.log(`[AlarmEngine] Cache state: lastSync=${cacheStatus.lastSyncTime?.toISOString() ?? 'never'}, fresh=${cacheStatus.isFresh}, syncInProgress=${cacheStatus.syncInProgress}`);
+
+        // ── Cache Freshness Guarantee ────────────────────────────────────────────
+        // If cache is stale and no sync is running, force an immediate sync before
+        // evaluation. This prevents alarm checks from silently running against old
+        // data when the background scheduler has fallen behind (FA downtime, backoff).
+        // We cap the wait at 2 minutes so the alarm check never hangs indefinitely.
+        if (!cacheStatus.isFresh) {
+          console.warn('[AlarmEngine] ⚠️ Cache is stale — forcing sync before evaluation (max 2 min)...');
+          try {
+            await Promise.race([
+              this.eventCache.forceSync(),
+              new Promise<void>(resolve => setTimeout(resolve, 2 * 60 * 1000)),
+            ]);
+            const refreshed = this.eventCache.getCacheStatus();
+            if (refreshed.isFresh) {
+              console.log('[AlarmEngine] ✅ Cache freshened successfully — proceeding with fresh data');
+            } else {
+              console.warn('[AlarmEngine] ⚠️ Cache still stale after force sync — proceeding with live FA fallback');
+            }
+          } catch (forceSyncErr) {
+            console.warn('[AlarmEngine] ⚠️ forceSync threw (non-fatal):', forceSyncErr);
+          }
+        }
       }
 
       // Get all enabled alarm definitions
@@ -820,6 +843,45 @@ export class AlarmDetectionEngine {
           filteredLogs = this.filterBruteForce(recentLogs, logic.threshold);
         } else if (logic.clientCheck === 'geo-anomaly') {
           filteredLogs = this.filterGeoAnomaly(recentLogs);
+        } else if (logic.clientCheck === 'per-user-dedup') {
+          // Fire one alarm per user: skip users who already have a recent alarm (per-user cooldown)
+          const cooldownMs = alarm.cooldownMinutes * 60 * 1000;
+          const userCooldownThreshold = new Date(Date.now() - cooldownMs);
+          // Group logs by user and take the most recent event per user
+          const userLatestLog = new Map<string, Record<string, unknown>>();
+          for (const log of recentLogs) {
+            const u = (log.user as string) || '';
+            if (!u) continue;
+            if (!userLatestLog.has(u)) userLatestLog.set(u, log);
+          }
+          // Filter out users already alerted
+          const newUserLogs: Array<Record<string, unknown>> = [];
+          for (const [username, log] of userLatestLog.entries()) {
+            const alreadyAlerted = await prisma.alarmEvent.findFirst({
+              where: {
+                alarmId: alarm.id,
+                deviceName: username,
+                createdAt: { gte: userCooldownThreshold },
+              },
+            });
+            if (!alreadyAlerted) {
+              newUserLogs.push(log);
+            } else {
+              console.log(`[AlarmEngine] ${alarm.code}: Skipping ${username} — already alerted (per-user cooldown)`);
+            }
+          }
+          // Fire one alarm per new user
+          for (const userLog of newUserLogs) {
+            const u = userLog.user as string;
+            console.log(`[AlarmEngine] ${alarm.code}: New connection detected for user ${u}`);
+            await this.fireAlarm(alarm, [userLog]);
+          }
+          return {
+            alarmCode: alarm.code,
+            triggered: newUserLogs.length > 0,
+            matchCount: newUserLogs.length,
+            events: newUserLogs.slice(0, 5),
+          };
         }
 
         // Alarm-specific exclusions (False Positive Filtering)
@@ -1479,18 +1541,25 @@ export class AlarmDetectionEngine {
   private async evaluateFortiGateSslvpnAlarm(alarm: AlarmDef): Promise<EvaluationResult> {
     const logic = alarm.detectionLogic;
 
-    // Check cooldown
-    const cooldownThreshold = new Date(Date.now() - alarm.cooldownMinutes * 60 * 1000);
-    const recentEvent = await prisma.alarmEvent.findFirst({
-      where: {
-        alarmId: alarm.id,
-        createdAt: { gte: cooldownThreshold },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    // Determine alarm type first — SSLVPN_CONNECTION uses per-user cooldown (skip alarm-level cooldown)
+    const isOffHoursAlarm2 = alarm.code === 'VPN_LOGIN_OFF_HOURS';
+    const isBusinessHoursAlarm2 = alarm.code === 'SSLVPN_BUSINESS_HOURS';
+    const isAllConnectionsAlarm2 = !isOffHoursAlarm2 && !isBusinessHoursAlarm2;
 
-    if (recentEvent) {
-      return { alarmCode: alarm.code, triggered: false, matchCount: 0, events: [], error: 'cooldown-active' };
+    // For non-all-connections alarms, apply standard alarm-level cooldown
+    const cooldownThreshold = new Date(Date.now() - alarm.cooldownMinutes * 60 * 1000);
+    // VPN_LOGIN_OFF_HOURS uses per-user dedup (like SSLVPN_CONNECTION), so skip alarm-level cooldown here
+    if (!isAllConnectionsAlarm2 && alarm.code !== 'VPN_LOGIN_OFF_HOURS') {
+      const recentEvent = await prisma.alarmEvent.findFirst({
+        where: {
+          alarmId: alarm.id,
+          createdAt: { gte: cooldownThreshold },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (recentEvent) {
+        return { alarmCode: alarm.code, triggered: false, matchCount: 0, events: [], error: 'cooldown-active' };
+      }
     }
 
     // Check if FortiGate service is available
@@ -1510,9 +1579,18 @@ export class AlarmDetectionEngine {
         return { alarmCode: alarm.code, triggered: false, matchCount: 0, events: [] };
       }
 
+      // Debug: print active users and their login timestamps
+      const now2 = new Date();
+      console.log(`[AlarmEngine][${alarm.code}] Active SSL-VPN users (${sslvpnUsers.length}):`);
+      for (const u of sslvpnUsers) {
+        const loginAge = Math.round((now2.getTime() - u.last_login_timestamp * 1000) / 60000);
+        console.log(`  - ${u.user_name} (${u.remote_host}) login=${loginAge}min ago interface=${u.interface}`);
+      }
+
       // Check if this is off-hours or business-hours alarm
       const isOffHoursAlarm = alarm.code === 'VPN_LOGIN_OFF_HOURS';
       const isBusinessHoursAlarm = alarm.code === 'SSLVPN_BUSINESS_HOURS';
+      const isAllConnectionsAlarm = !isOffHoursAlarm && !isBusinessHoursAlarm; // e.g. SSLVPN_CONNECTION
 
       // Filter users based on alarm type
       const matchedUsers: Array<Record<string, unknown>> = [];
@@ -1564,7 +1642,52 @@ export class AlarmDetectionEngine {
             outMB: Math.round(user.out_bytes / 1024 / 1024),
             isBusinessHours,
           });
+        } else if (isAllConnectionsAlarm) {
+          // SSLVPN_CONNECTION: match all users regardless of time-of-day
+          matchedUsers.push({
+            user: user.user_name,
+            remoteIp: user.remote_host,
+            assignedIp: user.aip,
+            loginTime: loginTime.toISOString(),
+            duration: Math.round(user.duration / 60),
+            inMB: Math.round(user.in_bytes / 1024 / 1024),
+            outMB: Math.round(user.out_bytes / 1024 / 1024),
+            isBusinessHours,
+            isOffHours,
+            isWeekend,
+          });
         }
+      }
+
+      // For all-connections alarm AND off-hours alarm: per-user cooldown + fire one alarm per new user
+      if (isAllConnectionsAlarm || isOffHoursAlarm) {
+        let firedCount = 0;
+        for (const userData of matchedUsers) {
+          const username = userData.user as string;
+          // Check if this specific user already has a recent alarm
+          const recentUserAlarm = await prisma.alarmEvent.findFirst({
+            where: {
+              alarmId: alarm.id,
+              deviceName: username,
+              createdAt: { gte: cooldownThreshold },
+            },
+          });
+          if (!recentUserAlarm) {
+            const logPrefix = isOffHoursAlarm ? 'VPN_OFF_HOURS' : 'SSLVPN_CONNECTION';
+            console.log(`[AlarmEngine] ${logPrefix}: New connection for ${username} (${userData.remoteIp || 'unknown IP'})`);
+            await this.fireAlarm(alarm, [userData]);
+            firedCount++;
+          } else {
+            const logPrefix = isOffHoursAlarm ? 'VPN_OFF_HOURS' : 'SSLVPN_CONNECTION';
+            console.log(`[AlarmEngine] ${logPrefix}: Skipping ${username} — already alerted (cooldown active)`);
+          }
+        }
+        return {
+          alarmCode: alarm.code,
+          triggered: firedCount > 0,
+          matchCount: firedCount,
+          events: matchedUsers.slice(0, 5),
+        };
       }
 
       const matchCount = matchedUsers.length;
@@ -1611,7 +1734,7 @@ export class AlarmDetectionEngine {
     let deviceName: string | null = null;
 
     // Special handling for FortiGate SSL-VPN alarms (source: fortigate-sslvpn)
-    if (firstLog.remoteIp || firstLog.user) {
+    if (firstLog.remoteIp || (firstLog.user && (firstLog.loginTime || firstLog.assignedIp))) {
       sourceIp = (firstLog.remoteIp as string) || (firstLog.assignedIp as string) || (firstLog.user as string) || null;
       deviceName = (firstLog.user as string) || null;
     } else if (firstLog.type && ['vm', 'host', 'datastore', 'snapshot', 'snapshot_created', 'snapshot_event', 'vm_lifecycle'].includes(firstLog.type as string)) {
@@ -1629,6 +1752,11 @@ export class AlarmDetectionEngine {
     } else {
       // FortiAnalyzer log metadata
       sourceIp = (firstLog.srcip as string) || (firstLog.remip as string) || (firstLog.remote_host as string) || null;
+      // Config-change events: extract admin source IP from ui field e.g. "GUI(10.7.7.16)" or "SSH(172.16.0.5)"
+      if (!sourceIp && firstLog.ui) {
+        const uiMatch = (firstLog.ui as string).match(/\(([^)]+)\)$/);
+        if (uiMatch) sourceIp = uiMatch[1];
+      }
       destIp = (firstLog.dstip as string) || null;
       deviceName = (firstLog.devname as string) || (firstLog.fortigate as string) || null;
     }
@@ -1851,7 +1979,38 @@ export class AlarmDetectionEngine {
   private buildAlarmTitle(alarm: AlarmDef, logs: Array<Record<string, unknown>>): string {
     const count = logs.length;
     const firstLog = logs[0] || {};
-    
+
+    // Special handling for FortiGate VPN tunnel events (IPsec / SSL-VPN tunnel-up/down)
+    if (firstLog.vpntunnel || firstLog.tunneltype) {
+      const tunnelName = (firstLog.vpntunnel as string) || '';
+      const devname = (firstLog.devname as string) || '';
+      let title = alarm.name;
+      if (count > 1) title += ` (${count} tunel)`;
+      if (tunnelName) title += ` - ${tunnelName}`;
+      if (devname) title += ` [${devname}]`;
+      return title;
+    }
+
+    // Special handling for config change alarms — show user + device
+    if (
+      alarm.code === 'CORE_CONFIG_CHANGE' ||
+      alarm.code === 'FW_POLICY_CHANGED' ||
+      alarm.code === 'INTERFACE_CONFIG_CHANGED' ||
+      alarm.code === 'CONFIG_CHANGE_AFTER_HOURS'
+    ) {
+      // Collect unique users
+      const users = [...new Set(logs.map(l => (l.user as string) || '').filter(Boolean))];
+      // Collect unique devices
+      const devices = [...new Set(logs.map(l => (l.devname as string) || '').filter(Boolean))];
+      let title = alarm.name;
+      if (count > 1) title += ` (${count} islem)`;
+      if (users.length === 1) title += ` - ${users[0]}`;
+      else if (users.length > 1) title += ` - ${users[0]} +${users.length - 1}`;
+      if (devices.length === 1) title += ` [${devices[0]}]`;
+      else if (devices.length > 1) title += ` [${devices.length} cihaz]`;
+      return title;
+    }
+
     // Special handling for FortiGate SSL-VPN alarms
     if (firstLog.user || firstLog.remoteIp) {
       const user = (firstLog.user as string) || '';
@@ -2166,18 +2325,74 @@ export class AlarmDetectionEngine {
       return sections.join('\n\n');
     }
 
+    // Special handling for FortiGate VPN tunnel events (IPsec / SSL-VPN tunnel-up/down)
+    if (firstLog.vpntunnel || (firstLog.tunneltype && firstLog.remip)) {
+      const tunnelDetails: string[] = [];
+      if (firstLog.vpntunnel)   tunnelDetails.push(`Tunel Adi: ${firstLog.vpntunnel}`);
+      if (firstLog.tunneltype)  tunnelDetails.push(`Tunel Tipi: ${(firstLog.tunneltype as string).toUpperCase()}`);
+      if (firstLog.action) {
+        const actionLabel = firstLog.action === 'tunnel-up'
+          ? 'Kuruldu (UP)'
+          : firstLog.action === 'tunnel-down'
+            ? 'Kapandi (DOWN)'
+            : String(firstLog.action);
+        tunnelDetails.push(`Durum: ${actionLabel}`);
+      }
+      if (firstLog.remip)   tunnelDetails.push(`Uzak Nokta (Remote): ${firstLog.remip}`);
+      if (firstLog.locip)   tunnelDetails.push(`Yerel Nokta (Local): ${firstLog.locip}`);
+      if (firstLog.devname) tunnelDetails.push(`Guvenlik Duvari: ${firstLog.devname}`);
+      const durationSec = Number(firstLog.duration || 0);
+      if (durationSec > 0) {
+        const h = Math.floor(durationSec / 3600);
+        const m = Math.floor((durationSec % 3600) / 60);
+        const s = durationSec % 60;
+        const durationStr = h > 0 ? `${h}s ${m}dk ${s}sn` : m > 0 ? `${m}dk ${s}sn` : `${s}sn`;
+        tunnelDetails.push(`Sure: ${durationStr}`);
+      }
+      const sentBytes = Number(firstLog.sentbyte || 0);
+      const rcvdBytes = Number(firstLog.rcvdbyte || 0);
+      if (sentBytes > 0) tunnelDetails.push(`Gonderilen: ${this.formatBytes(sentBytes)}`);
+      if (rcvdBytes > 0) tunnelDetails.push(`Alinan: ${this.formatBytes(rcvdBytes)}`);
+      if (firstLog.date && firstLog.time) {
+        tunnelDetails.push(`Olay Zamani: ${firstLog.date} ${firstLog.time}${firstLog.tz ? ` (${firstLog.tz})` : ''}`);
+      }
+      if (firstLog.logdesc) tunnelDetails.push(`Log: ${this.decodeMsg(firstLog.logdesc as string)}`);
+
+      sections.push(tunnelDetails.join('\n'));
+
+      // List other tunnels if multiple
+      if (logs.length > 1) {
+        const others = logs.slice(1, 6).map((l) => {
+          const tname = (l.vpntunnel as string) || (l.remip as string) || 'N/A';
+          const tstatus = l.action === 'tunnel-up' ? 'UP' : l.action === 'tunnel-down' ? 'DOWN' : String(l.action || '');
+          return `- ${tname} [${tstatus}]`;
+        }).join('\n');
+        sections.push(`Diger tuneller:\n${others}${logs.length > 6 ? `\n- ... ve ${logs.length - 6} daha` : ''}`);
+      }
+
+      sections.push(`Onerilen Aksiyon: ${alarm.detectionLogic.recommendedAction}`);
+      return sections.join('\n\n');
+    }
+
     // Special handling for FortiGate SSL-VPN alarms
-    if (firstLog.remoteIp || firstLog.user) {
+    // NOTE: config change events also have a 'user' field — skip them here (handled below via cfgpath)
+    const isConfigChangeAlarm = alarm.code === 'CORE_CONFIG_CHANGE' ||
+      alarm.code === 'FW_POLICY_CHANGED' ||
+      alarm.code === 'INTERFACE_CONFIG_CHANGED' ||
+      alarm.code === 'CONFIG_CHANGE_AFTER_HOURS';
+    if ((firstLog.remoteIp || firstLog.user) && !isConfigChangeAlarm) {
       const fgDetails: string[] = [];
       if (firstLog.user) fgDetails.push(`Kullanici: ${firstLog.user}`);
       if (firstLog.remoteIp) fgDetails.push(`Uzak IP: ${firstLog.remoteIp}`);
       if (firstLog.assignedIp) fgDetails.push(`Atanan IP: ${firstLog.assignedIp}`);
-      if (firstLog.loginTime) fgDetails.push(`Giris Zamani: ${new Date(firstLog.loginTime as string).toLocaleString('tr-TR')}`);
+      if (firstLog.loginTime) fgDetails.push(`Giris Zamani: ${new Date(firstLog.loginTime as string).toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' })}`);
       if (firstLog.duration) fgDetails.push(`Sure: ${firstLog.duration} dakika`);
       if (firstLog.inMB) fgDetails.push(`Gelen: ${firstLog.inMB} MB`);
       if (firstLog.outMB) fgDetails.push(`Giden: ${firstLog.outMB} MB`);
+      // Time context
       if (firstLog.isWeekend) fgDetails.push(`Hafta sonu: EVET`);
       if (firstLog.isOffHours) fgDetails.push(`Mesai disi: EVET`);
+      if (firstLog.isBusinessHours && !firstLog.isOffHours && !firstLog.isWeekend) fgDetails.push(`Mesai ici baglanti: EVET`);
 
       sections.push(fgDetails.join('\n'));
 
@@ -2200,6 +2415,151 @@ export class AlarmDetectionEngine {
 
     // Event details from first log (generic path)
     const details: string[] = [];
+
+    // ── Config Change alarms: rich per-change breakdown ──────────────────────
+    if (
+      alarm.code === 'CORE_CONFIG_CHANGE' ||
+      alarm.code === 'FW_POLICY_CHANGED' ||
+      alarm.code === 'INTERFACE_CONFIG_CHANGED' ||
+      alarm.code === 'CONFIG_CHANGE_AFTER_HOURS'
+    ) {
+      // Group logs by user for overview
+      const userGroups = new Map<string, Array<Record<string, unknown>>>();
+      for (const log of logs) {
+        const u = (log.user as string) || 'N/A';
+        if (!userGroups.has(u)) userGroups.set(u, []);
+        userGroups.get(u)!.push(log);
+      }
+
+      const cfgSections: string[] = [];
+
+      // Header: who, from where, on which device
+      const ui = (firstLog.ui as string) || '';
+      const uiMatch = ui.match(/^([A-Z]+)\((.+)\)$/);
+      const accessMethod = uiMatch ? uiMatch[1] : ui;
+      const accessIp = uiMatch ? uiMatch[2] : '';
+
+      cfgSections.push([
+        `Kullanici: ${firstLog.user || 'N/A'}`,
+        `Cihaz: ${firstLog.devname || 'N/A'}`,
+        `VDOM: ${firstLog.vd || 'root'}`,
+        accessMethod ? `Erisim: ${accessMethod}${accessIp ? ` (${accessIp})` : ''}` : '',
+      ].filter(Boolean).join('\n'));
+
+      // List of changes (up to 10)
+      // Action label mapping
+      const actionLabel = (raw: string) => {
+        switch ((raw || '').toLowerCase()) {
+          case 'add':    return 'Ekleme (Add)';
+          case 'delete': return 'Silme (Delete)';
+          case 'edit':   return 'Duzenleme (Edit)';
+          case 'set':    return 'Guncelleme (Set)';
+          default:       return raw || 'Duzenleme';
+        }
+      };
+
+      const changeList = logs.slice(0, 10).map((log, idx) => {
+        const t = `${log.time || ''}`;
+        const action = (log.action as string) || 'Edit';
+        const path = (log.cfgpath as string) || '';
+        const obj = (log.cfgobj as string) || '';
+        const attr = (log.cfgattr as string) || '';
+        const msg = (log.msg as string) || '';
+        const logUser = (log.user as string) || '';
+        const logDev = (log.devname as string) || '';
+
+        let line = `${idx + 1}. [${t}] ${actionLabel(action)}`;
+        // For FW_POLICY_CHANGED show path + object ID prominently
+        if (alarm.code === 'FW_POLICY_CHANGED') {
+          if (obj) line += ` — Politika #${obj}`;
+        } else {
+          if (path) line += ` ${path}`;
+          if (obj) line += ` #${obj}`;
+        }
+        if (logUser !== (firstLog.user as string)) line += ` (${logUser})`;
+        if (logDev !== (firstLog.devname as string)) line += ` [${logDev}]`;
+        if (attr) {
+          const attrDecoded = this.decodeMsg(attr);
+          // Trim long attrs
+          const attrShort = attrDecoded.length > 120 ? attrDecoded.slice(0, 117) + '...' : attrDecoded;
+          line += `\n   Degisiklik: ${attrShort}`;
+        } else if (msg) {
+          // Decode and show the msg field (URL-encoded) as fallback for Delete/Add ops
+          const msgDecoded = this.decodeMsg(msg);
+          if (msgDecoded) line += `\n   ${msgDecoded}`;
+        }
+        return line;
+      });
+      cfgSections.push(`Yapilandirma Degisiklikleri (${logs.length} islem):\n${changeList.join('\n')}${
+        logs.length > 10 ? `\n... ve ${logs.length - 10} islem daha` : ''
+      }`);
+
+      sections.push(cfgSections.join('\n\n'));
+      sections.push(`Onerilen Aksiyon: ${alarm.detectionLogic.recommendedAction}`);
+      return sections.join('\n\n');
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // ── WebFilter alarms: per-event URL + category breakdown ─────────────
+    if (alarm.code === 'WEBFILTER_HIGH_RISK' || alarm.code === 'WEBFILTER_OVERRIDE') {
+      const wfSections: string[] = [];
+
+      // Overview header
+      const srcGroup = (firstLog.srcuuid_name as string) || '';
+      const profile = (firstLog.profile as string) || '';
+      const devname = (firstLog.devname as string) || '';
+      wfSections.push([
+        `Kaynak IP: ${firstLog.srcip || 'N/A'}${srcGroup ? ` (${srcGroup})` : ''}`,
+        `Kaynak Arayuz: ${firstLog.srcintf || 'N/A'}`,
+        `Cihaz: ${devname}`,
+        `Profil: ${profile}`,
+      ].filter(Boolean).join('\n'));
+
+      // Per-event details (up to 10)
+      const eventList = logs.slice(0, 10).map((log, idx) => {
+        const hostname = this.decodeMsg((log.hostname as string) || '');
+        const catdesc = (log.catdesc as string) || '';
+        const cat = (log.cat as string) || '';
+        const action = (log.action as string) || '';
+        const srcip = (log.srcip as string) || '';
+        const dstCountry = this.decodeMsg((log.dstcountry as string) || '');
+        const t = `${log.time || ''}`;
+        const sent = log.sentbyte ? this.formatBytes(Number(log.sentbyte)) : '';
+        const rcvd = log.rcvdbyte ? this.formatBytes(Number(log.rcvdbyte)) : '';
+        const refUrl = this.decodeMsg((log.referralurl as string) || '');
+
+        let line = `${idx + 1}. [${t}] ${hostname || 'N/A'}`;
+        if (catdesc) line += `\n   Kategori: ${catdesc}${cat ? ` (ID: ${cat})` : ''}`;
+        if (action) line += `\n   Aksiyon: ${action}`;
+        if (srcip !== (firstLog.srcip as string)) line += `\n   Kaynak: ${srcip}`;
+        if (dstCountry) line += `\n   Hedef Ulke: ${dstCountry}`;
+        if (sent || rcvd) line += `\n   Trafik: ${sent ? `↑${sent}` : ''} ${rcvd ? `↓${rcvd}` : ''}`.trim();
+        if (refUrl) line += `\n   Referans: ${refUrl.slice(0, 80)}${refUrl.length > 80 ? '...' : ''}`;
+        return line;
+      });
+      wfSections.push(`Engellenen Erisimler (${logs.length} olay):\n${eventList.join('\n')}${
+        logs.length > 10 ? `\n... ve ${logs.length - 10} olay daha` : ''
+      }`);
+
+      // Category summary
+      const catCounts = new Map<string, number>();
+      for (const log of logs) {
+        const c = (log.catdesc as string) || 'Unknown';
+        catCounts.set(c, (catCounts.get(c) || 0) + 1);
+      }
+      const catSummary = [...catCounts.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .map(([cat, cnt]) => `  - ${cat}: ${cnt} kez`)
+        .join('\n');
+      if (catSummary) wfSections.push(`Kategori Ozeti:\n${catSummary}`);
+
+      sections.push(wfSections.join('\n\n'));
+      sections.push(`Onerilen Aksiyon: ${alarm.detectionLogic.recommendedAction}`);
+      return sections.join('\n\n');
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
+
     if (firstLog.msg) details.push(`Mesaj: ${this.decodeMsg(firstLog.msg)}`);
     if (firstLog.action) details.push(`Aksiyon: ${firstLog.action}`);
     if (firstLog.user) details.push(`Kullanici: ${firstLog.user}`);

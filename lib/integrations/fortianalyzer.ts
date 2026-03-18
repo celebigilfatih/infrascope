@@ -107,6 +107,8 @@ interface FAGlobalLoginState {
   connectionQueue: Array<(session: string | null) => void>;
   consecutiveFailures: number;
   backoffUntil: number; // epoch ms — login suppressed until this time
+  isAccountLocked: boolean; // true when FA returned code=-22 (too many failed logins)
+  lastFailureAt: number;  // epoch ms of last login failure
 }
 
 function getGlobalLoginState(host: string): FAGlobalLoginState {
@@ -120,6 +122,8 @@ function getGlobalLoginState(host: string): FAGlobalLoginState {
       connectionQueue: [],
       consecutiveFailures: 0,
       backoffUntil: 0,
+      isAccountLocked: false,
+      lastFailureAt: 0,
     };
   }
   return g._fazGlobalState[host];
@@ -281,6 +285,8 @@ class FortiAnalyzerService {
         state.lastLoginTime = Date.now();
         state.consecutiveFailures = 0;
         state.backoffUntil = 0;
+        state.isAccountLocked = false;
+        state.lastFailureAt = 0;
         this.session = state.session;
         this.lastLoginTime = state.lastLoginTime;
         console.log('[FortiAnalyzer] ✅ Login successful — failure counter reset');
@@ -293,12 +299,23 @@ class FortiAnalyzerService {
       const bMs = this.calcBackoffMs(state.consecutiveFailures);
       state.backoffUntil = Date.now() + bMs;
       state.session = null;
+      state.lastFailureAt = Date.now();
       this.session = null;
-      console.error(
-        `[FortiAnalyzer] ❌ Login failed at ${new Date().toISOString()}: ` +
-        `code=${status?.code} msg=${status?.message} ` +
-        `(failure #${state.consecutiveFailures}, next attempt in ${Math.round(bMs / 60000)}min)`
-      );
+      // code=-22 = FA account locked (too many failed logins)
+      if (status?.code === -22) {
+        state.isAccountLocked = true;
+        console.error(
+          `[FortiAnalyzer] 🔒 Account LOCKED (code=-22) — unlock via FA GUI: System → Administrators → infrascope → Unlock. ` +
+          `Next attempt in ${Math.round(bMs / 60000)}min.`
+        );
+      } else {
+        state.isAccountLocked = false;
+        console.error(
+          `[FortiAnalyzer] ❌ Login failed at ${new Date().toISOString()}: ` +
+          `code=${status?.code} msg=${status?.message} ` +
+          `(failure #${state.consecutiveFailures}, next attempt in ${Math.round(bMs / 60000)}min)`
+        );
+      }
       releaseWithSession(null);
       return false;
     } catch (error) {
@@ -306,6 +323,7 @@ class FortiAnalyzerService {
       const bMs = this.calcBackoffMs(state.consecutiveFailures);
       state.backoffUntil = Date.now() + bMs;
       state.session = null;
+      state.lastFailureAt = Date.now();
       this.session = null;
       console.error(`[FortiAnalyzer] ❌ Login threw at ${new Date().toISOString()} (failure #${state.consecutiveFailures}):`, error);
       releaseWithSession(null);
@@ -502,10 +520,14 @@ class FortiAnalyzerService {
         return d.toISOString().slice(0, 19).replace('T', ' ');
       };
 
+      // Device filter can be configured via environment variable
+      // Use 'All_FortiGate' for all devices or specific device serial like 'FG4H0FT922903115'
+      const deviceFilter = process.env.FA_DEVICE_FILTER || 'All_FortiGate';
+      
       const params: Record<string, unknown> = {
         url: '/logview/adom/root/logsearch',
         apiver: 3,
-        device: [{ devid: 'All_FortiGate' }],
+        device: [{ devid: deviceFilter }],
         logtype: logtype,
         'time-order': 'desc',
         'time-range': {
@@ -909,4 +931,27 @@ export function initSharedFortiAnalyzerService(config: FortiAnalyzerConfig): For
   _sharedInstance = new FortiAnalyzerService(config);
   console.log('[FortiAnalyzer] Shared singleton instance created');
   return _sharedInstance;
+}
+
+/**
+ * Returns the live login health state for the configured FA host.
+ * Used by the health endpoint and alarm runner to surface failures.
+ */
+export function getFortiAnalyzerLoginHealth(host?: string): {
+  consecutiveFailures: number;
+  isAccountLocked: boolean;
+  backoffRemainingSec: number;
+  lastFailureAt: Date | null;
+} {
+  const resolvedHost = host || (_sharedInstance as any)?.config?.host;
+  if (!resolvedHost) {
+    return { consecutiveFailures: 0, isAccountLocked: false, backoffRemainingSec: 0, lastFailureAt: null };
+  }
+  const state = getGlobalLoginState(resolvedHost);
+  return {
+    consecutiveFailures: state.consecutiveFailures,
+    isAccountLocked: state.isAccountLocked,
+    backoffRemainingSec: Math.max(0, Math.round((state.backoffUntil - Date.now()) / 1000)),
+    lastFailureAt: state.lastFailureAt > 0 ? new Date(state.lastFailureAt) : null,
+  };
 }

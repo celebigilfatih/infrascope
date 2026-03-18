@@ -29,9 +29,50 @@
  */
 
 import { prisma } from '@/lib/prisma';
-import { initSharedFortiAnalyzerService } from '@/lib/integrations/fortianalyzer';
+import { initSharedFortiAnalyzerService, getFortiAnalyzerLoginHealth } from '@/lib/integrations/fortianalyzer';
 import { AlarmDetectionEngine } from '@/lib/alarms/detection-engine';
 import { processDLQ, cleanupDLQ, getDLQStats } from '@/lib/notifications/dlq-worker';
+import { sendAlarmEmail } from '@/lib/notifications/email';
+
+// ── FA health alert throttle ───────────────────────────────────────────────
+const FA_ALERT_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour between FA health alerts
+let lastFAAlertTime = 0;
+
+async function maybeSendFAHealthAlert(): Promise<void> {
+  const health = getFortiAnalyzerLoginHealth();
+  if (health.consecutiveFailures < 3) return; // Not yet concerning
+  if (Date.now() - lastFAAlertTime < FA_ALERT_COOLDOWN_MS) return; // Already alerted recently
+
+  lastFAAlertTime = Date.now();
+  const subject = health.isAccountLocked
+    ? `[🔒 FA LOCKED] FortiAnalyzer account locked — action required`
+    : `[⚠️ FA DOWN] FortiAnalyzer unreachable — alarm detection impaired`;
+
+  const bodyLines = [
+    `FortiAnalyzer login has failed ${health.consecutiveFailures} consecutive time(s).`,
+    health.isAccountLocked
+      ? `The infrascope account is LOCKED (code=-22). Unlock via: FortiAnalyzer GUI → System → Administrators → infrascope → Unlock.`
+      : `FA may be unreachable or credentials may have changed.`,
+    `Backoff remaining: ${health.backoffRemainingSec}s`,
+    health.lastFailureAt ? `Last failure: ${health.lastFailureAt.toISOString()}` : '',
+    `\nImpact: Alarm detection is running on stale/cached data. New security events may not be detected until FA connection is restored.`,
+  ].filter(Boolean).join('\n');
+
+  try {
+    await sendAlarmEmail({
+      alarmCode: 'SYSTEM_HEALTH',
+      alarmName: health.isAccountLocked ? 'FortiAnalyzer Account Locked' : 'FortiAnalyzer Unreachable',
+      severity: health.isAccountLocked ? 'ALARM_CRITICAL' : 'ALARM_HIGH',
+      category: 'SYSTEM',
+      title: subject,
+      message: bodyLines,
+      timestamp: new Date(),
+    }, { bypassCooldown: true });
+    console.warn(`[AlarmRunner] 📧 FA health alert sent (${health.consecutiveFailures} failures)`);
+  } catch (err) {
+    console.error('[AlarmRunner] Failed to send FA health alert:', err);
+  }
+}
 
 // ── Mutex ────────────────────────────────────────────────────────────────────
 // Timestamp-based: allows auto-recovery after 12 min if the runner somehow
@@ -69,6 +110,29 @@ let lastResult: AlarmCheckResult | null = null;
 
 export function getLastAlarmCheckResult(): AlarmCheckResult | null {
   return lastResult;
+}
+
+// ── Startup Initialization ────────────────────────────────────────────────────
+// Called once when the alarm system starts. Cleans up RUNNING records left
+// behind by a previous process (container restart, crash, forced stop).
+// Without this, a new process would be blocked by the DB guard for up to
+// MAX_LOCK_DURATION_MS (12 min) on every container restart.
+export async function initializeAlarmRunner(): Promise<void> {
+  try {
+    const orphaned = await prisma.alarmCheckLog.updateMany({
+      where: { status: 'RUNNING' },
+      data: { status: 'ORPHANED' },
+    });
+    if (orphaned.count > 0) {
+      console.warn(
+        `[AlarmRunner] 🧹 Cleaned up ${orphaned.count} orphan RUNNING lock(s) from previous process`
+      );
+    } else {
+      console.log('[AlarmRunner] ✅ No orphan locks found');
+    }
+  } catch (err) {
+    console.warn('[AlarmRunner] Could not clean up orphan locks (non-fatal):', err);
+  }
 }
 
 // ── Core runner ──────────────────────────────────────────────────────────────
@@ -261,6 +325,12 @@ export async function runAlarmCheck(): Promise<AlarmCheckResult> {
     } catch (dlqErr) {
       console.error('[AlarmRunner] DLQ error (non-fatal):', dlqErr);
     }
+
+    // ── FA health alert ─────────────────────────────────────────
+    // After every check, if FA has been failing, notify ops team once per hour.
+    maybeSendFAHealthAlert().catch((err) =>
+      console.error('[AlarmRunner] maybeSendFAHealthAlert failed (non-fatal):', err)
+    );
 
     lastResult = {
       success: true,

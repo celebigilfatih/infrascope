@@ -14,8 +14,8 @@ export interface CorrelationRule {
 }
 
 export interface AlarmDetectionLogic {
-  logtype: string;             // FortiAnalyzer log type: event, attack, virus, dns, traffic, webfilter, app-ctrl
-  filter: string;              // FortiAnalyzer LogView filter expression
+  logtype?: string;            // FortiAnalyzer log type: event, attack, virus, dns, traffic, webfilter, app-ctrl (optional when source != fortianalyzer)
+  filter?: string;             // FortiAnalyzer LogView filter expression (optional when source != fortianalyzer)
   threshold: number;           // Minimum count to trigger alarm
   timeWindowMinutes: number;   // How far back to search (minutes)
   clientCheck?: string;        // Optional client-side check: 'off-hours', 'brute-force-group', 'anomaly', 'geo-anomaly', 'correlation'
@@ -47,12 +47,12 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
     description: 'Firewall kurallarinda ekleme, duzenleme veya silme tespit edildi. Kim tarafindan, nereden ve ne degistirildigini izler.',
     category: 'CONFIG_ACCESS',
     severity: 'ALARM_CRITICAL',
-    cooldownMinutes: 120, // Must match timeWindowMinutes
+    cooldownMinutes: 180, // Must match timeWindowMinutes
     detectionLogic: {
       logtype: 'event',
       filter: 'subtype == system and logdesc like %attribute% and cfgpath like %firewall.policy%',
       threshold: 1,
-      timeWindowMinutes: 120,
+      timeWindowMinutes: 180,
       description: 'Detects firewall policy add/edit/delete operations from system event logs. Includes admin user, source IP, and policy details.',
       recommendedAction: 'Verify change was authorized. Check admin identity and source IP. Review before/after policy state in config revisions.',
     },
@@ -96,12 +96,12 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
     description: 'Interface, routing, HA veya system-level degisiklikler tespit edildi. Risk etkisi yuksek.',
     category: 'CONFIG_ACCESS',
     severity: 'ALARM_CRITICAL',
-    cooldownMinutes: 120, // Must match timeWindowMinutes to prevent duplicate triggers
+    cooldownMinutes: 180, // Must match timeWindowMinutes to prevent duplicate triggers
     detectionLogic: {
       logtype: 'event',
       filter: 'subtype == system and logdesc like %attribute% or logdesc like %changed%',
       threshold: 1,
-      timeWindowMinutes: 120,
+      timeWindowMinutes: 180,
       description: 'Detects configuration changes to core settings: interfaces, routing tables, HA configuration, and system-level parameters. Matches both "Object attribute configured" and "Configuration changed" log types.',
       recommendedAction: 'Review change details in config revisions. Verify authorized change window. Assess blast radius - did change affect redundancy or routing?',
     },
@@ -153,12 +153,12 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
     notifyEmail: true,
     detectionLogic: {
       logtype: 'event',
-      filter: '',
+      filter: 'subtype == user and action == auth-logon',
       threshold: 1,
-      timeWindowMinutes: 60,
+      timeWindowMinutes: 240,       // Look back 4 hours to catch sessions missed by earlier cycles
       clientCheck: 'off-hours',
-      source: 'fortigate-sslvpn',  // Use FortiGate API directly for SSL-VPN users
-      description: 'Detects SSL-VPN connections outside business hours (08:00-18:00 weekdays) using FortiGate API. Weekend and holiday logins flagged as higher risk.',
+      source: 'fortigate-sslvpn',   // Primary: FortiGate API for currently active sessions
+      description: 'Detects SSL-VPN connections outside business hours (08:00-18:00 weekdays). Uses FortiGate API for real-time active session detection. Alarm fires once per user per 4 hours.',
       recommendedAction: 'Verify VPN user identity and authorization. Check if remote work was planned. Review accessed resources during off-hours session. Contact user if unexpected.',
     },
   },
@@ -780,15 +780,15 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
     description: 'Yeni SSL-VPN baglantisi tespit edildi. Kullanici, kaynak IP, interface ve baglanti detaylari kaydedilir.',
     category: 'SECURITY',
     severity: 'ALARM_INFO',
-    cooldownMinutes: 5,
+    cooldownMinutes: 60,           // Per-user cooldown — same user won't re-alarm within 60 min
     notifyEmail: true,
     detectionLogic: {
       logtype: 'event',
       filter: 'subtype == user and action == auth-logon',
-      // Previously: 'subtype == auth and action == auth-logon' — no events with subtype=auth exist
       threshold: 1,
-      timeWindowMinutes: 10,
-      description: 'SSL-VPN basarili girislerini tespit eder. Her yeni baglanti icin kullanici bilgileri, kaynak IP, uzak host ve interface bilgilerini kaydeder.',
+      timeWindowMinutes: 60,        // Capture all connections in the last 60 min
+      clientCheck: 'per-user-dedup',// Fire one alarm per user, skip users already alerted
+      description: 'SSL-VPN basarili girislerini tespit eder. Her yeni baglanti icin kullanici bilgileri, kaynak IP ve baglanti detaylari kaydedilir.',
       recommendedAction: 'Baglantiyi dogrulayin. Beklenmeyen kullanicilar veya lokasyonlar icin kullanici ile iletisime gecin.',
     },
   },

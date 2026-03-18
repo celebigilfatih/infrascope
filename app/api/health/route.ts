@@ -8,7 +8,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { startAlarmScheduler, getSchedulerStatus } from '@/lib/alarm-scheduler';
 import { startAlarmMonitor, getAlarmMonitor } from '@/lib/alarms/alarm-monitor';
 import { prisma } from '@/lib/prisma';
-import { getSharedFortiAnalyzerService } from '@/lib/integrations/fortianalyzer';
+import { getSharedFortiAnalyzerService, getFortiAnalyzerLoginHealth } from '@/lib/integrations/fortianalyzer';
+import { getDLQStats } from '@/lib/notifications/dlq-worker';
 
 interface HealthStatus {
   status: 'healthy' | 'degraded' | 'unhealthy';
@@ -20,7 +21,7 @@ interface HealthStatus {
   };
   datasources: {
     database: { status: 'healthy' | 'unhealthy'; responseTimeMs: number };
-    fortianalyzer: { status: 'healthy' | 'unhealthy' | 'unknown'; responseTimeMs?: number; error?: string };
+    fortianalyzer: { status: 'healthy' | 'unhealthy' | 'unknown'; responseTimeMs?: number; error?: string; consecutiveFailures?: number; isAccountLocked?: boolean; backoffRemainingSec?: number };
     vmware: { status: 'healthy' | 'unhealthy' | 'unknown'; responseTimeMs?: number; error?: string };
   };
   alarms: {
@@ -28,6 +29,14 @@ interface HealthStatus {
     enabledDefinitions: number;
     recentEvents: number;
     recentErrors: number;
+  };
+  notifications: {
+    dlq: {
+      pending: number;
+      delivered: number;
+      failedPermanent: number;
+      oldestPendingAgeMin: number | null;
+    };
   };
 }
 
@@ -56,7 +65,7 @@ let _lastFAHealth: {
 } | null = null;
 const FA_HEALTH_CACHE_MS = 5 * 60 * 1000; // 5-minute cache for failed health checks
 
-async function checkFortiAnalyzerHealth(): Promise<{ status: 'healthy' | 'unhealthy'; responseTimeMs: number; error?: string }> {
+async function checkFortiAnalyzerHealth(): Promise<{ status: 'healthy' | 'unhealthy'; responseTimeMs: number; error?: string; consecutiveFailures?: number; isAccountLocked?: boolean; backoffRemainingSec?: number }> {
   const startTime = Date.now();
   try {
     // Use shared singleton (if available) to avoid creating competing login sessions
@@ -73,21 +82,35 @@ async function checkFortiAnalyzerHealth(): Promise<{ status: 'healthy' | 'unheal
       _lastFAHealth.result.status === 'unhealthy' &&
       Date.now() - _lastFAHealth.time < FA_HEALTH_CACHE_MS
     ) {
-      return _lastFAHealth.result;
+      // Enrich cached result with current login health state
+      const loginHealth = getFortiAnalyzerLoginHealth();
+      return { ..._lastFAHealth.result, ...loginHealth };
     }
     
     const loggedIn = await service.login();
+    const loginHealth = getFortiAnalyzerLoginHealth();
     if (!loggedIn) {
-      const result = { status: 'unhealthy' as const, responseTimeMs: Date.now() - startTime, error: 'Login failed' };
+      const result = {
+        status: 'unhealthy' as const,
+        responseTimeMs: Date.now() - startTime,
+        error: loginHealth.isAccountLocked ? 'Account locked (code=-22) — unlock via FA GUI' : 'Login failed',
+        ...loginHealth,
+      };
       _lastFAHealth = { result, time: Date.now() };
       return result;
     }
     
     // Success — clear the cache so next health check validates fresh
     _lastFAHealth = null;
-    return { status: 'healthy', responseTimeMs: Date.now() - startTime };
+    return { status: 'healthy', responseTimeMs: Date.now() - startTime, ...loginHealth };
   } catch (error) {
-    const result = { status: 'unhealthy' as const, responseTimeMs: Date.now() - startTime, error: (error as Error).message };
+    const loginHealth = getFortiAnalyzerLoginHealth();
+    const result = {
+      status: 'unhealthy' as const,
+      responseTimeMs: Date.now() - startTime,
+      error: (error as Error).message,
+      ...loginHealth,
+    };
     _lastFAHealth = { result, time: Date.now() };
     return result;
   }
@@ -180,12 +203,13 @@ export async function GET(_request: NextRequest) {
   // Ensure alarm services are running (auto-restart if stopped)
   const { schedulerOk, monitorOk } = ensureAlarmServicesRunning();
   
-  // Check all datasources
-  const [dbHealth, fazHealth, vmwareHealth, alarmStats] = await Promise.all([
+  // Check all datasources + DLQ stats in parallel
+  const [dbHealth, fazHealth, vmwareHealth, alarmStats, dlqStats] = await Promise.all([
     checkDatabaseHealth(),
     checkFortiAnalyzerHealth(),
     checkVMwareHealth(),
     getAlarmStats(),
+    getDLQStats(),
   ]);
   
   // Determine overall status
@@ -194,7 +218,7 @@ export async function GET(_request: NextRequest) {
   
   if (unhealthyCount >= 2 || !schedulerOk || !monitorOk) {
     overallStatus = 'unhealthy';
-  } else if (unhealthyCount === 1 || alarmStats.recentErrors > 5) {
+  } else if (unhealthyCount === 1 || alarmStats.recentErrors > 5 || dlqStats.failedPermanent > 0) {
     overallStatus = 'degraded';
   }
   
@@ -212,6 +236,14 @@ export async function GET(_request: NextRequest) {
       vmware: vmwareHealth,
     },
     alarms: alarmStats,
+    notifications: {
+      dlq: {
+        pending: dlqStats.pending,
+        delivered: dlqStats.delivered,
+        failedPermanent: dlqStats.failedPermanent,
+        oldestPendingAgeMin: dlqStats.oldestPendingAge,
+      },
+    },
   };
   
   const httpStatus = overallStatus === 'healthy' ? 200 : overallStatus === 'degraded' ? 200 : 503;

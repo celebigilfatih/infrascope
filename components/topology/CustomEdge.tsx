@@ -68,7 +68,7 @@ export const CustomEdge = ({
   );
 };
 
-// Building connection edge — compact label, curved path
+// Building connection edge — straight line, compact label
 export const BuildingConnectionEdge = ({
   id,
   sourceX,
@@ -77,12 +77,11 @@ export const BuildingConnectionEdge = ({
   targetY,
   data,
 }: EdgeProps) => {
-  const [edgePath, labelX, labelY] = getBezierPath({
+  const [edgePath, labelX, labelY] = getStraightPath({
     sourceX,
     sourceY,
     targetX,
     targetY,
-    curvature: 0.35,
   });
 
   const strokeColor = data?.strokeColor || '#6B7280';
