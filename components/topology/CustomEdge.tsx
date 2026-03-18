@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { EdgeProps, getStraightPath, EdgeLabelRenderer } from 'reactflow';
+import { EdgeProps, getStraightPath, getBezierPath, EdgeLabelRenderer } from 'reactflow';
 
 // Regular custom edge for device connections
 export const CustomEdge = ({
@@ -48,7 +48,7 @@ export const CustomEdge = ({
           <div
             style={{
               position: 'absolute',
-              transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+              transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
               pointerEvents: 'none',
               backgroundColor: 'white',
               padding: '4px 8px',
@@ -68,7 +68,7 @@ export const CustomEdge = ({
   );
 };
 
-// Building connection edge with large, prominent labels
+// Building connection edge — compact label, curved path
 export const BuildingConnectionEdge = ({
   id,
   sourceX,
@@ -77,16 +77,16 @@ export const BuildingConnectionEdge = ({
   targetY,
   data,
 }: EdgeProps) => {
-  const [edgePath, labelX, labelY] = getStraightPath({
+  const [edgePath, labelX, labelY] = getBezierPath({
     sourceX,
     sourceY,
     targetX,
     targetY,
+    curvature: 0.35,
   });
 
-  // Get colors from data or use defaults
   const strokeColor = data?.strokeColor || '#6B7280';
-  const textColor = data?.textColor || '#6B7280';
+  const textColor = data?.textColor || '#4B5563';
   const bgColor = data?.bgColor || 'white';
 
   return (
@@ -95,8 +95,9 @@ export const BuildingConnectionEdge = ({
         id={id}
         style={{
           stroke: strokeColor,
-          strokeWidth: data?.strokeWidth || 3,
+          strokeWidth: data?.strokeWidth || 2,
           strokeDasharray: data?.strokeDasharray || '0',
+          opacity: 0.85,
         }}
         className="react-flow__edge-path"
         d={edgePath}
@@ -106,7 +107,7 @@ export const BuildingConnectionEdge = ({
           <div
             style={{
               position: 'absolute',
-              transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+              transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
               pointerEvents: 'none',
               display: 'flex',
               alignItems: 'center',
@@ -114,45 +115,31 @@ export const BuildingConnectionEdge = ({
               whiteSpace: 'nowrap',
             }}
           >
-            {/* Label background with border */}
             <div
               style={{
                 backgroundColor: bgColor,
-                border: `2.5px solid ${strokeColor}`,
-                borderRadius: '10px',
-                padding: '12px 16px',
+                border: `1.5px solid ${strokeColor}`,
+                borderRadius: '6px',
+                padding: '4px 10px',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '10px',
-                boxShadow: '0 4px 15px rgba(0, 0, 0, 0.15)',
+                gap: '5px',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
               }}
             >
               {(() => {
-                // Correctly handle emojis that use surrogate pairs
                 const chars = [...data.label];
                 const icon = chars[0];
                 const rest = chars.slice(1).join('').trim();
-                
                 return (
                   <>
+                    <span style={{ fontSize: '14px', lineHeight: '1' }}>{icon}</span>
                     <span
                       style={{
-                        fontSize: '32px',
-                        lineHeight: '1',
-                        display: 'flex',
-                        alignItems: 'center',
-                      }}
-                    >
-                      {icon}
-                    </span>
-                    <span
-                      style={{
-                        fontSize: '24px',
-                        fontWeight: 950,
+                        fontSize: '12px',
+                        fontWeight: 700,
                         color: textColor,
-                        fontFamily: 'system-ui, -apple-system, sans-serif',
-                        letterSpacing: '-0.5px',
-                        whiteSpace: 'nowrap',
+                        letterSpacing: '-0.2px',
                       }}
                     >
                       {rest}

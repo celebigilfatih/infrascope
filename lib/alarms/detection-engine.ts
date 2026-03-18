@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import FortiAnalyzerService from '@/lib/integrations/fortianalyzer';
 import { VMwareService } from '@/lib/integrations/vmware';
+import { FortiGateService, FortiGateConfig } from '@/lib/integrations/fortigate';
 import { sendAlarmEmail, getEmailStats } from '@/lib/notifications/email';
 import type { AlarmDetectionLogic, CorrelationRule } from './alarm-definitions';
 import { EventCacheService } from './event-cache';
@@ -42,6 +43,8 @@ export class AlarmDetectionEngine {
   private service: FortiAnalyzerService;
   private vmwareService: VMwareService | null = null;
   private vmwareInitialized: boolean = false;
+  private fortiGateService: FortiGateService | null = null;
+  private fortiGateInitialized: boolean = false;
   
   // VMware cache to avoid repeated API calls during same check run
   private vmwareCache: {
@@ -110,6 +113,44 @@ export class AlarmDetectionEngine {
     } catch (error) {
       console.error('[AlarmEngine] Error initializing VMware service:', error);
       this.vmwareService = null;
+    }
+  }
+
+  private async initializeFortiGate() {
+    try {
+      console.log('[AlarmEngine] Initializing FortiGate service...');
+      const fgConfig = await prisma.integrationConfig.findFirst({
+        where: { type: 'FORTIGATE', enabled: true },
+      });
+      
+      if (!fgConfig) {
+        console.log('[AlarmEngine] No enabled FortiGate integration found in database');
+        return;
+      }
+      
+      console.log(`[AlarmEngine] Found FortiGate config: ${fgConfig.name}`);
+      
+      if (fgConfig && fgConfig.config) {
+        const config = fgConfig.config as any;
+        this.fortiGateService = new FortiGateService({
+          host: config.host,
+          accessToken: config.accessToken,
+          pollingInterval: config.pollingInterval || 5,
+          syncMode: 'rest',
+          enabledModules: {
+            interfaces: true,
+            vlans: true,
+            policies: true,
+            addresses: true,
+            vips: true,
+            sdwan: true,
+          },
+        });
+        console.log('[AlarmEngine] FortiGate service initialized');
+      }
+    } catch (error) {
+      console.error('[AlarmEngine] Error initializing FortiGate service:', error);
+      this.fortiGateService = null;
     }
   }
 
@@ -213,6 +254,12 @@ export class AlarmDetectionEngine {
         this.vmwareInitialized = true;
       }
 
+      // Initialize FortiGate service on first run
+      if (!this.fortiGateInitialized) {
+        await this.initializeFortiGate();
+        this.fortiGateInitialized = true;
+      }
+
       // Clear VMware cache at start of each check run for fresh data
       this.clearVMwareCache();
 
@@ -263,8 +310,9 @@ export class AlarmDetectionEngine {
         throw new Error('FortiAnalyzer login failed — cannot evaluate alarms');
       }
 
-      // Separate correlation alarms from regular alarms
+      // Separate correlation alarms and FortiGate source alarms from regular alarms
       const correlationAlarms: AlarmDef[] = [];
+      const fortiGateSslvpnAlarms: AlarmDef[] = [];
       const regularAlarms = sortedAlarms;
 
       // Group regular alarms by logtype to batch searches
@@ -279,13 +327,19 @@ export class AlarmDetectionEngine {
           continue;
         }
 
+        // Handle FortiGate source alarms separately
+        if (logic.source === 'fortigate-sslvpn') {
+          fortiGateSslvpnAlarms.push(alarmDef);
+          continue;
+        }
+
         if (!logTypeGroups.has(logtype)) {
           logTypeGroups.set(logtype, []);
         }
         logTypeGroups.get(logtype)!.push(alarmDef);
       }
 
-      console.log(`[AlarmEngine] LogTypeGroups: ${JSON.stringify([...logTypeGroups.keys()])}`);
+      console.log(`[AlarmEngine] LogTypeGroups: ${JSON.stringify([...logTypeGroups.keys()])}, FortiGateSslvpnAlarms: ${fortiGateSslvpnAlarms.length}`);
 
       // Check overall cache freshness to decide how to run logtype groups:
       //  - Cache FRESH  → full parallel (all groups + all filter batches at once = fast DB reads, zero FA load)
@@ -343,6 +397,20 @@ export class AlarmDetectionEngine {
           console.error(`[AlarmEngine] Group ${logtype} failed: ${error}`);
         }
         results.push(...groupResult);
+      }
+
+      // Evaluate FortiGate SSL-VPN alarms (uses FortiGate API, not FortiAnalyzer)
+      if (fortiGateSslvpnAlarms.length > 0) {
+        console.log(`[AlarmEngine] Evaluating ${fortiGateSslvpnAlarms.length} FortiGate SSL-VPN alarms...`);
+        for (const alarm of fortiGateSslvpnAlarms) {
+          try {
+            const result = await this.evaluateFortiGateSslvpnAlarm(alarm);
+            results.push(result);
+          } catch (error) {
+            console.error(`[AlarmEngine] FortiGate SSL-VPN error ${alarm.code}:`, error);
+            results.push({ alarmCode: alarm.code, triggered: false, matchCount: 0, events: [], error: (error as Error).message });
+          }
+        }
       }
 
       // Evaluate correlation alarms (after regular alarms, so precursor events exist)
@@ -746,6 +814,8 @@ export class AlarmDetectionEngine {
         let filteredLogs = recentLogs;
         if (logic.clientCheck === 'off-hours') {
           filteredLogs = this.filterOffHours(recentLogs);
+        } else if (logic.clientCheck === 'business-hours') {
+          filteredLogs = this.filterBusinessHours(recentLogs);
         } else if (logic.clientCheck === 'brute-force-group') {
           filteredLogs = this.filterBruteForce(recentLogs, logic.threshold);
         } else if (logic.clientCheck === 'geo-anomaly') {
@@ -984,6 +1054,8 @@ export class AlarmDetectionEngine {
     let filteredLogs = recentLogs;
     if (logic.clientCheck === 'off-hours') {
       filteredLogs = this.filterOffHours(recentLogs);
+    } else if (logic.clientCheck === 'business-hours') {
+      filteredLogs = this.filterBusinessHours(recentLogs);
     } else if (logic.clientCheck === 'brute-force-group') {
       filteredLogs = this.filterBruteForce(recentLogs, logic.threshold);
     } else if (logic.clientCheck === 'geo-anomaly') {
@@ -1401,6 +1473,131 @@ export class AlarmDetectionEngine {
   }
 
   /**
+   * Evaluate a FortiGate SSL-VPN alarm using live FortiGate API
+   * Checks currently connected SSL-VPN users for off-hours logins
+   */
+  private async evaluateFortiGateSslvpnAlarm(alarm: AlarmDef): Promise<EvaluationResult> {
+    const logic = alarm.detectionLogic;
+
+    // Check cooldown
+    const cooldownThreshold = new Date(Date.now() - alarm.cooldownMinutes * 60 * 1000);
+    const recentEvent = await prisma.alarmEvent.findFirst({
+      where: {
+        alarmId: alarm.id,
+        createdAt: { gte: cooldownThreshold },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (recentEvent) {
+      return { alarmCode: alarm.code, triggered: false, matchCount: 0, events: [], error: 'cooldown-active' };
+    }
+
+    // Check if FortiGate service is available
+    if (!this.fortiGateService) {
+      console.warn(`[AlarmEngine] FortiGate service not available for alarm ${alarm.code}`);
+      return { alarmCode: alarm.code, triggered: false, matchCount: 0, events: [], error: 'fortigate-service-unavailable' };
+    }
+
+    try {
+      console.log(`[AlarmEngine] Evaluating FortiGate SSL-VPN alarm ${alarm.code}`);
+
+      // Get currently connected SSL-VPN users from FortiGate
+      const sslvpnUsers = await this.fortiGateService.getSSLVPNUsers();
+
+      if (!sslvpnUsers || sslvpnUsers.length === 0) {
+        console.log(`[AlarmEngine] No active SSL-VPN users found`);
+        return { alarmCode: alarm.code, triggered: false, matchCount: 0, events: [] };
+      }
+
+      // Check if this is off-hours or business-hours alarm
+      const isOffHoursAlarm = alarm.code === 'VPN_LOGIN_OFF_HOURS';
+      const isBusinessHoursAlarm = alarm.code === 'SSLVPN_BUSINESS_HOURS';
+
+      // Filter users based on alarm type
+      const matchedUsers: Array<Record<string, unknown>> = [];
+      const now = new Date();
+
+      // Only consider users who logged in recently (within timeWindow)
+      // Prevents re-alarming for old sessions that started off-hours but are still active
+      const timeWindowMs = (logic.timeWindowMinutes || 120) * 60 * 1000;
+
+      for (const user of sslvpnUsers) {
+        const loginTime = new Date(user.last_login_timestamp * 1000);
+        const loginAgeMs = now.getTime() - loginTime.getTime();
+
+        // Skip sessions older than the time window (already alerted for these)
+        if (loginAgeMs > timeWindowMs) {
+          continue;
+        }
+
+        // Convert login time to Turkey timezone for hour/day check
+        const turkeyLoginTime = new Date(loginTime.toLocaleString('en-US', { timeZone: 'Europe/Istanbul' }));
+        const loginHour = turkeyLoginTime.getHours();
+        const loginDay = turkeyLoginTime.getDay(); // 0=Sunday, 6=Saturday
+
+        // Off-hours: before 08:00, after 18:00, or weekend
+        const isWeekend = loginDay === 0 || loginDay === 6;
+        const isOffHours = loginHour < 8 || loginHour >= 18;
+        const isBusinessHours = !isWeekend && !isOffHours;
+
+        if (isOffHoursAlarm && (isWeekend || isOffHours)) {
+          matchedUsers.push({
+            user: user.user_name,
+            remoteIp: user.remote_host,
+            assignedIp: user.aip,
+            loginTime: loginTime.toISOString(),
+            duration: Math.round(user.duration / 60), // Convert to minutes
+            inMB: Math.round(user.in_bytes / 1024 / 1024),
+            outMB: Math.round(user.out_bytes / 1024 / 1024),
+            isWeekend,
+            isOffHours,
+          });
+        } else if (isBusinessHoursAlarm && isBusinessHours) {
+          matchedUsers.push({
+            user: user.user_name,
+            remoteIp: user.remote_host,
+            assignedIp: user.aip,
+            loginTime: loginTime.toISOString(),
+            duration: Math.round(user.duration / 60), // Convert to minutes
+            inMB: Math.round(user.in_bytes / 1024 / 1024),
+            outMB: Math.round(user.out_bytes / 1024 / 1024),
+            isBusinessHours,
+          });
+        }
+      }
+
+      const matchCount = matchedUsers.length;
+      const triggered = matchCount >= logic.threshold;
+
+      if (triggered) {
+        if (isOffHoursAlarm) {
+          console.log(`[AlarmEngine] OFF-HOURS SSL-VPN DETECTED: ${matchCount} users`);
+        } else {
+          console.log(`[AlarmEngine] BUSINESS-HOURS SSL-VPN DETECTED: ${matchCount} users`);
+        }
+        await this.fireAlarm(alarm, matchedUsers);
+      }
+
+      return {
+        alarmCode: alarm.code,
+        triggered,
+        matchCount,
+        events: matchedUsers.slice(0, 5),
+      };
+    } catch (error) {
+      console.error(`[AlarmEngine] Error evaluating FortiGate SSL-VPN alarm ${alarm.code}:`, error);
+      return {
+        alarmCode: alarm.code,
+        triggered: false,
+        matchCount: 0,
+        events: [],
+        error: (error as Error).message,
+      };
+    }
+  }
+
+  /**
    * Fire an alarm: create DB record and send email notification
    */
   private async fireAlarm(alarm: AlarmDef, matchingLogs: Array<Record<string, unknown>>): Promise<void> {
@@ -1413,7 +1610,11 @@ export class AlarmDetectionEngine {
     let destIp: string | null = null;
     let deviceName: string | null = null;
 
-    if (firstLog.type && ['vm', 'host', 'datastore', 'snapshot', 'snapshot_created', 'snapshot_event', 'vm_lifecycle'].includes(firstLog.type as string)) {
+    // Special handling for FortiGate SSL-VPN alarms (source: fortigate-sslvpn)
+    if (firstLog.remoteIp || firstLog.user) {
+      sourceIp = (firstLog.remoteIp as string) || (firstLog.assignedIp as string) || (firstLog.user as string) || null;
+      deviceName = (firstLog.user as string) || null;
+    } else if (firstLog.type && ['vm', 'host', 'datastore', 'snapshot', 'snapshot_created', 'snapshot_event', 'vm_lifecycle'].includes(firstLog.type as string)) {
       // VMware alarm metadata
       if (firstLog.type === 'vm' || firstLog.type === 'vm_lifecycle') {
         deviceName = (firstLog.vmName as string) || null;
@@ -1537,6 +1738,28 @@ export class AlarmDetectionEngine {
   }
 
   /**
+   * Filter logs for BUSINESS hours only (08:00-18:00 on weekdays)
+   */
+  private filterBusinessHours(logs: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
+    return logs.filter((log) => {
+      const logTime = this.parseLogTime(log);
+      if (!logTime) return false;
+
+      // Convert to Turkey timezone
+      const turkeyTime = new Date(logTime.toLocaleString('en-US', { timeZone: 'Europe/Istanbul' }));
+      const hour = turkeyTime.getHours();
+      const day = turkeyTime.getDay(); // 0=Sunday, 6=Saturday
+
+      // Weekend - NOT business hours
+      if (day === 0 || day === 6) return false;
+      // Before 08:00 or after 18:00 - NOT business hours
+      if (hour < 8 || hour >= 18) return false;
+
+      return true;
+    });
+  }
+
+  /**
    * Filter/group logs for brute force detection (multiple events from same source)
    */
   private filterBruteForce(logs: Array<Record<string, unknown>>, threshold: number): Array<Record<string, unknown>> {
@@ -1628,6 +1851,18 @@ export class AlarmDetectionEngine {
   private buildAlarmTitle(alarm: AlarmDef, logs: Array<Record<string, unknown>>): string {
     const count = logs.length;
     const firstLog = logs[0] || {};
+    
+    // Special handling for FortiGate SSL-VPN alarms
+    if (firstLog.user || firstLog.remoteIp) {
+      const user = (firstLog.user as string) || '';
+      const remoteIp = (firstLog.remoteIp as string) || '';
+      let title = alarm.name;
+      if (count > 1) title += ` (${count} kullanicı)`;
+      if (user) title += ` - ${user}`;
+      if (remoteIp) title += ` [${remoteIp}]`;
+      return title;
+    }
+
     const srcip = (firstLog.srcip as string) || '';
     const devname = (firstLog.devname as string) || '';
 
@@ -1927,6 +2162,38 @@ export class AlarmDetectionEngine {
       }
 
       // Recommended action
+      sections.push(`Onerilen Aksiyon: ${alarm.detectionLogic.recommendedAction}`);
+      return sections.join('\n\n');
+    }
+
+    // Special handling for FortiGate SSL-VPN alarms
+    if (firstLog.remoteIp || firstLog.user) {
+      const fgDetails: string[] = [];
+      if (firstLog.user) fgDetails.push(`Kullanici: ${firstLog.user}`);
+      if (firstLog.remoteIp) fgDetails.push(`Uzak IP: ${firstLog.remoteIp}`);
+      if (firstLog.assignedIp) fgDetails.push(`Atanan IP: ${firstLog.assignedIp}`);
+      if (firstLog.loginTime) fgDetails.push(`Giris Zamani: ${new Date(firstLog.loginTime as string).toLocaleString('tr-TR')}`);
+      if (firstLog.duration) fgDetails.push(`Sure: ${firstLog.duration} dakika`);
+      if (firstLog.inMB) fgDetails.push(`Gelen: ${firstLog.inMB} MB`);
+      if (firstLog.outMB) fgDetails.push(`Giden: ${firstLog.outMB} MB`);
+      if (firstLog.isWeekend) fgDetails.push(`Hafta sonu: EVET`);
+      if (firstLog.isOffHours) fgDetails.push(`Mesai disi: EVET`);
+
+      sections.push(fgDetails.join('\n'));
+
+      // List other SSL-VPN users
+      if (logs.length > 1) {
+        const otherUsers = logs.slice(1, 6).map((l) => {
+          const u = l.user || 'N/A';
+          const ip = l.remoteIp || '';
+          const time = l.loginTime ? new Date(l.loginTime as string).toLocaleTimeString('tr-TR') : '';
+          return `- ${u}${ip ? ` (${ip})` : ''}${time ? ` - ${time}` : ''}`;
+        }).join('\n');
+        sections.push(
+          `Diger kullanicilar:\n${otherUsers}${logs.length > 6 ? `\n- ... ve ${logs.length - 6} daha` : ''}`
+        );
+      }
+
       sections.push(`Onerilen Aksiyon: ${alarm.detectionLogic.recommendedAction}`);
       return sections.join('\n\n');
     }

@@ -7,7 +7,7 @@ async function test() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       method: 'exec',
-      params: [{ url: '/sys/login/user', data: { user: 'fcelebigil', passwd: 'Thor.7485-a' } }],
+      params: [{ url: '/sys/login/user', data: { user: 'infrascope', passwd: 'Thor.7485-app' } }],
       id: 1
     }),
   });

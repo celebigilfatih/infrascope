@@ -1090,16 +1090,35 @@ const NetworkTopologyPage = () => {
         }
       });
       
-      // Calculate building positions (organic layout)
+      // Calculate building positions — radial/concentric layout
+      // Scales from 3 to 40+ buildings without crossings
       const buildingsArray = Array.from(buildingMap.values());
-      const cols = Math.ceil(Math.sqrt(buildingsArray.length));
-      const spacing = 600;
-      
+      const RING_RADIUS = 300;      // distance between rings
+      const MIN_PER_RING = 8;      // max buildings per ring (ring N holds N*MIN_PER_RING)
+
+      // Compute concentric ring positions centered at origin
+      const radialPositions: { x: number; y: number }[] = [];
+      let placed = 0;
+      let ring = 1;
+      while (placed < buildingsArray.length) {
+        const capacity = ring * MIN_PER_RING;
+        const inThisRing = Math.min(capacity, buildingsArray.length - placed);
+        const radius = ring * RING_RADIUS;
+        for (let i = 0; i < inThisRing; i++) {
+          const angle = (i / inThisRing) * 2 * Math.PI - Math.PI / 2;
+          radialPositions.push({
+            x: Math.round(Math.cos(angle) * radius),
+            y: Math.round(Math.sin(angle) * radius),
+          });
+        }
+        placed += inThisRing;
+        ring++;
+      }
+
       buildingsArray.forEach((buildingData, index) => {
         const { building, devices } = buildingData;
-        const row = Math.floor(index / cols);
-        const col = index % cols;
-        
+        const pos = radialPositions[index] || { x: 0, y: 0 };
+
         // Calculate device counts by role
         const deviceRoles = devices.map(d => getDeviceRole(d.type, d.name));
         const coreCount = deviceRoles.filter(r => r === 'core').length;
@@ -1126,7 +1145,7 @@ const NetworkTopologyPage = () => {
         const buildingNode: Node = {
           id: `building-${building.id}`,
           type: 'building',
-          position: { x: col * spacing, y: row * spacing },
+          position: { x: pos.x, y: pos.y },
           data: {
             buildingId: building.id,
             name: building.name,
@@ -1162,8 +1181,8 @@ const NetworkTopologyPage = () => {
         // If building is expanded or zoomed in enough, show devices
         if (expandedBuildings.has(building.id) || semanticZoom > 0.8) {
           // Calculate device positions based on role
-          const buildingX = col * spacing;
-          const buildingY = row * spacing;
+          const buildingX = pos.x;
+          const buildingY = pos.y;
           const buildingWidth = 500;
           const buildingHeight = 400;
           

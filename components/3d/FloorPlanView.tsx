@@ -42,6 +42,32 @@ interface FloorPlanViewProps {
   onUpdate?: () => void;
 }
 
+// Compute auto-layout grid positions for racks without coordinates
+function computeRackPositions(racks: Rack[], roomWidth: number, roomDepth: number): Map<string, { x: number; z: number }> {
+  const RACK_W = 1.2;
+  const RACK_D = 2.0;
+  const GAP_X = 0.6;
+  const GAP_Z = 0.8;
+
+  const cols = Math.max(2, Math.floor(roomWidth / (RACK_W + GAP_X)));
+  const totalRows = Math.ceil(racks.length / cols);
+  const gridW = cols * (RACK_W + GAP_X) - GAP_X;
+  const gridD = totalRows * (RACK_D + GAP_Z) - GAP_Z;
+  const startX = Math.max(0.3, (roomWidth - gridW) / 2);
+  const startZ = Math.max(0.3, (roomDepth - gridD) / 2);
+
+  const positions = new Map<string, { x: number; z: number }>();
+  racks.forEach((rack, index) => {
+    const col = index % cols;
+    const row = Math.floor(index / cols);
+    positions.set(rack.id, {
+      x: rack.coordX ?? (startX + col * (RACK_W + GAP_X)),
+      z: rack.coordZ ?? (startZ + row * (RACK_D + GAP_Z)),
+    });
+  });
+  return positions;
+}
+
 export function FloorPlanView({ room, onUpdate }: FloorPlanViewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [selectedRack, setSelectedRack] = useState<Rack | null>(null);
@@ -182,9 +208,11 @@ export function FloorPlanView({ room, onUpdate }: FloorPlanViewProps) {
 
     // Draw racks with 3D isometric effect
     if (room.racks) {
+      const rackPositions = computeRackPositions(room.racks, roomWidth, roomDepth);
       room.racks.forEach((rack) => {
-        const x = offset.x + (rack.coordX || 0) * scale;
-        const y = offset.y + (rack.coordZ || 0) * scale;
+        const pos = rackPositions.get(rack.id) || { x: 0, z: 0 };
+        const x = offset.x + pos.x * scale;
+        const y = offset.y + pos.z * scale;
         const rackWidth = 1.2 * scale;  // Increased from 0.6 to 1.2 (double size)
         const rackDepth = 2.0 * scale;  // Increased from 1.0 to 2.0 (double size)
         const rotation = (rack.rotation || 0) * (Math.PI / 180);
@@ -318,9 +346,11 @@ export function FloorPlanView({ room, onUpdate }: FloorPlanViewProps) {
     // Check if clicked on a rack
     let clickedRack: Rack | null = null;
     if (room.racks && editMode) {
+      const rackPositions = computeRackPositions(room.racks, roomWidth, roomDepth);
       for (const rack of room.racks) {
-        const x = offset.x + (rack.coordX || 0) * scale;
-        const y = offset.y + (rack.coordZ || 0) * scale;
+        const pos = rackPositions.get(rack.id) || { x: 0, z: 0 };
+        const x = offset.x + pos.x * scale;
+        const y = offset.y + pos.z * scale;
         const width = 1.2 * scale;  // Updated to match new size
         const depth = 2.0 * scale;  // Updated to match new size
 
@@ -334,9 +364,10 @@ export function FloorPlanView({ room, onUpdate }: FloorPlanViewProps) {
     if (clickedRack && editMode) {
       setSelectedRack(clickedRack);
       setIsDraggingRack(true);
+      const clickedPos = computeRackPositions(room.racks || [], roomWidth, roomDepth).get(clickedRack.id) || { x: 0, z: 0 };
       setDragStart({ 
-        x: mouseX - (offset.x + (clickedRack.coordX || 0) * scale), 
-        y: mouseY - (offset.y + (clickedRack.coordZ || 0) * scale) 
+        x: mouseX - (offset.x + clickedPos.x * scale), 
+        y: mouseY - (offset.y + clickedPos.z * scale) 
       });
     } else {
       setIsDragging(true);
@@ -375,9 +406,11 @@ export function FloorPlanView({ room, onUpdate }: FloorPlanViewProps) {
       // Check hover
       let hovered: string | null = null;
       if (room.racks) {
+        const rackPositions = computeRackPositions(room.racks, roomWidth, roomDepth);
         for (const rack of room.racks) {
-          const x = offset.x + (rack.coordX || 0) * scale;
-          const y = offset.y + (rack.coordZ || 0) * scale;
+          const pos = rackPositions.get(rack.id) || { x: 0, z: 0 };
+          const x = offset.x + pos.x * scale;
+          const y = offset.y + pos.z * scale;
           const width = 1.2 * scale;  // Updated to match new size
           const depth = 2.0 * scale;  // Updated to match new size
 

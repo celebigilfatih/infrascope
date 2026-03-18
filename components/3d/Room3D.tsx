@@ -132,16 +132,22 @@ export function Room3D({ room, onRackClick }: Room3DProps) {
 
           {/* Racks */}
           {room.racks && Array.isArray(room.racks) && room.racks.length > 0 ? (
-            room.racks.map((rack, index) => {
-              // Default to grid layout if no coordinates provided
-              let x = rack.coordX ?? (index % 2) * 2;
-              let z = rack.coordZ ?? Math.floor(index / 2) * 2.5;
+            (() => {
+              // Auto-layout: centered grid, 2 columns, no overlapping
+              const COLS = 2;
+              const SPACING_X = 1.5; // spacing between column centers (rack width=0.6m + gap)
+              const SPACING_Z = 2.0; // spacing between row centers (rack depth=1.0m + gap)
+              const totalRows = Math.ceil(room.racks!.length / COLS);
+              const gridStartX = -((COLS - 1) * SPACING_X) / 2;
+              const gridStartZ = -((totalRows - 1) * SPACING_Z) / 2;
+
+              return room.racks!.map((rack, index) => {
+              const col = index % COLS;
+              const row = Math.floor(index / COLS);
+              const x = rack.coordX ?? (gridStartX + col * SPACING_X);
+              const z = rack.coordZ ?? (gridStartZ + row * SPACING_Z);
               const y = rack.coordY ?? 0;
               const rotationY = (rack.rotation ?? 0) * (Math.PI / 180);
-
-              // Clamp to room boundaries
-              x = Math.max(-5, Math.min(5, x));
-              z = Math.max(-4, Math.min(4, z));
 
               // Calculate height offset (mesh is centered, so we move it up by half height)
               const rackHeightOffset = (rack.maxUnits * 0.04445) / 2;
@@ -162,7 +168,8 @@ export function Room3D({ room, onRackClick }: Room3DProps) {
                   devices={rack.devices}
                 />
               );
-            })
+            });
+            })()
           ) : (
             // Placeholder racks when none exist
             <>

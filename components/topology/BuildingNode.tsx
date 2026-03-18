@@ -48,57 +48,54 @@ export const BuildingNode = memo(({ data, selected }: NodeProps<BuildingNodeData
         transformOrigin: 'center',
       }}
     >
-      {/* Connection Handles */}
+      {/* Single centered handles — edges draw from icon center, appearing to come from behind */}
       <Handle
         type="source"
         position={Position.Top}
         id="top-source"
-        className="!w-3 !h-3 !bg-blue-500 !border-2 !border-white !rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md"
+        style={{ left: '50%', top: '50%', transform: 'translate(-50%, -50%)', opacity: 0, width: 0, height: 0, border: 'none', minWidth: 0, minHeight: 0 }}
       />
       <Handle
         type="target"
         position={Position.Top}
         id="top-target"
-        className="!w-3 !h-3 !bg-green-500 !border-2 !border-white !rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md"
+        style={{ left: '50%', top: '50%', transform: 'translate(-50%, -50%)', opacity: 0, width: 0, height: 0, border: 'none', minWidth: 0, minHeight: 0 }}
       />
-
       <Handle
         type="source"
         position={Position.Right}
         id="right-source"
-        className="!w-3 !h-3 !bg-blue-500 !border-2 !border-white !rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md"
+        style={{ left: '50%', top: '50%', transform: 'translate(-50%, -50%)', opacity: 0, width: 0, height: 0, border: 'none', minWidth: 0, minHeight: 0 }}
       />
       <Handle
         type="target"
         position={Position.Right}
         id="right-target"
-        className="!w-3 !h-3 !bg-green-500 !border-2 !border-white !rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md"
+        style={{ left: '50%', top: '50%', transform: 'translate(-50%, -50%)', opacity: 0, width: 0, height: 0, border: 'none', minWidth: 0, minHeight: 0 }}
       />
-
       <Handle
         type="source"
         position={Position.Bottom}
         id="bottom-source"
-        className="!w-3 !h-3 !bg-blue-500 !border-2 !border-white !rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md"
+        style={{ left: '50%', top: '50%', transform: 'translate(-50%, -50%)', opacity: 0, width: 0, height: 0, border: 'none', minWidth: 0, minHeight: 0 }}
       />
       <Handle
         type="target"
         position={Position.Bottom}
         id="bottom-target"
-        className="!w-3 !h-3 !bg-green-500 !border-2 !border-white !rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md"
+        style={{ left: '50%', top: '50%', transform: 'translate(-50%, -50%)', opacity: 0, width: 0, height: 0, border: 'none', minWidth: 0, minHeight: 0 }}
       />
-
       <Handle
         type="source"
         position={Position.Left}
         id="left-source"
-        className="!w-3 !h-3 !bg-blue-500 !border-2 !border-white !rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md"
+        style={{ left: '50%', top: '50%', transform: 'translate(-50%, -50%)', opacity: 0, width: 0, height: 0, border: 'none', minWidth: 0, minHeight: 0 }}
       />
       <Handle
         type="target"
         position={Position.Left}
         id="left-target"
-        className="!w-3 !h-3 !bg-green-500 !border-2 !border-white !rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md"
+        style={{ left: '50%', top: '50%', transform: 'translate(-50%, -50%)', opacity: 0, width: 0, height: 0, border: 'none', minWidth: 0, minHeight: 0 }}
       />
 
       {/* Simplified Building Node - Icon + Name */}

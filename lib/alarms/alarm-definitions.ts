@@ -21,6 +21,7 @@ export interface AlarmDetectionLogic {
   clientCheck?: string;        // Optional client-side check: 'off-hours', 'brute-force-group', 'anomaly', 'geo-anomaly', 'correlation'
   fortiviewQuery?: string;     // Optional FortiView view name (instead of logview)
   correlationRules?: CorrelationRule; // Optional: correlation rules for SIEM-like detection
+  source?: 'fortianalyzer' | 'fortigate-sslvpn' | 'vmware';  // Data source (default: fortianalyzer)
   description: string;         // Why this alarm matters
   recommendedAction: string;   // What operators should do
 }
@@ -148,16 +149,36 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
     description: 'Calisma saatleri disinda (08:00-18:00) veya hafta sonu SSL-VPN baglantisi tespit edildi. Yetkisiz uzaktan erisim riski.',
     category: 'SECURITY',
     severity: 'ALARM_HIGH',
-    cooldownMinutes: 30,
+    cooldownMinutes: 240,
+    notifyEmail: true,
     detectionLogic: {
       logtype: 'event',
-      filter: 'subtype == user and action == auth-logon',
-      // Previously: 'subtype == auth and action == auth-logon' — no events with subtype=auth
+      filter: '',
       threshold: 1,
       timeWindowMinutes: 60,
       clientCheck: 'off-hours',
-      description: 'Detects successful SSL-VPN connections outside business hours (08:00-18:00 weekdays). Weekend and holiday logins flagged as higher risk.',
+      source: 'fortigate-sslvpn',  // Use FortiGate API directly for SSL-VPN users
+      description: 'Detects SSL-VPN connections outside business hours (08:00-18:00 weekdays) using FortiGate API. Weekend and holiday logins flagged as higher risk.',
       recommendedAction: 'Verify VPN user identity and authorization. Check if remote work was planned. Review accessed resources during off-hours session. Contact user if unexpected.',
+    },
+  },
+  {
+    code: 'SSLVPN_BUSINESS_HOURS',
+    name: 'SSL-VPN Mesai Içi Baglantisi',
+    description: 'Calisma saatleri içinde (08:00-18:00) ve hafta içi SSL-VPN baglantisi tespit edildi. Normal çalışma saatlerinde beklenen bağlantı.',
+    category: 'SECURITY',
+    severity: 'ALARM_INFO',
+    cooldownMinutes: 60,
+    notifyEmail: false,
+    detectionLogic: {
+      logtype: 'event',
+      filter: '',
+      threshold: 1,
+      timeWindowMinutes: 60,
+      clientCheck: 'business-hours',
+      source: 'fortigate-sslvpn',  // Use FortiGate API directly for SSL-VPN users
+      description: 'Detects SSL-VPN connections during business hours (08:00-18:00 weekdays). Informational only - tracks normal VPN usage.',
+      recommendedAction: 'Review user activity for any suspicious behavior. This is expected VPN usage during work hours.',
     },
   },
   {

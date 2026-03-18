@@ -200,7 +200,7 @@ class FortiAnalyzerService {
       console.warn(
         `[FortiAnalyzer] 🚫 Login suppressed — backoff active ` +
         `(${waitSec}s remaining, ${state.consecutiveFailures} consecutive failure(s)). ` +
-        `Account may be locked on FA; unlock via System → Administrators → fazapi → Unlock.`
+        `Account may be locked on FA; unlock via System → Administrators → infrascope → Unlock.`
       );
       return false;
     }
@@ -430,7 +430,7 @@ class FortiAnalyzerService {
         {
           id: 2,
           time: Math.floor(Date.now() / 1000) - 7200,
-          admin: 'fcelebigil',
+          admin: 'infrascope',
           comment: 'Interface configuration change',
           version: '1.0.0',
           device: 'FG4H0FT922903137'

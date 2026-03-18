@@ -68,6 +68,21 @@ export async function POST(request: NextRequest) {
     }
 
     // Actually delete the alarms
+    // First, get IDs of alarms to be deleted
+    const alarmsToDelete = await prisma.alarmEvent.findMany({
+      where,
+      select: { id: true },
+    });
+    const alarmIds = alarmsToDelete.map(a => a.id);
+
+    if (alarmIds.length > 0) {
+      // Delete related notification_dlq records first (to satisfy foreign key constraint)
+      await prisma.notificationDLQ.deleteMany({
+        where: { alarmEventId: { in: alarmIds } },
+      });
+    }
+
+    // Now delete the alarms
     const deleted = await prisma.alarmEvent.deleteMany({ where });
 
     console.log(
