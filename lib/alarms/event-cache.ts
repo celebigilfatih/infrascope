@@ -138,9 +138,10 @@ export class EventCacheService {
     ];
     
     // Targeted filters for high-priority alarm types that may get crowded out in general sync
+    // NOTE: FA API ignores 'subtype == user' filter (returns 0 TID) — use 'action == auth-logon' directly
     const targetedEventFilters = [
-      'subtype == user',    // SSL-VPN auth-logon/auth-logout events
-      'subtype == system',  // Config changes: policy, address objects, interfaces, routing, etc.
+      'action == auth-logon',  // SSL-VPN user logon events (subtype=user)
+      'subtype == system',     // Config changes: policy, address objects, interfaces, routing, etc.
     ];
 
     const now = new Date();
@@ -349,7 +350,9 @@ export class EventCacheService {
   private async saveEvents(logtype: string, logs: Array<Record<string, unknown>>) {
     const eventsToSave = logs.map(log => ({
       logtype,
-      logId: String(log.logid || ''),
+      // IMPORTANT: FortiGate uses static logid per event TYPE (e.g. all auth-logon = '0102043039')
+      // We must combine logid + eventtime (nanosecond) to get a unique key per event instance
+      logId: String(log.logid || '') + '-' + String(log.eventtime || log.itime_t || ''),
       eventTime: this.parseEventTime(log) || new Date(),
       srcIp: String(log.srcip || ''),
       dstIp: String(log.dstip || ''),
@@ -422,6 +425,30 @@ export class EventCacheService {
   }
 
   /**
+   * Extract simple equality conditions from a filter string that map directly to DB columns.
+   * Supports: action, subtype, user, vdom, level (most common alarm filter fields).
+   * Returns a Prisma-compatible where fragment.
+   */
+  private extractDbFilters(filter: string): Record<string, string> {
+    const COLUMN_FIELDS = ['action', 'subtype', 'user', 'vdom', 'level', 'devname'];
+    const dbFilters: Record<string, string> = {};
+
+    // Split by AND-like operators to get individual conditions
+    const conditions = filter.split(/&&|\band\b/i).map(c => c.trim());
+    for (const cond of conditions) {
+      const match = cond.match(/^(\w+)\s*==\s*["']?([^"'\s]+)["']?$/);
+      if (match) {
+        const [, field, value] = match;
+        if (COLUMN_FIELDS.includes(field.toLowerCase())) {
+          dbFilters[field] = value;
+        }
+      }
+    }
+
+    return dbFilters;
+  }
+
+  /**
    * Query cached events (replacement for live API calls)
    */
   async queryCachedEvents(filters: CachedEventFilters): Promise<Array<Record<string, unknown>>> {
@@ -434,6 +461,11 @@ export class EventCacheService {
     console.log(`[EventCache] Query: ${logtype} from ${startTime.toISOString()} to ${endTime.toISOString()}`);
 
     try {
+      // Extract DB-level column filters from the filter string.
+      // This pushes simple equality conditions (e.g. action==auth-logon) into the DB WHERE
+      // clause so we don't accidentally miss events when >1000 rows exist in the time window.
+      const dbColumnFilters = filter ? this.extractDbFilters(filter) : {};
+
       const events = await prisma.cachedEvent.findMany({
         where: {
           logtype,
@@ -441,6 +473,7 @@ export class EventCacheService {
             gte: startTime,
             lte: endTime,
           },
+          ...dbColumnFilters,
         },
         orderBy: {
           eventTime: 'desc',
@@ -448,9 +481,9 @@ export class EventCacheService {
         take: dbLimit,
       });
 
-      console.log(`[EventCache] Found ${events.length} cached events for ${logtype}`);
+      console.log(`[EventCache] Found ${events.length} cached events for ${logtype}` + (Object.keys(dbColumnFilters).length ? ` (DB filter: ${JSON.stringify(dbColumnFilters)})` : ''));
 
-      // Apply client-side filter if provided
+      // Apply remaining client-side filter conditions (complex conditions not handled by DB)
       if (filter) {
         const filtered = this.applyFilter(events, filter);
         console.log(`[EventCache] Filter matched ${filtered.length}/${events.length} for ${logtype} | filter: ${filter.substring(0, 60)}`);

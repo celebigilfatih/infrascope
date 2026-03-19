@@ -136,7 +136,6 @@ export const Sidebar: React.FC = () => {
         { name: 'Genel Saglik', href: '/dashboard', icon: LayoutDashboard },
         { name: 'Kritik Alarmlar', href: '/dashboard/alerts', icon: AlertTriangle },
         // { name: 'Riskli Assetler', href: '/dashboard/risks', icon: AlertOctagon },
-        { name: 'Son Degisiklikler', href: '/dashboard/changes', icon: History },
       ]
     },
     {

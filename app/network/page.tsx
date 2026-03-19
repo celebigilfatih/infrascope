@@ -15,6 +15,7 @@ import ReactFlow, {
   Connection,
   Panel,
   ReactFlowProvider,
+  ConnectionLineType,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { toPng } from 'html-to-image';
@@ -1304,51 +1305,6 @@ const NetworkTopologyPage = () => {
       const filteredNodes = filterNodesByZoom(newNodes, zoomConfig);
       const filteredEdges = filterEdgesByZoom(newEdges, filteredNodes);
       
-      // ADD BUILDING CONNECTION EDGES (for building view)
-      if (buildingConnections.length > 0) {
-        buildingConnections.forEach((buildingConn: any) => {
-          const sourceBuilding = buildingConn.sourceBuilding || { name: '' };
-          const destBuilding = buildingConn.destBuilding || { name: '' };
-          
-          const sourceBuildingNodeId = `group-building-${sourceBuilding.name}`;
-          const destBuildingNodeId = `group-building-${destBuilding.name}`;
-          
-          // Check if both building nodes exist
-          const sourceExists = filteredNodes.some(n => n.id === sourceBuildingNodeId);
-          const destExists = filteredNodes.some(n => n.id === destBuildingNodeId);
-          
-          if (sourceExists && destExists) {
-            const style = connectionStyles[buildingConn.connectionType] || connectionStyles['OTHER'];
-            
-            filteredEdges.push({
-              id: `building-conn-${buildingConn.id}`,
-              source: sourceBuildingNodeId,
-              target: destBuildingNodeId,
-              sourceHandle: undefined,
-              targetHandle: undefined,
-              animated: buildingConn.status === 'ACTIVE',
-              style: undefined,
-              label: buildingConn.bandwidth 
-                ? `${style.icon} ${style.label} (${buildingConn.bandwidth})`
-                : `${style.icon} ${style.label}`,
-              type: 'building',
-              data: {
-                label: buildingConn.bandwidth 
-                  ? `${style.icon} ${style.label} (${buildingConn.bandwidth})`
-                  : `${style.icon} ${style.label}`,
-                strokeColor: style.color,
-                textColor: style.color,
-                strokeWidth: style.width,
-                strokeDasharray: style.dash,
-                bgColor: 'white',
-                buildingConnection: buildingConn,
-                type: 'building-connection',
-              },
-            });
-          }
-        });
-      }
-
       return { topologyNodes: filteredNodes, topologyEdges: filteredEdges };
     } else if (viewMode === 'physical') {
       // ====================================================================
@@ -2344,6 +2300,12 @@ const NetworkTopologyPage = () => {
                     }}
                     fitView
                     attributionPosition="bottom-left"
+                    connectionLineType={ConnectionLineType.Straight}
+                    connectionLineStyle={{
+                      stroke: '#3b82f6',
+                      strokeWidth: 2,
+                      strokeDasharray: '5,5',
+                    }}
                   >
                     <Background color="#3b82f6" gap={20} />
                     <Controls className="bg-card border-border fill-foreground shadow-xl" />

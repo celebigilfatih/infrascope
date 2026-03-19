@@ -5,6 +5,7 @@ import { FortiGateService, FortiGateConfig } from '@/lib/integrations/fortigate'
 import { sendAlarmEmail, getEmailStats } from '@/lib/notifications/email';
 import type { AlarmDetectionLogic, CorrelationRule } from './alarm-definitions';
 import { EventCacheService } from './event-cache';
+import { ALARM_QUERY_REGISTRY, BYPASS_CACHE_ALARMS } from './queries';
 
 interface AlarmDef {
   id: string;
@@ -784,18 +785,23 @@ export class AlarmDetectionEngine {
         
         console.log(`[AlarmEngine] Batch fetching ${logtype} logs (limit=${limit}): filter="${filter}"`);
         
-        // Single log search for entire batch
+        // Single log search for entire batch.
+        // Pick the first alarm that has a dedicated query in the registry — this
+        // ensures the DB-level query path is used even when filterAlarms[0] is
+        // not registered (non-deterministic Prisma findMany order).
+        const representativeAlarm =
+          filterAlarms.find(a => ALARM_QUERY_REGISTRY.has(a.code)) ?? filterAlarms[0];
         const searchResult = await Promise.race([
-          this.performLogSearch(filterAlarms[0], logtype, filter, limit),
+          this.performLogSearch(representativeAlarm, logtype, filter, limit),
           new Promise<{ tid: string | null; logs: Array<Record<string, unknown>> }>((resolve) =>
-            setTimeout(() => resolve({ tid: null, logs: [] }), 15000)
+            setTimeout(() => resolve({ tid: null, logs: [] }), 25000)
           ),
         ]);
 
         if (!searchResult.tid || searchResult.logs.length === 0) {
           // No logs found — determine whether this is a real failure or just no events
-          const errorReason = searchResult.tid === 'cache-empty'
-            ? undefined  // cache says clean — not an error, just no events
+          const errorReason = (searchResult.tid === 'cache-empty' || searchResult.tid === 'dedicated-query-empty')
+            ? undefined  // authoritative empty — cache or dedicated query confirmed no events
             : (searchResult.tid
                 ? undefined  // FA queried OK but found 0 matching logs — alarm not triggered (normal)
                 : 'search-timeout');  // FA returned no TID — real failure (session error, invalid filter, etc.)
@@ -874,6 +880,40 @@ export class AlarmDetectionEngine {
           for (const userLog of newUserLogs) {
             const u = userLog.user as string;
             console.log(`[AlarmEngine] ${alarm.code}: New connection detected for user ${u}`);
+            await this.fireAlarm(alarm, [userLog]);
+          }
+          return {
+            alarmCode: alarm.code,
+            triggered: newUserLogs.length > 0,
+            matchCount: newUserLogs.length,
+            events: newUserLogs.slice(0, 5),
+          };
+        } else if (logic.clientCheck === 'off-hours-per-user') {
+          // Off-hours filter THEN per-user dedup:
+          // Only events outside business hours (18:00-08:00 + weekends), one alarm per user per cooldown
+          const offHoursLogs = this.filterOffHours(recentLogs);
+          const cooldownMs = alarm.cooldownMinutes * 60 * 1000;
+          const userCooldownThreshold = new Date(Date.now() - cooldownMs);
+          const userLatestLog = new Map<string, Record<string, unknown>>();
+          for (const log of offHoursLogs) {
+            const u = (log.user as string) || '';
+            if (!u) continue;
+            if (!userLatestLog.has(u)) userLatestLog.set(u, log);
+          }
+          const newUserLogs: Array<Record<string, unknown>> = [];
+          for (const [username, log] of userLatestLog.entries()) {
+            const alreadyAlerted = await prisma.alarmEvent.findFirst({
+              where: { alarmId: alarm.id, deviceName: username, createdAt: { gte: userCooldownThreshold } },
+            });
+            if (!alreadyAlerted) {
+              newUserLogs.push(log);
+            } else {
+              console.log(`[AlarmEngine] ${alarm.code}: Skipping ${username} — already alerted off-hours (per-user cooldown)`);
+            }
+          }
+          for (const userLog of newUserLogs) {
+            const u = userLog.user as string;
+            console.log(`[AlarmEngine] ${alarm.code}: Off-hours login detected for user ${u}`);
             await this.fireAlarm(alarm, [userLog]);
           }
           return {
@@ -1095,7 +1135,7 @@ export class AlarmDetectionEngine {
     ]);
     
     if (!searchResult.tid || searchResult.logs.length === 0) {
-      const isCleanCache = searchResult.tid === 'cache-empty';
+      const isCleanCache = searchResult.tid === 'cache-empty' || searchResult.tid === 'dedicated-query-empty';
       return { 
         alarmCode: alarm.code, 
         triggered: false, 
@@ -1167,6 +1207,33 @@ export class AlarmDetectionEngine {
     const logic = alarm.detectionLogic as unknown as AlarmDetectionLogic;
     const endTime = new Date();
     const startTime = new Date(Date.now() - logic.timeWindowMinutes * 60 * 1000);
+
+    // ── Dedicated Query Layer ─────────────────────────────────────────────
+    // If this alarm has a registered query function, use it instead of the
+    // generic cache path. Dedicated queries use DB-level WHERE conditions
+    // (including JSONB path filters) so they NEVER miss events due to
+    // the "fetch N rows then filter in memory" problem.
+    if (ALARM_QUERY_REGISTRY.has(alarm.code)) {
+      const queryFn = ALARM_QUERY_REGISTRY.get(alarm.code)!;
+      const cacheStatus = this.eventCache?.getCacheStatus() ?? null;
+      try {
+        const result = await queryFn({
+          alarmCode: alarm.code,
+          timeWindowMinutes: logic.timeWindowMinutes,
+          eventCache: this.eventCache,
+          cacheIsFresh: cacheStatus?.isFresh ?? false,
+          faService: this.service,
+          bypassCache: BYPASS_CACHE_ALARMS.has(alarm.code),
+        });
+        // Use sentinel TIDs that the caller understands
+        const tid = result.events.length > 0 ? 'dedicated-query' : 'dedicated-query-empty';
+        return { tid, logs: result.events };
+      } catch (err) {
+        console.error(`[AlarmEngine] Dedicated query failed for ${alarm.code}, falling back to generic:`, err);
+        // Fall through to generic path on error
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────
 
     // Try cache first
     if (this.eventCache && this.cacheInitialized) {
@@ -1749,6 +1816,10 @@ export class AlarmDetectionEngine {
       } else if (firstLog.type === 'snapshot' || firstLog.type === 'snapshot_created' || firstLog.type === 'snapshot_event') {
         deviceName = `${firstLog.vmName} - ${firstLog.snapshotName}` || null;
       }
+    } else if (firstLog.action === 'auth-logon' && firstLog.user) {
+      // FA SSL-VPN auth-logon events: store username as deviceName so per-user cooldown checks work
+      sourceIp = (firstLog.srcip as string) || (firstLog.remip as string) || null;
+      deviceName = (firstLog.user as string);
     } else {
       // FortiAnalyzer log metadata
       sourceIp = (firstLog.srcip as string) || (firstLog.remip as string) || (firstLog.remote_host as string) || null;
