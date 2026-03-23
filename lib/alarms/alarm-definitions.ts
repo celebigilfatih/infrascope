@@ -74,6 +74,23 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
     },
   },
   {
+    code: 'ADMIN_LOGIN_FAILED',
+    name: 'Admin Basarisiz Giris Denemesi (FortiGate)',
+    description: 'FortiGate uzerinden tespit edilen basarisiz admin giris denemesi.',
+    category: 'SECURITY',
+    severity: 'ALARM_MEDIUM',
+    cooldownMinutes: 5,
+    detectionLogic: {
+      logtype: 'event',
+      filter: 'subtype == system and action == login and status == failed',
+      threshold: 1,
+      timeWindowMinutes: 15,
+      description: 'Detects failed admin login attempts directly from FortiGate REST API. Monitors all authentication failures regardless of user or IP.',
+      recommendedAction: 'Review source IP and username. Verify if this is a legitimate admin. Consider blocking IP after multiple failures. Enable 2FA for all admin accounts.',
+    },
+    notifyEmail: true,
+  },
+  {
     code: 'ADMIN_LOGIN_OFF_HOURS',
     name: 'Mesai Disi Admin Girisi',
     description: 'Calisma saatleri disinda (08:00-18:00) admin girisi tespit edildi. Hafta sonu ve tatil gunleri vurgulanir.',

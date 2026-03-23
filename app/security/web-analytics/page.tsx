@@ -130,10 +130,8 @@ function formatNumber(numStr?: string): string {
 }
 
 const TIME_RANGES = [
-  { label: '5 dk', value: 5 },
   { label: '15 dk', value: 15 },
-  { label: '4 saat', value: 240 },
-  { label: '7 gün', value: 10080 },
+  { label: '1 saat', value: 60 },
 ];
 
 export default function WebAnalyticsPage() {
@@ -151,7 +149,7 @@ export default function WebAnalyticsPage() {
   const [policySearch, setPolicySearch] = useState('');
   const [cloudSearch, setCloudSearch] = useState('');
   const [activeTab, setActiveTab] = useState('categories');
-  const [timeRange, setTimeRange] = useState(240);
+  const [timeRange, setTimeRange] = useState(60);
 
   // Fetch all FortiView data in a SINGLE batch API call (single FA login)
   const fetchAllData = useCallback(async (range: number) => {

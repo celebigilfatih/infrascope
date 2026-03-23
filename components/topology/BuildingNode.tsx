@@ -56,14 +56,14 @@ export const BuildingNode = memo(({ data, selected }: NodeProps<BuildingNodeData
           position={Position.Top}
           id="top-source"
           className="!w-0 !h-0 !border-0 opacity-0 group-hover:opacity-100 transition-opacity"
-          style={{ left: '50%', top: 0, transform: 'translate(-50%, -50%)' }}
+          style={{ left: '50%', top: 0 }}
         />
         <Handle
           type="target"
           position={Position.Top}
           id="top-target"
           className="!w-0 !h-0 !border-0 opacity-0 group-hover:opacity-100 transition-opacity"
-          style={{ left: '50%', top: 0, transform: 'translate(-50%, -50%)' }}
+          style={{ left: '50%', top: 0 }}
         />
         
         {/* Right handle */}
@@ -72,14 +72,14 @@ export const BuildingNode = memo(({ data, selected }: NodeProps<BuildingNodeData
           position={Position.Right}
           id="right-source"
           className="!w-0 !h-0 !border-0 opacity-0 group-hover:opacity-100 transition-opacity"
-          style={{ right: 0, top: '50%', transform: 'translate(50%, -50%)' }}
+          style={{ right: 0, top: '50%' }}
         />
         <Handle
           type="target"
           position={Position.Right}
           id="right-target"
           className="!w-0 !h-0 !border-0 opacity-0 group-hover:opacity-100 transition-opacity"
-          style={{ right: 0, top: '50%', transform: 'translate(50%, -50%)' }}
+          style={{ right: 0, top: '50%' }}
         />
         
         {/* Bottom handle */}
@@ -88,14 +88,14 @@ export const BuildingNode = memo(({ data, selected }: NodeProps<BuildingNodeData
           position={Position.Bottom}
           id="bottom-source"
           className="!w-0 !h-0 !border-0 opacity-0 group-hover:opacity-100 transition-opacity"
-          style={{ left: '50%', bottom: 0, transform: 'translate(-50%, 50%)' }}
+          style={{ left: '50%', bottom: 0 }}
         />
         <Handle
           type="target"
           position={Position.Bottom}
           id="bottom-target"
           className="!w-0 !h-0 !border-0 opacity-0 group-hover:opacity-100 transition-opacity"
-          style={{ left: '50%', bottom: 0, transform: 'translate(-50%, 50%)' }}
+          style={{ left: '50%', bottom: 0 }}
         />
         
         {/* Left handle */}
@@ -104,14 +104,14 @@ export const BuildingNode = memo(({ data, selected }: NodeProps<BuildingNodeData
           position={Position.Left}
           id="left-source"
           className="!w-0 !h-0 !border-0 opacity-0 group-hover:opacity-100 transition-opacity"
-          style={{ left: 0, top: '50%', transform: 'translate(-50%, -50%)' }}
+          style={{ left: 0, top: '50%' }}
         />
         <Handle
           type="target"
           position={Position.Left}
           id="left-target"
           className="!w-0 !h-0 !border-0 opacity-0 group-hover:opacity-100 transition-opacity"
-          style={{ left: 0, top: '50%', transform: 'translate(-50%, -50%)' }}
+          style={{ left: 0, top: '50%' }}
         />
       </div>
 

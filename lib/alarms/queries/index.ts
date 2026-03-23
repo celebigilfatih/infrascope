@@ -58,6 +58,9 @@ export {
   getIpsecTunnelDownEvents,
 } from './vpn-events';
 
+// FortiGate direct queries (bypass FortiAnalyzer)
+export { getAdminLoginFailedEvents } from './admin-login-failed';
+
 // Security threat events
 export {
   getIpsHighSeverityEvents,
@@ -107,7 +110,10 @@ export const ALARM_QUERY_REGISTRY = new Map<string, AlarmQueryFn>([
   ['SD_WAN_CHANGED',           getSdWanChangeEvents],
   ['HA_CONFIG_CHANGED',        getHaConfigChangeEvents],
 
-  // ── Authentication & Login ───────────────────────────────────────────────
+  // ── Authentication & Login (FortiGate Direct) ────────────────────────────
+  ['ADMIN_LOGIN_FAILED',       getAdminLoginFailedEvents],  // Direct FortiGate query
+  
+  // ── Authentication & Login (FortiAnalyzer) ──────────────────────────────
   ['UNAUTH_ADMIN_LOGIN',       getAdminLoginFailEvents],
   ['ADMIN_LOGIN_OFF_HOURS',    getAdminLoginSuccessEvents],
   ['VPN_LOGIN_OFF_HOURS',      getVpnLoginEvents],

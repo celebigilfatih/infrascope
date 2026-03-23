@@ -807,6 +807,59 @@ export class FortiGateService {
   }
 
   /**
+   * Get admin login events from FortiGate system log
+   * Returns both successful and failed login attempts
+   */
+  async getAdminLoginEvents(): Promise<Array<{
+    user: string;
+    srcip: string;
+    timestamp: number;
+    action: string;
+    status: string;
+    msg?: string;
+  }>> {
+    try {
+      // Fetch from FortiGate log endpoint
+      const response = await fetch(`${this.baseUrl}/monitor/log/current?limit=100`, {
+        headers: { 'Authorization': `Bearer ${this.config.accessToken}` },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const data = await response.json() as {
+        results?: Array<{
+          user?: string;
+          srcip?: string;
+          timestamp?: number;
+          action?: string;
+          status?: string;
+          msg?: string;
+          subtype?: string;
+        }>;
+      };
+
+      // Filter for admin login events (subtype=system, action=login)
+      const loginEvents = (data.results || []).filter(log => 
+        log.subtype === 'system' && log.action === 'login'
+      ).map(log => ({
+        user: log.user || 'unknown',
+        srcip: log.srcip || '',
+        timestamp: log.timestamp || 0,
+        action: log.action || 'login',
+        status: log.status || 'unknown',
+        msg: log.msg || '',
+      }));
+
+      return loginEvents;
+    } catch (error) {
+      console.error('Failed to get admin login events:', error);
+      return [];
+    }
+  }
+
+  /**
    * Get IPsec VPN tunnels
    */
   async getIPsecTunnels(): Promise<Array<{

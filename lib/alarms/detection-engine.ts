@@ -824,12 +824,52 @@ export class AlarmDetectionEngine {
             
             // Check cooldown — skip if alarm fired recently
             const cooldownThreshold = new Date(Date.now() - alarm.cooldownMinutes * 60 * 1000);
-            const recentEvent = await prisma.alarmEvent.findFirst({
-              where: { alarmId: alarm.id, createdAt: { gte: cooldownThreshold } },
-              orderBy: { createdAt: 'desc' },
-            });
-            if (recentEvent) {
-              return { alarmCode: alarm.code, triggered: false, matchCount: 0, events: [], error: 'cooldown-active' as string };
+            
+            // For config change alarms, use per-user + per-object tracking
+            // This prevents missing critical changes when same user modifies different objects
+            const isConfigChangeAlarm = ['ADDRESS_OBJECT_CHANGED', 'FW_POLICY_CHANGED'].includes(alarm.code);
+            
+            let recentEvent;
+            if (isConfigChangeAlarm && searchResult.logs.length > 0) {
+              // Extract user and object/policy from the first matching log
+              const userName = searchResult.logs[0]?.user as string;
+              const cfgobj = searchResult.logs[0]?.cfgobj as string;
+              const cfgpath = searchResult.logs[0]?.cfgpath as string;
+              
+              // Hybrid cooldown: same user + same object/policy combination
+              recentEvent = await prisma.alarmEvent.findFirst({
+                where: {
+                  alarmId: alarm.id,
+                  createdAt: { gte: cooldownThreshold },
+                  AND: [
+                    { rawData: { path: ['user'], equals: userName } },
+                    {
+                      OR: [
+                        { rawData: { path: ['cfgobj'], equals: cfgobj } },
+                        { rawData: { path: ['cfgpath'], equals: cfgpath } },
+                      ],
+                    },
+                  ],
+                },
+                orderBy: { createdAt: 'desc' },
+              });
+              
+              if (recentEvent) {
+                console.log(
+                  `[AlarmEngine] ${alarm.code}: SKIPPED — ${userName} changed ${cfgobj || cfgpath} ` +
+                  `(cooldown active until ${new Date(recentEvent.createdAt.getTime() + alarm.cooldownMinutes * 60 * 1000).toISOString()})`
+                );
+                return { alarmCode: alarm.code, triggered: false, matchCount: 0, events: [], error: 'cooldown-active' as string };
+              }
+            } else {
+              // Standard global cooldown for other alarms
+              recentEvent = await prisma.alarmEvent.findFirst({
+                where: { alarmId: alarm.id, createdAt: { gte: cooldownThreshold } },
+                orderBy: { createdAt: 'desc' },
+              });
+              if (recentEvent) {
+                return { alarmCode: alarm.code, triggered: false, matchCount: 0, events: [], error: 'cooldown-active' as string };
+              }
             }
         
         // Filter by time window
