@@ -96,6 +96,13 @@ export interface CachedEventWhere {
       equals?: string;
     };
   }>;
+  NOT?: Array<{
+    rawLog?: {
+      path: string[];
+      string_contains?: string;
+      equals?: string;
+    };
+  }>;
   OR?: Array<{
     rawLog?: {
       path: string[];

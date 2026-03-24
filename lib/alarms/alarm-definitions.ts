@@ -51,7 +51,7 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
     cooldownMinutes: 180, // Must match timeWindowMinutes
     detectionLogic: {
       logtype: 'event',
-      filter: 'subtype == system and logdesc like %attribute% and cfgpath like %firewall.policy%',
+      filter: 'subtype == system and logdesc like %attribute% and cfgpath like %firewall.policy% and ui != ha_daemon',
       threshold: 1,
       timeWindowMinutes: 180,
       description: 'Detects firewall policy add/edit/delete operations from system event logs. Includes admin user, source IP, and policy details.',
@@ -322,12 +322,12 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
     description: 'Mevcut IP, subnet veya FQDN nesnesi duzenlendi veya silindi. Politika etkisi incelenmeli.',
     category: 'CONFIG_ACCESS',
     severity: 'ALARM_HIGH',
-    cooldownMinutes: 60, // Must match timeWindowMinutes
+    cooldownMinutes: 30,
     detectionLogic: {
       logtype: 'event',
       filter: 'subtype == system and logdesc like %attribute% and cfgpath like %firewall.address%',
       threshold: 1,
-      timeWindowMinutes: 60,
+      timeWindowMinutes: 30,
       description: 'Detects firewall address object modifications (Edit/Delete). Changes to address objects can affect multiple policies.',
       recommendedAction: 'Review changed address object and identify all policies referencing it. Verify change was authorized. Check before/after values.',
     },

@@ -18,12 +18,15 @@ import type { AlarmQueryContext, QueryResult } from './types';
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
 
-/** All config-change events share logtype=event, subtype=system */
+/** All config-change events share logtype=event, subtype=system.
+ *  HA-daemon events (ui=ha_daemon) are excluded — they are HA-sync
+ *  duplicates of primary-unit events and should not count as admin changes. */
 function baseConfigWhere(minutes: number) {
   return {
     logtype: 'event' as const,
     subtype: 'system',
     eventTime: timeWindow(minutes),
+    NOT: [{ rawLog: { path: ['ui'], equals: 'ha_daemon' } }],
   };
 }
 
@@ -58,7 +61,7 @@ export async function getFirewallPolicyChangeEvents(ctx: AlarmQueryContext): Pro
       queryFortiAnalyzerDirect(
         fa,
         'event',
-        'subtype == system and logdesc like %attribute% and cfgpath like %firewall.policy%',
+        'subtype == system and logdesc like %attribute% and cfgpath like %firewall.policy% and ui != ha_daemon',
         ctx.timeWindowMinutes
       ),
     { softFallback: false }
@@ -94,7 +97,7 @@ export async function getCoreConfigChangeEvents(ctx: AlarmQueryContext): Promise
       queryFortiAnalyzerDirect(
         fa,
         'event',
-        'subtype == system and logdesc like %attribute% or logdesc like %changed%',
+        'subtype == system and (logdesc like %attribute% or logdesc like %changed%) and ui != ha_daemon',
         ctx.timeWindowMinutes
       )
   );
@@ -123,7 +126,7 @@ export async function getFirmwareChangeEvents(ctx: AlarmQueryContext): Promise<Q
       queryFortiAnalyzerDirect(
         fa,
         'event',
-        'subtype == system and logdesc like %firmware%',
+        'subtype == system and logdesc like %firmware% and ui != ha_daemon',
         ctx.timeWindowMinutes
       )
   );
@@ -159,7 +162,7 @@ export async function getAuthServerChangeEvents(ctx: AlarmQueryContext): Promise
       queryFortiAnalyzerDirect(
         fa,
         'event',
-        'subtype == system and logdesc like %attribute% and (cfgpath like %user.radius% or cfgpath like %user.ldap% or cfgpath like %user.tacacs%)',
+        'subtype == system and logdesc like %attribute% and (cfgpath like %user.radius% or cfgpath like %user.ldap% or cfgpath like %user.tacacs%) and ui != ha_daemon',
         ctx.timeWindowMinutes
       )
   );
@@ -195,7 +198,7 @@ export async function getRouteTableChangeEvents(ctx: AlarmQueryContext): Promise
       queryFortiAnalyzerDirect(
         fa,
         'event',
-        'subtype == system and logdesc like %attribute% and (cfgpath like %router.static% or cfgpath like %router.policy%)',
+        'subtype == system and logdesc like %attribute% and (cfgpath like %router.static% or cfgpath like %router.policy%) and ui != ha_daemon',
         ctx.timeWindowMinutes
       )
   );
@@ -228,7 +231,7 @@ export async function getAdminPasswordChangeEvents(ctx: AlarmQueryContext): Prom
       queryFortiAnalyzerDirect(
         fa,
         'event',
-        'subtype == system and logdesc like %attribute% and cfgpath like %system.admin%',
+        'subtype == system and logdesc like %attribute% and cfgpath like %system.admin% and ui != ha_daemon',
         ctx.timeWindowMinutes
       )
   );
@@ -261,7 +264,7 @@ export async function getAddressObjectChangeEvents(ctx: AlarmQueryContext): Prom
       queryFortiAnalyzerDirect(
         fa,
         'event',
-        'subtype == system and logdesc like %attribute% and cfgpath like %firewall.address%',
+        'subtype == system and logdesc like %attribute% and cfgpath like %firewall.address% and ui != ha_daemon',
         ctx.timeWindowMinutes
       )
   );
@@ -290,7 +293,7 @@ export async function getSdWanChangeEvents(ctx: AlarmQueryContext): Promise<Quer
       queryFortiAnalyzerDirect(
         fa,
         'event',
-        'subtype == system and logdesc like %attribute% and cfgpath like %system.sdwan%',
+        'subtype == system and logdesc like %attribute% and cfgpath like %system.sdwan% and ui != ha_daemon',
         ctx.timeWindowMinutes
       )
   );
@@ -321,7 +324,7 @@ export async function getHaConfigChangeEvents(ctx: AlarmQueryContext): Promise<Q
       queryFortiAnalyzerDirect(
         fa,
         'event',
-        'subtype == system and logdesc like %attribute% and cfgpath like %system.ha%',
+        'subtype == system and logdesc like %attribute% and cfgpath like %system.ha% and ui != ha_daemon',
         ctx.timeWindowMinutes
       ),
     { softFallback: true } // HA changes are high-stakes — double-check if cache is empty

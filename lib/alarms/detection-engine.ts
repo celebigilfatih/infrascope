@@ -829,54 +829,18 @@ export class AlarmDetectionEngine {
           try {
             const logic = alarm.detectionLogic;
             
-            // Check cooldown — skip if alarm fired recently
+            // Check cooldown — skip if alarm fired recently (standard global cooldown)
             const cooldownThreshold = new Date(Date.now() - alarm.cooldownMinutes * 60 * 1000);
-            
-            // For config change alarms, use per-user + per-object tracking
-            // This prevents missing critical changes when same user modifies different objects
-            const isConfigChangeAlarm = ['ADDRESS_OBJECT_CHANGED', 'FW_POLICY_CHANGED'].includes(alarm.code);
-            
-            let recentEvent;
-            if (isConfigChangeAlarm && searchResult.logs.length > 0) {
-              // Extract user and object/policy from the first matching log
-              const userName = searchResult.logs[0]?.user as string;
-              const cfgobj = searchResult.logs[0]?.cfgobj as string;
-              const cfgpath = searchResult.logs[0]?.cfgpath as string;
-              
-              // Hybrid cooldown: same user + same object/policy combination
-              recentEvent = await prisma.alarmEvent.findFirst({
-                where: {
-                  alarmId: alarm.id,
-                  createdAt: { gte: cooldownThreshold },
-                  AND: [
-                    { rawData: { path: ['user'], equals: userName } },
-                    {
-                      OR: [
-                        { rawData: { path: ['cfgobj'], equals: cfgobj } },
-                        { rawData: { path: ['cfgpath'], equals: cfgpath } },
-                      ],
-                    },
-                  ],
-                },
-                orderBy: { createdAt: 'desc' },
-              });
-              
-              if (recentEvent) {
-                console.log(
-                  `[AlarmEngine] ${alarm.code}: SKIPPED — ${userName} changed ${cfgobj || cfgpath} ` +
-                  `(cooldown active until ${new Date(recentEvent.createdAt.getTime() + alarm.cooldownMinutes * 60 * 1000).toISOString()})`
-                );
-                return { alarmCode: alarm.code, triggered: false, matchCount: 0, events: [], error: 'cooldown-active' as string };
-              }
-            } else {
-              // Standard global cooldown for other alarms
-              recentEvent = await prisma.alarmEvent.findFirst({
-                where: { alarmId: alarm.id, createdAt: { gte: cooldownThreshold } },
-                orderBy: { createdAt: 'desc' },
-              });
-              if (recentEvent) {
-                return { alarmCode: alarm.code, triggered: false, matchCount: 0, events: [], error: 'cooldown-active' as string };
-              }
+            const recentEvent = await prisma.alarmEvent.findFirst({
+              where: { alarmId: alarm.id, createdAt: { gte: cooldownThreshold } },
+              orderBy: { createdAt: 'desc' },
+            });
+            if (recentEvent) {
+              console.log(
+                `[AlarmEngine] ${alarm.code}: SKIPPED — cooldown active until ` +
+                new Date(recentEvent.createdAt.getTime() + alarm.cooldownMinutes * 60 * 1000).toISOString()
+              );
+              return { alarmCode: alarm.code, triggered: false, matchCount: 0, events: [], error: 'cooldown-active' as string };
             }
         
         // Filter by time window
@@ -1542,7 +1506,11 @@ export class AlarmDetectionEngine {
       // ── VM lifecycle events handled via SOAP ────────────────────────────────
       else if (alarm.code === 'VM_CLONED') {
         const events = await this.vmwareService.fetchEventsByTypes(logic.timeWindowMinutes, ['VmClonedEvent']);
-        vmwareData = events.map(evt => ({
+        const filtered = events.filter(evt => !this.isTrustedAutomation(evt));
+        if (filtered.length < events.length) {
+          console.log(`[AlarmEngine] VM_CLONED: excluded ${events.length - filtered.length} Veeam/automation event(s)`);
+        }
+        vmwareData = filtered.map(evt => ({
           type: 'vm_event',
           vmCloned: true,
           vmName: evt.vmName,
@@ -1556,7 +1524,11 @@ export class AlarmDetectionEngine {
         const events = await this.vmwareService.fetchEventsByTypes(logic.timeWindowMinutes, [
           'VmMigratedEvent', 'VmMigrationEvent', 'VmRelocatedEvent',
         ]);
-        vmwareData = events.map(evt => ({
+        const filtered = events.filter(evt => !this.isTrustedAutomation(evt));
+        if (filtered.length < events.length) {
+          console.log(`[AlarmEngine] VM_MIGRATED: excluded ${events.length - filtered.length} Veeam/automation event(s)`);
+        }
+        vmwareData = filtered.map(evt => ({
           type: 'vm_event',
           vmMigrated: true,
           vmName: evt.vmName,
@@ -1568,7 +1540,11 @@ export class AlarmDetectionEngine {
       }
       else if (alarm.code === 'VM_RECONFIGURED') {
         const events = await this.vmwareService.fetchEventsByTypes(logic.timeWindowMinutes, ['VmReconfiguredEvent']);
-        vmwareData = events.map(evt => ({
+        const filtered = events.filter(evt => !this.isTrustedAutomation(evt));
+        if (filtered.length < events.length) {
+          console.log(`[AlarmEngine] VM_RECONFIGURED: excluded ${events.length - filtered.length} Veeam/automation event(s)`);
+        }
+        vmwareData = filtered.map(evt => ({
           type: 'vm_event',
           vmReconfigured: true,
           vmName: evt.vmName,
@@ -2169,6 +2145,41 @@ export class AlarmDetectionEngine {
   }
 
   /**
+   * Trusted-automation filter for VMware events.
+   *
+   * Returns true when an event was generated by a known backup/automation system
+   * (Veeam, etc.) and should NOT trigger an operator alarm.
+   *
+   * Checks (all case-insensitive):
+   *   • userName  – service account name contains a known automation keyword
+   *   • message   – full formatted message contains a known automation keyword
+   *
+   * Add new keywords to AUTOMATION_KEYWORDS to extend coverage.
+   */
+  private isTrustedAutomation(event: {
+    userName?: string;
+    vmName?: string;
+    message?: string;
+    eventType?: string;
+  }): boolean {
+    // Keywords that identify automated / backup-system activity
+    const AUTOMATION_KEYWORDS = [
+      'veeam',
+      'veeam backup',
+      'veeam replica',
+      'veeam agent',
+    ];
+
+    const userName = (event.userName || '').toLowerCase();
+    const message  = (event.message  || '').toLowerCase();
+
+    return AUTOMATION_KEYWORDS.some(
+      kw => userName.includes(kw) || message.includes(kw)
+    );
+  }
+
+
+  /**
    * Filter logs for off-hours check (outside 08:00-18:00 weekdays Turkey time)
    */
   private filterOffHours(logs: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
@@ -2316,12 +2327,33 @@ export class AlarmDetectionEngine {
       return title;
     }
 
+    // Special handling for admin login fail alarms — show user + device + count
+    if (alarm.code === 'UNAUTH_ADMIN_LOGIN' || alarm.code === 'ADMIN_LOGIN_FAILED') {
+      const users = [...new Set(logs.map(l => (l.user as string) || '').filter(Boolean))];
+      const devices = [...new Set(logs.map(l => (l.devname as string) || '').filter(Boolean))];
+      let title = alarm.name;
+      if (count > 1) title += ` (${count} deneme)`;
+      if (users.length === 1) title += ` - ${users[0]}`;
+      else if (users.length > 1) title += ` - ${users[0]} +${users.length - 1} kullanici`;
+      if (devices.length === 1) title += ` [${devices[0]}]`;
+      else if (devices.length > 1) title += ` [${devices.length} cihaz]`;
+      return title;
+    }
+
     // Special handling for config change alarms — show user + device
     if (
       alarm.code === 'CORE_CONFIG_CHANGE' ||
       alarm.code === 'FW_POLICY_CHANGED' ||
       alarm.code === 'INTERFACE_CONFIG_CHANGED' ||
-      alarm.code === 'CONFIG_CHANGE_AFTER_HOURS'
+      alarm.code === 'CONFIG_CHANGE_AFTER_HOURS' ||
+      alarm.code === 'ADDRESS_OBJECT_CHANGED' ||
+      alarm.code === 'NEW_ADDRESS_OBJECT' ||
+      alarm.code === 'NEW_SERVICE_OBJECT' ||
+      alarm.code === 'ADDRESS_GROUP_CHANGED' ||
+      alarm.code === 'ROUTE_TABLE_CHANGED' ||
+      alarm.code === 'HA_CONFIG_CHANGED' ||
+      alarm.code === 'AUTH_SERVER_CHANGED' ||
+      alarm.code === 'SD_WAN_CHANGED'
     ) {
       // Collect unique users
       const users = [...new Set(logs.map(l => (l.user as string) || '').filter(Boolean))];
@@ -2699,12 +2731,72 @@ export class AlarmDetectionEngine {
       return sections.join('\n\n');
     }
 
+    // Special handling for admin login fail alarms (UNAUTH_ADMIN_LOGIN, ADMIN_LOGIN_FAILED)
+    if (alarm.code === 'UNAUTH_ADMIN_LOGIN' || alarm.code === 'ADMIN_LOGIN_FAILED') {
+      const loginDetails: string[] = [];
+
+      const user     = (firstLog.user    as string) || 'N/A';
+      const srcip    = (firstLog.srcip   as string) || (firstLog.remip as string) || '';
+      const devname  = (firstLog.devname as string) || '';
+      const vd       = (firstLog.vd      as string) || '';
+      const msg      = (firstLog.msg     as string) || '';
+      const ui       = (firstLog.ui      as string) || '';
+
+      // Parse "GUI(10.7.7.7)" → method=GUI, ip=10.7.7.7
+      const uiMatch    = ui.match(/^([A-Za-z_]+)\((.+)\)$/);
+      const accessMethod = uiMatch ? uiMatch[1].toUpperCase() : (ui || 'N/A');
+      const accessIp     = uiMatch ? uiMatch[2] : srcip;
+
+      loginDetails.push(`Kullanici: ${user}`);
+      if (accessIp || srcip) loginDetails.push(`Kaynak IP: ${accessIp || srcip}`);
+      loginDetails.push(`Erisim Yontemi: ${accessMethod}`);
+      if (devname) loginDetails.push(`Cihaz: ${devname}`);
+      if (vd && vd !== 'root') loginDetails.push(`VDOM: ${vd}`);
+      if (firstLog.date && firstLog.time) {
+        const tz = firstLog.tz ? ` (${firstLog.tz})` : '';
+        loginDetails.push(`Zaman: ${firstLog.date} ${firstLog.time}${tz}`);
+      }
+      if (msg) loginDetails.push(`Hata: ${this.decodeMsg(msg)}`);
+
+      sections.push(loginDetails.join('\n'));
+
+      // List additional attempts
+      if (logs.length > 1) {
+        const attempts = logs.slice(1, 10).map((l) => {
+          const lu    = (l.user   as string) || 'N/A';
+          const lsrc  = (l.srcip  as string) || (l.remip  as string) || '';
+          const lui   = (l.ui     as string) || '';
+          const lm    = lui.match(/^([A-Za-z_]+)\((.+)\)$/);
+          const lMethod = lm ? lm[1].toUpperCase() : (lui || '');
+          const lIp     = lm ? lm[2] : lsrc;
+          const lt      = (l.time as string) || '';
+          const parts: string[] = [lu];
+          if (lIp)     parts.push(lIp);
+          if (lMethod) parts.push(lMethod);
+          if (lt)      parts.push(lt);
+          return `- ${parts.join(' @ ')}`;
+        }).join('\n');
+        sections.push(`Diger denemeler:\n${attempts}${logs.length > 10 ? `\n- ... ve ${logs.length - 10} daha` : ''}`);
+      }
+
+      sections.push(`Onerilen Aksiyon: ${alarm.detectionLogic.recommendedAction}`);
+      return sections.join('\n\n');
+    }
+
     // Special handling for FortiGate SSL-VPN alarms
     // NOTE: config change events also have a 'user' field — skip them here (handled below via cfgpath)
     const isConfigChangeAlarm = alarm.code === 'CORE_CONFIG_CHANGE' ||
       alarm.code === 'FW_POLICY_CHANGED' ||
       alarm.code === 'INTERFACE_CONFIG_CHANGED' ||
-      alarm.code === 'CONFIG_CHANGE_AFTER_HOURS';
+      alarm.code === 'CONFIG_CHANGE_AFTER_HOURS' ||
+      alarm.code === 'ADDRESS_OBJECT_CHANGED' ||
+      alarm.code === 'NEW_ADDRESS_OBJECT' ||
+      alarm.code === 'NEW_SERVICE_OBJECT' ||
+      alarm.code === 'ADDRESS_GROUP_CHANGED' ||
+      alarm.code === 'ROUTE_TABLE_CHANGED' ||
+      alarm.code === 'HA_CONFIG_CHANGED' ||
+      alarm.code === 'AUTH_SERVER_CHANGED' ||
+      alarm.code === 'SD_WAN_CHANGED';
     if ((firstLog.remoteIp || firstLog.user) && !isConfigChangeAlarm) {
       const fgDetails: string[] = [];
       if (firstLog.user) fgDetails.push(`Kullanici: ${firstLog.user}`);
@@ -2746,7 +2838,15 @@ export class AlarmDetectionEngine {
       alarm.code === 'CORE_CONFIG_CHANGE' ||
       alarm.code === 'FW_POLICY_CHANGED' ||
       alarm.code === 'INTERFACE_CONFIG_CHANGED' ||
-      alarm.code === 'CONFIG_CHANGE_AFTER_HOURS'
+      alarm.code === 'CONFIG_CHANGE_AFTER_HOURS' ||
+      alarm.code === 'ADDRESS_OBJECT_CHANGED' ||
+      alarm.code === 'NEW_ADDRESS_OBJECT' ||
+      alarm.code === 'NEW_SERVICE_OBJECT' ||
+      alarm.code === 'ADDRESS_GROUP_CHANGED' ||
+      alarm.code === 'ROUTE_TABLE_CHANGED' ||
+      alarm.code === 'HA_CONFIG_CHANGED' ||
+      alarm.code === 'AUTH_SERVER_CHANGED' ||
+      alarm.code === 'SD_WAN_CHANGED'
     ) {
       // Group logs by user for overview
       const userGroups = new Map<string, Array<Record<string, unknown>>>();
@@ -2794,9 +2894,28 @@ export class AlarmDetectionEngine {
         const logDev = (log.devname as string) || '';
 
         let line = `${idx + 1}. [${t}] ${actionLabel(action)}`;
-        // For FW_POLICY_CHANGED show path + object ID prominently
+        // Per-alarm-type: show object name prominently
         if (alarm.code === 'FW_POLICY_CHANGED') {
           if (obj) line += ` — Politika #${obj}`;
+        } else if (alarm.code === 'ADDRESS_OBJECT_CHANGED' || alarm.code === 'NEW_ADDRESS_OBJECT') {
+          if (obj) line += ` — Adres Nesnesi: "${obj}"`;
+          else if (path) line += ` ${path}`;
+        } else if (alarm.code === 'ADDRESS_GROUP_CHANGED') {
+          if (obj) line += ` — Adres Grubu: "${obj}"`;
+        } else if (alarm.code === 'NEW_SERVICE_OBJECT') {
+          if (obj) line += ` — Servis: "${obj}"`;
+        } else if (alarm.code === 'ROUTE_TABLE_CHANGED') {
+          if (obj) line += ` — Rota: "${obj}"`;
+          else if (path) line += ` ${path}`;
+        } else if (alarm.code === 'HA_CONFIG_CHANGED') {
+          if (obj) line += ` — HA Objesi: "${obj}"`;
+          else if (path) line += ` ${path}`;
+        } else if (alarm.code === 'AUTH_SERVER_CHANGED') {
+          if (obj) line += ` — Sunucu: "${obj}"`;
+          else if (path) line += ` ${path}`;
+        } else if (alarm.code === 'SD_WAN_CHANGED') {
+          if (obj) line += ` — SD-WAN: "${obj}"`;
+          else if (path) line += ` ${path}`;
         } else {
           if (path) line += ` ${path}`;
           if (obj) line += ` #${obj}`;
@@ -2884,6 +3003,169 @@ export class AlarmDetectionEngine {
     }
     // ─────────────────────────────────────────────────────────────────────────
 
+
+    // ── POLICY_HIT_ANOMALY: rich traffic breakdown ────────────────────────────
+    if (alarm.code === 'POLICY_HIT_ANOMALY' || alarm.code === 'EXCESSIVE_BANDWIDTH') {
+      const topN = <K extends string | number>(
+        map: Map<K, number>,
+        n: number
+      ): Array<[K, number]> =>
+        [...map.entries()].sort((a, b) => b[1] - a[1]).slice(0, n);
+
+      // Aggregation maps
+      const srcCounts    = new Map<string, number>();
+      const dstCounts    = new Map<string, number>();
+      const policyCounts = new Map<string, number>();
+      const svcCounts    = new Map<string, number>();
+      const actionCounts = new Map<string, number>();
+      let totalSent = 0;
+      let totalRcvd = 0;
+
+      for (const log of logs) {
+        const src    = (log.srcip    as string) || '';
+        const dst    = (log.dstip    as string) || '';
+        const pol    = (log.policyid as string) || '';
+        const svc    = (log.service  as string) || (log.app as string) || '';
+        const act    = (log.action   as string) || 'unknown';
+        totalSent += Number(log.sentbyte  || 0);
+        totalRcvd += Number(log.rcvdbyte  || 0);
+        if (src) srcCounts.set(src,    (srcCounts.get(src)    || 0) + 1);
+        if (dst) dstCounts.set(dst,    (dstCounts.get(dst)    || 0) + 1);
+        if (pol) policyCounts.set(pol, (policyCounts.get(pol) || 0) + 1);
+        if (svc) svcCounts.set(svc,    (svcCounts.get(svc)    || 0) + 1);
+        actionCounts.set(act, (actionCounts.get(act) || 0) + 1);
+      }
+
+      const devname   = (firstLog.devname as string) || '';
+      const srcIfaceF = (firstLog.srcintf as string) || '';
+      const dstIfaceF = (firstLog.dstintf as string) || '';
+
+      // Header
+      const headerLines = [
+        `Toplam Olay: ${logs.length}`,
+        `Cihaz: ${devname}`,
+      ];
+      if (srcIfaceF || dstIfaceF) headerLines.push(`Arayuzler: ${srcIfaceF} → ${dstIfaceF}`);
+      if (totalSent + totalRcvd > 0)
+        headerLines.push(`Toplam Trafik: ↑${this.formatBytes(totalSent)} ↓${this.formatBytes(totalRcvd)}`);
+      sections.push(headerLines.join('\n'));
+
+      // Action breakdown
+      const actionStr = topN(actionCounts, 6)
+        .map(([a, c]) => `${a}: ${c}`)
+        .join(' | ');
+      sections.push(`Aksiyon Ozeti: ${actionStr}`);
+
+      // Top 5 source IPs
+      const topSrc = topN(srcCounts, 5);
+      if (topSrc.length > 0) {
+        sections.push(
+          `En Fazla Kaynak IP:\n` +
+          topSrc.map(([ip, c]) => `  - ${ip} (${c} istek)`).join('\n')
+        );
+      }
+
+      // Top 5 destination IPs
+      const topDst = topN(dstCounts, 5);
+      if (topDst.length > 0) {
+        sections.push(
+          `En Fazla Hedef IP:\n` +
+          topDst.map(([ip, c]) => `  - ${ip} (${c} istek)`).join('\n')
+        );
+      }
+
+      // Top 3 policies
+      const topPol = topN(policyCounts, 3);
+      if (topPol.length > 0) {
+        sections.push(
+          `En Cok Vurulan Politikalar:\n` +
+          topPol.map(([pol, c]) => `  - Politika #${pol} (${c} hit)`).join('\n')
+        );
+      }
+
+      // Top 3 services
+      const topSvc = topN(svcCounts, 3);
+      if (topSvc.length > 0) {
+        sections.push(
+          `En Cok Kullanilan Servisler:\n` +
+          topSvc.map(([svc, c]) => `  - ${svc} (${c} hit)`).join('\n')
+        );
+      }
+
+      sections.push(`Onerilen Aksiyon: ${alarm.detectionLogic.recommendedAction}`);
+      return sections.join('\n\n');
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // ── POLICY_HIT_ANOMALY: rich traffic breakdown ────────────────────────────
+    if (alarm.code === 'POLICY_HIT_ANOMALY' || alarm.code === 'EXCESSIVE_BANDWIDTH') {
+      const topN = <K extends string | number>(
+        map: Map<K, number>,
+        n: number
+      ): Array<[K, number]> =>
+        [...map.entries()].sort((a, b) => b[1] - a[1]).slice(0, n);
+
+      const srcCounts    = new Map<string, number>();
+      const dstCounts    = new Map<string, number>();
+      const policyCounts = new Map<string, number>();
+      const svcCounts    = new Map<string, number>();
+      const actionCounts = new Map<string, number>();
+      let totalSent = 0;
+      let totalRcvd = 0;
+
+      for (const log of logs) {
+        const src = (log.srcip    as string) || '';
+        const dst = (log.dstip    as string) || '';
+        const pol = (log.policyid as string) || '';
+        const svc = (log.service  as string) || (log.app as string) || '';
+        const act = (log.action   as string) || 'unknown';
+        totalSent += Number(log.sentbyte || 0);
+        totalRcvd += Number(log.rcvdbyte || 0);
+        if (src) srcCounts.set(src,    (srcCounts.get(src)    || 0) + 1);
+        if (dst) dstCounts.set(dst,    (dstCounts.get(dst)    || 0) + 1);
+        if (pol) policyCounts.set(pol, (policyCounts.get(pol) || 0) + 1);
+        if (svc) svcCounts.set(svc,    (svcCounts.get(svc)    || 0) + 1);
+        actionCounts.set(act, (actionCounts.get(act) || 0) + 1);
+      }
+
+      const devname   = (firstLog.devname as string) || '';
+      const srcIfaceF = (firstLog.srcintf as string) || '';
+      const dstIfaceF = (firstLog.dstintf as string) || '';
+
+      const headerLines = [
+        `Toplam Olay: ${logs.length}`,
+        `Cihaz: ${devname}`,
+      ];
+      if (srcIfaceF || dstIfaceF) headerLines.push(`Arayuzler: ${srcIfaceF} -> ${dstIfaceF}`);
+      if (totalSent + totalRcvd > 0)
+        headerLines.push(`Toplam Trafik: gonderilen ${this.formatBytes(totalSent)}, alinan ${this.formatBytes(totalRcvd)}`);
+      sections.push(headerLines.join('\n'));
+
+      const actionStr = topN(actionCounts, 6)
+        .map(([a, c]) => `${a}: ${c}`)
+        .join(' | ');
+      sections.push(`Aksiyon Ozeti: ${actionStr}`);
+
+      const topSrc = topN(srcCounts, 5);
+      if (topSrc.length > 0)
+        sections.push('En Fazla Kaynak IP:\n' + topSrc.map(([ip, c]) => `  - ${ip} (${c} istek)`).join('\n'));
+
+      const topDst = topN(dstCounts, 5);
+      if (topDst.length > 0)
+        sections.push('En Fazla Hedef IP:\n' + topDst.map(([ip, c]) => `  - ${ip} (${c} istek)`).join('\n'));
+
+      const topPol = topN(policyCounts, 3);
+      if (topPol.length > 0)
+        sections.push('En Cok Vurulan Politikalar:\n' + topPol.map(([pol, c]) => `  - Politika #${pol} (${c} hit)`).join('\n'));
+
+      const topSvc = topN(svcCounts, 3);
+      if (topSvc.length > 0)
+        sections.push('En Cok Kullanilan Servisler:\n' + topSvc.map(([svc, c]) => `  - ${svc} (${c} hit)`).join('\n'));
+
+      sections.push(`Onerilen Aksiyon: ${alarm.detectionLogic.recommendedAction}`);
+      return sections.join('\n\n');
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     if (firstLog.msg) details.push(`Mesaj: ${this.decodeMsg(firstLog.msg)}`);
     if (firstLog.action) details.push(`Aksiyon: ${firstLog.action}`);
