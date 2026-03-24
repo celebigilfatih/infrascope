@@ -272,6 +272,7 @@ export class VMwareService {
   async retrieveServiceContent(): Promise<{
     eventManager?: string;
     rootFolder?: string;
+    viewManager?: string;
   }> {
     const soapEnvelope = `<?xml version="1.0" encoding="UTF-8"?>
 <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
@@ -298,10 +299,12 @@ export class VMwareService {
     // Extract eventManager
     const eventManagerMatch = xmlText.match(/<eventManager[^>]*type="EventManager"[^>]*>([^<]+)<\/eventManager>/);
     const rootFolderMatch = xmlText.match(/<rootFolder[^>]*type="Folder"[^>]*>([^<]+)<\/rootFolder>/);
+    const viewManagerMatch = xmlText.match(/<viewManager[^>]*type="ViewManager"[^>]*>([^<]+)<\/viewManager>/);
     
     return {
       eventManager: eventManagerMatch ? eventManagerMatch[1] : undefined,
       rootFolder: rootFolderMatch ? rootFolderMatch[1] : undefined,
+      viewManager: viewManagerMatch ? viewManagerMatch[1] : undefined,
     };
   }
 
@@ -1132,6 +1135,254 @@ export class VMwareService {
       return events;
     } catch (error) {
       console.error('[VMware] Error fetching snapshot events:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Generic SOAP event fetcher — wrapper around queryEventsSOAP with typed return
+   */
+  async fetchEventsByTypes(timeWindowMinutes: number, eventTypes: string[]): Promise<Array<{
+    eventType: string;
+    vmName?: string;
+    vmId?: string;
+    hostName?: string;
+    userName: string;
+    eventTime: string;
+    message: string;
+  }>> {
+    try {
+      const soapEvents = await this.queryEventsSOAP(timeWindowMinutes, eventTypes);
+      return soapEvents.map(evt => ({
+        eventType: evt.eventType,
+        vmName: evt.vmName,
+        vmId: evt.vmId,
+        userName: evt.userName,
+        eventTime: evt.createdTime,
+        message: evt.message,
+      }));
+    } catch (error) {
+      console.error('[VMware] Error in fetchEventsByTypes:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Create a ContainerView for enumerating objects of a given type
+   */
+  private async createContainerView(viewManager: string, rootFolder: string, type: string): Promise<string | null> {
+    const soapEnvelope = `<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+                  xmlns:urn="urn:vim25">
+   <soapenv:Body>
+      <urn:CreateContainerView>
+         <_this type="ViewManager">${viewManager}</_this>
+         <container type="Folder">${rootFolder}</container>
+         <type>${type}</type>
+         <recursive>true</recursive>
+      </urn:CreateContainerView>
+   </soapenv:Body>
+</soapenv:Envelope>`;
+
+    try {
+      const response = await fetch(`https://${this.config.host}/sdk`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/xml; charset=utf-8',
+          'SOAPAction': '"urn:vim25/6.0"',
+          'Cookie': this.sessionCookie || '',
+        },
+        body: soapEnvelope,
+      });
+      const xmlText = await response.text();
+      const match = xmlText.match(/<returnval[^>]*type="ContainerView"[^>]*>([^<]+)<\/returnval>/);
+      return match ? match[1] : null;
+    } catch (err) {
+      console.error('[VMware] createContainerView error:', err);
+      return null;
+    }
+  }
+
+  /**
+   * Destroy a view object
+   */
+  private async destroyView(viewRef: string): Promise<void> {
+    const soapEnvelope = `<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+                  xmlns:urn="urn:vim25">
+   <soapenv:Body>
+      <urn:DestroyView>
+         <_this type="ContainerView">${viewRef}</_this>
+      </urn:DestroyView>
+   </soapenv:Body>
+</soapenv:Envelope>`;
+
+    try {
+      await fetch(`https://${this.config.host}/sdk`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/xml; charset=utf-8',
+          'SOAPAction': '"urn:vim25/6.0"',
+          'Cookie': this.sessionCookie || '',
+        },
+        body: soapEnvelope,
+      });
+    } catch (err) {
+      console.warn('[VMware] destroyView error (non-fatal):', err);
+    }
+  }
+
+  /**
+   * Fetch host quickStats via SOAP RetrievePropertiesEx + ContainerView
+   * Returns real-time CPU/memory usage for all ESXi hosts
+   */
+  async fetchHostQuickStats(): Promise<Array<{
+    hostId: string;
+    name: string;
+    cpuUsedMHz: number;
+    cpuTotalMHz: number;
+    memUsedMB: number;
+    memTotalMB: number;
+    inMaintenanceMode: boolean;
+    connectionState: string;
+  }>> {
+    try {
+      // Ensure SOAP session is active
+      if (!this.sessionCookie || !this.sessionCookie.includes('vmware_soap_session')) {
+        const authenticated = await this.authenticateSOAP();
+        if (!authenticated) {
+          console.error('[VMware] SOAP authentication required for fetchHostQuickStats');
+          return [];
+        }
+      }
+
+      const serviceContent = await this.retrieveServiceContent();
+      if (!serviceContent.viewManager || !serviceContent.rootFolder) {
+        console.error('[VMware] viewManager or rootFolder not found in ServiceContent');
+        return [];
+      }
+
+      const containerView = await this.createContainerView(
+        serviceContent.viewManager,
+        serviceContent.rootFolder,
+        'HostSystem'
+      );
+      if (!containerView) {
+        console.error('[VMware] Failed to create ContainerView for HostSystem');
+        return [];
+      }
+
+      // RetrievePropertiesEx using ContainerView traversal
+      const soapEnvelope = `<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+                  xmlns:urn="urn:vim25"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+   <soapenv:Body>
+      <urn:RetrievePropertiesEx>
+         <_this type="PropertyCollector">propertyCollector</_this>
+         <specSet>
+            <propSet>
+               <type>HostSystem</type>
+               <all>false</all>
+               <pathSet>name</pathSet>
+               <pathSet>summary.quickStats.overallCpuUsage</pathSet>
+               <pathSet>summary.quickStats.overallMemoryUsage</pathSet>
+               <pathSet>summary.hardware.cpuMhz</pathSet>
+               <pathSet>summary.hardware.numCpuCores</pathSet>
+               <pathSet>summary.hardware.memorySize</pathSet>
+               <pathSet>summary.runtime.connectionState</pathSet>
+               <pathSet>summary.runtime.inMaintenanceMode</pathSet>
+            </propSet>
+            <objectSet>
+               <obj type="ContainerView">${containerView}</obj>
+               <skip>true</skip>
+               <selectSet xsi:type="urn:TraversalSpec">
+                  <name>traverseEntities</name>
+                  <type>ContainerView</type>
+                  <path>view</path>
+                  <skip>false</skip>
+               </selectSet>
+            </objectSet>
+         </specSet>
+         <options/>
+      </urn:RetrievePropertiesEx>
+   </soapenv:Body>
+</soapenv:Envelope>`;
+
+      const response = await fetch(`https://${this.config.host}/sdk`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/xml; charset=utf-8',
+          'SOAPAction': '"urn:vim25/6.0"',
+          'Cookie': this.sessionCookie || '',
+        },
+        body: soapEnvelope,
+      });
+
+      const xmlText = await response.text();
+      await this.destroyView(containerView);
+
+      // Parse returnval blocks — one per host
+      const results: Array<{
+        hostId: string;
+        name: string;
+        cpuUsedMHz: number;
+        cpuTotalMHz: number;
+        memUsedMB: number;
+        memTotalMB: number;
+        inMaintenanceMode: boolean;
+        connectionState: string;
+      }> = [];
+
+      const returnvalRegex = /<returnval>([\s\S]*?)<\/returnval>/g;
+      for (const rvMatch of xmlText.matchAll(returnvalRegex)) {
+        const block = rvMatch[1];
+
+        const hostIdMatch = block.match(/<obj[^>]*type="HostSystem"[^>]*>([^<]+)<\/obj>/);
+        if (!hostIdMatch) continue;
+        const hostId = hostIdMatch[1];
+
+        // Helper to extract a <val> for a given property name
+        const getProp = (propName: string): string => {
+          const escaped = propName.replace(/\./g, '\\.').replace(/\//g, '\\/');
+          const rx = new RegExp(`<name>${escaped}<\\/name>[\\s\\S]*?<val[^>]*>([^<]*)<\\/val>`);
+          const m = block.match(rx);
+          return m ? m[1].trim() : '';
+        };
+
+        const cpuMhzStr = getProp('summary.hardware.cpuMhz');
+        const numCoresStr = getProp('summary.hardware.numCpuCores');
+        const cpuUsedStr = getProp('summary.quickStats.overallCpuUsage');
+        const memUsedStr = getProp('summary.quickStats.overallMemoryUsage');
+        const memSizeStr = getProp('summary.hardware.memorySize');
+
+        const cpuMhz = parseInt(cpuMhzStr, 10) || 0;
+        const numCores = parseInt(numCoresStr, 10) || 0;
+        const cpuTotalMHz = cpuMhz * numCores;
+        const cpuUsedMHz = parseInt(cpuUsedStr, 10) || 0;
+        const memUsedMB = parseInt(memUsedStr, 10) || 0;
+        const memTotalMB = Math.round((parseInt(memSizeStr, 10) || 0) / (1024 * 1024));
+
+        const connectionState = getProp('summary.runtime.connectionState') || 'connected';
+        const inMaintStr = getProp('summary.runtime.inMaintenanceMode');
+        const inMaintenanceMode = inMaintStr === 'true' || inMaintStr === '1';
+
+        results.push({
+          hostId,
+          name: getProp('name'),
+          cpuUsedMHz,
+          cpuTotalMHz,
+          memUsedMB,
+          memTotalMB,
+          inMaintenanceMode,
+          connectionState: connectionState.toLowerCase(),
+        });
+      }
+
+      console.log(`[VMware] fetchHostQuickStats: ${results.length} hosts retrieved`);
+      return results;
+    } catch (error) {
+      console.error('[VMware] Error in fetchHostQuickStats:', error);
       return [];
     }
   }

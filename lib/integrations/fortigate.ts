@@ -806,9 +806,94 @@ export class FortiGateService {
     }
   }
 
+  // ── Per-cycle cache, request dedup & sequential queue to avoid 429 ──────────
+  private _eventLogCache = new Map<string, { ts: number; data: Array<Record<string, any>> }>();
+  private _eventLogCacheTTL = 5 * 60 * 1000; // 5 min TTL
+  private _inflight = new Map<string, Promise<Array<Record<string, any>>>>();
+  private _requestQueue: Promise<void> = Promise.resolve();
+  private _requestDelay = 1000; // ms between requests
+
+  /** Clear the per-cycle event log cache (call at the start of each alarm check cycle). */
+  clearEventLogCache(): void {
+    this._eventLogCache.clear();
+    this._inflight.clear();
+  }
+
   /**
-   * Get admin login events from FortiGate system log
-   * Returns both successful and failed login attempts
+   * Generic event log query from FortiGate REST API.
+   *
+   * Features:
+   * - Per-cycle cache: identical filter+rows combos return cached results
+   * - Request deduplication: concurrent calls for the same filter share one API call
+   * - Sequential queue with delay: prevents HTTP 429 rate limiting
+   *
+   * @param filter  FortiGate filter expression, e.g.
+   *   "subtype==system&&action==login&&status==failed"
+   * @param rows    Max rows to return (default 1000)
+   */
+  async getEventLogs(filter: string, rows = 1000): Promise<Array<Record<string, any>>> {
+    const cacheKey = `${filter}|${rows}`;
+
+    // 1. Return from cache if available
+    const cached = this._eventLogCache.get(cacheKey);
+    if (cached && Date.now() - cached.ts < this._eventLogCacheTTL) {
+      return cached.data;
+    }
+
+    // 2. Return in-flight promise if another caller already queued the same request
+    const inflight = this._inflight.get(cacheKey);
+    if (inflight) {
+      return inflight;
+    }
+
+    // 3. Queue a new request
+    const promise = new Promise<Array<Record<string, any>>>((resolve) => {
+      this._requestQueue = this._requestQueue.then(async () => {
+        // Double-check cache (might have been populated by a previous queued request)
+        const cached2 = this._eventLogCache.get(cacheKey);
+        if (cached2 && Date.now() - cached2.ts < this._eventLogCacheTTL) {
+          resolve(cached2.data);
+          return;
+        }
+
+        try {
+          const params = new URLSearchParams({ rows: String(rows) });
+          if (filter) params.set('filter', filter);
+
+          const url = `${this.baseUrl}/monitor/log/event?${params}`;
+          const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${this.config.accessToken}` },
+          });
+
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+
+          const data = await response.json() as { results?: Array<Record<string, any>> };
+          const logs = data.results || [];
+          this._eventLogCache.set(cacheKey, { ts: Date.now(), data: logs });
+          resolve(logs);
+        } catch (error) {
+          console.error(`[FortiGate] getEventLogs failed (filter=${filter}):`, error);
+          // Cache empty result briefly to avoid hammering a failing endpoint
+          this._eventLogCache.set(cacheKey, { ts: Date.now(), data: [] });
+          resolve([]);
+        }
+        // Delay before next request
+        await new Promise(r => setTimeout(r, this._requestDelay));
+      });
+    });
+
+    this._inflight.set(cacheKey, promise);
+    // Clean up inflight entry after resolution
+    promise.then(() => this._inflight.delete(cacheKey));
+
+    return promise;
+  }
+
+  /**
+   * Get admin login events from FortiGate system log.
+   * Convenience wrapper around getEventLogs().
    */
   async getAdminLoginEvents(): Promise<Array<{
     user: string;
@@ -818,45 +903,15 @@ export class FortiGateService {
     status: string;
     msg?: string;
   }>> {
-    try {
-      // Fetch from FortiGate log endpoint
-      const response = await fetch(`${this.baseUrl}/monitor/log/current?limit=100`, {
-        headers: { 'Authorization': `Bearer ${this.config.accessToken}` },
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      const data = await response.json() as {
-        results?: Array<{
-          user?: string;
-          srcip?: string;
-          timestamp?: number;
-          action?: string;
-          status?: string;
-          msg?: string;
-          subtype?: string;
-        }>;
-      };
-
-      // Filter for admin login events (subtype=system, action=login)
-      const loginEvents = (data.results || []).filter(log => 
-        log.subtype === 'system' && log.action === 'login'
-      ).map(log => ({
-        user: log.user || 'unknown',
-        srcip: log.srcip || '',
-        timestamp: log.timestamp || 0,
-        action: log.action || 'login',
-        status: log.status || 'unknown',
-        msg: log.msg || '',
-      }));
-
-      return loginEvents;
-    } catch (error) {
-      console.error('Failed to get admin login events:', error);
-      return [];
-    }
+    const logs = await this.getEventLogs('subtype==system&&action==login', 200);
+    return logs.map(log => ({
+      user: log.user || 'unknown',
+      srcip: log.srcip || '',
+      timestamp: log.timestamp || 0,
+      action: log.action || 'login',
+      status: log.status || 'unknown',
+      msg: log.msg || '',
+    }));
   }
 
   /**

@@ -34,6 +34,7 @@ export interface AlarmDefinitionSeed {
   severity: 'ALARM_CRITICAL' | 'ALARM_HIGH' | 'ALARM_MEDIUM' | 'ALARM_LOW' | 'ALARM_INFO';
   cooldownMinutes: number;
   notifyEmail?: boolean;
+  source?: 'fortianalyzer' | 'fortigate-sslvpn' | 'vmware';
   detectionLogic: AlarmDetectionLogic;
 }
 
@@ -1142,6 +1143,7 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
     category: 'OPERATIONAL',
     severity: 'ALARM_HIGH',
     cooldownMinutes: 15,
+    source: 'vmware',
     detectionLogic: {
       logtype: 'vmware',
       filter: 'powerState == poweredOff',
@@ -1158,6 +1160,7 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
     category: 'OPERATIONAL',
     severity: 'ALARM_MEDIUM',
     cooldownMinutes: 30,
+    source: 'vmware',
     detectionLogic: {
       logtype: 'vmware',
       filter: 'cpuUsage > 90',
@@ -1174,6 +1177,7 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
     category: 'OPERATIONAL',
     severity: 'ALARM_MEDIUM',
     cooldownMinutes: 30,
+    source: 'vmware',
     detectionLogic: {
       logtype: 'vmware',
       filter: 'memoryUsage > 90',
@@ -1190,6 +1194,7 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
     category: 'OPERATIONAL',
     severity: 'ALARM_CRITICAL',
     cooldownMinutes: 5,
+    source: 'vmware',
     detectionLogic: {
       logtype: 'vmware',
       filter: 'connectionState != connected',
@@ -1206,6 +1211,7 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
     category: 'OPERATIONAL',
     severity: 'ALARM_HIGH',
     cooldownMinutes: 30,
+    source: 'vmware',
     detectionLogic: {
       logtype: 'vmware',
       filter: 'hostCpuUsage > 85',
@@ -1222,6 +1228,7 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
     category: 'OPERATIONAL',
     severity: 'ALARM_HIGH',
     cooldownMinutes: 30,
+    source: 'vmware',
     detectionLogic: {
       logtype: 'vmware',
       filter: 'hostMemoryUsage > 90',
@@ -1238,6 +1245,7 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
     category: 'OPERATIONAL',
     severity: 'ALARM_HIGH',
     cooldownMinutes: 60,
+    source: 'vmware',
     detectionLogic: {
       logtype: 'vmware',
       filter: 'datastoreFreePercent < 15',
@@ -1254,6 +1262,7 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
     category: 'OPERATIONAL',
     severity: 'ALARM_CRITICAL',
     cooldownMinutes: 15,
+    source: 'vmware',
     detectionLogic: {
       logtype: 'vmware',
       filter: 'datastoreFreePercent < 5',
@@ -1273,6 +1282,7 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
     category: 'OPERATIONAL',
     severity: 'ALARM_CRITICAL',
     cooldownMinutes: 120,
+    source: 'vmware',
     notifyEmail: true,
     detectionLogic: {
       logtype: 'vmware',
@@ -1290,6 +1300,7 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
     category: 'OPERATIONAL',
     severity: 'ALARM_CRITICAL',
     cooldownMinutes: 240,
+    source: 'vmware',
     notifyEmail: true,
     detectionLogic: {
       logtype: 'vmware',
@@ -1307,6 +1318,7 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
     category: 'OPERATIONAL',
     severity: 'ALARM_MEDIUM',
     cooldownMinutes: 60,
+    source: 'vmware',
     notifyEmail: false,
     detectionLogic: {
       logtype: 'vmware',
@@ -1327,6 +1339,7 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
     category: 'SECURITY',
     severity: 'ALARM_CRITICAL',
     cooldownMinutes: 30,
+    source: 'vmware',
     notifyEmail: true,
     detectionLogic: {
       logtype: 'vmware',
@@ -1345,6 +1358,7 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
     category: 'SECURITY',
     severity: 'ALARM_CRITICAL',
     cooldownMinutes: 15,
+    source: 'vmware',
     notifyEmail: true,
     detectionLogic: {
       logtype: 'vmware',
@@ -1362,6 +1376,7 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
     category: 'CONFIG_ACCESS',
     severity: 'ALARM_MEDIUM',
     cooldownMinutes: 30,
+    source: 'vmware',
     notifyEmail: true,
     detectionLogic: {
       logtype: 'vmware',
@@ -1383,6 +1398,7 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
     category: 'OPERATIONAL',
     severity: 'ALARM_INFO',
     cooldownMinutes: 15,
+    source: 'vmware',
     notifyEmail: false,
     detectionLogic: {
       logtype: 'vmware',
@@ -1400,6 +1416,7 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
     category: 'OPERATIONAL',
     severity: 'ALARM_INFO',
     cooldownMinutes: 15,
+    source: 'vmware',
     notifyEmail: false,
     detectionLogic: {
       logtype: 'vmware',
@@ -1417,6 +1434,7 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
     category: 'SECURITY',
     severity: 'ALARM_HIGH',
     cooldownMinutes: 30,
+    source: 'vmware',
     notifyEmail: true,
     detectionLogic: {
       logtype: 'vmware',
@@ -1435,6 +1453,7 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
     category: 'OPERATIONAL',
     severity: 'ALARM_LOW',
     cooldownMinutes: 30,
+    source: 'vmware',
     notifyEmail: false,
     detectionLogic: {
       logtype: 'vmware',
@@ -1452,6 +1471,7 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
     category: 'OPERATIONAL',
     severity: 'ALARM_INFO',
     cooldownMinutes: 75, // Must be > timeWindowMinutes to prevent duplicate triggers
+    source: 'vmware',
     notifyEmail: true,
     detectionLogic: {
       logtype: 'vmware',
@@ -1469,6 +1489,7 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
     category: 'OPERATIONAL',
     severity: 'ALARM_INFO',
     cooldownMinutes: 30,
+    source: 'vmware',
     notifyEmail: true,
     detectionLogic: {
       logtype: 'vmware',
@@ -1486,6 +1507,7 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
     category: 'OPERATIONAL',
     severity: 'ALARM_MEDIUM',
     cooldownMinutes: 15,
+    source: 'vmware',
     notifyEmail: true,
     detectionLogic: {
       logtype: 'vmware',
@@ -1503,6 +1525,7 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
     category: 'SECURITY',
     severity: 'ALARM_CRITICAL',
     cooldownMinutes: 15,
+    source: 'vmware',
     notifyEmail: true,
     detectionLogic: {
       logtype: 'vmware',
@@ -1521,6 +1544,7 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
     category: 'OPERATIONAL',
     severity: 'ALARM_MEDIUM',
     cooldownMinutes: 120,
+    source: 'vmware',
     notifyEmail: false,
     detectionLogic: {
       logtype: 'vmware',
@@ -1538,6 +1562,7 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
     category: 'OPERATIONAL',
     severity: 'ALARM_INFO',
     cooldownMinutes: 30,
+    source: 'vmware',
     notifyEmail: false,
     detectionLogic: {
       logtype: 'vmware',
@@ -1555,6 +1580,7 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
     category: 'OPERATIONAL',
     severity: 'ALARM_INFO',
     cooldownMinutes: 30,
+    source: 'vmware',
     notifyEmail: false,
     detectionLogic: {
       logtype: 'vmware',
@@ -1572,6 +1598,7 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
     category: 'CONFIG_ACCESS',
     severity: 'ALARM_MEDIUM',
     cooldownMinutes: 30,
+    source: 'vmware',
     notifyEmail: false,
     detectionLogic: {
       logtype: 'vmware',
@@ -1589,6 +1616,7 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
     category: 'OPERATIONAL',
     severity: 'ALARM_LOW',
     cooldownMinutes: 30,
+    source: 'vmware',
     notifyEmail: false,
     detectionLogic: {
       logtype: 'vmware',

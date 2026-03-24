@@ -29,7 +29,7 @@
 export type { AlarmQueryContext, QueryResult, QueryStats, AlarmQueryFn } from './types';
 export { runAlarmQuery, queryCache, queryFortiAnalyzerDirect, timeWindow } from './base';
 
-// Config change
+// Config change (FortiAnalyzer cache+fallback — kept as secondary)
 export {
   getFirewallPolicyChangeEvents,
   getCoreConfigChangeEvents,
@@ -42,7 +42,7 @@ export {
   getHaConfigChangeEvents,
 } from './config-change';
 
-// Auth & login events
+// Auth & login events (FortiAnalyzer — kept as secondary)
 export {
   getAdminLoginFailEvents,
   getAdminLoginSuccessEvents,
@@ -51,15 +51,46 @@ export {
   getSslvpnTunnelDownEvents,
 } from './auth-events';
 
-// VPN threat events
+// VPN threat events (FortiAnalyzer — kept as secondary)
 export {
   getVpnBruteForceEvents,
   getSslvpnLockoutEvents,
   getIpsecTunnelDownEvents,
 } from './vpn-events';
 
-// FortiGate direct queries (bypass FortiAnalyzer)
-export { getAdminLoginFailedEvents } from './admin-login-failed';
+// FortiGate direct queries — Config & Access
+export {
+  fgFirewallPolicyChanged,
+  fgUnauthAdminLogin,
+  fgAdminLoginFailed,
+  fgAdminLoginOffHours,
+  fgCoreConfigChange,
+  fgFirmwareChange,
+  fgAdminPasswordChanged,
+  fgAdminPrivilegeChange,
+  fgAddressObjectChanged,
+  fgNewAddressObject,
+  fgNewServiceObject,
+  fgRouteTableChanged,
+  fgInterfaceConfigChanged,
+  fgAuthServerChanged,
+} from './fortigate-config';
+
+// FortiGate direct queries — VPN & SSL-VPN
+export {
+  fgVpnBruteForce,
+  fgSslvpnAuthFailed,
+  fgSslvpnMultiFail,
+  fgSslvpnLockout,
+  fgSslvpnConnection,
+  fgSslvpnTunnelDown,
+  fgSslvpnHighTraffic,
+  fgUserSessionOffHours,
+  fgVpnNewUser,
+  fgIpsecTunnelChanged,
+  fgSslVpnSettingsChanged,
+  fgVpnTunnelDown,
+} from './fortigate-vpn';
 
 // Security threat events
 export {
@@ -83,60 +114,80 @@ export {
 // ─── Registry ─────────────────────────────────────────────────────────────────
 
 import type { AlarmQueryFn } from './types';
-import { getFirewallPolicyChangeEvents, getCoreConfigChangeEvents, getFirmwareChangeEvents, getAuthServerChangeEvents, getRouteTableChangeEvents, getAdminPasswordChangeEvents, getAddressObjectChangeEvents, getSdWanChangeEvents, getHaConfigChangeEvents } from './config-change';
-import { getAdminLoginFailEvents, getAdminLoginSuccessEvents, getVpnLoginEvents, getSslvpnTunnelUpEvents, getSslvpnTunnelDownEvents } from './auth-events';
-import { getVpnBruteForceEvents, getSslvpnLockoutEvents, getIpsecTunnelDownEvents } from './vpn-events';
+
+// FortiAnalyzer cache imports — all log-based alarms use FA event cache
+import {
+  getFirewallPolicyChangeEvents,
+  getCoreConfigChangeEvents,
+  getFirmwareChangeEvents,
+  getAdminPasswordChangeEvents,
+  getAddressObjectChangeEvents,
+  getAuthServerChangeEvents,
+  getRouteTableChangeEvents,
+  getSdWanChangeEvents,
+  getHaConfigChangeEvents,
+} from './config-change';
+import {
+  getAdminLoginFailEvents,
+  getAdminLoginSuccessEvents,
+  getVpnLoginEvents,
+  getSslvpnTunnelUpEvents,
+  getSslvpnTunnelDownEvents,
+} from './auth-events';
+import {
+  getVpnBruteForceEvents,
+  getSslvpnLockoutEvents,
+  getIpsecTunnelDownEvents,
+} from './vpn-events';
 import { getIpsHighSeverityEvents, getMalwareDetectedEvents, getAppCtrlViolationEvents, getShadowItEvents, getWebFilterBlockEvents, getIocHitEvents } from './security-events';
 import { getDnsTunnelSuspectEvents } from './dns-events';
 
 /**
  * Maps alarm codes to their dedicated, type-safe query functions.
  *
- * Each entry guarantees:
- *  ✓ DB-level WHERE filtering (no "fetch 1000 then filter in JS")
- *  ✓ JSONB path filters for fields not in columns (logdesc, cfgpath, status)
- *  ✓ Cache-first with automatic FA fallback
- *  ✓ Per-query observability (source, count, duration logged)
+ * ── FortiAnalyzer Cache (all log-based alarms) ────────────────────────────────
+ * Config/Access, VPN/SSL-VPN, Security, DNS alarms use FA event cache.
+ * FortiGate v7.2.11 does not support REST log querying (/monitor/log/event → 404).
+ *
+ * ── FortiGate Real-Time (SSLVPN source alarms) ────────────────────────────────
+ * VPN_LOGIN_OFF_HOURS and SSLVPN_BUSINESS_HOURS use source: 'fortigate-sslvpn'
+ * and are evaluated separately by evaluateFortiGateSslvpnAlarm().
  */
 export const ALARM_QUERY_REGISTRY = new Map<string, AlarmQueryFn>([
-  // ── Config & Access ──────────────────────────────────────────────────────
+  // ── Config & Access (FortiAnalyzer cache) ──────────────────────────────────
   ['FW_POLICY_CHANGED',        getFirewallPolicyChangeEvents],
   ['CORE_CONFIG_CHANGE',       getCoreConfigChangeEvents],
   ['FIRMWARE_CHANGE',          getFirmwareChangeEvents],
-  ['AUTH_SERVER_CHANGED',      getAuthServerChangeEvents],
-  ['ROUTE_TABLE_CHANGED',      getRouteTableChangeEvents],
   ['ADMIN_PASSWORD_CHANGED',   getAdminPasswordChangeEvents],
   ['ADDRESS_OBJECT_CHANGED',   getAddressObjectChangeEvents],
+  ['AUTH_SERVER_CHANGED',      getAuthServerChangeEvents],
+  ['ROUTE_TABLE_CHANGED',      getRouteTableChangeEvents],
   ['SD_WAN_CHANGED',           getSdWanChangeEvents],
   ['HA_CONFIG_CHANGED',        getHaConfigChangeEvents],
 
-  // ── Authentication & Login (FortiGate Direct) ────────────────────────────
-  ['ADMIN_LOGIN_FAILED',       getAdminLoginFailedEvents],  // Direct FortiGate query
-  
-  // ── Authentication & Login (FortiAnalyzer) ──────────────────────────────
-  ['UNAUTH_ADMIN_LOGIN',       getAdminLoginFailEvents],
-  ['ADMIN_LOGIN_OFF_HOURS',    getAdminLoginSuccessEvents],
-  ['VPN_LOGIN_OFF_HOURS',      getVpnLoginEvents],
-  ['SSLVPN_TUNNEL_UP',         getSslvpnTunnelUpEvents],
-  ['VPN_TUNNEL_DOWN',          getSslvpnTunnelDownEvents],
-
-  // ── VPN Threats ──────────────────────────────────────────────────────────
+  // ── VPN (FortiAnalyzer cache) ───────────────────────────────────────────────
   ['VPN_BRUTE_FORCE',          getVpnBruteForceEvents],
-  ['SSLVPN_AUTH_FAILED',       getVpnBruteForceEvents],  // same filter — single failed attempt
-  ['SSLVPN_MULTI_FAIL',        getVpnBruteForceEvents],  // same filter — multiple failed attempts
   ['SSLVPN_LOCKOUT',           getSslvpnLockoutEvents],
-  ['IPSEC_TUNNEL_DOWN',        getIpsecTunnelDownEvents],
+  ['IPSEC_TUNNEL_CHANGED',     getIpsecTunnelDownEvents],
+  ['SSLVPN_TUNNEL_UP',         getSslvpnTunnelUpEvents],
+  ['SSLVPN_TUNNEL_DOWN',       getSslvpnTunnelDownEvents],
 
-  // ── Security Threats ─────────────────────────────────────────────────────
+  // ── Authentication (FortiAnalyzer cache) ────────────────────────────────────
+  ['UNAUTH_ADMIN_LOGIN',       getAdminLoginFailEvents],
+  ['ADMIN_LOGIN_FAILED',       getAdminLoginFailEvents],
+  ['ADMIN_LOGIN_OFF_HOURS',    getAdminLoginSuccessEvents],
+  ['USER_SESSION_OFF_HOURS',   getVpnLoginEvents],
+
+  // ── Security Threats (FortiAnalyzer cache) ──────────────────────────────────
   ['IPS_HIGH_SEVERITY',        getIpsHighSeverityEvents],
-  ['IPS_DETECT',               getIpsHighSeverityEvents],  // alias
+  ['IPS_DETECT',               getIpsHighSeverityEvents],
   ['MALWARE_DETECTED',         getMalwareDetectedEvents],
   ['APP_CONTROL_VIOLATION',    getAppCtrlViolationEvents],
   ['SHADOW_IT_DETECTED',       getShadowItEvents],
   ['WEB_FILTER_BLOCK',         getWebFilterBlockEvents],
   ['IOC_HIT',                  getIocHitEvents],
 
-  // ── DNS ──────────────────────────────────────────────────────────────────
+  // ── DNS (FortiAnalyzer cache) ───────────────────────────────────────────────
   ['DNS_TUNNEL_SUSPECT',       getDnsTunnelSuspectEvents],
 ]);
 
