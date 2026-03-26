@@ -841,13 +841,13 @@ export default function AlertsDashboardPage() {
                   )}
 
                   {/* Olay Detayları — key-value table */}
-                  {parsed.keyValueRows.length > 0 && (
+                  {parsed.keyValueRows.filter(r => r.key !== 'Giris Zamani' && r.key !== 'Olay Zamani').length > 0 && (
                     <section>
                       <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Olay Detayları</p>
                       <div className="rounded-lg border overflow-hidden">
                         <table className="w-full text-sm">
                           <tbody>
-                            {parsed.keyValueRows.map(({ key, value }, i) => (
+                            {parsed.keyValueRows.filter(r => r.key !== 'Giris Zamani' && r.key !== 'Olay Zamani').map(({ key, value }, i) => (
                               <tr key={i} className="border-b last:border-0">
                                 <td className="px-4 py-2.5 text-muted-foreground w-[38%] bg-muted/20 align-top">{key}</td>
                                 <td className="px-4 py-2.5 break-words">{value}</td>
@@ -877,7 +877,21 @@ export default function AlertsDashboardPage() {
                     </div>
                     <div className="p-3 rounded-lg bg-muted/30">
                       <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Zaman</p>
-                      <p className="text-sm font-bold">{new Date(selectedEvent.createdAt).toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' })}</p>
+                      {(() => {
+                        // Show actual event time (Giris Zamani / Zaman / Olay Zamani) if available from parsed message
+                        const eventTimeRow = parsed.keyValueRows.find(r => 
+                          r.key === 'Giris Zamani' || r.key === 'Zaman' || r.key === 'Olay Zamani'
+                        );
+                        if (eventTimeRow) {
+                          return (
+                            <>
+                              <p className="text-sm font-bold">{eventTimeRow.value}</p>
+                              <p className="text-[10px] text-muted-foreground mt-0.5">Tespit: {new Date(selectedEvent.createdAt).toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' })}</p>
+                            </>
+                          );
+                        }
+                        return <p className="text-sm font-bold">{new Date(selectedEvent.createdAt).toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' })}</p>;
+                      })()}
                     </div>
                     <div className="p-3 rounded-lg bg-muted/30">
                       <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Kaynak IP</p>

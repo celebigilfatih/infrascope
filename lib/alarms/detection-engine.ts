@@ -1506,9 +1506,10 @@ export class AlarmDetectionEngine {
       // ── VM lifecycle events handled via SOAP ────────────────────────────────
       else if (alarm.code === 'VM_CLONED') {
         const events = await this.vmwareService.fetchEventsByTypes(logic.timeWindowMinutes, ['VmClonedEvent']);
-        const filtered = events.filter(evt => !this.isTrustedAutomation(evt));
+        // Only keep events from Veeam/automation users (ignore manual operations)
+        const filtered = events.filter(evt => this.isTrustedAutomation(evt));
         if (filtered.length < events.length) {
-          console.log(`[AlarmEngine] VM_CLONED: excluded ${events.length - filtered.length} Veeam/automation event(s)`);
+          console.log(`[AlarmEngine] VM_CLONED: kept ${filtered.length} Veeam/automation event(s), ignored ${events.length - filtered.length} manual`);
         }
         vmwareData = filtered.map(evt => ({
           type: 'vm_event',
@@ -1524,9 +1525,10 @@ export class AlarmDetectionEngine {
         const events = await this.vmwareService.fetchEventsByTypes(logic.timeWindowMinutes, [
           'VmMigratedEvent', 'VmMigrationEvent', 'VmRelocatedEvent',
         ]);
-        const filtered = events.filter(evt => !this.isTrustedAutomation(evt));
+        // Only keep events from Veeam/automation users (ignore manual operations)
+        const filtered = events.filter(evt => this.isTrustedAutomation(evt));
         if (filtered.length < events.length) {
-          console.log(`[AlarmEngine] VM_MIGRATED: excluded ${events.length - filtered.length} Veeam/automation event(s)`);
+          console.log(`[AlarmEngine] VM_MIGRATED: kept ${filtered.length} Veeam/automation event(s), ignored ${events.length - filtered.length} manual`);
         }
         vmwareData = filtered.map(evt => ({
           type: 'vm_event',
@@ -1540,9 +1542,10 @@ export class AlarmDetectionEngine {
       }
       else if (alarm.code === 'VM_RECONFIGURED') {
         const events = await this.vmwareService.fetchEventsByTypes(logic.timeWindowMinutes, ['VmReconfiguredEvent']);
-        const filtered = events.filter(evt => !this.isTrustedAutomation(evt));
+        // Only keep events from Veeam/automation users (ignore manual operations)
+        const filtered = events.filter(evt => this.isTrustedAutomation(evt));
         if (filtered.length < events.length) {
-          console.log(`[AlarmEngine] VM_RECONFIGURED: excluded ${events.length - filtered.length} Veeam/automation event(s)`);
+          console.log(`[AlarmEngine] VM_RECONFIGURED: kept ${filtered.length} Veeam/automation event(s), ignored ${events.length - filtered.length} manual`);
         }
         vmwareData = filtered.map(evt => ({
           type: 'vm_event',
@@ -1571,7 +1574,19 @@ export class AlarmDetectionEngine {
         const events = await this.vmwareService.fetchEventsByTypes(logic.timeWindowMinutes, [
           'EnteredMaintenanceModeEvent', 'EnteringMaintenanceModeEvent',
         ]);
-        vmwareData = events.map(evt => ({
+        
+        // Ignore list: trusted automation accounts and service accounts
+        const IGNORED_USERS = ['veeam', 'vcenter', 'automation', 'backup', 'ansible', 'terraform'];
+        const filtered = events.filter(evt => {
+          const user = (evt.userName || '').toLowerCase();
+          return !IGNORED_USERS.some(ignored => user.includes(ignored));
+        });
+        
+        if (filtered.length < events.length) {
+          console.log(`[AlarmEngine] ESXI_MAINTENANCE_OUT_OF_HOURS: excluded ${events.length - filtered.length} automation event(s)`);
+        }
+        
+        vmwareData = filtered.map(evt => ({
           type: 'host_event',
           maintenanceMode: true,
           hostName: evt.vmName || evt.message, // ESXi events store host name in vmName field
@@ -2168,6 +2183,8 @@ export class AlarmDetectionEngine {
       'veeam backup',
       'veeam replica',
       'veeam agent',
+      'vcenter',
+      'vmware',
     ];
 
     const userName = (event.userName || '').toLowerCase();
@@ -2404,13 +2421,41 @@ export class AlarmDetectionEngine {
     // Special handling for VMware alarms
     if (firstLog.type && ['vm', 'host', 'datastore', 'snapshot', 'vm_lifecycle', 'snapshot_event', 'snapshot_created'].includes(firstLog.type as string)) {
       const vmwareDetails: string[] = [];
-      
+            
       // VM Lifecycle Events
       if (firstLog.type === 'vm_lifecycle') {
         vmwareDetails.push(`VM Adi: ${firstLog.vmName || 'N/A'}`);  
         vmwareDetails.push(`Islem: ${firstLog.eventType || 'N/A'}`);  
         if (firstLog.userName) vmwareDetails.push(`Kullanici: ${firstLog.userName}`);
         if (firstLog.eventTime) vmwareDetails.push(`Olay Zamani: ${new Date(firstLog.eventTime as string).toLocaleString('tr-TR')}`);
+      }
+      // VM Clone Event (from Events API)
+      else if (firstLog.type === 'vm_event' && firstLog.vmCloned) {
+        vmwareDetails.push(`VM Adi: ${firstLog.vmName || 'N/A'}`);
+        vmwareDetails.push(`Islem: Klonlama (Clone)`);
+        if (firstLog.userName) vmwareDetails.push(`Kullanici: ${firstLog.userName}`);
+        if (firstLog.eventTime) vmwareDetails.push(`Zaman: ${new Date(firstLog.eventTime as string).toLocaleString('tr-TR')}`);
+      }
+      // VM Migration Event (vMotion / Storage vMotion)
+      else if (firstLog.type === 'vm_event' && firstLog.vmMigrated) {
+        vmwareDetails.push(`VM Adi: ${firstLog.vmName || 'N/A'}`);
+        vmwareDetails.push(`Islem: Tasima (vMotion/Storage vMotion)`);
+        if (firstLog.userName) vmwareDetails.push(`Kullanici: ${firstLog.userName}`);
+        if (firstLog.eventTime) vmwareDetails.push(`Zaman: ${new Date(firstLog.eventTime as string).toLocaleString('tr-TR')}`);
+      }
+      // VM Reconfigure Event
+      else if (firstLog.type === 'vm_event' && firstLog.vmReconfigured) {
+        vmwareDetails.push(`VM Adi: ${firstLog.vmName || 'N/A'}`);
+        vmwareDetails.push(`Islem: Yapilandirma Degisikligi`);
+        if (firstLog.userName) vmwareDetails.push(`Kullanici: ${firstLog.userName}`);
+        if (firstLog.eventTime) vmwareDetails.push(`Zaman: ${new Date(firstLog.eventTime as string).toLocaleString('tr-TR')}`);
+        // Show key settings changed from message
+        if (firstLog.message) {
+          const msg = firstLog.message as string;
+          if (msg.includes('CPU') || msg.includes('Memory') || msg.includes('Disk')) {
+            vmwareDetails.push(`Detay: ${msg.substring(0, 100)}${msg.length > 100 ? '...' : ''}`);
+          }
+        }
       }
       // Snapshot Created (from snapshot list - more reliable detection)
       else if (firstLog.type === 'snapshot_created') {
@@ -2447,6 +2492,24 @@ export class AlarmDetectionEngine {
         if (firstLog.hostMemoryUsage) vmwareDetails.push(`Bellek Kullanimi: ${firstLog.hostMemoryUsage}%`);
         if (firstLog.numCpuCores) vmwareDetails.push(`CPU Core: ${firstLog.numCpuCores}`);
         if (firstLog.overallStatus) vmwareDetails.push(`Genel Durum: ${firstLog.overallStatus}`);
+      } else if (firstLog.type === 'host_event' && firstLog.maintenanceMode) {
+        // ESXI_MAINTENANCE_OUT_OF_HOURS alarm details
+        const host = (firstLog.hostName as string || '').replace(/.*Maintenance mode/, '').trim() || 'N/A';
+        vmwareDetails.push(`Host: ${host}`);
+        vmwareDetails.push(`Durum: Maintenance Mode`);
+        if (firstLog.userName) vmwareDetails.push(`Kullanici: ${firstLog.userName}`);
+        if (firstLog.eventTime) vmwareDetails.push(`Zaman: ${new Date(firstLog.eventTime as string).toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' })}`);
+        
+        // Parse event message for additional context
+        if (firstLog.message) {
+          const msg = firstLog.message as string;
+          if (msg.includes('User')) {
+            const userMatch = msg.match(/User\s+(\S+)/);
+            if (userMatch && !vmwareDetails.some(d => d.includes('Kullanici'))) {
+              vmwareDetails.push(`Islemi Yapan: ${userMatch[1]}`);
+            }
+          }
+        }
       } else if (firstLog.type === 'datastore') {
         vmwareDetails.push(`Datastore Adi: ${firstLog.datastoreName || 'N/A'}`);
         vmwareDetails.push(`Tip: ${firstLog.datastoreType || 'N/A'}`);
@@ -2493,7 +2556,24 @@ export class AlarmDetectionEngine {
             const user = l.userName ? ` - ${l.userName}` : '';
             return `- VM: ${l.vmName} (${l.powerState}${user})`;
           }
+          if (l.type === 'vm_event' && l.vmCloned) {
+            const time = l.eventTime ? new Date(l.eventTime as string).toLocaleTimeString('tr-TR') : '';
+            return `- ${l.vmName} (clone @ ${time})`;
+          }
+          if (l.type === 'vm_event' && l.vmMigrated) {
+            const time = l.eventTime ? new Date(l.eventTime as string).toLocaleTimeString('tr-TR') : '';
+            return `- ${l.vmName} (migrate @ ${time})`;
+          }
+          if (l.type === 'vm_event' && l.vmReconfigured) {
+            const time = l.eventTime ? new Date(l.eventTime as string).toLocaleTimeString('tr-TR') : '';
+            return `- ${l.vmName} (reconfig @ ${time})`;
+          }
           if (l.type === 'host') return `- Host: ${l.hostName} (${l.connectionState})`;
+          if (l.type === 'host_event' && l.maintenanceMode) {
+            const host = (l.hostName as string || '').replace(/.*Maintenance mode/, '').trim();
+            const time = l.eventTime ? new Date(l.eventTime as string).toLocaleTimeString('tr-TR') : '';
+            return `- ${host} (maintenance @ ${time})`;
+          }
           if (l.type === 'datastore') return `- Datastore: ${l.datastoreName} (${Number(l.datastoreFreePercent || 0).toFixed(1)}% bos)`;
           if (l.type === 'snapshot') return `- Snapshot: ${l.snapshotName} (${l.vmName}, ${Math.floor(Number(l.snapshotAgeDays || 0))} gun)`;
           return `- ${l.type || 'Unknown'}`;
@@ -2797,6 +2877,27 @@ export class AlarmDetectionEngine {
       alarm.code === 'HA_CONFIG_CHANGED' ||
       alarm.code === 'AUTH_SERVER_CHANGED' ||
       alarm.code === 'SD_WAN_CHANGED';
+    
+    // SSL-VPN authentication failure alarm - show user + IP details
+    if (alarm.code === 'SSLVPN_AUTH_FAILED') {
+      const fgDetails: string[] = [];
+      if (firstLog.user) fgDetails.push(`Kullanici: ${firstLog.user}`);
+      if (firstLog.remip) fgDetails.push(`Kaynak IP: ${firstLog.remip}`);
+      if (firstLog.devname) fgDetails.push(`Guvenlik Duvari: ${firstLog.devname}`);
+      if (firstLog.tunneltype) fgDetails.push(`Tunel Tipi: ${firstLog.tunneltype.toUpperCase().replace(/-/g, ' ')}`);
+      if (firstLog.action) fgDetails.push(`Durum: ${firstLog.action}`);
+      if (firstLog.reason) fgDetails.push(`Sebep: ${this.decodeMsg(firstLog.reason as string).replace(/_/g, ' ')}`);
+      if (firstLog.date && firstLog.time) {
+        const tz = firstLog.tz ? ` (${firstLog.tz})` : '';
+        fgDetails.push(`Olay Zamani: ${firstLog.date} ${firstLog.time}${tz}`);
+      }
+      if (firstLog.group && firstLog.group !== 'N/A') fgDetails.push(`Grup: ${firstLog.group}`);
+      
+      sections.push(fgDetails.join('\n'));
+      sections.push(`Onerilen Aksiyon: ${alarm.detectionLogic.recommendedAction}`);
+      return sections.join('\n\n');
+    }
+    
     if ((firstLog.remoteIp || firstLog.user) && !isConfigChangeAlarm) {
       const fgDetails: string[] = [];
       if (firstLog.user) fgDetails.push(`Kullanici: ${firstLog.user}`);

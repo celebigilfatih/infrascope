@@ -1567,7 +1567,7 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
     detectionLogic: {
       logtype: 'vmware',
       filter: 'vmCloned == true',
-      threshold: 1,
+      threshold: 10,
       timeWindowMinutes: 15,
       description: 'VM cloning islemlerini izler. Kaynak VM ve hedef VM bilgilerini kaydeder.',
       recommendedAction: 'Clone amacini kontrol edin (test, dev, prod replica). Lisans gereksinimlerini dogrulayin. Resource allocation kontrolu yapin.',
@@ -1585,7 +1585,7 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
     detectionLogic: {
       logtype: 'vmware',
       filter: 'vmMigrated == true',
-      threshold: 1,
+      threshold: 10,
       timeWindowMinutes: 15,
       description: 'vMotion veya Storage vMotion islemlerini izler. Kaynak ve hedef host/datastore bilgilerini kaydeder.',
       recommendedAction: 'Migration basarili tamamlandi mi kontrol edin. VM performansini dogrulayin. DRS otomatik migration ise policy yi gozden gecirin.',
@@ -1603,7 +1603,7 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
     detectionLogic: {
       logtype: 'vmware',
       filter: 'vmReconfigured == true',
-      threshold: 1,
+      threshold: 10,
       timeWindowMinutes: 15,
       description: 'VM kaynak degisikliklerini izler (vCPU, RAM, disk boyutu, network adapter). Hot-add/remove islemleri dahil.',
       recommendedAction: 'Degisiklik nedenini ve kim tarafindan yapildigini kontrol edin. Host kaynaklarinin yeterli oldugunu dogrulayin. Lisans etkisi varsa kontrol edin.',
