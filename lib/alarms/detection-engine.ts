@@ -1366,10 +1366,12 @@ export class AlarmDetectionEngine {
       // Snapshot Events - SNAPSHOT_CREATED uses snapshot list, others use SOAP events
       else if (alarm.code === 'SNAPSHOT_CREATED') {
         // Use snapshot list to detect recently created snapshots (more reliable than SOAP events)
+        console.log(`[AlarmEngine] SNAPSHOT_CREATED: fetching recent snapshots (window=${logic.timeWindowMinutes}min)...`);
         const recentSnapshots = await this.vmwareService.fetchRecentlyCreatedSnapshots(logic.timeWindowMinutes);
+        console.log(`[AlarmEngine] SNAPSHOT_CREATED: found ${recentSnapshots.length} recent snapshots`);
         vmwareData = recentSnapshots.map(snap => ({
           type: 'snapshot_created',
-          snapshotCreated: 'true',  // String for filter matching (filter uses string comparison)
+          snapshotCreated: true,  // Boolean for filter matching
           eventType: 'created',
           vmId: snap.vmId,
           vmName: snap.vmName,
@@ -2521,6 +2523,47 @@ export class AlarmDetectionEngine {
           const freeGB = Number(firstLog.datastoreFreeSpace || 0) / (1024 * 1024 * 1024);
           vmwareDetails.push(`Kapasite: ${capacityGB.toFixed(1)}GB (bos: ${freeGB.toFixed(1)}GB)`);
         }
+      } else if (firstLog.type === 'cluster' && firstLog.haFailoverRisk) {
+        // CLUSTER_HA_RISK alarm details
+        const reason = firstLog.reason as string || 'unknown';
+        const hostCount = firstLog.hostCount as number || 0;
+        
+        vmwareDetails.push(`Bagli Host Sayisi: ${hostCount}`);
+        
+        if (reason === 'no-connected-hosts') {
+          vmwareDetails.push(`Durum: Cluster'da bagli host yok`);
+          vmwareDetails.push(`Risk: Tum VM ler kapatildi veya baska cluster'a tasindi`);
+        } else if (reason === 'single-host') {
+          vmwareDetails.push(`Durum: Tek host calisiyor`);
+          vmwareDetails.push(`Risk: HA failover mumkun degil - bu host kapanirsa tum VM ler etkilenecek`);
+        } else if (reason === 'cpu-insufficient') {
+          const cpuUsedPct = firstLog.cpuUsedPct as number || 0;
+          vmwareDetails.push(`Durum: CPU kapasitesi yetersiz`);
+          vmwareDetails.push(`En buyuk host kaybindan sonra CPU kullanimi: %${cpuUsedPct}`);
+          vmwareDetails.push(`Risk: Bir host kapanirsa diger hostlar CPU yukunu karsilayamaz`);
+        } else if (reason === 'mem-insufficient') {
+          const memUsedPct = firstLog.memUsedPct as number || 0;
+          vmwareDetails.push(`Durum: Bellek kapasitesi yetersiz`);
+          vmwareDetails.push(`En buyuk host kaybindan sonra bellek kullanimi: %${memUsedPct}`);
+          vmwareDetails.push(`Risk: Bir host kapanirsa diger hostlar bellek yukunu karsilayamaz`);
+        }
+        
+        vmwareDetails.push('');
+        vmwareDetails.push(`ACIL: ${hostCount === 0 ? 'Cluster hostlerini kontrol edin.' : hostCount === 1 ? 'Yeni host ekleyin veya VMleri tasiyin.' : 'Host sayisini artirin veya VM kaynaklarini optimize edin.'}`);
+      } else if (firstLog.type === 'cluster' && firstLog.drsImbalance) {
+        // DRS_IMBALANCE alarm details
+        const drsImbalance = firstLog.drsImbalance as number || 0;
+        const hostCount = firstLog.hostCount as number || 0;
+        const maxCpuPct = firstLog.maxCpuPct as number || 0;
+        const minCpuPct = firstLog.minCpuPct as number || 0;
+        
+        vmwareDetails.push(`Host Sayisi: ${hostCount}`);
+        vmwareDetails.push(`Yuk Dengesizligi: %${Math.round(drsImbalance)}`);
+        vmwareDetails.push(`En yuksek CPU: %${maxCpuPct}`);
+        vmwareDetails.push(`En dusuk CPU: %${minCpuPct}`);
+        vmwareDetails.push('');
+        vmwareDetails.push(`Aciklama: Hostlar arasindaki CPU kullanim farki %25'i animsadir. DRS otomatik migration yapamiyor veya yetersiz kalmis.`);
+        vmwareDetails.push(`Tavsiye: DRS ayarlarini kontrol edin, VMleri elle yeniden dagitin veya host kaynaklarini artirin.`);
       } else if (firstLog.type === 'snapshot') {
         vmwareDetails.push(`Snapshot Adi: ${firstLog.snapshotName || 'N/A'}`);
         vmwareDetails.push(`VM: ${firstLog.vmName || 'N/A'}`);
@@ -2532,6 +2575,19 @@ export class AlarmDetectionEngine {
         }
         if (firstLog.snapshotSize) {
           vmwareDetails.push(`Boyut: ${this.formatBytes(Number(firstLog.snapshotSize))}`);
+        }
+        // MULTIPLE_SNAPSHOTS: show count and list VMs with many snapshots
+        if (firstLog.snapshotCount !== undefined) {
+          vmwareDetails.push('');
+          vmwareDetails.push(`Bu VM de: ${firstLog.snapshotCount} snapshot var`);
+          if (firstLog.snapshotNames) {
+            vmwareDetails.push(`Snapshotlar: ${(firstLog.snapshotNames as string).substring(0, 100)}${(firstLog.snapshotNames as string).length > 100 ? '...' : ''}`);
+          }
+        }
+        // SNAPSHOT_DISK_GROWTH: show size info
+        if (firstLog.snapshotSizeGB !== undefined) {
+          vmwareDetails.push('');
+          vmwareDetails.push(`Snapshot Boyutu: ${firstLog.snapshotSizeGB} GB`);
         }
       }
 
@@ -2884,8 +2940,8 @@ export class AlarmDetectionEngine {
       if (firstLog.user) fgDetails.push(`Kullanici: ${firstLog.user}`);
       if (firstLog.remip) fgDetails.push(`Kaynak IP: ${firstLog.remip}`);
       if (firstLog.devname) fgDetails.push(`Guvenlik Duvari: ${firstLog.devname}`);
-      if (firstLog.tunneltype) fgDetails.push(`Tunel Tipi: ${firstLog.tunneltype.toUpperCase().replace(/-/g, ' ')}`);
-      if (firstLog.action) fgDetails.push(`Durum: ${firstLog.action}`);
+      if (firstLog.tunneltype) fgDetails.push(`Tunel Tipi: ${(firstLog.tunneltype as string).toUpperCase().replace(/-/g, ' ')}`);
+      if (firstLog.action) fgDetails.push(`Durum: ${(firstLog.action as string)}`);
       if (firstLog.reason) fgDetails.push(`Sebep: ${this.decodeMsg(firstLog.reason as string).replace(/_/g, ' ')}`);
       if (firstLog.date && firstLog.time) {
         const tz = firstLog.tz ? ` (${firstLog.tz})` : '';
