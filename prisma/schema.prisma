@@ -1079,3 +1079,21 @@ model NotificationDLQ {
   @@index([alarmEventId])
   @@map("notification_dlq")
 }
+
+/// Alarm Whitelist for suppressing false positives
+model AlarmWhitelist {
+  id          String   @id @default(cuid())
+  alarmCode   String   // e.g. "DNS_TUNNEL_SUSPECT"
+  field       String   // "sourceIp", "destIp", "user", "hostname"
+  value       String   // The value to match (e.g. "10.5.2.1")
+  reason      String?  // Why this is whitelisted
+  createdBy   String   // User who added it
+  expiresAt   DateTime? // Optional expiration
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([alarmCode, field, value])
+  @@index([alarmCode, enabled])
+  @@map("alarm_whitelist")
+}

@@ -161,7 +161,8 @@ export async function runAlarmCheck(): Promise<AlarmCheckResult> {
   }
 
   // DB-level guard: prevent concurrent runs from DIFFERENT module instances
-  // (e.g. health-check chunk and scheduler chunk each have separate in-process mutexes)
+  // (e.g. health-check chunk and scheduler chunk each have separate in-process mutexes).
+  // Only check recent RUNNING locks — stale ones are cleaned up by AlarmScheduler before each tick.
   try {
     const recentRunning = await prisma.alarmCheckLog.findFirst({
       where: {
@@ -255,7 +256,11 @@ export async function runAlarmCheck(): Promise<AlarmCheckResult> {
           GLOBAL_TIMEOUT_MS
         )
       ),
-    ]);
+    ]).catch((err) => {
+      // Log timeout or any other error immediately
+      console.error('[AlarmRunner] Evaluation failed:', err.message);
+      throw err;
+    });
 
     const triggered = results.filter((r) => r.triggered);
     const errors = results.filter((r) => r.error && r.error !== 'cooldown-active');
@@ -361,6 +366,13 @@ export async function runAlarmCheck(): Promise<AlarmCheckResult> {
       `[AlarmRunner] ❌ Error after ${Math.round(durationMs / 1000)}s:`,
       error
     );
+
+    // Timeout detection - force cleanup if stuck
+    const isTimeout = (error as Error).message.includes('timeout');
+    if (isTimeout) {
+      console.warn('[AlarmRunner] ⚠️ TIMEOUT DETECTED - forcing lock cleanup');
+      checkStartTime = null; // Force reset the in-process lock
+    }
 
     // ── Write FAILED log (update RUNNING → FAILED) ────────────────────────
     // This is a plain async call — guaranteed to run because we're NOT inside

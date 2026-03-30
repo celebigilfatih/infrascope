@@ -155,6 +155,10 @@ export default function AlertsDashboardPage() {
   // Detail view state
   const [selectedEvent, setSelectedEvent] = useState<AlarmEventData | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  // Discard/Whitelist dialog state
+  const [discardOpen, setDiscardOpen] = useState(false);
+  const [discardReason, setDiscardReason] = useState('');
+  const [discardLoading, setDiscardLoading] = useState(false);
   // Track which event IDs are currently being acknowledged
   const [acknowledgingIds, setAcknowledgingIds] = useState<Set<string>>(new Set());
 
@@ -326,6 +330,53 @@ export default function AlertsDashboardPage() {
       if (data.success) fetchEvents();
     } catch (err) {
       console.error('Acknowledge all error:', err);
+    }
+  };
+
+  // Add to whitelist (discard alarm)
+  const addToWhitelist = async () => {
+    if (!selectedEvent || !discardReason.trim()) return;
+    
+    setDiscardLoading(true);
+    try {
+      // Determine which field to whitelist based on alarm code
+      let field = 'sourceIp';
+      if (selectedEvent.alarm.code === 'SSLVPN_AUTH_FAILED') {
+        field = 'user';
+      } else if (selectedEvent.destIp && selectedEvent.alarm.code.includes('DNS')) {
+        field = 'destIp';
+      }
+      
+      const value = field === 'sourceIp' ? selectedEvent.sourceIp 
+                : field === 'destIp' ? selectedEvent.destIp 
+                : selectedEvent.deviceName || '';
+      
+      const res = await fetch('/api/alarms/whitelist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          alarmCode: selectedEvent.alarm.code,
+          field,
+          value,
+          reason: discardReason.trim(),
+          createdBy: 'admin',
+        }),
+      });
+      
+      const data = await res.json();
+      if (data.success) {
+        setMessage({ text: 'Alarm whitelisted successfully', type: 'success' });
+        setDiscardOpen(false);
+        setDiscardReason('');
+        fetchEvents();
+      } else {
+        setMessage({ text: `Error: ${data.error}`, type: 'error' });
+      }
+    } catch (err) {
+      console.error('Whitelist error:', err);
+      setMessage({ text: 'Failed to add to whitelist', type: 'error' });
+    } finally {
+      setDiscardLoading(false);
     }
   };
 
@@ -982,11 +1033,82 @@ export default function AlertsDashboardPage() {
                       Onayla
                     </Button>
                   )}
+                  <Button
+                    variant="outline"
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                    onClick={() => setDiscardOpen(true)}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Discard
+                  </Button>
                   <Button variant="outline" onClick={() => setDetailOpen(false)}>Kapat</Button>
                 </div>
               </div>
             );
           })()}
+        </DialogContent>
+      </Dialog>
+
+      {/* Discard/Whitelist Dialog */}
+      <Dialog open={discardOpen} onOpenChange={setDiscardOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <Trash2 className="h-5 w-5" />
+              Alarm'i Whitelist'e Ekle
+            </DialogTitle>
+            <DialogDescription>
+              Bu alarm bir daha üretilmeyecek. False positive ise whitelist'e ekleyin.
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedEvent && (
+            <div className="space-y-4 py-4">
+              <div className="rounded-lg bg-muted/30 p-3">
+                <p className="text-xs font-semibold mb-1">Alarm:</p>
+                <p className="text-sm">{selectedEvent.title}</p>
+              </div>
+              
+              <div className="rounded-lg bg-muted/30 p-3">
+                <p className="text-xs font-semibold mb-1">Whitelist Edilecek:</p>
+                <p className="text-sm font-mono">
+                  {(() => {
+                    let field = 'sourceIp';
+                    if (selectedEvent.alarm.code === 'SSLVPN_AUTH_FAILED') field = 'user';
+                    else if (selectedEvent.destIp && selectedEvent.alarm.code.includes('DNS')) field = 'destIp';
+                    
+                    const value = field === 'sourceIp' ? selectedEvent.sourceIp 
+                                  : field === 'destIp' ? selectedEvent.destIp 
+                                  : selectedEvent.deviceName || '';
+                    return `${field}: ${value || 'N/A'}`;
+                  })()}
+                </p>
+              </div>
+              
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Sebep (opsiyonel):</label>
+                <textarea
+                  className="w-full min-h-[80px] rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  placeholder="Neden whitelist'e ekliyorsunuz? (örn: Kurum içi DNS sunucusu)"
+                  value={discardReason}
+                  onChange={(e) => setDiscardReason(e.target.value)}
+                />
+              </div>
+            </div>
+          )}
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDiscardOpen(false)} disabled={discardLoading}>
+              İptal
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={addToWhitelist}
+              disabled={!discardReason.trim() || discardLoading}
+            >
+              {discardLoading ? 'Ekleniyor...' : 'Whitelist\'e Ekle'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

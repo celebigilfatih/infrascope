@@ -1684,11 +1684,42 @@ export class AlarmDetectionEngine {
         // Check if losing one host would exceed remaining cluster capacity
         const hostStats = await this.vmwareService.fetchHostQuickStats();
         const connected = hostStats.filter(h => h.connectionState === 'connected' && !h.inMaintenanceMode);
+        
         if (connected.length === 0) {
-          vmwareData = [{ type: 'cluster', haFailoverRisk: true, reason: 'no-connected-hosts', hostCount: 0 }];
+          vmwareData = [{ 
+            type: 'cluster', 
+            haFailoverRisk: true, 
+            reason: 'no-connected-hosts', 
+            hostCount: 0,
+            clusterName: 'Unknown',
+            hostList: hostStats.map(h => ({
+              hostName: h.name,
+              connectionState: h.connectionState,
+              inMaintenanceMode: h.inMaintenanceMode,
+              cpuTotalMHz: h.cpuTotalMHz,
+              cpuUsedMHz: h.cpuUsedMHz,
+              memTotalMB: h.memTotalMB,
+              memUsedMB: h.memUsedMB,
+            })),
+          }];
         } else if (connected.length === 1) {
           // Single host — HA failover impossible
-          vmwareData = [{ type: 'cluster', haFailoverRisk: true, reason: 'single-host', hostCount: 1 }];
+          vmwareData = [{ 
+            type: 'cluster', 
+            haFailoverRisk: true, 
+            reason: 'single-host', 
+            hostCount: 1,
+            clusterName: 'Unknown',
+            hostList: hostStats.map(h => ({
+              hostName: h.name,
+              connectionState: h.connectionState,
+              inMaintenanceMode: h.inMaintenanceMode,
+              cpuTotalMHz: h.cpuTotalMHz,
+              cpuUsedMHz: h.cpuUsedMHz,
+              memTotalMB: h.memTotalMB,
+              memUsedMB: h.memUsedMB,
+            })),
+          }];
         } else {
           // Check if total CPU/RAM minus the largest host still covers current load
           const totalCpuMHz = connected.reduce((s, h) => s + h.cpuTotalMHz, 0);
@@ -1709,6 +1740,16 @@ export class AlarmDetectionEngine {
               hostCount: connected.length,
               cpuUsedPct: remainingCpu > 0 ? Math.round((usedCpuMHz / remainingCpu) * 100) : 999,
               memUsedPct: remainingMem > 0 ? Math.round((usedMemMB  / remainingMem) * 100) : 999,
+              clusterName: 'Unknown',
+              hostList: hostStats.map(h => ({
+                hostName: h.name,
+                connectionState: h.connectionState,
+                inMaintenanceMode: h.inMaintenanceMode,
+                cpuTotalMHz: h.cpuTotalMHz,
+                cpuUsedMHz: h.cpuUsedMHz,
+                memTotalMB: h.memTotalMB,
+                memUsedMB: h.memUsedMB,
+              })),
             }];
           }
         }
@@ -2046,7 +2087,7 @@ export class AlarmDetectionEngine {
     if (firstLog.remoteIp || (firstLog.user && (firstLog.loginTime || firstLog.assignedIp))) {
       sourceIp = (firstLog.remoteIp as string) || (firstLog.assignedIp as string) || (firstLog.user as string) || null;
       deviceName = (firstLog.user as string) || null;
-    } else if (firstLog.type && ['vm', 'host', 'datastore', 'snapshot', 'snapshot_created', 'snapshot_event', 'vm_lifecycle'].includes(firstLog.type as string)) {
+    } else if (firstLog.type && ['vm', 'host', 'datastore', 'cluster', 'snapshot', 'snapshot_created', 'snapshot_event', 'vm_lifecycle'].includes(firstLog.type as string)) {
       // VMware alarm metadata
       if (firstLog.type === 'vm' || firstLog.type === 'vm_lifecycle') {
         deviceName = (firstLog.vmName as string) || null;
@@ -2072,6 +2113,19 @@ export class AlarmDetectionEngine {
       }
       destIp = (firstLog.dstip as string) || null;
       deviceName = (firstLog.devname as string) || (firstLog.fortigate as string) || null;
+    }
+
+    // Check whitelist BEFORE creating alarm event — suppress false positives
+    const rawDataForWhitelist: Record<string, unknown> = {
+      sourceIp,
+      destIp,
+      user: firstLog.user,
+      hostname: firstLog.hostname,
+      ...firstLog,
+    };
+    if (await this.isWhitelisted(alarm.code, rawDataForWhitelist)) {
+      console.log(`[AlarmEngine] ⚠️ WHITELISTED: ${alarm.code} - ${title} (suppressed)`);
+      return { alarmCode: alarm.code, triggered: false, matchCount: 0, events: [] };
     }
 
     // Create alarm event in DB
@@ -2195,6 +2249,43 @@ export class AlarmDetectionEngine {
     return AUTOMATION_KEYWORDS.some(
       kw => userName.includes(kw) || message.includes(kw)
     );
+  }
+
+  /**
+   * Check if an alarm event matches any active whitelist entry.
+   * Whitelist entries suppress false positives for specific field values.
+   */
+  private async isWhitelisted(alarmCode: string, rawData: Record<string, unknown>): Promise<boolean> {
+    try {
+      // Fetch all active whitelist entries for this alarm code
+      const whitelist = await prisma.alarmWhitelist.findMany({
+        where: {
+          alarmCode,
+          enabled: true,
+          OR: [
+            { expiresAt: null },
+            { expiresAt: { gt: new Date() } },
+          ],
+        },
+      });
+
+      if (whitelist.length === 0) return false;
+
+      // Check if any whitelist entry matches the raw data
+      return whitelist.some((entry) => {
+        const fieldValue = rawData[entry.field];
+        if (!fieldValue) return false;
+        
+        // Exact match or substring match (for IP addresses in messages)
+        const valueStr = String(fieldValue).toLowerCase();
+        const whitelistValue = entry.value.toLowerCase();
+        
+        return valueStr === whitelistValue || valueStr.includes(whitelistValue);
+      });
+    } catch (err) {
+      console.error('[AlarmEngine] Whitelist check failed:', err);
+      return false; // Fail open - don't suppress alarms on DB errors
+    }
   }
 
 
@@ -2421,7 +2512,7 @@ export class AlarmDetectionEngine {
     sections.push(`Tespit edilen olay sayisi: ${logs.length}`);
 
     // Special handling for VMware alarms
-    if (firstLog.type && ['vm', 'host', 'datastore', 'snapshot', 'vm_lifecycle', 'snapshot_event', 'snapshot_created'].includes(firstLog.type as string)) {
+    if (firstLog.type && ['vm', 'host', 'datastore', 'cluster', 'snapshot', 'vm_lifecycle', 'snapshot_event', 'snapshot_created'].includes(firstLog.type as string)) {
       const vmwareDetails: string[] = [];
             
       // VM Lifecycle Events
@@ -2546,6 +2637,21 @@ export class AlarmDetectionEngine {
           vmwareDetails.push(`Durum: Bellek kapasitesi yetersiz`);
           vmwareDetails.push(`En buyuk host kaybindan sonra bellek kullanimi: %${memUsedPct}`);
           vmwareDetails.push(`Risk: Bir host kapanirsa diger hostlar bellek yukunu karsilayamaz`);
+        }
+        
+        // Add cluster name and host list if available
+        if (firstLog.clusterName) {
+          vmwareDetails.push(`Cluster: ${firstLog.clusterName}`);
+        }
+        if (firstLog.hostList && Array.isArray(firstLog.hostList)) {
+          vmwareDetails.push('');
+          vmwareDetails.push('Host Detaylari:');
+          (firstLog.hostList as any[]).forEach((host, idx) => {
+            const status = host.inMaintenanceMode ? '[MAINTENANCE]' : host.connectionState === 'connected' ? '[CONNECTED]' : '[DISCONNECTED]';
+            const cpuPct = host.cpuTotalMHz > 0 ? Math.round((host.cpuUsedMHz / host.cpuTotalMHz) * 100) : 0;
+            const memPct = host.memTotalMB > 0 ? Math.round((host.memUsedMB / host.memTotalMB) * 100) : 0;
+            vmwareDetails.push(`  ${idx + 1}. ${host.hostName || 'Unknown'} ${status} - CPU: %${cpuPct}, RAM: %${memPct}`);
+          });
         }
         
         vmwareDetails.push('');

@@ -37,6 +37,31 @@ export function startAlarmScheduler() {
   schedulerInterval = setInterval(async () => {
     const tickStart = Date.now();
     try {
+      // ── Proactive stale lock cleanup ──────────────────────────────────────
+      // Clean up any RUNNING sentinel that is older than 15 minutes.
+      // This covers cases where the Node.js process got stuck and never
+      // released the in-process mutex (e.g. 23-hour hung evaluation).
+      // Running here (before runAlarmCheck) ensures every tick starts clean.
+      const STALE_LOCK_THRESHOLD_MS = 15 * 60 * 1000;
+      try {
+        const stale = await prisma.alarmCheckLog.updateMany({
+          where: {
+            status: 'RUNNING',
+            checkTime: { lte: new Date(Date.now() - STALE_LOCK_THRESHOLD_MS) },
+          },
+          data: {
+            status: 'FAILED',
+          },
+        });
+        if (stale.count > 0) {
+          console.warn(
+            `[AlarmScheduler] 🧹 Cleaned up ${stale.count} stale RUNNING lock(s) before tick`
+          );
+        }
+      } catch (cleanupErr) {
+        console.warn('[AlarmScheduler] Stale lock cleanup failed (non-fatal):', cleanupErr);
+      }
+
       console.log('[AlarmScheduler] Starting scheduled alarm check...');
 
       const result = await runAlarmCheck();
