@@ -174,7 +174,8 @@ async function getVMwareService(): Promise<VMwareService | null> {
   };
 
   return new VMwareService({
-    host: vmwareConfig.host,
+    // Strip any protocol prefix the user may have typed (https:// or http://)
+    host: vmwareConfig.host.replace(/^https?:\/\//i, '').replace(/\/+$/, ''),
     username: vmwareConfig.username,
     password: vmwareConfig.password,
     thumbprint: vmwareConfig.thumbprint,
@@ -189,15 +190,44 @@ export async function GET(request: NextRequest) {
     const type = searchParams.get('type');
     const vmId = searchParams.get('vmId');
 
+    // ── DB-only routes (no vCenter auth needed) ──────────────────────────────
+    // Get configuration — reads from DB only, never touches vCenter
+    if (type === 'config') {
+      const vmwareConfig = await prisma.integrationConfig.findFirst({
+        where: { type: 'VMWARE_VCENTER' as any },
+      });
+
+      if (vmwareConfig) {
+        const configData = vmwareConfig.config as any;
+        return NextResponse.json({
+          config: {
+            host: configData.host || '',
+            username: configData.username || '',
+            password: configData.password ? '********' : '',  // masked — non-empty means password is stored
+            thumbprint: configData.thumbprint || '',
+            pollingInterval: configData.pollingInterval || 10,
+            enabledModules: configData.enabledModules || {
+              datacenters: true,
+              clusters: true,
+              hosts: true,
+              vms: true,
+              datastores: true,
+            },
+            lastSyncAt: vmwareConfig.lastSyncAt,
+            lastSyncStatus: vmwareConfig.lastSyncStatus,
+          },
+        });
+      }
+
+      return NextResponse.json({ config: null });
+    }
+
+    // ── Cache layer ───────────────────────────────────────────────────────────
     // Cache key based on request type
     const cacheKey = `vmware_${type}_${vmId || ''}`;
     const cachedData = globalThis as any;
     if (!cachedData.vmwareCache) cachedData.vmwareCache = {};
     
-    // Return cached data if available
-    // vms/hosts/clusters/datastores: 5 min TTL (heavy vCenter calls)
-    // dashboard/summary: 5 min TTL
-    // others: 2 min TTL
     const now = Date.now();
     const cacheEntry = cachedData.vmwareCache[cacheKey];
     const cacheTTL = ['dashboard', 'summary', 'vms', 'hosts', 'clusters', 'datastores'].includes(type || '')
@@ -753,7 +783,7 @@ export async function POST(request: NextRequest) {
       };
 
       const service = new VMwareService({
-        host: vmwareConfig.host,
+        host: vmwareConfig.host.replace(/^https?:\/\//i, '').replace(/\/+$/, ''),
         username: vmwareConfig.username,
         password: vmwareConfig.password,
         thumbprint: vmwareConfig.thumbprint,
@@ -773,14 +803,19 @@ export async function POST(request: NextRequest) {
 
     if (action === 'sync') {
       // Get the organization from request or use first one
-      const organizationId = body.organizationId || 
+      // Auto-create a default org if the database has none yet
+      let organizationId: string | undefined = body.organizationId || 
         (await prisma.organization.findFirst())?.id;
 
       if (!organizationId) {
-        return NextResponse.json(
-          { error: 'No organization found' },
-          { status: 400 }
-        );
+        const defaultOrg = await prisma.organization.create({
+          data: {
+            name: 'Default Organization',
+            code: 'DEFAULT',
+            description: 'Auto-created for VMware integration',
+          },
+        });
+        organizationId = defaultOrg.id;
       }
 
       // Get VMware configuration
@@ -811,7 +846,7 @@ export async function POST(request: NextRequest) {
       };
 
       const service = new VMwareService({
-        host: configData.host,
+        host: configData.host.replace(/^https?:\/\//i, '').replace(/\/+$/, ''),
         username: configData.username,
         password: configData.password,
         thumbprint: configData.thumbprint,
@@ -848,7 +883,8 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'save-config') {
-      const newConfig = config as {
+      // Sanitize host: strip protocol prefix and trailing slashes before saving
+      const rawConfig = config as {
         host: string;
         username: string;
         password: string;
@@ -862,6 +898,23 @@ export async function POST(request: NextRequest) {
           datastores: boolean;
         };
       };
+      const newConfig = {
+        ...rawConfig,
+        host: rawConfig.host.replace(/^https?:\/\//i, '').replace(/\/+$/, ''),
+      };
+
+      // If password is empty (page never loads it for security), preserve the existing stored password
+      if (!newConfig.password) {
+        const existing = await prisma.integrationConfig.findFirst({
+          where: { type: 'VMWARE_VCENTER' as any },
+        });
+        if (existing) {
+          const existingConfig = existing.config as any;
+          if (existingConfig?.password) {
+            newConfig.password = existingConfig.password;
+          }
+        }
+      }
 
       await prisma.integrationConfig.upsert({
         where: {

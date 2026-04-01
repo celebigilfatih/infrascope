@@ -46,6 +46,11 @@ services:
       DB_HOST: db
       DB_PORT: 5432
       NODE_TLS_REJECT_UNAUTHORIZED: "0"
+      # NMS Node.js backend (from /Dev/nms project, port 4001)
+      # On Mac Docker Desktop, host.docker.internal resolves to host machine IP
+      NMS_BACKEND_URL: ${NMS_BACKEND_URL:-http://host.docker.internal:4001}
+      # Fallback: If host.docker.internal doesn't work, use your Mac's IP:
+      # NMS_BACKEND_URL: http://10.7.7.7:4001
     ports:
       - "8170:3000"
     depends_on:
@@ -60,6 +65,9 @@ services:
       - /app/node_modules
       # Exclude .next to prevent build conflicts
       - /app/.next
+    extra_hosts:
+      # Enable host.docker.internal on Linux; on Mac it's built-in but harmless
+      - "host.docker.internal:host-gateway"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
       interval: 60s
@@ -69,6 +77,44 @@ services:
     restart: unless-stopped
     entrypoint: /app/scripts/entrypoint.sh
     command: npm run dev
+
+  # NMS Service — SNMP polling + network discovery sidecar
+  nms:
+    build:
+      context: .
+      dockerfile: nms_service/Dockerfile
+    container_name: infrascope-nms-dev
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-infrascope}:${DB_PASSWORD:-infrascope-dev}@db:5432/${DB_NAME:-infrascope}
+      NMS_ENV: development
+      NMS_DEBUG: "false"
+      NMS_LOG_LEVEL: INFO
+      SNMP_TIMEOUT: "10"
+      SNMP_RETRIES: "3"
+      INTERFACE_POLL_INTERVAL: "30"
+      CPU_MEMORY_POLL_INTERVAL: "300"
+      INVENTORY_POLL_INTERVAL: "3600"
+      TOPOLOGY_POLL_INTERVAL: "3600"
+      CPU_THRESHOLD: "80.0"
+      MEMORY_THRESHOLD: "80.0"
+      TEMPERATURE_THRESHOLD: "80.0"
+      NMS_API_PORT: "8500"
+    ports:
+      - "8500:8500"   # Internal FastAPI — accessible from host for debug
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - infrascope-network
+    volumes:
+      - nms_logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8500/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
 
   # Optional: Redis for caching and WebSocket support (future)
   #   image: redis:7-alpine
@@ -91,6 +137,9 @@ networks:
 volumes:
   postgres_data_dev:
     name: infrascope-postgres-data-dev
+    driver: local
+  nms_logs:
+    name: infrascope-nms-logs
     driver: local
   # redis_data_dev:
   #   name: infrascope-redis-data-dev

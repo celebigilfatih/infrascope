@@ -1,0 +1,200 @@
+{
+  "1.3.6.1.2.1.1.1.0": {
+    "oid": "1.3.6.1.2.1.1.1.0",
+    "name": "sysDescr",
+    "description": "System description",
+    "metric_type": "string",
+    "unit": null,
+    "vendor": "generic",
+    "conversion_factor": 1.0
+  },
+  "1.3.6.1.2.1.1.3.0": {
+    "oid": "1.3.6.1.2.1.1.3.0",
+    "name": "sysUpTime",
+    "description": "System uptime in ticks (10ms)",
+    "metric_type": "counter",
+    "unit": "ticks",
+    "vendor": "generic",
+    "conversion_factor": 0.01
+  },
+  "1.3.6.1.2.1.1.5.0": {
+    "oid": "1.3.6.1.2.1.1.5.0",
+    "name": "sysName",
+    "description": "System name (hostname)",
+    "metric_type": "string",
+    "unit": null,
+    "vendor": "generic",
+    "conversion_factor": 1.0
+  },
+  "1.3.6.1.2.1.2.2.1.1": {
+    "oid": "1.3.6.1.2.1.2.2.1.1",
+    "name": "ifIndex",
+    "description": "Interface index",
+    "metric_type": "gauge",
+    "unit": null,
+    "vendor": "generic",
+    "conversion_factor": 1.0
+  },
+  "1.3.6.1.2.1.2.2.1.2": {
+    "oid": "1.3.6.1.2.1.2.2.1.2",
+    "name": "ifDescr",
+    "description": "Interface description",
+    "metric_type": "string",
+    "unit": null,
+    "vendor": "generic",
+    "conversion_factor": 1.0
+  },
+  "1.3.6.1.2.1.2.2.1.3": {
+    "oid": "1.3.6.1.2.1.2.2.1.3",
+    "name": "ifType",
+    "description": "Interface type",
+    "metric_type": "gauge",
+    "unit": null,
+    "vendor": "generic",
+    "conversion_factor": 1.0
+  },
+  "1.3.6.1.2.1.2.2.1.5": {
+    "oid": "1.3.6.1.2.1.2.2.1.5",
+    "name": "ifSpeed",
+    "description": "Interface speed in bits per second",
+    "metric_type": "gauge",
+    "unit": "bps",
+    "vendor": "generic",
+    "conversion_factor": 1.0
+  },
+  "1.3.6.1.2.1.2.2.1.7": {
+    "oid": "1.3.6.1.2.1.2.2.1.7",
+    "name": "ifAdminStatus",
+    "description": "Interface administrative status (1=up, 2=down, 3=testing)",
+    "metric_type": "gauge",
+    "unit": null,
+    "vendor": "generic",
+    "conversion_factor": 1.0
+  },
+  "1.3.6.1.2.1.2.2.1.8": {
+    "oid": "1.3.6.1.2.1.2.2.1.8",
+    "name": "ifOperStatus",
+    "description": "Interface operational status (1=up, 2=down, 3=testing)",
+    "metric_type": "gauge",
+    "unit": null,
+    "vendor": "generic",
+    "conversion_factor": 1.0
+  },
+  "1.3.6.1.2.1.2.2.1.10": {
+    "oid": "1.3.6.1.2.1.2.2.1.10",
+    "name": "ifInOctets",
+    "description": "Octets received on the interface",
+    "metric_type": "counter",
+    "unit": "octets",
+    "vendor": "generic",
+    "conversion_factor": 1.0
+  },
+  "1.3.6.1.2.1.2.2.1.16": {
+    "oid": "1.3.6.1.2.1.2.2.1.16",
+    "name": "ifOutOctets",
+    "description": "Octets sent on the interface",
+    "metric_type": "counter",
+    "unit": "octets",
+    "vendor": "generic",
+    "conversion_factor": 1.0
+  },
+  "1.3.6.1.4.1.9.9.109.1.1.1.1.3": {
+    "oid": "1.3.6.1.4.1.9.9.109.1.1.1.1.3",
+    "name": "cpmCPUTotal5sec",
+    "description": "Cisco CPU usage 5-second average",
+    "metric_type": "gauge",
+    "unit": "%",
+    "vendor": "cisco",
+    "conversion_factor": 1.0
+  },
+  "1.3.6.1.4.1.9.9.109.1.1.1.1.5": {
+    "oid": "1.3.6.1.4.1.9.9.109.1.1.1.1.5",
+    "name": "cpmCPUTotal1min",
+    "description": "Cisco CPU usage 1-minute average",
+    "metric_type": "gauge",
+    "unit": "%",
+    "vendor": "cisco",
+    "conversion_factor": 1.0
+  },
+  "1.3.6.1.4.1.9.9.48.1.1.1.5": {
+    "oid": "1.3.6.1.4.1.9.9.48.1.1.1.5",
+    "name": "ciscoMemoryPoolUsed",
+    "description": "Cisco memory pool used",
+    "metric_type": "gauge",
+    "unit": "bytes",
+    "vendor": "cisco",
+    "conversion_factor": 1.0
+  },
+  "1.3.6.1.4.1.9.9.48.1.1.1.6": {
+    "oid": "1.3.6.1.4.1.9.9.48.1.1.1.6",
+    "name": "ciscoMemoryPoolFree",
+    "description": "Cisco memory pool free",
+    "metric_type": "gauge",
+    "unit": "bytes",
+    "vendor": "cisco",
+    "conversion_factor": 1.0
+  },
+  "1.3.6.1.4.1.9.9.13.1.3.1.3": {
+    "oid": "1.3.6.1.4.1.9.9.13.1.3.1.3",
+    "name": "ciscoEnvMonTemperatureValue",
+    "description": "Temperature reading in Celsius",
+    "metric_type": "gauge",
+    "unit": "celsius",
+    "vendor": "cisco",
+    "conversion_factor": 1.0
+  },
+  "1.3.6.1.4.1.12356.101.13.2.1.1.2": {
+    "oid": "1.3.6.1.4.1.12356.101.13.2.1.1.2",
+    "name": "fgSysCpuUsage",
+    "description": "FortiGate CPU usage",
+    "metric_type": "gauge",
+    "unit": "%",
+    "vendor": "fortinet",
+    "conversion_factor": 1.0
+  },
+  "1.3.6.1.4.1.12356.101.13.2.1.2.1": {
+    "oid": "1.3.6.1.4.1.12356.101.13.2.1.2.1",
+    "name": "fgSysMemUsage",
+    "description": "FortiGate memory usage",
+    "metric_type": "gauge",
+    "unit": "%",
+    "vendor": "fortinet",
+    "conversion_factor": 1.0
+  },
+  "1.3.6.1.4.1.12356.101.13.2.1.3.1": {
+    "oid": "1.3.6.1.4.1.12356.101.13.2.1.3.1",
+    "name": "fgSysTemperature",
+    "description": "FortiGate temperature",
+    "metric_type": "gauge",
+    "unit": "celsius",
+    "vendor": "fortinet",
+    "conversion_factor": 1.0
+  },
+  "1.3.6.1.4.1.14988.1.1.3.2": {
+    "oid": "1.3.6.1.4.1.14988.1.1.3.2",
+    "name": "mtxrHlCpuLoad",
+    "description": "MikroTik CPU load percentage",
+    "metric_type": "gauge",
+    "unit": "%",
+    "vendor": "mikrotik",
+    "conversion_factor": 1.0
+  },
+  "1.3.6.1.4.1.14988.1.1.3.3": {
+    "oid": "1.3.6.1.4.1.14988.1.1.3.3",
+    "name": "mtxrHlMemSize",
+    "description": "MikroTik total memory",
+    "metric_type": "gauge",
+    "unit": "bytes",
+    "vendor": "mikrotik",
+    "conversion_factor": 1.0
+  },
+  "1.3.6.1.4.1.14988.1.1.3.4": {
+    "oid": "1.3.6.1.4.1.14988.1.1.3.4",
+    "name": "mtxrHlMemFree",
+    "description": "MikroTik free memory",
+    "metric_type": "gauge",
+    "unit": "bytes",
+    "vendor": "mikrotik",
+    "conversion_factor": 1.0
+  }
+}

@@ -53,6 +53,7 @@ interface SidebarItem {
   icon: any;
   subItems?: string[];
   hasArrow?: boolean;
+  children?: { name: string; href: string; icon: any }[];
 }
 
 interface SidebarSection {
@@ -202,6 +203,17 @@ export const Sidebar: React.FC = () => {
       title: 'Integrations',
       items: [
         { name: 'VMware', href: '/integrations/vmware', icon: Server },
+        {
+          name: 'NMS / SNMP',
+          href: '/integrations/nms',
+          icon: Network,
+          children: [
+            { name: 'Overview', href: '/integrations/nms', icon: Activity },
+            { name: 'Devices', href: '/integrations/nms/devices', icon: Server },
+            { name: 'Add Device', href: '/integrations/nms/add-device', icon: Plug },
+            { name: 'Config Backups', href: '/integrations/nms/backups', icon: Database },
+          ],
+        },
         { name: 'Firewall', href: '/integrations/firewall', icon: Shield },
         { name: 'FortiAnalyzer', href: '/integrations/fortianalyzer', icon: Activity },
         { name: 'Sync Status', href: '/integrations/status', icon: Activity },
@@ -282,6 +294,9 @@ export const Sidebar: React.FC = () => {
             )}
             {(!collapsedSections[section.title] || isCollapsed) && section.items.map((item) => {
               const isActive = pathname === item.href;
+              const isParentActive = item.children
+                ? pathname.startsWith(item.href)
+                : false;
               const Icon = item.icon;
               return (
                 <div key={item.name}>
@@ -290,8 +305,8 @@ export const Sidebar: React.FC = () => {
                     className={cn(
                       "w-full h-9 hover:bg-accent hover:text-accent-foreground flex items-center transition-all relative group",
                       isCollapsed ? "justify-center px-0" : "justify-start px-2",
-                      isActive && "bg-primary/10 text-primary font-semibold border-l-2 border-primary shadow-sm",
-                      !isActive && "border-l-2 border-transparent"
+                      (isActive || isParentActive) && "bg-primary/10 text-primary font-semibold border-l-2 border-primary shadow-sm",
+                      !isActive && !isParentActive && "border-l-2 border-transparent"
                     )}
                     asChild
                     title={isCollapsed ? item.name : undefined}
@@ -300,12 +315,15 @@ export const Sidebar: React.FC = () => {
                       <div className={cn("flex items-center", isCollapsed ? "justify-center" : "gap-3")}>
                         <Icon className={cn(
                           "h-4 w-4 shrink-0 transition-all", 
-                          isActive ? "text-primary scale-110" : "text-muted-foreground group-hover:text-foreground"
+                          (isActive || isParentActive) ? "text-primary scale-110" : "text-muted-foreground group-hover:text-foreground"
                         )} />
-                        {!isCollapsed && <span className={cn("text-xs truncate", isActive && "font-semibold")}>{item.name}</span>}
+                        {!isCollapsed && <span className={cn("text-xs truncate", (isActive || isParentActive) && "font-semibold")}>{item.name}</span>}
                       </div>
-                      {!isCollapsed && (item.subItems || item.hasArrow) && (
-                        <ChevronDown className="h-3 w-3 text-muted-foreground/50 ml-auto" />
+                      {!isCollapsed && (item.subItems || item.hasArrow || item.children) && (
+                        <ChevronDown className={cn(
+                          "h-3 w-3 text-muted-foreground/50 ml-auto transition-transform",
+                          isParentActive && "rotate-180"
+                        )} />
                       )}
                     </Link>
                   </Button>
@@ -324,6 +342,33 @@ export const Sidebar: React.FC = () => {
                           {sub}
                         </Link>
                       ))}
+                    </div>
+                  )}
+
+                  {!isCollapsed && item.children && isParentActive && (
+                    <div className="ml-7 mt-0.5 space-y-0.5 border-l border-border/60 pl-3">
+                      {item.children.map((child) => {
+                        const isChildActive = pathname === child.href;
+                        const ChildIcon = child.icon;
+                        return (
+                          <Button
+                            key={child.href}
+                            variant="ghost"
+                            className={cn(
+                              "w-full h-8 justify-start px-2 text-xs transition-all",
+                              isChildActive
+                                ? "text-primary font-semibold bg-primary/10"
+                                : "text-muted-foreground hover:text-foreground"
+                            )}
+                            asChild
+                          >
+                            <Link href={child.href}>
+                              <ChildIcon className="h-3.5 w-3.5 shrink-0 mr-2" />
+                              {child.name}
+                            </Link>
+                          </Button>
+                        );
+                      })}
                     </div>
                   )}
                 </div>

@@ -459,6 +459,14 @@ export class AlarmDetectionEngine {
         }
       }
 
+      // Evaluate NMS (SNMP) alarms from nms_* tables
+      try {
+        const nmsResults = await this.evaluateNmsAlarms();
+        results.push(...nmsResults);
+      } catch (nmsErr) {
+        console.error('[AlarmEngine] NMS alarm evaluation error:', nmsErr);
+      }
+
       console.log(`[AlarmEngine] Evaluation complete: ${results.filter(r => r.triggered).length} triggered, ${results.filter(r => r.error && r.error !== 'cooldown-active' && r.error !== 'cache-empty').length} errors, ${results.filter(r => r.error === 'cooldown-active').length} on-cooldown, ${results.filter(r => r.error === 'cache-empty').length} cache-empty`);
       
       // Retry any failed notifications from previous cycles
@@ -3455,6 +3463,239 @@ export class AlarmDetectionEngine {
     sections.push(`Onerilen Aksiyon: ${alarm.detectionLogic.recommendedAction}`);
 
     return sections.join('\n\n');
+  }
+
+  /**
+   * Evaluate NMS (SNMP) alarms from nms_* tables.
+   * 
+   * Reads raw metrics written by the Python NMS service (nms_interfaces,
+   * nms_health_metrics) and generates alarm events for:
+   *   NMS_PORT_DOWN       — interface admin=up, oper=down
+   *   NMS_CPU_HIGH        — cpu_usage >= threshold (from detectionLogic.threshold)
+   *   NMS_MEMORY_HIGH     — memory_usage >= threshold
+   *   NMS_TEMPERATURE_HIGH — temperature >= threshold
+   *   NMS_DEVICE_UNREACHABLE — no health metric in last 3× poll intervals
+   */
+  private async evaluateNmsAlarms(): Promise<EvaluationResult[]> {
+    const results: EvaluationResult[] = [];
+
+    // Load enabled NMS alarm definitions
+    const nmsAlarms = await prisma.alarmDefinition.findMany({
+      where: { enabled: true, code: { startsWith: 'NMS_' } },
+    });
+
+    if (nmsAlarms.length === 0) return results;
+
+    // ── NMS_PORT_DOWN ─────────────────────────────────────────────────────────
+    const portDownAlarm = nmsAlarms.find(a => a.code === 'NMS_PORT_DOWN');
+    if (portDownAlarm) {
+      try {
+        // Find interfaces where admin=up but oper=down, updated in the last 10 minutes
+        const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000);
+        const downInterfaces = await (prisma as any).nmsInterface.findMany({
+          where: {
+            adminStatus: 'up',
+            operStatus: 'down',
+            updatedAt: { gte: tenMinAgo },
+          },
+          include: { device: { select: { id: true, name: true, managementIp: true } } },
+          take: 20,
+        }) as Array<any>;
+
+        for (const iface of downInterfaces) {
+          const deviceName = iface.device?.name ?? `NMS Device ${iface.nmsDeviceId}`;
+          const ifaceLabel = iface.description || iface.interfaceName;
+          const title = `Port Down: ${ifaceLabel} on ${deviceName}`;
+          const message = `Interface ${ifaceLabel} (index ${iface.interfaceIndex}) on ${deviceName} is administratively UP but operationally DOWN.`;
+
+          // Cooldown check
+          const cooldownMs = portDownAlarm.cooldownMinutes * 60 * 1000;
+          const existing = await prisma.alarmEvent.findFirst({
+            where: {
+              alarmId: portDownAlarm.id,
+              deviceName,
+              createdAt: { gte: new Date(Date.now() - cooldownMs) },
+            },
+          });
+          if (existing) {
+            results.push({ alarmCode: 'NMS_PORT_DOWN', triggered: false, matchCount: 0, events: [], error: 'cooldown-active' });
+            continue;
+          }
+
+          const event = await prisma.alarmEvent.create({
+            data: {
+              alarmId: portDownAlarm.id,
+              severity: portDownAlarm.severity as any,
+              title,
+              message,
+              deviceName,
+              rawData: {
+                nms_device_id: iface.nmsDeviceId,
+                interface_index: iface.interfaceIndex,
+                interface_name: iface.interfaceName,
+                description: iface.description,
+                admin_status: iface.adminStatus,
+                oper_status: iface.operStatus,
+                source: 'nms',
+              } as any,
+            },
+          });
+          results.push({ alarmCode: 'NMS_PORT_DOWN', triggered: true, matchCount: 1, events: [{ id: event.id }] });
+          console.log(`[AlarmEngine] NMS PORT_DOWN: ${ifaceLabel} on ${deviceName}`);
+        }
+      } catch (e) {
+        results.push({ alarmCode: 'NMS_PORT_DOWN', triggered: false, matchCount: 0, events: [], error: (e as Error).message });
+      }
+    }
+
+    // ── NMS_CPU_HIGH / NMS_MEMORY_HIGH / NMS_TEMPERATURE_HIGH ─────────────────
+    const healthAlarmCodes = ['NMS_CPU_HIGH', 'NMS_MEMORY_HIGH', 'NMS_TEMPERATURE_HIGH'] as const;
+    for (const code of healthAlarmCodes) {
+      const alarmDef = nmsAlarms.find(a => a.code === code);
+      if (!alarmDef) continue;
+
+      const logic = alarmDef.detectionLogic as Record<string, unknown>;
+      const threshold = typeof logic.threshold === 'number' ? logic.threshold : 80;
+
+      try {
+        const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
+        const latestMetrics = await (prisma as any).$queryRaw`
+          SELECT DISTINCT ON (nms_device_id)
+            id, nms_device_id, cpu_usage, memory_usage, temperature, uptime_seconds, collected_at
+          FROM nms_health_metrics
+          WHERE collected_at >= ${fiveMinAgo}
+          ORDER BY nms_device_id, collected_at DESC
+        ` as Array<{ id: string; nms_device_id: number; cpu_usage: number | null; memory_usage: number | null; temperature: number | null; uptime_seconds: number | null; collected_at: Date }>;
+
+        for (const metric of latestMetrics) {
+          const value =
+            code === 'NMS_CPU_HIGH' ? metric.cpu_usage :
+            code === 'NMS_MEMORY_HIGH' ? metric.memory_usage :
+            metric.temperature;
+
+          if (value === null || value === undefined || value < threshold) continue;
+
+          // Resolve device name
+          const device = await (prisma as any).device.findFirst({
+            where: { nmsDeviceId: metric.nms_device_id },
+            select: { id: true, name: true },
+          }) as { id: string; name: string } | null;
+          const deviceName = device?.name ?? `NMS Device ${metric.nms_device_id}`;
+          const metricLabel = code === 'NMS_CPU_HIGH' ? 'CPU' : code === 'NMS_MEMORY_HIGH' ? 'Memory' : 'Temperature';
+          const unit = code === 'NMS_TEMPERATURE_HIGH' ? '°C' : '%';
+          const title = `${metricLabel} High on ${deviceName}: ${value.toFixed(1)}${unit}`;
+          const message = `${metricLabel} usage on ${deviceName} is ${value.toFixed(1)}${unit}, exceeding threshold of ${threshold}${unit}.`;
+
+          // Cooldown check
+          const cooldownMs = alarmDef.cooldownMinutes * 60 * 1000;
+          const existing = await prisma.alarmEvent.findFirst({
+            where: {
+              alarmId: alarmDef.id,
+              deviceName,
+              createdAt: { gte: new Date(Date.now() - cooldownMs) },
+            },
+          });
+          if (existing) {
+            results.push({ alarmCode: code, triggered: false, matchCount: 0, events: [], error: 'cooldown-active' });
+            continue;
+          }
+
+          const event = await prisma.alarmEvent.create({
+            data: {
+              alarmId: alarmDef.id,
+              severity: alarmDef.severity as any,
+              title,
+              message,
+              deviceName,
+              rawData: {
+                nms_device_id: metric.nms_device_id,
+                cpu_usage: metric.cpu_usage,
+                memory_usage: metric.memory_usage,
+                temperature: metric.temperature,
+                uptime_seconds: metric.uptime_seconds,
+                threshold,
+                source: 'nms',
+              } as any,
+            },
+          });
+          results.push({ alarmCode: code, triggered: true, matchCount: 1, events: [{ id: event.id }] });
+          console.log(`[AlarmEngine] NMS ${code}: ${deviceName} = ${value.toFixed(1)}${unit}`);
+        }
+      } catch (e) {
+        results.push({ alarmCode: code, triggered: false, matchCount: 0, events: [], error: (e as Error).message });
+      }
+    }
+
+    // ── NMS_DEVICE_UNREACHABLE ─────────────────────────────────────────────────
+    const unreachableAlarm = nmsAlarms.find(a => a.code === 'NMS_DEVICE_UNREACHABLE');
+    if (unreachableAlarm) {
+      try {
+        // Devices with polling_enabled=true and no health metric in the last 5 minutes
+        const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
+        const pollingDevices = await (prisma as any).device.findMany({
+          where: {
+            pollingEnabled: true,
+            nmsDeviceId: { not: null },
+          },
+          select: { id: true, name: true, nmsDeviceId: true, lastPolledAt: true },
+        }) as Array<{ id: string; name: string; nmsDeviceId: number | null; lastPolledAt: Date | null }>;
+
+        for (const device of pollingDevices) {
+          if (!device.nmsDeviceId) continue;
+
+          // Check if we got any health metric recently
+          const recentMetric = await (prisma as any).nmsHealthMetric.findFirst({
+            where: {
+              nmsDeviceId: device.nmsDeviceId,
+              collectedAt: { gte: fiveMinAgo },
+            },
+          });
+
+          if (recentMetric) continue; // Device is reporting fine
+
+          // Also check last_polled_at — if never polled, don't alarm yet
+          if (!device.lastPolledAt) continue;
+
+          // Cooldown check
+          const cooldownMs = unreachableAlarm.cooldownMinutes * 60 * 1000;
+          const existing = await prisma.alarmEvent.findFirst({
+            where: {
+              alarmId: unreachableAlarm.id,
+              deviceName: device.name,
+              createdAt: { gte: new Date(Date.now() - cooldownMs) },
+            },
+          });
+          if (existing) {
+            results.push({ alarmCode: 'NMS_DEVICE_UNREACHABLE', triggered: false, matchCount: 0, events: [], error: 'cooldown-active' });
+            continue;
+          }
+
+          const title = `Device Unreachable: ${device.name}`;
+          const message = `Device ${device.name} (NMS ID ${device.nmsDeviceId}) has not reported SNMP metrics in the last 5 minutes.`;
+
+          const event = await prisma.alarmEvent.create({
+            data: {
+              alarmId: unreachableAlarm.id,
+              severity: unreachableAlarm.severity as any,
+              title,
+              message,
+              deviceName: device.name,
+              rawData: {
+                nms_device_id: device.nmsDeviceId,
+                last_polled_at: device.lastPolledAt,
+                source: 'nms',
+              } as any,
+            },
+          });
+          results.push({ alarmCode: 'NMS_DEVICE_UNREACHABLE', triggered: true, matchCount: 1, events: [{ id: event.id }] });
+          console.log(`[AlarmEngine] NMS DEVICE_UNREACHABLE: ${device.name}`);
+        }
+      } catch (e) {
+        results.push({ alarmCode: 'NMS_DEVICE_UNREACHABLE', triggered: false, matchCount: 0, events: [], error: (e as Error).message });
+      }
+    }
+
+    return results;
   }
 
   private formatBytes(bytes: number): string {

@@ -1647,7 +1647,6 @@ export class VMwareService {
               vmwareMoref: host.host.value,
               healthScore: host.summary?.overallStatus === 'green' ? 100 : 
                           host.summary?.overallStatus === 'yellow' ? 70 : 30,
-              organizationId,
               createdAt: new Date(),
               updatedAt: new Date(),
             };

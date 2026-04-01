@@ -102,30 +102,45 @@ export default function VMwareIntegrationPage() {
         // Check connection status from config (without auth)
         setStatus({
           connected: !!configData.config?.host,
-          version: configData.config?.host ? 'Connected' : undefined,
-          error: configData.config?.host ? undefined : 'Not configured'
+          version: configData.config?.host ? 'Configured' : undefined,
+          error: configData.config?.host ? undefined : 'Not configured — enter vCenter details and save'
         });
 
-        // Fetch dashboard data for sync tab
+        // Warn if saved config has no password (was accidentally overwritten)
+        if (configData.config?.host && !configData.config?.password) {
+          setStatus(prev => ({
+            connected: prev?.connected ?? false,
+            version: prev?.version,
+            error: 'Password missing from saved config — please re-enter and save',
+          }));
+        }
+
+        // Fetch dashboard data for sync tab (requires live vCenter auth)
         try {
           const dashRes = await fetch('/api/integrations/vmware?type=dashboard');
-          const dashData = await dashRes.json();
-          if (dashData.summary) {
-            setDashboardData(dashData);
-            // Set sync result from dashboard data
-            setSyncResult({
-              success: true,
-              clustersCreated: 0,
-              clustersUpdated: dashData.summary.clusters || 0,
-              hostsCreated: 0,
-              hostsUpdated: dashData.summary.hostsOnline || 0,
-              vmsCreated: 0,
-              vmsUpdated: dashData.summary.vmRunning || 0,
-              datastoresProcessed: dashData.summary.datastores || 0,
-              errors: [],
-              duration: 0
-            });
+          if (dashRes.ok) {
+            const dashData = await dashRes.json();
+            if (dashData.summary) {
+              setDashboardData(dashData);
+              setSyncResult({
+                success: true,
+                clustersCreated: 0,
+                clustersUpdated: dashData.summary.clusters || 0,
+                hostsCreated: 0,
+                hostsUpdated: dashData.summary.hostsOnline || 0,
+                vmsCreated: 0,
+                vmsUpdated: dashData.summary.vmRunning || 0,
+                datastoresProcessed: dashData.summary.datastores || 0,
+                errors: [],
+                duration: 0
+              });
+              // vCenter is reachable
+              if (configData.config?.host) {
+                setStatus({ connected: true, version: 'Connected' });
+              }
+            }
           }
+          // 401 = auth failed, 200 not configured = just skip, status already set above
         } catch (e) {
           console.error('Failed to load dashboard:', e);
         }
@@ -170,18 +185,41 @@ export default function VMwareIntegrationPage() {
   };
 
   const runSync = async () => {
+    if (!config.host || !config.username) {
+      setStatus({ connected: false, error: 'Please fill in vCenter Host and Username before syncing.' });
+      return;
+    }
     setSyncing(true);
     try {
+      // Auto-save config to DB first so sync can find it
+      const saveRes = await fetch('/api/integrations/vmware', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'save-config', name: 'VMware vCenter', config }),
+      });
+      if (!saveRes.ok) {
+        const saveErr = await saveRes.json();
+        setStatus({ connected: false, error: saveErr.error || 'Failed to save configuration before sync' });
+        setSyncing(false);
+        return;
+      }
+
       const response = await fetch('/api/integrations/vmware', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'sync' }),
       });
       const data = await response.json();
-      setSyncResult(data);
-      setActiveTab('sync');
+      if (!response.ok) {
+        setStatus({ connected: false, error: data.error || 'Sync failed' });
+        setActiveTab('config');
+      } else {
+        setSyncResult(data);
+        setActiveTab('sync');
+      }
     } catch (error) {
       console.error('Sync failed:', error);
+      setStatus({ connected: false, error: (error as Error).message });
     }
     setSyncing(false);
   };
@@ -245,9 +283,9 @@ export default function VMwareIntegrationPage() {
                   <Label htmlFor="host">vCenter Host</Label>
                   <Input
                     id="host"
-                    placeholder="vcenter.example.com"
+                    placeholder="10.5.56.10  (no https:// prefix)"
                     value={config.host}
-                    onChange={(e) => setConfig({ ...config, host: e.target.value })}
+                    onChange={(e) => setConfig({ ...config, host: e.target.value.replace(/^https?:\/\//i, '').replace(/\/+$/, '') })}
                   />
                 </div>
                 <div className="space-y-2">
@@ -327,7 +365,7 @@ export default function VMwareIntegrationPage() {
             <CardHeader>
               <CardTitle>Run Manual Sync</CardTitle>
               <CardDescription>
-                Manually trigger a synchronization with vCenter
+                Save your configuration first, then trigger a synchronization with vCenter
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -438,7 +476,7 @@ export default function VMwareIntegrationPage() {
                     </div>
                   </div>
                 </div>
-                {syncResult.errors.length > 0 && (
+                {syncResult.errors && syncResult.errors.length > 0 && (
                   <div className="mt-4 p-3 rounded-lg bg-destructive/10">
                     <p className="text-sm font-medium mb-2">Errors:</p>
                     <ul className="text-sm text-destructive space-y-1">

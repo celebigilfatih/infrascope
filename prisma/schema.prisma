@@ -176,6 +176,16 @@ model Device {
   vmwareMoref       String?  // VMware Managed Object Reference
   fortiDeviceId     String?
   
+  // NMS / SNMP integration
+  nmsDeviceId       Int?     @unique @map("nms_device_id")
+  managementIp      String?  @map("management_ip")    // Primary IP for SNMP polling
+  snmpCommunity     String?  @map("snmp_community")
+  snmpVersion       String?  @default("2c") @map("snmp_version")
+  snmpPort          Int?     @default(161) @map("snmp_port")
+  pollingEnabled    Boolean  @default(false) @map("polling_enabled")
+  pollingInterval   Int?     @default(30) @map("polling_interval")  // seconds
+  lastPolledAt      DateTime? @map("last_polled_at")
+  
   // Relationships
   vmHostId          String?  // For VMs: which ESXi host
   
@@ -200,11 +210,17 @@ model Device {
   sourceRelationships Relationship[]   @relation("SourceDevice")
   targetRelationships Relationship[]   @relation("TargetDevice")
 
+  // NMS relationships
+  nmsInterfaces      NmsInterface[]
+  nmsHealthMetrics   NmsHealthMetric[]
+  nmsTopologyLinks   NmsTopologyLink[]
+
   @@index([rackId])
   @@index([parentDeviceId])
   @@index([zabbixHostId])
   @@index([vmwareMoref])
   @@index([vmwareClusterId])
+  @@index([nmsDeviceId])
   @@map("devices")
 }
 
@@ -1096,4 +1112,110 @@ model AlarmWhitelist {
   @@unique([alarmCode, field, value])
   @@index([alarmCode, enabled])
   @@map("alarm_whitelist")
+}
+
+// ============================================================================
+// NMS / SNMP INTEGRATION TABLES
+// ============================================================================
+
+/// Current SNMP interface state per device (upserted every poll cycle)
+model NmsInterface {
+  id             String   @id @default(cuid())
+  nmsDeviceId    Int      @map("nms_device_id")
+  device         Device   @relation(fields: [nmsDeviceId], references: [nmsDeviceId], onDelete: Cascade)
+  interfaceIndex Int      @map("interface_index")
+  interfaceName  String   @map("interface_name")
+  description    String?
+  adminStatus    String   @map("admin_status")   // "up" | "down"
+  operStatus     String   @map("oper_status")    // "up" | "down"
+  speed          BigInt   @default(0)
+  inOctets       BigInt   @default(0) @map("in_octets")
+  outOctets      BigInt   @default(0) @map("out_octets")
+  inErrors       Int      @default(0) @map("in_errors")
+  outErrors      Int      @default(0) @map("out_errors")
+  mtu            Int      @default(1500)
+  lastPolledAt   DateTime @map("last_polled_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@unique([nmsDeviceId, interfaceIndex])
+  @@index([nmsDeviceId])
+  @@index([adminStatus, operStatus])
+  @@map("nms_interfaces")
+}
+
+/// SNMP health metrics time series (CPU, memory, temperature, uptime)
+model NmsHealthMetric {
+  id            String   @id @default(cuid())
+  nmsDeviceId   Int      @map("nms_device_id")
+  device        Device   @relation(fields: [nmsDeviceId], references: [nmsDeviceId], onDelete: Cascade)
+  uptimeSeconds Int?     @map("uptime_seconds")
+  cpuUsage      Float?   @map("cpu_usage")
+  memoryUsage   Float?   @map("memory_usage")
+  temperature   Float?
+  collectedAt   DateTime @map("collected_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([nmsDeviceId, collectedAt])
+  @@index([collectedAt])
+  @@map("nms_health_metrics")
+}
+
+/// SNMP topology links discovered via LLDP/CDP
+model NmsTopologyLink {
+  id               String   @id @default(cuid())
+  nmsDeviceId      Int      @map("nms_device_id")
+  device           Device   @relation(fields: [nmsDeviceId], references: [nmsDeviceId], onDelete: Cascade)
+  localInterface   String   @map("local_interface")
+  remoteDeviceName String   @map("remote_device_name")
+  remoteInterface  String   @map("remote_interface")
+  protocol         String   @default("lldp")  // "lldp" | "cdp"
+  lastSeenAt       DateTime @default(now()) @map("last_seen_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@unique([nmsDeviceId, localInterface, remoteDeviceName])
+  @@index([nmsDeviceId])
+  @@map("nms_topology_links")
+}
+
+/// Network discovery scan job
+model NmsDiscoveryScan {
+  id             String   @id @default(cuid())
+  cidr           String
+  status         String   @default("pending")  // pending | running | completed | failed
+  totalHosts     Int      @default(0) @map("total_hosts")
+  processedHosts Int      @default(0) @map("processed_hosts")
+  foundDevices   Int      @default(0) @map("found_devices")
+  errorMessage   String?  @map("error_message")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  discoveredDevices NmsDiscoveredDevice[]
+
+  @@index([status])
+  @@index([createdAt])
+  @@map("nms_discovery_scans")
+}
+
+/// Devices found during a discovery scan (pending import approval)
+model NmsDiscoveredDevice {
+  id            String   @id @default(cuid())
+  scanId        String   @map("scan_id")
+  scan          NmsDiscoveryScan @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  ipAddress     String   @map("ip_address")
+  hostname      String?
+  vendor        String   @default("Generic")
+  snmpCommunity String?  @map("snmp_community")
+  sysDescr      String?  @map("sys_descr")
+  snmpStatus    String   @default("none") @map("snmp_status")  // success | failed | none
+  sshStatus     String   @default("none") @map("ssh_status")   // success | failed | open | closed | none
+  imported      Boolean  @default(false)
+  importedAt    DateTime? @map("imported_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@unique([scanId, ipAddress])
+  @@index([scanId])
+  @@index([ipAddress])
+  @@map("nms_discovered_devices")
 }
