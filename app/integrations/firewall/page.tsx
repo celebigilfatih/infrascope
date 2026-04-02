@@ -24,6 +24,8 @@ import {
 
 interface FortiGateConfig {
   host: string;
+  username: string;
+  password: string;
   accessToken: string;
   snmp: {
     community: string;
@@ -55,6 +57,8 @@ interface SyncResult {
 export default function FortiGateIntegrationPage() {
   const [config, setConfig] = useState<FortiGateConfig>({
     host: '',
+    username: '',
+    password: '',
     accessToken: '',
     snmp: {
       community: 'public',
@@ -78,6 +82,7 @@ export default function FortiGateIntegrationPage() {
   const [syncing, setSyncing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('config');
+  const [passwordSet, setPasswordSet] = useState(false);
 
   // Load config and status on mount
   useEffect(() => {
@@ -90,6 +95,8 @@ export default function FortiGateIntegrationPage() {
         if (configData.config) {
           setConfig({
             host: configData.config.host || '',
+            username: configData.config.username || '',
+            password: '',  // Never pre-fill password
             accessToken: '',
             snmp: configData.config.snmp || { community: 'public', version: '2c' },
             pollingInterval: configData.config.pollingInterval || 15,
@@ -103,12 +110,13 @@ export default function FortiGateIntegrationPage() {
               sdwan: false,
             },
           });
+          setPasswordSet(!!configData.config.passwordSet);
         }
         
         // Check connection status from config (without auth)
         setStatus({
           connected: !!configData.config?.host,
-          version: configData.config?.host ? 'Connected' : undefined,
+          version: configData.config?.host ? 'Configured' : undefined,
           error: configData.config?.host ? undefined : 'Not configured'
         });
 
@@ -164,6 +172,7 @@ export default function FortiGateIntegrationPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'save-config', name: `FortiGate-${config.host}`, config }),
       });
+      if (config.password) setPasswordSet(true);
     } catch (error) {
       console.error('Failed to save config:', error);
     }
@@ -243,23 +252,38 @@ export default function FortiGateIntegrationPage() {
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="host">FortiGate Host</Label>
+                  <Label htmlFor="host">FortiGate Host / IP</Label>
                   <Input
                     id="host"
-                    placeholder="firewall.example.com"
+                    placeholder="192.168.1.99 or firewall.example.com"
                     value={config.host}
                     onChange={(e) => setConfig({ ...config, host: e.target.value })}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="token">API Access Token</Label>
+                  <Label htmlFor="username">Username</Label>
                   <Input
-                    id="token"
-                    type="password"
-                    placeholder="Enter API access token"
-                    value={config.accessToken}
-                    onChange={(e) => setConfig({ ...config, accessToken: e.target.value })}
+                    id="username"
+                    placeholder="admin"
+                    value={config.username}
+                    onChange={(e) => setConfig({ ...config, username: e.target.value })}
                   />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="password">Password</Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    placeholder={passwordSet ? '(saved — leave blank to keep)' : '••••••••'}
+                    value={config.password}
+                    onChange={(e) => setConfig({ ...config, password: e.target.value })}
+                  />
+                  {passwordSet && !config.password && (
+                    <p className="text-xs text-muted-foreground">Password is saved. Enter a new one only to change it.</p>
+                  )}
                 </div>
               </div>
 

@@ -31,7 +31,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         config: {
           host: fortiConfig.host || '',
+          username: fortiConfig.username || '',
           accessToken: '',
+          passwordSet: !!fortiConfig.password,
           snmp: fortiConfig.snmp || { community: 'public', version: '2c' },
           pollingInterval: fortiConfig.pollingInterval || 15,
           syncMode: fortiConfig.syncMode || 'rest',
@@ -59,6 +61,8 @@ export async function GET(request: NextRequest) {
         const fortiConfig = config.config as any;
         const service = new FortiGateService({
           host: fortiConfig.host,
+          username: fortiConfig.username,
+          password: fortiConfig.password,
           accessToken: fortiConfig.accessToken,
           snmp: fortiConfig.snmp,
           pollingInterval: fortiConfig.pollingInterval || 15,
@@ -103,6 +107,8 @@ export async function GET(request: NextRequest) {
         try {
           const service = new FortiGateService({
             host: fortiConfig.host,
+            username: fortiConfig.username,
+            password: fortiConfig.password,
             accessToken: fortiConfig.accessToken,
             snmp: fortiConfig.snmp,
             pollingInterval: fortiConfig.pollingInterval || 15,
@@ -149,6 +155,8 @@ export async function GET(request: NextRequest) {
 
     const fortiConfig = config.config as {
       host: string;
+      username?: string;
+      password?: string;
       accessToken: string;
       snmp?: {
         community: string;
@@ -168,6 +176,8 @@ export async function GET(request: NextRequest) {
 
     const service = new FortiGateService({
       host: fortiConfig.host,
+      username: fortiConfig.username,
+      password: fortiConfig.password,
       accessToken: fortiConfig.accessToken,
       snmp: fortiConfig.snmp,
       pollingInterval: fortiConfig.pollingInterval,
@@ -233,6 +243,8 @@ export async function POST(request: NextRequest) {
       // Test connection without saving
       const fortiConfig = config as {
         host: string;
+        username?: string;
+        password?: string;
         accessToken: string;
         snmp?: {
           community: string;
@@ -240,9 +252,18 @@ export async function POST(request: NextRequest) {
         };
       };
 
+      // If password is blank, use the saved password from DB
+      let password = fortiConfig.password;
+      if (!password) {
+        const existing = await prisma.integrationConfig.findFirst({ where: { type: 'FORTIGATE' } });
+        password = (existing?.config as any)?.password || '';
+      }
+
       const service = new FortiGateService({
         host: fortiConfig.host,
-        accessToken: fortiConfig.accessToken,
+        username: fortiConfig.username,
+        password: password,
+        accessToken: fortiConfig.accessToken || '',
         snmp: fortiConfig.snmp,
         pollingInterval: 15,
         syncMode: 'rest',
@@ -286,6 +307,8 @@ export async function POST(request: NextRequest) {
 
       const configData = fortiConfig.config as {
         host: string;
+        username?: string;
+        password?: string;
         accessToken: string;
         snmp?: {
           community: string;
@@ -305,6 +328,8 @@ export async function POST(request: NextRequest) {
 
       const service = new FortiGateService({
         host: configData.host,
+        username: configData.username,
+        password: configData.password,
         accessToken: configData.accessToken,
         snmp: configData.snmp,
         pollingInterval: configData.pollingInterval,
@@ -344,6 +369,8 @@ export async function POST(request: NextRequest) {
     if (action === 'save-config') {
       const newConfig = config as {
         host: string;
+        username?: string;
+        password?: string;
         accessToken: string;
         snmp?: {
           community: string;
@@ -361,6 +388,14 @@ export async function POST(request: NextRequest) {
         };
       };
 
+      // Preserve existing password if none provided
+      const existingRecord = await prisma.integrationConfig.findFirst({
+        where: { type: 'FORTIGATE' },
+      });
+      const existingData = existingRecord?.config as any;
+      const finalPassword = newConfig.password || existingData?.password || '';
+      const finalToken = newConfig.accessToken || existingData?.accessToken || '';
+
       await prisma.integrationConfig.upsert({
         where: {
           type_name: {
@@ -372,12 +407,12 @@ export async function POST(request: NextRequest) {
           type: 'FORTIGATE',
           name: body.name || `FortiGate-${config.host}`,
           enabled: true,
-          config: newConfig,
+          config: { ...newConfig, password: finalPassword, accessToken: finalToken },
           syncInterval: newConfig.pollingInterval,
         },
         update: {
           enabled: true,
-          config: newConfig,
+          config: { ...newConfig, password: finalPassword, accessToken: finalToken },
           syncInterval: newConfig.pollingInterval,
         },
       });

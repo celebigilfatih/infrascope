@@ -33,7 +33,19 @@ export async function POST(request: NextRequest) {
     const { action, config: reqConfig } = body;
 
     if (action === 'test') {
-      const { host, username, password } = reqConfig as { host: string; username: string; password: string };
+      const { host, username, password: rawPassword } = reqConfig as { host: string; username: string; password?: string };
+
+      // If password is blank, use the saved password from DB
+      let password = rawPassword;
+      if (!password) {
+        const existing = await prisma.integrationConfig.findFirst({ where: { type: 'FORTIANALYZER' } });
+        password = (existing?.config as any)?.password || '';
+      }
+
+      if (!host || !username || !password) {
+        return NextResponse.json({ success: false, connected: false, error: 'Host, username and password are required.' });
+      }
+
       const service = new FortiAnalyzerService({ host, username, password });
       const loggedIn = await service.login();
       if (loggedIn) {

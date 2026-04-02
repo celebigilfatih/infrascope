@@ -49,6 +49,8 @@ export async function GET() {
 
     const fortiConfig = config.config as {
       host: string;
+      username?: string;
+      password?: string;
       accessToken: string;
       pollingInterval: number;
       syncMode: 'snmp' | 'rest' | 'both';
@@ -64,6 +66,8 @@ export async function GET() {
 
     const service = new FortiGateService({
       host: fortiConfig.host,
+      username: fortiConfig.username,
+      password: fortiConfig.password,
       accessToken: fortiConfig.accessToken,
       pollingInterval: fortiConfig.pollingInterval,
       syncMode: fortiConfig.syncMode,

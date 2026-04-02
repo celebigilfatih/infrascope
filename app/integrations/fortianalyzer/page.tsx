@@ -50,8 +50,8 @@ export default function FortiAnalyzerIntegrationPage() {
   }, []);
 
   const testConnection = async () => {
-    if (!host || !username || !password) {
-      setTestResult({ connected: false, error: 'Host, username and password are required for connection test.' });
+    if (!host || !username) {
+      setTestResult({ connected: false, error: 'Host and username are required for connection test.' });
       return;
     }
     setTesting(true);

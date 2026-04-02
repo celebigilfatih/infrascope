@@ -8,13 +8,17 @@
  */
 
 import { PrismaClient, DeviceType, DeviceStatus, DeviceCriticality } from '@prisma/client';
+import * as https from 'https';
+import * as querystring from 'querystring';
 
 const prisma = new PrismaClient();
 
 // Configuration Types
 export interface FortiGateConfig {
   host: string;
-  accessToken: string; // REST API token
+  username?: string;   // Admin username for cookie-based auth
+  password?: string;   // Admin password for cookie-based auth
+  accessToken: string; // REST API token (fallback if no username/password)
   snmp?: {
     community: string;
     version: '2c' | '3';
@@ -169,6 +173,12 @@ export class FortiGateService {
   private baseUrl: string;
   private snmpClient?: SNMPClient;
 
+  // Cookie-based session state
+  private sessionCookie: string | null = null;
+  private csrfToken: string | null = null;
+  private csrfCookie: string | null = null;
+  private sessionExpiry: number = 0;
+
   constructor(config: FortiGateConfig) {
     this.config = config;
     this.baseUrl = `https://${config.host}/api/v2`;
@@ -179,6 +189,85 @@ export class FortiGateService {
   }
 
   /**
+   * Login to FortiGate with username/password and obtain a session cookie.
+   */
+  private async login(): Promise<void> {
+    // Use Node.js https module directly to bypass Next.js fetch patching which
+    // strips HttpOnly cookies (APSCOOKIE) from Set-Cookie response headers.
+    return new Promise((resolve, reject) => {
+      const postData = querystring.stringify({
+        username: this.config.username!,
+        secretkey: this.config.password!,
+      });
+
+      const options: https.RequestOptions = {
+        hostname: this.config.host,
+        port: 443,
+        path: '/logincheck',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Content-Length': Buffer.byteLength(postData),
+        },
+        rejectUnauthorized: false,
+      };
+
+      const req = https.request(options, (res) => {
+        res.resume(); // consume body
+
+        // Node.js http.IncomingMessage always exposes set-cookie as string[]
+        const rawCookies: string[] = (res.headers['set-cookie'] as string[]) || [];
+        const cookiePairs = rawCookies.map((c) => c.split(';')[0].trim()).filter(Boolean);
+
+        const apsRaw = cookiePairs.find((c) => /^APSCOOKIE_/i.test(c));
+        if (!apsRaw) {
+          reject(new Error('FortiGate login failed: no APSCOOKIE received (check credentials)'));
+          return;
+        }
+        this.sessionCookie = apsRaw;
+
+        // CSRF token lives in a separate ccsrftoken_* cookie (not inside APSCOOKIE).
+        const csrfRaw = cookiePairs.find((c) => /^ccsrftoken_/i.test(c));
+        if (csrfRaw) {
+          this.csrfToken = csrfRaw.split('=').slice(1).join('=').replace(/^"|"$/g, '');
+          this.csrfCookie = csrfRaw;
+        } else {
+          this.csrfToken = null;
+          this.csrfCookie = null;
+        }
+
+        this.sessionExpiry = Date.now() + 25 * 60 * 1000;
+        resolve();
+      });
+
+      req.on('error', reject);
+      req.write(postData);
+      req.end();
+    });
+  }
+
+  /**
+   * Return the correct authentication headers depending on config.
+   * Uses cookie auth when username/password are set, Bearer token otherwise.
+   */
+  private async getAuthHeaders(): Promise<Record<string, string>> {
+    if (this.config.username && this.config.password) {
+      if (!this.sessionCookie || Date.now() > this.sessionExpiry) {
+        await this.login();
+      }
+      // Send both APSCOOKIE and ccsrftoken cookies; FortiGate requires both.
+      const cookieHeader = this.csrfCookie
+        ? `${this.sessionCookie!}; ${this.csrfCookie}`
+        : this.sessionCookie!;
+      return {
+        'Cookie': cookieHeader,
+        ...(this.csrfToken ? { 'X-CSRFTOKEN': this.csrfToken } : {}),
+      };
+    }
+    return { 'Authorization': `Bearer ${this.config.accessToken}` };
+  }
+
+  /**
    * Make a request to the FortiGate REST API
    */
   private async apiRequest<T>(
@@ -186,12 +275,14 @@ export class FortiGateService {
     method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET',
     body?: Record<string, unknown>
   ): Promise<T> {
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+    const authHeaders = await this.getAuthHeaders();
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
       method,
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.config.accessToken}`,
         'Accept': 'application/json',
+        ...authHeaders,
       },
       body: body ? JSON.stringify(body) : undefined,
     });
@@ -666,9 +757,11 @@ export class FortiGateService {
     error?: string;
   }> {
     try {
+      const authHeaders = await this.getAuthHeaders();
+      process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
       // Get system status
       const statusRes = await fetch(`${this.baseUrl}/monitor/system/status`, {
-        headers: { 'Authorization': `Bearer ${this.config.accessToken}` },
+        headers: authHeaders,
       });
       if (!statusRes.ok) {
         return { connected: false, error: `HTTP ${statusRes.status}` };
@@ -677,7 +770,7 @@ export class FortiGateService {
 
       // Get resource usage
       const resourceRes = await fetch(`${this.baseUrl}/monitor/system/vdom-resource`, {
-        headers: { 'Authorization': `Bearer ${this.config.accessToken}` },
+        headers: authHeaders,
       });
       const resourceData = resourceRes.ok ? await resourceRes.json() as {
         results: { cpu: number; memory: number; session: { current_usage: number; usage_percent: number } };
@@ -685,7 +778,7 @@ export class FortiGateService {
 
       // Get HA status
       const haRes = await fetch(`${this.baseUrl}/monitor/system/ha-checksums`, {
-        headers: { 'Authorization': `Bearer ${this.config.accessToken}` },
+        headers: authHeaders,
       });
       const haData = haRes.ok ? await haRes.json() as {
         results: Array<{ is_root_primary: boolean; serial_no: string }>;
@@ -693,7 +786,7 @@ export class FortiGateService {
 
       // Get SD-WAN status
       const sdwanRes = await fetch(`${this.baseUrl}/monitor/virtual-wan/members`, {
-        headers: { 'Authorization': `Bearer ${this.config.accessToken}` },
+        headers: authHeaders,
       });
       const sdwanData = sdwanRes.ok ? await sdwanRes.json() as {
         results: Record<string, { link: string; session: number; tx_bandwidth: number; rx_bandwidth: number }>;
@@ -701,7 +794,7 @@ export class FortiGateService {
 
       // Get license status
       const licenseRes = await fetch(`${this.baseUrl}/monitor/license/status`, {
-        headers: { 'Authorization': `Bearer ${this.config.accessToken}` },
+        headers: authHeaders,
       });
       const licenseData = licenseRes.ok ? await licenseRes.json() as {
         results: { forticare: { registration_status: string; support: { enhanced: { support_level: string; expires: number } } } };
@@ -766,7 +859,7 @@ export class FortiGateService {
   }>> {
     try {
       const response = await fetch(`${this.baseUrl}/monitor/vpn/ssl`, {
-        headers: { 'Authorization': `Bearer ${this.config.accessToken}` },
+        headers: await this.getAuthHeaders(),
       });
 
       if (!response.ok) {
@@ -861,8 +954,9 @@ export class FortiGateService {
           if (filter) params.set('filter', filter);
 
           const url = `${this.baseUrl}/monitor/log/event?${params}`;
+          const authH = await this.getAuthHeaders();
           const response = await fetch(url, {
-            headers: { 'Authorization': `Bearer ${this.config.accessToken}` },
+            headers: authH,
           });
 
           if (!response.ok) {
@@ -929,7 +1023,7 @@ export class FortiGateService {
   }>> {
     try {
       const response = await fetch(`${this.baseUrl}/monitor/vpn/ipsec`, {
-        headers: { 'Authorization': `Bearer ${this.config.accessToken}` },
+        headers: await this.getAuthHeaders(),
       });
 
       if (!response.ok) {
@@ -980,7 +1074,7 @@ export class FortiGateService {
   }> {
     try {
       const response = await fetch(`${this.baseUrl}/monitor/system/config-revision`, {
-        headers: { 'Authorization': `Bearer ${this.config.accessToken}` },
+        headers: await this.getAuthHeaders(),
       });
 
       if (!response.ok) {
@@ -1036,7 +1130,7 @@ export class FortiGateService {
   }>> {
     try {
       const response = await fetch(`${this.baseUrl}/monitor/system/interface`, {
-        headers: { 'Authorization': `Bearer ${this.config.accessToken}` },
+        headers: await this.getAuthHeaders(),
       });
 
       if (!response.ok) {
