@@ -19,6 +19,9 @@ import {
   ArrowUpRight,
   Layers,
   CheckCircle2,
+  XCircle,
+  CheckCircle,
+  WifiOff,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
@@ -59,6 +62,20 @@ interface SnapshotInfo {
   name: string;
   ageInDays: number;
   sizeGB: number;
+}
+
+interface NmsDevice {
+  id: number;
+  name: string;
+  ip_address: string;
+  connection_status: string;
+}
+
+interface NmsAlarm {
+  id: number;
+  device_name: string;
+  message: string;
+  severity: string;
 }
 
 interface IpsecTunnel {
@@ -102,6 +119,11 @@ export default function DashboardPage() {
   const [sslUsers, setSslUsers] = useState<SSLUser[]>([]);
   const [sslUsersLoading, setSslUsersLoading] = useState(true);
 
+  const [nmsDevices, setNmsDevices] = useState<NmsDevice[]>([]);
+  const [nmsAlarms, setNmsAlarms] = useState<NmsAlarm[]>([]);
+  const [nmsLoading, setNmsLoading] = useState(true);
+  const [nmsReachable, setNmsReachable] = useState<boolean | null>(null);
+
   useEffect(() => {
     loadAll();
   }, []);
@@ -110,6 +132,32 @@ export default function DashboardPage() {
     loadVmwareData();
     loadFirewallData();
     loadSSLUsers();
+    loadNmsData();
+  };
+
+  const loadNmsData = async () => {
+    try {
+      setNmsLoading(true);
+      const [devRes, alarmRes] = await Promise.allSettled([
+        fetch('/api/integrations/nms/network-devices'),
+        fetch('/api/integrations/nms/alarms?status=active'),
+      ]);
+      if (devRes.status === 'fulfilled' && devRes.value.ok) {
+        const data = await devRes.value.json();
+        setNmsDevices(data.data || []);
+        setNmsReachable(true);
+      } else {
+        setNmsReachable(false);
+      }
+      if (alarmRes.status === 'fulfilled' && alarmRes.value.ok) {
+        const data = await alarmRes.value.json();
+        setNmsAlarms(data.data || []);
+      }
+    } catch {
+      setNmsReachable(false);
+    } finally {
+      setNmsLoading(false);
+    }
   };
 
   const loadVmwareData = async () => {
@@ -171,7 +219,11 @@ export default function DashboardPage() {
   const ipsecDown = firewall?.ipsecTunnels.filter((t) => t.status !== 'up') || [];
   const ipsecTotal = firewall?.ipsecTunnels.length || 0;
 
-  const loading = vmwareLoading || firewallLoading;
+  const loading = vmwareLoading || firewallLoading || nmsLoading;
+
+  const nmsOnline = nmsDevices.filter(d => d.connection_status === 'online').length;
+  const nmsOffline = nmsDevices.filter(d => d.connection_status === 'offline' || d.connection_status === 'unreachable').length;
+  const nmsCritical = nmsAlarms.filter(a => a.severity === 'critical').length;
 
   // Format duration from seconds to readable
   const formatDuration = (seconds: number) => {
@@ -203,7 +255,7 @@ export default function DashboardPage() {
         </Button>
       </div>
 
-      {/* Top Stats Row */}
+      {/* VMware & Firewall Stats Row */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6">
         <Link href="/virtualization/vms">
           <Card className="border-border/50 hover:shadow-md transition-shadow cursor-pointer h-full">
@@ -408,6 +460,111 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         </div>
+      </div>
+
+      {/* NMS Stats + Alarms Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+        {/* NMS Stats: 2x2 */}
+        <div className="grid grid-cols-2 gap-4 content-start">
+          <Link href="/integrations/nms">
+            <Card className="border-border/50 hover:shadow-md transition-shadow cursor-pointer h-full">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Server className="h-4 w-4 text-blue-500" />
+                  <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">SNMP Cihaz</span>
+                </div>
+                <div className="text-2xl font-black">{nmsLoading ? '...' : nmsDevices.length}</div>
+                <div className="flex items-center gap-1 mt-1">
+                  <span className="text-[10px] text-emerald-500 font-medium">{nmsOnline} online</span>
+                  <span className="text-[10px] text-muted-foreground">·</span>
+                  <span className="text-[10px] text-rose-500 font-medium">{nmsOffline} offline</span>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
+          <Link href="/integrations/nms">
+            <Card className={cn('hover:shadow-md transition-shadow cursor-pointer h-full', nmsOffline > 0 ? 'border-rose-500/50' : 'border-border/50')}>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  {nmsOffline > 0 ? <XCircle className="h-4 w-4 text-rose-500" /> : <CheckCircle className="h-4 w-4 text-emerald-500" />}
+                  <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Offline</span>
+                </div>
+                <div className={cn('text-2xl font-black', nmsOffline > 0 ? 'text-rose-500' : 'text-emerald-500')}>{nmsLoading ? '...' : nmsOffline}</div>
+                <div className="text-[10px] text-muted-foreground mt-1">erişilemeyen cihaz</div>
+              </CardContent>
+            </Card>
+          </Link>
+          <Link href="/integrations/nms">
+            <Card className={cn('hover:shadow-md transition-shadow cursor-pointer h-full', nmsCritical > 0 ? 'border-rose-500/50' : 'border-border/50')}>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <AlertTriangle className={cn('h-4 w-4', nmsCritical > 0 ? 'text-rose-500' : 'text-muted-foreground')} />
+                  <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Kritik Alarm</span>
+                </div>
+                <div className={cn('text-2xl font-black', nmsCritical > 0 ? 'text-rose-500' : 'text-muted-foreground')}>{nmsLoading ? '...' : nmsCritical}</div>
+                <div className="text-[10px] text-muted-foreground mt-1">aktif alarm</div>
+              </CardContent>
+            </Card>
+          </Link>
+          <Link href="/integrations/nms">
+            <Card className={cn('hover:shadow-md transition-shadow cursor-pointer h-full', nmsReachable === false ? 'border-rose-500/50' : 'border-border/50')}>
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  {nmsReachable ? <Wifi className="h-4 w-4 text-emerald-500" /> : <WifiOff className="h-4 w-4 text-rose-500" />}
+                  <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">NMS Servis</span>
+                </div>
+                <div className={cn('text-lg font-black', nmsReachable ? 'text-emerald-500' : nmsReachable === false ? 'text-rose-500' : 'text-muted-foreground')}>
+                  {nmsLoading ? '...' : nmsReachable ? 'Bağlı' : 'Bağlı Değil'}
+                </div>
+                <div className="text-[10px] text-muted-foreground mt-1">SNMP servisi</div>
+              </CardContent>
+            </Card>
+          </Link>
+        </div>
+
+        {/* NMS Alarms */}
+        <Card className={cn('lg:col-span-2 border-border/50', nmsCritical > 0 && 'border-rose-500/50')}>
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className={cn('h-4 w-4', nmsCritical > 0 ? 'text-rose-500' : 'text-muted-foreground')} />
+                <CardTitle className="text-sm font-bold">SNMP Aktif Alarmlar</CardTitle>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary" className="text-[10px]">{nmsAlarms.length}</Badge>
+                <Link href="/integrations/nms">
+                  <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2">
+                    Tümü <ArrowUpRight className="h-3 w-3 ml-1" />
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {nmsLoading ? (
+              <div className="text-xs text-muted-foreground text-center py-4">Yükleniyor...</div>
+            ) : nmsAlarms.length === 0 ? (
+              <div className="flex items-center gap-2 text-xs text-emerald-600 py-2">
+                <CheckCircle2 className="h-4 w-4" />
+                <span>Aktif SNMP alarmı yok</span>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {nmsAlarms.slice(0, 8).map((alarm) => (
+                  <div key={alarm.id} className="flex items-start justify-between gap-2 p-2 rounded-lg border border-border bg-muted/20">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold truncate">{alarm.device_name}</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5 truncate">{alarm.message}</p>
+                    </div>
+                    <Badge variant={alarm.severity === 'critical' ? 'destructive' : 'secondary'} className="text-[9px] shrink-0">
+                      {alarm.severity}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       {/* Bottom Row: Datastores + IPSec + Recent Alarms */}

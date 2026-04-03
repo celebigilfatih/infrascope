@@ -189,9 +189,48 @@ export class FortiGateService {
   }
 
   /**
+   * Logout from FortiGate and invalidate the current session on the server side.
+   * Called automatically before re-authentication to prevent session pile-up.
+   */
+  private async logout(): Promise<void> {
+    if (!this.sessionCookie) return;
+    const cookieHeader = this.csrfCookie
+      ? `${this.sessionCookie}; ${this.csrfCookie}`
+      : this.sessionCookie;
+
+    return new Promise<void>((resolve) => {
+      const options: https.RequestOptions = {
+        hostname: this.config.host,
+        port: 443,
+        path: '/logout',
+        method: 'GET',
+        headers: { 'Cookie': cookieHeader },
+        rejectUnauthorized: false,
+      };
+      const req = https.request(options, (res) => {
+        res.resume();
+        resolve();
+      });
+      req.on('error', () => resolve()); // best-effort, ignore failures
+      req.end();
+    }).finally(() => {
+      // Always clear local state regardless of logout success
+      this.sessionCookie = null;
+      this.csrfToken = null;
+      this.csrfCookie = null;
+      this.sessionExpiry = 0;
+      console.log('[FortiGate] Session logged out and cleared');
+    });
+  }
+
+  /**
    * Login to FortiGate with username/password and obtain a session cookie.
    */
   private async login(): Promise<void> {
+    // Always logout existing session first to avoid session pile-up on FortiGate
+    if (this.sessionCookie) {
+      await this.logout();
+    }
     // Use Node.js https module directly to bypass Next.js fetch patching which
     // strips HttpOnly cookies (APSCOOKIE) from Set-Cookie response headers.
     return new Promise((resolve, reject) => {
@@ -910,6 +949,77 @@ export class FortiGateService {
   clearEventLogCache(): void {
     this._eventLogCache.clear();
     this._inflight.clear();
+  }
+
+  // ── CMDB Diff Snapshot Storage ───────────────────────────────────────────────
+  // Maps endpoint path → JSON fingerprint of last known state.
+  // On first call (no stored snapshot) → isFirstRun=true, alarm does NOT fire.
+  // On subsequent calls → changed=true when fingerprint differs.
+  private _cmdbSnapshotStore = new Map<string, string>(); // endpoint → fingerprint
+  private _cmdbResponseCache = new Map<string, { ts: number; data: any }>(); // short-lived
+  private readonly _cmdbResponseCacheTTL = 90_000; // 90s — covers one full alarm cycle
+
+  /**
+   * Poll a FortiGate CMDB endpoint and return whether the config changed since last call.
+   *
+   * Design:
+   *  - First call per endpoint → initializes snapshot, returns { isFirstRun: true, changed: false }
+   *  - Subsequent calls       → returns { isFirstRun: false, changed: <true if fingerprint differs> }
+   *  - Per-cycle response cache (90s TTL) prevents duplicate HTTP calls when multiple alarm
+   *    functions share the same endpoint (e.g. NEW_ADMIN_USER and ADMIN_PASSWORD_CHANGED both
+   *    poll /cmdb/system/admin).
+   *
+   * @param endpoint   Path after /api/v2, e.g. '/cmdb/firewall/policy'
+   */
+  async getCmdbChanges(endpoint: string): Promise<{
+    changed: boolean;
+    isFirstRun: boolean;
+    current: any[] | Record<string, any> | null;
+  }> {
+    // 1. Return cached response if available (avoids duplicate calls in same cycle)
+    const cached = this._cmdbResponseCache.get(endpoint);
+    if (cached && Date.now() - cached.ts < this._cmdbResponseCacheTTL) {
+      const stored = this._cmdbSnapshotStore.get(endpoint);
+      const fingerprint = JSON.stringify(cached.data);
+      const isFirstRun = stored === undefined;
+      const changed = !isFirstRun && stored !== fingerprint;
+      return { changed, isFirstRun, current: cached.data };
+    }
+
+    try {
+      const authH = await this.getAuthHeaders();
+      const url = `${this.baseUrl}${endpoint}`;
+      const res = await fetch(url, { headers: authH });
+
+      if (!res.ok) {
+        console.warn(`[FortiGate] getCmdbChanges(${endpoint}) HTTP ${res.status}`);
+        return { changed: false, isFirstRun: false, current: null };
+      }
+
+      const data = await res.json() as { results?: any; [k: string]: any };
+      const current: any = data.results ?? data;
+
+      // Cache the response
+      this._cmdbResponseCache.set(endpoint, { ts: Date.now(), data: current });
+
+      // Compute fingerprint
+      const fingerprint = JSON.stringify(current);
+      const stored = this._cmdbSnapshotStore.get(endpoint);
+      const isFirstRun = stored === undefined;
+      const changed = !isFirstRun && stored !== fingerprint;
+
+      // Always update snapshot to current state
+      this._cmdbSnapshotStore.set(endpoint, fingerprint);
+
+      if (changed) {
+        console.log(`[FortiGate] CMDB change detected: ${endpoint}`);
+      }
+
+      return { changed, isFirstRun, current };
+    } catch (error) {
+      console.error(`[FortiGate] getCmdbChanges(${endpoint}) error:`, error);
+      return { changed: false, isFirstRun: false, current: null };
+    }
   }
 
   /**

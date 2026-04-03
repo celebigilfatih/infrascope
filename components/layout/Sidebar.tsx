@@ -162,9 +162,11 @@ export const Sidebar: React.FC = () => {
       title: 'Network',
       items: [
         { name: 'Topology', href: '/network', icon: Network },
-        { name: 'Switches', href: '/network/switches', icon: Globe },
-        { name: 'Ports', href: '/network/ports', icon: Plug },
-        { name: 'VLANs', href: '/network/vlans', icon: Shield },
+        
+        { name: 'Alarmlar', href: '/integrations/nms', icon: Activity },
+        { name: 'Switches', href: '/integrations/nms/devices', icon: Server },
+        { name: 'Add Device', href: '/integrations/nms/add-device', icon: Plug },
+        { name: 'Config Backups', href: '/integrations/nms/backups', icon: Database },
       ]
     },
     {
@@ -203,17 +205,6 @@ export const Sidebar: React.FC = () => {
       title: 'Integrations',
       items: [
         { name: 'VMware', href: '/integrations/vmware', icon: Server },
-        {
-          name: 'NMS / SNMP',
-          href: '/integrations/nms',
-          icon: Network,
-          children: [
-            { name: 'Overview', href: '/integrations/nms', icon: Activity },
-            { name: 'Devices', href: '/integrations/nms/devices', icon: Server },
-            { name: 'Add Device', href: '/integrations/nms/add-device', icon: Plug },
-            { name: 'Config Backups', href: '/integrations/nms/backups', icon: Database },
-          ],
-        },
         { name: 'Firewall', href: '/integrations/firewall', icon: Shield },
         { name: 'FortiAnalyzer', href: '/integrations/fortianalyzer', icon: Activity },
         { name: 'Sync Status', href: '/integrations/status', icon: Activity },

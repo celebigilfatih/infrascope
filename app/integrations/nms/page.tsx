@@ -5,27 +5,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
-  Server,
-  CheckCircle,
-  XCircle,
   AlertTriangle,
-  Wifi,
-  WifiOff,
+  CheckCircle,
   RefreshCw,
-  Plus,
+  Bell,
+  ShieldCheck,
   Clock,
+  XCircle,
 } from 'lucide-react';
-import Link from 'next/link';
-
-interface NmsDevice {
-  id: number;
-  name: string;
-  ip_address: string;
-  vendor: string;
-  device_type: string;
-  connection_status: string;
-  last_polled: string | null;
-}
 
 interface NmsAlarm {
   id: number;
@@ -36,74 +23,82 @@ interface NmsAlarm {
   severity: string;
   status: string;
   created_at: string;
+  acknowledged_at?: string | null;
+  resolved_at?: string | null;
 }
 
-export default function NmsOverviewPage() {
-  const [devices, setDevices] = useState<NmsDevice[]>([]);
+type StatusFilter = 'active' | 'acknowledged' | 'resolved' | 'all';
+type SeverityFilter = 'all' | 'critical' | 'warning' | 'info';
+
+export default function NmsAlarmsPage() {
   const [alarms, setAlarms] = useState<NmsAlarm[]>([]);
   const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState<number | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
-  const [nmsReachable, setNmsReachable] = useState<boolean | null>(null);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('active');
+  const [severityFilter, setSeverityFilter] = useState<SeverityFilter>('all');
 
-  const loadData = useCallback(async () => {
+  const loadAlarms = useCallback(async () => {
     setLoading(true);
     try {
-      const [devRes, alarmRes] = await Promise.allSettled([
-        fetch('/api/integrations/nms/network-devices'),
-        fetch('/api/integrations/nms/alarms?status=active'),
-      ]);
-
-      if (devRes.status === 'fulfilled' && devRes.value.ok) {
-        const data = await devRes.value.json();
-        setDevices(data.data || []);
-        setNmsReachable(true);
-      } else {
-        setNmsReachable(false);
-      }
-
-      if (alarmRes.status === 'fulfilled' && alarmRes.value.ok) {
-        const data = await alarmRes.value.json();
+      const params = new URLSearchParams({ status: statusFilter === 'all' ? '' : statusFilter });
+      const res = await fetch(`/api/integrations/nms/alarms?${params}`);
+      if (res.ok) {
+        const data = await res.json();
         setAlarms(data.data || []);
       }
     } catch {
-      setNmsReachable(false);
+      setAlarms([]);
     } finally {
       setLoading(false);
       setLastUpdate(new Date());
     }
-  }, []);
+  }, [statusFilter]);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    loadAlarms();
+  }, [loadAlarms]);
 
-  const onlineCount = devices.filter(d => d.connection_status === 'online').length;
-  const offlineCount = devices.filter(d => d.connection_status === 'offline' || d.connection_status === 'unreachable').length;
-  const criticalAlarms = alarms.filter(a => a.severity === 'critical').length;
-
-  const formatLastPolled = (ts: string | null) => {
-    if (!ts) return 'Never';
-    const diff = Date.now() - new Date(ts).getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 1) return 'Just now';
-    if (mins < 60) return `${mins}m ago`;
-    return `${Math.floor(mins / 60)}h ago`;
-  };
-
-  const statusColor = (status: string) => {
-    switch (status) {
-      case 'online': return 'text-green-500';
-      case 'offline':
-      case 'unreachable': return 'text-red-500';
-      default: return 'text-yellow-500';
+  const handleAction = async (id: number, action: 'acknowledge' | 'resolve') => {
+    setActionLoading(id);
+    try {
+      await fetch('/api/integrations/nms/alarms', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, action }),
+      });
+      await loadAlarms();
+    } finally {
+      setActionLoading(null);
     }
   };
 
-  const severityColor = (severity: string) => {
-    switch (severity) {
+  const filtered = alarms.filter(a =>
+    severityFilter === 'all' ? true : a.severity === severityFilter
+  );
+
+  const critical = alarms.filter(a => a.severity === 'critical').length;
+  const warning = alarms.filter(a => a.severity === 'warning').length;
+
+  const severityBadge = (s: string) => {
+    switch (s) {
       case 'critical': return 'destructive';
       case 'warning': return 'warning' as any;
       default: return 'secondary';
+    }
+  };
+
+  const formatDate = (ts: string) => {
+    const d = new Date(ts);
+    return d.toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  };
+
+  const statusBadge = (s: string) => {
+    switch (s) {
+      case 'active': return <Badge variant="destructive" className="text-[10px]">Aktif</Badge>;
+      case 'acknowledged': return <Badge variant="secondary" className="text-[10px]">Onaylandı</Badge>;
+      case 'resolved': return <Badge variant="success" className="text-[10px]">Çözüldü</Badge>;
+      default: return <Badge variant="secondary" className="text-[10px]">{s}</Badge>;
     }
   };
 
@@ -112,190 +107,162 @@ export default function NmsOverviewPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">NMS Dashboard</h1>
+          <h1 className="text-2xl font-bold">SNMP Alarmları</h1>
           <p className="text-muted-foreground text-sm">
-            Network monitoring overview &bull; Last update:{' '}
-            {loading ? 'updating...' : `${lastUpdate.toLocaleTimeString()}`}
+            Son güncelleme: {loading ? 'yükleniyor...' : lastUpdate.toLocaleTimeString('tr-TR')}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={loadData} disabled={loading} className="gap-2">
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
-          <Button size="sm" asChild className="gap-2">
-            <Link href="/integrations/nms/add-device">
-              <Plus className="h-4 w-4" />
-              Add Device
-            </Link>
-          </Button>
-        </div>
+        <Button variant="outline" size="sm" onClick={loadAlarms} disabled={loading} className="gap-2">
+          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          Yenile
+        </Button>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-4">
         <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wide">Total Devices</p>
-                <p className="text-3xl font-bold mt-1">{devices.length}</p>
-              </div>
-              <Server className="h-8 w-8 text-blue-500 opacity-80" />
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide">Kritik</p>
+              <p className="text-3xl font-bold mt-1 text-red-500">{critical}</p>
             </div>
+            <AlertTriangle className="h-8 w-8 text-red-500 opacity-70" />
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wide">Online</p>
-                <p className="text-3xl font-bold mt-1 text-green-500">{onlineCount}</p>
-              </div>
-              <CheckCircle className="h-8 w-8 text-green-500 opacity-80" />
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide">Uyarı</p>
+              <p className="text-3xl font-bold mt-1 text-yellow-500">{warning}</p>
             </div>
+            <AlertTriangle className="h-8 w-8 text-yellow-500 opacity-70" />
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wide">Offline</p>
-                <p className="text-3xl font-bold mt-1 text-red-500">{offlineCount}</p>
-              </div>
-              <XCircle className="h-8 w-8 text-red-500 opacity-80" />
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide">Toplam</p>
+              <p className="text-3xl font-bold mt-1">{alarms.length}</p>
             </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wide">Critical Alarms</p>
-                <p className="text-3xl font-bold mt-1 text-red-500">{criticalAlarms}</p>
-              </div>
-              <AlertTriangle className="h-8 w-8 text-red-500 opacity-80" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card className={nmsReachable === false ? 'border-destructive' : ''}>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wide">NMS Service</p>
-                <p className={`text-lg font-bold mt-1 ${nmsReachable ? 'text-green-500' : nmsReachable === false ? 'text-red-500' : 'text-muted-foreground'}`}>
-                  {nmsReachable === null ? 'Checking...' : nmsReachable ? 'Connected' : 'Disconnected'}
-                </p>
-              </div>
-              {nmsReachable ? (
-                <Wifi className="h-8 w-8 text-green-500 opacity-80" />
-              ) : (
-                <WifiOff className="h-8 w-8 text-red-500 opacity-80" />
-              )}
-            </div>
+            <Bell className="h-8 w-8 text-muted-foreground opacity-70" />
           </CardContent>
         </Card>
       </div>
 
-      {/* Main content grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Connected Devices Table */}
-        <div className="lg:col-span-2">
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base font-semibold flex items-center gap-2">
-                  <Server className="h-4 w-4 text-blue-500" />
-                  Connected Devices
-                </CardTitle>
-                <Badge variant="secondary" className="text-xs">{devices.length} total</Badge>
-              </div>
-            </CardHeader>
-            <CardContent className="p-0">
-              {loading ? (
-                <div className="flex items-center justify-center py-12">
-                  <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
-                </div>
-              ) : devices.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-                  <Server className="h-12 w-12 opacity-30 mb-3" />
-                  <p className="text-sm">No devices found</p>
-                  <Button variant="outline" size="sm" className="mt-3" asChild>
-                    <Link href="/integrations/nms/add-device">Add first device</Link>
-                  </Button>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border">
-                        <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">Device Name</th>
-                        <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">IP Address</th>
-                        <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">Status</th>
-                        <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">Last Polled</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {devices.map((device) => (
-                        <tr key={device.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                          <td className="px-4 py-3 font-medium">{device.name}</td>
-                          <td className="px-4 py-3 text-muted-foreground font-mono text-xs">{device.ip_address}</td>
-                          <td className="px-4 py-3">
-                            <span className={`flex items-center gap-1.5 text-xs font-medium ${statusColor(device.connection_status)}`}>
-                              <span className={`w-1.5 h-1.5 rounded-full ${device.connection_status === 'online' ? 'bg-green-500' : 'bg-red-500'}`} />
-                              {device.connection_status || 'unknown'}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-muted-foreground text-xs flex items-center gap-1">
-                            <Clock className="h-3 w-3" />
-                            {formatLastPolled(device.last_polled)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+      {/* Filters */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-red-500" />
+            Alarm Listesi
+            <Badge variant="secondary" className="ml-auto">{filtered.length}</Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {/* Filter bar */}
+          <div className="flex items-center gap-2 px-4 pb-3 border-b border-border flex-wrap">
+            <span className="text-xs text-muted-foreground mr-1">Durum:</span>
+            {(['active', 'acknowledged', 'resolved', 'all'] as StatusFilter[]).map(s => (
+              <Button
+                key={s}
+                size="sm"
+                variant={statusFilter === s ? 'default' : 'outline'}
+                className="h-7 text-xs px-3"
+                onClick={() => setStatusFilter(s)}
+              >
+                {s === 'active' ? 'Aktif' : s === 'acknowledged' ? 'Onaylandı' : s === 'resolved' ? 'Çözüldü' : 'Tümü'}
+              </Button>
+            ))}
+            <span className="text-xs text-muted-foreground ml-3 mr-1">Şiddet:</span>
+            {(['all', 'critical', 'warning', 'info'] as SeverityFilter[]).map(s => (
+              <Button
+                key={s}
+                size="sm"
+                variant={severityFilter === s ? 'default' : 'outline'}
+                className="h-7 text-xs px-3"
+                onClick={() => setSeverityFilter(s)}
+              >
+                {s === 'all' ? 'Tümü' : s === 'critical' ? 'Kritik' : s === 'warning' ? 'Uyarı' : 'Bilgi'}
+              </Button>
+            ))}
+          </div>
 
-        {/* Recent Alarms */}
-        <div>
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base font-semibold flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-red-500" />
-                Recent Alarms
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {alarms.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
-                  <CheckCircle className="h-10 w-10 text-green-500 opacity-60 mb-2" />
-                  <p className="text-sm">No active alarms</p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {alarms.slice(0, 10).map((alarm) => (
-                    <div key={alarm.id} className="p-3 rounded-lg border border-border bg-muted/20">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold truncate">{alarm.device_name}</p>
-                          <p className="text-xs text-muted-foreground mt-0.5 truncate">{alarm.message}</p>
-                        </div>
-                        <Badge variant={severityColor(alarm.severity)} className="text-[10px] shrink-0">
-                          {alarm.severity}
+          {/* Table */}
+          {loading ? (
+            <div className="flex items-center justify-center py-16">
+              <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+              <CheckCircle className="h-12 w-12 text-green-500 opacity-40 mb-3" />
+              <p className="text-sm">Alarm bulunamadı</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border bg-muted/30">
+                    <th className="text-left px-4 py-2.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">Cihaz</th>
+                    <th className="text-left px-4 py-2.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">Mesaj</th>
+                    <th className="text-left px-4 py-2.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">Şiddet</th>
+                    <th className="text-left px-4 py-2.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">Durum</th>
+                    <th className="text-left px-4 py-2.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">Tarih</th>
+                    <th className="text-left px-4 py-2.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">İşlem</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((alarm) => (
+                    <tr key={alarm.id} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
+                      <td className="px-4 py-3 font-medium text-xs">{alarm.device_name}</td>
+                      <td className="px-4 py-3 text-muted-foreground text-xs max-w-xs truncate">{alarm.message}</td>
+                      <td className="px-4 py-3">
+                        <Badge variant={severityBadge(alarm.severity)} className="text-[10px]">
+                          {alarm.severity === 'critical' ? 'Kritik' : alarm.severity === 'warning' ? 'Uyarı' : 'Bilgi'}
                         </Badge>
-                      </div>
-                    </div>
+                      </td>
+                      <td className="px-4 py-3">{statusBadge(alarm.status)}</td>
+                      <td className="px-4 py-3 text-muted-foreground text-xs">
+                        <span className="flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          {formatDate(alarm.created_at)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1.5">
+                          {alarm.status === 'active' && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-6 text-[10px] px-2 gap-1"
+                              disabled={actionLoading === alarm.id}
+                              onClick={() => handleAction(alarm.id, 'acknowledge')}
+                            >
+                              {actionLoading === alarm.id ? <RefreshCw className="h-3 w-3 animate-spin" /> : <ShieldCheck className="h-3 w-3" />}
+                              Onayla
+                            </Button>
+                          )}
+                          {alarm.status !== 'resolved' && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-6 text-[10px] px-2 gap-1 text-green-600 border-green-500/50 hover:bg-green-50"
+                              disabled={actionLoading === alarm.id}
+                              onClick={() => handleAction(alarm.id, 'resolve')}
+                            >
+                              {actionLoading === alarm.id ? <RefreshCw className="h-3 w-3 animate-spin" /> : <CheckCircle className="h-3 w-3" />}
+                              Çöz
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
                   ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

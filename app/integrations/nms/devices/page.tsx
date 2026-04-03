@@ -117,7 +117,7 @@ export default function NmsDevicesPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Monitored Devices</h1>
+          <h1 className="text-2xl font-bold">Switches</h1>
           <p className="text-muted-foreground text-sm">
             {devices.length} devices &bull;{' '}
             <span className="text-green-500">{online} online</span>{' '}&bull;{' '}

@@ -58,6 +58,23 @@ export {
   getIpsecTunnelDownEvents,
 } from './vpn-events';
 
+// FortiGate CMDB diff queries — Config & Access (replaces FA log queries for v7.2.11)
+export {
+  cmdbFirewallPolicyChanged,
+  cmdbNewVip,
+  cmdbNewAdminUser,
+  cmdbAdminPasswordChanged,
+  cmdbAdminPrivilegeChange,
+  cmdbRouteTableChanged,
+  cmdbIpsecTunnelChanged,
+  cmdbSslVpnSettingsChanged,
+  cmdbAuthServerChanged,
+  cmdbInterfaceConfigChanged,
+  cmdbAddressObjectChanged,
+  cmdbAddressGroupChanged,
+  cmdbCoreConfigChange,
+} from './fortigate-cmdb';
+
 // FortiGate direct queries — Config & Access
 export {
   fgFirewallPolicyChanged,
@@ -117,6 +134,21 @@ import type { AlarmQueryFn } from './types';
 
 // FortiAnalyzer cache imports — all log-based alarms use FA event cache
 import {
+  cmdbFirewallPolicyChanged,
+  cmdbNewVip,
+  cmdbNewAdminUser,
+  cmdbAdminPasswordChanged,
+  cmdbAdminPrivilegeChange,
+  cmdbRouteTableChanged,
+  cmdbIpsecTunnelChanged,
+  cmdbSslVpnSettingsChanged,
+  cmdbAuthServerChanged,
+  cmdbInterfaceConfigChanged,
+  cmdbAddressObjectChanged,
+  cmdbAddressGroupChanged,
+  cmdbCoreConfigChange,
+} from './fortigate-cmdb';
+import {
   getFirewallPolicyChangeEvents,
   getCoreConfigChangeEvents,
   getFirmwareChangeEvents,
@@ -145,34 +177,45 @@ import { getDnsTunnelSuspectEvents } from './dns-events';
 /**
  * Maps alarm codes to their dedicated, type-safe query functions.
  *
- * ── FortiAnalyzer Cache (all log-based alarms) ────────────────────────────────
- * Config/Access, VPN/SSL-VPN, Security, DNS alarms use FA event cache.
- * FortiGate v7.2.11 does not support REST log querying (/monitor/log/event → 404).
+ * ── FortiGate CMDB Diff (CONFIG_ACCESS alarms) ───────────────────────────────
+ * FortiGate v7.2.11 does NOT support REST log querying (/monitor/log/event → 404).
+ * CONFIG_ACCESS alarms use CMDB diff: poll /api/v2/cmdb/* and compare state.
+ *
+ * ── FortiAnalyzer Cache (log-based alarms) ────────────────────────────────────
+ * Security, VPN, DNS alarms use FA event cache as before.
  *
  * ── FortiGate Real-Time (SSLVPN source alarms) ────────────────────────────────
  * VPN_LOGIN_OFF_HOURS and SSLVPN_BUSINESS_HOURS use source: 'fortigate-sslvpn'
  * and are evaluated separately by evaluateFortiGateSslvpnAlarm().
  */
 export const ALARM_QUERY_REGISTRY = new Map<string, AlarmQueryFn>([
-  // ── Config & Access (FortiAnalyzer cache) ──────────────────────────────────
-  ['FW_POLICY_CHANGED',        getFirewallPolicyChangeEvents],
-  ['CORE_CONFIG_CHANGE',       getCoreConfigChangeEvents],
+  // ── Config & Access (FortiGate CMDB diff — works on v7.2.11) ─────────────────
+  ['FW_POLICY_CHANGED',        cmdbFirewallPolicyChanged],
+  ['CORE_CONFIG_CHANGE',       cmdbCoreConfigChange],
+  ['NEW_VIP',                  cmdbNewVip],
+  ['NEW_ADMIN_USER',           cmdbNewAdminUser],
+  ['ADMIN_PASSWORD_CHANGED',   cmdbAdminPasswordChanged],
+  ['ADMIN_PRIVILEGE_CHANGE',   cmdbAdminPrivilegeChange],
+  ['ROUTE_TABLE_CHANGED',      cmdbRouteTableChanged],
+  ['IPSEC_TUNNEL_CHANGED',     cmdbIpsecTunnelChanged],
+  ['SSL_VPN_SETTINGS_CHANGED', cmdbSslVpnSettingsChanged],
+  ['AUTH_SERVER_CHANGED',      cmdbAuthServerChanged],
+  ['INTERFACE_CONFIG_CHANGED', cmdbInterfaceConfigChanged],
+  ['ADDRESS_OBJECT_CHANGED',   cmdbAddressObjectChanged],
+  ['ADDRESS_GROUP_CHANGED',    cmdbAddressGroupChanged],
+
+  // ── Config & Access (FortiAnalyzer cache — FA log-based, v7.2.11 fallback) ───
   ['FIRMWARE_CHANGE',          getFirmwareChangeEvents],
-  ['ADMIN_PASSWORD_CHANGED',   getAdminPasswordChangeEvents],
-  ['ADDRESS_OBJECT_CHANGED',   getAddressObjectChangeEvents],
-  ['AUTH_SERVER_CHANGED',      getAuthServerChangeEvents],
-  ['ROUTE_TABLE_CHANGED',      getRouteTableChangeEvents],
   ['SD_WAN_CHANGED',           getSdWanChangeEvents],
   ['HA_CONFIG_CHANGED',        getHaConfigChangeEvents],
 
   // ── VPN (FortiAnalyzer cache) ───────────────────────────────────────────────
   ['VPN_BRUTE_FORCE',          getVpnBruteForceEvents],
   ['SSLVPN_LOCKOUT',           getSslvpnLockoutEvents],
-  ['IPSEC_TUNNEL_CHANGED',     getIpsecTunnelDownEvents],
   ['SSLVPN_TUNNEL_UP',         getSslvpnTunnelUpEvents],
   ['SSLVPN_TUNNEL_DOWN',       getSslvpnTunnelDownEvents],
 
-  // ── Authentication (FortiAnalyzer cache) ────────────────────────────────────
+  // ── Authentication (FortiAnalyzer cache — no FG log API on v7.2.11) ─────────
   ['UNAUTH_ADMIN_LOGIN',       getAdminLoginFailEvents],
   ['ADMIN_LOGIN_FAILED',       getAdminLoginFailEvents],
   ['ADMIN_LOGIN_OFF_HOURS',    getAdminLoginSuccessEvents],

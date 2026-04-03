@@ -140,8 +140,10 @@ export class EventCacheService {
     // Targeted filters for high-priority alarm types that may get crowded out in general sync
     // NOTE: FA API ignores 'subtype == user' filter (returns 0 TID) — use 'action == auth-logon' directly
     const targetedEventFilters = [
-      'action == auth-logon',  // SSL-VPN user logon events (subtype=user)
-      'subtype == system',     // Config changes: policy, address objects, interfaces, routing, etc.
+      'action == auth-logon',                           // SSL-VPN user logon events (subtype=user)
+      'subtype == system',                              // Config changes: policy, address objects, interfaces, routing, etc.
+      'action == login and status == failed',           // Admin failed login attempts (security-critical)
+      'action == ssl-login-fail',                       // SSL-VPN failed login attempts (security-critical)
     ];
 
     const now = new Date();
@@ -182,7 +184,7 @@ export class EventCacheService {
           await this.syncLogTypeWithFilter('event', filter, startTime, now);
           console.log(`[EventCache] event (${filter}): Targeted sync took ${Date.now() - filterStart}ms`);
         } catch (error) {
-          console.error(`[EventCache] Failed to sync event with filter "${filter}":`, error);
+          console.error(`[EventCache] ❌ Failed to sync event with filter "${filter}":`, error instanceof Error ? error.message : String(error));
         }
       }
 
