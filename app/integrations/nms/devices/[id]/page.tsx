@@ -24,8 +24,26 @@ import {
   Pencil,
   RefreshCw,
   Monitor,
+  Plug,
+  ArrowDown,
+  ArrowUp,
 } from 'lucide-react';
 import Link from 'next/link';
+
+interface NmsInterface {
+  id: number;
+  name: string;
+  ip_address: string | null;
+  status: string;
+  in_octets: string;
+  out_octets: string;
+  in_errors: string;
+  out_errors: string;
+  speed: string;
+  mtu: number;
+  type: string;
+  last_updated: string | null;
+}
 
 interface NmsDevice {
   id: number;
@@ -45,6 +63,7 @@ interface NmsDevice {
   last_online: string | null;
   location: string | null;
   notes: string | null;
+  interfaces?: NmsInterface[];
 }
 
 function StatCard({ icon: Icon, label, value, color }: { icon: any; label: string; value: string; color: string }) {
@@ -238,10 +257,17 @@ export default function ViewNmsDevicePage() {
 
       {/* Tabs */}
       <Tabs defaultValue="overview" className="space-y-4">
-        <TabsList className="grid grid-cols-3 w-fit">
+        <TabsList className="grid grid-cols-4 w-fit">
           <TabsTrigger value="overview" className="gap-2">
             <Activity className="h-4 w-4" />
             Overview
+          </TabsTrigger>
+          <TabsTrigger value="ports" className="gap-2">
+            <Plug className="h-4 w-4" />
+            Portlar
+            {device.interfaces && device.interfaces.length > 0 && (
+              <span className="ml-1 text-[10px] bg-muted rounded px-1">{device.interfaces.length}</span>
+            )}
           </TabsTrigger>
           <TabsTrigger value="snmp" className="gap-2">
             <Network className="h-4 w-4" />
@@ -308,6 +334,103 @@ export default function ViewNmsDevicePage() {
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">{device.notes}</p>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        {/* Ports Tab */}
+        <TabsContent value="ports" className="space-y-4">
+          {!device.interfaces || device.interfaces.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                <Plug className="h-10 w-10 opacity-30 mb-3" />
+                <p className="text-sm">Port bilgisi bulunamadı</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                    <Plug className="h-4 w-4 text-muted-foreground" />
+                    Port / Arayüz Listesi
+                  </CardTitle>
+                  <div className="flex gap-3 text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
+                      {device.interfaces.filter(i => i.status === 'up').length} aktif
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-red-500 inline-block" />
+                      {device.interfaces.filter(i => i.status !== 'up').length} kapalı
+                    </span>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/30">
+                        <th className="text-left px-4 py-2.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">Port</th>
+                        <th className="text-left px-4 py-2.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">Durum</th>
+                        <th className="text-left px-4 py-2.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">Hız</th>
+                        <th className="text-left px-4 py-2.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">IP</th>
+                        <th className="text-left px-4 py-2.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                          <span className="flex items-center gap-1"><ArrowDown className="h-3 w-3 text-blue-500" />Gelen</span>
+                        </th>
+                        <th className="text-left px-4 py-2.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                          <span className="flex items-center gap-1"><ArrowUp className="h-3 w-3 text-orange-500" />Giden</span>
+                        </th>
+                        <th className="text-left px-4 py-2.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">Hatalar</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {device.interfaces
+                        .slice()
+                        .sort((a, b) => (a.status === 'up' ? -1 : 1) - (b.status === 'up' ? -1 : 1) || a.name.localeCompare(b.name))
+                        .map((iface) => {
+                          const speedMbps = iface.speed ? Math.round(parseInt(iface.speed) / 1_000_000) : 0;
+                          const inGB = (parseInt(iface.in_octets || '0') / 1_073_741_824).toFixed(2);
+                          const outGB = (parseInt(iface.out_octets || '0') / 1_073_741_824).toFixed(2);
+                          const totalErrors = parseInt(iface.in_errors || '0') + parseInt(iface.out_errors || '0');
+                          return (
+                            <tr key={iface.id} className={`border-b border-border/50 transition-colors ${
+                              iface.status === 'up' ? 'hover:bg-muted/20' : 'opacity-50 hover:bg-muted/10'
+                            }`}>
+                              <td className="px-4 py-2.5 font-mono text-xs font-semibold">{iface.name}</td>
+                              <td className="px-4 py-2.5">
+                                <span className={`flex items-center gap-1.5 text-xs font-semibold ${
+                                  iface.status === 'up' ? 'text-green-500' : 'text-red-500'
+                                }`}>
+                                  <span className={`w-1.5 h-1.5 rounded-full ${
+                                    iface.status === 'up' ? 'bg-green-500' : 'bg-red-500'
+                                  }`} />
+                                  {iface.status === 'up' ? 'Up' : 'Down'}
+                                </span>
+                              </td>
+                              <td className="px-4 py-2.5 text-xs text-muted-foreground">
+                                {speedMbps >= 1000 ? `${speedMbps / 1000}G` : speedMbps > 0 ? `${speedMbps}M` : '—'}
+                              </td>
+                              <td className="px-4 py-2.5 text-xs font-mono text-muted-foreground">
+                                {iface.ip_address || '—'}
+                              </td>
+                              <td className="px-4 py-2.5 text-xs text-blue-500">{inGB} GB</td>
+                              <td className="px-4 py-2.5 text-xs text-orange-500">{outGB} GB</td>
+                              <td className="px-4 py-2.5 text-xs">
+                                {totalErrors > 0 ? (
+                                  <span className="text-red-500 font-semibold">{totalErrors}</span>
+                                ) : (
+                                  <span className="text-muted-foreground">0</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
               </CardContent>
             </Card>
           )}
