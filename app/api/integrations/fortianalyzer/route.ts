@@ -170,12 +170,60 @@ export async function GET(request: NextRequest) {
       console.log('FortiAnalyzer event logs data:', JSON.stringify(data, null, 2));
     } else if (dataType === 'config-revisions') {
       // Admin system logs from FortiAnalyzer (login/logout, config changes - exclude perf-stats and empty users)
+      // Fallback to FortiGate direct API if FortiAnalyzer returns empty
       const tid = await service.startLogSearch('event', 1000, 'subtype == system and action != perf-stats and user != ""');
       if (tid) {
         await new Promise(resolve => setTimeout(resolve, 6000));
         data = await service.fetchLogResults(tid, 0, 500);
       } else {
         data = [];
+      }
+      
+      // If FortiAnalyzer returned empty, try NMS EventCache (PostgreSQL)
+      if (!data || data.length === 0) {
+        console.log('[ConfigRevisions] FortiAnalyzer returned empty, trying NMS EventCache...');
+        try {
+          // Query NMS database for recent event logs
+          const recentEvents = await prisma.cachedEvent.findMany({
+            where: {
+              logtype: 'event',
+              subtype: 'system',
+              eventTime: {
+                gte: new Date(Date.now() - 24 * 60 * 60 * 1000), // Last 24 hours
+              },
+            },
+            orderBy: {
+              eventTime: 'desc',
+            },
+            take: 500,
+          });
+          
+          // Convert to the format expected by the frontend
+          data = recentEvents.map(event => ({
+            id: event.id,
+            date: event.eventTime?.toISOString().split('T')[0],
+            time: event.eventTime?.toISOString().split('T')[1]?.split('.')[0],
+            user: (event.rawLog as any)?.user || '',
+            action: event.action || (event.rawLog as any)?.action || '',
+            msg: (event.rawLog as any)?.msg || '',
+            logdesc: (event.rawLog as any)?.logdesc || '',
+            srcip: (event.rawLog as any)?.srcip || '',
+            dstip: (event.rawLog as any)?.dstip || '',
+            status: (event.rawLog as any)?.status || '',
+            level: event.level || (event.rawLog as any)?.level || '',
+            ui: (event.rawLog as any)?.ui || '',
+            profile: (event.rawLog as any)?.profile || '',
+            devname: (event.rawLog as any)?.devname || (event.rawLog as any)?.dev_name || '',
+            devid: (event.rawLog as any)?.devid || '',
+            cfgpath: (event.rawLog as any)?.cfgpath || '',
+            cfgattr: (event.rawLog as any)?.cfgattr || '',
+            cfgobj: (event.rawLog as any)?.cfgobj || '',
+          }));
+          
+          console.log(`[ConfigRevisions] NMS EventCache returned ${data.length} events`);
+        } catch (nmsError) {
+          console.error('[ConfigRevisions] NMS EventCache error:', nmsError);
+        }
       }
     } else if (dataType === 'traffic') {
       const tid = await service.startLogSearch('traffic', 10);
