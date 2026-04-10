@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { EdgeProps, getStraightPath, getBezierPath, EdgeLabelRenderer } from 'reactflow';
+import { EdgeProps, getStraightPath, EdgeLabelRenderer } from 'reactflow';
 
 // Regular custom edge for device connections
 export const CustomEdge = ({

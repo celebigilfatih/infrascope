@@ -11,7 +11,7 @@ echo "🚀 InfraScope Container Starting..."
 # Wait for database to be ready
 echo "📍 Waiting for database to be ready..."
 for i in $(seq 1 30); do
-  if timeout 5 sh -c "echo '> /dev/null' > /dev/tcp/db/5432" 2>/dev/null; then
+  if node -e "var n=require('net').createConnection(5432,'db');n.setTimeout(2000);n.on('connect',function(){process.exit(0)}).on('error',function(){process.exit(1)}).on('timeout',function(){n.destroy();process.exit(1)})" 2>/dev/null; then
     echo "✅ Database is ready!"
     break
   fi

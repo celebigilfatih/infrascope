@@ -72,6 +72,16 @@ export class AlarmDetectionEngine {
     this.service = service;
   }
 
+  /**
+   * Inject a pre-initialized FortiGate service (singleton from alarm-runner).
+   * Skips the internal initializeFortiGate() call so the CMDB snapshot store persists.
+   */
+  injectFortiGateService(fgService: FortiGateService): void {
+    this.fortiGateService = fgService;
+    this.fortiGateInitialized = true;
+    (globalThis as any).__detectionEngine = this;
+  }
+
   private async initializeVMware() {
     try {
       console.log('[AlarmEngine] Initializing VMware service...');
@@ -269,6 +279,8 @@ export class AlarmDetectionEngine {
       // Clear FortiGate event log cache to get fresh data each cycle
       if (this.fortiGateService) {
         this.fortiGateService.clearEventLogCache();
+        // NOTE: clearCmdbResponseCache() is called in alarm-runner.ts before evaluation starts
+        // Calling it here would reset frozen snapshots AFTER some alarms have already run
       }
 
       // Initialize event cache on first run
@@ -806,10 +818,19 @@ export class AlarmDetectionEngine {
         // not registered (non-deterministic Prisma findMany order).
         const representativeAlarm =
           filterAlarms.find(a => ALARM_QUERY_REGISTRY.has(a.code)) ?? filterAlarms[0];
+        
+        // CMDB-based alarms need more time (fetching 400+ items from FortiGate)
+        const CMDB_ALARMS = new Set([
+          'FW_POLICY_CHANGED', 'CORE_CONFIG_CHANGE', 'INTERFACE_CONFIG_CHANGED',
+          'ADDRESS_OBJECT_CHANGED', 'IPSEC_TUNNEL_CHANGED',
+        ]);
+        const isCmdbAlarm = filterAlarms.some(a => CMDB_ALARMS.has(a.code));
+        const timeoutMs = isCmdbAlarm ? 180000 : 25000; // 3 min for CMDB, 25s for others
+        
         const searchResult = await Promise.race([
           this.performLogSearch(representativeAlarm, logtype, filter, limit),
           new Promise<{ tid: string | null; logs: Array<Record<string, unknown>> }>((resolve) =>
-            setTimeout(() => resolve({ tid: null, logs: [] }), 25000)
+            setTimeout(() => resolve({ tid: null, logs: [] }), timeoutMs)
           ),
         ]);
 
@@ -1145,11 +1166,17 @@ export class AlarmDetectionEngine {
 
     console.log(`[AlarmEngine] Searching ${alarm.code}: logtype=${logtype} filter="${filter}"`);
     
-    // Add timeout for log search
+    // Add timeout for log search (CMDB alarms need more time)
+    const CMDB_ALARMS = new Set([
+      'FW_POLICY_CHANGED', 'CORE_CONFIG_CHANGE', 'INTERFACE_CONFIG_CHANGED',
+      'ADDRESS_OBJECT_CHANGED', 'IPSEC_TUNNEL_CHANGED',
+    ]);
+    const timeoutMs = CMDB_ALARMS.has(alarm.code) ? 180000 : 30000;
+    
     const searchResult = await Promise.race([
       this.performLogSearch(alarm, logtype, filter, limit),
       new Promise<{ tid: string | null; logs: Array<Record<string, unknown>> }>((resolve) =>
-        setTimeout(() => resolve({ tid: null, logs: [] }), 30000)
+        setTimeout(() => resolve({ tid: null, logs: [] }), timeoutMs)
       ),
     ]);
     
@@ -1194,8 +1221,10 @@ export class AlarmDetectionEngine {
       filteredLogs = filteredLogs.filter((log) => {
         const userName = (log.userName as string || '').toLowerCase();
         const snapshotName = (log.snapshotName as string || '').toUpperCase();
-        // Exclude Veeam backup snapshots
-        return userName !== 'veeam' && !snapshotName.includes('VEEAM BACKUP TEMPORARY SNAPSHOT');
+        // Exclude Veeam backup snapshots (both Backup and Sure Backup test snapshots)
+        return userName !== 'veeam' && 
+               !snapshotName.includes('VEEAM BACKUP TEMPORARY SNAPSHOT') &&
+               !snapshotName.includes('VEEAM_SUREBACKUP_SNAPSHOT');
       });
     }
 
@@ -1780,11 +1809,12 @@ export class AlarmDetectionEngine {
       // Apply filter to data
       let matchingData = this.applyVMwareFilter(vmwareData, logic.filter || '');
 
-      // SNAPSHOT_CREATED: Filter out Veeam backup snapshots
+      // SNAPSHOT_CREATED: Filter out Veeam backup snapshots (both Backup and Sure Backup test snapshots)
       if (alarm.code === 'SNAPSHOT_CREATED') {
         matchingData = matchingData.filter((item) => {
           const snapshotName = (item.snapshotName as string || '').toUpperCase();
-          return !snapshotName.includes('VEEAM BACKUP TEMPORARY SNAPSHOT');
+          return !snapshotName.includes('VEEAM BACKUP TEMPORARY SNAPSHOT') &&
+                 !snapshotName.includes('VEEAM_SUREBACKUP_SNAPSHOT');
         });
       }
 
@@ -2133,7 +2163,7 @@ export class AlarmDetectionEngine {
     };
     if (await this.isWhitelisted(alarm.code, rawDataForWhitelist)) {
       console.log(`[AlarmEngine] ⚠️ WHITELISTED: ${alarm.code} - ${title} (suppressed)`);
-      return { alarmCode: alarm.code, triggered: false, matchCount: 0, events: [] };
+      return;  // Don't fire alarm, method returns void
     }
 
     // Create alarm event in DB
@@ -3119,6 +3149,61 @@ export class AlarmDetectionEngine {
       alarm.code === 'AUTH_SERVER_CHANGED' ||
       alarm.code === 'SD_WAN_CHANGED'
     ) {
+      // Check if this is a CMDB diff-based alarm (has diffDetails)
+      const diffDetails = (firstLog as any).diffDetails;
+      if (diffDetails && (diffDetails.added?.length > 0 || diffDetails.removed?.length > 0 || diffDetails.modified?.length > 0)) {
+        // CMDB diff alarm — show detailed changes
+        const cfgSections: string[] = [];
+        
+        cfgSections.push([
+          `Endpoint: ${firstLog.endpoint || 'N/A'}`,
+          `Toplam Obje: ${firstLog.itemCount || 'N/A'}`,
+          `Tespit: ${firstLog.detectedAt || 'N/A'}`,
+        ].filter(Boolean).join('\n'));
+
+        // Added items
+        if (diffDetails.added.length > 0) {
+          const addedList = diffDetails.added.slice(0, 10).map((item: any, idx: number) => {
+            return `${idx + 1}. ${item.name}`;
+          }).join('\n');
+          cfgSections.push(`Yeni Eklenenler (${diffDetails.added.length}):\n${addedList}${
+            diffDetails.added.length > 10 ? `\n... ve ${diffDetails.added.length - 10} tane daha` : ''
+          }`);
+        }
+
+        // Removed items
+        if (diffDetails.removed.length > 0) {
+          const removedList = diffDetails.removed.slice(0, 10).map((item: any, idx: number) => {
+            return `${idx + 1}. ${item.name}`;
+          }).join('\n');
+          cfgSections.push(`Silinenler (${diffDetails.removed.length}):\n${removedList}${
+            diffDetails.removed.length > 10 ? `\n... ve ${diffDetails.removed.length - 10} tane daha` : ''
+          }`);
+        }
+
+        // Modified items
+        if (diffDetails.modified.length > 0) {
+          const modifiedList = diffDetails.modified.slice(0, 5).map((item: any, idx: number) => {
+            const changes = item.changes.slice(0, 3).map((c: any) => {
+              const oldVal = typeof c.oldValue === 'object' ? JSON.stringify(c.oldValue) : c.oldValue;
+              const newVal = typeof c.newValue === 'object' ? JSON.stringify(c.newValue) : c.newValue;
+              return `   - ${c.field}: ${oldVal} -> ${newVal}`;
+            }).join('\n');
+            return `${idx + 1}. ${item.name} (${item.changes.length} degisiklik)\n${changes}${
+              item.changes.length > 3 ? `\n   ... ve ${item.changes.length - 3} degisiklik daha` : ''
+            }`;
+          }).join('\n\n');
+          cfgSections.push(`Degistirilenler (${diffDetails.modified.length}):\n${modifiedList}${
+            diffDetails.modified.length > 5 ? `\n... ve ${diffDetails.modified.length - 5} tane daha` : ''
+          }`);
+        }
+
+        sections.push(cfgSections.join('\n\n'));
+        sections.push(`Onerilen Aksiyon: ${alarm.detectionLogic.recommendedAction}`);
+        return sections.join('\n\n');
+      }
+
+      // Fallback: Original log-based format (for FA log events)
       // Group logs by user for overview
       const userGroups = new Map<string, Array<Record<string, unknown>>>();
       for (const log of logs) {

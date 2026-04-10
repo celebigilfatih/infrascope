@@ -1,3 +1,17 @@
+import https from 'https';
+
+// Disable SSL verification for self-signed FortiAnalyzer certificates
+if (typeof process !== 'undefined' && process.env.NODE_ENV === 'development') {
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+}
+
+// Helper to make HTTPS requests with self-signed cert bypass
+function fetchWithAgent(url: string, options: RequestInit) {
+  // Node.js fetch doesn't support 'agent' option directly in RequestInit
+  // Using NODE_TLS_REJECT_UNAUTHORIZED env var instead (development only)
+  return fetch(url, options);
+}
+
 interface FortiAnalyzerConfig {
   host: string;
   accessToken?: string;
@@ -241,7 +255,7 @@ class FortiAnalyzerService {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 60000);
 
-      const response = await fetch(this.baseUrl, {
+      const response = await fetchWithAgent(this.baseUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         signal: controller.signal,
@@ -254,7 +268,7 @@ class FortiAnalyzerService {
           }],
           id: 1,
         }),
-      }).catch((err) => {
+      } as any).catch((err) => {
         clearTimeout(timeoutId);
         console.error('[FortiAnalyzer] Login request failed:', err.message);
         return null;
@@ -341,7 +355,7 @@ class FortiAnalyzerService {
     }
 
     try {
-      const response = await fetch(this.baseUrl, {
+      const response = await fetchWithAgent(this.baseUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -377,7 +391,7 @@ class FortiAnalyzerService {
     }
 
     try {
-      const response = await fetch(this.baseUrl, {
+      const response = await fetchWithAgent(this.baseUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -472,7 +486,7 @@ class FortiAnalyzerService {
     }
 
     try {
-      const response = await fetch(this.baseUrl, {
+      const response = await fetchWithAgent(this.baseUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -546,7 +560,7 @@ class FortiAnalyzerService {
       const timeoutId = setTimeout(() => controller.abort(), 90000); // 90s timeout (increased for large datasets)
 
       try {
-        const response = await fetch(this.baseUrl, {
+        const response = await fetchWithAgent(this.baseUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -598,7 +612,7 @@ class FortiAnalyzerService {
       const timeoutId = setTimeout(() => controller.abort(), 120000); // 120s timeout (increased for complex queries)
 
       try {
-        const response = await fetch(this.baseUrl, {
+        const response = await fetchWithAgent(this.baseUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           signal: controller.signal,
@@ -690,7 +704,7 @@ class FortiAnalyzerService {
       }
 
       // Step 1: Start FortiView task
-      const addResponse = await fetch(this.baseUrl, {
+      const addResponse = await fetchWithAgent(this.baseUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -735,7 +749,7 @@ class FortiAnalyzerService {
       for (let i = 0; i < 12; i++) {
         await new Promise(resolve => setTimeout(resolve, 5000));
 
-        const getResponse = await fetch(this.baseUrl, {
+        const getResponse = await fetchWithAgent(this.baseUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -821,7 +835,7 @@ class FortiAnalyzerService {
         id: 40,
       };
 
-      const response = await fetch(this.baseUrl, {
+      const response = await fetchWithAgent(this.baseUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody),
@@ -866,7 +880,7 @@ class FortiAnalyzerService {
         };
       }
 
-      const response = await fetch(this.baseUrl, {
+      const response = await fetchWithAgent(this.baseUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

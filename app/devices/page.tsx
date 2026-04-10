@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { apiGet, apiDelete, apiPost, apiPut } from '../../lib/api';
 import { Device, ApiResponse } from '../../types';
 import { getVendorLogo } from '../../lib/formatting';

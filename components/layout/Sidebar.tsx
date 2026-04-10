@@ -20,7 +20,6 @@ import {
   Building2,
   Grid,
   Layers,
-  Zap,
   Server,
   HardDrive,
   Cpu,
@@ -28,32 +27,25 @@ import {
   GitBranch,
   Box,
   Puzzle,
-  ClipboardList,
-  Clock,
-  TrendingUp,
-  BarChart3,
   Plug,
   ShieldAlert,
   Globe,
   Lock,
-  Eye,
-  AlertOctagon,
-  Target,
   History,
   Key,
-  FileText,
   ExternalLink
 } from 'lucide-react';
+import { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
 interface SidebarItem {
   name: string;
   href: string;
-  icon: any;
+  icon: LucideIcon;
   subItems?: string[];
   hasArrow?: boolean;
-  children?: { name: string; href: string; icon: any }[];
+  children?: { name: string; href: string; icon: LucideIcon }[];
 }
 
 interface SidebarSection {

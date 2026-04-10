@@ -210,10 +210,21 @@ export async function queryFortiAnalyzerDirect(
 
   // Filter by time window (FA may return older events beyond our window)
   const cutoff = new Date(Date.now() - windowMinutes * 60 * 1000);
-  return logs.filter(log => {
+  let filtered = logs.filter(log => {
     const t = parseLogTimestamp(log);
     return t ? t >= cutoff : true; // if unparseable, keep it (safe default)
   });
+
+  // For login events, also filter for failed attempts in-memory
+  // (FortiAnalyzer filter syntax may not support msg ~ failed)
+  if (filter.includes('action == login')) {
+    filtered = filtered.filter(log => {
+      const msg = String(log.msg || '').toLowerCase();
+      return msg.includes('failed') || msg.includes('invalid');
+    });
+  }
+
+  return filtered;
 }
 
 // ─── Internal Helpers ─────────────────────────────────────────────────────────

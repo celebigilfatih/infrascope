@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { RefreshCw, Plus, User, Mail, MoreHorizontal, Trash2, Edit2 } from 'lucide-react';
+import { RefreshCw, Plus, User, Mail, Trash2, Edit2 } from 'lucide-react';
 
 interface UserType {
   id: string;

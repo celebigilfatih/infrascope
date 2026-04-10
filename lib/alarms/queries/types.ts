@@ -89,6 +89,7 @@ export interface CachedEventWhere {
   srcIp?: string;
   dstIp?: string;
   devname?: string;
+  apprisk?: string;
   AND?: Array<{
     rawLog?: {
       path: string[];

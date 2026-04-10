@@ -17,7 +17,7 @@ interface NeighborInfo {
   confidence: number;
 }
 
-interface TopologyNode {
+export interface TopologyNode {
   id: string;
   label: string;
   type: string;
@@ -26,7 +26,7 @@ interface TopologyNode {
   y: number;
 }
 
-interface TopologyEdge {
+export interface TopologyEdge {
   id: string;
   source: string;
   target: string;

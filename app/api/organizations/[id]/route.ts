@@ -8,16 +8,14 @@ export async function PUT(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { name, description, status, contactEmail, address } = body;
+    const { name, description, code } = body;
 
     const organization = await prisma.organization.update({
       where: { id },
       data: {
         name,
         description,
-        status,
-        contactEmail,
-        address,
+        code,
       },
     });
 

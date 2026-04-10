@@ -39,6 +39,20 @@ npm run db:seed
 npm run dev
 ```
 
+**Important:** The development server will auto-start alarm services after Next.js is ready. You'll see:
+```
+✨ Development environment ready!
+   - API: http://localhost:3000/api
+   - Dashboard: http://localhost:3000/dashboard
+   - Health: http://localhost:3000/api/health
+```
+
+⚠️ **Environment Setup:** If alarms aren't working, ensure `.env.local` has:
+```
+NODE_TLS_REJECT_UNAUTHORIZED=0
+DATABASE_URL="postgresql://infrascope:infrascope-dev@localhost:5434/infrascope?schema=public"
+```
+
 ### Step 7: Open in Browser
 Visit: `http://localhost:3000/dashboard`
 

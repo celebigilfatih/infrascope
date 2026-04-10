@@ -132,10 +132,12 @@ async function checkVMwareHealth(): Promise<{ status: 'healthy' | 'unhealthy' | 
       host: vmwareHost,
       username: process.env.VMWARE_USERNAME || '',
       password: process.env.VMWARE_PASSWORD || '',
+      pollingInterval: 5,
+      enabledModules: { datacenters: false, clusters: false, hosts: false, vms: false, datastores: false },
     });
     
-    await service.connect();
-    return { status: 'healthy', responseTimeMs: Date.now() - startTime };
+    const connected = await service.authenticateSOAP();
+    return { status: connected ? 'healthy' : 'unhealthy', responseTimeMs: Date.now() - startTime };
   } catch (error) {
     return { status: 'unhealthy', responseTimeMs: Date.now() - startTime, error: (error as Error).message };
   }

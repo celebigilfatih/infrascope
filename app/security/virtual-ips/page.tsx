@@ -20,7 +20,6 @@ import {
   AlertCircle,
   ArrowRightLeft,
   Shield,
-  Server,
   ChevronLeft,
   ChevronRight,
   ExternalLink,

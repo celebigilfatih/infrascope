@@ -35,24 +35,31 @@ import type { AlarmQueryContext, QueryResult } from './types';
  * to verify via FA if cache returns empty (don't silently miss brute-force logins).
  */
 export async function getAdminLoginFailEvents(ctx: AlarmQueryContext): Promise<QueryResult> {
-  const description = 'logtype=event subtype=system action=login status=failed';
+  const description = 'logtype=event subtype=system action=login (in-memory filter for failed)';
 
   return runAlarmQuery(
     ctx,
     description,
-    () =>
-      queryCache({
+    async () => {
+      // Query all logins, then filter for failed in-memory
+      const allLogins = await queryCache({
         logtype: 'event',
         subtype: 'system',
         action: 'login',
         eventTime: timeWindow(ctx.timeWindowMinutes),
-        AND: [{ rawLog: { path: ['status'], equals: 'failed' } }],
-      }),
+      });
+      
+      // Filter for failed attempts based on msg field
+      return allLogins.filter(log => {
+        const msg = String(log.msg || '').toLowerCase();
+        return msg.includes('failed') || msg.includes('invalid') || msg.includes('incorrect');
+      });
+    },
     fa =>
       queryFortiAnalyzerDirect(
         fa,
         'event',
-        'subtype == system and action == login and status == failed',
+        'subtype == system and action == login',  // Fetch all logins, filter for failed in-memory
         ctx.timeWindowMinutes
       ),
     { softFallback: true } // Don't miss failed logins — verify via FA if cache empty

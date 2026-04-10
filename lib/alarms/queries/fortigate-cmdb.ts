@@ -53,6 +53,7 @@ function emptyResult(ctx: AlarmQueryContext, description: string, durationMs = 0
  * Core CMDB diff check.
  * - On first run: initializes snapshot, returns empty result (no alarm)
  * - On subsequent runs: returns 1 synthetic event if the endpoint state changed
+ *   Includes detailed diff information (added/removed/modified items)
  */
 async function cmdbDiff(
   ctx: AlarmQueryContext,
@@ -81,20 +82,28 @@ async function cmdbDiff(
     return emptyResult(ctx, description, durationMs);
   }
 
-  // Change detected — produce a synthetic event so the detection engine fires the alarm
+  // Change detected — compute detailed diff
   const count = Array.isArray(current) ? current.length : 1;
   console.log(`[AlarmQuery] ${ctx.alarmCode}: CMDB CHANGE detected (${durationMs}ms) | ${endpoint} | items: ${count}`);
 
+  // Get previous snapshot data for detailed diff
+  const fgService = getFortiGateService();
+  const previousSnapshot = fgService?.getCmdbSnapshot(endpoint);
+  
+  let diffDetails: any = null;
+  if (previousSnapshot && Array.isArray(previousSnapshot.data) && Array.isArray(current)) {
+    diffDetails = computeArrayDiff(previousSnapshot.data, current);
+  }
+
   return {
     events: [{
-      rawLog: {
-        endpoint,
-        description,
-        itemCount: count,
-        detectedAt: new Date().toISOString(),
-        source: 'fortigate-cmdb-diff',
-      },
-      timestamp: Date.now() / 1000,
+      endpoint,
+      description,
+      itemCount: count,
+      detectedAt: new Date().toISOString(),
+      source: 'fortigate-cmdb-diff',
+      itime_t: Math.floor(Date.now() / 1000), // Unix timestamp for parseLogTime
+      diffDetails, // Include detailed diff in the event
     }],
     stats: {
       alarmCode: ctx.alarmCode,
@@ -105,6 +114,97 @@ async function cmdbDiff(
       queryDescription: `CMDB diff: ${description}`,
     },
   };
+}
+
+/**
+ * Compute detailed diff between two arrays of CMDB objects.
+ * Returns { added, removed, modified } with item details.
+ */
+function computeArrayDiff(
+  previous: any[],
+  current: any[],
+): { added: any[]; removed: any[]; modified: any[] } {
+  // Use 'policyid' or 'name' or 'id' as the unique key
+  const getKey = (item: any): string => {
+    return String(item.policyid || item.name || item.id || JSON.stringify(item));
+  };
+
+  const prevMap = new Map<string, any>();
+  const currMap = new Map<string, any>();
+
+  for (const item of previous) {
+    prevMap.set(getKey(item), item);
+  }
+  for (const item of current) {
+    currMap.set(getKey(item), item);
+  }
+
+  const added: any[] = [];
+  const removed: any[] = [];
+  const modified: any[] = [];
+
+  // Find added and modified items
+  for (const [key, currItem] of currMap) {
+    const prevItem = prevMap.get(key);
+    if (!prevItem) {
+      // New item added
+      added.push({
+        key,
+        name: currItem.name || `#${currItem.policyid || currItem.id}`,
+        data: currItem,
+      });
+    } else if (JSON.stringify(prevItem) !== JSON.stringify(currItem)) {
+      // Item modified - find what changed
+      const changes = findObjectChanges(prevItem, currItem);
+      if (changes.length > 0) {
+        modified.push({
+          key,
+          name: currItem.name || `#${currItem.policyid || currItem.id}`,
+          changes,
+        });
+      }
+    }
+  }
+
+  // Find removed items
+  for (const [key, prevItem] of prevMap) {
+    if (!currMap.has(key)) {
+      removed.push({
+        key,
+        name: prevItem.name || `#${prevItem.policyid || prevItem.id}`,
+        data: prevItem,
+      });
+    }
+  }
+
+  return { added, removed, modified };
+}
+
+/**
+ * Find specific field changes between two objects.
+ * Returns array of { field, oldValue, newValue } for changed fields.
+ */
+function findObjectChanges(oldObj: any, newObj: any): Array<{ field: string; oldValue: any; newValue: any }> {
+  const changes: Array<{ field: string; oldValue: any; newValue: any }> = [];
+  const allKeys = new Set([...Object.keys(oldObj), ...Object.keys(newObj)]);
+
+  for (const key of allKeys) {
+    // Skip internal/verbose fields
+    if (key.startsWith('q_') || key === 'uuid' || key === 'obj name' || key === 'obj seq') continue;
+    
+    const oldVal = oldObj[key];
+    const newVal = newObj[key];
+    
+    if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
+      changes.push({
+        field: key,
+        oldValue: oldVal,
+        newValue: newVal,
+      });
+    }
+  }
+
+  return changes;
 }
 
 // ─── CONFIG_ACCESS Alarm Functions ─────────────────────────────────────────────
@@ -211,12 +311,10 @@ export async function cmdbCoreConfigChange(ctx: AlarmQueryContext): Promise<Quer
   console.log(`[AlarmQuery] ${ctx.alarmCode}: CORE CONFIG CHANGE detected (${durationMs}ms) | ${changedEndpoints.join(', ')}`);
   return {
     events: [{
-      rawLog: {
-        changedEndpoints,
-        detectedAt: new Date().toISOString(),
-        source: 'fortigate-cmdb-diff',
-      },
-      timestamp: Date.now() / 1000,
+      changedEndpoints,
+      detectedAt: new Date().toISOString(),
+      source: 'fortigate-cmdb-diff',
+      itime_t: Math.floor(Date.now() / 1000), // Unix timestamp for parseLogTime
     }],
     stats: {
       alarmCode: ctx.alarmCode,

@@ -48,12 +48,12 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
     description: 'Firewall kurallarinda ekleme, duzenleme veya silme tespit edildi. Kim tarafindan, nereden ve ne degistirildigini izler.',
     category: 'CONFIG_ACCESS',
     severity: 'ALARM_CRITICAL',
-    cooldownMinutes: 180, // Must match timeWindowMinutes
+    cooldownMinutes: 30, // Reduced from 180 to 30 minutes for faster detection
     detectionLogic: {
       logtype: 'event',
       filter: 'subtype == system and logdesc like %attribute% and cfgpath like %firewall.policy% and ui != ha_daemon',
       threshold: 1,
-      timeWindowMinutes: 180,
+      timeWindowMinutes: 30, // Match cooldownMinutes
       description: 'Detects firewall policy add/edit/delete operations from system event logs. Includes admin user, source IP, and policy details.',
       recommendedAction: 'Verify change was authorized. Check admin identity and source IP. Review before/after policy state in config revisions.',
     },
@@ -1467,7 +1467,7 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
   {
     code: 'SNAPSHOT_CREATED',
     name: 'Snapshot Olusturuldu',
-    description: 'VM snapshot alindi. Disk alani takibi ve yedekleme sureci izleme. Veeam backup snapshot lari haric tutulur.',
+    description: 'VM snapshot alindi. Disk alani takibi ve yedekleme sureci izleme. Veeam backup ve Sure Backup test snapshot lari haric tutulur.',
     category: 'OPERATIONAL',
     severity: 'ALARM_INFO',
     cooldownMinutes: 75, // Must be > timeWindowMinutes to prevent duplicate triggers
@@ -1478,7 +1478,7 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
       filter: 'snapshotCreated == true',
       threshold: 1,
       timeWindowMinutes: 60, // Increased from 15 to catch snapshots within 1-hour window
-      description: 'Snapshot olusturma islemlerini izler. Hangi VM, snapshot adi ve boyutunu kaydeder. Veeam kullanici ve "VEEAM BACKUP TEMPORARY SNAPSHOT" iceren snapshot lar filtrelenir.',
+      description: 'Snapshot olusturma islemlerini izler. Hangi VM, snapshot adi ve boyutunu kaydeder. Veeam kullanici ve Veeam backup snapshot lari ("VEEAM BACKUP TEMPORARY SNAPSHOT" ve "VEEAM_SUREBACKUP_SNAPSHOT" iceren snapshot lar) filtrelenir.',
       recommendedAction: 'Snapshot amacini kontrol edin (backup, test, patch oncesi). Datastore bos alanini dogrulayin. Snapshot retention policy hatirlatın.',
     },
   },

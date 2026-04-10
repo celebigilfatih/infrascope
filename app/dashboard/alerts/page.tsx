@@ -351,6 +351,13 @@ export default function AlertsDashboardPage() {
                 : field === 'destIp' ? selectedEvent.destIp 
                 : selectedEvent.deviceName || '';
       
+      // Validate value is not null/empty before calling API
+      if (!value) {
+        setMessage({ text: `Cannot whitelist: No ${field} value available for this alarm`, type: 'error' });
+        setDiscardLoading(false);
+        return;
+      }
+      
       const res = await fetch('/api/alarms/whitelist', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -397,10 +404,6 @@ export default function AlertsDashboardPage() {
   const startIndex = (currentPage - 1) * pageSize;
   const endIndex = startIndex + pageSize;
   const paginatedEvents = filteredEvents.slice(startIndex, endIndex);
-
-  const criticalCount = stats['ALARM_CRITICAL'] || 0;
-  const highCount = stats['ALARM_HIGH'] || 0;
-  const totalUnacked = Object.values(stats).reduce((sum: number, v: number) => sum + v, 0);
 
   return (
     <div className="p-6 space-y-6">

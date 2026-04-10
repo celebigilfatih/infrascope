@@ -31,8 +31,50 @@
 import { prisma } from '@/lib/prisma';
 import { initSharedFortiAnalyzerService, getFortiAnalyzerLoginHealth } from '@/lib/integrations/fortianalyzer';
 import { AlarmDetectionEngine } from '@/lib/alarms/detection-engine';
+import { FortiGateService } from '@/lib/integrations/fortigate';
 import { processDLQ, cleanupDLQ, getDLQStats } from '@/lib/notifications/dlq-worker';
 import { sendAlarmEmail } from '@/lib/notifications/email';
+
+// ── FortiGate singleton ───────────────────────────────────────────────────────
+// Must persist between alarm check runs so CMDB snapshot store survives.
+// Re-created only when the integration config changes in the database.
+let _sharedFortiGateService: FortiGateService | null = null;
+let _sharedFortiGateConfigHash: string | null = null;
+
+async function getOrInitFortiGateService(): Promise<FortiGateService | null> {
+  try {
+    const fgConfig = await prisma.integrationConfig.findFirst({
+      where: { type: 'FORTIGATE', enabled: true },
+    });
+    if (!fgConfig) return null;
+
+    // Re-create if config changed
+    const configHash = JSON.stringify(fgConfig.config);
+    if (_sharedFortiGateService && _sharedFortiGateConfigHash === configHash) {
+      return _sharedFortiGateService;
+    }
+
+    const cfg = fgConfig.config as any;
+    _sharedFortiGateService = new FortiGateService({
+      host: cfg.host,
+      username: cfg.username,
+      password: cfg.password,
+      accessToken: cfg.accessToken,
+      pollingInterval: cfg.pollingInterval || 5,
+      syncMode: 'rest',
+      enabledModules: {
+        interfaces: true, vlans: true, policies: true,
+        addresses: true, vips: true, sdwan: true,
+      },
+    });
+    _sharedFortiGateConfigHash = configHash;
+    console.log('[AlarmRunner] FortiGate singleton (re)initialized');
+    return _sharedFortiGateService;
+  } catch (err) {
+    console.error('[AlarmRunner] FortiGate init error:', err);
+    return null;
+  }
+}
 
 // ── FA health alert throttle ───────────────────────────────────────────────
 const FA_ALERT_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour between FA health alerts
@@ -240,6 +282,14 @@ export async function runAlarmCheck(): Promise<AlarmCheckResult> {
     });
 
     const engine = new AlarmDetectionEngine(service);
+
+    // Inject FortiGate singleton so CMDB snapshot store persists between runs
+    const fgService = await getOrInitFortiGateService();
+    if (fgService) {
+      engine.injectFortiGateService(fgService);
+      // Clear CMDB response cache for fresh data this cycle
+      fgService.clearCmdbResponseCache();
+    }
 
     // ── Run evaluation with 10-minute timeout ──────────────────────────────
     // Normal runs complete in 85-120 s. 10 min = generous hard limit.

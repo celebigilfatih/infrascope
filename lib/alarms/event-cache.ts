@@ -142,7 +142,7 @@ export class EventCacheService {
     const targetedEventFilters = [
       'action == auth-logon',                           // SSL-VPN user logon events (subtype=user)
       'subtype == system',                              // Config changes: policy, address objects, interfaces, routing, etc.
-      'action == login and status == failed',           // Admin failed login attempts (security-critical)
+      'action == login',                                // Admin login attempts (both success and failed) - will filter for failed in-memory
       'action == ssl-login-fail',                       // SSL-VPN failed login attempts (security-critical)
     ];
 
@@ -333,10 +333,19 @@ export class EventCacheService {
     }
 
     // Filter by time range and save
-    const recentLogs = logs.filter(log => {
+    let recentLogs = logs.filter(log => {
       const eventTime = this.parseEventTime(log);
       return eventTime && eventTime >= startTime && eventTime <= endTime;
     });
+
+    // For login events, also filter for failed attempts in-memory
+    // (FortiAnalyzer filter syntax may not support msg ~ failed)
+    if (filter === 'action == login') {
+      recentLogs = recentLogs.filter(log => {
+        const msg = String(log.msg || '').toLowerCase();
+        return msg.includes('failed') || msg.includes('invalid');
+      });
+    }
 
     if (recentLogs.length > 0) {
       await this.saveEvents(logtype, recentLogs);
@@ -374,7 +383,7 @@ export class EventCacheService {
       apprisk: String(log.apprisk || ''),
       srccountry: String(log.srccountry || ''),
       dstcountry: String(log.dstcountry || ''),
-      msg: String(log.msg || ''),
+      msg: String(log.msg || '').includes('%') ? decodeURIComponent(String(log.msg || '')) : String(log.msg || ''),
       rawLog: log as any,
     }));
 
@@ -397,18 +406,36 @@ export class EventCacheService {
 
   /**
    * Parse event time from log
+   * Priority order: itime_t (seconds) → itime (string) → eventtime (nanoseconds)
+   * itime_t is most reliable as Unix timestamp; eventtime needs TZ adjustment
    */
   private parseEventTime(log: Record<string, unknown>): Date | null {
-    const eventTime = log.eventtime;
-    if (!eventTime) {
-      // Fallback: try itime field (format: "YYYY-MM-DD HH:MM:SS")
-      const itime = log.itime as string | undefined;
-      if (itime) return new Date(itime.replace(' ', 'T') + 'Z');
-      return null;
+    // FIRST: Try itime_t (Unix timestamp in seconds - most reliable)
+    const itime_t = log.itime_t;
+    if (itime_t) {
+      const ts = typeof itime_t === 'number' ? itime_t : Number(itime_t);
+      if (ts > 1e9) return new Date(ts * 1000); // Convert seconds to ms
     }
 
-    // FortiAnalyzer eventtime is in NANOSECONDS (19-digit number)
-    // e.g. 1772619793970881411 → divide by 1e6 to get milliseconds
+    // SECOND: Try itime field (ISO string "YYYY-MM-DD HH:MM:SS" or Unix timestamp)
+    const itime = log.itime as string | number | undefined;
+    if (itime) {
+      if (typeof itime === 'number') {
+        if (itime > 1e9) return new Date(itime * 1000);
+      } else {
+        // itime is typically "2026-04-07 10:31:45"
+        // FortiAnalyzer returns local time, but we parse as UTC+3 from tz field if present
+        const tzStr = log.tz as string | undefined;
+        const dateStr = itime.replace(' ', 'T') + 'Z'; // Treat as UTC for now
+        const dt = new Date(dateStr);
+        if (!isNaN(dt.getTime())) return dt;
+      }
+    }
+
+    // THIRD: Fallback to eventtime (nanoseconds from FortiAnalyzer)
+    const eventTime = log.eventtime;
+    if (!eventTime) return null;
+
     const raw = typeof eventTime === 'number' ? eventTime : Number(eventTime);
     let ms: number;
 

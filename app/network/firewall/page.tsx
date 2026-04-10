@@ -235,8 +235,8 @@ export default function FirewallPage() {
     return `${hours}h ${mins}m`;
   };
 
-  const formatDate = (timestamp: number) => {
-    return new Date(timestamp * 1000).toLocaleString('tr-TR');
+  const formatDate = (_timestamp: number) => {
+    return new Date(_timestamp * 1000).toLocaleString('tr-TR');
   };
 
   const getPageNumbers = (currentPage: number, totalPages: number) => {

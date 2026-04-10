@@ -11,7 +11,6 @@ import {
   Bell,
   ShieldCheck,
   Clock,
-  XCircle,
 } from 'lucide-react';
 
 interface NmsAlarm {

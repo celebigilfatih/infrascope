@@ -12,7 +12,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import {
-  Plus, Search, Grid, Server, RefreshCw, MoreHorizontal, Pencil, Trash2, X,
+  Plus, Search, Grid, Server, RefreshCw, Pencil, Trash2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/components/ui/use-toast';

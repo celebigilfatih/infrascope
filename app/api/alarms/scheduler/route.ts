@@ -9,7 +9,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import { startAlarmScheduler, stopAlarmScheduler, getSchedulerStatus } from '@/lib/alarm-scheduler';
+import { startAlarmScheduler, getSchedulerStatus } from '@/lib/alarm-scheduler';
 
 export async function GET() {
   try {

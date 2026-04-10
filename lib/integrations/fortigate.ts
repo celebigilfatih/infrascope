@@ -979,7 +979,8 @@ export class FortiGateService {
     // 1. Return cached response if available (avoids duplicate calls in same cycle)
     const cached = this._cmdbResponseCache.get(endpoint);
     if (cached && Date.now() - cached.ts < this._cmdbResponseCacheTTL) {
-      const stored = this._cmdbSnapshotStore.get(endpoint);
+      // Use frozen snapshot from cycle start, not the live one (which may have been updated by another alarm)
+      const stored = this._frozenSnapshots.get(endpoint) ?? this._cmdbSnapshotStore.get(endpoint);
       const fingerprint = JSON.stringify(cached.data);
       const isFirstRun = stored === undefined;
       const changed = !isFirstRun && stored !== fingerprint;
@@ -1002,15 +1003,14 @@ export class FortiGateService {
       // Cache the response
       this._cmdbResponseCache.set(endpoint, { ts: Date.now(), data: current });
 
-      // Compute fingerprint
+      // Compute fingerprint and compare with FROZEN snapshot (from cycle start)
       const fingerprint = JSON.stringify(current);
-      const stored = this._cmdbSnapshotStore.get(endpoint);
+      const stored = this._frozenSnapshots.get(endpoint) ?? this._cmdbSnapshotStore.get(endpoint);
       const isFirstRun = stored === undefined;
       const changed = !isFirstRun && stored !== fingerprint;
 
-      // Always update snapshot to current state
+      // Update the live snapshot (for next cycle) and frozen snapshot (so this cycle's baseline is preserved)
       this._cmdbSnapshotStore.set(endpoint, fingerprint);
-
       if (changed) {
         console.log(`[FortiGate] CMDB change detected: ${endpoint}`);
       }
@@ -1020,6 +1020,36 @@ export class FortiGateService {
       console.error(`[FortiGate] getCmdbChanges(${endpoint}) error:`, error);
       return { changed: false, isFirstRun: false, current: null };
     }
+  }
+
+  /** @internal Frozen snapshots from the current cycle (set when response cache is cleared) */
+  private _frozenSnapshots = new Map<string, string>();
+
+  /**
+   * Clear CMDB response cache — call at the start of each alarm check cycle
+   * to ensure fresh data is fetched from FortiGate, not stale cached data.
+   */
+  clearCmdbResponseCache(): void {
+    this._cmdbResponseCache.clear();
+    // Freeze current snapshots so all alarms in this cycle compare against the same baseline
+    this._frozenSnapshots = new Map(this._cmdbSnapshotStore);
+    console.log('[FortiGate] CMDB response cache cleared for fresh cycle');
+  }
+
+  /**
+   * Get CMDB snapshot status for diagnostic purposes.
+   * Returns snapshot info if the endpoint has been queried at least once.
+   */
+  getCmdbSnapshot(endpoint: string): { timestamp: number; data: any } | null {
+    const fingerprint = this._cmdbSnapshotStore.get(endpoint);
+    if (!fingerprint) return null;
+
+    // Return cached response if available, otherwise just signal snapshot exists
+    const cached = this._cmdbResponseCache.get(endpoint);
+    return {
+      timestamp: cached?.ts ?? Date.now(),
+      data: cached?.data ?? [],
+    };
   }
 
   /**
