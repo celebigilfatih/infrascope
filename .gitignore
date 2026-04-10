@@ -50,3 +50,6 @@ Thumbs.db
 .eslintcache
 
 # Cover
+
+# Large database backups
+nms_service/*.sql
