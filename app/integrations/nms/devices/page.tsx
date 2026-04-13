@@ -23,16 +23,24 @@ import {
 import Link from 'next/link';
 
 interface NmsDevice {
-  id: number;
+  id: string;          // InfraScope CUID
   name: string;
-  ip_address: string;
+  type: string | null;
   vendor: string | null;
-  device_type: string | null;
-  connection_status: string;
-  last_polled: string | null;
-  polling_enabled: boolean;
-  snmp_version: string;
-  active_alarm_count?: number;
+  nmsDeviceId: number;
+  managementIp: string | null;
+  snmpVersion: string | null;
+  snmpPort: number | null;
+  pollingEnabled: boolean;
+  pollingInterval: number | null;
+  lastPolledAt: string | null;
+  latestHealth: {
+    cpuUsage: number | null;
+    memoryUsage: number | null;
+    temperature: number | null;
+    collectedAt: string;
+  } | null;
+  portDownCount: number;
 }
 
 export default function NmsDevicesPage() {
@@ -40,24 +48,22 @@ export default function NmsDevicesPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
-  const [deleting, setDeleting] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const loadDevices = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams();
-      if (filterStatus) params.set('status', filterStatus);
-      const res = await fetch(`/api/integrations/nms/network-devices${params.toString() ? '?' + params.toString() : ''}`);
+      const res = await fetch('/api/integrations/nms/devices');
       const data = await res.json();
       if (!res.ok) {
         setError(data.error || 'Failed to load devices');
       } else {
-        setDevices(data.data || []);
+        setDevices(data.devices || []);
       }
     } catch (e: any) {
-      setError('NMS backend unreachable: ' + e.message);
+      setError('Failed to load NMS devices: ' + e.message);
     } finally {
       setLoading(false);
     }
@@ -67,11 +73,11 @@ export default function NmsDevicesPage() {
     loadDevices();
   }, [loadDevices]);
 
-  const handleDelete = async (id: number, name: string) => {
-    if (!confirm(`Delete device "${name}" from NMS monitoring?`)) return;
+  const handleDelete = async (id: string, name: string) => {
+    if (!confirm(`Remove "${name}" from NMS monitoring?`)) return;
     setDeleting(id);
     try {
-      const res = await fetch(`/api/integrations/nms/network-devices/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/integrations/nms/devices/${id}`, { method: 'DELETE' });
       if (res.ok) {
         setDevices(prev => prev.filter(d => d.id !== id));
       }
@@ -91,26 +97,36 @@ export default function NmsDevicesPage() {
     return `${Math.floor(hrs / 24)}d ago`;
   };
 
+  const getConnectionStatus = (device: NmsDevice): string => {
+    if (!device.pollingEnabled) return 'disabled';
+    if (!device.lastPolledAt) return 'unknown';
+    const diffMs = Date.now() - new Date(device.lastPolledAt).getTime();
+    return diffMs < 3 * 60 * 1000 ? 'online' : 'offline';
+  };
+
   const statusBadge = (status: string) => {
     switch (status) {
       case 'online':
         return <Badge variant="success" className="gap-1 text-xs"><CheckCircle className="h-3 w-3" />Online</Badge>;
       case 'offline':
-      case 'unreachable':
         return <Badge variant="destructive" className="gap-1 text-xs"><XCircle className="h-3 w-3" />Offline</Badge>;
+      case 'disabled':
+        return <Badge variant="outline" className="gap-1 text-xs text-muted-foreground"><XCircle className="h-3 w-3" />Disabled</Badge>;
       default:
-        return <Badge variant="secondary" className="gap-1 text-xs"><Wifi className="h-3 w-3" />{status || 'Unknown'}</Badge>;
+        return <Badge variant="secondary" className="gap-1 text-xs"><Wifi className="h-3 w-3" />Unknown</Badge>;
     }
   };
 
   const filtered = devices.filter(d => {
+    const status = getConnectionStatus(d);
+    if (filterStatus && status !== filterStatus) return false;
     if (search && !d.name.toLowerCase().includes(search.toLowerCase()) &&
-        !d.ip_address.includes(search)) return false;
+        !(d.managementIp || '').includes(search)) return false;
     return true;
   });
 
-  const online = devices.filter(d => d.connection_status === 'online').length;
-  const offline = devices.filter(d => d.connection_status !== 'online').length;
+  const online = devices.filter(d => getConnectionStatus(d) === 'online').length;
+  const offline = devices.filter(d => getConnectionStatus(d) !== 'online').length;
 
   return (
     <div className="p-6 space-y-6">
@@ -164,7 +180,6 @@ export default function NmsDevicesPage() {
         <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive text-sm">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           {error}
-          <span className="text-xs opacity-70 ml-1">(Make sure the NMS backend is running on port 4001)</span>
         </div>
       )}
 
@@ -194,7 +209,8 @@ export default function NmsDevicesPage() {
                     <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Type</th>
                     <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Status</th>
                     <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Last Polled</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Alarms</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">CPU / Mem</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Port Issues</th>
                     <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Actions</th>
                   </tr>
                 </thead>
@@ -207,21 +223,29 @@ export default function NmsDevicesPage() {
                           <span className="font-medium">{device.name}</span>
                         </div>
                       </td>
-                      <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{device.ip_address}</td>
+                      <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{device.managementIp || '—'}</td>
                       <td className="px-4 py-3 text-muted-foreground">{device.vendor || '—'}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{device.device_type || '—'}</td>
-                      <td className="px-4 py-3">{statusBadge(device.connection_status)}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{device.type || '—'}</td>
+                      <td className="px-4 py-3">{statusBadge(getConnectionStatus(device))}</td>
                       <td className="px-4 py-3 text-muted-foreground text-xs">
                         <span className="flex items-center gap-1">
                           <Clock className="h-3 w-3" />
-                          {formatLastPolled(device.last_polled)}
+                          {formatLastPolled(device.lastPolledAt)}
                         </span>
                       </td>
+                      <td className="px-4 py-3 text-xs">
+                        {device.latestHealth ? (
+                          <span className="text-muted-foreground">
+                            {device.latestHealth.cpuUsage != null ? `CPU ${device.latestHealth.cpuUsage.toFixed(0)}%` : '—'}
+                            {device.latestHealth.memoryUsage != null ? ` / Mem ${device.latestHealth.memoryUsage.toFixed(0)}%` : ''}
+                          </span>
+                        ) : <span className="text-muted-foreground">—</span>}
+                      </td>
                       <td className="px-4 py-3">
-                        {(device.active_alarm_count || 0) > 0 ? (
+                        {device.portDownCount > 0 ? (
                           <Badge variant="destructive" className="gap-1 text-xs">
                             <AlertTriangle className="h-3 w-3" />
-                            {device.active_alarm_count}
+                            {device.portDownCount} down
                           </Badge>
                         ) : (
                           <span className="text-xs text-muted-foreground">—</span>

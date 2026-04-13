@@ -3,6 +3,13 @@ import { prisma } from '@/lib/prisma';
 
 interface Params { params: { id: string } }
 
+/** Convert BigInt fields to strings for JSON serialization */
+function serializeBigInt(obj: unknown): unknown {
+  return JSON.parse(JSON.stringify(obj, (_key, val) =>
+    typeof val === 'bigint' ? val.toString() : val
+  ));
+}
+
 /**
  * GET /api/integrations/nms/devices/[id]
  * Get SNMP config and latest metrics for a device.
@@ -65,6 +72,8 @@ export async function GET(_req: NextRequest, { params }: Params) {
         speed: true,
         inOctets: true,
         outOctets: true,
+        inErrors: true,
+        outErrors: true,
         mtu: true,
         lastPolledAt: true,
       },
@@ -83,7 +92,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
       },
     });
 
-    return NextResponse.json({ device, healthMetrics, interfaces, topologyLinks });
+    return NextResponse.json(serializeBigInt({ device, healthMetrics, interfaces, topologyLinks }));
   } catch (error) {
     console.error('[NMS Device] GET error:', error);
     return NextResponse.json({ error: 'Failed to get device NMS data' }, { status: 500 });
