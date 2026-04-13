@@ -55,6 +55,7 @@ export {
 export {
   getVpnBruteForceEvents,
   getSslvpnLockoutEvents,
+  getSslvpnAuthFailedEvents,
   getIpsecTunnelDownEvents,
 } from './vpn-events';
 
@@ -169,6 +170,7 @@ import {
 import {
   getVpnBruteForceEvents,
   getSslvpnLockoutEvents,
+  getSslvpnAuthFailedEvents,
   getIpsecTunnelDownEvents,
 } from './vpn-events';
 import { getIpsHighSeverityEvents, getMalwareDetectedEvents, getAppCtrlViolationEvents, getShadowItEvents, getWebFilterBlockEvents, getIocHitEvents } from './security-events';
@@ -211,6 +213,8 @@ export const ALARM_QUERY_REGISTRY = new Map<string, AlarmQueryFn>([
 
   // ── VPN (FortiAnalyzer cache) ───────────────────────────────────────────────
   ['VPN_BRUTE_FORCE',          getVpnBruteForceEvents],
+  ['SSLVPN_AUTH_FAILED',       getSslvpnAuthFailedEvents],
+  ['SSLVPN_MULTI_FAIL',        getSslvpnAuthFailedEvents],  // Same query, different threshold (3 vs 1)
   ['SSLVPN_LOCKOUT',           getSslvpnLockoutEvents],
   ['SSLVPN_TUNNEL_UP',         getSslvpnTunnelUpEvents],
   ['SSLVPN_TUNNEL_DOWN',       getSslvpnTunnelDownEvents],

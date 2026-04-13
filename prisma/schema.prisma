@@ -214,6 +214,9 @@ model Device {
   nmsInterfaces      NmsInterface[]
   nmsHealthMetrics   NmsHealthMetric[]
   nmsTopologyLinks   NmsTopologyLink[]
+  nmsDeviceMetrics   NmsDeviceMetric[]
+  nmsInterfaceMetrics NmsInterfaceMetric[]
+  nmsBackups         NmsBackup[]
 
   @@index([rackId])
   @@index([parentDeviceId])
@@ -1218,4 +1221,63 @@ model NmsDiscoveredDevice {
   @@index([scanId])
   @@index([ipAddress])
   @@map("nms_discovered_devices")
+}
+
+/// Generic device metric time series (CPU, memory, temperature, bandwidth — one row per metric per poll)
+model NmsDeviceMetric {
+  id                String   @id @default(cuid())
+  nmsDeviceId       Int      @map("nms_device_id")
+  device            Device   @relation(fields: [nmsDeviceId], references: [nmsDeviceId], onDelete: Cascade)
+  metricType        String   @map("metric_type")         // "cpu" | "memory" | "temperature" | ...
+  metricName        String?  @map("metric_name")
+  metricValue       Decimal? @map("metric_value")         @db.Decimal(10,2)
+  metricUnit        String?  @map("metric_unit")
+  thresholdWarning  Decimal? @map("threshold_warning")    @db.Decimal(10,2)
+  thresholdCritical Decimal? @map("threshold_critical")   @db.Decimal(10,2)
+  status            String?                               // "ok" | "warning" | "critical"
+  collectedAt       DateTime @default(now()) @map("collected_at")
+
+  @@index([nmsDeviceId, collectedAt])
+  @@index([metricType])
+  @@index([collectedAt])
+  @@map("nms_device_metrics")
+}
+
+/// Interface-level bandwidth / error metrics time series
+model NmsInterfaceMetric {
+  id             String   @id @default(cuid())
+  nmsDeviceId    Int      @map("nms_device_id")
+  device         Device   @relation(fields: [nmsDeviceId], references: [nmsDeviceId], onDelete: Cascade)
+  interfaceIndex Int      @map("interface_index")
+  interfaceName  String?  @map("interface_name")
+  description    String?
+  adminStatus    String?  @map("admin_status")   // "up" | "down"
+  operStatus     String?  @map("oper_status")    // "up" | "down"
+  speed          BigInt?                          // bps
+  inOctets       BigInt?  @map("in_octets")
+  outOctets      BigInt?  @map("out_octets")
+  collectedAt    DateTime @default(now()) @map("collected_at")
+
+  @@index([nmsDeviceId, interfaceIndex, collectedAt])
+  @@index([collectedAt])
+  @@map("nms_interface_metrics")
+}
+
+/// Configuration backup stored from a device via SSH
+model NmsBackup {
+  id            String   @id @default(cuid())
+  nmsDeviceId   Int      @map("nms_device_id")
+  device        Device   @relation(fields: [nmsDeviceId], references: [nmsDeviceId], onDelete: Cascade)
+  backupType    String   @default("config") @map("backup_type") // "Running Config" | "Startup Config"
+  backupFile    String?  @map("backup_file")
+  description   String?
+  sizeBytes     BigInt   @default(0) @map("size_bytes")
+  checksum      String?
+  configuration String?  @db.Text
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@index([nmsDeviceId])
+  @@index([createdAt])
+  @@map("nms_backups")
 }

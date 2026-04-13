@@ -146,6 +146,35 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    // Fetch current firewall policies directly from FortiGate CMDB (for alarm enrichment)
+    if (type === 'cmdb-policies') {
+      if (!config) {
+        return NextResponse.json({ success: false, error: 'FortiGate not configured' }, { status: 404 });
+      }
+      const fortiConf = config.config as any;
+      try {
+        const svc = new FortiGateService({
+          host: fortiConf.host,
+          username: fortiConf.username,
+          password: fortiConf.password,
+          accessToken: fortiConf.accessToken,
+          snmp: fortiConf.snmp,
+          pollingInterval: fortiConf.pollingInterval || 15,
+          syncMode: fortiConf.syncMode || 'rest',
+          enabledModules: { interfaces: true, vlans: true, policies: true, addresses: true, vips: true, sdwan: true },
+        });
+        const policies = await svc.fetchFirewallPolicies();
+        return NextResponse.json({
+          success: true,
+          host: fortiConf.host,
+          policies,
+          total: policies.length,
+        });
+      } catch (err) {
+        return NextResponse.json({ success: false, error: (err as Error).message }, { status: 500 });
+      }
+    }
+
     if (!config) {
       return NextResponse.json({
         connected: false,

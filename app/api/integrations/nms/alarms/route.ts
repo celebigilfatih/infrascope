@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-const NMS_BACKEND_URL = process.env.NMS_BACKEND_URL || 'http://localhost:4001';
+import { prisma } from '@/lib/prisma';
 
 /**
  * GET /api/integrations/nms/alarms
- * Get active alarms from NMS backend
+ * Get NMS device alarms from infrascope alarm_events table
  */
 export async function GET(req: NextRequest) {
   try {
@@ -12,41 +11,50 @@ export async function GET(req: NextRequest) {
     const status = searchParams.get('status') || 'active';
     const deviceId = searchParams.get('device_id');
 
-    const params = new URLSearchParams({ status });
-    if (deviceId) params.set('device_id', deviceId);
+    // Map status filter
+    const statusFilter = status === 'active' ? ['ACTIVE', 'TRIGGERED'] : undefined;
 
-    const res = await fetch(`${NMS_BACKEND_URL}/api/alarms?${params.toString()}`, {
-      signal: AbortSignal.timeout(10000),
+    const alarms = await (prisma as any).alarmEvent.findMany({
+      where: {
+        ...(statusFilter ? { status: { in: statusFilter } } : {}),
+        // NMS device alarms have alarmCode starting with NMS_ or SNMP_
+        OR: [
+          { alarmCode: { startsWith: 'NMS_' } },
+          { alarmCode: { startsWith: 'SNMP_' } },
+          { alarmCode: { startsWith: 'DEVICE_' } },
+          { alarmCode: { contains: 'PORT' } },
+        ],
+      },
+      orderBy: { triggeredAt: 'desc' },
+      take: 100,
     });
-    const data = await res.json();
-    if (!res.ok) return NextResponse.json({ error: data.error || 'Alarms fetch failed' }, { status: res.status });
-    return NextResponse.json(data);
+
+    return NextResponse.json({ alarms, total: alarms.length });
   } catch (error: any) {
     console.error('[NMS Alarms] GET error:', error.message);
-    return NextResponse.json({ error: 'NMS backend unreachable', details: error.message }, { status: 503 });
+    return NextResponse.json({ error: 'Failed to fetch alarms', details: error.message }, { status: 500 });
   }
 }
 
 /**
  * PATCH /api/integrations/nms/alarms
- * Acknowledge an alarm: body { id, action: 'acknowledge' | 'resolve' }
+ * Acknowledge or resolve an alarm
  */
 export async function PATCH(req: NextRequest) {
   try {
     const { id, action } = await req.json();
-    const endpoint = action === 'resolve'
-      ? `${NMS_BACKEND_URL}/api/alarms/${id}/resolve`
-      : `${NMS_BACKEND_URL}/api/alarms/${id}/acknowledge`;
+    const newStatus = action === 'resolve' ? 'RESOLVED' : 'ACKNOWLEDGED';
 
-    const res = await fetch(endpoint, {
-      method: 'PUT',
-      signal: AbortSignal.timeout(10000),
-      headers: { 'Content-Type': 'application/json' },
+    const updated = await (prisma as any).alarmEvent.update({
+      where: { id },
+      data: {
+        status: newStatus,
+        ...(action === 'resolve' ? { resolvedAt: new Date() } : { acknowledgedAt: new Date() }),
+      },
     });
-    const data = await res.json();
-    if (!res.ok) return NextResponse.json({ error: data.error || 'Action failed' }, { status: res.status });
-    return NextResponse.json(data);
+
+    return NextResponse.json({ alarm: updated });
   } catch (error: any) {
-    return NextResponse.json({ error: 'NMS backend unreachable', details: error.message }, { status: 503 });
+    return NextResponse.json({ error: 'Failed to update alarm', details: error.message }, { status: 500 });
   }
 }

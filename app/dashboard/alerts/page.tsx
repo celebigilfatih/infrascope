@@ -18,7 +18,8 @@ import {
 } from '@/components/ui/dialog';
 import {
   AlertTriangle, AlertCircle, AlertOctagon, CheckCircle, Clock, RefreshCw,
-  Search, Play, Shield, Bell, Trash2, BarChart3, Eye, User,
+  Search, Play, Shield, Bell, Trash2, BarChart3, Eye, User, Router, Monitor,
+  ChevronDown, ChevronRight, Code2,
 } from 'lucide-react';
 
 interface AlarmEventData {
@@ -36,6 +37,7 @@ interface AlarmEventData {
   notifiedAt: string | null;
   notifyChannel: string | null;
   createdAt: string;
+  rawData: Array<Record<string, unknown>> | null;
   alarm: {
     code: string;
     name: string;
@@ -67,6 +69,27 @@ const CATEGORY_EMOJI: Record<string, string> = {
   OPERATIONAL: '⚙️',
   SOC_CORRELATION: '🔍',
 };
+
+type SourceType = 'all' | 'firewall' | 'switch' | 'vmware';
+
+const SOURCE_CONFIG: Record<SourceType, { label: string; color: string; bgActive: string; icon: typeof Shield }> = {
+  all:      { label: 'Tümü',    color: 'text-foreground',  bgActive: 'bg-slate-700',    icon: Shield   },
+  firewall: { label: 'Firewall', color: 'text-orange-500', bgActive: 'bg-orange-600',   icon: Shield   },
+  switch:   { label: 'Switch',   color: 'text-blue-500',   bgActive: 'bg-blue-600',     icon: Router   },
+  vmware:   { label: 'VMware',   color: 'text-purple-500', bgActive: 'bg-purple-600',   icon: Monitor  },
+};
+
+function getAlarmSource(code: string): 'firewall' | 'switch' | 'vmware' {
+  const c = code.toUpperCase();
+  if (c.startsWith('VM_') || c.startsWith('SNAPSHOT_') || c === 'MULTIPLE_SNAPSHOTS') return 'vmware';
+  if (
+    c.startsWith('NMS_') ||
+    c.startsWith('SNMP_') ||
+    c.startsWith('PORT_') ||
+    c.startsWith('DEVICE_')
+  ) return 'switch';
+  return 'firewall';
+}
 
 interface ParsedAlarmMessage {
   description: string;
@@ -138,10 +161,12 @@ export default function AlertsDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
   const [filter, setFilter] = useState('all');
+  const [sourceFilter, setSourceFilter] = useState<SourceType>('all');
   const [search, setSearch] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [rawLogExpanded, setRawLogExpanded] = useState(false);
 
   // Cleanup states
   const [cleanupStatsOpen, setCleanupStatsOpen] = useState(false);
@@ -155,6 +180,12 @@ export default function AlertsDashboardPage() {
   // Detail view state
   const [selectedEvent, setSelectedEvent] = useState<AlarmEventData | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  // Policy enrichment for FW_POLICY_CHANGED alarms
+  const [policyData, setPolicyData] = useState<{ host: string; policies: any[]; total: number } | null>(null);
+  const [policyLoading, setPolicyLoading] = useState(false);
+  const [policyError, setPolicyError] = useState<string | null>(null);
+  const [policySearch, setPolicySearch] = useState('');
+  const [policyExpanded, setPolicyExpanded] = useState(false);
   // Discard/Whitelist dialog state
   const [discardOpen, setDiscardOpen] = useState(false);
   const [discardReason, setDiscardReason] = useState('');
@@ -387,7 +418,28 @@ export default function AlertsDashboardPage() {
     }
   };
 
+  const fetchPolicies = async () => {
+    setPolicyLoading(true);
+    setPolicyError(null);
+    setPolicyData(null);
+    try {
+      const res = await fetch('/api/integrations/fortigate?type=cmdb-policies');
+      const data = await res.json();
+      if (data.success) {
+        setPolicyData(data);
+        setPolicyExpanded(true);
+      } else {
+        setPolicyError(data.error || 'Politika listesi alınamadı');
+      }
+    } catch {
+      setPolicyError('Bağlantı hatası');
+    } finally {
+      setPolicyLoading(false);
+    }
+  };
+
   const filteredEvents = events.filter((e: AlarmEventData) => {
+    if (sourceFilter !== 'all' && getAlarmSource(e.alarm?.code || '') !== sourceFilter) return false;
     if (!search) return true;
     const term = search.toLowerCase();
     return (
@@ -476,6 +528,33 @@ export default function AlertsDashboardPage() {
 
       {/* Filter & Search */}
       <div className="flex items-center gap-4 flex-wrap">
+        {/* Source category filter */}
+        <div className="flex gap-2">
+          {(['all', 'firewall', 'switch', 'vmware'] as SourceType[]).map((src) => {
+            const cfg = SOURCE_CONFIG[src];
+            const Icon = cfg.icon;
+            const count = src === 'all'
+              ? events.length
+              : events.filter((e: AlarmEventData) => getAlarmSource(e.alarm?.code || '') === src).length;
+            return (
+              <Button
+                key={src}
+                size="sm"
+                variant={sourceFilter === src ? 'default' : 'outline'}
+                className={sourceFilter === src ? `${cfg.bgActive} text-white border-0` : ''}
+                onClick={() => { setSourceFilter(src); setCurrentPage(1); }}
+              >
+                <Icon className="h-3.5 w-3.5 mr-1.5" />
+                {cfg.label}
+                <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded-full ${
+                  sourceFilter === src ? 'bg-white/20' : 'bg-muted'
+                }`}>{count}</span>
+              </Button>
+            );
+          })}
+        </div>
+
+        {/* Severity filter */}
         <div className="flex gap-2">
           {[
             { key: 'all', label: 'Tumu' },
@@ -485,7 +564,7 @@ export default function AlertsDashboardPage() {
             { key: 'ALARM_MEDIUM', label: 'Orta' },
             { key: 'ALARM_LOW', label: 'Dusuk' },
           ].map((f) => (
-            <Button key={f.key} variant={filter === f.key ? 'default' : 'outline'} size="sm" onClick={() => setFilter(f.key)}>
+            <Button key={f.key} variant={filter === f.key ? 'default' : 'outline'} size="sm" onClick={() => { setFilter(f.key); setCurrentPage(1); }}>
               {f.label}
             </Button>
           ))}
@@ -528,6 +607,7 @@ export default function AlertsDashboardPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="whitespace-nowrap">Zaman</TableHead>
+                    <TableHead className="whitespace-nowrap">Kaynak</TableHead>
                     <TableHead className="whitespace-nowrap">Alarm</TableHead>
                     <TableHead className="whitespace-nowrap">Kategori</TableHead>
                     <TableHead className="whitespace-nowrap">Seviye</TableHead>
@@ -550,6 +630,14 @@ export default function AlertsDashboardPage() {
                             <Clock className="h-3 w-3" />
                             {new Date(event.createdAt).toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' })}
                           </div>
+                        </TableCell>
+                        <TableCell>
+                          {(() => {
+                            const src = getAlarmSource(event.alarm?.code || '');
+                            if (src === 'vmware') return <Badge variant="outline" className="text-xs text-purple-500 border-purple-500/40"><Monitor className="h-3 w-3 mr-1" />VMware</Badge>;
+                            if (src === 'switch') return <Badge variant="outline" className="text-xs text-blue-500 border-blue-500/40"><Router className="h-3 w-3 mr-1" />Switch</Badge>;
+                            return <Badge variant="outline" className="text-xs text-orange-500 border-orange-500/40"><Shield className="h-3 w-3 mr-1" />Firewall</Badge>;
+                          })()}
                         </TableCell>
                         <TableCell>
                           <div className="max-w-md">
@@ -619,6 +707,11 @@ export default function AlertsDashboardPage() {
                               className="h-8 w-8 p-0"
                               onClick={() => {
                                 setSelectedEvent(event);
+                                setRawLogExpanded(false);
+                                setPolicyData(null);
+                                setPolicyError(null);
+                                setPolicySearch('');
+                                setPolicyExpanded(false);
                                 setDetailOpen(true);
                               }}
                               title="Detayları Göster"
@@ -1015,6 +1108,165 @@ export default function AlertsDashboardPage() {
                       <p className="text-sm text-amber-700 dark:text-amber-200">{parsed.recommendedAction}</p>
                     </div>
                   )}
+
+                  {/* Firewall Policy Enrichment — only for FW_POLICY_CHANGED */}
+                  {selectedEvent.alarm?.code === 'FW_POLICY_CHANGED' && (
+                    <section className="rounded-lg border overflow-hidden">
+                      <div className="flex items-center justify-between px-4 py-2.5 bg-orange-50 dark:bg-orange-900/20 border-b">
+                        <div className="flex items-center gap-2">
+                          <Shield className="h-4 w-4 text-orange-500" />
+                          <span className="text-xs font-bold uppercase tracking-widest text-orange-700 dark:text-orange-300">
+                            Firewall Politika Listesi
+                          </span>
+                          {policyData && (
+                            <span className="text-xs text-muted-foreground">({policyData.host} • {policyData.total} politika)</span>
+                          )}
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs"
+                          disabled={policyLoading}
+                          onClick={fetchPolicies}
+                        >
+                          {policyLoading
+                            ? <><RefreshCw className="h-3 w-3 mr-1.5 animate-spin" />Yükleniyor...</>
+                            : policyData
+                            ? <><RefreshCw className="h-3 w-3 mr-1.5" />Yenile</>
+                            : <><Eye className="h-3 w-3 mr-1.5" />Politikaları Getir</>}
+                        </Button>
+                      </div>
+
+                      {policyError && (
+                        <div className="px-4 py-3 text-xs text-red-600 bg-red-50 dark:bg-red-900/20">
+                          <AlertOctagon className="h-3.5 w-3.5 inline mr-1" />{policyError}
+                        </div>
+                      )}
+
+                      {policyData && policyExpanded && (
+                        <div className="p-3 space-y-2">
+                          <Input
+                            placeholder="Politika ara... (ID, isim, kaynak, hedef)"
+                            value={policySearch}
+                            onChange={(e) => setPolicySearch(e.target.value)}
+                            className="h-7 text-xs"
+                          />
+                          <div className="max-h-64 overflow-y-auto">
+                            <table className="w-full text-xs border-collapse">
+                              <thead>
+                                <tr className="bg-muted/40 text-left">
+                                  <th className="px-2 py-1.5 font-semibold border-b">#</th>
+                                  <th className="px-2 py-1.5 font-semibold border-b">Ad</th>
+                                  <th className="px-2 py-1.5 font-semibold border-b">Kaynak Ara./ Adres</th>
+                                  <th className="px-2 py-1.5 font-semibold border-b">Hedef Ara./ Adres</th>
+                                  <th className="px-2 py-1.5 font-semibold border-b">Servis</th>
+                                  <th className="px-2 py-1.5 font-semibold border-b">Aksiyon</th>
+                                  <th className="px-2 py-1.5 font-semibold border-b">Durum</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {policyData.policies
+                                  .filter((p: any) => {
+                                    if (!policySearch) return true;
+                                    const t = policySearch.toLowerCase();
+                                    return (
+                                      String(p.policyid).includes(t) ||
+                                      (p.name || '').toLowerCase().includes(t) ||
+                                      (p.srcintf || []).some((x: any) => x.name?.toLowerCase().includes(t)) ||
+                                      (p.dstintf || []).some((x: any) => x.name?.toLowerCase().includes(t)) ||
+                                      (p.srcaddr || []).some((x: any) => x.name?.toLowerCase().includes(t)) ||
+                                      (p.dstaddr || []).some((x: any) => x.name?.toLowerCase().includes(t)) ||
+                                      (p.service || []).some((x: any) => x.name?.toLowerCase().includes(t))
+                                    );
+                                  })
+                                  .map((p: any) => (
+                                    <tr key={p.policyid} className="border-b hover:bg-muted/10">
+                                      <td className="px-2 py-1.5 font-mono text-muted-foreground">{p.policyid}</td>
+                                      <td className="px-2 py-1.5 max-w-[120px] truncate" title={p.name}>{p.name || <span className="text-muted-foreground italic">isimsiz</span>}</td>
+                                      <td className="px-2 py-1.5">
+                                        <div className="text-[10px] text-muted-foreground">{(p.srcintf || []).map((x: any) => x.name).join(', ')}</div>
+                                        <div>{(p.srcaddr || []).map((x: any) => x.name).join(', ')}</div>
+                                      </td>
+                                      <td className="px-2 py-1.5">
+                                        <div className="text-[10px] text-muted-foreground">{(p.dstintf || []).map((x: any) => x.name).join(', ')}</div>
+                                        <div>{(p.dstaddr || []).map((x: any) => x.name).join(', ')}</div>
+                                      </td>
+                                      <td className="px-2 py-1.5 max-w-[100px] truncate">{(p.service || []).map((x: any) => x.name).join(', ')}</td>
+                                      <td className="px-2 py-1.5">
+                                        <span className={`font-semibold ${
+                                          p.action === 'accept' ? 'text-green-600' : 'text-red-500'
+                                        }`}>{p.action === 'accept' ? '✓ İzin' : '✕ Engel'}</span>
+                                      </td>
+                                      <td className="px-2 py-1.5">
+                                        <span className={p.status === 'enable' ? 'text-green-600' : 'text-muted-foreground'}>
+                                          {p.status === 'enable' ? 'Aktif' : 'Pasif'}
+                                        </span>
+                                      </td>
+                                    </tr>
+                                  ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+                    </section>
+                  )}
+
+                  {/* Ham Log Verisi — expandable */}
+                  {selectedEvent.rawData && selectedEvent.rawData.length > 0 && (() => {
+                    const SKIP_FIELDS = new Set(['_index', 'esequence', 'logflag', 'checksum']);
+                    const logs = selectedEvent.rawData as Array<Record<string, unknown>>;
+                    return (
+                      <section>
+                        <button
+                          type="button"
+                          className="flex items-center gap-2 w-full text-left group"
+                          onClick={() => setRawLogExpanded(v => !v)}
+                        >
+                          {rawLogExpanded
+                            ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                            : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                          <Code2 className="h-3.5 w-3.5 text-muted-foreground" />
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground group-hover:text-foreground transition-colors">
+                            Ham Log Verisi
+                            <span className="ml-2 text-[9px] font-normal normal-case">({logs.length} kayıt)</span>
+                          </p>
+                        </button>
+
+                        {rawLogExpanded && (
+                          <div className="mt-2 space-y-3">
+                            {logs.map((log, logIdx) => {
+                              const entries = Object.entries(log).filter(
+                                ([k, v]) => !SKIP_FIELDS.has(k) && v !== null && v !== undefined && v !== ''
+                              );
+                              if (entries.length === 0) return null;
+                              return (
+                                <div key={logIdx} className="rounded-lg border overflow-hidden">
+                                  {logs.length > 1 && (
+                                    <div className="px-3 py-1.5 bg-muted/40 text-[10px] font-semibold text-muted-foreground border-b">
+                                      Kayıt {logIdx + 1}
+                                    </div>
+                                  )}
+                                  <table className="w-full text-xs">
+                                    <tbody>
+                                      {entries.map(([k, v]) => (
+                                        <tr key={k} className="border-b last:border-0">
+                                          <td className="px-3 py-1.5 font-mono text-muted-foreground bg-muted/20 w-[38%] align-top select-all">{k}</td>
+                                          <td className="px-3 py-1.5 break-all font-mono select-all">
+                                            {typeof v === 'object' ? JSON.stringify(v) : String(v)}
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </section>
+                    );
+                  })()}
 
                   {/* Footer branding */}
                   <div className="text-center text-xs text-muted-foreground pt-3 border-t">

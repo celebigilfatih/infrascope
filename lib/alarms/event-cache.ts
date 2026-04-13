@@ -139,11 +139,13 @@ export class EventCacheService {
     
     // Targeted filters for high-priority alarm types that may get crowded out in general sync
     // NOTE: FA API ignores 'subtype == user' filter (returns 0 TID) — use 'action == auth-logon' directly
+    // NOTE: FA API may also ignore 'action == ssl-login-fail' — 'subtype == vpn' ensures ALL vpn events
+    //       are captured (including ssl-login-fail, ssl-exit-error, ssl-alert, tunnel-up/down, etc.)
     const targetedEventFilters = [
       'action == auth-logon',                           // SSL-VPN user logon events (subtype=user)
       'subtype == system',                              // Config changes: policy, address objects, interfaces, routing, etc.
       'action == login',                                // Admin login attempts (both success and failed) - will filter for failed in-memory
-      'action == ssl-login-fail',                       // SSL-VPN failed login attempts (security-critical)
+      'subtype == vpn',                                 // ALL SSL-VPN events incl. ssl-login-fail, ssl-exit-error, ssl-alert
     ];
 
     const now = new Date();

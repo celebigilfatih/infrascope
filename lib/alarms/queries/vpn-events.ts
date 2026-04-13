@@ -1,11 +1,15 @@
 /**
  * Alarm Query Layer — VPN Threat Events
  *
- * Covers: VPN_BRUTE_FORCE, SSLVPN_LOCKOUT
+ * Covers: VPN_BRUTE_FORCE, SSLVPN_LOCKOUT, SSLVPN_AUTH_FAILED, SSLVPN_MULTI_FAIL
  *
  * Key design notes:
  *  - Brute force detection requires GROUP BY srcIp + COUNT (done by detection engine clientCheck)
  *    This query returns the raw failed-login events; detection engine counts per IP.
+ *  - ssl-login-fail events are the primary auth-failure action from FortiGate SSL-VPN.
+ *  - FA API targeted filter 'action == ssl-login-fail' sometimes returns 0 TID (similar to
+ *    'subtype == user' bug). As a safety net, the cache query also captures ssl-exit-error
+ *    and ssl-alert events which may indicate auth failures.
  *  - All filters use indexed columns where possible (subtype, action) to avoid full table scans.
  */
 
@@ -50,6 +54,53 @@ export async function getVpnBruteForceEvents(ctx: AlarmQueryContext): Promise<Qu
         ctx.timeWindowMinutes
       ),
     { softFallback: true } // Brute force is high-priority — verify via FA if cache empty
+  );
+}
+
+/**
+ * SSLVPN_AUTH_FAILED / SSLVPN_MULTI_FAIL — SSL-VPN authentication failures.
+ *
+ * Primary: action = 'ssl-login-fail'
+ * Fallback: action IN ('ssl-exit-error', 'ssl-alert') where reason != 'warning'
+ *   — FortiAnalyzer may log auth failures under these actions on some firmware versions.
+ *
+ * softFallback: true — auth failures are security-critical, always verify via FA if cache empty.
+ */
+export async function getSslvpnAuthFailedEvents(ctx: AlarmQueryContext): Promise<QueryResult> {
+  const description = 'logtype=event subtype=vpn action=ssl-login-fail (+ ssl-exit-error fallback)';
+
+  return runAlarmQuery(
+    ctx,
+    description,
+    async () => {
+      // Primary: explicit login failures
+      const primary = await queryCache({
+        logtype: 'event',
+        subtype: 'vpn',
+        action: 'ssl-login-fail',
+        eventTime: timeWindow(ctx.timeWindowMinutes),
+      });
+      if (primary.length > 0) return primary;
+
+      // Fallback: ssl-exit-error / ssl-alert events with an identifiable user
+      // FortiAnalyzer may log auth failures under these actions on some firmware versions
+      const [exitErrors, alerts] = await Promise.all([
+        queryCache({ logtype: 'event', subtype: 'vpn', action: 'ssl-exit-error', eventTime: timeWindow(ctx.timeWindowMinutes) }),
+        queryCache({ logtype: 'event', subtype: 'vpn', action: 'ssl-alert',     eventTime: timeWindow(ctx.timeWindowMinutes) }),
+      ]);
+      // Only keep events where user field is a real username (not 'N/A' or empty)
+      return [...exitErrors, ...alerts].filter(
+        (log) => log.user && log.user !== 'N/A' && log.user !== ''
+      );
+    },
+    fa =>
+      queryFortiAnalyzerDirect(
+        fa,
+        'event',
+        'subtype == vpn and action == ssl-login-fail',
+        ctx.timeWindowMinutes
+      ),
+    { softFallback: true }
   );
 }
 
