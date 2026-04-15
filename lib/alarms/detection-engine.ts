@@ -2279,6 +2279,7 @@ export class AlarmDetectionEngine {
       'veeam agent',
       'vcenter',
       'vmware',
+      'com.vmware.vim.eam',  // VMware ESX Agent Manager (automated migrations/operations)
     ];
 
     const userName = (event.userName || '').toLowerCase();
@@ -3712,34 +3713,50 @@ export class AlarmDetectionEngine {
     }
 
     // ── NMS_DEVICE_UNREACHABLE ─────────────────────────────────────────────────
+    // False-positive prevention: require NO health metrics for 3 consecutive
+    // poll windows (~15 min) AND verify the device was previously reporting.
     const unreachableAlarm = nmsAlarms.find(a => a.code === 'NMS_DEVICE_UNREACHABLE');
     if (unreachableAlarm) {
       try {
-        // Devices with polling_enabled=true and no health metric in the last 5 minutes
-        const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
+        // Require 15 minutes of silence (3× default 5-min poll interval)
+        const silenceThresholdMs = 15 * 60 * 1000;
+        const silenceCutoff = new Date(Date.now() - silenceThresholdMs);
+
         const pollingDevices = await (prisma as any).device.findMany({
           where: {
             pollingEnabled: true,
             nmsDeviceId: { not: null },
           },
-          select: { id: true, name: true, nmsDeviceId: true, lastPolledAt: true },
-        }) as Array<{ id: string; name: string; nmsDeviceId: number | null; lastPolledAt: Date | null }>;
+          select: { id: true, name: true, nmsDeviceId: true, managementIp: true, lastPolledAt: true, pollingInterval: true },
+        }) as Array<{ id: string; name: string; nmsDeviceId: number | null; managementIp: string | null; lastPolledAt: Date | null; pollingInterval: number | null }>;
 
         for (const device of pollingDevices) {
           if (!device.nmsDeviceId) continue;
 
-          // Check if we got any health metric recently
+          // If never polled, skip — newly added device
+          if (!device.lastPolledAt) continue;
+
+          // Use device-specific interval if available (default 300s = 5 min)
+          const intervalMs = (device.pollingInterval || 300) * 1000;
+          // Require at least 3 missed intervals before alarming
+          const effectiveThreshold = Math.max(silenceThresholdMs, intervalMs * 3);
+          const effectiveCutoff = new Date(Date.now() - effectiveThreshold);
+
+          // Check if we got any health metric within the threshold window
           const recentMetric = await (prisma as any).nmsHealthMetric.findFirst({
             where: {
               nmsDeviceId: device.nmsDeviceId,
-              collectedAt: { gte: fiveMinAgo },
+              collectedAt: { gte: effectiveCutoff },
             },
           });
 
           if (recentMetric) continue; // Device is reporting fine
 
-          // Also check last_polled_at — if never polled, don't alarm yet
-          if (!device.lastPolledAt) continue;
+          // Additional check: lastPolledAt must also be older than threshold
+          // (NMS agent updates lastPolledAt even on failed polls sometimes)
+          if (device.lastPolledAt && device.lastPolledAt.getTime() > effectiveCutoff.getTime()) {
+            continue; // NMS agent still polling recently — not truly unreachable
+          }
 
           // Cooldown check
           const cooldownMs = unreachableAlarm.cooldownMinutes * 60 * 1000;
@@ -3755,8 +3772,28 @@ export class AlarmDetectionEngine {
             continue;
           }
 
+          // Calculate how long device has been silent
+          const lastMetric = await (prisma as any).nmsHealthMetric.findFirst({
+            where: { nmsDeviceId: device.nmsDeviceId },
+            orderBy: { collectedAt: 'desc' },
+            select: { collectedAt: true },
+          });
+          const silentSinceMs = lastMetric
+            ? Date.now() - new Date(lastMetric.collectedAt).getTime()
+            : Date.now() - new Date(device.lastPolledAt).getTime();
+          const silentMinutes = Math.round(silentSinceMs / 60000);
+
           const title = `Device Unreachable: ${device.name}`;
-          const message = `Device ${device.name} (NMS ID ${device.nmsDeviceId}) has not reported SNMP metrics in the last 5 minutes.`;
+          const message = [
+            `Network device not responding to SNMP queries`,
+            ``,
+            `Cihaz: ${device.name}`,
+            `IP: ${device.managementIp || 'N/A'}`,
+            `Son basarili metrik: ${silentMinutes} dakika once`,
+            `Son poll zamani: ${device.lastPolledAt ? new Date(device.lastPolledAt).toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' }) : 'N/A'}`,
+            ``,
+            `Onerilen Aksiyon: Cihaza SSH/konsol erisimi kontrol edin. SNMP servisinin calistigini dogrulayin. Agdaki erisimi (ping, traceroute) test edin.`,
+          ].join('\n');
 
           const event = await prisma.alarmEvent.create({
             data: {
@@ -3765,15 +3802,20 @@ export class AlarmDetectionEngine {
               title,
               message,
               deviceName: device.name,
+              sourceIp: device.managementIp,
               rawData: {
                 nms_device_id: device.nmsDeviceId,
-                last_polled_at: device.lastPolledAt,
+                management_ip: device.managementIp,
+                last_polled_at: device.lastPolledAt?.toISOString(),
+                last_metric_at: lastMetric?.collectedAt ? new Date(lastMetric.collectedAt).toISOString() : null,
+                silent_minutes: silentMinutes,
+                polling_interval_sec: device.pollingInterval || 300,
                 source: 'nms',
               } as any,
             },
           });
           results.push({ alarmCode: 'NMS_DEVICE_UNREACHABLE', triggered: true, matchCount: 1, events: [{ id: event.id }] });
-          console.log(`[AlarmEngine] NMS DEVICE_UNREACHABLE: ${device.name}`);
+          console.log(`[AlarmEngine] NMS DEVICE_UNREACHABLE: ${device.name} (silent ${silentMinutes}m)`);
         }
       } catch (e) {
         results.push({ alarmCode: 'NMS_DEVICE_UNREACHABLE', triggered: false, matchCount: 0, events: [], error: (e as Error).message });

@@ -19,7 +19,7 @@ import {
 import {
   AlertTriangle, AlertCircle, AlertOctagon, CheckCircle, Clock, RefreshCw,
   Search, Play, Shield, Bell, Trash2, BarChart3, Eye, User, Router, Monitor,
-  ChevronDown, ChevronRight, Code2,
+  ChevronDown, ChevronRight, Code2, MapPin,
 } from 'lucide-react';
 
 interface AlarmEventData {
@@ -43,6 +43,7 @@ interface AlarmEventData {
     name: string;
     category: string;
     description: string | null;
+    source?: string;
   };
 }
 
@@ -79,8 +80,12 @@ const SOURCE_CONFIG: Record<SourceType, { label: string; color: string; bgActive
   vmware:   { label: 'VMware',   color: 'text-purple-500', bgActive: 'bg-purple-600',   icon: Monitor  },
 };
 
-function getAlarmSource(code: string): 'firewall' | 'switch' | 'vmware' {
-  const c = code.toUpperCase();
+function getAlarmSource(alarm?: { code: string; source?: string }): 'firewall' | 'switch' | 'vmware' {
+  // Prefer explicit source from alarm definition
+  if (alarm?.source === 'vmware') return 'vmware';
+  if (alarm?.source === 'fortigate-sslvpn' || alarm?.source === 'fortianalyzer') return 'firewall';
+  // Fall back to code-prefix matching
+  const c = (alarm?.code || '').toUpperCase();
   if (c.startsWith('VM_') || c.startsWith('SNAPSHOT_') || c === 'MULTIPLE_SNAPSHOTS') return 'vmware';
   if (
     c.startsWith('NMS_') ||
@@ -186,6 +191,16 @@ export default function AlertsDashboardPage() {
   const [policyError, setPolicyError] = useState<string | null>(null);
   const [policySearch, setPolicySearch] = useState('');
   const [policyExpanded, setPolicyExpanded] = useState(false);
+  // Address object enrichment for ADDRESS_OBJECT_CHANGED alarms
+  const [addressData, setAddressData] = useState<{ host: string; addresses: any[]; total: number } | null>(null);
+  const [addressLoading, setAddressLoading] = useState(false);
+  const [addressError, setAddressError] = useState<string | null>(null);
+  const [addressSearch, setAddressSearch] = useState('');
+  const [addressExpanded, setAddressExpanded] = useState(false);
+  // Port enrichment for NMS_PORT_DOWN alarms
+  const [portData, setPortData] = useState<{ device: any; port: any; neighbors: any[] } | null>(null);
+  const [portLoading, setPortLoading] = useState(false);
+  const [portError, setPortError] = useState<string | null>(null);
   // Discard/Whitelist dialog state
   const [discardOpen, setDiscardOpen] = useState(false);
   const [discardReason, setDiscardReason] = useState('');
@@ -418,6 +433,67 @@ export default function AlertsDashboardPage() {
     }
   };
 
+  const fetchAddresses = async () => {
+    setAddressLoading(true);
+    setAddressError(null);
+    setAddressData(null);
+    try {
+      const res = await fetch('/api/integrations/fortigate?type=cmdb-addresses');
+      const data = await res.json();
+      if (data.success) {
+        setAddressData(data);
+        setAddressExpanded(true);
+      } else {
+        setAddressError(data.error || 'Adres nesneleri alinamadi');
+      }
+    } catch (err: any) {
+      setAddressError(err.message);
+    } finally {
+      setAddressLoading(false);
+    }
+  };
+
+  const fetchPorts = async () => {
+    setPortLoading(true);
+    setPortError(null);
+    setPortData(null);
+    try {
+      // Extract device name and port name from the alarm message
+      // Format: "Port Down: GigabitEthernet1/0/22 on B_BLOK_KAT_1_POE"
+      const match = selectedEvent?.title.match(/Port Down:\s+(.+?)\s+on\s+(.+)/);
+      if (!match) {
+        setPortError('Could not parse port name from alarm');
+        setPortLoading(false);
+        return;
+      }
+      const portName = match[1].trim();
+      const deviceName = match[2].trim();
+      
+      // Find device ID by name
+      const devRes = await fetch('/api/integrations/nms/devices?enabled=true');
+      const devData = await devRes.json();
+      const device = devData.devices?.find((d: any) => d.name === deviceName);
+      
+      if (!device) {
+        setPortError(`Device "${deviceName}" not found in NMS`);
+        setPortLoading(false);
+        return;
+      }
+
+      const res = await fetch(`/api/integrations/nms/devices/${device.id}/ports/${encodeURIComponent(portName)}`);
+      const data = await res.json();
+      if (data.port) {
+        setPortData(data);
+      } else {
+        setPortError(data.error || 'Port details not found');
+      }
+    } catch (err: any) {
+      setPortError(err.message);
+    } finally {
+      setPortLoading(false);
+    }
+  };
+
   const fetchPolicies = async () => {
     setPolicyLoading(true);
     setPolicyError(null);
@@ -439,7 +515,7 @@ export default function AlertsDashboardPage() {
   };
 
   const filteredEvents = events.filter((e: AlarmEventData) => {
-    if (sourceFilter !== 'all' && getAlarmSource(e.alarm?.code || '') !== sourceFilter) return false;
+    if (sourceFilter !== 'all' && getAlarmSource(e.alarm) !== sourceFilter) return false;
     if (!search) return true;
     const term = search.toLowerCase();
     return (
@@ -535,7 +611,7 @@ export default function AlertsDashboardPage() {
             const Icon = cfg.icon;
             const count = src === 'all'
               ? events.length
-              : events.filter((e: AlarmEventData) => getAlarmSource(e.alarm?.code || '') === src).length;
+              : events.filter((e: AlarmEventData) => getAlarmSource(e.alarm) === src).length;
             return (
               <Button
                 key={src}
@@ -633,7 +709,7 @@ export default function AlertsDashboardPage() {
                         </TableCell>
                         <TableCell>
                           {(() => {
-                            const src = getAlarmSource(event.alarm?.code || '');
+                            const src = getAlarmSource(event.alarm);
                             if (src === 'vmware') return <Badge variant="outline" className="text-xs text-purple-500 border-purple-500/40"><Monitor className="h-3 w-3 mr-1" />VMware</Badge>;
                             if (src === 'switch') return <Badge variant="outline" className="text-xs text-blue-500 border-blue-500/40"><Router className="h-3 w-3 mr-1" />Switch</Badge>;
                             return <Badge variant="outline" className="text-xs text-orange-500 border-orange-500/40"><Shield className="h-3 w-3 mr-1" />Firewall</Badge>;
@@ -1211,6 +1287,260 @@ export default function AlertsDashboardPage() {
                       )}
                     </section>
                   )}
+
+                  {/* Address Object Enrichment — only for ADDRESS_OBJECT_CHANGED */}
+                  {selectedEvent.alarm?.code === 'ADDRESS_OBJECT_CHANGED' && (
+                    <section className="rounded-lg border overflow-hidden">
+                      <div className="flex items-center justify-between px-4 py-2.5 bg-purple-50 dark:bg-purple-900/20 border-b">
+                        <div className="flex items-center gap-2">
+                          <MapPin className="h-4 w-4 text-purple-500" />
+                          <span className="text-xs font-bold uppercase tracking-widest text-purple-700 dark:text-purple-300">
+                            Adres Nesne Listesi
+                          </span>
+                          {addressData && (
+                            <span className="text-xs text-muted-foreground">({addressData.host} • {addressData.total} nesne)</span>
+                          )}
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs"
+                          disabled={addressLoading}
+                          onClick={fetchAddresses}
+                        >
+                          {addressLoading
+                            ? <><RefreshCw className="h-3 w-3 mr-1.5 animate-spin" />Yükleniyor...</>
+                            : addressData
+                            ? <><RefreshCw className="h-3 w-3 mr-1.5" />Yenile</>
+                            : <><Eye className="h-3 w-3 mr-1.5" />Nesneleri Getir</>}
+                        </Button>
+                      </div>
+
+                      {addressError && (
+                        <div className="px-4 py-3 text-xs text-red-600 bg-red-50 dark:bg-red-900/20">
+                          <AlertOctagon className="h-3.5 w-3.5 inline mr-1" />{addressError}
+                        </div>
+                      )}
+
+
+                      {addressData && addressExpanded && (
+                        <div className="p-3 space-y-2">
+                          <Input
+                            placeholder="Adres ara... (isim, IP, subnet, FQDN)"
+                            value={addressSearch}
+                            onChange={(e) => setAddressSearch(e.target.value)}
+                            className="h-7 text-xs"
+                          />
+                          <div className="max-h-64 overflow-y-auto">
+                            <table className="w-full text-xs border-collapse">
+                              <thead>
+                                <tr className="bg-muted/40 text-left">
+                                  <th className="px-2 py-1.5 font-semibold border-b">İsim</th>
+                                  <th className="px-2 py-1.5 font-semibold border-b">Tür</th>
+                                  <th className="px-2 py-1.5 font-semibold border-b">Değer (IP/Subnet/FQDN)</th>
+                                  <th className="px-2 py-1.5 font-semibold border-b">Arayüz</th>
+                                  <th className="px-2 py-1.5 font-semibold border-b">Ülke</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {addressData.addresses
+                                  .filter((a: any) => {
+                                    if (!addressSearch) return true;
+                                    const t = addressSearch.toLowerCase();
+                                    return (
+                                      (a.name || '').toLowerCase().includes(t) ||
+                                      (a.subnet || '').toLowerCase().includes(t) ||
+                                      (a.fqdn || '').toLowerCase().includes(t) ||
+                                      (a.type || '').toLowerCase().includes(t)
+                                    );
+                                  })
+                                  .map((a: any) => (
+                                    <tr key={a.name} className="border-b hover:bg-muted/10">
+                                      <td className="px-2 py-1.5 max-w-[140px] truncate font-medium" title={a.name}>{a.name || <span className="text-muted-foreground italic">isimsiz</span>}</td>
+                                      <td className="px-2 py-1.5">
+                                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase ${
+                                          a.type === 'ipmask' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
+                                          a.type === 'fqdn' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' :
+                                          a.type === 'geography' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300' :
+                                          'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
+                                        }`}>{a.type || '—'}</span>
+                                      </td>
+                                      <td className="px-2 py-1.5 font-mono text-muted-foreground">
+                                        {a.subnet || a.fqdn || <span className="text-muted-foreground italic">—</span>}
+                                      </td>
+                                      <td className="px-2 py-1.5 text-muted-foreground">{a.interface || '—'}</td>
+                                      <td className="px-2 py-1.5 text-muted-foreground">{a.country || '—'}</td>
+                                    </tr>
+                                  ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+                    </section>
+                  )}
+
+                  {/* Port Details Enrichment — only for NMS_PORT_DOWN */}
+                  {selectedEvent.alarm?.code === 'NMS_PORT_DOWN' && (
+                    <section className="rounded-lg border overflow-hidden">
+                      <div className="flex items-center justify-between px-4 py-2.5 bg-sky-50 dark:bg-sky-900/20 border-b">
+                        <div className="flex items-center gap-2">
+                          <Router className="h-4 w-4 text-sky-500" />
+                          <span className="text-xs font-bold uppercase tracking-widest text-sky-700 dark:text-sky-300">
+                            Port Detaylari
+                          </span>
+                          {portData && (
+                            <span className="text-xs text-muted-foreground">({portData.device.name} • {portData.port.interfaceName})</span>
+                          )}
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs"
+                          disabled={portLoading}
+                          onClick={fetchPorts}
+                        >
+                          {portLoading
+                            ? <><RefreshCw className="h-3 w-3 mr-1.5 animate-spin" />Yükleniyor...</>
+                            : portData
+                            ? <><RefreshCw className="h-3 w-3 mr-1.5" />Yenile</>
+                            : <><Eye className="h-3 w-3 mr-1.5" />Port Bilgilerini Getir</>}
+                        </Button>
+                      </div>
+
+                      {portError && (
+                        <div className="px-4 py-3 text-xs text-red-600 bg-red-50 dark:bg-red-900/20">
+                          <AlertOctagon className="h-3.5 w-3.5 inline mr-1" />{portError}
+                        </div>
+                      )}
+
+                      {portData && (
+                        <div className="p-3 space-y-3">
+                          {/* Device Info */}
+                          <div className="grid grid-cols-2 gap-2 text-xs">
+                            <div>
+                              <span className="text-muted-foreground">Cihaz:</span>{' '}
+                              <span className="font-medium">{portData.device.name}</span>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Vendor:</span>{' '}
+                              <span className="font-medium">{portData.device.vendor || '—'}</span>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Management IP:</span>{' '}
+                              <span className="font-mono">{portData.device.managementIp || '—'}</span>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Tip:</span>{' '}
+                              <span>{portData.device.type || '—'}</span>
+                            </div>
+                          </div>
+
+                          {/* Port Status */}
+                          <div className="rounded-md border p-3 bg-muted/30">
+                            <div className="text-xs font-semibold mb-2">Port Durumu</div>
+                            <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+                              <div>
+                                <span className="text-muted-foreground">Port:</span>{' '}
+                                <span className="font-mono font-medium">{portData.port.interfaceName}</span>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground">Admin Status:</span>{' '}
+                                <span className={`font-semibold ${portData.port.adminStatus === 'up' ? 'text-green-600' : 'text-red-500'}`}>
+                                  {portData.port.adminStatus === 'up' ? '✓ UP' : '✕ DOWN'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground">Oper Status:</span>{' '}
+                                <span className={`font-semibold ${portData.port.operStatus === 'up' ? 'text-green-600' : 'text-red-500'}`}>
+                                  {portData.port.operStatus === 'up' ? '✓ UP' : '✕ DOWN'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground">Speed:</span>{' '}
+                                <span className="font-medium">
+                                  {portData.port.speed ? `${(Number(portData.port.speed) / 1000000).toFixed(0)} Mbps` : '—'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground">MTU:</span>{' '}
+                                <span>{portData.port.mtu || '—'}</span>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground">Last Polled:</span>{' '}
+                                <span className="font-mono text-[10px]">
+                                  {portData.port.lastPolledAt ? new Date(portData.port.lastPolledAt).toLocaleString('tr-TR') : '—'}
+                                </span>
+                              </div>
+                              <div className="col-span-2">
+                                <span className="text-muted-foreground">Description:</span>{' '}
+                                <span className="font-medium">{portData.port.description || '—'}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Error Counters */}
+                          <div className="rounded-md border p-3 bg-muted/30">
+                            <div className="text-xs font-semibold mb-2">Hata Sayaçlari</div>
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                              <div className="text-center p-2 rounded bg-red-50 dark:bg-red-900/10">
+                                <div className="text-muted-foreground">In Errors</div>
+                                <div className="font-mono font-semibold text-red-500 text-sm">
+                                  {Number(portData.port.inErrors || 0).toLocaleString()}
+                                </div>
+                              </div>
+                              <div className="text-center p-2 rounded bg-red-50 dark:bg-red-900/10">
+                                <div className="text-muted-foreground">Out Errors</div>
+                                <div className="font-mono font-semibold text-red-500 text-sm">
+                                  {Number(portData.port.outErrors || 0).toLocaleString()}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Traffic Stats */}
+                          <div className="rounded-md border p-3 bg-muted/30">
+                            <div className="text-xs font-semibold mb-2">Trafik Istatistikleri</div>
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                              <div>
+                                <span className="text-muted-foreground">In Octets:</span>{' '}
+                                <span className="font-mono">
+                                  {portData.port.inOctets ? `${(Number(portData.port.inOctets) / 1048576).toFixed(2)} MB` : '—'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground">Out Octets:</span>{' '}
+                                <span className="font-mono">
+                                  {portData.port.outOctets ? `${(Number(portData.port.outOctets) / 1048576).toFixed(2)} MB` : '—'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Topology Neighbors */}
+                          {portData.neighbors && portData.neighbors.length > 0 && (
+                            <div className="rounded-md border p-3 bg-muted/30">
+                              <div className="text-xs font-semibold mb-2">Komşu Cihazlar (LLDP/CDP)</div>
+                              <div className="space-y-1">
+                                {portData.neighbors.map((n: any, i: number) => (
+                                  <div key={i} className="flex items-center gap-2 text-xs">
+                                    <Router className="h-3 w-3 text-muted-foreground" />
+                                    <span className="font-medium">{n.remoteDeviceName}</span>
+                                    <span className="text-muted-foreground">→</span>
+                                    <span className="font-mono text-xs">{n.remoteInterface}</span>
+                                    <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                                      {n.protocol}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </section>
+                  )}
+
 
                   {/* Ham Log Verisi — expandable */}
                   {selectedEvent.rawData && selectedEvent.rawData.length > 0 && (() => {

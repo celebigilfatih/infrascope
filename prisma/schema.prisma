@@ -948,6 +948,7 @@ model AlarmDefinition {
   severity        AlarmSeverity2
   enabled         Boolean       @default(true)
   detectionLogic  Json          // {logtype, filter, threshold, timeWindowMinutes}
+  source          String?        @map("source")  // 'fortianalyzer', 'fortigate-sslvpn', 'vmware'
   cooldownMinutes Int           @default(15)
   notifyEmail     Boolean       @default(true)
   createdAt       DateTime      @default(now())

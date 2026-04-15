@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
         where,
         include: {
           alarm: {
-            select: { code: true, name: true, category: true, description: true },
+            select: { code: true, name: true, category: true, description: true, source: true },
           },
         },
         orderBy: { createdAt: 'desc' },
@@ -59,6 +59,10 @@ export async function GET(request: NextRequest) {
       data: events,
       total,
       stats: severityStats,
+    }, {
+      headers: {
+        'Cache-Control': 'no-store, max-age=0',
+      },
     });
   } catch (error) {
     console.error('[Alarms] GET error:', error);
