@@ -1044,12 +1044,26 @@ export class FortiGateService {
     const fingerprint = this._cmdbSnapshotStore.get(endpoint);
     if (!fingerprint) return null;
 
-    // Return cached response if available, otherwise just signal snapshot exists
+    // Return cached response if available (has full parsed data)
     const cached = this._cmdbResponseCache.get(endpoint);
-    return {
-      timestamp: cached?.ts ?? Date.now(),
-      data: cached?.data ?? [],
-    };
+    if (cached?.data) {
+      return {
+        timestamp: cached.ts,
+        data: cached.data,
+      };
+    }
+
+    // Fallback: parse the fingerprint to recover the data
+    // Fingerprint is JSON.stringify(current), so we can reverse it
+    try {
+      const data = JSON.parse(fingerprint);
+      return {
+        timestamp: Date.now(),
+        data,
+      };
+    } catch {
+      return null;
+    }
   }
 
   /**

@@ -42,6 +42,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
         description: true,
         adminStatus: true,
         operStatus: true,
+        downSince: true,
         speed: true,
         inOctets: true,
         outOctets: true,

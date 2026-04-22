@@ -6,6 +6,7 @@ import { sendAlarmEmail, getEmailStats } from '@/lib/notifications/email';
 import type { AlarmDetectionLogic, CorrelationRule } from './alarm-definitions';
 import { EventCacheService } from './event-cache';
 import { ALARM_QUERY_REGISTRY, BYPASS_CACHE_ALARMS } from './queries';
+import { createDefaultSuppressionEngine, SuppressionEvent } from './suppression-engine';
 
 interface AlarmDef {
   id: string;
@@ -67,9 +68,26 @@ export class AlarmDetectionEngine {
   // Event cache for fast queries (avoids live FortiAnalyzer API calls)
   private eventCache: EventCacheService | null = null;
   private cacheInitialized: boolean = false;
+  
+  // Suppression engine for filtering noisy events
+  private suppressionEngine = createDefaultSuppressionEngine();
 
   constructor(service: FortiAnalyzerService) {
     this.service = service;
+  }
+
+  /**
+   * Get suppression engine for managing rules
+   */
+  getSuppressionEngine() {
+    return this.suppressionEngine;
+  }
+
+  /**
+   * Get suppression statistics
+   */
+  getSuppressionStats() {
+    return this.suppressionEngine.getStats();
   }
 
   /**
@@ -259,6 +277,10 @@ export class AlarmDetectionEngine {
     const results: EvaluationResult[] = [];
 
     try {
+      // Log suppression engine status
+      const suppressionStats = this.getSuppressionStats();
+      console.log(`[AlarmEngine] Suppression engine: ${suppressionStats.enabledRules}/${suppressionStats.totalRules} rules active`);
+
       // Initialize VMware service on first run
       if (!this.vmwareInitialized) {
         await this.initializeVMware();
@@ -1564,20 +1586,52 @@ export class AlarmDetectionEngine {
         const events = await this.vmwareService.fetchEventsByTypes(logic.timeWindowMinutes, [
           'VmMigratedEvent', 'VmMigrationEvent', 'VmRelocatedEvent',
         ]);
-        // Only keep events from Veeam/automation users (ignore manual operations)
-        const filtered = events.filter(evt => this.isTrustedAutomation(evt));
-        if (filtered.length < events.length) {
-          console.log(`[AlarmEngine] VM_MIGRATED: kept ${filtered.length} Veeam/automation event(s), ignored ${events.length - filtered.length} manual`);
+        
+        // Apply suppression engine filtering - track original indices
+        const keptIndices: number[] = [];
+        let suppressedCount = 0;
+        
+        for (let idx = 0; idx < events.length; idx++) {
+          const evt = events[idx];
+          const suppressionEvent: SuppressionEvent = {
+            userName: evt.userName,
+            vmName: evt.vmName,
+            hostName: evt.hostName,
+            eventType: evt.eventType,
+            message: evt.message,
+            source: 'vmware',
+            alarmCode: 'VM_MIGRATED',
+            timestamp: evt.eventTime,
+          };
+          
+          const result = this.suppressionEngine.shouldSuppress(suppressionEvent);
+          if (result.suppressed) {
+            suppressedCount++;
+          } else {
+            keptIndices.push(idx);
+          }
         }
-        vmwareData = filtered.map(evt => ({
-          type: 'vm_event',
-          vmMigrated: true,
-          vmName: evt.vmName,
-          vmId: evt.vmId,
-          userName: evt.userName,
-          eventTime: evt.eventTime,
-          message: evt.message,
-        }));
+        
+        if (suppressedCount > 0) {
+          console.log(`[AlarmEngine] VM_MIGRATED: suppressed ${suppressedCount} event(s) via suppression engine`);
+        }
+        if (keptIndices.length < events.length) {
+          console.log(`[AlarmEngine] VM_MIGRATED: kept ${keptIndices.length} event(s), suppressed ${suppressedCount} event(s)`);
+        }
+        
+        // Map back to original events using indices
+        vmwareData = keptIndices.map(idx => {
+          const evt = events[idx];
+          return {
+            type: 'vm_event',
+            vmMigrated: true,
+            vmName: evt.vmName,
+            vmId: evt.vmId,
+            userName: evt.userName,
+            eventTime: evt.eventTime,
+            message: evt.message,
+          };
+        });
       }
       else if (alarm.code === 'VM_RECONFIGURED') {
         const events = await this.vmwareService.fetchEventsByTypes(logic.timeWindowMinutes, ['VmReconfiguredEvent']);
@@ -3204,6 +3258,55 @@ export class AlarmDetectionEngine {
         return sections.join('\n\n');
       }
 
+      // CMDB diff event (no per-item diffDetails) — e.g. CORE_CONFIG_CHANGE
+      if (firstLog.source === 'fortigate-cmdb-diff') {
+        const endpointLabel = (ep: string): string => {
+          const labels: Record<string, string> = {
+            '/cmdb/firewall/policy':              'Guvenlik Duvari Politikasi',
+            '/cmdb/system/admin':                 'Sistem Yoneticisi',
+            '/cmdb/firewall/vip':                 'Virtual IP (VIP)',
+            '/cmdb/router/static':                'Statik Rota',
+            '/cmdb/vpn.ipsec/phase1-interface':   'IPsec Tunel',
+            '/cmdb/vpn.ssl/settings':             'SSL-VPN Ayarlari',
+            '/cmdb/system/interface':             'Arayuz Konfigurasyonu',
+            '/cmdb/firewall/address':             'Adres Nesnesi',
+            '/cmdb/firewall/addrgrp':             'Adres Grubu',
+            '/cmdb/user/ldap':                    'Kimlik Dogrulama Sunucusu (LDAP)',
+            '/cmdb/system/accprofile':            'Erisim Profili',
+          };
+          return labels[ep] || ep.replace('/cmdb/', '');
+        };
+
+        const changedEps = (firstLog.changedEndpoints as string[] | undefined) || [];
+        const endpoint   = (firstLog.endpoint as string | undefined) || '';
+        const detectedAt = firstLog.detectedAt as string | undefined;
+        const detectedAtStr = detectedAt
+          ? new Date(detectedAt).toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' })
+          : 'N/A';
+
+        const cmdbSections: string[] = [];
+
+        // Header summary
+        const headerLines: string[] = [
+          `Kaynak: FortiGate CMDB Fark Tespiti`,
+          `Tespit Zamani: ${detectedAtStr}`,
+        ];
+        if (firstLog.itemCount) headerLines.push(`Toplam Nesne: ${firstLog.itemCount}`);
+        cmdbSections.push(headerLines.join('\n'));
+
+        // Changed endpoints list
+        if (changedEps.length > 0) {
+          const epList = changedEps.map((ep, i) => `${i + 1}. ${endpointLabel(ep)}`).join('\n');
+          cmdbSections.push(`Degisen Konfigurasyon Alanlari (${changedEps.length}):\n${epList}`);
+        } else if (endpoint) {
+          cmdbSections.push(`Degisen Alan: ${endpointLabel(endpoint)}`);
+        }
+
+        sections.push(cmdbSections.join('\n\n'));
+        sections.push(`Onerilen Aksiyon: ${alarm.detectionLogic.recommendedAction}`);
+        return sections.join('\n\n');
+      }
+
       // Fallback: Original log-based format (for FA log events)
       // Group logs by user for overview
       const userGroups = new Map<string, Array<Record<string, unknown>>>();
@@ -3573,15 +3676,20 @@ export class AlarmDetectionEngine {
     if (nmsAlarms.length === 0) return results;
 
     // ── NMS_PORT_DOWN ─────────────────────────────────────────────────────────
+    // False-positive prevention: only alarm if port has been down for at least
+    // 5 minutes. Brief link flaps (seconds) will not trigger alarms.
     const portDownAlarm = nmsAlarms.find(a => a.code === 'NMS_PORT_DOWN');
     if (portDownAlarm) {
       try {
-        // Find interfaces where admin=up but oper=down, updated in the last 10 minutes
         const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000);
+        const downThresholdMs = 5 * 60 * 1000; // 5 minutes
+
         const downInterfaces = await (prisma as any).nmsInterface.findMany({
           where: {
+            monitored: true,
             adminStatus: 'up',
             operStatus: 'down',
+            operUpSince: { not: null },  // Only alarm if port was ever seen up
             updatedAt: { gte: tenMinAgo },
           },
           include: { device: { select: { id: true, name: true, managementIp: true } } },
@@ -3591,9 +3699,19 @@ export class AlarmDetectionEngine {
         for (const iface of downInterfaces) {
           const deviceName = iface.device?.name ?? `NMS Device ${iface.nmsDeviceId}`;
           const ifaceLabel = iface.description || iface.interfaceName;
-          const title = `Port Down: ${ifaceLabel} on ${deviceName}`;
-          const message = `Interface ${ifaceLabel} (index ${iface.interfaceIndex}) on ${deviceName} is administratively UP but operationally DOWN.`;
 
+          // Check how long the port has been down
+          const downSince = iface.downSince ? new Date(iface.downSince).getTime() : Date.now();
+          const downDurationMs = Date.now() - downSince;
+
+          // Skip if port has been down for less than 5 minutes (brief flap)
+          if (downDurationMs < downThresholdMs) {
+            continue;
+          }
+
+          const downMinutes = Math.round(downDurationMs / 60000);
+          const title = `Port Down: ${ifaceLabel} on ${deviceName}`;
+          const message = `Interface ${ifaceLabel} (index ${iface.interfaceIndex}) on ${deviceName} has been DOWN for ${downMinutes} minutes.`;
           // Cooldown check
           const cooldownMs = portDownAlarm.cooldownMinutes * 60 * 1000;
           const existing = await prisma.alarmEvent.findFirst({
@@ -3622,12 +3740,14 @@ export class AlarmDetectionEngine {
                 description: iface.description,
                 admin_status: iface.adminStatus,
                 oper_status: iface.operStatus,
+                down_since: iface.downSince,
+                down_duration_minutes: downMinutes,
                 source: 'nms',
               } as any,
             },
           });
           results.push({ alarmCode: 'NMS_PORT_DOWN', triggered: true, matchCount: 1, events: [{ id: event.id }] });
-          console.log(`[AlarmEngine] NMS PORT_DOWN: ${ifaceLabel} on ${deviceName}`);
+          console.log(`[AlarmEngine] NMS PORT_DOWN: ${ifaceLabel} on ${deviceName} (down ${downMinutes}m)`);
         }
       } catch (e) {
         results.push({ alarmCode: 'NMS_PORT_DOWN', triggered: false, matchCount: 0, events: [], error: (e as Error).message });

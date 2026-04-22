@@ -1132,6 +1132,9 @@ model NmsInterface {
   description    String?
   adminStatus    String   @map("admin_status")   // "up" | "down"
   operStatus     String   @map("oper_status")    // "up" | "down"
+  downSince      DateTime? @map("down_since")    // When port went down (for duration-based alarm filtering)
+  operUpSince    DateTime? @map("oper_up_since")  // Last time port was seen up (NULL = never; skips NMS_PORT_DOWN alarm)
+  monitored      Boolean  @default(false)          // Only monitored ports generate NMS_PORT_DOWN alarms
   speed          BigInt   @default(0)
   inOctets       BigInt   @default(0) @map("in_octets")
   outOctets      BigInt   @default(0) @map("out_octets")
@@ -1281,4 +1284,5 @@ model NmsBackup {
   @@index([nmsDeviceId])
   @@index([createdAt])
   @@map("nms_backups")
+}
 }

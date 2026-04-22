@@ -2,6 +2,10 @@
 
 All nms_* tables use nms_device_id (Int) as the link to Device,
 NOT device.id (String CUID). The NMS integer ID is the bridge key.
+
+oper_up_since tracking: Records when a port was last seen oper-up.
+Used by the detection engine to distinguish "always been down" from
+"was working, now down" (the latter should generate alarms).
 """
 
 from typing import List, Optional
@@ -91,11 +95,13 @@ class MetricsRepository:
                     INSERT INTO nms_interfaces
                         (id, nms_device_id, interface_index, interface_name, description,
                          admin_status, oper_status, speed, in_octets, out_octets,
-                         in_errors, out_errors, mtu, last_polled_at, created_at, updated_at)
+                         in_errors, out_errors, mtu, down_since, oper_up_since,
+                         last_polled_at, created_at, updated_at)
                     VALUES
                         (:id, :nms_device_id, :interface_index, :interface_name, :description,
                          :admin_status, :oper_status, :speed, :in_octets, :out_octets,
-                         :in_errors, :out_errors, :mtu, :now, :now, :now)
+                         :in_errors, :out_errors, :mtu, :down_since, :oper_up_since,
+                         :now, :now, :now)
                     ON CONFLICT (nms_device_id, interface_index) DO UPDATE SET
                         interface_name = EXCLUDED.interface_name,
                         description = EXCLUDED.description,
@@ -107,6 +113,20 @@ class MetricsRepository:
                         in_errors = EXCLUDED.in_errors,
                         out_errors = EXCLUDED.out_errors,
                         mtu = EXCLUDED.mtu,
+                        down_since = CASE
+                            WHEN nms_interfaces.oper_status = 'up' AND EXCLUDED.oper_status = 'down'
+                                THEN EXCLUDED.last_polled_at
+                            WHEN EXCLUDED.oper_status = 'up'
+                                THEN NULL
+                            WHEN nms_interfaces.down_since IS NULL AND EXCLUDED.oper_status = 'down'
+                                THEN EXCLUDED.last_polled_at
+                            ELSE nms_interfaces.down_since
+                        END,
+                        oper_up_since = CASE
+                            WHEN EXCLUDED.oper_status = 'up'
+                                THEN EXCLUDED.last_polled_at
+                            ELSE nms_interfaces.oper_up_since
+                        END,
                         last_polled_at = EXCLUDED.last_polled_at,
                         updated_at = EXCLUDED.updated_at
                 """),
@@ -124,6 +144,8 @@ class MetricsRepository:
                     "in_errors": in_errors,
                     "out_errors": out_errors,
                     "mtu": mtu,
+                    "down_since": now if oper_status == 'down' else None,
+                    "oper_up_since": now if oper_status == 'up' else None,
                     "now": now,
                 },
             )

@@ -60,6 +60,7 @@ interface DbNmsInterface {
   outErrors: number;
   mtu: number;
   lastPolledAt: string | null;
+  monitored: boolean;
 }
 
 interface DbNmsHealthMetric {
@@ -98,7 +99,9 @@ function getConnectionStatus(device: DbDevice): 'online' | 'offline' | 'disabled
   if (!device.pollingEnabled) return 'disabled';
   if (!device.lastPolledAt) return 'unknown';
   const diffMs = Date.now() - new Date(device.lastPolledAt).getTime();
-  return diffMs < 3 * 60 * 1000 ? 'online' : 'offline';
+  // Allow 2.5x the polling interval as grace period (default 5 min → 12.5 min threshold)
+  const intervalMs = (device.pollingInterval ?? 300) * 1000;
+  return diffMs < intervalMs * 2.5 ? 'online' : 'offline';
 }
 
 function StatCard({ icon: Icon, label, value, color }: { icon: any; label: string; value: string; color: string }) {
@@ -143,6 +146,11 @@ export default function ViewNmsDevicePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [device, setDevice] = useState<DbDevice | null>(null);
+
+  // Port monitoring state
+  const [monitoredIds, setMonitoredIds] = useState<Set<string>>(new Set());
+  const [savingMonitored, setSavingMonitored] = useState(false);
+  const [monitoredDirty, setMonitoredDirty] = useState(false);
 
   const loadBackups = async () => {
     setBackupsLoading(true);
@@ -218,6 +226,8 @@ export default function ViewNmsDevicePage() {
       } else {
         setDevice(data.device);
         setInterfaces(data.interfaces || []);
+        setMonitoredIds(new Set((data.interfaces || []).filter((i: DbNmsInterface) => i.monitored).map((i: DbNmsInterface) => i.id)));
+        setMonitoredDirty(false);
         setHealthMetrics(data.healthMetrics || []);
         setTopologyLinks(data.topologyLinks || []);
       }
@@ -316,6 +326,46 @@ export default function ViewNmsDevicePage() {
 
   const activeInterfaces = interfaces.filter(i => i.operStatus === 'up').length;
   const downInterfaces = interfaces.filter(i => i.adminStatus === 'up' && i.operStatus === 'down').length;
+
+  const toggleMonitored = (id: string) => {
+    setMonitoredIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+    setMonitoredDirty(true);
+  };
+
+  const saveMonitored = async () => {
+    if (!device) return;
+    setSavingMonitored(true);
+    try {
+      // Determine which changed: enable newly monitored, disable removed
+      const original = new Set(interfaces.filter(i => i.monitored).map(i => i.id));
+      const toEnable = interfaces.filter(i => monitoredIds.has(i.id) && !original.has(i.id)).map(i => i.id);
+      const toDisable = interfaces.filter(i => !monitoredIds.has(i.id) && original.has(i.id)).map(i => i.id);
+
+      await Promise.all([
+        ...(toEnable.length > 0 ? [fetch(`/api/integrations/nms/devices/${device.id}/ports/monitored`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ interfaceIds: toEnable, monitored: true }),
+        })] : []),
+        ...(toDisable.length > 0 ? [fetch(`/api/integrations/nms/devices/${device.id}/ports/monitored`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ interfaceIds: toDisable, monitored: false }),
+        })] : []),
+      ]);
+
+      // Update local state to reflect saved
+      setInterfaces(prev => prev.map(i => ({ ...i, monitored: monitoredIds.has(i.id) })));
+      setMonitoredDirty(false);
+    } finally {
+      setSavingMonitored(false);
+    }
+  };
 
   return (
     <div className="p-6 space-y-6">
@@ -577,15 +627,32 @@ export default function ViewNmsDevicePage() {
                     <Plug className="h-4 w-4 text-muted-foreground" />
                     Port / Arayüz Listesi
                   </CardTitle>
-                  <div className="flex gap-3 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
-                      {activeInterfaces} aktif
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-full bg-red-500 inline-block" />
-                      {downInterfaces} kapalı
-                    </span>
+                  <div className="flex items-center gap-4">
+                    <div className="flex gap-3 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
+                        {activeInterfaces} aktif
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-red-500 inline-block" />
+                        {downInterfaces} kapalı
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-orange-500 inline-block" />
+                        {monitoredIds.size} izleniyor
+                      </span>
+                    </div>
+                    {monitoredDirty && (
+                      <Button
+                        size="sm"
+                        className="h-7 text-xs gap-1 bg-orange-500 hover:bg-orange-600 text-white"
+                        onClick={saveMonitored}
+                        disabled={savingMonitored}
+                      >
+                        {savingMonitored ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle className="h-3 w-3" />}
+                        Kaydet
+                      </Button>
+                    )}
                   </div>
                 </div>
               </CardHeader>
@@ -594,6 +661,19 @@ export default function ViewNmsDevicePage() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-border bg-muted/30">
+                        <th className="text-left px-4 py-2.5 text-xs font-medium text-muted-foreground uppercase tracking-wide w-10">
+                          <input
+                            type="checkbox"
+                            className="rounded"
+                            checked={monitoredIds.size === interfaces.filter(i => i.adminStatus === 'up').length}
+                            onChange={(e) => {
+                              const adminUpIds = interfaces.filter(i => i.adminStatus === 'up').map(i => i.id);
+                              setMonitoredIds(e.target.checked ? new Set(adminUpIds) : new Set());
+                              setMonitoredDirty(true);
+                            }}
+                            title="Tüm aktif portları seç"
+                          />
+                        </th>
                         <th className="text-left px-4 py-2.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">Port</th>
                         <th className="text-left px-4 py-2.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">Admin</th>
                         <th className="text-left px-4 py-2.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">Oper</th>
@@ -612,6 +692,10 @@ export default function ViewNmsDevicePage() {
                       {interfaces
                         .slice()
                         .sort((a, b) => {
+                          // Monitored first, then by oper status, then name
+                          const aM = monitoredIds.has(a.id) ? 0 : 1;
+                          const bM = monitoredIds.has(b.id) ? 0 : 1;
+                          if (aM !== bM) return aM - bM;
                           if (a.operStatus === 'up' && b.operStatus !== 'up') return -1;
                           if (a.operStatus !== 'up' && b.operStatus === 'up') return 1;
                           return a.interfaceName.localeCompare(b.interfaceName);
@@ -619,11 +703,26 @@ export default function ViewNmsDevicePage() {
                         .map((iface) => {
                           const totalErrors = (iface.inErrors || 0) + (iface.outErrors || 0);
                           const isUp = iface.operStatus === 'up';
+                          const isMonitored = monitoredIds.has(iface.id);
                           return (
                             <tr key={iface.id} className={`border-b border-border/50 transition-colors ${
+                              isMonitored ? 'bg-orange-500/5 hover:bg-orange-500/10' :
                               isUp ? 'hover:bg-muted/20' : 'opacity-50 hover:bg-muted/10'
                             }`}>
-                              <td className="px-4 py-2.5 font-mono text-xs font-semibold">{iface.interfaceName}</td>
+                              <td className="px-4 py-2.5">
+                                <input
+                                  type="checkbox"
+                                  className="rounded"
+                                  checked={isMonitored}
+                                  onChange={() => toggleMonitored(iface.id)}
+                                />
+                              </td>
+                              <td className="px-4 py-2.5 font-mono text-xs font-semibold">
+                                <span className="flex items-center gap-1.5">
+                                  {isMonitored && <span className="w-1.5 h-1.5 rounded-full bg-orange-500 shrink-0" title="İzleniyor" />}
+                                  {iface.interfaceName}
+                                </span>
+                              </td>
                               <td className="px-4 py-2.5">
                                 <span className={`flex items-center gap-1 text-xs ${iface.adminStatus === 'up' ? 'text-green-500' : 'text-muted-foreground'}`}>
                                   <span className={`w-1.5 h-1.5 rounded-full ${iface.adminStatus === 'up' ? 'bg-green-500' : 'bg-gray-400'}`} />

@@ -391,6 +391,9 @@ export default function AlertsDashboardPage() {
         field = 'user';
       } else if (selectedEvent.destIp && selectedEvent.alarm.code.includes('DNS')) {
         field = 'destIp';
+      } else if (selectedEvent.alarm.code.startsWith('NMS_') || selectedEvent.alarm.code.startsWith('VM_')) {
+        // NMS and VMware alarms use deviceName instead of sourceIp
+        field = 'deviceName';
       }
       
       const value = field === 'sourceIp' ? selectedEvent.sourceIp 
@@ -645,15 +648,19 @@ export default function AlertsDashboardPage() {
             </Button>
           ))}
         </div>
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Alarm ara..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
-        </div>
+
+        {/* Action buttons */}
         {events.some((e: AlarmEventData) => !e.acknowledged) && (
           <Button variant="outline" size="sm" onClick={acknowledgeAll}>
             <CheckCircle className="h-4 w-4 mr-1" /> Tumunu Onayla
           </Button>
         )}
+
+        {/* Search - at the end */}
+        <div className="relative ml-auto max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input placeholder="Alarm ara..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
+        </div>
       </div>
 
       {/* Alarm Events Table */}
@@ -1661,9 +1668,11 @@ export default function AlertsDashboardPage() {
                     let field = 'sourceIp';
                     if (selectedEvent.alarm.code === 'SSLVPN_AUTH_FAILED') field = 'user';
                     else if (selectedEvent.destIp && selectedEvent.alarm.code.includes('DNS')) field = 'destIp';
+                    else if (selectedEvent.alarm.code.startsWith('NMS_') || selectedEvent.alarm.code.startsWith('VM_')) field = 'deviceName';
                     
                     const value = field === 'sourceIp' ? selectedEvent.sourceIp 
                                   : field === 'destIp' ? selectedEvent.destIp 
+                                  : field === 'deviceName' ? selectedEvent.deviceName
                                   : selectedEvent.deviceName || '';
                     return `${field}: ${value || 'N/A'}`;
                   })()}

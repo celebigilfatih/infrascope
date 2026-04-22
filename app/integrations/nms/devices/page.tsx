@@ -101,7 +101,9 @@ export default function NmsDevicesPage() {
     if (!device.pollingEnabled) return 'disabled';
     if (!device.lastPolledAt) return 'unknown';
     const diffMs = Date.now() - new Date(device.lastPolledAt).getTime();
-    return diffMs < 3 * 60 * 1000 ? 'online' : 'offline';
+    // 2.5x polling interval grace period — avoids false offline between polls
+    const intervalMs = (device.pollingInterval ?? 300) * 1000;
+    return diffMs < intervalMs * 2.5 ? 'online' : 'offline';
   };
 
   const statusBadge = (status: string) => {

@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Valid fields
-    const validFields = ['sourceIp', 'destIp', 'user', 'hostname'];
+    const validFields = ['sourceIp', 'destIp', 'user', 'hostname', 'deviceName'];
     if (!validFields.includes(field)) {
       return NextResponse.json(
         { error: `Invalid field. Must be one of: ${validFields.join(', ')}` },

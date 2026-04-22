@@ -76,6 +76,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
         outErrors: true,
         mtu: true,
         lastPolledAt: true,
+        monitored: true,
       },
     });
 
