@@ -1567,10 +1567,10 @@ export class AlarmDetectionEngine {
       // ── VM lifecycle events handled via SOAP ────────────────────────────────
       else if (alarm.code === 'VM_CLONED') {
         const events = await this.vmwareService.fetchEventsByTypes(logic.timeWindowMinutes, ['VmClonedEvent']);
-        // Only keep events from Veeam/automation users (ignore manual operations)
-        const filtered = events.filter(evt => this.isTrustedAutomation(evt));
+        // Exclude automated operations — only fire for manual/admin actions
+        const filtered = events.filter(evt => !this.isTrustedAutomation(evt));
         if (filtered.length < events.length) {
-          console.log(`[AlarmEngine] VM_CLONED: kept ${filtered.length} Veeam/automation event(s), ignored ${events.length - filtered.length} manual`);
+          console.log(`[AlarmEngine] VM_CLONED: excluded ${events.length - filtered.length} Veeam/VMware automation event(s), kept ${filtered.length} manual`);
         }
         vmwareData = filtered.map(evt => ({
           type: 'vm_event',
@@ -1635,10 +1635,10 @@ export class AlarmDetectionEngine {
       }
       else if (alarm.code === 'VM_RECONFIGURED') {
         const events = await this.vmwareService.fetchEventsByTypes(logic.timeWindowMinutes, ['VmReconfiguredEvent']);
-        // Only keep events from Veeam/automation users (ignore manual operations)
-        const filtered = events.filter(evt => this.isTrustedAutomation(evt));
+        // Exclude automated operations — only fire for manual/admin actions
+        const filtered = events.filter(evt => !this.isTrustedAutomation(evt));
         if (filtered.length < events.length) {
-          console.log(`[AlarmEngine] VM_RECONFIGURED: kept ${filtered.length} Veeam/automation event(s), ignored ${events.length - filtered.length} manual`);
+          console.log(`[AlarmEngine] VM_RECONFIGURED: excluded ${events.length - filtered.length} Veeam/VMware automation event(s), kept ${filtered.length} manual`);
         }
         vmwareData = filtered.map(evt => ({
           type: 'vm_event',
@@ -3204,61 +3204,7 @@ export class AlarmDetectionEngine {
       alarm.code === 'AUTH_SERVER_CHANGED' ||
       alarm.code === 'SD_WAN_CHANGED'
     ) {
-      // Check if this is a CMDB diff-based alarm (has diffDetails)
-      const diffDetails = (firstLog as any).diffDetails;
-      if (diffDetails && (diffDetails.added?.length > 0 || diffDetails.removed?.length > 0 || diffDetails.modified?.length > 0)) {
-        // CMDB diff alarm — show detailed changes
-        const cfgSections: string[] = [];
-        
-        cfgSections.push([
-          `Endpoint: ${firstLog.endpoint || 'N/A'}`,
-          `Toplam Obje: ${firstLog.itemCount || 'N/A'}`,
-          `Tespit: ${firstLog.detectedAt || 'N/A'}`,
-        ].filter(Boolean).join('\n'));
-
-        // Added items
-        if (diffDetails.added.length > 0) {
-          const addedList = diffDetails.added.slice(0, 10).map((item: any, idx: number) => {
-            return `${idx + 1}. ${item.name}`;
-          }).join('\n');
-          cfgSections.push(`Yeni Eklenenler (${diffDetails.added.length}):\n${addedList}${
-            diffDetails.added.length > 10 ? `\n... ve ${diffDetails.added.length - 10} tane daha` : ''
-          }`);
-        }
-
-        // Removed items
-        if (diffDetails.removed.length > 0) {
-          const removedList = diffDetails.removed.slice(0, 10).map((item: any, idx: number) => {
-            return `${idx + 1}. ${item.name}`;
-          }).join('\n');
-          cfgSections.push(`Silinenler (${diffDetails.removed.length}):\n${removedList}${
-            diffDetails.removed.length > 10 ? `\n... ve ${diffDetails.removed.length - 10} tane daha` : ''
-          }`);
-        }
-
-        // Modified items
-        if (diffDetails.modified.length > 0) {
-          const modifiedList = diffDetails.modified.slice(0, 5).map((item: any, idx: number) => {
-            const changes = item.changes.slice(0, 3).map((c: any) => {
-              const oldVal = typeof c.oldValue === 'object' ? JSON.stringify(c.oldValue) : c.oldValue;
-              const newVal = typeof c.newValue === 'object' ? JSON.stringify(c.newValue) : c.newValue;
-              return `   - ${c.field}: ${oldVal} -> ${newVal}`;
-            }).join('\n');
-            return `${idx + 1}. ${item.name} (${item.changes.length} degisiklik)\n${changes}${
-              item.changes.length > 3 ? `\n   ... ve ${item.changes.length - 3} degisiklik daha` : ''
-            }`;
-          }).join('\n\n');
-          cfgSections.push(`Degistirilenler (${diffDetails.modified.length}):\n${modifiedList}${
-            diffDetails.modified.length > 5 ? `\n... ve ${diffDetails.modified.length - 5} tane daha` : ''
-          }`);
-        }
-
-        sections.push(cfgSections.join('\n\n'));
-        sections.push(`Onerilen Aksiyon: ${alarm.detectionLogic.recommendedAction}`);
-        return sections.join('\n\n');
-      }
-
-      // CMDB diff event (no per-item diffDetails) — e.g. CORE_CONFIG_CHANGE
+      // ── CMDB Diff alarms — unified handler with rich detail ─────────────
       if (firstLog.source === 'fortigate-cmdb-diff') {
         const endpointLabel = (ep: string): string => {
           const labels: Record<string, string> = {
@@ -3277,30 +3223,81 @@ export class AlarmDetectionEngine {
           return labels[ep] || ep.replace('/cmdb/', '');
         };
 
-        const changedEps = (firstLog.changedEndpoints as string[] | undefined) || [];
-        const endpoint   = (firstLog.endpoint as string | undefined) || '';
-        const detectedAt = firstLog.detectedAt as string | undefined;
+        const endpoint     = firstLog.endpoint as string | undefined;
+        const changedEps   = (firstLog.changedEndpoints as string[] | undefined) || [];
+        const detectedAt   = firstLog.detectedAt as string | undefined;
+        const itemCount    = firstLog.itemCount as number | undefined;
+        const diffDetails  = (firstLog as any).diffDetails;
         const detectedAtStr = detectedAt
           ? new Date(detectedAt).toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' })
           : 'N/A';
 
         const cmdbSections: string[] = [];
 
-        // Header summary
-        const headerLines: string[] = [
-          `Kaynak: FortiGate CMDB Fark Tespiti`,
-          `Tespit Zamani: ${detectedAtStr}`,
-        ];
-        if (firstLog.itemCount) headerLines.push(`Toplam Nesne: ${firstLog.itemCount}`);
+        // ── Header with endpoint + item count ───────────────────────────
+        const headerLines: string[] = [];
+        if (endpoint) {
+          headerLines.push(`Degisen Alan: ${endpointLabel(endpoint)}`);
+        }
+        if (changedEps.length > 0) {
+          headerLines.push(`Degisen Alanlar: ${changedEps.map(ep => endpointLabel(ep)).join(', ')}`);
+        }
+        if (itemCount !== undefined) {
+          headerLines.push(`Toplam Obje: ${itemCount}`);
+        }
+        headerLines.push(`Tespit Zamani: ${detectedAtStr}`);
         cmdbSections.push(headerLines.join('\n'));
 
-        // Changed endpoints list
-        if (changedEps.length > 0) {
-          const epList = changedEps.map((ep, i) => `${i + 1}. ${endpointLabel(ep)}`).join('\n');
-          cmdbSections.push(`Degisen Konfigurasyon Alanlari (${changedEps.length}):\n${epList}`);
-        } else if (endpoint) {
-          cmdbSections.push(`Degisen Alan: ${endpointLabel(endpoint)}`);
+        // ── Detailed diff (added / removed / modified) ──────────────────
+        if (diffDetails && (diffDetails.added?.length > 0 || diffDetails.removed?.length > 0 || diffDetails.modified?.length > 0)) {
+          // Added items
+          if (diffDetails.added.length > 0) {
+            const addedList = diffDetails.added.slice(0, 10).map((item: any, idx: number) => {
+              const name = item.name || item.key || '#N/A';
+              return `${idx + 1}. ${name}`;
+            }).join('\n');
+            cmdbSections.push(`Yeni Eklenenler (${diffDetails.added.length}):\n${addedList}${
+              diffDetails.added.length > 10 ? `\n   ... ve ${diffDetails.added.length - 10} tane daha` : ''
+            }`);
+          }
+
+          // Removed items
+          if (diffDetails.removed.length > 0) {
+            const removedList = diffDetails.removed.slice(0, 10).map((item: any, idx: number) => {
+              const name = item.name || item.key || '#N/A';
+              return `${idx + 1}. ${name}`;
+            }).join('\n');
+            cmdbSections.push(`Silinenler (${diffDetails.removed.length}):\n${removedList}${
+              diffDetails.removed.length > 10 ? `\n   ... ve ${diffDetails.removed.length - 10} tane daha` : ''
+            }`);
+          }
+
+          // Modified items
+          if (diffDetails.modified.length > 0) {
+            const modifiedList = diffDetails.modified.slice(0, 5).map((item: any, idx: number) => {
+              const name = item.name || item.key || '#N/A';
+              const changes = (item.changes || []).slice(0, 3).map((c: any) => {
+                const oldVal = typeof c.oldValue === 'object' ? JSON.stringify(c.oldValue) : String(c.oldValue ?? '-');
+                const newVal = typeof c.newValue === 'object' ? JSON.stringify(c.newValue) : String(c.newValue ?? '-');
+                return `   - ${c.field}: ${oldVal} -> ${newVal}`;
+              }).join('\n');
+              return `${idx + 1}. ${name} (${(item.changes || []).length} degisiklik)\n${changes}${
+                (item.changes || []).length > 3 ? `\n   ... ve ${(item.changes || []).length - 3} degisiklik daha` : ''
+              }`;
+            }).join('\n\n');
+            cmdbSections.push(`Degistirilenler (${diffDetails.modified.length}):\n${modifiedList}${
+              diffDetails.modified.length > 5 ? `\n   ... ve ${diffDetails.modified.length - 5} tane daha` : ''
+            }`);
+          }
+
+          sections.push(cmdbSections.join('\n\n'));
+          sections.push(`Onerilen Aksiyon: ${alarm.detectionLogic.recommendedAction}`);
+          return sections.join('\n\n');
         }
+
+        // ── No per-item diff: endpoint-level change detected ────────────
+        // (Content changed but item-by-item diff produced empty arrays)
+        cmdbSections.push(`Durum: Endpoint iceriginde degisiklik algilandi ancak item-seviyesinde fark bulunamadi.\nOneri: FortiGate Config Revision ile onceki/sonraki durumu karsilastirin.`);
 
         sections.push(cmdbSections.join('\n\n'));
         sections.push(`Onerilen Aksiyon: ${alarm.detectionLogic.recommendedAction}`);
@@ -3838,8 +3835,11 @@ export class AlarmDetectionEngine {
     const unreachableAlarm = nmsAlarms.find(a => a.code === 'NMS_DEVICE_UNREACHABLE');
     if (unreachableAlarm) {
       try {
-        // Require 15 minutes of silence (3× default 5-min poll interval)
-        const silenceThresholdMs = 15 * 60 * 1000;
+        // Require 30 minutes of silence (6× default 5-min poll interval)
+        // Rationale: a single slow poll cycle can take up to ~120s (2 min).
+        // Using 6× intervals gives enough margin to avoid false positives
+        // when the NMS service is momentarily busy or restarting.
+        const silenceThresholdMs = 30 * 60 * 1000;
         const silenceCutoff = new Date(Date.now() - silenceThresholdMs);
 
         const pollingDevices = await (prisma as any).device.findMany({

@@ -15,7 +15,7 @@ Polling architecture:
 
 import time
 import threading
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, wait as futures_wait
 from typing import Dict, Optional
 from datetime import datetime
 
@@ -220,14 +220,20 @@ class NMSOrchestrator:
         polled = 0
         skipped = 0
         max_workers = min(config.snmp.max_concurrent_pollers, len(device_ids))
+        # Maximum time to wait for all device threads in a single cycle.
+        # Prevents a hung SNMP call from blocking the entire poll cycle.
+        MAX_CYCLE_SECONDS = 120
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = {
+            future_map = {
                 executor.submit(self._poll_single_device, did): did
                 for did in device_ids
             }
-            for future in as_completed(futures):
-                did = futures[future]
+            done, not_done = futures_wait(future_map, timeout=MAX_CYCLE_SECONDS)
+
+            # Process completed futures
+            for future in done:
+                did = future_map[future]
                 try:
                     if future.result():
                         polled += 1
@@ -235,6 +241,14 @@ class NMSOrchestrator:
                         skipped += 1
                 except Exception as e:
                     logger.error(f"Thread error for device {did}: {e}")
+
+            # Log timed-out devices
+            for future in not_done:
+                did = future_map[future]
+                device = self.device_map.get(did)
+                name = device.name if device else str(did)
+                logger.warning(f"Poll timeout (>{MAX_CYCLE_SECONDS}s): {name} — skipping this cycle")
+                future.cancel()
 
         elapsed = time.time() - cycle_start
         if polled > 0:

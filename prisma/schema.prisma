@@ -1285,4 +1285,3 @@ model NmsBackup {
   @@index([createdAt])
   @@map("nms_backups")
 }
-}

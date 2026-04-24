@@ -74,10 +74,11 @@ class SNMPSession:
         self.timeout = timeout if timeout is not None else config.snmp.snmp_timeout
         self.retries = retries if retries is not None else config.snmp.snmp_retries
         
-        # Lazy initialization
-        self._engine: Optional[SnmpEngine] = None
-        self._transport: Optional[UdpTransportTarget] = None
+        # NOTE: SnmpEngine is NOT thread-safe. Do NOT share engines across threads.
+        # Each SNMP call creates a fresh engine + transport to avoid thread contention.
+        # (Reusing a shared engine causes 100x slowdowns with ThreadPoolExecutor)
         self._auth: Optional[CommunityData] = None
+        self._auth_initialized = False
     
     def _validate_connectivity(self) -> bool:
         """Test basic connectivity to device (UDP check is limited, so we skip TCP check)"""
@@ -85,34 +86,35 @@ class SNMPSession:
         # We'll let the actual SNMP GET handle the timeout.
         return True
     
-    def _init_snmp_engine(self) -> None:
-        """Initialize SNMP engine and transport"""
-        if self._engine is not None:
-            return
-        
+    def _make_engine_and_transport(self):
+        """Create a fresh SnmpEngine + UdpTransportTarget for each SNMP call.
+
+        pysnmp's SnmpEngine uses asyncio internals that are NOT thread-safe when
+        shared across threads. Creating a fresh engine per call eliminates
+        cross-thread contention and prevents poll cycles from serializing.
+        Returns (engine, transport, auth) tuple.
+        """
         try:
-            self._engine = SnmpEngine()
-            self._transport = UdpTransportTarget(
+            engine = SnmpEngine()
+            transport = UdpTransportTarget(
                 (self.ip_address, self.port),
                 timeout=self.timeout,
-                retries=self.retries
+                retries=self.retries,
             )
-            
-            logger.debug(f"Initializing SNMP engine with version: '{self.version}'")
-            
             if self.version in ["2c", "v2c"]:
-                self._auth = CommunityData(self.community_string)
+                auth = CommunityData(self.community_string)
             else:
-                # TODO: Implement SNMP v3 authentication
                 raise NotImplementedError(f"SNMP version '{self.version}' not yet implemented")
-            
-            logger.debug(
-                f"SNMP engine initialized for {self.device_name} "
-                f"({self.ip_address})"
-            )
+            return engine, transport, auth
+        except NotImplementedError:
+            raise
         except Exception as e:
-            logger.error(f"Failed to initialize SNMP engine: {e}")
+            logger.error(f"Failed to create SNMP engine for {self.device_name}: {e}")
             raise SNMPError(f"SNMP initialization failed: {e}")
+
+    def _init_snmp_engine(self) -> None:
+        """No-op: kept for compatibility. Engines are now created per-call."""
+        pass
     
     def _parse_snmp_value(self, value: Any) -> Any:
         """Convert pysnmp value to native Python type"""
@@ -147,13 +149,13 @@ class SNMPSession:
             )
         
         try:
-            self._init_snmp_engine()
+            engine, transport, auth = self._make_engine_and_transport()
             
             error_indication, error_status, error_index, var_binds = next(
                 getCmd(
-                    self._engine,
-                    self._auth,
-                    self._transport,
+                    engine,
+                    auth,
+                    transport,
                     ContextData(),
                     ObjectType(ObjectIdentity(oid))
                 )
@@ -202,13 +204,13 @@ class SNMPSession:
             )
         
         try:
-            self._init_snmp_engine()
+            engine, transport, auth = self._make_engine_and_transport()
             
             error_indication, error_status, error_index, var_binds = next(
                 getCmd(
-                    self._engine,
-                    self._auth,
-                    self._transport,
+                    engine,
+                    auth,
+                    transport,
                     ContextData(),
                     *[ObjectType(ObjectIdentity(oid)) for oid in oids]
                 )
@@ -262,16 +264,16 @@ class SNMPSession:
         results = {}
         
         try:
-            self._init_snmp_engine()
+            engine, transport, auth = self._make_engine_and_transport()
             
             # Use bulkCmd for efficient walking
             use_bulk = config.snmp.bulk_walk_enabled
             
             if use_bulk:
                 iterator = bulkCmd(
-                    self._engine,
-                    self._auth,
-                    self._transport,
+                    engine,
+                    auth,
+                    transport,
                     ContextData(),
                     0,  # nonRepeaters
                     25,  # maxRepetitions
@@ -279,9 +281,9 @@ class SNMPSession:
                 )
             else:
                 iterator = nextCmd(
-                    self._engine,
-                    self._auth,
-                    self._transport,
+                    engine,
+                    auth,
+                    transport,
                     ContextData(),
                     ObjectType(ObjectIdentity(oid))
                 )
@@ -329,17 +331,8 @@ class SNMPSession:
             return results
     
     def close(self) -> None:
-        """Close SNMP session"""
-        if self._engine:
-            try:
-                self._engine.closeDispatcher()
-                logger.debug(f"SNMP session closed for {self.device_name}")
-            except Exception as e:
-                logger.warning(f"Error closing SNMP session: {e}")
-            finally:
-                self._engine = None
-                self._transport = None
-                self._auth = None
+        """Close SNMP session (no-op: engines are created/destroyed per call)"""
+        pass
     
     def __repr__(self) -> str:
         return (

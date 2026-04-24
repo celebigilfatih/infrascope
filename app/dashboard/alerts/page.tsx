@@ -177,7 +177,7 @@ export default function AlertsDashboardPage() {
   const [cleanupStatsOpen, setCleanupStatsOpen] = useState(false);
   const [cleanupStats, setCleanupStats] = useState<any>(null);
   const [cleanupOpen, setCleanupOpen] = useState(false);
-  const [cleanupDays, setCleanupDays] = useState(7);
+  const [cleanupHours, setCleanupHours] = useState(168); // 7 days default
   const [cleanupAcknowledgedOnly, setCleanupAcknowledgedOnly] = useState(true);
   const [cleanupLoading, setCleanupLoading] = useState(false);
   const [cleanupDryRun, setCleanupDryRun] = useState(true);
@@ -234,7 +234,7 @@ export default function AlertsDashboardPage() {
   // Fetch cleanup statistics
   const fetchCleanupStats = useCallback(async () => {
     try {
-      const res = await fetch(`/api/alarms/cleanup?daysOld=${cleanupDays}`, { method: 'GET' });
+      const res = await fetch(`/api/alarms/cleanup?hoursOld=${cleanupHours}`, { method: 'GET' });
       const data = await res.json();
       if (data.success) {
         setCleanupStats(data.stats);
@@ -242,14 +242,14 @@ export default function AlertsDashboardPage() {
     } catch (err) {
       console.error('Failed to fetch cleanup stats:', err);
     }
-  }, [cleanupDays]);
+  }, [cleanupHours]);
 
   // Run cleanup
   const runCleanup = async () => {
     setCleanupLoading(true);
     try {
       const params = new URLSearchParams({
-        daysOld: cleanupDays.toString(),
+        hoursOld: cleanupHours.toString(),
         acknowledged: cleanupAcknowledgedOnly.toString(),
         dryRun: cleanupDryRun.toString(),
       });
@@ -910,7 +910,7 @@ export default function AlertsDashboardPage() {
                 <p className="text-sm font-medium mb-2">Storage Usage</p>
                 <p className="text-2xl font-bold">{cleanupStats?.estimatedStorageMB || '0'} MB</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {cleanupStats?.percentOld || '0'}% of total alarms are older than {cleanupStats?.daysOld || 7} days
+                  {cleanupStats?.percentOld || '0'}% of total alarms are older than {cleanupStats?.hoursOld < 24 ? `${cleanupStats?.hoursOld} saat` : `${(cleanupStats?.hoursOld ?? 168) / 24} gün`}
                 </p>
               </div>
 
@@ -953,15 +953,35 @@ export default function AlertsDashboardPage() {
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium mb-2">
-                Delete alarms older than (days)
+                Şu kadar süreden eski alarmları sil
               </label>
-              <Input
-                type="number"
-                min="1"
-                max="365"
-                value={cleanupDays}
-                onChange={(e) => setCleanupDays(Math.max(1, parseInt(e.target.value) || 7))}
-              />
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { label: '4 Saat',   hours: 4   },
+                  { label: '12 Saat',  hours: 12  },
+                  { label: '1 Gün',    hours: 24  },
+                  { label: '3 Gün',    hours: 72  },
+                  { label: '7 Gün',    hours: 168 },
+                  { label: '30 Gün',   hours: 720 },
+                  { label: '90 Gün',   hours: 2160 },
+                ].map(({ label, hours }) => (
+                  <button
+                    key={hours}
+                    type="button"
+                    onClick={() => setCleanupHours(hours)}
+                    className={`px-3 py-1.5 rounded text-sm font-medium border transition-colors ${
+                      cleanupHours === hours
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'bg-background text-foreground border-border hover:bg-muted'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                Seçili: <span className="font-medium">{cleanupHours < 24 ? `${cleanupHours} saat` : `${cleanupHours / 24} gün`}</span> öncesi
+              </p>
             </div>
 
             <div className="flex items-center gap-2">

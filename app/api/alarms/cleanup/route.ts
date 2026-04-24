@@ -1,6 +1,7 @@
 /**
  * POST /api/alarms/cleanup - Automatic or manual cleanup of old alarms
  * Query params:
+ *   - hoursOld: number of hours before which alarms should be deleted (takes priority)
  *   - daysOld: number of days before which alarms should be deleted (default: 7)
  *   - acknowledged: boolean - only delete acknowledged alarms (default: true)
  *   - dryRun: boolean - show what would be deleted without actually deleting (default: false)
@@ -12,20 +13,22 @@ import { prisma } from '@/lib/prisma';
 export async function POST(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
+    const hoursOldParam = searchParams.get('hoursOld');
     const daysOld = parseInt(searchParams.get('daysOld') || '7', 10);
+    const totalHours = hoursOldParam != null ? parseInt(hoursOldParam, 10) : daysOld * 24;
     const acknowledgedOnly = searchParams.get('acknowledged') !== 'false';
     const dryRun = searchParams.get('dryRun') === 'true';
 
-    if (daysOld < 1) {
+    if (totalHours < 1) {
       return NextResponse.json(
-        { success: false, error: 'daysOld must be at least 1' },
+        { success: false, error: 'hoursOld must be at least 1' },
         { status: 400 }
       );
     }
 
     // Calculate cutoff date
     const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - daysOld);
+    cutoffDate.setTime(cutoffDate.getTime() - totalHours * 60 * 60 * 1000);
 
     // Build where clause
     const where: Record<string, unknown> = {
@@ -60,7 +63,8 @@ export async function POST(request: NextRequest) {
         wouldDelete: deleteCount,
         sampleAlarms,
         criteria: {
-          daysOld,
+          hoursOld: totalHours,
+          daysOld: totalHours >= 24 ? totalHours / 24 : undefined,
           acknowledgedOnly,
           cutoffDate: cutoffDate.toISOString(),
         },
@@ -86,14 +90,15 @@ export async function POST(request: NextRequest) {
     const deleted = await prisma.alarmEvent.deleteMany({ where });
 
     console.log(
-      `[AlarmCleanup] Deleted ${deleted.count} alarms older than ${daysOld} days`
+      `[AlarmCleanup] Deleted ${deleted.count} alarms older than ${totalHours}h`
     );
 
     return NextResponse.json({
       success: true,
       deleted: deleted.count,
       criteria: {
-        daysOld,
+        hoursOld: totalHours,
+        daysOld: totalHours >= 24 ? totalHours / 24 : undefined,
         acknowledgedOnly,
         cutoffDate: cutoffDate.toISOString(),
       },
@@ -113,10 +118,12 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
+    const hoursOldParam = searchParams.get('hoursOld');
     const daysOld = parseInt(searchParams.get('daysOld') || '7', 10);
+    const totalHours = hoursOldParam != null ? parseInt(hoursOldParam, 10) : daysOld * 24;
 
     const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - daysOld);
+    cutoffDate.setTime(cutoffDate.getTime() - totalHours * 60 * 60 * 1000);
 
     const stats = await Promise.all([
       // Total alarms
@@ -170,7 +177,8 @@ export async function GET(request: NextRequest) {
           severityBreakdown.map((s) => [s.severity, s._count.id])
         ),
         cutoffDate: cutoffDate.toISOString(),
-        daysOld,
+        hoursOld: totalHours,
+        daysOld: totalHours >= 24 ? totalHours / 24 : undefined,
       },
     });
   } catch (error) {
