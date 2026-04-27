@@ -89,8 +89,8 @@ services:
       NMS_ENV: development
       NMS_DEBUG: "false"
       NMS_LOG_LEVEL: INFO
-      SNMP_TIMEOUT: "10"
-      SNMP_RETRIES: "3"
+      SNMP_TIMEOUT: "3"
+      SNMP_RETRIES: "1"
       INTERFACE_POLL_INTERVAL: "30"
       CPU_MEMORY_POLL_INTERVAL: "300"
       INVENTORY_POLL_INTERVAL: "3600"

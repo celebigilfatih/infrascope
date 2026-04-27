@@ -41,6 +41,10 @@ class NMSOrchestrator:
         self.last_device_poll: Dict[int, datetime] = {}  # per-device interval throttle
         self._topo_lock = threading.Lock()       # protects last_topology_poll
         self._last_poll_lock = threading.Lock()  # protects last_device_poll
+        # Persistent thread pool — avoids ThreadPoolExecutor.__exit__ blocking
+        self._executor = ThreadPoolExecutor(
+            max_workers=config.snmp.max_concurrent_pollers,
+        )
         logger.info("NMS Orchestrator initialized (concurrent polling mode)")
 
     def register_devices_from_db(self) -> int:
@@ -204,12 +208,12 @@ class NMSOrchestrator:
             session.close()
 
     def poll_cycle(self) -> None:
-        """Concurrent polling cycle -- all devices polled in parallel via ThreadPoolExecutor.
+        """Concurrent polling cycle -- all devices polled in parallel.
 
-        Benefits over sequential:
-          - A timeout on one device (10s) does NOT block others
-          - All 21 devices complete in ~10s instead of ~50s
-          - Per-device interval ensures each device is only polled when due
+        Uses a persistent ThreadPoolExecutor (no `with` context manager) so that
+        the cycle function can return promptly after MAX_CYCLE_SECONDS without
+        waiting for hung threads to finish.  With subprocess-based SNMP calls,
+        each thread's I/O runs in a child process that honours its own timeout.
         """
         cycle_start = time.time()
         device_ids = list(self.poller.sessions.keys())
@@ -219,43 +223,40 @@ class NMSOrchestrator:
 
         polled = 0
         skipped = 0
-        max_workers = min(config.snmp.max_concurrent_pollers, len(device_ids))
-        # Maximum time to wait for all device threads in a single cycle.
-        # Prevents a hung SNMP call from blocking the entire poll cycle.
-        MAX_CYCLE_SECONDS = 120
+        MAX_CYCLE_SECONDS = 90
 
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_map = {
-                executor.submit(self._poll_single_device, did): did
-                for did in device_ids
-            }
-            done, not_done = futures_wait(future_map, timeout=MAX_CYCLE_SECONDS)
+        future_map = {
+            self._executor.submit(self._poll_single_device, did): did
+            for did in device_ids
+        }
+        done, not_done = futures_wait(future_map, timeout=MAX_CYCLE_SECONDS)
 
-            # Process completed futures
-            for future in done:
-                did = future_map[future]
-                try:
-                    if future.result():
-                        polled += 1
-                    else:
-                        skipped += 1
-                except Exception as e:
-                    logger.error(f"Thread error for device {did}: {e}")
+        # Process completed futures
+        for future in done:
+            did = future_map[future]
+            try:
+                if future.result():
+                    polled += 1
+                else:
+                    skipped += 1
+            except Exception as e:
+                logger.error(f"Thread error for device {did}: {e}")
 
-            # Log timed-out devices
+        # Log timed-out devices (they'll finish in background)
+        if not_done:
+            names = []
             for future in not_done:
                 did = future_map[future]
                 device = self.device_map.get(did)
-                name = device.name if device else str(did)
-                logger.warning(f"Poll timeout (>{MAX_CYCLE_SECONDS}s): {name} — skipping this cycle")
-                future.cancel()
+                names.append(device.name if device else str(did))
+            logger.warning(f"Poll timeout (>{MAX_CYCLE_SECONDS}s): {', '.join(names)}")
 
         elapsed = time.time() - cycle_start
         if polled > 0:
             logger.info(
                 f"Poll cycle done: {polled} polled, {skipped} skipped -- "
                 f"{len(device_ids)} total devices in {elapsed:.2f}s "
-                f"(max_workers={max_workers})"
+                f"(max_workers={self._executor._max_workers})"
             )
 
     def run(self) -> None:
@@ -290,6 +291,7 @@ class NMSOrchestrator:
         """Graceful shutdown"""
         logger.info("Shutting down NMS service")
         try:
+            self._executor.shutdown(wait=False, cancel_futures=True)
             self.poller.close_all()
             db_manager.close()
             logger.info("NMS service shutdown complete")

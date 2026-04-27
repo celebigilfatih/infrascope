@@ -1258,14 +1258,14 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
   {
     code: 'DATASTORE_SPACE_CRITICAL',
     name: 'Datastore Alan Kritik',
-    description: 'Datastore bos alani %5 altina dustu. Acil mudahale gerekli.',
+    description: 'Datastore bos alani %3 altina dustu. Acil mudahale gerekli.',
     category: 'OPERATIONAL',
     severity: 'ALARM_CRITICAL',
-    cooldownMinutes: 15,
+    cooldownMinutes: 60,
     source: 'vmware',
     detectionLogic: {
       logtype: 'vmware',
-      filter: 'datastoreFreePercent < 5',
+      filter: 'datastoreFreePercent < 3',
       threshold: 1,
       timeWindowMinutes: 15,
       description: 'Datastore bos alan yuzdesini izler. %5 altina dustugunde kritik alarm uretir.',

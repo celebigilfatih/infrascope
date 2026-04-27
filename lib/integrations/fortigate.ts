@@ -956,6 +956,7 @@ export class FortiGateService {
   // On first call (no stored snapshot) → isFirstRun=true, alarm does NOT fire.
   // On subsequent calls → changed=true when fingerprint differs.
   private _cmdbSnapshotStore = new Map<string, string>(); // endpoint → fingerprint
+  private _previousCmdbData = new Map<string, any>(); // endpoint → previous actual data (before this cycle's update)
   private _cmdbResponseCache = new Map<string, { ts: number; data: any }>(); // short-lived
   private readonly _cmdbResponseCacheTTL = 90_000; // 90s — covers one full alarm cycle
 
@@ -1000,6 +1001,12 @@ export class FortiGateService {
       const data = await res.json() as { results?: any; [k: string]: any };
       const current: any = data.results ?? data;
 
+      // Preserve previous data BEFORE updating cache — needed for computeArrayDiff
+      const prevCached = this._cmdbResponseCache.get(endpoint);
+      if (prevCached && prevCached.data) {
+        this._previousCmdbData.set(endpoint, prevCached.data);
+      }
+
       // Cache the response
       this._cmdbResponseCache.set(endpoint, { ts: Date.now(), data: current });
 
@@ -1030,6 +1037,13 @@ export class FortiGateService {
    * to ensure fresh data is fetched from FortiGate, not stale cached data.
    */
   clearCmdbResponseCache(): void {
+    // Preserve current cached data as "previous" before clearing
+    // This is needed for computeArrayDiff when a change is detected this cycle
+    for (const [endpoint, cached] of this._cmdbResponseCache) {
+      if (cached?.data) {
+        this._previousCmdbData.set(endpoint, cached.data);
+      }
+    }
     this._cmdbResponseCache.clear();
     // Freeze current snapshots so all alarms in this cycle compare against the same baseline
     this._frozenSnapshots = new Map(this._cmdbSnapshotStore);
@@ -1037,14 +1051,18 @@ export class FortiGateService {
   }
 
   /**
-   * Get CMDB snapshot status for diagnostic purposes.
-   * Returns snapshot info if the endpoint has been queried at least once.
+   * Get CMDB snapshot — returns PREVIOUS data if a change was detected this cycle,
+   * otherwise returns current cached data. Used by computeArrayDiff to compare
+   * old vs new state.
    */
   getCmdbSnapshot(endpoint: string): { timestamp: number; data: any } | null {
-    const fingerprint = this._cmdbSnapshotStore.get(endpoint);
-    if (!fingerprint) return null;
+    // If we have previous data (change was detected this cycle), return it
+    const prevData = this._previousCmdbData.get(endpoint);
+    if (prevData !== undefined) {
+      return { timestamp: Date.now(), data: prevData };
+    }
 
-    // Return cached response if available (has full parsed data)
+    // Otherwise return current cached data
     const cached = this._cmdbResponseCache.get(endpoint);
     if (cached?.data) {
       return {
@@ -1054,7 +1072,8 @@ export class FortiGateService {
     }
 
     // Fallback: parse the fingerprint to recover the data
-    // Fingerprint is JSON.stringify(current), so we can reverse it
+    const fingerprint = this._cmdbSnapshotStore.get(endpoint);
+    if (!fingerprint) return null;
     try {
       const data = JSON.parse(fingerprint);
       return {

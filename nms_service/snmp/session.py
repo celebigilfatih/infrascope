@@ -1,22 +1,18 @@
-"""SNMP device communication engine
+"""SNMP device communication engine — CLI-based (net-snmp)
 
-Provides sync and async-ready SNMP operations with graceful error handling.
+Uses subprocess calls to snmpget / snmpbulkwalk instead of pysnmp.
+This eliminates Python GIL contention and pysnmp internal serialization
+that caused ThreadPoolExecutor poll cycles to run for hours.
+
+Each SNMP call spawns an independent OS process → true parallelism.
 """
 
-import asyncio
-import socket
-from typing import Dict, Optional, Any, List, Tuple
-from datetime import datetime
-from pysnmp.hlapi import (
-    getCmd, nextCmd, bulkCmd,
-    SnmpEngine, UdpTransportTarget,
-    CommunityData, ContextData,
-    ObjectIdentity, ObjectType,
-)
+import re
+import subprocess
+from typing import Dict, Optional, Any, List
 
 from nms_service.core.logger import logger
 from nms_service.core.config import config
-from nms_service.snmp.vendor_oids import oid_manager
 
 
 class SNMPError(Exception):
@@ -40,8 +36,8 @@ class SNMPDeviceUnreachable(SNMPError):
 
 
 class SNMPSession:
-    """Manages SNMP sessions with a single device"""
-    
+    """Manages SNMP sessions with a single device via CLI tools (snmpget/snmpbulkwalk)"""
+
     def __init__(
         self,
         device_id: int,
@@ -53,18 +49,6 @@ class SNMPSession:
         timeout: int = None,
         retries: int = None,
     ):
-        """Initialize SNMP session
-        
-        Args:
-            device_id: Unique device identifier
-            device_name: Human-readable device name
-            ip_address: IP address of SNMP device
-            community_string: SNMP community string (for v2c)
-            version: SNMP version ("2c" or "3")
-            port: SNMP port (default 161)
-            timeout: Request timeout in seconds
-            retries: Number of retries for failed requests
-        """
         self.device_id = device_id
         self.device_name = device_name
         self.ip_address = ip_address
@@ -73,277 +57,201 @@ class SNMPSession:
         self.port = port
         self.timeout = timeout if timeout is not None else config.snmp.snmp_timeout
         self.retries = retries if retries is not None else config.snmp.snmp_retries
-        
-        # NOTE: SnmpEngine is NOT thread-safe. Do NOT share engines across threads.
-        # Each SNMP call creates a fresh engine + transport to avoid thread contention.
-        # (Reusing a shared engine causes 100x slowdowns with ThreadPoolExecutor)
-        self._auth: Optional[CommunityData] = None
-        self._auth_initialized = False
-    
-    def _validate_connectivity(self) -> bool:
-        """Test basic connectivity to device (UDP check is limited, so we skip TCP check)"""
-        # SNMP uses UDP, so TCP connect check is inappropriate and fails on most devices.
-        # We'll let the actual SNMP GET handle the timeout.
-        return True
-    
-    def _make_engine_and_transport(self):
-        """Create a fresh SnmpEngine + UdpTransportTarget for each SNMP call.
 
-        pysnmp's SnmpEngine uses asyncio internals that are NOT thread-safe when
-        shared across threads. Creating a fresh engine per call eliminates
-        cross-thread contention and prevents poll cycles from serializing.
-        Returns (engine, transport, auth) tuple.
-        """
-        try:
-            engine = SnmpEngine()
-            transport = UdpTransportTarget(
-                (self.ip_address, self.port),
-                timeout=self.timeout,
-                retries=self.retries,
-            )
-            if self.version in ["2c", "v2c"]:
-                auth = CommunityData(self.community_string)
-            else:
-                raise NotImplementedError(f"SNMP version '{self.version}' not yet implemented")
-            return engine, transport, auth
-        except NotImplementedError:
-            raise
-        except Exception as e:
-            logger.error(f"Failed to create SNMP engine for {self.device_name}: {e}")
-            raise SNMPError(f"SNMP initialization failed: {e}")
+    # ── helpers ───────────────────────────────────────────────────────────
 
-    def _init_snmp_engine(self) -> None:
-        """No-op: kept for compatibility. Engines are now created per-call."""
-        pass
-    
-    def _parse_snmp_value(self, value: Any) -> Any:
-        """Convert pysnmp value to native Python type"""
-        try:
-            if hasattr(value, 'prettyPrint'):
-                value_str = value.prettyPrint()
-                
-                # Try to convert to numeric types
-                if value_str.isdigit():
-                    return int(value_str)
-                try:
-                    return float(value_str)
-                except ValueError:
-                    return value_str
-            return value
-        except Exception as e:
-            logger.warning(f"Failed to parse SNMP value: {e}")
-            return str(value)
-    
-    def get(self, oid: str) -> Optional[Any]:
-        """Get a single OID value (synchronous)
-        
-        Args:
-            oid: Object identifier to retrieve
-            
-        Returns:
-            Value or None if failed
+    def _subprocess_timeout(self) -> int:
+        """Max wall-clock seconds to wait for a single snmp* subprocess."""
+        return self.timeout * (self.retries + 1) + 5
+
+    def _base_args(self) -> List[str]:
+        """Common CLI flags shared by snmpget / snmpbulkwalk."""
+        ver = "2c" if self.version in ("2c", "v2c") else self.version
+        return [
+            "-v", ver,
+            "-c", self.community_string,
+            "-t", str(self.timeout),
+            "-r", str(self.retries),
+        ]
+
+    @staticmethod
+    def _parse_cli_value(raw: str) -> Any:
+        """Convert a net-snmp quick-print value to a Python type.
+
+        Input examples (with -Oq):
+            "1"
+            "GigabitEthernet0/1"
+            "No Such Object available on this agent at this OID"
+            "No Such Instance currently exists at this OID"
         """
-        if not self._validate_connectivity():
-            raise SNMPDeviceUnreachable(
-                f"Device {self.device_name} ({self.ip_address}) is unreachable"
-            )
-        
-        try:
-            engine, transport, auth = self._make_engine_and_transport()
-            
-            error_indication, error_status, error_index, var_binds = next(
-                getCmd(
-                    engine,
-                    auth,
-                    transport,
-                    ContextData(),
-                    ObjectType(ObjectIdentity(oid))
-                )
-            )
-            
-            if error_indication:
-                logger.error(
-                    f"SNMP get error for {self.device_name}: "
-                    f"{error_indication}"
-                )
-                raise SNMPError(f"SNMP get failed: {error_indication}")
-            
-            if error_status:
-                logger.warning(
-                    f"SNMP error status for {self.device_name}: "
-                    f"{error_status}"
-                )
-                return None
-            
-            # Extract value from response
-            for name, value in var_binds:
-                return self._parse_snmp_value(value)
-            
+        if not raw:
             return None
-            
-        except SNMPDeviceUnreachable:
+        # net-snmp error sentinels
+        if "No Such" in raw or "No more" in raw:
+            return None
+        raw = raw.strip().strip('"')
+        # Try integer
+        if raw.isdigit():
+            return int(raw)
+        try:
+            return int(raw)
+        except ValueError:
+            pass
+        # Try float
+        try:
+            return float(raw)
+        except ValueError:
+            pass
+        return raw
+
+    # ── public API (same interface as the old pysnmp-based session) ───────
+
+    def get(self, oid: str) -> Optional[Any]:
+        """Get a single OID value via snmpget.
+
+        Returns:
+            Parsed value, or None on failure.
+        """
+        cmd = [
+            "snmpget",
+            *self._base_args(),
+            "-Oqv",                         # quick-print, value only
+            f"{self.ip_address}:{self.port}",
+            oid,
+        ]
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=self._subprocess_timeout(),
+            )
+            if result.returncode != 0:
+                stderr = result.stderr.strip()
+                if "Timeout" in stderr:
+                    raise SNMPError(f"SNMP get failed: No SNMP response received before timeout")
+                raise SNMPError(f"SNMP get failed: {stderr}")
+            return self._parse_cli_value(result.stdout.strip())
+        except subprocess.TimeoutExpired:
+            logger.error(f"SNMP get subprocess timeout for {self.device_name}")
+            raise SNMPError(f"SNMP get failed: No SNMP response received before timeout")
+        except SNMPError:
             raise
         except Exception as e:
-            logger.error(
-                f"SNMP get operation failed for {self.device_name}: {e}"
-            )
+            logger.error(f"SNMP get operation failed for {self.device_name}: {e}")
             raise SNMPError(f"SNMP operation failed: {e}")
-    
+
     def get_multiple(self, oids: List[str]) -> Dict[str, Optional[Any]]:
-        """Get multiple OID values in a single request
-        
-        Args:
-            oids: List of OIDs to retrieve
-            
+        """Get multiple OID values in a single snmpget call.
+
         Returns:
-            Dictionary mapping OID to value
+            Dict mapping each requested OID → parsed value (or None).
         """
-        if not self._validate_connectivity():
-            raise SNMPDeviceUnreachable(
-                f"Device {self.device_name} ({self.ip_address}) is unreachable"
-            )
-        
-        try:
-            engine, transport, auth = self._make_engine_and_transport()
-            
-            error_indication, error_status, error_index, var_binds = next(
-                getCmd(
-                    engine,
-                    auth,
-                    transport,
-                    ContextData(),
-                    *[ObjectType(ObjectIdentity(oid)) for oid in oids]
-                )
-            )
-            
-            results = {oid: None for oid in oids}
-            
-            if error_indication:
-                logger.error(
-                    f"SNMP get_multiple error for {self.device_name}: "
-                    f"{error_indication}"
-                )
-                return results
-            
-            if error_status:
-                logger.warning(
-                    f"SNMP error status for {self.device_name}: "
-                    f"{error_status}"
-                )
-                return results
-            
-            # Map values to OIDs
-            for name, value in var_binds:
-                oid_str = str(name)
-                results[oid_str] = self._parse_snmp_value(value)
-            
+        results: Dict[str, Optional[Any]] = {oid: None for oid in oids}
+        if not oids:
             return results
-            
-        except SNMPDeviceUnreachable:
-            raise
-        except Exception as e:
-            logger.error(
-                f"SNMP get_multiple operation failed for {self.device_name}: {e}"
-            )
-            return {oid: None for oid in oids}
-    
-    def walk(self, oid: str) -> Dict[str, Any]:
-        """Walk OID subtree (synchronous bulk operation)
-        
-        Args:
-            oid: Root OID to walk
-            
-        Returns:
-            Dictionary mapping OIDs to values
-        """
-        if not self._validate_connectivity():
-            raise SNMPDeviceUnreachable(
-                f"Device {self.device_name} ({self.ip_address}) is unreachable"
-            )
-        
-        results = {}
-        
+
+        cmd = [
+            "snmpget",
+            *self._base_args(),
+            "-Oqn",                          # quick-print, numeric OIDs
+            f"{self.ip_address}:{self.port}",
+            *oids,
+        ]
         try:
-            engine, transport, auth = self._make_engine_and_transport()
-            
-            # Use bulkCmd for efficient walking
-            use_bulk = config.snmp.bulk_walk_enabled
-            
-            if use_bulk:
-                iterator = bulkCmd(
-                    engine,
-                    auth,
-                    transport,
-                    ContextData(),
-                    0,  # nonRepeaters
-                    25,  # maxRepetitions
-                    ObjectType(ObjectIdentity(oid))
-                )
-            else:
-                iterator = nextCmd(
-                    engine,
-                    auth,
-                    transport,
-                    ContextData(),
-                    ObjectType(ObjectIdentity(oid))
-                )
-            
-            for error_indication, error_status, error_index, var_binds in iterator:
-                if error_indication:
-                    logger.warning(
-                        f"SNMP walk error for {self.device_name}: "
-                        f"{error_indication}"
-                    )
+            proc = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=self._subprocess_timeout(),
+            )
+            if proc.returncode != 0:
+                stderr = proc.stderr.strip()
+                if "Timeout" in stderr:
+                    logger.error(f"SNMP get_multiple timeout for {self.device_name}")
+                return results
+
+            for line in proc.stdout.strip().splitlines():
+                if not line:
+                    continue
+                parts = line.split(" ", 1)
+                if len(parts) < 2:
+                    continue
+                oid_key = parts[0].lstrip(".")
+                val = self._parse_cli_value(parts[1])
+                results[oid_key] = val
+
+        except subprocess.TimeoutExpired:
+            logger.error(f"SNMP get_multiple subprocess timeout for {self.device_name}")
+        except Exception as e:
+            logger.error(f"SNMP get_multiple failed for {self.device_name}: {e}")
+
+        return results
+
+    def walk(self, oid: str) -> Dict[str, Any]:
+        """Walk OID subtree via snmpbulkwalk.
+
+        Returns:
+            Dict mapping full numeric OIDs → parsed values.
+        """
+        cmd = [
+            "snmpbulkwalk",
+            *self._base_args(),
+            "-Oqn",                          # quick-print, numeric OIDs
+            "-Cr25",                         # max-repetitions 25
+            f"{self.ip_address}:{self.port}",
+            oid,
+        ]
+        results: Dict[str, Any] = {}
+        try:
+            proc = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=self._subprocess_timeout(),
+            )
+            if proc.returncode != 0:
+                stderr = proc.stderr.strip()
+                if "Timeout" in stderr:
+                    logger.warning(f"SNMP walk error for {self.device_name}: No SNMP response received before timeout")
+                return results
+
+            for line in proc.stdout.strip().splitlines():
+                if not line:
+                    continue
+                parts = line.split(" ", 1)
+                if len(parts) < 2:
+                    continue
+                oid_key = parts[0].lstrip(".")
+                # Stop if we've walked past the requested subtree
+                if not oid_key.startswith(oid):
                     break
-                
-                if error_status:
-                    logger.warning(
-                        f"SNMP error status during walk for {self.device_name}: "
-                        f"{error_status}"
-                    )
-                    break
-                
-                stop_walk = False
-                for name, value in var_binds:
-                    oid_str = str(name)
-                    # Check if we are still within the requested OID subtree
-                    if not oid_str.startswith(oid):
-                        stop_walk = True
-                        break
-                    results[oid_str] = self._parse_snmp_value(value)
-                
-                if stop_walk:
-                    break
-            
+                results[oid_key] = self._parse_cli_value(parts[1])
+
             logger.debug(
                 f"SNMP walk completed for {self.device_name}, "
                 f"collected {len(results)} OIDs"
             )
-            
-            return results
-            
-        except SNMPDeviceUnreachable:
-            raise
+
+        except subprocess.TimeoutExpired:
+            logger.warning(f"SNMP walk error for {self.device_name}: No SNMP response received before timeout")
         except Exception as e:
-            logger.error(
-                f"SNMP walk operation failed for {self.device_name}: {e}"
-            )
-            return results
-    
+            logger.error(f"SNMP walk operation failed for {self.device_name}: {e}")
+
+        return results
+
     def close(self) -> None:
-        """Close SNMP session (no-op: engines are created/destroyed per call)"""
+        """No-op: CLI sessions have no persistent state."""
         pass
-    
+
     def __repr__(self) -> str:
         return (
             f"SNMPSession(device_id={self.device_id}, "
             f"name={self.device_name}, ip={self.ip_address})"
         )
-    
+
     def __enter__(self):
-        """Context manager entry"""
         return self
-    
+
     def __exit__(self, exc_type, exc_val, exc_tb):
-        """Context manager exit"""
         self.close()

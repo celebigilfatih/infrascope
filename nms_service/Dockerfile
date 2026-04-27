@@ -2,11 +2,12 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# System deps for pysnmp and paramiko
+# System deps for SNMP CLI tools and paramiko
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libffi-dev \
     libssl-dev \
+    snmp \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies

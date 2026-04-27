@@ -90,9 +90,22 @@ async function cmdbDiff(
   const fgService = getFortiGateService();
   const previousSnapshot = fgService?.getCmdbSnapshot(endpoint);
   
+  // Extract the actual items array — previous snapshot may be wrapped in API response
+  const prevData = previousSnapshot?.data;
+  const prevItems = Array.isArray(prevData)
+    ? prevData
+    : (prevData?.results && Array.isArray(prevData.results) ? prevData.results : null);
+  const currItems = Array.isArray(current)
+    ? current
+    : (current?.results && Array.isArray(current.results) ? current.results : null);
+  
   let diffDetails: any = null;
-  if (previousSnapshot && Array.isArray(previousSnapshot.data) && Array.isArray(current)) {
-    diffDetails = computeArrayDiff(previousSnapshot.data, current);
+  if (prevItems && currItems) {
+    console.log(`[AlarmQuery] ${ctx.alarmCode}: computing diff — prev: ${prevItems.length} items, curr: ${currItems.length} items`);
+    diffDetails = computeArrayDiff(prevItems, currItems);
+    console.log(`[AlarmQuery] ${ctx.alarmCode}: diff result — added: ${diffDetails.added.length}, removed: ${diffDetails.removed.length}, modified: ${diffDetails.modified.length}`);
+  } else {
+    console.warn(`[AlarmQuery] ${ctx.alarmCode}: cannot compute diff — prevItems: ${!!prevItems}, currItems: ${!!currItems}, prev type: ${typeof prevData}, curr type: ${typeof current}`);
   }
 
   return {
