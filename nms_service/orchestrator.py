@@ -22,6 +22,7 @@ from datetime import datetime
 from nms_service.core.logger import logger
 from nms_service.core.config import config
 from nms_service.snmp.poller import SNMPPoller, DeviceConfig
+from nms_service.ssh.poller import SSHPoller, SSHDeviceConfig
 from nms_service.database.models import db_manager, Device
 from nms_service.database.repository import (
     DeviceRepository,
@@ -35,6 +36,12 @@ class NMSOrchestrator:
 
     def __init__(self):
         self.poller = SNMPPoller()
+        self.ssh_poller = SSHPoller()
+        # Set default SSH credentials from environment
+        ssh_username = getattr(config, 'ssh_username', 'admin')
+        ssh_password = getattr(config, 'ssh_password', 'admin')
+        if ssh_username and ssh_password:
+            self.ssh_poller.set_default_credentials(ssh_username, ssh_password)
         # nms_device_id (int) -> Device record
         self.device_map: Dict[int, Device] = {}
         self.last_topology_poll: Dict[int, datetime] = {}
@@ -45,7 +52,7 @@ class NMSOrchestrator:
         self._executor = ThreadPoolExecutor(
             max_workers=config.snmp.max_concurrent_pollers,
         )
-        logger.info("NMS Orchestrator initialized (concurrent polling mode)")
+        logger.info("NMS Orchestrator initialized (concurrent polling mode with SSH fallback)")
 
     def register_devices_from_db(self) -> int:
         """Load polling-enabled devices from InfraScope DB.
@@ -53,6 +60,7 @@ class NMSOrchestrator:
         Queries devices WHERE nms_device_id IS NOT NULL AND polling_enabled = TRUE.
         Uses management_ip as the SNMP target and nms_device_id as the poller integer ID.
         Re-called every cycle to pick up newly added devices automatically.
+        Also registers devices for SSH polling as fallback.
         """
         try:
             session = db_manager.get_session()
@@ -67,6 +75,7 @@ class NMSOrchestrator:
                 # Detect vendor from device name for OID selection
                 vendor = self._detect_vendor(device.name)
 
+                # Register for SNMP polling
                 device_cfg = DeviceConfig(
                     device_id=device.nms_device_id,
                     device_name=device.name,
@@ -78,11 +87,25 @@ class NMSOrchestrator:
                     enabled=device.polling_enabled,
                 )
                 self.poller.register_device(device_cfg)
+                
+                # Register for SSH polling (fallback)
+                ssh_cfg = SSHDeviceConfig(
+                    device_id=device.nms_device_id,
+                    device_name=device.name,
+                    ip_address=device.management_ip,
+                    username=device.ssh_username or "admin",
+                    password=device.ssh_password or "",
+                    port=device.ssh_port or 22,
+                    vendor=vendor,
+                    enabled=device.polling_enabled,
+                )
+                self.ssh_poller.register_device(ssh_cfg)
+                
                 self.device_map[device.nms_device_id] = device
                 count += 1
 
             session.close()
-            logger.info(f"Registered {count} polling-enabled devices from InfraScope DB")
+            logger.info(f"Registered {count} polling-enabled devices from InfraScope DB (SNMP + SSH)")
             return count
 
         except Exception as e:
@@ -104,13 +127,16 @@ class NMSOrchestrator:
         """Poll one device in a thread-pool worker.
 
         Each call gets its own DB session (SQLAlchemy sessions are NOT thread-safe).
+        Tries SNMP first, falls back to SSH if SNMP fails.
         Returns True if device was polled, False if skipped (interval not yet reached).
         """
         snmp_session = self.poller.sessions.get(nms_device_id)
-        if not snmp_session:
+        ssh_session = self.ssh_poller.sessions.get(nms_device_id)
+        
+        if not snmp_session and not ssh_session:
             return False
 
-        device_name = snmp_session.device_name
+        device_name = snmp_session.device_name if snmp_session else (ssh_session.device_name if ssh_session else "Unknown")
         device = self.device_map.get(nms_device_id)
         polling_interval = (device.polling_interval or 300) if device else 300
 
@@ -129,43 +155,83 @@ class NMSOrchestrator:
             metrics_repo = MetricsRepository(session)
             device_repo = DeviceRepository(session)
 
-            # -- Interface polling ---------------------------------------------------
-            try:
-                interfaces = self.poller.poll_interfaces(nms_device_id)
-                if interfaces:
-                    for iface in interfaces:
-                        metrics_repo.save_interface_metrics(
-                            nms_device_id=nms_device_id,
-                            interface_index=iface.interface_index,
-                            interface_name=iface.interface_name,
-                            description=iface.description,
-                            admin_status=iface.admin_status,
-                            oper_status=iface.oper_status,
-                            speed=iface.speed,
-                            in_octets=iface.in_octets,
-                            out_octets=iface.out_octets,
-                            in_errors=iface.in_errors,
-                            out_errors=iface.out_errors,
-                            mtu=iface.mtu,
-                        )
-                    logger.info(f"Found {len(interfaces)} interface indices for {device_name}")
-            except Exception as e:
-                logger.error(f"Interface poll failed for {device_name}: {e}")
-
-            # -- Health polling ------------------------------------------------------
-            try:
-                vendor = self._detect_vendor(device.name) if device else "generic"
-                health = self.poller.poll_device_health(nms_device_id, vendor)
-                if health:
-                    metrics_repo.save_health_metrics(
+            # -- Interface polling (SNMP first, then SSH fallback) -------------------
+            interfaces = []
+            snmp_failed = False
+            
+            if snmp_session:
+                try:
+                    interfaces = self.poller.poll_interfaces(nms_device_id)
+                    if interfaces:
+                        logger.info(f"SNMP: Found {len(interfaces)} interfaces for {device_name}")
+                    else:
+                        # SNMP returned empty list - likely timeout/unreachable
+                        logger.warning(f"SNMP returned no interfaces for {device_name}, trying SSH")
+                        snmp_failed = True
+                except Exception as e:
+                    logger.warning(f"SNMP interface poll failed for {device_name}: {e}")
+                    snmp_failed = True
+            
+            # SSH fallback if SNMP failed or not available
+            if (snmp_failed or not snmp_session) and ssh_session:
+                try:
+                    interfaces = self.ssh_poller.poll_interfaces(nms_device_id)
+                    if interfaces:
+                        logger.info(f"SSH: Found {len(interfaces)} interfaces for {device_name}")
+                except Exception as e:
+                    logger.error(f"SSH interface poll failed for {device_name}: {e}")
+            
+            # Save interfaces
+            if interfaces:
+                for iface in interfaces:
+                    metrics_repo.save_interface_metrics(
                         nms_device_id=nms_device_id,
-                        uptime_seconds=health.uptime_seconds,
-                        cpu_usage=health.cpu_usage,
-                        memory_usage=health.memory_usage,
-                        temperature=health.temperature,
+                        interface_index=iface.interface_index,
+                        interface_name=iface.interface_name,
+                        description=iface.description,
+                        admin_status=iface.admin_status,
+                        oper_status=iface.oper_status,
+                        speed=iface.speed,
+                        in_octets=iface.in_octets,
+                        out_octets=iface.out_octets,
+                        in_errors=iface.in_errors,
+                        out_errors=iface.out_errors,
+                        mtu=iface.mtu,
                     )
-            except Exception as e:
-                logger.error(f"Health poll failed for {device_name}: {e}")
+
+            # -- Health polling (SNMP first, then SSH fallback) ----------------------
+            health = None
+            snmp_health_failed = False
+            
+            if snmp_session:
+                try:
+                    vendor = self._detect_vendor(device.name) if device else "generic"
+                    health = self.poller.poll_device_health(nms_device_id, vendor)
+                    if health:
+                        logger.info(f"SNMP: Polled health for {device_name}")
+                except Exception as e:
+                    logger.warning(f"SNMP health poll failed for {device_name}: {e}")
+                    snmp_health_failed = True
+            
+            # SSH fallback if SNMP failed or not available
+            if (snmp_health_failed or not snmp_session or not health) and ssh_session:
+                try:
+                    vendor = self._detect_vendor(device.name) if device else "generic"
+                    health = self.ssh_poller.poll_device_health(nms_device_id, vendor)
+                    if health:
+                        logger.info(f"SSH: Polled health for {device_name}")
+                except Exception as e:
+                    logger.error(f"SSH health poll failed for {device_name}: {e}")
+            
+            # Save health
+            if health:
+                metrics_repo.save_health_metrics(
+                    nms_device_id=nms_device_id,
+                    uptime_seconds=health.uptime_seconds,
+                    cpu_usage=health.cpu_usage,
+                    memory_usage=health.memory_usage,
+                    temperature=health.temperature,
+                )
 
             # -- Topology polling (throttled -- 1 hour by default) -------------------
             with self._topo_lock:

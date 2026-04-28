@@ -294,7 +294,7 @@ export const Sidebar: React.FC = () => {
                     asChild
                     title={isCollapsed ? item.name : undefined}
                   >
-                    <Link href={item.href}>
+                    <Link href={item.href} prefetch={true}>
                       <div className={cn("flex items-center", isCollapsed ? "justify-center" : "gap-3")}>
                         <Icon className={cn(
                           "h-4 w-4 shrink-0 transition-all", 
@@ -345,7 +345,7 @@ export const Sidebar: React.FC = () => {
                             )}
                             asChild
                           >
-                            <Link href={child.href}>
+                            <Link href={child.href} prefetch={true}>
                               <ChildIcon className="h-3.5 w-3.5 shrink-0 mr-2" />
                               {child.name}
                             </Link>

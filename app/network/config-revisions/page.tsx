@@ -25,8 +25,17 @@ import {
   Shield,
   Server,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Eye,
+  X
 } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 
 interface AdminLog {
   id?: string;
@@ -59,6 +68,7 @@ export default function ConfigRevisionsPage() {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedLog, setSelectedLog] = useState<AdminLog | null>(null);
 
   useEffect(() => {
     fetchAdminLogs();
@@ -73,8 +83,8 @@ export default function ConfigRevisionsPage() {
       const response = await fetch('/api/integrations/fortianalyzer?type=config-revisions');
       const result = await response.json();
       if (result.success && Array.isArray(result.data)) {
-        // Exclude siem service account — automated log collection noise
-        const EXCLUDED_USERS = ['siem'];
+        // Exclude service accounts — automated log collection noise
+        const EXCLUDED_USERS = ['siem', 'fgtinfra'];
         setLogs(result.data.filter((log: AdminLog) =>
           !EXCLUDED_USERS.includes((log.user || '').toLowerCase())
         ));
@@ -245,12 +255,13 @@ export default function ConfigRevisionsPage() {
                     <TableHead>Kaynak IP</TableHead>
                     <TableHead>Cihaz</TableHead>
                     <TableHead>Seviye</TableHead>
+                    <TableHead className="w-16"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {paginatedLogs.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Admin logu bulunamadı</TableCell>
+                      <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Admin logu bulunamadı</TableCell>
                     </TableRow>
                   ) : (
                     paginatedLogs.map((log, idx) => (
@@ -272,6 +283,16 @@ export default function ConfigRevisionsPage() {
                         <TableCell className="text-xs font-mono">{log.srcip || '-'}</TableCell>
                         <TableCell className="text-xs">{log.devname || '-'}</TableCell>
                         <TableCell>{getLevelBadge(log.level)}</TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => setSelectedLog(log)}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     ))
                   )}
@@ -290,6 +311,128 @@ export default function ConfigRevisionsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Detail Dialog */}
+      <Dialog open={!!selectedLog} onOpenChange={() => setSelectedLog(null)}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Shield className="h-5 w-5" />
+              Log Detayı
+            </DialogTitle>
+            <DialogDescription>
+              {selectedLog?.date} {selectedLog?.time}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedLog && (
+            <div className="space-y-4">
+              {/* Basic Info */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Admin Kullanıcısı</label>
+                  <div className="flex items-center gap-2">
+                    {getActionIcon(selectedLog.action)}
+                    <span className="font-medium">{selectedLog.user || '-'}</span>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">İşlem</label>
+                  <div>{getActionBadge(selectedLog.action)}</div>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Kaynak IP</label>
+                  <p className="font-mono text-sm">{selectedLog.srcip || '-'}</p>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Hedef IP</label>
+                  <p className="font-mono text-sm">{selectedLog.dstip || '-'}</p>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Cihaz</label>
+                  <p className="text-sm">{selectedLog.devname || '-'}</p>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Cihaz ID</label>
+                  <p className="font-mono text-xs">{selectedLog.devid || '-'}</p>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Arayüz</label>
+                  <p className="text-sm">{selectedLog.ui || '-'}</p>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Metod</label>
+                  <p className="text-sm">{selectedLog.method || '-'}</p>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Seviye</label>
+                  <div>{getLevelBadge(selectedLog.level)}</div>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Durum</label>
+                  <p className="text-sm">{selectedLog.status || '-'}</p>
+                </div>
+              </div>
+
+              {/* Message */}
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">Açıklama (Message)</label>
+                <div className="bg-muted/50 p-3 rounded-lg text-sm whitespace-pre-wrap break-all">
+                  {decodeMsg(selectedLog.msg)}
+                </div>
+              </div>
+
+              {/* Log Description */}
+              {selectedLog.logdesc && (
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Log Açıklaması</label>
+                  <p className="text-sm">{selectedLog.logdesc}</p>
+                </div>
+              )}
+
+              {/* Config Path */}
+              {selectedLog.cfgpath && (
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Konfigürasyon Yolu</label>
+                  <p className="font-mono text-xs bg-muted/50 p-2 rounded">{selectedLog.cfgpath}</p>
+                </div>
+              )}
+
+              {/* Config Attribute */}
+              {selectedLog.cfgattr && (
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Konfigürasyon Attribute</label>
+                  <p className="font-mono text-xs bg-muted/50 p-2 rounded">{selectedLog.cfgattr}</p>
+                </div>
+              )}
+
+              {/* Config Object */}
+              {selectedLog.cfgobj && (
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Konfigürasyon Objesi</label>
+                  <p className="font-mono text-xs bg-muted/50 p-2 rounded">{selectedLog.cfgobj}</p>
+                </div>
+              )}
+
+              {/* Profile */}
+              {selectedLog.profile && (
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Profil</label>
+                  <p className="text-sm">{selectedLog.profile}</p>
+                </div>
+              )}
+
+              {/* Reason */}
+              {selectedLog.reason && (
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Sebep</label>
+                  <p className="text-sm">{selectedLog.reason}</p>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

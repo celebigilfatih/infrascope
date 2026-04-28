@@ -39,6 +39,15 @@ class SNMPConfig:
 
 
 @dataclass
+class SSHConfig:
+    """SSH global configuration"""
+    ssh_username: str = "admin"
+    ssh_password: str = "admin"
+    ssh_timeout: int = 10
+    ssh_port: int = 22
+
+
+@dataclass
 class PollingConfig:
     """Polling interval configuration"""
     interface_poll_interval: int = 30      # seconds
@@ -105,6 +114,12 @@ class Config:
             snmp_retries=int(os.getenv("SNMP_RETRIES", "3")),
             max_concurrent_pollers=int(os.getenv("MAX_CONCURRENT_POLLERS", "20")),
         )
+
+        # SSH
+        self.ssh_username = os.getenv("SSH_USERNAME", "buski")
+        self.ssh_password = os.getenv("SSH_PASSWORD", "bbs*2018")
+        self.ssh_timeout = int(os.getenv("SSH_TIMEOUT", "10"))
+        self.ssh_port = int(os.getenv("SSH_PORT", "22"))
 
         # Polling intervals
         self.polling = PollingConfig(

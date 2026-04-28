@@ -71,31 +71,17 @@ export function NavigationProgress() {
 
   return (
     <>
-      {/* Top progress bar */}
+      {/* Top progress bar - simplified */}
       <div 
         className={cn(
-          "fixed top-0 left-0 right-0 h-1 bg-primary z-[9999] transition-all duration-300 shadow-lg",
+          "fixed top-0 left-0 right-0 h-0.5 bg-primary z-[9999]",
           progress === 100 ? "opacity-0" : "opacity-100"
         )}
         style={{ 
           width: `${progress}%`,
           transition: progress === 100 ? 'width 0.3s ease-out, opacity 0.3s ease-out 0.3s' : 'width 0.4s ease-out'
         }}
-      >
-        <div className="absolute right-0 top-0 bottom-0 w-32 bg-gradient-to-r from-transparent to-white/40" />
-      </div>
-
-      {/* Loading overlay (subtle) */}
-      {isNavigating && progress < 90 && (
-        <div className="fixed inset-0 z-[9998] pointer-events-none">
-          <div className="absolute inset-0 bg-background/50 backdrop-blur-[1px] animate-in fade-in duration-300" />
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-            <div className="bg-card border border-border rounded-lg p-4 shadow-xl">
-              <Loader2 className="h-6 w-6 animate-spin text-primary" />
-            </div>
-          </div>
-        </div>
-      )}
+      />
     </>
   );
 }
