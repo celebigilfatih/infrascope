@@ -222,22 +222,55 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ config: null });
     }
 
-    // ── Cache layer ───────────────────────────────────────────────────────────
+    // ── Cache layer (stale-while-revalidate) ──────────────────────────────────
     // Cache key based on request type
     const cacheKey = `vmware_${type}_${vmId || ''}`;
     const cachedData = globalThis as any;
     if (!cachedData.vmwareCache) cachedData.vmwareCache = {};
+    if (!cachedData.vmwareRevalidating) cachedData.vmwareRevalidating = new Set<string>();
     
     const now = Date.now();
     const cacheEntry = cachedData.vmwareCache[cacheKey];
     const cacheTTL = ['dashboard', 'summary', 'vms', 'hosts', 'clusters', 'datastores'].includes(type || '')
-      ? 300000  // 5 minutes
-      : 120000; // 2 minutes
-    if (cacheEntry && (now - cacheEntry.timestamp) < cacheTTL) {
-      const res = NextResponse.json(cacheEntry.data);
-      res.headers.set('X-Cache', 'HIT');
-      res.headers.set('X-Cache-Age', String(Math.round((now - cacheEntry.timestamp) / 1000)));
-      return res;
+      ? 300000  // 5 minutes fresh window
+      : 120000; // 2 minutes fresh window
+    // Serve stale data for up to STALE_WINDOW past expiry while revalidating in background.
+    const STALE_WINDOW = 30 * 60 * 1000; // 30 minutes
+
+    if (cacheEntry) {
+      const age = now - cacheEntry.timestamp;
+      if (age < cacheTTL) {
+        // Fresh hit — return as-is.
+        const res = NextResponse.json(cacheEntry.data);
+        res.headers.set('X-Cache', 'HIT');
+        res.headers.set('X-Cache-Age', String(Math.round(age / 1000)));
+        return res;
+      }
+      if (age < cacheTTL + STALE_WINDOW) {
+        // Stale but usable — serve cached immediately, refresh in background.
+        if (!cachedData.vmwareRevalidating.has(cacheKey)) {
+          cachedData.vmwareRevalidating.add(cacheKey);
+                    const origin = request.nextUrl.origin;
+                    const fullUrl = `${origin}${request.nextUrl.pathname}${request.nextUrl.search}`;
+          // Fire-and-forget background revalidation; bypass our own cache via header.
+          setTimeout(() => {
+            fetch(fullUrl, { headers: { 'x-cache-bypass': '1' } })
+              .catch((e) => console.warn('[VMware API] Background revalidate failed:', e?.message))
+              .finally(() => cachedData.vmwareRevalidating.delete(cacheKey));
+          }, 0);
+        }
+        const res = NextResponse.json(cacheEntry.data);
+        res.headers.set('X-Cache', 'STALE');
+        res.headers.set('X-Cache-Age', String(Math.round(age / 1000)));
+        return res;
+      }
+      // Too old — fall through to fresh fetch.
+    }
+
+    // Bypass cache entirely when the background revalidator is calling us.
+        const bypass = request.headers.get('x-cache-bypass') === '1';
+    if (bypass) {
+      // no-op — we just skip any later early returns via cache
     }
 
     const service = await getVMwareService();

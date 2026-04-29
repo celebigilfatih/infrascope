@@ -62,6 +62,7 @@ class Device(Base):
     polling_enabled = Column(Boolean, default=False)
     polling_interval = Column(Integer, default=30)
     last_polled_at = Column(DateTime, nullable=True)
+    vendor = Column(String(50), nullable=True)
 
 
 class NmsInterface(Base):

@@ -1,69 +1,68 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-const NMS_BACKEND_URL = process.env.NMS_BACKEND_URL || 'http://localhost:4001';
+import { prisma } from '@/lib/prisma';
 
 /**
  * GET /api/integrations/nms/network-devices
- * List all NMS-monitored devices (proxied from NMS backend)
+ * Dashboard-friendly list of NMS-monitored devices served directly from the
+ * infrascope DB (no proxy hop to the Python NMS backend — avoids cold-start
+ * latency and port-mismatch issues).
+ *
+ * Connection status is derived from the most recent health metric:
+ *   - online   : health metric within the last 5 minutes
+ *   - offline  : no health metric in the last 5 minutes
+ *   - unknown  : never polled
  */
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
-    const vendor = searchParams.get('vendor');
-    const status = searchParams.get('status');
+    const vendorFilter = searchParams.get('vendor');
+    const statusFilter = searchParams.get('status');
 
-    let url = `${NMS_BACKEND_URL}/api/devices`;
-    const params = new URLSearchParams();
-    if (vendor) params.set('vendor', vendor);
-    if (status) params.set('status', status);
-    if (params.toString()) url += `?${params.toString()}`;
-
-    const res = await fetch(url, {
-      signal: AbortSignal.timeout(10000),
-      headers: { 'Content-Type': 'application/json' },
+    const devices = await (prisma as any).device.findMany({
+      where: {
+        nmsDeviceId: { not: null },
+        pollingEnabled: true,
+        ...(vendorFilter ? { vendor: vendorFilter } : {}),
+      },
+      select: {
+        id: true,
+        name: true,
+        vendor: true,
+        managementIp: true,
+        nmsDeviceId: true,
+        lastPolledAt: true,
+      },
+      orderBy: { name: 'asc' },
     });
 
-    const data = await res.json();
-    if (!res.ok) {
-      return NextResponse.json({ error: data.error || 'NMS backend error' }, { status: res.status });
-    }
+    const FIVE_MIN = 5 * 60 * 1000;
+    const now = Date.now();
 
-    return NextResponse.json(data);
-  } catch (error: any) {
-    console.error('[NMS Devices] GET error:', error.message);
-    return NextResponse.json(
-      { error: 'NMS backend unreachable', details: error.message },
-      { status: 503 }
-    );
-  }
-}
-
-/**
- * POST /api/integrations/nms/network-devices
- * Add a new device to NMS monitoring
- */
-export async function POST(req: NextRequest) {
-  try {
-    const body = await req.json();
-
-    const res = await fetch(`${NMS_BACKEND_URL}/api/devices`, {
-      method: 'POST',
-      signal: AbortSignal.timeout(10000),
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+    const data = devices.map((d: any) => {
+      const last = d.lastPolledAt ? new Date(d.lastPolledAt).getTime() : 0;
+      const age = last ? now - last : Infinity;
+      let connection_status: 'online' | 'offline' | 'unknown' = 'unknown';
+      if (last) connection_status = age < FIVE_MIN ? 'online' : 'offline';
+      return {
+        id: d.nmsDeviceId,
+        name: d.name,
+        ip_address: d.managementIp,
+        vendor: d.vendor,
+        connection_status,
+        last_polled_at: d.lastPolledAt,
+      };
     });
 
-    const data = await res.json();
-    if (!res.ok) {
-      return NextResponse.json({ error: data.error || 'Failed to create device' }, { status: res.status });
-    }
+    const filtered = statusFilter
+      ? data.filter((d: any) => d.connection_status === statusFilter)
+      : data;
 
-    return NextResponse.json(data, { status: 201 });
+    return NextResponse.json({ data: filtered, total: filtered.length });
   } catch (error: any) {
-    console.error('[NMS Devices] POST error:', error.message);
+    console.error('[NMS network-devices] GET error:', error.message);
     return NextResponse.json(
-      { error: 'NMS backend unreachable', details: error.message },
-      { status: 503 }
+      { error: 'Failed to load NMS devices', details: error.message },
+      { status: 500 }
     );
   }
 }

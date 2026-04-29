@@ -32,8 +32,8 @@ class DatabaseConfig:
 @dataclass
 class SNMPConfig:
     """SNMP global configuration"""
-    snmp_timeout: int = 5
-    snmp_retries: int = 3
+    snmp_timeout: int = 3           # shorter probe; fail-fast to SSH fallback
+    snmp_retries: int = 1           # at most one retry -> ~ (timeout * 2)
     max_concurrent_pollers: int = 20
     bulk_walk_enabled: bool = True
 
@@ -110,8 +110,8 @@ class Config:
 
         # SNMP
         self.snmp = SNMPConfig(
-            snmp_timeout=int(os.getenv("SNMP_TIMEOUT", "10")),
-            snmp_retries=int(os.getenv("SNMP_RETRIES", "3")),
+            snmp_timeout=int(os.getenv("SNMP_TIMEOUT", "3")),
+            snmp_retries=int(os.getenv("SNMP_RETRIES", "1")),
             max_concurrent_pollers=int(os.getenv("MAX_CONCURRENT_POLLERS", "20")),
         )
 
@@ -120,6 +120,16 @@ class Config:
         self.ssh_password = os.getenv("SSH_PASSWORD", "bbs*2018")
         self.ssh_timeout = int(os.getenv("SSH_TIMEOUT", "10"))
         self.ssh_port = int(os.getenv("SSH_PORT", "22"))
+        # Cap concurrent SSH TCP connections across the orchestrator
+        self.ssh_max_concurrent = int(os.getenv("SSH_MAX_CONCURRENT", "15"))
+
+        # Jitter (seconds) applied to per-device poll schedule to avoid thundering herd
+        self.poll_jitter_max = int(os.getenv("POLL_JITTER_MAX", "10"))
+
+        # Dynamic polling intervals (seconds) by device status
+        self.poll_interval_snmp_ok = int(os.getenv("POLL_INTERVAL_SNMP_OK", "60"))
+        self.poll_interval_ssh_only = int(os.getenv("POLL_INTERVAL_SSH_ONLY", "300"))
+        self.poll_interval_unstable = int(os.getenv("POLL_INTERVAL_UNSTABLE", "600"))
 
         # Polling intervals
         self.polling = PollingConfig(

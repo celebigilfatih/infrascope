@@ -3677,6 +3677,43 @@ export class AlarmDetectionEngine {
     // 5 minutes. Brief link flaps (seconds) will not trigger alarms.
     const portDownAlarm = nmsAlarms.find(a => a.code === 'NMS_PORT_DOWN');
     if (portDownAlarm) {
+      // ── Auto-resolve: acknowledge PORT_DOWN alarms whose port is now UP ──
+      // Also auto-resolve alarms whose port is no longer monitored (monitored=false).
+      try {
+        const openPortDownAlarms = await prisma.alarmEvent.findMany({
+          where: { alarmId: portDownAlarm.id, acknowledged: false },
+          select: { id: true, rawData: true, deviceName: true },
+          take: 200,
+        });
+        if (openPortDownAlarms.length > 0) {
+          const toAckIds: string[] = [];
+          for (const ev of openPortDownAlarms) {
+            const raw = (ev.rawData || {}) as any;
+            const idx = raw.interface_index as number | undefined;
+            const nmsDevId = raw.nms_device_id as number | undefined;
+            if (idx == null || nmsDevId == null) continue;
+            const cur = await (prisma as any).nmsInterface.findFirst({
+              where: { nmsDeviceId: nmsDevId, interfaceIndex: idx },
+              select: { operStatus: true, monitored: true },
+            });
+            if (!cur) continue;
+            // Resolve if port is now UP OR no longer monitored
+            if (cur.operStatus === 'up' || cur.monitored === false) {
+              toAckIds.push(ev.id);
+            }
+          }
+          if (toAckIds.length > 0) {
+            await prisma.alarmEvent.updateMany({
+              where: { id: { in: toAckIds } },
+              data: { acknowledged: true, acknowledgedBy: 'system:auto-resolve', acknowledgedAt: new Date() },
+            });
+            console.log(`[AlarmEngine] NMS PORT_DOWN auto-resolved ${toAckIds.length} alarm(s) (port UP or unmonitored)`);
+          }
+        }
+      } catch (e) {
+        console.warn('[AlarmEngine] PORT_DOWN auto-resolve failed:', (e as Error).message);
+      }
+
       try {
         const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000);
         const downThresholdMs = 5 * 60 * 1000; // 5 minutes
@@ -3695,7 +3732,9 @@ export class AlarmDetectionEngine {
 
         for (const iface of downInterfaces) {
           const deviceName = iface.device?.name ?? `NMS Device ${iface.nmsDeviceId}`;
-          const ifaceLabel = iface.description || iface.interfaceName;
+          // Use interface_name when description is empty/null/"None"
+          const desc = iface.description;
+          const ifaceLabel = (desc && desc !== 'None' && desc.trim() !== '') ? desc : iface.interfaceName;
 
           // Check how long the port has been down
           const downSince = iface.downSince ? new Date(iface.downSince).getTime() : Date.now();

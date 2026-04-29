@@ -10,6 +10,59 @@ import { NextRequest, NextResponse } from 'next/server';
 import { FortiGateService } from '@/lib/integrations/fortigate';
 import { prisma } from '@/lib/prisma';
 
+// ── Stale-while-revalidate cache for dashboard-facing FortiGate endpoints ──
+// Absorbs FortiGate cold-start latency (first call ~25-30s) so subsequent
+// dashboard loads never wait on upstream.
+type FgCacheEntry = { data: any; timestamp: number };
+function fgCache(): Record<string, FgCacheEntry> {
+  const g = globalThis as any;
+  if (!g.__fgCache) g.__fgCache = {};
+  return g.__fgCache;
+}
+function fgRevalidating(): Set<string> {
+  const g = globalThis as any;
+  if (!g.__fgRevalidating) g.__fgRevalidating = new Set<string>();
+  return g.__fgRevalidating;
+}
+function fgServeCached(
+  req: NextRequest,
+  key: string,
+  ttlMs: number,
+  staleWindowMs: number,
+): NextResponse | null {
+  const bypass = req.headers.get('x-cache-bypass') === '1';
+  if (bypass) return null;
+  const entry = fgCache()[key];
+  if (!entry) return null;
+  const age = Date.now() - entry.timestamp;
+  if (age < ttlMs) {
+    const res = NextResponse.json(entry.data);
+    res.headers.set('X-Cache', 'HIT');
+    res.headers.set('X-Cache-Age', String(Math.round(age / 1000)));
+    return res;
+  }
+  if (age < ttlMs + staleWindowMs) {
+    const revalidating = fgRevalidating();
+    if (!revalidating.has(key)) {
+      revalidating.add(key);
+      const url = `${req.nextUrl.origin}${req.nextUrl.pathname}${req.nextUrl.search}`;
+      setTimeout(() => {
+        fetch(url, { headers: { 'x-cache-bypass': '1' } })
+          .catch((e) => console.warn('[FortiGate API] bg revalidate failed:', e?.message))
+          .finally(() => revalidating.delete(key));
+      }, 0);
+    }
+    const res = NextResponse.json(entry.data);
+    res.headers.set('X-Cache', 'STALE');
+    res.headers.set('X-Cache-Age', String(Math.round(age / 1000)));
+    return res;
+  }
+  return null;
+}
+function fgStore(key: string, data: any) {
+  fgCache()[key] = { data, timestamp: Date.now() };
+}
+
 export async function GET(request: NextRequest) {
   try {
     // Get query params
@@ -78,6 +131,8 @@ export async function GET(request: NextRequest) {
 
     // Get sync status - real data from database
     if (type === 'sync-status') {
+      const cached = fgServeCached(request, 'sync-status', 60_000, 10 * 60_000);
+      if (cached) return cached;
       const fortiConfig = config?.config as any;
       
       // First try to get from database
@@ -129,7 +184,7 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      return NextResponse.json({
+      const payload = {
         success: true,
         data: {
           interfacesProcessed: interfaceCount,
@@ -143,7 +198,9 @@ export async function GET(request: NextRequest) {
           lastSync: syncLog?.startedAt || null,
           status: syncLog?.status || (policyCount > 0 ? 'success' : 'unknown'),
         }
-      });
+      };
+      fgStore('sync-status', payload);
+      return NextResponse.json(payload);
     }
 
     // Fetch current firewall policies directly from FortiGate CMDB (for alarm enrichment)
@@ -245,11 +302,17 @@ export async function GET(request: NextRequest) {
 
     // Return VPN data if requested
     if (vpn === 'ssl') {
+      const cached = fgServeCached(request, 'vpn-ssl', 45_000, 10 * 60_000);
+      if (cached) return cached;
       const users = await service.getSSLVPNUsers();
-      return NextResponse.json({ success: true, data: users });
+      const payload = { success: true, data: users };
+      fgStore('vpn-ssl', payload);
+      return NextResponse.json(payload);
     }
 
     if (vpn === 'ssl-summary') {
+      const cached = fgServeCached(request, 'vpn-ssl-summary', 45_000, 10 * 60_000);
+      if (cached) return cached;
       const users = await service.getSSLVPNUsers();
       const summary = {
         total_users: users.length,
@@ -257,12 +320,18 @@ export async function GET(request: NextRequest) {
         total_in_bytes: users.reduce((sum, u) => sum + (u.in_bytes || 0), 0),
         total_out_bytes: users.reduce((sum, u) => sum + (u.out_bytes || 0), 0),
       };
-      return NextResponse.json({ success: true, data: summary });
+      const payload = { success: true, data: summary };
+      fgStore('vpn-ssl-summary', payload);
+      return NextResponse.json(payload);
     }
 
     if (vpn === 'ipsec') {
+      const cached = fgServeCached(request, 'vpn-ipsec', 60_000, 10 * 60_000);
+      if (cached) return cached;
       const tunnels = await service.getIPsecTunnels();
-      return NextResponse.json({ success: true, data: tunnels });
+      const payload = { success: true, data: tunnels };
+      fgStore('vpn-ipsec', payload);
+      return NextResponse.json(payload);
     }
 
     if (vpn === 'config') {

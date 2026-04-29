@@ -75,15 +75,26 @@ class SNMPPoller:
         self.last_poll_time: Dict[int, Dict[str, datetime]] = {}
     
     def register_device(self, config: DeviceConfig) -> None:
-        """Register a device for polling
-        
+        """Register a device for polling (idempotent).
+
         Args:
             config: Device configuration
         """
         if not config.enabled:
             logger.info(f"Device {config.device_name} is disabled, skipping")
             return
-        
+
+        # Idempotent: skip if already registered with same connection parameters
+        existing = self.sessions.get(config.device_id)
+        if (
+            existing is not None
+            and existing.ip_address == config.ip_address
+            and existing.community_string == config.community_string
+            and existing.port == config.snmp_port
+            and existing.version == (config.snmp_version or "2c")
+        ):
+            return  # nothing changed — keep existing session silently
+
         try:
             session = SNMPSession(
                 device_id=config.device_id,

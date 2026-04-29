@@ -154,8 +154,6 @@ export const Sidebar: React.FC = () => {
       title: 'Network',
       items: [
         { name: 'Topology', href: '/network', icon: Network },
-        
-        { name: 'Alarmlar', href: '/integrations/nms', icon: Activity },
         { name: 'Switches', href: '/integrations/nms/devices', icon: Server },
         { name: 'Add Device', href: '/integrations/nms/add-device', icon: Plug },
         { name: 'Config Backups', href: '/integrations/nms/backups', icon: Database },
@@ -173,7 +171,8 @@ export const Sidebar: React.FC = () => {
         { name: 'IPsec Tunnels', href: '/network/ipsec', icon: Globe },
         { name: 'SSL-VPN', href: '/network/ssl-vpn', icon: Users },
         { name: 'Risky Rules', href: '/security/risks', icon: AlertTriangle },
-        { name: 'IPS / DoS Events', href: '/security/ips', icon: ShieldAlert },
+        // TEMPORARILY DISABLED - IPS / DoS Events page
+        // { name: 'IPS / DoS Events', href: '/security/ips', icon: ShieldAlert },
       ]
     },
     {

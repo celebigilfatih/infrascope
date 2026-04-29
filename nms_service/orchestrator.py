@@ -15,8 +15,9 @@ Polling architecture:
 
 import time
 import threading
+import random
 from concurrent.futures import ThreadPoolExecutor, wait as futures_wait
-from typing import Dict, Optional
+from typing import Dict, Optional, Set
 from datetime import datetime
 
 from nms_service.core.logger import logger
@@ -46,13 +47,53 @@ class NMSOrchestrator:
         self.device_map: Dict[int, Device] = {}
         self.last_topology_poll: Dict[int, datetime] = {}
         self.last_device_poll: Dict[int, datetime] = {}  # per-device interval throttle
+        # Per-device outcome tracking to drive dynamic polling intervals
+        # status: 'snmp_ok' | 'ssh_only' | 'unstable'
+        self.device_status: Dict[int, str] = {}
+        # Jitter offsets (0..poll_jitter_max) applied per device to spread the load
+        self._jitter_offset: Dict[int, int] = {}
+        # Active poll set — prevents parallel polls for the same device
+        self._active_polls: Set[int] = set()
+        self._active_lock = threading.Lock()
         self._topo_lock = threading.Lock()       # protects last_topology_poll
         self._last_poll_lock = threading.Lock()  # protects last_device_poll
         # Persistent thread pool — avoids ThreadPoolExecutor.__exit__ blocking
         self._executor = ThreadPoolExecutor(
             max_workers=config.snmp.max_concurrent_pollers,
         )
-        logger.info("NMS Orchestrator initialized (concurrent polling mode with SSH fallback)")
+        logger.info(
+            f"NMS Orchestrator initialized "
+            f"(workers={config.snmp.max_concurrent_pollers}, "
+            f"ssh_max={getattr(config, 'ssh_max_concurrent', 15)}, "
+            f"snmp_timeout={config.snmp.snmp_timeout}s, "
+            f"snmp_retries={config.snmp.snmp_retries})"
+        )
+
+    # ------------------------------------------------------------------
+    # Dynamic polling interval based on last poll outcome
+    # ------------------------------------------------------------------
+    def _effective_interval(self, nms_device_id: int, device) -> int:
+        """Pick a polling interval for this device.
+
+        Falls back to the device record's polling_interval if no outcome is
+        tracked yet. Applies deterministic per-device jitter to spread load.
+        """
+        status = self.device_status.get(nms_device_id)
+        if status == 'snmp_ok':
+            base = getattr(config, 'poll_interval_snmp_ok', 60)
+        elif status == 'ssh_only':
+            base = getattr(config, 'poll_interval_ssh_only', 300)
+        elif status == 'unstable':
+            base = getattr(config, 'poll_interval_unstable', 600)
+        else:
+            base = (device.polling_interval or 300) if device else 300
+
+        # Deterministic jitter per device (0..jitter_max)
+        jitter = self._jitter_offset.get(nms_device_id)
+        if jitter is None:
+            jitter = random.randint(0, max(0, getattr(config, 'poll_jitter_max', 10)))
+            self._jitter_offset[nms_device_id] = jitter
+        return base + jitter
 
     def register_devices_from_db(self) -> int:
         """Load polling-enabled devices from InfraScope DB.
@@ -114,13 +155,21 @@ class NMSOrchestrator:
 
     def _detect_vendor(self, device_name: str) -> str:
         """Infer SNMP vendor from device name for OID selection"""
-        name_lower = device_name.lower()
+        name_lower = (device_name or "").lower()
         if "cisco" in name_lower:
             return "cisco"
         if "fortinet" in name_lower or "fortigate" in name_lower:
             return "fortinet"
         if "mikrotik" in name_lower:
             return "mikrotik"
+        if "huawei" in name_lower:
+            return "huawei"
+        if any(k in name_lower for k in ("h3c", "comware", "hpe", "procurve", "_hp_", "hp-", "hp_")):
+            return "hp"
+        if "juniper" in name_lower or "junos" in name_lower:
+            return "juniper"
+        if "arista" in name_lower:
+            return "arista"
         return "generic"
 
     def _poll_single_device(self, nms_device_id: int) -> bool:
@@ -130,6 +179,19 @@ class NMSOrchestrator:
         Tries SNMP first, falls back to SSH if SNMP fails.
         Returns True if device was polled, False if skipped (interval not yet reached).
         """
+        # Poll deduplication — prevent parallel polls for the same device
+        with self._active_lock:
+            if nms_device_id in self._active_polls:
+                return False
+            self._active_polls.add(nms_device_id)
+
+        try:
+            return self._poll_single_device_inner(nms_device_id)
+        finally:
+            with self._active_lock:
+                self._active_polls.discard(nms_device_id)
+
+    def _poll_single_device_inner(self, nms_device_id: int) -> bool:
         snmp_session = self.poller.sessions.get(nms_device_id)
         ssh_session = self.ssh_poller.sessions.get(nms_device_id)
         
@@ -138,9 +200,9 @@ class NMSOrchestrator:
 
         device_name = snmp_session.device_name if snmp_session else (ssh_session.device_name if ssh_session else "Unknown")
         device = self.device_map.get(nms_device_id)
-        polling_interval = (device.polling_interval or 300) if device else 300
+        polling_interval = self._effective_interval(nms_device_id, device)
 
-        # Per-device interval throttle -- respect each device's own polling_interval
+        # Per-device interval throttle -- respect the dynamic polling_interval
         now = datetime.utcnow()
         with self._last_poll_lock:
             last_poll = self.last_device_poll.get(nms_device_id)
@@ -158,6 +220,7 @@ class NMSOrchestrator:
             # -- Interface polling (SNMP first, then SSH fallback) -------------------
             interfaces = []
             snmp_failed = False
+            used_ssh = False
             
             if snmp_session:
                 try:
@@ -178,8 +241,24 @@ class NMSOrchestrator:
                     interfaces = self.ssh_poller.poll_interfaces(nms_device_id)
                     if interfaces:
                         logger.info(f"SSH: Found {len(interfaces)} interfaces for {device_name}")
+                        used_ssh = True
                 except Exception as e:
                     logger.error(f"SSH interface poll failed for {device_name}: {e}")
+
+            # Track outcome -> drives dynamic polling interval next cycle
+            prev_status = self.device_status.get(nms_device_id)
+            if interfaces and not used_ssh:
+                new_status = 'snmp_ok'
+            elif interfaces and used_ssh:
+                new_status = 'ssh_only'
+            else:
+                new_status = 'unstable'
+            if new_status != prev_status:
+                logger.info(
+                    f"Device {device_name} status transition: "
+                    f"{prev_status or 'none'} -> {new_status}"
+                )
+            self.device_status[nms_device_id] = new_status
             
             # Save interfaces
             if interfaces:
@@ -359,6 +438,7 @@ class NMSOrchestrator:
         try:
             self._executor.shutdown(wait=False, cancel_futures=True)
             self.poller.close_all()
+            self.ssh_poller.close_all()
             db_manager.close()
             logger.info("NMS service shutdown complete")
         except Exception as e:

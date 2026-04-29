@@ -46,11 +46,8 @@ services:
       DB_HOST: db
       DB_PORT: 5432
       NODE_TLS_REJECT_UNAUTHORIZED: "0"
-      # NMS Node.js backend (from /Dev/nms project, port 4001)
-      # On Mac Docker Desktop, host.docker.internal resolves to host machine IP
-      NMS_BACKEND_URL: ${NMS_BACKEND_URL:-http://host.docker.internal:4001}
-      # Fallback: If host.docker.internal doesn't work, use your Mac's IP:
-      # NMS_BACKEND_URL: http://10.7.7.7:4001
+      # NMS Python sidecar (FastAPI on port 8500, internal Docker DNS)
+      NMS_BACKEND_URL: ${NMS_BACKEND_URL:-http://nms:8500}
     ports:
       - "8170:3000"
     depends_on:

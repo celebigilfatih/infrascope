@@ -19,7 +19,7 @@ import {
 import {
   AlertTriangle, AlertCircle, AlertOctagon, CheckCircle, Clock, RefreshCw,
   Search, Play, Shield, Bell, Trash2, BarChart3, Eye, User, Router, Monitor,
-  ChevronDown, ChevronRight, Code2, MapPin,
+  ChevronDown, ChevronRight, Code2, MapPin, Globe,
 } from 'lucide-react';
 
 interface AlarmEventData {
@@ -201,6 +201,10 @@ export default function AlertsDashboardPage() {
   const [portData, setPortData] = useState<{ device: any; port: any; neighbors: any[] } | null>(null);
   const [portLoading, setPortLoading] = useState(false);
   const [portError, setPortError] = useState<string | null>(null);
+  // Device-ports enrichment for NMS_DEVICE_UNREACHABLE alarms
+  const [devicePortsData, setDevicePortsData] = useState<{ deviceName: string; total: number; monitoredCount: number; interfaces: any[] } | null>(null);
+  const [devicePortsLoading, setDevicePortsLoading] = useState(false);
+  const [devicePortsError, setDevicePortsError] = useState<string | null>(null);
   // Discard/Whitelist dialog state
   const [discardOpen, setDiscardOpen] = useState(false);
   const [discardReason, setDiscardReason] = useState('');
@@ -304,6 +308,32 @@ export default function AlertsDashboardPage() {
     const interval = setInterval(autoCheck, 5 * 60 * 1000);
     return () => { clearTimeout(initialTimeout); clearInterval(interval); };
   }, [fetchEvents]);
+
+  // Reset all per-alarm enrichment state whenever the selected alarm changes.
+  // This is a belt-and-suspenders safeguard: the click handler that opens the
+  // detail dialog also resets state, but any other code path that reassigns
+  // `selectedEvent` (e.g. acknowledge button, future features) must not leak
+  // stale device / port / policy / address data from a previous alarm into the
+  // currently opened alarm.
+  useEffect(() => {
+    setPortData(null);
+    setPortError(null);
+    setPolicyData(null);
+    setPolicyError(null);
+    setPolicySearch('');
+    setPolicyExpanded(false);
+    setAddressData(null);
+    setAddressError(null);
+    setAddressSearch('');
+    setAddressExpanded(false);
+    setDevicePortsData(null);
+    setDevicePortsError(null);
+    setRawLogExpanded(false);
+    // Intentionally depend on the alarm event id only. Mutating the rest of
+    // the selectedEvent object (e.g. marking it acknowledged) must NOT wipe
+    // the user's already-loaded enrichment panels.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedEvent?.id]);
 
   const runAlarmCheck = async () => {
     setChecking(true);
@@ -453,6 +483,44 @@ export default function AlertsDashboardPage() {
       setAddressError(err.message);
     } finally {
       setAddressLoading(false);
+    }
+  };
+
+  const fetchDevicePorts = async () => {
+    setDevicePortsLoading(true);
+    setDevicePortsError(null);
+    setDevicePortsData(null);
+    try {
+      // Extract device name from alarm title: "Device Unreachable: ISLETMELER_SW1"
+      const match = selectedEvent?.title.match(/Device Unreachable:\s+(.+)/);
+      const deviceName = match?.[1]?.trim() || selectedEvent?.deviceName;
+      if (!deviceName) {
+        setDevicePortsError('Could not parse device name from alarm');
+        setDevicePortsLoading(false);
+        return;
+      }
+
+      const devRes = await fetch('/api/integrations/nms/devices?enabled=true');
+      const devData = await devRes.json();
+      const device = devData.devices?.find((d: any) => d.name === deviceName);
+
+      if (!device) {
+        setDevicePortsError(`Device "${deviceName}" not found in NMS`);
+        setDevicePortsLoading(false);
+        return;
+      }
+
+      const res = await fetch(`/api/integrations/nms/devices/${device.id}/ports/monitored`);
+      const data = await res.json();
+      if (data.interfaces) {
+        setDevicePortsData(data);
+      } else {
+        setDevicePortsError(data.error || 'Port list not found');
+      }
+    } catch (err: any) {
+      setDevicePortsError(err.message);
+    } finally {
+      setDevicePortsLoading(false);
     }
   };
 
@@ -737,7 +805,23 @@ export default function AlertsDashboardPage() {
                             {sev.label}
                           </Badge>
                         </TableCell>
-                        <TableCell className="font-mono text-xs">{event.sourceIp || '-'}</TableCell>
+                        <TableCell>
+                          {event.sourceIp ? (
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-mono font-medium ${
+                              event.sourceIp.startsWith('10.') || 
+                              event.sourceIp.startsWith('172.16.') || 
+                              event.sourceIp.startsWith('192.168.') ||
+                              event.sourceIp.startsWith('127.')
+                                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                                : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'
+                            }`} title={event.sourceIp}>
+                              <Globe className="h-3 w-3 mr-1 opacity-60" />
+                              {event.sourceIp.length > 12 ? event.sourceIp.slice(0, 12) + '...' : event.sourceIp}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
                         <TableCell className="text-xs max-w-[150px] truncate" title={event.deviceName || '-'}>{event.deviceName || '-'}</TableCell>
                         <TableCell>
                           {event.acknowledged ? (
@@ -795,6 +879,16 @@ export default function AlertsDashboardPage() {
                                 setPolicyError(null);
                                 setPolicySearch('');
                                 setPolicyExpanded(false);
+                                setDevicePortsData(null);
+                                setDevicePortsError(null);
+                                // Reset all per-alarm enrichment state to prevent
+                                // stale data leaking between different alarms.
+                                setPortData(null);
+                                setPortError(null);
+                                setAddressData(null);
+                                setAddressError(null);
+                                setAddressSearch('');
+                                setAddressExpanded(false);
                                 setDetailOpen(true);
                               }}
                               title="Detayları Göster"
@@ -1145,7 +1239,23 @@ export default function AlertsDashboardPage() {
                     </div>
                     <div className="p-3 rounded-lg bg-muted/30">
                       <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Kaynak IP</p>
-                      <p className="font-mono text-sm font-bold">{selectedEvent.sourceIp || '-'}</p>
+                      {selectedEvent.sourceIp ? (
+                        <div className="flex items-center gap-2">
+                          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-mono font-semibold ${
+                            selectedEvent.sourceIp.startsWith('10.') || 
+                            selectedEvent.sourceIp.startsWith('172.16.') || 
+                            selectedEvent.sourceIp.startsWith('192.168.') ||
+                            selectedEvent.sourceIp.startsWith('127.')
+                              ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                              : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'
+                          }`}>
+                            <Globe className="h-3 w-3 mr-1.5 opacity-70" />
+                            {selectedEvent.sourceIp}
+                          </span>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">-</p>
+                      )}
                     </div>
                     <div className="p-3 rounded-lg bg-muted/30">
                       <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Cihaz</p>
@@ -1563,6 +1673,157 @@ export default function AlertsDashboardPage() {
                               </div>
                             </div>
                           )}
+                        </div>
+                      )}
+                    </section>
+                  )}
+
+
+                  {/* Etkilenen Portlar — only for NMS_DEVICE_UNREACHABLE */}
+                  {selectedEvent.alarm?.code === 'NMS_DEVICE_UNREACHABLE' && (
+                    <section className="rounded-lg border overflow-hidden">
+                      <div className="flex items-center justify-between px-4 py-2.5 bg-rose-50 dark:bg-rose-900/20 border-b">
+                        <div className="flex items-center gap-2">
+                          <Router className="h-4 w-4 text-rose-500" />
+                          <span className="text-xs font-bold uppercase tracking-widest text-rose-700 dark:text-rose-300">
+                            Etkilenen Portlar
+                          </span>
+                          {devicePortsData && (
+                            <span className="text-xs text-muted-foreground">
+                              ({devicePortsData.deviceName} • {devicePortsData.monitoredCount}/{devicePortsData.total} izleniyor)
+                            </span>
+                          )}
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs"
+                          disabled={devicePortsLoading}
+                          onClick={fetchDevicePorts}
+                        >
+                          {devicePortsLoading
+                            ? <><RefreshCw className="h-3 w-3 mr-1.5 animate-spin" />Yükleniyor...</>
+                            : devicePortsData
+                            ? <><RefreshCw className="h-3 w-3 mr-1.5" />Yenile</>
+                            : <><Eye className="h-3 w-3 mr-1.5" />Port Listesini Getir</>}
+                        </Button>
+                      </div>
+
+                      {devicePortsError && (
+                        <div className="px-4 py-3 text-xs text-red-600 bg-red-50 dark:bg-red-900/20">
+                          <AlertOctagon className="h-3.5 w-3.5 inline mr-1" />{devicePortsError}
+                        </div>
+                      )}
+
+                      {devicePortsData && devicePortsData.interfaces.length > 0 && (() => {
+                        const ifs = devicePortsData.interfaces;
+                        const upCount = ifs.filter((i: any) => i.operStatus === 'up').length;
+                        const downCount = ifs.filter((i: any) => i.operStatus === 'down').length;
+                        const monitoredDown = ifs.filter((i: any) => i.monitored && i.operStatus === 'down');
+                        return (
+                          <div className="p-3 space-y-3">
+                            {/* Summary */}
+                            <div className="grid grid-cols-3 gap-2 text-xs">
+                              <div className="text-center p-2 rounded bg-green-50 dark:bg-green-900/10">
+                                <div className="text-muted-foreground">Up</div>
+                                <div className="font-mono font-bold text-green-600 text-sm">{upCount}</div>
+                              </div>
+                              <div className="text-center p-2 rounded bg-red-50 dark:bg-red-900/10">
+                                <div className="text-muted-foreground">Down</div>
+                                <div className="font-mono font-bold text-red-500 text-sm">{downCount}</div>
+                              </div>
+                              <div className="text-center p-2 rounded bg-sky-50 dark:bg-sky-900/10">
+                                <div className="text-muted-foreground">İzlenen</div>
+                                <div className="font-mono font-bold text-sky-600 text-sm">{devicePortsData.monitoredCount}</div>
+                              </div>
+                            </div>
+
+                            {/* Monitored DOWN ports first (most relevant) */}
+                            {monitoredDown.length > 0 && (
+                              <div>
+                                <div className="text-xs font-semibold mb-2 text-red-600 dark:text-red-400">
+                                  ⚠️ İzlenen &amp; Down Portlar ({monitoredDown.length})
+                                </div>
+                                <div className="rounded-md border overflow-hidden">
+                                  <table className="w-full text-xs">
+                                    <thead className="bg-muted/40">
+                                      <tr>
+                                        <th className="px-3 py-1.5 text-left font-semibold">Port</th>
+                                        <th className="px-3 py-1.5 text-left font-semibold">Açıklama</th>
+                                        <th className="px-3 py-1.5 text-center font-semibold">Admin</th>
+                                        <th className="px-3 py-1.5 text-center font-semibold">Oper</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {monitoredDown.map((iface: any) => (
+                                        <tr key={iface.id} className="border-t">
+                                          <td className="px-3 py-1.5 font-mono font-medium">{iface.interfaceName}</td>
+                                          <td className="px-3 py-1.5 text-muted-foreground">{(iface.description && iface.description !== 'None') ? iface.description : '—'}</td>
+                                          <td className="px-3 py-1.5 text-center">
+                                            <span className={`font-semibold ${iface.adminStatus === 'up' ? 'text-green-600' : 'text-red-500'}`}>
+                                              {iface.adminStatus === 'up' ? '✓ UP' : '✕ DOWN'}
+                                            </span>
+                                          </td>
+                                          <td className="px-3 py-1.5 text-center">
+                                            <span className={`font-semibold ${iface.operStatus === 'up' ? 'text-green-600' : 'text-red-500'}`}>
+                                              {iface.operStatus === 'up' ? '✓ UP' : '✕ DOWN'}
+                                            </span>
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* All ports (collapsed table) */}
+                            <details className="rounded-md border">
+                              <summary className="px-3 py-2 text-xs font-semibold cursor-pointer hover:bg-muted/30">
+                                Tüm Portlar ({ifs.length})
+                              </summary>
+                              <div className="max-h-64 overflow-y-auto">
+                                <table className="w-full text-xs">
+                                  <thead className="bg-muted/40 sticky top-0">
+                                    <tr>
+                                      <th className="px-3 py-1.5 text-left font-semibold">Port</th>
+                                      <th className="px-3 py-1.5 text-left font-semibold">Açıklama</th>
+                                      <th className="px-3 py-1.5 text-center font-semibold">Admin</th>
+                                      <th className="px-3 py-1.5 text-center font-semibold">Oper</th>
+                                      <th className="px-3 py-1.5 text-center font-semibold">İzleniyor</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {ifs.map((iface: any) => (
+                                      <tr key={iface.id} className="border-t">
+                                        <td className="px-3 py-1.5 font-mono">{iface.interfaceName}</td>
+                                        <td className="px-3 py-1.5 text-muted-foreground truncate max-w-[180px]">{(iface.description && iface.description !== 'None') ? iface.description : '—'}</td>
+                                        <td className="px-3 py-1.5 text-center">
+                                          <span className={iface.adminStatus === 'up' ? 'text-green-600' : 'text-red-500'}>
+                                            {iface.adminStatus === 'up' ? 'UP' : 'DOWN'}
+                                          </span>
+                                        </td>
+                                        <td className="px-3 py-1.5 text-center">
+                                          <span className={iface.operStatus === 'up' ? 'text-green-600' : 'text-red-500'}>
+                                            {iface.operStatus === 'up' ? 'UP' : 'DOWN'}
+                                          </span>
+                                        </td>
+                                        <td className="px-3 py-1.5 text-center">
+                                          {iface.monitored ? <span className="text-sky-600">✓</span> : <span className="text-muted-foreground">—</span>}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </details>
+                          </div>
+                        );
+                      })()}
+
+                      {devicePortsData && devicePortsData.interfaces.length === 0 && (
+                        <div className="px-4 py-4 text-xs text-muted-foreground text-center">
+                          Bu cihaz için port bilgisi bulunamadı.
                         </div>
                       )}
                     </section>

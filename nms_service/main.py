@@ -11,6 +11,7 @@ The main SNMP polling loop runs as a background thread.
 """
 
 import asyncio
+import hashlib
 import threading
 import uuid
 from typing import List, Optional, Dict, Any
@@ -78,6 +79,11 @@ class DiscoveryRequest(BaseModel):
     communities: List[str] = ["public"]
     ssh_user: str = ""
     ssh_pass: str = ""
+
+
+class BackupRequest(BaseModel):
+    backup_type: str = "Running Config"
+    description: Optional[str] = None
 
 
 # ── Health ────────────────────────────────────────────────────────────────────
@@ -170,6 +176,94 @@ def trigger_poll(nms_device_id: int):
         }
     except Exception as e:
         logger.error(f"On-demand poll failed for nms_device_id={nms_device_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        session.close()
+
+
+# ── Backups ───────────────────────────────────────────────────────────────────
+
+@app.post("/devices/{nms_device_id}/backup")
+def trigger_backup(nms_device_id: int, req: BackupRequest):
+    """Trigger SSH-based config backup for a device.
+
+    Connects via SSH (stateless), executes vendor-specific running-config command,
+    saves the result to nms_backups, and returns the new backup record.
+    """
+    if nms_device_id not in orchestrator.ssh_poller.sessions:
+        raise HTTPException(
+            status_code=404,
+            detail=f"nms_device_id={nms_device_id} not registered for SSH polling",
+        )
+
+    session = db_manager.get_session()
+    try:
+        device = orchestrator.device_map.get(nms_device_id)
+        device_name = device.name if device else f"NMS Device {nms_device_id}"
+        # Prefer DB-stored vendor (set by discovery/user); fall back to name heuristic
+        db_vendor = (getattr(device, "vendor", None) or "").strip() if device else ""
+        vendor = db_vendor or (orchestrator._detect_vendor(device.name) if device else "cisco")
+
+        config_text = orchestrator.ssh_poller.backup_running_config(nms_device_id, vendor)
+        if not config_text:
+            raise HTTPException(
+                status_code=502,
+                detail=f"SSH backup failed for {device_name} (no output / connection error)",
+            )
+
+        size_bytes = len(config_text.encode("utf-8"))
+        checksum = hashlib.sha256(config_text.encode("utf-8")).hexdigest()
+        backup_id = cuid()
+        now = datetime.utcnow()
+        backup_file = f"backup_{nms_device_id}_{now.strftime('%Y%m%d_%H%M%S')}.cfg"
+
+        session.execute(
+            text(
+                """
+                INSERT INTO nms_backups
+                  (id, nms_device_id, backup_type, backup_file, description,
+                   size_bytes, checksum, configuration, created_at, updated_at)
+                VALUES
+                  (:id, :dev, :btype, :bfile, :desc,
+                   :size, :csum, :cfg, :ts, :ts)
+                """
+            ),
+            {
+                "id": backup_id,
+                "dev": nms_device_id,
+                "btype": req.backup_type or "Running Config",
+                "bfile": backup_file,
+                "desc": req.description,
+                "size": size_bytes,
+                "csum": checksum,
+                "cfg": config_text,
+                "ts": now,
+            },
+        )
+        session.commit()
+
+        logger.info(
+            f"Backup created: id={backup_id} device={device_name} "
+            f"size={size_bytes}B vendor={vendor}"
+        )
+        return {
+            "success": True,
+            "backup": {
+                "id": backup_id,
+                "nms_device_id": nms_device_id,
+                "device_name": device_name,
+                "backup_type": req.backup_type or "Running Config",
+                "backup_file": backup_file,
+                "size_bytes": size_bytes,
+                "checksum": checksum,
+                "created_at": now.isoformat(),
+            },
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Backup failed for nms_device_id={nms_device_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         session.close()
