@@ -330,3 +330,53 @@ export async function getHaConfigChangeEvents(ctx: AlarmQueryContext): Promise<Q
     { softFallback: true } // HA changes are high-stakes — double-check if cache is empty
   );
 }
+
+// ─── Admin Config Changes (Config Revision — Critical Alarm) ──────────────────
+
+/**
+ * ADMIN_CONFIG_CHANGE — Any admin-initiated config change (Edit/Add/Delete/Move/Clone)
+ * performed by a real admin user (excludes service accounts siem/fgtinfra).
+ *
+ * Replaces the CMDB-diff snapshot approach with native FortiAnalyzer event logs
+ * which carry full context: user, ui (GUI/SSH/API + source IP), cfgpath, cfgattr,
+ * cfgobj. Same data shown on the Config Revisions page.
+ *
+ * DB filter:
+ *   logtype = 'event', subtype = 'system'
+ *   user NOT IN ('siem', 'fgtinfra', '')
+ *   action IN ('Edit','Add','Delete','Move','Clone')
+ *   ui != 'ha_daemon' (exclude HA internal sync)
+ */
+export async function getAdminConfigChangeEvents(ctx: AlarmQueryContext): Promise<QueryResult> {
+  const description = 'logtype=event subtype=system user!=siem|fgtinfra action=Edit|Add|Delete|Move|Clone';
+
+  return runAlarmQuery(
+    ctx,
+    description,
+    async () => {
+      const { prisma } = await import('@/lib/prisma');
+      const rows = await prisma.cachedEvent.findMany({
+        where: {
+          logtype: 'event',
+          subtype: 'system',
+          eventTime: timeWindow(ctx.timeWindowMinutes),
+          user: { notIn: ['siem', 'fgtinfra', ''] },
+          action: { in: ['Edit', 'Add', 'Delete', 'Move', 'Clone'] },
+          NOT: [{ rawLog: { path: ['ui'], equals: 'ha_daemon' } as any }],
+        },
+        orderBy: { eventTime: 'desc' },
+        take: 500,
+        select: { rawLog: true },
+      });
+      return rows.map((r: any) => r.rawLog as Record<string, unknown>);
+    },
+    fa =>
+      queryFortiAnalyzerDirect(
+        fa,
+        'event',
+        'subtype == system and user != "" and user != "fgtinfra" and user != "siem" and (action == Edit or action == Add or action == Delete or action == Move or action == Clone) and ui != ha_daemon',
+        ctx.timeWindowMinutes
+      ),
+    { softFallback: true }
+  );
+}

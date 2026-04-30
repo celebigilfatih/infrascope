@@ -1017,7 +1017,7 @@ export class AlarmDetectionEngine {
           });
         }
         
-        if (alarm.code === 'FW_POLICY_CHANGED' || alarm.code === 'CORE_CONFIG_CHANGE') {
+        if (alarm.code === 'FW_POLICY_CHANGED' || alarm.code === 'CORE_CONFIG_CHANGE' || alarm.code === 'ADMIN_CONFIG_CHANGE') {
           // Exclude changes made by automation tools
           const excludedUsers = ['ansible', 'puppet', 'chef', 'terraform', 'automation', 'script'];
           filteredLogs = filteredLogs.filter((log) => {

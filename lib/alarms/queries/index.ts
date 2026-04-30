@@ -40,6 +40,7 @@ export {
   getAddressObjectChangeEvents,
   getSdWanChangeEvents,
   getHaConfigChangeEvents,
+  getAdminConfigChangeEvents,
 } from './config-change';
 
 // Auth & login events (FortiAnalyzer — kept as secondary)
@@ -159,6 +160,7 @@ import {
   getRouteTableChangeEvents,
   getSdWanChangeEvents,
   getHaConfigChangeEvents,
+  getAdminConfigChangeEvents,
 } from './config-change';
 import {
   getAdminLoginFailEvents,
@@ -191,25 +193,21 @@ import { getDnsTunnelSuspectEvents } from './dns-events';
  * and are evaluated separately by evaluateFortiGateSslvpnAlarm().
  */
 export const ALARM_QUERY_REGISTRY = new Map<string, AlarmQueryFn>([
-  // ── Config & Access (FortiGate CMDB diff — works on v7.2.11) ─────────────────
-  ['FW_POLICY_CHANGED',        cmdbFirewallPolicyChanged],
-  ['CORE_CONFIG_CHANGE',       cmdbCoreConfigChange],
-  ['NEW_VIP',                  cmdbNewVip],
-  ['NEW_ADMIN_USER',           cmdbNewAdminUser],
-  ['ADMIN_PASSWORD_CHANGED',   cmdbAdminPasswordChanged],
-  ['ADMIN_PRIVILEGE_CHANGE',   cmdbAdminPrivilegeChange],
-  ['ROUTE_TABLE_CHANGED',      cmdbRouteTableChanged],
-  ['IPSEC_TUNNEL_CHANGED',     cmdbIpsecTunnelChanged],
-  ['SSL_VPN_SETTINGS_CHANGED', cmdbSslVpnSettingsChanged],
-  ['AUTH_SERVER_CHANGED',      cmdbAuthServerChanged],
-  ['INTERFACE_CONFIG_CHANGED', cmdbInterfaceConfigChanged],
-  ['ADDRESS_OBJECT_CHANGED',   cmdbAddressObjectChanged],
-  ['ADDRESS_GROUP_CHANGED',    cmdbAddressGroupChanged],
+  // ── Config & Access ──────────────────────────────────────────────────────────
+  // NOTE: CMDB diff alarms (FW_POLICY_CHANGED, ADDRESS_OBJECT_CHANGED, CORE_CONFIG_CHANGE,
+  // NEW_VIP, NEW_ADMIN_USER, ADMIN_PASSWORD_CHANGED, ADMIN_PRIVILEGE_CHANGE,
+  // ROUTE_TABLE_CHANGED, IPSEC_TUNNEL_CHANGED, SSL_VPN_SETTINGS_CHANGED,
+  // AUTH_SERVER_CHANGED, INTERFACE_CONFIG_CHANGED, ADDRESS_GROUP_CHANGED) were
+  // disabled intentionally — Config Revisions page already surfaces admin config
+  // changes natively from FortiAnalyzer cached_events with full user/IP context.
+  // Keeping CMDB queries registered here would create duplicate noise without
+  // user attribution. CMDB snapshot polling is retained for Config Backups only.
 
   // ── Config & Access (FortiAnalyzer cache — FA log-based, v7.2.11 fallback) ───
   ['FIRMWARE_CHANGE',          getFirmwareChangeEvents],
   ['SD_WAN_CHANGED',           getSdWanChangeEvents],
   ['HA_CONFIG_CHANGED',        getHaConfigChangeEvents],
+  ['ADMIN_CONFIG_CHANGE',      getAdminConfigChangeEvents],
 
   // ── VPN (FortiAnalyzer cache) ───────────────────────────────────────────────
   ['VPN_BRUTE_FORCE',          getVpnBruteForceEvents],

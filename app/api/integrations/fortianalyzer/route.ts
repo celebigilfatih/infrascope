@@ -171,7 +171,7 @@ export async function GET(request: NextRequest) {
     } else if (dataType === 'config-revisions') {
       // Admin system logs from FortiAnalyzer (login/logout, config changes - exclude perf-stats and empty users)
       // Fallback to FortiGate direct API if FortiAnalyzer returns empty
-      const tid = await service.startLogSearch('event', 1000, 'subtype == system and action != perf-stats and user != ""');
+      const tid = await service.startLogSearch('event', 1000, 'subtype == system and action != perf-stats and user != "" and user != "fgtinfra" and user != "siem"');
       if (tid) {
         await new Promise(resolve => setTimeout(resolve, 6000));
         data = await service.fetchLogResults(tid, 0, 500);
@@ -188,8 +188,11 @@ export async function GET(request: NextRequest) {
             where: {
               logtype: 'event',
               subtype: 'system',
+              user: {
+                notIn: ['siem', 'fgtinfra', ''],
+              },
               eventTime: {
-                gte: new Date(Date.now() - 24 * 60 * 60 * 1000), // Last 24 hours
+                gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // Last 7 days
               },
             },
             orderBy: {
