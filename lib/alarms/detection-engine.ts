@@ -2195,6 +2195,11 @@ export class AlarmDetectionEngine {
       // FA SSL-VPN auth-logon events: store username as deviceName so per-user cooldown checks work
       sourceIp = (firstLog.srcip as string) || (firstLog.remip as string) || null;
       deviceName = (firstLog.user as string);
+    } else if (firstLog.source === 'fortigate-cmdb-diff') {
+      // CMDB diff alarms — extract admin user and source IP from the enriched fields
+      sourceIp = (firstLog.admin_ui as string)?.match(/\(([^)]+)\)$/)?.[1] || null;
+      deviceName = (firstLog.admin_user as string) || null;
+      destIp = null;
     } else {
       // FortiAnalyzer log metadata
       sourceIp = (firstLog.srcip as string) || (firstLog.remip as string) || (firstLog.remote_host as string) || null;
@@ -3228,6 +3233,10 @@ export class AlarmDetectionEngine {
         const detectedAt   = firstLog.detectedAt as string | undefined;
         const itemCount    = firstLog.itemCount as number | undefined;
         const diffDetails  = (firstLog as any).diffDetails;
+        // Admin user enrichment fields (set by fortigate-cmdb.ts resolveAdminUsers)
+        const adminUsers   = (firstLog as any).admin_users as Array<{ user: string; ui: string; objects: string[] }> | undefined;
+        const adminUser    = (firstLog.admin_user as string | null) || null;
+        const adminUi      = (firstLog.admin_ui as string | null) || null;
         const detectedAtStr = detectedAt
           ? new Date(detectedAt).toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' })
           : 'N/A';
@@ -3246,6 +3255,17 @@ export class AlarmDetectionEngine {
           headerLines.push(`Toplam Obje: ${itemCount}`);
         }
         headerLines.push(`Tespit Zamani: ${detectedAtStr}`);
+        // ── Who made the change ──────────────────────────────────────────
+        if (adminUser) {
+          // Format: "fcelebigil (GUI - 10.7.7.7)" or "fcelebigil"
+          const uiDisplay = adminUi
+            ? adminUi.replace(/^(GUI|SSH|API)\(([^)]+)\)$/, '$1 - $2')
+            : '';
+          headerLines.push(`Degistiren Kullanici: ${adminUser}${uiDisplay ? ` (${uiDisplay})` : ''}`);
+        } else if (adminUsers && adminUsers.length > 1) {
+          // Multiple users (rare)
+          headerLines.push(`Degistiren Kullanici: ${adminUsers.map(u => u.user).join(', ')}`);
+        }
         cmdbSections.push(headerLines.join('\n'));
 
         // ── Detailed diff (added / removed / modified) ──────────────────
@@ -3873,6 +3893,43 @@ export class AlarmDetectionEngine {
     // poll windows (~15 min) AND verify the device was previously reporting.
     const unreachableAlarm = nmsAlarms.find(a => a.code === 'NMS_DEVICE_UNREACHABLE');
     if (unreachableAlarm) {
+      // ── Auto-resolve: acknowledge DEVICE_UNREACHABLE alarms whose device is
+      // now reporting health metrics again (SNMP or SSH fallback). Devices may
+      // recover silently (SSH poller comes back, SNMP comes back, network
+      // path is restored) — we must not leave stale critical alarms open.
+      try {
+        const openUnreachableAlarms = await prisma.alarmEvent.findMany({
+          where: { alarmId: unreachableAlarm.id, acknowledged: false },
+          select: { id: true, rawData: true, deviceName: true },
+          take: 200,
+        });
+        if (openUnreachableAlarms.length > 0) {
+          // A device is considered recovered when it has produced at least
+          // one health metric in the last 15 minutes (3× default poll cycle).
+          const recoveryCutoff = new Date(Date.now() - 15 * 60 * 1000);
+          const toAckIds: string[] = [];
+          for (const ev of openUnreachableAlarms) {
+            const raw = (ev.rawData || {}) as any;
+            const nmsDevId = raw.nms_device_id as number | undefined;
+            if (nmsDevId == null) continue;
+            const recentMetric = await (prisma as any).nmsHealthMetric.findFirst({
+              where: { nmsDeviceId: nmsDevId, collectedAt: { gte: recoveryCutoff } },
+              select: { collectedAt: true },
+            });
+            if (recentMetric) toAckIds.push(ev.id);
+          }
+          if (toAckIds.length > 0) {
+            await prisma.alarmEvent.updateMany({
+              where: { id: { in: toAckIds } },
+              data: { acknowledged: true, acknowledgedBy: 'system:auto-resolve', acknowledgedAt: new Date() },
+            });
+            console.log(`[AlarmEngine] NMS DEVICE_UNREACHABLE auto-resolved ${toAckIds.length} alarm(s) (device reporting again)`);
+          }
+        }
+      } catch (e) {
+        console.warn('[AlarmEngine] DEVICE_UNREACHABLE auto-resolve failed:', (e as Error).message);
+      }
+
       try {
         // Require 30 minutes of silence (6× default 5-min poll interval)
         // Rationale: a single slow poll cycle can take up to ~120s (2 min).

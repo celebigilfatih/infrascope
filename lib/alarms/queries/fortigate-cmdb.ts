@@ -27,6 +27,53 @@
  */
 
 import type { AlarmQueryContext, QueryResult } from './types';
+import { prisma } from '@/lib/prisma';
+
+// Maps CMDB endpoint paths to FortiAnalyzer cfgpath values stored in cached_events.
+// FortiGate uses dot-separated cfgpath (e.g. 'firewall.policy') while CMDB endpoints
+// use slash-separated paths (e.g. '/cmdb/firewall/policy').
+function endpointToCfgpath(endpoint: string): string {
+  // Strip leading '/cmdb/' and replace '/' with '.'
+  return endpoint.replace(/^\/cmdb\//, '').replace(/\//g, '.');
+}
+
+/**
+ * Look up which admin user(s) made changes matching the given CMDB endpoint
+ * in the last `windowMs` milliseconds. Queries `cached_events.rawLog.cfgpath`.
+ * Returns deduplicated list of { user, ui } records sorted by most-recent first.
+ */
+async function resolveAdminUsers(
+  cfgpath: string,
+  windowMs = 60 * 60 * 1000, // 1 hour
+): Promise<Array<{ user: string; ui: string; cfgobj: string; eventTime: Date }>> {
+  try {
+    const cutoff = new Date(Date.now() - windowMs);
+    // Use raw SQL via Prisma for JSONB path filter on rawLog->>'cfgpath'
+    const rows = await prisma.$queryRaw<Array<{
+      user: string | null;
+      ui: string | null;
+      cfgobj: string | null;
+      eventTime: Date;
+    }>>`
+      SELECT "user", "rawLog"->>'ui' AS ui, "rawLog"->>'cfgobj' AS cfgobj, "eventTime"
+      FROM cached_events
+      WHERE "rawLog"->>'cfgpath' = ${cfgpath}
+        AND "eventTime" >= ${cutoff}
+      ORDER BY "eventTime" DESC
+      LIMIT 20
+    `;
+    return rows
+      .filter(r => r.user)
+      .map(r => ({
+        user: r.user as string,
+        ui: r.ui || '',
+        cfgobj: r.cfgobj || '',
+        eventTime: r.eventTime,
+      }));
+  } catch {
+    return [];
+  }
+}
 
 // ─── Helper ────────────────────────────────────────────────────────────────────
 
@@ -108,6 +155,37 @@ async function cmdbDiff(
     console.warn(`[AlarmQuery] ${ctx.alarmCode}: cannot compute diff — prevItems: ${!!prevItems}, currItems: ${!!currItems}, prev type: ${typeof prevData}, curr type: ${typeof current}`);
   }
 
+  // ── Enrich with admin user info from FortiAnalyzer cached_events ──────────
+  // FortiAnalyzer records config-change events with user, ui (e.g. GUI(10.7.7.7))
+  // and cfgpath (e.g. 'firewall.policy'). We correlate these with the CMDB diff
+  // timestamp to identify who made the change, then store in the alarm rawData.
+  const cfgpath = endpointToCfgpath(endpoint);
+  const adminRows = await resolveAdminUsers(cfgpath, 60 * 60 * 1000);
+
+  // Deduplicate: one entry per user, include all affected objects and UI
+  const adminMap = new Map<string, { user: string; ui: string; objects: Set<string> }>();
+  for (const row of adminRows) {
+    if (!adminMap.has(row.user)) {
+      adminMap.set(row.user, { user: row.user, ui: row.ui, objects: new Set() });
+    }
+    const entry = adminMap.get(row.user)!;
+    // Prefer non-ha_daemon UI (ha_daemon is internal replication, not the actual admin source)
+    if (row.ui && !row.ui.startsWith('ha_daemon') && !entry.ui) {
+      entry.ui = row.ui;
+    }
+    if (row.cfgobj) entry.objects.add(row.cfgobj);
+  }
+
+  const adminUsers = [...adminMap.values()].map(e => ({
+    user: e.user,
+    ui: e.ui,
+    objects: [...e.objects].slice(0, 5),
+  }));
+
+  if (adminUsers.length > 0) {
+    console.log(`[AlarmQuery] ${ctx.alarmCode}: enriched with admin user(s): ${adminUsers.map(u => u.user).join(', ')}`);
+  }
+
   return {
     events: [{
       endpoint,
@@ -117,6 +195,10 @@ async function cmdbDiff(
       source: 'fortigate-cmdb-diff',
       itime_t: Math.floor(Date.now() / 1000), // Unix timestamp for parseLogTime
       diffDetails, // Include detailed diff in the event
+      // Who made the change (from FortiAnalyzer audit logs)
+      admin_users: adminUsers,         // full list with ui + objects
+      admin_user: adminUsers[0]?.user ?? null,  // convenience: primary user
+      admin_ui: adminUsers[0]?.ui ?? null,      // convenience: primary access method
     }],
     stats: {
       alarmCode: ctx.alarmCode,
