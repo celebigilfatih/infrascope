@@ -2,7 +2,7 @@ import './globals.css';
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import { Toaster } from "@/components/ui/toaster";
-import { Sidebar } from '../components/layout/Sidebar';
+import { LayoutShell } from '../components/layout/LayoutShell';
 import { NavigationProgress } from '@/components/ui/navigation-progress';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -42,13 +42,9 @@ export default function RootLayout({
       </head>
       <body className={inter.className} suppressHydrationWarning>
         <NavigationProgress />
-        <div className="flex min-h-screen bg-background text-foreground transition-colors duration-300">
-          <Sidebar />
-          {/* Main content wrapper */}
-          <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-            {children}
-          </main>
-        </div>
+        <LayoutShell>
+          {children}
+        </LayoutShell>
         <Toaster />
       </body>
     </html>

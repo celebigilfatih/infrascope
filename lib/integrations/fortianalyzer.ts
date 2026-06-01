@@ -169,6 +169,86 @@ class FortiAnalyzerService {
   }
 
   /**
+   * FA session-expired / auth-invalid JSON-RPC codes.
+   * -11 = "No permission for the resource" (typically stale session)
+   *  -6 = "Invalid URL" when session is completely gone
+   *   1 = "Generic error" paired with session/login messages
+   * Additional heuristic: any status message containing 'session' / 'login'.
+   */
+  private isSessionExpiredError(code?: number, message?: string): boolean {
+    if (code === -11 || code === -6) return true;
+    const msg = (message || '').toLowerCase();
+    if (msg.includes('invalid session') || msg.includes('session expired') ||
+        msg.includes('login required') || msg.includes('no permission')) {
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Clear session state both locally and globally.
+   * Call this whenever FA indicates the session is invalid so the next
+   * request triggers a fresh login instead of hammering FA with a dead session
+   * (each dead-session call counts as a failed auth and drives the account to
+   * permanent lockout on FA).
+   */
+  private invalidateSession(reason: string): void {
+    if (this.config.accessToken) return; // API keys don't expire
+    const state = getGlobalLoginState(this.config.host);
+    if (state.session || this.session) {
+      console.warn(`[FortiAnalyzer] ⚠️  Invalidating session: ${reason}`);
+    }
+    state.session = null;
+    state.lastLoginTime = 0;
+    this.session = null;
+    this.lastLoginTime = 0;
+  }
+
+  /**
+   * Logout from FortiAnalyzer and invalidate the current session on the server
+   * side. Called automatically before re-authentication to prevent session
+   * pile-up (FA has a max-concurrent-sessions-per-admin limit; orphan sessions
+   * drive the account to permanent lockout that only user recreation fixes).
+   */
+  private async logout(): Promise<void> {
+    const state = getGlobalLoginState(this.config.host);
+    const sess = state.session || this.session;
+    if (!sess || this.config.accessToken) {
+      // No session to close, or API-key auth (stateless)
+      return;
+    }
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10_000);
+
+      await fetchWithAgent(this.baseUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'exec',
+          params: [{ url: '/sys/logout' }],
+          session: sess,
+          id: 99,
+        }),
+      } as any).catch(() => null); // best-effort, ignore network errors
+
+      clearTimeout(timeoutId);
+      console.log('[FortiAnalyzer] 👋 Logged out — server-side session released');
+    } catch {
+      // Best-effort: we're about to replace the session anyway
+    } finally {
+      // Always clear local + global state regardless of logout success
+      state.session = null;
+      state.lastLoginTime = 0;
+      this.session = null;
+      this.lastLoginTime = 0;
+    }
+  }
+
+  /**
    * Check if local session is valid (not expired).
    * Also syncs from global state in case another module instance logged in.
    */
@@ -208,6 +288,13 @@ class FortiAnalyzerService {
     if (this.isSessionValid()) return true;
 
     const state = getGlobalLoginState(this.config.host);
+
+    // Best-effort logout if we have a stale/cached session on file.
+    // This releases the server-side session so it does not pile up in FA's
+    // admin session table (the primary driver of permanent account lockout).
+    if (state.session) {
+      await this.logout();
+    }
 
     // ── Backoff guard ────────────────────────────────────────────────────────
     // Suppress login entirely while backoff window is active.
@@ -368,8 +455,22 @@ class FortiAnalyzerService {
       });
 
       const data = await response.json() as {
-        result?: Array<{ data: Record<string, unknown>; status: { code: number } }>;
+        result?: Array<{ data: Record<string, unknown>; status: { code: number; message?: string } }>;
+        error?: { code: number; message: string };
       };
+
+      // Session expired on FA side — clear cache so the next call re-logs in
+      const outerErr = data.error;
+      const innerStatus = data.result?.[0]?.status;
+      if (outerErr && this.isSessionExpiredError(outerErr.code, outerErr.message)) {
+        this.invalidateSession(`getStatus outer error code=${outerErr.code}`);
+        return null;
+      }
+      if (innerStatus && innerStatus.code !== 0 &&
+          this.isSessionExpiredError(innerStatus.code, innerStatus.message)) {
+        this.invalidateSession(`getStatus status code=${innerStatus.code}`);
+        return null;
+      }
 
       if (data.result && data.result[0].status.code === 0) {
         return data.result[0].data;
@@ -404,8 +505,22 @@ class FortiAnalyzerService {
       });
 
       const data = await response.json() as {
-        result?: Array<{ data: Array<Record<string, unknown>>; status: { code: number } }>;
+        result?: Array<{ data: Array<Record<string, unknown>>; status: { code: number; message?: string } }>;
+        error?: { code: number; message: string };
       };
+
+      // Session expired on FA side — clear cache so the next call re-logs in
+      const outerErr = data.error;
+      const innerStatus = data.result?.[0]?.status;
+      if (outerErr && this.isSessionExpiredError(outerErr.code, outerErr.message)) {
+        this.invalidateSession(`getAdoms outer error code=${outerErr.code}`);
+        return null;
+      }
+      if (innerStatus && innerStatus.code !== 0 &&
+          this.isSessionExpiredError(innerStatus.code, innerStatus.message)) {
+        this.invalidateSession(`getAdoms status code=${innerStatus.code}`);
+        return null;
+      }
 
       if (data.result && data.result[0].status.code === 0) {
         return data.result[0].data;
@@ -501,8 +616,23 @@ class FortiAnalyzerService {
         }),
       });
 
-      const data = await response.json();
-      console.log('Devices raw response:', JSON.stringify(data, null, 2));
+      const data = await response.json() as {
+        result?: Array<{ data: Array<Record<string, unknown>>; status: { code: number; message?: string } }>;
+        error?: { code: number; message: string };
+      };
+
+      // Session expired on FA side — clear cache so the next call re-logs in
+      const outerErr = data.error;
+      const innerStatus = data.result?.[0]?.status;
+      if (outerErr && this.isSessionExpiredError(outerErr.code, outerErr.message)) {
+        this.invalidateSession(`getDevices outer error code=${outerErr.code}`);
+        return [];
+      }
+      if (innerStatus && innerStatus.code !== 0 &&
+          this.isSessionExpiredError(innerStatus.code, innerStatus.message)) {
+        this.invalidateSession(`getDevices status code=${innerStatus.code}`);
+        return [];
+      }
 
       if (data.result && Array.isArray(data.result)) {
         return data.result[0]?.data || [];
@@ -580,9 +710,21 @@ class FortiAnalyzerService {
         }
 
         const data = await response.json() as {
-          result?: { tid: number };
+          result?: { tid: number; status?: { code: number; message?: string } };
           error?: { code: number; message: string };
         };
+
+        // Session expired on FA side — clear cache so the next call re-logs in
+        if (data.error && this.isSessionExpiredError(data.error.code, data.error.message)) {
+          this.invalidateSession(`startLogSearch outer error code=${data.error.code}`);
+          return null;
+        }
+        const innerStatus = data.result?.status;
+        if (innerStatus && innerStatus.code !== 0 &&
+            this.isSessionExpiredError(innerStatus.code, innerStatus.message)) {
+          this.invalidateSession(`startLogSearch status code=${innerStatus.code}`);
+          return null;
+        }
 
         if (data.error) {
           throw new Error(`Log search error: ${data.error.message}`);
@@ -650,6 +792,19 @@ class FortiAnalyzerService {
 
         if (!data) {
           throw new Error(`fetchLogResults JSON parse timed out (tid=${tid})`);
+        }
+
+        // Session expired on FA side — clear cache so the next call re-logs in
+        const outerErr = data.error;
+        const innerStatus = data.result?.status;
+        if (outerErr && this.isSessionExpiredError(outerErr.code, outerErr.message)) {
+          this.invalidateSession(`fetchLogResults outer error code=${outerErr.code}`);
+          return null;
+        }
+        if (innerStatus && innerStatus.code !== 0 &&
+            this.isSessionExpiredError(innerStatus.code, innerStatus.message)) {
+          this.invalidateSession(`fetchLogResults status code=${innerStatus.code}`);
+          return null;
         }
 
         if (data.error) {
@@ -724,12 +879,22 @@ class FortiAnalyzerService {
       // Handle both response formats: {result: {tid}} and {result: [{tid, status}]}
       let tid: number | null = null;
       if (addData.error) {
+        // Session expired on FA side — clear cache so the next call re-logs in
+        if (this.isSessionExpiredError(addData.error.code, addData.error.message)) {
+          this.invalidateSession(`getFortiView add outer error code=${addData.error.code}`);
+          return null;
+        }
         console.error(`FortiView ${viewName} add error:`, addData.error);
         return null;
       }
       if (Array.isArray(addData.result)) {
         const first = addData.result[0];
         if (first?.status && first.status.code !== 0) {
+          // Session expired on FA side — check inner status
+          if (this.isSessionExpiredError(first.status.code, first.status.message)) {
+            this.invalidateSession(`getFortiView add status code=${first.status.code}`);
+            return null;
+          }
           console.error(`FortiView ${viewName} add status error:`, first.status);
           return null;
         }
@@ -776,11 +941,22 @@ class FortiAnalyzerService {
         };
 
         if (getData.error) {
+          // Session expired on FA side — clear cache so the next call re-logs in
+          if (this.isSessionExpiredError(getData.error.code, getData.error.message)) {
+            this.invalidateSession(`getFortiView poll outer error code=${getData.error.code}`);
+            return null;
+          }
           console.error('FortiView get error:', getData.error);
           return null;
         }
 
         const result = getData.result;
+        // Session expired on FA side — check inner status
+        if (result?.status && result.status.code !== 0 &&
+            this.isSessionExpiredError(result.status.code, result.status.message)) {
+          this.invalidateSession(`getFortiView poll status code=${result.status.code}`);
+          return null;
+        }
         if (result && result.percentage >= 90 && result.data && result.data.length > 0) {
           console.log(`FortiView ${viewName}: completed at ${result.percentage}% with ${result.data.length} rows`);
           return {
@@ -841,7 +1017,24 @@ class FortiAnalyzerService {
         body: JSON.stringify(requestBody),
       });
 
-      const data = await response.json();
+      const data = await response.json() as {
+        result?: any;
+        error?: { code: number; message: string };
+      };
+
+      // Session expired on FA side — clear cache so the next call re-logs in
+      if (data.error && this.isSessionExpiredError(data.error.code, data.error.message)) {
+        this.invalidateSession(`getMitreAttackMatrix outer error code=${data.error.code}`);
+        return null;
+      }
+      // Check inner status (FA may return status inside result)
+      const innerStatus = data.result?.status || data.result?.[0]?.status;
+      if (innerStatus && innerStatus.code !== 0 &&
+          this.isSessionExpiredError(innerStatus.code, innerStatus.message)) {
+        this.invalidateSession(`getMitreAttackMatrix status code=${innerStatus.code}`);
+        return null;
+      }
+
       if (data.error) {
         console.error('[MITRE] Error in response:', data.error);
         return null;
@@ -892,7 +1085,24 @@ class FortiAnalyzerService {
         }),
       });
 
-      const data = await response.json();
+      const data = await response.json() as {
+        result?: any;
+        error?: { code: number; message: string };
+      };
+
+      // Session expired on FA side — clear cache so the next call re-logs in
+      if (data.error && this.isSessionExpiredError(data.error.code, data.error.message)) {
+        this.invalidateSession(`getMitreTechniqueDetails outer error code=${data.error.code}`);
+        return null;
+      }
+      // Check inner status (FA may return status inside result)
+      const innerStatus = data.result?.status || data.result?.[0]?.status;
+      if (innerStatus && innerStatus.code !== 0 &&
+          this.isSessionExpiredError(innerStatus.code, innerStatus.message)) {
+        this.invalidateSession(`getMitreTechniqueDetails status code=${innerStatus.code}`);
+        return null;
+      }
+
       if (data.error) {
         console.error(`MITRE Technique ${techId} get error:`, data.error);
         return null;

@@ -43,6 +43,31 @@ const nextConfig = {
         source: '/api/locations/:path*',
         headers: [{ key: 'Cache-Control', value: 'public, s-maxage=30, stale-while-revalidate=120' }],
       },
+      // Dashboard API caching — reduce load on integrations
+      {
+        source: '/api/integrations/vmware',
+        headers: [{ key: 'Cache-Control', value: 'public, s-maxage=60, stale-while-revalidate=300' }],
+      },
+      {
+        source: '/api/integrations/fortigate',
+        headers: [{ key: 'Cache-Control', value: 'public, s-maxage=30, stale-while-revalidate=120' }],
+      },
+      {
+        source: '/api/integrations/nms/:path*',
+        headers: [{ key: 'Cache-Control', value: 'public, s-maxage=30, stale-while-revalidate=120' }],
+      },
+      {
+        source: '/api/security/quarantine',
+        headers: [{ key: 'Cache-Control', value: 'public, s-maxage=30, stale-while-revalidate=120' }],
+      },
+      {
+        source: '/api/alarms',
+        headers: [{ key: 'Cache-Control', value: 'public, s-maxage=15, stale-while-revalidate=60' }],
+      },
+      {
+        source: '/api/dashboard/summary',
+        headers: [{ key: 'Cache-Control', value: 'public, s-maxage=30, stale-while-revalidate=120' }],
+      },
     ];
   },
   experimental: {

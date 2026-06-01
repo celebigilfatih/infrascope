@@ -12,7 +12,9 @@ export async function GET(request: NextRequest) {
     const severity = searchParams.get('severity');
     const acknowledged = searchParams.get('acknowledged');
     const category = searchParams.get('category');
-    const limit = parseInt(searchParams.get('limit') || '100', 10);
+    const source = searchParams.get('source');
+    const search = searchParams.get('search');
+    const limit = Math.min(parseInt(searchParams.get('limit') || '25', 10), 200);
     const offset = parseInt(searchParams.get('offset') || '0', 10);
 
     const where: Record<string, unknown> = {};
@@ -25,6 +27,44 @@ export async function GET(request: NextRequest) {
     }
     if (category) {
       where.alarm = { category };
+    }
+    if (source) {
+      // Map UI source categories to DB-level filters
+      // 'vmware' → alarm.source = 'vmware' OR alarm.code starts with VM_/SNAPSHOT_/MULTIPLE_SNAPSHOTS
+      // 'switch' → alarm.code starts with NMS_/SNMP_/PORT_/DEVICE_
+      // 'firewall' → everything else (fortianalyzer, fortigate-sslvpn, or no source)
+      const existingAlarm = (where.alarm as Record<string, unknown>) || {};
+      const alarmFilter: Record<string, unknown> = { ...existingAlarm };
+      if (source === 'vmware') {
+        alarmFilter.OR = [
+          { source: 'vmware' },
+          { code: { startsWith: 'VM_', mode: 'insensitive' } },
+          { code: { startsWith: 'SNAPSHOT_', mode: 'insensitive' } },
+          { code: 'MULTIPLE_SNAPSHOTS' },
+        ];
+      } else if (source === 'switch') {
+        alarmFilter.OR = [
+          { code: { startsWith: 'NMS_', mode: 'insensitive' } },
+          { code: { startsWith: 'SNMP_', mode: 'insensitive' } },
+          { code: { startsWith: 'PORT_', mode: 'insensitive' } },
+          { code: { startsWith: 'DEVICE_', mode: 'insensitive' } },
+        ];
+      } else if (source === 'firewall') {
+        alarmFilter.OR = [
+          { source: 'fortianalyzer' },
+          { source: 'fortigate-sslvpn' },
+        ];
+      }
+      where.alarm = alarmFilter;
+    }
+    if (search) {
+      const term = search.toLowerCase();
+      where.OR = [
+        { title: { contains: term, mode: 'insensitive' } },
+        { message: { contains: term, mode: 'insensitive' } },
+        { sourceIp: { contains: term } },
+        { deviceName: { contains: term, mode: 'insensitive' } },
+      ];
     }
 
     const [events, total] = await Promise.all([

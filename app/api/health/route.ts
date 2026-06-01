@@ -9,7 +9,38 @@ import { startAlarmScheduler, getSchedulerStatus } from '@/lib/alarm-scheduler';
 import { startAlarmMonitor, getAlarmMonitor } from '@/lib/alarms/alarm-monitor';
 import { prisma } from '@/lib/prisma';
 import { getSharedFortiAnalyzerService, getFortiAnalyzerLoginHealth } from '@/lib/integrations/fortianalyzer';
+import { getEventCacheStatus } from '@/lib/alarms/detection-engine';
 import { getDLQStats } from '@/lib/notifications/dlq-worker';
+
+interface FAHealthResult {
+  status: 'healthy' | 'unhealthy' | 'unknown';
+  responseTimeMs: number;
+  error?: string;
+  consecutiveFailures?: number;
+  isAccountLocked?: boolean;
+  backoffRemainingSec?: number;
+  session?: { active: boolean; lastLoginAt: string | null };
+  eventCache?: { lastSyncAt: string | null; isFresh: boolean; syncInProgress: boolean; consecutiveSyncFailures: number; nextSyncDelayMin: number } | null;
+}
+
+interface VMwareHealthResult {
+  status: 'healthy' | 'unhealthy' | 'unknown';
+  responseTimeMs?: number;
+  error?: string;
+  version?: string;
+  lastSyncAt?: string | null;
+  lastSyncStatus?: string | null;
+}
+
+interface NmsHealthResult {
+  status: 'healthy' | 'unhealthy' | 'unknown';
+  error?: string;
+  pollerAlive?: boolean;
+  registeredDevices?: number;
+  pollingDevices?: number;
+  recentHealthMetrics?: number;
+  pollingActive?: boolean;
+}
 
 interface HealthStatus {
   status: 'healthy' | 'degraded' | 'unhealthy';
@@ -21,8 +52,9 @@ interface HealthStatus {
   };
   datasources: {
     database: { status: 'healthy' | 'unhealthy'; responseTimeMs: number };
-    fortianalyzer: { status: 'healthy' | 'unhealthy' | 'unknown'; responseTimeMs?: number; error?: string; consecutiveFailures?: number; isAccountLocked?: boolean; backoffRemainingSec?: number };
-    vmware: { status: 'healthy' | 'unhealthy' | 'unknown'; responseTimeMs?: number; error?: string };
+    fortianalyzer: FAHealthResult;
+    vmware: VMwareHealthResult;
+    nms: NmsHealthResult;
   };
   alarms: {
     totalDefinitions: number;
@@ -65,13 +97,24 @@ let _lastFAHealth: {
 } | null = null;
 const FA_HEALTH_CACHE_MS = 5 * 60 * 1000; // 5-minute cache for failed health checks
 
-async function checkFortiAnalyzerHealth(): Promise<{ status: 'healthy' | 'unhealthy'; responseTimeMs: number; error?: string; consecutiveFailures?: number; isAccountLocked?: boolean; backoffRemainingSec?: number }> {
+async function checkFortiAnalyzerHealth(): Promise<FAHealthResult> {
   const startTime = Date.now();
+
+  // Build event cache info from detection engine singleton (no API call needed)
+  const cacheStatus = getEventCacheStatus();
+  const eventCacheInfo = cacheStatus ? {
+    lastSyncAt: cacheStatus.lastSyncTime?.toISOString() ?? null,
+    isFresh: cacheStatus.isFresh,
+    syncInProgress: cacheStatus.syncInProgress,
+    consecutiveSyncFailures: cacheStatus.consecutiveSyncFailures,
+    nextSyncDelayMin: cacheStatus.nextSyncDelayMin,
+  } : null;
+
   try {
     // Use shared singleton (if available) to avoid creating competing login sessions
     const service = getSharedFortiAnalyzerService();
     if (!service) {
-      return { status: 'unknown' as 'unhealthy', responseTimeMs: 0, error: 'Not initialized' };
+      return { status: 'unknown' as 'unhealthy', responseTimeMs: 0, error: 'Not initialized', eventCache: eventCacheInfo };
     }
 
     // Return cached UNHEALTHY result if last check failed recently.
@@ -82,11 +125,15 @@ async function checkFortiAnalyzerHealth(): Promise<{ status: 'healthy' | 'unheal
       _lastFAHealth.result.status === 'unhealthy' &&
       Date.now() - _lastFAHealth.time < FA_HEALTH_CACHE_MS
     ) {
-      // Enrich cached result with current login health state
       const loginHealth = getFortiAnalyzerLoginHealth();
-      return { ..._lastFAHealth.result, ...loginHealth };
+      return {
+        ..._lastFAHealth.result,
+        ...loginHealth,
+        session: { active: false, lastLoginAt: null },
+        eventCache: eventCacheInfo,
+      };
     }
-    
+
     const loggedIn = await service.login();
     const loginHealth = getFortiAnalyzerLoginHealth();
     if (!loggedIn) {
@@ -97,12 +144,18 @@ async function checkFortiAnalyzerHealth(): Promise<{ status: 'healthy' | 'unheal
         ...loginHealth,
       };
       _lastFAHealth = { result, time: Date.now() };
-      return result;
+      return { ...result, session: { active: false, lastLoginAt: null }, eventCache: eventCacheInfo };
     }
-    
+
     // Success — clear the cache so next health check validates fresh
     _lastFAHealth = null;
-    return { status: 'healthy', responseTimeMs: Date.now() - startTime, ...loginHealth };
+    return {
+      status: 'healthy',
+      responseTimeMs: Date.now() - startTime,
+      ...loginHealth,
+      session: { active: true, lastLoginAt: null },
+      eventCache: eventCacheInfo,
+    };
   } catch (error) {
     const loginHealth = getFortiAnalyzerLoginHealth();
     const result = {
@@ -112,20 +165,29 @@ async function checkFortiAnalyzerHealth(): Promise<{ status: 'healthy' | 'unheal
       ...loginHealth,
     };
     _lastFAHealth = { result, time: Date.now() };
-    return result;
+    return { ...result, session: { active: false, lastLoginAt: null }, eventCache: eventCacheInfo };
   }
 }
 
 /**
- * Check VMware health (if configured)
+ * Check VMware health (if configured).
+ * Uses VMwareService.getStatus() for connectivity + version check,
+ * and queries IntegrationConfig for last sync time.
  */
-async function checkVMwareHealth(): Promise<{ status: 'healthy' | 'unhealthy' | 'unknown'; responseTimeMs?: number; error?: string }> {
+async function checkVMwareHealth(): Promise<VMwareHealthResult> {
   const vmwareHost = process.env.VMWARE_HOST;
   if (!vmwareHost) {
     return { status: 'unknown', error: 'Not configured' };
   }
-  
+
   const startTime = Date.now();
+
+  // Fetch last sync info from DB in parallel with connectivity check
+  const syncInfoPromise = prisma.integrationConfig.findFirst({
+    where: { type: 'VMWARE_VCENTER' },
+    select: { lastSyncAt: true, lastSyncStatus: true },
+  }).catch(() => null);
+
   try {
     const { VMwareService } = await import('@/lib/integrations/vmware');
     const service = new VMwareService({
@@ -135,12 +197,100 @@ async function checkVMwareHealth(): Promise<{ status: 'healthy' | 'unhealthy' | 
       pollingInterval: 5,
       enabledModules: { datacenters: false, clusters: false, hosts: false, vms: false, datastores: false },
     });
-    
-    const connected = await service.authenticateSOAP();
-    return { status: connected ? 'healthy' : 'unhealthy', responseTimeMs: Date.now() - startTime };
+
+    const [vmStatus, syncInfo] = await Promise.all([
+      service.getStatus(),
+      syncInfoPromise,
+    ]);
+
+    return {
+      status: vmStatus.connected ? 'healthy' : 'unhealthy',
+      responseTimeMs: Date.now() - startTime,
+      error: vmStatus.error,
+      version: vmStatus.version,
+      lastSyncAt: syncInfo?.lastSyncAt?.toISOString() ?? null,
+      lastSyncStatus: syncInfo?.lastSyncStatus ?? null,
+    };
   } catch (error) {
-    return { status: 'unhealthy', responseTimeMs: Date.now() - startTime, error: (error as Error).message };
+    return {
+      status: 'unhealthy',
+      responseTimeMs: Date.now() - startTime,
+      error: (error as Error).message,
+    };
   }
+}
+
+/**
+ * Check NMS (Network Management System) health.
+ * Queries the FastAPI /health endpoint for poller status and uses DB
+ * metrics as a sign-of-life indicator when the service is unreachable.
+ */
+async function checkNmsHealth(): Promise<NmsHealthResult> {
+  const nmsUrl = process.env.NMS_INTERNAL_URL || 'http://nms:8500';
+  const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000);
+
+  // Query DB metrics in parallel with the FastAPI health check
+  const [pollingDevices, recentMetrics] = await Promise.all([
+    (prisma as any).device.count({
+      where: { pollingEnabled: true, nmsDeviceId: { not: null } },
+    }).catch(() => 0),
+    (prisma as any).nmsHealthMetric.count({
+      where: { collectedAt: { gte: tenMinAgo } },
+    }).catch(() => 0),
+  ]);
+
+  // Try reaching the NMS FastAPI service
+  let pollerAlive = false;
+  let registeredDevices = 0;
+  try {
+    const res = await fetch(`${nmsUrl}/health`, {
+      signal: AbortSignal.timeout(3000),
+    });
+    if (res.ok) {
+      const data = await res.json() as Record<string, unknown>;
+      pollerAlive = data.poller_alive === true;
+      registeredDevices = typeof data.registered_devices === 'number' ? data.registered_devices : 0;
+    }
+  } catch {
+    // NMS service not running (expected in development without Docker)
+  }
+
+  const pollingActive = recentMetrics > 0;
+
+  // Determine status: healthy if poller is alive OR we see recent metrics
+  if (pollerAlive || pollingActive) {
+    return {
+      status: 'healthy',
+      pollerAlive,
+      registeredDevices,
+      pollingDevices,
+      recentHealthMetrics: recentMetrics,
+      pollingActive,
+    };
+  }
+
+  // If we have polling-enabled devices but no activity, that's unhealthy
+  if (pollingDevices > 0 && !pollingActive && !pollerAlive) {
+    return {
+      status: 'unhealthy',
+      error: 'No recent polling activity',
+      pollerAlive,
+      registeredDevices,
+      pollingDevices,
+      recentHealthMetrics: recentMetrics,
+      pollingActive,
+    };
+  }
+
+  // No NMS devices configured — report unknown (not an error)
+  return {
+    status: 'unknown',
+    pollerAlive,
+    registeredDevices,
+    pollingDevices,
+    recentHealthMetrics: recentMetrics,
+    pollingActive,
+  };
 }
 
 /**
@@ -206,17 +356,18 @@ export async function GET(_request: NextRequest) {
   const { schedulerOk, monitorOk } = ensureAlarmServicesRunning();
   
   // Check all datasources + DLQ stats in parallel
-  const [dbHealth, fazHealth, vmwareHealth, alarmStats, dlqStats] = await Promise.all([
+  const [dbHealth, fazHealth, vmwareHealth, nmsHealth, alarmStats, dlqStats] = await Promise.all([
     checkDatabaseHealth(),
     checkFortiAnalyzerHealth(),
     checkVMwareHealth(),
+    checkNmsHealth(),
     getAlarmStats(),
     getDLQStats(),
   ]);
   
   // Determine overall status
   let overallStatus: 'healthy' | 'degraded' | 'unhealthy' = 'healthy';
-  const unhealthyCount = [dbHealth, fazHealth, vmwareHealth].filter(h => h.status === 'unhealthy').length;
+  const unhealthyCount = [dbHealth, fazHealth, vmwareHealth, nmsHealth].filter(h => h.status === 'unhealthy').length;
   
   if (unhealthyCount >= 2 || !schedulerOk || !monitorOk) {
     overallStatus = 'unhealthy';
@@ -236,6 +387,7 @@ export async function GET(_request: NextRequest) {
       database: dbHealth,
       fortianalyzer: fazHealth,
       vmware: vmwareHealth,
+      nms: nmsHealth,
     },
     alarms: alarmStats,
     notifications: {

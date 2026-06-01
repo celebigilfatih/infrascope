@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
+import { useApi } from '@/lib/hooks/useApi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -73,40 +74,29 @@ const ITEMS_PER_PAGE = 15;
 
 export default function ConfigRevisionsPage() {
   const [logs, setLogs] = useState<AdminLog[]>([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedLog, setSelectedLog] = useState<AdminLog | null>(null);
 
-  useEffect(() => {
-    fetchAdminLogs();
-    const interval = setInterval(fetchAdminLogs, 5 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, []);
+  // SWR: auto-refresh every 5 min, dedup requests, cache in-memory
+  const { data: apiResult, isLoading, mutate: refreshLogs } = useApi<{ success: boolean; data?: AdminLog[]; error?: string }>(
+    '/api/integrations/fortianalyzer?type=config-revisions',
+    { refreshInterval: 5 * 60 * 1000 },
+  );
 
-  const fetchAdminLogs = async () => {
-    try {
-      setLoading(true);
+  // Process SWR data into logs state
+  useMemo(() => {
+    if (apiResult?.success && Array.isArray(apiResult.data)) {
+      const EXCLUDED_USERS = ['siem', 'fgtinfra'];
+      setLogs(apiResult.data.filter((log: AdminLog) =>
+        !EXCLUDED_USERS.includes((log.user || '').toLowerCase())
+      ));
       setError(null);
-      const response = await fetch('/api/integrations/fortianalyzer?type=config-revisions');
-      const result = await response.json();
-      if (result.success && Array.isArray(result.data)) {
-        // Exclude service accounts — automated log collection noise
-        const EXCLUDED_USERS = ['siem', 'fgtinfra'];
-        setLogs(result.data.filter((log: AdminLog) =>
-          !EXCLUDED_USERS.includes((log.user || '').toLowerCase())
-        ));
-      } else {
-        setError(result.error || 'Veri yüklenemedi');
-      }
-    } catch (err) {
-      setError('Admin logları yüklenemedi');
-      console.error('Failed to fetch admin logs:', err);
-    } finally {
-      setLoading(false);
+    } else if (apiResult && !apiResult.success) {
+      setError(apiResult.error || 'Veri yüklenemedi');
     }
-  };
+  }, [apiResult]);
 
   const filteredLogs = useMemo(() => {
     if (!searchTerm) return logs;
@@ -188,8 +178,8 @@ export default function ConfigRevisionsPage() {
             FortiGate üzerindeki admin kullanıcı işlemleri (giriş/çıkış, konfigürasyon değişiklikleri)
           </p>
         </div>
-        <Button onClick={fetchAdminLogs} variant="outline" disabled={loading}>
-          <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+        <Button onClick={() => refreshLogs()} variant="outline" disabled={isLoading}>
+          <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
           Yenile
         </Button>
       </div>
@@ -244,7 +234,7 @@ export default function ConfigRevisionsPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {loading ? (
+          {isLoading ? (
             <div className="flex justify-center py-12"><RefreshCw className="h-8 w-8 animate-spin text-primary" /></div>
           ) : error ? (
             <div className="flex items-center gap-2 p-4 bg-destructive/10 rounded-lg">

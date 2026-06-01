@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -96,6 +96,158 @@ function getAlarmSource(alarm?: { code: string; source?: string }): 'firewall' |
   return 'firewall';
 }
 
+// Config change alarm codes that should show structured change details
+const CONFIG_CHANGE_CODES = new Set([
+  'CORE_CONFIG_CHANGE', 'FW_POLICY_CHANGED', 'INTERFACE_CONFIG_CHANGED',
+  'CONFIG_CHANGE_AFTER_HOURS', 'ADDRESS_OBJECT_CHANGED', 'NEW_ADDRESS_OBJECT',
+  'NEW_SERVICE_OBJECT', 'ADDRESS_GROUP_CHANGED', 'ROUTE_TABLE_CHANGED',
+  'AUTH_SERVER_CHANGED', 'ADMIN_PRIVILEGE_CHANGE', 'ADMIN_PASSWORD_CHANGED',
+  'NEW_ADMIN_USER', 'SERVICE_GROUP_CHANGED', 'NAT_POLICY_CHANGED',
+  'SNAT_POOL_CHANGED', 'IPSEC_TUNNEL_CHANGED', 'SSL_VPN_SETTINGS_CHANGED',
+  'SCHEDULE_OBJECT_CHANGED',
+]);
+
+// Map FortiGate attribute names to Turkish labels
+const ATTR_LABELS: Record<string, string> = {
+  status: 'Durum', name: 'Isim', action: 'Aksiyon', srcintf: 'Kaynak Arayuzu',
+  dstintf: 'Hedef Arayuzu', srcaddr: 'Kaynak Adresi', dstaddr: 'Hedef Adresi',
+  service: 'Servis', schedule: 'Zamanlama', logtraffic: 'Log Trafigi',
+  nat: 'NAT', comments: 'Aciklama', groups: 'Gruplar', password: 'Sifre',
+  mode: 'Mod', type: 'Tip', interface: 'Arayuz', ip: 'IP Adresi',
+  allowaccess: 'Izin Verilen Erisim', mtu: 'MTU', vlanid: 'VLAN ID',
+  member: 'Uye', dst: 'Hedef', src: 'Kaynak', protocol: 'Protokol',
+  port: 'Port', policyid: 'Politika ID', scope: 'Kapsam', subnet: 'Alt Ag',
+  fqdn: 'FQDN', primary: 'Birincil', secondary: 'Ikincil', server: 'Sunucu',
+  key: 'Anahtar', secret: 'Gizli Anahtar', source_ip: 'Kaynak IP',
+  auth_type: 'Kimlik Dogrulama Tipi', profile: 'Profil',
+  webfilter_profile: 'Web Filtre Profili', av_profile: 'Antivirus Profili',
+  ips_sensor: 'IPS Sensor', application_list: 'Uygulama Listesi',
+  ssl_ssh_profile: 'SSL/SSH Profili', deep_packet_inspection: 'Derin Paket Incelemesi',
+  gateway: 'Gateway', distance: 'Mesafe', device: 'Cihaz', 'sdwan-zone': 'SD-WAN Bolgesi',
+  'net-device': 'Ag Cihazi', 'remote-gw': 'Uzak Gateway', 'local-gw': 'Yerel Gateway',
+  proposal: 'Oneri', psksecret: 'PSK Sifresi', dhgrp: 'DH Grubu', keylifeseconds: 'Anahtar Omru',
+  dpd: 'Dead Peer Detection', network: 'Ag', 'auto-negotiate': 'Otomatik Pazarlik',
+  authmethod: 'Kimlik Dogrulama Metodu', peertype: 'Es Tipi', xauthtype: 'XAuth Tipi',
+  peerid: 'Es ID', localid: 'Yerel ID', phase1name: 'Phase 1 Adi', seq_num: 'Sira Numarasi',
+  priority: 'Oncelik', weight: 'Agirlik', bfd: 'BFD', ike_version: 'IKE Versiyon',
+  interface_: 'Arayuz',
+};
+
+// Map common FortiGate values to Turkish labels
+const VALUE_LABELS: Record<string, string> = {
+  enable: 'Aktif', disable: 'Pasif', accept: 'Izin Ver', deny: 'Reddet',
+  drop: 'Birak', reset: 'Sifirla', all: 'Tumu', utm: 'UTM', local: 'Yerel',
+  any: 'Herhangi', none: 'Yok',
+};
+
+function getAttrLabel(attr: string): string { return ATTR_LABELS[attr] || attr; }
+function getValueLabel(value: string): string { return VALUE_LABELS[String(value).trim().toLowerCase()] || String(value); }
+
+// Parse cfgattr for before→after:
+//   Colon format:  "status:enable->disable" or "status:value"
+//   Bracket format: "gateway[1.2.1.2]" or "net-device[disable->disable]" or "sdwan-zone[]"
+//   Mixed:          concatenated brackets "gateway[1.2.1.2]distance[1]device[...]"
+function parseCfgAttr(cfgattr: string): Array<{ attr: string; oldVal: string | null; newVal: string | null }> {
+  const decoded = (() => { try { return decodeURIComponent(cfgattr); } catch { return cfgattr; } })();
+  const results: Array<{ attr: string; oldVal: string | null; newVal: string | null }> = [];
+
+  // Try bracket format first: attr[value] or attr[value->value]
+  const bracketMatches = Array.from(decoded.matchAll(/([\w-]+)\[([^\]]*)\]/g));
+  if (bracketMatches.length > 0) {
+    for (const m of bracketMatches) {
+      const attr = m[1];
+      const inner = m[2];
+      const arrowMatch = inner.match(/^(.+?)->(.+)$/);
+      if (arrowMatch) {
+        results.push({ attr, oldVal: arrowMatch[1], newVal: arrowMatch[2] });
+      } else {
+        results.push({ attr, oldVal: null, newVal: inner || null });
+      }
+    }
+    return results;
+  }
+
+  // Fallback to colon/space format
+  for (const part of decoded.split(/\s+/)) {
+    if (!part) continue;
+    const colonArrow = part.match(/^(\w+):(.+?)->(.+)$/);
+    if (colonArrow) { results.push({ attr: colonArrow[1], oldVal: colonArrow[2], newVal: colonArrow[3] }); continue; }
+    results.push({ attr: part, oldVal: null, newVal: null });
+  }
+  return results;
+}
+
+// Extract new value from msg: "set status disable in firewall.policy 42"
+function extractNewValueFromMsg(msg: string, attr: string): string | null {
+  const decoded = (() => { try { return decodeURIComponent(msg); } catch { return msg; } })();
+  const setMatch = decoded.match(new RegExp(`(?:set|edit)\\s+${attr}\\s+(\\S+)`, 'i'));
+  return setMatch ? setMatch[1] : null;
+}
+
+// Map cfgpath to Turkish label
+const CFGPATH_LABELS: Record<string, string> = {
+  'firewall.policy': 'Guvenlik Duvari Politikasi',
+  'firewall.address': 'Adres Nesnesi',
+  'firewall.addrgrp': 'Adres Grubu',
+  'firewall.service': 'Servis Nesnesi',
+  'firewall.service.group': 'Servis Grubu',
+  'firewall.vip': 'Virtual IP (VIP)',
+  'firewall.schedule': 'Zamanlama Nesnesi',
+  'firewall.ippool': 'IP Havuzu',
+  'firewall.central-snat': 'Merkezi SNAT',
+  'router.static': 'Statik Rota',
+  'system.admin': 'Sistem Yoneticisi',
+  'system.interface': 'Arayuz Konfigurasyonu',
+  'system.accprofile': 'Erisim Profili',
+  'vpn.ipsec.phase1-interface': 'IPsec Phase 1',
+  'vpn.ipsec.phase2-interface': 'IPsec Phase 2',
+  'vpn.ssl.settings': 'SSL-VPN Ayarlari',
+  'user.ldap': 'LDAP Sunucusu',
+  'user.radius': 'RADIUS Sunucusu',
+  'user.tacacs+': 'TACACS+ Sunucusu',
+};
+
+function getCfgPathLabel(path: string): string {
+  return CFGPATH_LABELS[path] || path;
+}
+
+// Action label mapping
+const ACTION_LABELS: Record<string, string> = {
+  add: 'Ekleme', delete: 'Silme', edit: 'Duzenleme', set: 'Guncelleme',
+};
+
+interface ConfigChangeEntry {
+  time: string;
+  action: string;
+  cfgpath: string;
+  cfgobj: string;
+  attrs: Array<{ attr: string; label: string; oldVal: string | null; newVal: string | null }>;
+  msg: string;
+}
+
+function buildConfigChangeEntries(rawData: Array<Record<string, unknown>>): ConfigChangeEntry[] {
+  return rawData.slice(0, 10).map((log) => {
+    const cfgattr = (log.cfgattr as string) || '';
+    const msg = (log.msg as string) || '';
+    const parsedAttrs = cfgattr ? parseCfgAttr(cfgattr) : [];
+    const attrs = parsedAttrs.map(pa => {
+      const extracted = (pa.oldVal === null && pa.newVal === null && msg)
+        ? extractNewValueFromMsg(msg, pa.attr) : null;
+      const oldVal = pa.oldVal;
+      const newVal = pa.newVal ?? extracted;
+      return { attr: pa.attr, label: getAttrLabel(pa.attr), oldVal, newVal };
+    });
+    return {
+      time: (log.time as string) || '',
+      action: (log.action as string) || 'edit',
+      cfgpath: (log.cfgpath as string) || '',
+      cfgobj: (log.cfgobj as string) || '',
+      attrs,
+      msg: (() => { try { return decodeURIComponent(msg); } catch { return msg; } })(),
+    };
+  });
+}
+
 interface ParsedAlarmMessage {
   description: string;
   eventCount: string;
@@ -165,11 +317,13 @@ export default function AlertsDashboardPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
+  const [refreshing, setRefreshing] = useState(false); // silent background refresh
   const [filter, setFilter] = useState('all');
   const [sourceFilter, setSourceFilter] = useState<SourceType>('all');
   const [search, setSearch] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const [rawLogExpanded, setRawLogExpanded] = useState(false);
 
@@ -212,28 +366,69 @@ export default function AlertsDashboardPage() {
   // Track which event IDs are currently being acknowledged
   const [acknowledgingIds, setAcknowledgingIds] = useState<Set<string>>(new Set());
 
-  const fetchEvents = useCallback(async () => {
-    setLoading(true);
+  const PAGE_SIZE = 25;
+
+  const fetchEvents = useCallback(async (silent = false, appendOffset = 0) => {
+    const isAppend = appendOffset > 0;
+    if (isAppend) setLoadingMore(true);
+    else if (!silent) setLoading(true);
+    else setRefreshing(true);
     try {
-      const params = new URLSearchParams({ limit: '200' });
+      const params = new URLSearchParams({ limit: PAGE_SIZE.toString(), offset: appendOffset.toString() });
       if (filter === 'unacknowledged') params.set('acknowledged', 'false');
       else if (filter !== 'all') params.set('severity', filter);
+      if (sourceFilter !== 'all') params.set('source', sourceFilter);
+      if (search) params.set('search', search);
 
       const res = await fetch(`/api/alarms?${params}`);
       const data = await res.json();
       if (data.success) {
-        setEvents(data.data || []);
+        const newEvents = data.data || [];
+        if (isAppend) {
+          setEvents((prev: AlarmEventData[]) => [...prev, ...newEvents]);
+        } else {
+          setEvents(newEvents);
+        }
         setStats(data.stats || {});
         setTotal(data.total || 0);
+        setHasMore(newEvents.length === PAGE_SIZE && (appendOffset + newEvents.length) < data.total);
       }
     } catch (err) {
       console.error('Fetch events error:', err);
     } finally {
-      setLoading(false);
+      if (isAppend) setLoadingMore(false);
+      else if (!silent) setLoading(false);
+      setRefreshing(false);
     }
-  }, [filter]);
+  }, [filter, sourceFilter, search]);
 
   useEffect(() => { fetchEvents(); }, [fetchEvents]);
+
+  // Reset offset when filters change
+  useEffect(() => {
+    setOffset(0);
+    setHasMore(true);
+  }, [filter, sourceFilter, search]);
+
+  // Infinite scroll observer
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+  const loadMore = useCallback(() => {
+    if (loadingMore || !hasMore) return;
+    const newOffset = offset + PAGE_SIZE;
+    setOffset(newOffset);
+    fetchEvents(false, newOffset);
+  }, [loadingMore, hasMore, offset, fetchEvents]);
+
+  useEffect(() => {
+    const el = loadMoreRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) loadMore(); },
+      { rootMargin: '200px' },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [loadMore]);
 
   // Fetch cleanup statistics
   const fetchCleanupStats = useCallback(async () => {
@@ -271,7 +466,7 @@ export default function AlertsDashboardPage() {
         });
 
         if (!cleanupDryRun) {
-          fetchEvents();
+          fetchEvents(true);
           setCleanupOpen(false);
         } else {
           setCleanupStats(data);
@@ -286,27 +481,10 @@ export default function AlertsDashboardPage() {
     }
   };
 
-  // Auto-refresh events every 60 seconds
+  // Auto-refresh events silently every 2 minutes (no loading spinner)
   useEffect(() => {
-    const interval = setInterval(fetchEvents, 60000);
+    const interval = setInterval(() => fetchEvents(true), 120000);
     return () => clearInterval(interval);
-  }, [fetchEvents]);
-
-  // Auto-run alarm check every 5 minutes (background)
-  useEffect(() => {
-    const autoCheck = async () => {
-      try {
-        await fetch('/api/alarms/check');
-        fetchEvents();
-      } catch (err) {
-        // silent background check
-      }
-    };
-    // Initial check after 10 seconds
-    const initialTimeout = setTimeout(autoCheck, 10000);
-    // Then every 5 minutes
-    const interval = setInterval(autoCheck, 5 * 60 * 1000);
-    return () => { clearTimeout(initialTimeout); clearInterval(interval); };
   }, [fetchEvents]);
 
   // Reset all per-alarm enrichment state whenever the selected alarm changes.
@@ -347,7 +525,7 @@ export default function AlertsDashboardPage() {
           text: `Alarm taramasi tamamlandi: ${s.total} alarm kontrol edildi, ${s.triggered} tetiklendi, ${s.skippedCooldown} cooldown, ${s.errors} hata`,
           type: s.triggered > 0 ? 'error' : 'success',
         });
-        fetchEvents();
+        fetchEvents(true);
       } else {
         setMessage({ text: data.error || 'Tarama hatasi', type: 'error' });
       }
@@ -376,8 +554,8 @@ export default function AlertsDashboardPage() {
         );
         setMessage({ text: 'Alarm onaylandi', type: 'success' });
         setTimeout(() => setMessage(null), 3000);
-        // Also refresh from server to ensure consistency
-        fetchEvents();
+        // Also refresh from server to ensure consistency (silent)
+        fetchEvents(true);
       } else {
         setMessage({ text: `Onaylama hatasi: ${data.error || 'Bilinmeyen hata'}`, type: 'error' });
       }
@@ -403,7 +581,7 @@ export default function AlertsDashboardPage() {
         body: JSON.stringify({ ids: unackedIds, acknowledged: true }),
       });
       const data = await res.json();
-      if (data.success) fetchEvents();
+      if (data.success) fetchEvents(true);
     } catch (err) {
       console.error('Acknowledge all error:', err);
     }
@@ -454,7 +632,7 @@ export default function AlertsDashboardPage() {
         setMessage({ text: 'Alarm whitelisted successfully', type: 'success' });
         setDiscardOpen(false);
         setDiscardReason('');
-        fetchEvents();
+        fetchEvents(true);
       } else {
         setMessage({ text: `Error: ${data.error}`, type: 'error' });
       }
@@ -585,24 +763,7 @@ export default function AlertsDashboardPage() {
     }
   };
 
-  const filteredEvents = events.filter((e: AlarmEventData) => {
-    if (sourceFilter !== 'all' && getAlarmSource(e.alarm) !== sourceFilter) return false;
-    if (!search) return true;
-    const term = search.toLowerCase();
-    return (
-      e.title.toLowerCase().includes(term) ||
-      (e.message || '').toLowerCase().includes(term) ||
-      (e.alarm?.code || '').toLowerCase().includes(term) ||
-      (e.sourceIp || '').includes(term) ||
-      (e.deviceName || '').toLowerCase().includes(term)
-    );
-  });
-
-  // Pagination
-  const totalPages = Math.ceil(filteredEvents.length / pageSize);
-  const startIndex = (currentPage - 1) * pageSize;
-  const endIndex = startIndex + pageSize;
-  const paginatedEvents = filteredEvents.slice(startIndex, endIndex);
+  // Filtering is now server-side; events array is the filtered result
 
   return (
     <div className="p-6 space-y-6">
@@ -635,8 +796,8 @@ export default function AlertsDashboardPage() {
             {checking ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Play className="h-4 w-4 mr-2" />}
             {checking ? 'Taraniyor...' : 'Alarm Tara'}
           </Button>
-          <Button variant="outline" size="icon" onClick={fetchEvents} disabled={loading}>
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          <Button variant="outline" size="icon" onClick={() => fetchEvents()} disabled={loading || refreshing}>
+            <RefreshCw className={`h-4 w-4 ${loading || refreshing ? 'animate-spin' : ''}`} />
           </Button>
         </div>
       </div>
@@ -689,7 +850,7 @@ export default function AlertsDashboardPage() {
                 size="sm"
                 variant={sourceFilter === src ? 'default' : 'outline'}
                 className={sourceFilter === src ? `${cfg.bgActive} text-white border-0` : ''}
-                onClick={() => { setSourceFilter(src); setCurrentPage(1); }}
+                onClick={() => { setSourceFilter(src); }}
               >
                 <Icon className="h-3.5 w-3.5 mr-1.5" />
                 {cfg.label}
@@ -711,7 +872,7 @@ export default function AlertsDashboardPage() {
             { key: 'ALARM_MEDIUM', label: 'Orta' },
             { key: 'ALARM_LOW', label: 'Dusuk' },
           ].map((f) => (
-            <Button key={f.key} variant={filter === f.key ? 'default' : 'outline'} size="sm" onClick={() => { setFilter(f.key); setCurrentPage(1); }}>
+            <Button key={f.key} variant={filter === f.key ? 'default' : 'outline'} size="sm" onClick={() => { setFilter(f.key); }}>
               {f.label}
             </Button>
           ))}
@@ -739,14 +900,14 @@ export default function AlertsDashboardPage() {
             Alarm Olaylari
             <Badge variant="secondary">{total}</Badge>
           </CardTitle>
-          <CardDescription>{startIndex + 1}-{Math.min(endIndex, filteredEvents.length)} / {filteredEvents.length} alarm gosteriliyor</CardDescription>
+          <CardDescription>{events.length} / {total} alarm gosteriliyor</CardDescription>
         </CardHeader>
         <CardContent className="p-0">
           {loading ? (
             <div className="flex justify-center py-12">
               <RefreshCw className="h-8 w-8 animate-spin text-primary" />
             </div>
-          ) : filteredEvents.length === 0 ? (
+          ) : events.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               <CheckCircle className="h-12 w-12 mx-auto mb-4 opacity-50" />
               <p className="text-lg font-medium">Alarm bulunamadi</p>
@@ -771,7 +932,7 @@ export default function AlertsDashboardPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {paginatedEvents.map((event: AlarmEventData) => {
+                  {events.map((event: AlarmEventData) => {
                     const sev = SEVERITY_CONFIG[event.severity] || SEVERITY_CONFIG['ALARM_INFO'];
                     const Icon = sev.icon;
                     return (
@@ -906,64 +1067,20 @@ export default function AlertsDashboardPage() {
           )}
         </CardContent>
         
-        {/* Pagination Controls */}
-        {filteredEvents.length > 0 && (
-          <div className="flex items-center justify-between px-6 py-4 border-t">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">
-                {startIndex + 1}-{Math.min(endIndex, filteredEvents.length)} / {filteredEvents.length} kayit
-              </span>
-              <select
-                value={pageSize}
-                onChange={(e) => {
-                  setPageSize(Number(e.target.value));
-                  setCurrentPage(1);
-                }}
-                className="border rounded px-2 py-1 text-sm"
-              >
-                <option value="10">10</option>
-                <option value="25">25</option>
-                <option value="50">50</option>
-                <option value="100">100</option>
-              </select>
-            </div>
-            
-            <div className="flex items-center gap-1">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage(1)}
-                disabled={currentPage === 1}
-              >
-                Ilk
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-              >
-                Onceki
-              </Button>
-              <span className="text-sm px-3">
-                {currentPage} / {totalPages}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages}
-              >
-                Sonraki
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentPage(totalPages)}
-                disabled={currentPage === totalPages}
-              >
-                Son
-              </Button>
+        {/* Infinite scroll sentinel */}
+        {events.length > 0 && (
+          <div className="flex items-center justify-center px-6 py-4 border-t">
+            <div ref={loadMoreRef} className="text-sm text-muted-foreground">
+              {loadingMore ? (
+                <span className="flex items-center gap-2">
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                  Yükleniyor...
+                </span>
+              ) : hasMore ? (
+                <span>{events.length} / {total} kayit — daha fazla icin kaydir</span>
+              ) : (
+                <span>{events.length} / {total} kayit (tumu yuklendi)</span>
+              )}
             </div>
           </div>
         )}
@@ -1213,6 +1330,86 @@ export default function AlertsDashboardPage() {
                     </section>
                   ))}
 
+                  {/* Structured Config Change Detail — reads directly from rawData */}
+                  {CONFIG_CHANGE_CODES.has(selectedEvent.alarm?.code || '') && selectedEvent.rawData && selectedEvent.rawData.length > 0 && (() => {
+                    const entries = buildConfigChangeEntries(selectedEvent.rawData);
+                    if (entries.length === 0) return null;
+                    return (
+                      <section>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
+                          Degisiklik Detaylari
+                        </p>
+                        <div className="space-y-2">
+                          {entries.map((entry, idx) => (
+                            <div key={idx} className="rounded-lg border bg-muted/10 overflow-hidden">
+                              {/* Change header */}
+                              <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 border-b text-xs">
+                                {entry.time && <span className="font-mono text-muted-foreground">{entry.time}</span>}
+                                <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                  entry.action === 'add' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' :
+                                  entry.action === 'delete' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' :
+                                  'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                                }`}>
+                                  {ACTION_LABELS[entry.action] || entry.action}
+                                </span>
+                                {entry.cfgpath && (
+                                  <span className="text-muted-foreground">
+                                    {getCfgPathLabel(entry.cfgpath)}
+                                    {entry.cfgobj && <span className="font-mono ml-1">#{entry.cfgobj}</span>}
+                                  </span>
+                                )}
+                              </div>
+                              {/* Attribute changes table */}
+                              {entry.attrs.length > 0 ? (
+                                <table className="w-full text-xs">
+                                  <tbody>
+                                    {entry.attrs.map((a, ai) => (
+                                      <tr key={ai} className="border-b last:border-0">
+                                        <td className="px-3 py-1.5 text-muted-foreground w-[30%] bg-muted/10 align-top font-medium">
+                                          {a.label}
+                                          {a.label !== a.attr && <span className="ml-1 opacity-50 font-normal">({a.attr})</span>}
+                                        </td>
+                                        <td className="px-3 py-1.5 align-top">
+                                          {a.oldVal !== null && a.newVal !== null ? (
+                                            <span className="flex items-center gap-1.5">
+                                              <span className="px-1.5 py-0.5 rounded bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300 line-through font-mono text-[11px]">
+                                                {getValueLabel(a.oldVal)}
+                                              </span>
+                                              <span className="text-muted-foreground">→</span>
+                                              <span className="px-1.5 py-0.5 rounded bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300 font-mono text-[11px] font-medium">
+                                                {getValueLabel(a.newVal)}
+                                              </span>
+                                            </span>
+                                          ) : a.newVal !== null ? (
+                                            <span className="flex items-center gap-1.5">
+                                              <span className="text-muted-foreground">→</span>
+                                              <span className="px-1.5 py-0.5 rounded bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300 font-mono text-[11px] font-medium">
+                                                {getValueLabel(a.newVal)}
+                                              </span>
+                                            </span>
+                                          ) : (
+                                            <span className="text-muted-foreground italic">degistirildi</span>
+                                          )}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              ) : entry.msg && entry.msg !== 'Object attribute configured' ? (
+                                <div className="px-3 py-2 text-xs text-muted-foreground">{entry.msg}</div>
+                              ) : null}
+                            </div>
+                          ))}
+                          {selectedEvent.rawData!.length > 10 && (
+                            <p className="text-xs text-muted-foreground italic text-center">
+                              ... ve {selectedEvent.rawData!.length - 10} degisiklik daha
+                            </p>
+                          )}
+                        </div>
+                      </section>
+                    );
+                  })()}
+
                   {/* Metadata 2x2 grid */}
                   <div className="grid grid-cols-2 gap-3">
                     <div className="p-3 rounded-lg bg-muted/30">
@@ -1262,6 +1459,55 @@ export default function AlertsDashboardPage() {
                       <p className="text-sm font-bold">{selectedEvent.deviceName || '-'}</p>
                     </div>
                   </div>
+
+                  {/* Config Change Extra Metadata — from rawData */}
+                  {CONFIG_CHANGE_CODES.has(selectedEvent.alarm?.code || '') && selectedEvent.rawData && selectedEvent.rawData.length > 0 && (() => {
+                    const firstLog = selectedEvent.rawData[0] as Record<string, unknown>;
+                    const ui = (firstLog.ui as string) || '';
+                    const vd = (firstLog.vd as string) || '';
+                    const devid = (firstLog.devid as string) || '';
+                    const logdesc = (firstLog.logdesc as string) || '';
+                    const msgRaw = (firstLog.msg as string) || '';
+                    const msgDecoded = (() => { try { return decodeURIComponent(msgRaw); } catch { return msgRaw; } })();
+                    if (!ui && !vd && !devid && !logdesc && !msgDecoded) return null;
+                    return (
+                      <section>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Islem Detaylari</p>
+                        <div className="grid grid-cols-2 gap-3">
+                          {ui && (
+                            <div className="p-3 rounded-lg bg-muted/30">
+                              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Erisim Yontemi</p>
+                              <p className="text-sm font-medium">{ui}</p>
+                            </div>
+                          )}
+                          {vd && (
+                            <div className="p-3 rounded-lg bg-muted/30">
+                              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">VDOM</p>
+                              <p className="text-sm font-medium">{vd}</p>
+                            </div>
+                          )}
+                          {devid && (
+                            <div className="p-3 rounded-lg bg-muted/30">
+                              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Cihaz ID</p>
+                              <p className="text-xs font-mono">{devid}</p>
+                            </div>
+                          )}
+                          {logdesc && (
+                            <div className="p-3 rounded-lg bg-muted/30">
+                              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Log Aciklamasi</p>
+                              <p className="text-sm font-medium">{logdesc}</p>
+                            </div>
+                          )}
+                        </div>
+                        {msgDecoded && msgDecoded !== logdesc && (
+                          <div className="mt-2 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800">
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-blue-700 dark:text-blue-300 mb-1">Islem Ozeti</p>
+                            <p className="text-sm font-medium text-blue-800 dark:text-blue-200">{msgDecoded}</p>
+                          </div>
+                        )}
+                      </section>
+                    );
+                  })()}
 
                   {/* Diger Olaylar */}
                   {parsed.otherEvents.length > 0 && (

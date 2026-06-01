@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { logAudit } from '@/lib/audit/logger';
 
 export async function GET() {
   try {
@@ -7,23 +8,21 @@ export async function GET() {
       orderBy: { createdAt: 'desc' },
     });
 
-    const formattedUsers = users.map(user => ({
+    const formattedUsers = users.map((user) => ({
       id: user.id,
       name: user.name,
       email: user.email,
       role: user.role.toLowerCase(),
       status: user.status.toLowerCase(),
-      lastLogin: user.lastLoginAt 
-        ? formatTimeAgo(user.lastLoginAt)
-        : 'Never',
+      lastLogin: user.lastLoginAt ? formatTimeAgo(user.lastLoginAt) : 'Never',
     }));
 
     // Calculate stats
     const stats = {
       total: users.length,
-      active: users.filter(u => u.status === 'ACTIVE').length,
-      inactive: users.filter(u => u.status === 'INACTIVE').length,
-      admins: users.filter(u => u.role === 'ADMIN').length,
+      active: users.filter((u) => u.status === 'ACTIVE').length,
+      inactive: users.filter((u) => u.status === 'INACTIVE').length,
+      admins: users.filter((u) => u.role === 'ADMIN').length,
     };
 
     return NextResponse.json({
@@ -80,6 +79,24 @@ export async function POST(request: Request) {
       },
     });
 
+    // Log activity
+    await prisma.userActivity.create({
+      data: {
+        userId: user.id,
+        action: 'create_user',
+        details: { name: user.name, email: user.email, role: user.role },
+      },
+    });
+
+    // Audit log
+    await logAudit({
+      userId: user.id,
+      action: 'user.create',
+      resource: 'user',
+      resourceId: user.id,
+      details: { name: user.name, email: user.email, role: user.role },
+    });
+
     return NextResponse.json({
       success: true,
       data: {
@@ -104,14 +121,33 @@ export async function PATCH(request: Request) {
     const body = await request.json();
     const { id, name, email, role, status } = body;
 
+    const updateData: Record<string, unknown> = {};
+    if (name) updateData.name = name;
+    if (email) updateData.email = email;
+    if (role) updateData.role = role.toUpperCase();
+    if (status) updateData.status = status.toUpperCase();
+
     const user = await prisma.user.update({
       where: { id },
+      data: updateData,
+    });
+
+    // Log activity
+    await prisma.userActivity.create({
       data: {
-        ...(name && { name }),
-        ...(email && { email }),
-        ...(role && { role: role.toUpperCase() }),
-        ...(status && { status: status.toUpperCase() }),
+        userId: user.id,
+        action: 'edit_user',
+        details: { updatedFields: Object.keys(updateData) },
       },
+    });
+
+    // Audit log
+    await logAudit({
+      userId: user.id,
+      action: 'user.update',
+      resource: 'user',
+      resourceId: user.id,
+      details: { updatedFields: Object.keys(updateData) },
     });
 
     return NextResponse.json({
@@ -145,8 +181,40 @@ export async function DELETE(request: Request) {
       );
     }
 
+    // Get user info before deletion for audit
+    const user = await prisma.user.findUnique({ where: { id } });
+
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: 'User not found' },
+        { status: 404 }
+      );
+    }
+
+    // Prevent deleting the last admin
+    if (user.role === 'ADMIN') {
+      const adminCount = await prisma.user.count({
+        where: { role: 'ADMIN' },
+      });
+      if (adminCount <= 1) {
+        return NextResponse.json(
+          { success: false, error: 'Cannot delete the last admin user' },
+          { status: 400 }
+        );
+      }
+    }
+
     await prisma.user.delete({
       where: { id },
+    });
+
+    // Audit log — userId is null since user is deleted
+    // Audit log — userId is null since the user is being deleted
+    await logAudit({
+      action: 'user.delete',
+      resource: 'user',
+      resourceId: id,
+      details: { name: user.name, email: user.email, role: user.role },
     });
 
     return NextResponse.json({ success: true });

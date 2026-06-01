@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import FortiAnalyzerService from '@/lib/integrations/fortianalyzer';
+import FortiAnalyzerService, { initSharedFortiAnalyzerService } from '@/lib/integrations/fortianalyzer';
 import { prisma } from '@/lib/prisma';
 
 export async function GET(request: NextRequest) {
@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
       password?: string;
     };
 
-    const service = new FortiAnalyzerService({
+    const service = initSharedFortiAnalyzerService({
       host: faConfig.host,
       username: faConfig.username || 'infrascope',
       password: faConfig.password || 'Thor.7485-app',

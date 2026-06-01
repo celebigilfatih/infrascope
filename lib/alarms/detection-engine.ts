@@ -38,6 +38,15 @@ let _sharedEventCache: EventCacheService | null = null;
 let _sharedCacheInitialized = false;
 
 /**
+ * Expose the shared event cache status for the /api/health endpoint.
+ * Returns null if the cache hasn't been initialized yet.
+ */
+export function getEventCacheStatus() {
+  if (!_sharedEventCache) return null;
+  return _sharedEventCache.getCacheStatus();
+}
+
+/**
  * Alarm Detection Engine
  * Evaluates alarm rules against FortiAnalyzer logs and triggers notifications.
  */
@@ -2339,6 +2348,7 @@ export class AlarmDetectionEngine {
       'vcenter',
       'vmware',
       'com.vmware.vim.eam',  // VMware ESX Agent Manager (automated migrations/operations)
+      'pyvmomi',              // Python VMware SDK (automated provisioning scripts)
     ];
 
     const userName = (event.userName || '').toLowerCase();
@@ -2493,6 +2503,156 @@ export class AlarmDetectionEngine {
     } catch {
       return String(text).replace(/%20/g, ' ').replace(/%28/g, '(').replace(/%29/g, ')').replace(/%3A/g, ':').replace(/%2F/g, '/');
     }
+  }
+
+  /**
+   * Map FortiGate config attribute name to Turkish label
+   */
+  private getAttrLabel(attr: string): string {
+    const labels: Record<string, string> = {
+      status: 'Durum',
+      name: 'Isim',
+      action: 'Aksiyon',
+      srcintf: 'Kaynak Arayuzu',
+      dstintf: 'Hedef Arayuzu',
+      srcaddr: 'Kaynak Adresi',
+      dstaddr: 'Hedef Adresi',
+      service: 'Servis',
+      schedule: 'Zamanlama',
+      logtraffic: 'Log Trafigi',
+      nat: 'NAT',
+      comments: 'Aciklama',
+      groups: 'Gruplar',
+      password: 'Sifre',
+      trusthost1: 'Guvenli Host 1',
+      trusthost2: 'Guvenli Host 2',
+      trusthost3: 'Guvenli Host 3',
+      trusthost4: 'Guvenli Host 4',
+      'ha-peerip': 'HA Es IP',
+      mode: 'Mod',
+      type: 'Tip',
+      interface: 'Arayuz',
+      ip: 'IP Adresi',
+      allowaccess: 'Izin Verilen Erisim',
+      mtu: 'MTU',
+      vlanid: 'VLAN ID',
+      member: 'Uye',
+      dst: 'Hedef',
+      src: 'Kaynak',
+      protocol: 'Protokol',
+      port: 'Port',
+      policyid: 'Politika ID',
+      internetfont: 'Internet Servisi',
+      fsso: 'FSSO',
+      diffserv_forward: 'Diffserv Ileri',
+      diffserv_reverse: 'Diffserv Geri',
+      tcp_mss_sender: 'TCP MSS Gonderen',
+      tcp_mss_receiver: 'TCP MSS Alici',
+      block_ip_enable: 'IP Bloklama',
+      auto_asic_offload: 'ASIC Offload',
+      deep_packet_inspection: 'Derin Paket Incelemesi',
+      dsri: 'DSRI',
+      webfilter_profile: 'Web Filtre Profili',
+      av_profile: 'Antivirus Profili',
+      ips_sensor: 'IPS Sensor',
+      application_list: 'Uygulama Listesi',
+      profile_protocol: 'Protokol Profili',
+      ssl_ssh_profile: 'SSL/SSH Profili',
+      scope: 'Kapsam',
+      subnet: 'Alt Ag',
+      fqdn: 'FQDN',
+      wildcard: 'Wildcard',
+      cache: 'Onbellek',
+      primary: 'Birincil',
+      secondary: 'Ikincil',
+      server: 'Sunucu',
+      cnid: 'CN ID',
+      dn: 'DN',
+      secondary_server: 'Ikincil Sunucu',
+      tertiary_server: 'Ucuncul Sunucu',
+      source_ip: 'Kaynak IP',
+      radius_server: 'RADIUS Sunucu',
+      auth_type: 'Kimlik Dogrulama Tipi',
+      nas_ip: 'NAS IP',
+      key: 'Anahtar',
+      secret: 'Gizli Anahtar',
+    };
+    return labels[attr] || attr;
+  }
+
+  /**
+   * Map common FortiGate config values to Turkish labels
+   */
+  private getValueLabel(value: string): string {
+    const v = String(value).trim().toLowerCase();
+    const labels: Record<string, string> = {
+      enable: 'Aktif',
+      disable: 'Pasif',
+      accept: 'Izin Ver',
+      deny: 'Reddet',
+      drop: 'Birak',
+      reset: 'Sifirla',
+      add: 'Ekleme',
+      delete: 'Silme',
+      edit: 'Duzenleme',
+      set: 'Guncelleme',
+      logdisk: 'Log Disk',
+      all: 'Tumu',
+      utm: 'UTM',
+      local: 'Yerel',
+      any: 'Herhangi',
+      none: 'Yok',
+    };
+    return labels[v] || String(value);
+  }
+
+  /**
+   * Parse cfgattr field from FortiAnalyzer config change logs.
+   * Formats handled:
+   *   "status"                       → [{ attr: "status", oldVal: null, newVal: null }]
+   *   "status:enable->disable"       → [{ attr: "status", oldVal: "enable", newVal: "disable" }]
+   *   "status enable->disable"       → [{ attr: "status", oldVal: "enable", newVal: "disable" }]
+   *   "status srcintf"               → [{ attr: "status", ... }, { attr: "srcintf", ... }]
+   */
+  private parseCfgAttr(cfgattr: string): Array<{ attr: string; oldVal: string | null; newVal: string | null }> {
+    const decoded = this.decodeMsg(cfgattr);
+    const results: Array<{ attr: string; oldVal: string | null; newVal: string | null }> = [];
+
+    // Split by spaces but handle "attr:old->new" or "attr old->new" as one unit
+    const parts = decoded.split(/\s+/);
+
+    for (const part of parts) {
+      if (!part) continue;
+      // Try format: attr:old->new
+      const colonArrow = part.match(/^(\w+):(.+?)->(.+)$/);
+      if (colonArrow) {
+        results.push({ attr: colonArrow[1], oldVal: colonArrow[2], newVal: colonArrow[3] });
+        continue;
+      }
+      // Try format: attr old->new (when not already split as separate tokens)
+      const spaceArrow = part.match(/^(\w+)(.+?)->(.+)$/);
+      if (spaceArrow) {
+        results.push({ attr: spaceArrow[1], oldVal: spaceArrow[2].trim(), newVal: spaceArrow[3] });
+        continue;
+      }
+      // Simple attribute name
+      results.push({ attr: part, oldVal: null, newVal: null });
+    }
+
+    return results;
+  }
+
+  /**
+   * Extract new value from FortiAnalyzer msg field for a given attribute.
+   * Msg formats: "set status disable in firewall.policy 42"
+   *              "Object attribute configured"
+   */
+  private extractNewValueFromMsg(msg: string, attr: string): string | null {
+    const decoded = this.decodeMsg(msg);
+    // Try: "set <attr> <value> in ..."
+    const setMatch = decoded.match(new RegExp(`(?:set|edit)\\s+${attr}\\s+(\\S+)`, 'i'));
+    if (setMatch) return setMatch[1];
+    return null;
   }
 
   /**
@@ -3134,9 +3294,16 @@ export class AlarmDetectionEngine {
       alarm.code === 'NEW_SERVICE_OBJECT' ||
       alarm.code === 'ADDRESS_GROUP_CHANGED' ||
       alarm.code === 'ROUTE_TABLE_CHANGED' ||
-      alarm.code === 'HA_CONFIG_CHANGED' ||
       alarm.code === 'AUTH_SERVER_CHANGED' ||
-      alarm.code === 'SD_WAN_CHANGED';
+      alarm.code === 'ADMIN_PRIVILEGE_CHANGE' ||
+      alarm.code === 'ADMIN_PASSWORD_CHANGED' ||
+      alarm.code === 'NEW_ADMIN_USER' ||
+      alarm.code === 'SERVICE_GROUP_CHANGED' ||
+      alarm.code === 'NAT_POLICY_CHANGED' ||
+      alarm.code === 'SNAT_POOL_CHANGED' ||
+      alarm.code === 'IPSEC_TUNNEL_CHANGED' ||
+      alarm.code === 'SSL_VPN_SETTINGS_CHANGED' ||
+      alarm.code === 'SCHEDULE_OBJECT_CHANGED';
     
     // SSL-VPN authentication failure alarm - show user + IP details
     if (alarm.code === 'SSLVPN_AUTH_FAILED') {
@@ -3205,9 +3372,16 @@ export class AlarmDetectionEngine {
       alarm.code === 'NEW_SERVICE_OBJECT' ||
       alarm.code === 'ADDRESS_GROUP_CHANGED' ||
       alarm.code === 'ROUTE_TABLE_CHANGED' ||
-      alarm.code === 'HA_CONFIG_CHANGED' ||
       alarm.code === 'AUTH_SERVER_CHANGED' ||
-      alarm.code === 'SD_WAN_CHANGED'
+      alarm.code === 'ADMIN_PRIVILEGE_CHANGE' ||
+      alarm.code === 'ADMIN_PASSWORD_CHANGED' ||
+      alarm.code === 'NEW_ADMIN_USER' ||
+      alarm.code === 'SERVICE_GROUP_CHANGED' ||
+      alarm.code === 'NAT_POLICY_CHANGED' ||
+      alarm.code === 'SNAT_POOL_CHANGED' ||
+      alarm.code === 'IPSEC_TUNNEL_CHANGED' ||
+      alarm.code === 'SSL_VPN_SETTINGS_CHANGED' ||
+      alarm.code === 'SCHEDULE_OBJECT_CHANGED'
     ) {
       // ── CMDB Diff alarms — unified handler with rich detail ─────────────
       if (firstLog.source === 'fortigate-cmdb-diff') {
@@ -3379,19 +3553,22 @@ export class AlarmDetectionEngine {
           else if (path) line += ` ${path}`;
         } else if (alarm.code === 'ADDRESS_GROUP_CHANGED') {
           if (obj) line += ` — Adres Grubu: "${obj}"`;
-        } else if (alarm.code === 'NEW_SERVICE_OBJECT') {
+        } else if (alarm.code === 'NEW_SERVICE_OBJECT' || alarm.code === 'SERVICE_GROUP_CHANGED') {
           if (obj) line += ` — Servis: "${obj}"`;
         } else if (alarm.code === 'ROUTE_TABLE_CHANGED') {
           if (obj) line += ` — Rota: "${obj}"`;
           else if (path) line += ` ${path}`;
-        } else if (alarm.code === 'HA_CONFIG_CHANGED') {
-          if (obj) line += ` — HA Objesi: "${obj}"`;
+        } else if (alarm.code === 'AUTH_SERVER_CHANGED' || alarm.code === 'ADMIN_PASSWORD_CHANGED' || alarm.code === 'NEW_ADMIN_USER' || alarm.code === 'ADMIN_PRIVILEGE_CHANGE') {
+          if (obj) line += ` — Sunucu/Kullanici: "${obj}"`;
           else if (path) line += ` ${path}`;
-        } else if (alarm.code === 'AUTH_SERVER_CHANGED') {
-          if (obj) line += ` — Sunucu: "${obj}"`;
+        } else if (alarm.code === 'IPSEC_TUNNEL_CHANGED' || alarm.code === 'SSL_VPN_SETTINGS_CHANGED') {
+          if (obj) line += ` — VPN: "${obj}"`;
           else if (path) line += ` ${path}`;
-        } else if (alarm.code === 'SD_WAN_CHANGED') {
-          if (obj) line += ` — SD-WAN: "${obj}"`;
+        } else if (alarm.code === 'SNAT_POOL_CHANGED' || alarm.code === 'NAT_POLICY_CHANGED') {
+          if (obj) line += ` — NAT: "${obj}"`;
+          else if (path) line += ` ${path}`;
+        } else if (alarm.code === 'SCHEDULE_OBJECT_CHANGED') {
+          if (obj) line += ` — Zamanlama: "${obj}"`;
           else if (path) line += ` ${path}`;
         } else {
           if (path) line += ` ${path}`;
@@ -3399,13 +3576,38 @@ export class AlarmDetectionEngine {
         }
         if (logUser !== (firstLog.user as string)) line += ` (${logUser})`;
         if (logDev !== (firstLog.devname as string)) line += ` [${logDev}]`;
+
+        // ── Rich attribute diff: parse cfgattr for before→after ──────
         if (attr) {
-          const attrDecoded = this.decodeMsg(attr);
-          // Trim long attrs
-          const attrShort = attrDecoded.length > 120 ? attrDecoded.slice(0, 117) + '...' : attrDecoded;
-          line += `\n   Degisiklik: ${attrShort}`;
+          const parsedAttrs = this.parseCfgAttr(attr);
+          for (const pa of parsedAttrs) {
+            const attrLabel = this.getAttrLabel(pa.attr);
+            if (pa.oldVal !== null && pa.newVal !== null) {
+              // Before→after found in cfgattr (e.g. "status:enable->disable")
+              const oldDisplay = this.getValueLabel(pa.oldVal);
+              const newDisplay = this.getValueLabel(pa.newVal);
+              line += `\n   ${attrLabel} (${pa.attr}): ${oldDisplay} → ${newDisplay}`;
+            } else {
+              // Only attribute name — try extracting new value from msg
+              const newValFromMsg = this.extractNewValueFromMsg(msg, pa.attr);
+              if (newValFromMsg) {
+                line += `\n   ${attrLabel} (${pa.attr}): → ${this.getValueLabel(newValFromMsg)}`;
+              } else {
+                line += `\n   ${attrLabel} (${pa.attr})`;
+              }
+            }
+          }
+          // Also show decoded msg if it contains additional detail beyond the attr
+          if (msg) {
+            const msgDecoded = this.decodeMsg(msg);
+            const msgShort = msgDecoded.length > 120 ? msgDecoded.slice(0, 117) + '...' : msgDecoded;
+            // Only add msg if it's not a generic message and doesn't repeat the attr info
+            if (msgShort && !msgShort.startsWith('Object attribute') && msgShort !== attr) {
+              line += `\n   Mesaj: ${msgShort}`;
+            }
+          }
         } else if (msg) {
-          // Decode and show the msg field (URL-encoded) as fallback for Delete/Add ops
+          // No cfgattr — decode and show the msg field
           const msgDecoded = this.decodeMsg(msg);
           if (msgDecoded) line += `\n   ${msgDecoded}`;
         }
@@ -3653,7 +3855,25 @@ export class AlarmDetectionEngine {
     if (firstLog.rcvdbyte) details.push(`Alinan: ${this.formatBytes(Number(firstLog.rcvdbyte))}`);
     if (firstLog.cfgpath) details.push(`Config Yolu: ${firstLog.cfgpath}`);
     if (firstLog.cfgobj) details.push(`Nesne: ${firstLog.cfgobj}`);
-    if (firstLog.cfgattr) details.push(`Degisiklik: ${this.decodeMsg(firstLog.cfgattr)}`);
+    if (firstLog.cfgattr) {
+      const parsedAttrs = this.parseCfgAttr(firstLog.cfgattr as string);
+      if (parsedAttrs.length > 0) {
+        for (const pa of parsedAttrs) {
+          const attrLabel = this.getAttrLabel(pa.attr);
+          if (pa.oldVal !== null && pa.newVal !== null) {
+            details.push(`${attrLabel}: ${this.getValueLabel(pa.oldVal)} → ${this.getValueLabel(pa.newVal)}`);
+          } else {
+            const msgStr = (firstLog.msg as string) || '';
+            const newValFromMsg = this.extractNewValueFromMsg(msgStr, pa.attr);
+            if (newValFromMsg) {
+              details.push(`${attrLabel}: → ${this.getValueLabel(newValFromMsg)}`);
+            } else {
+              details.push(`Degisen Ozellik: ${attrLabel} (${pa.attr})`);
+            }
+          }
+        }
+      }
+    }
     if (firstLog.attack) details.push(`Saldiri: ${this.decodeMsg(firstLog.attack)}`);
     if (firstLog.devname) details.push(`Cihaz: ${firstLog.devname}`);
     if (firstLog.date && firstLog.time) details.push(`Olay Zamani: ${firstLog.date} ${firstLog.time}`);
@@ -3750,8 +3970,19 @@ export class AlarmDetectionEngine {
           take: 20,
         }) as Array<any>;
 
+        // Track created events in this evaluation to prevent duplicates
+        // (race condition: two events created 1ms apart bypass DB cooldown check)
+        const createdPortsThisEval = new Set<string>();
+
         for (const iface of downInterfaces) {
           const deviceName = iface.device?.name ?? `NMS Device ${iface.nmsDeviceId}`;
+          const portKey = `${iface.nmsDeviceId}:${iface.interfaceIndex}`;
+
+          // Skip if we already created an event for this port in this evaluation
+          if (createdPortsThisEval.has(portKey)) {
+            continue;
+          }
+
           // Use interface_name when description is empty/null/"None"
           const desc = iface.description;
           const ifaceLabel = (desc && desc !== 'None' && desc.trim() !== '') ? desc : iface.interfaceName;
@@ -3768,13 +3999,16 @@ export class AlarmDetectionEngine {
           const downMinutes = Math.round(downDurationMs / 60000);
           const title = `Port Down: ${ifaceLabel} on ${deviceName}`;
           const message = `Interface ${ifaceLabel} (index ${iface.interfaceIndex}) on ${deviceName} has been DOWN for ${downMinutes} minutes.`;
-          // Cooldown check
+          // Cooldown check — use device + port name for deduplication
           const cooldownMs = portDownAlarm.cooldownMinutes * 60 * 1000;
           const existing = await prisma.alarmEvent.findFirst({
             where: {
               alarmId: portDownAlarm.id,
               deviceName,
-              createdAt: { gte: new Date(Date.now() - cooldownMs) },
+              AND: [
+                { createdAt: { gte: new Date(Date.now() - cooldownMs) } },
+                { rawData: { path: ['interface_name'], equals: iface.interfaceName } },
+              ],
             },
           });
           if (existing) {
@@ -3802,6 +4036,8 @@ export class AlarmDetectionEngine {
               } as any,
             },
           });
+          // Mark this port as created to prevent duplicate in same loop
+          createdPortsThisEval.add(portKey);
           results.push({ alarmCode: 'NMS_PORT_DOWN', triggered: true, matchCount: 1, events: [{ id: event.id }] });
           console.log(`[AlarmEngine] NMS PORT_DOWN: ${ifaceLabel} on ${deviceName} (down ${downMinutes}m)`);
         }

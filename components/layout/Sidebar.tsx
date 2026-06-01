@@ -33,11 +33,14 @@ import {
   Lock,
   History,
   Key,
-  ExternalLink
+  ExternalLink,
+  FileText,
+  Mail
 } from 'lucide-react';
 import { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { UserProfile } from './UserProfile';
 
 interface SidebarItem {
   name: string;
@@ -206,6 +209,8 @@ export const Sidebar: React.FC = () => {
       items: [
         { name: 'Organizations', href: '/settings/organizations', icon: Building2 },
         { name: 'Users & Roles', href: '/settings/users', icon: Users },
+        { name: 'Invitations', href: '/settings/users/invitations', icon: Mail },
+        { name: 'Audit Log', href: '/settings/audit', icon: FileText },
         { name: 'Alert Rules', href: '/settings/alerts', icon: AlertTriangle },
         { name: 'API Keys', href: '/settings/keys', icon: Key },
       ]
@@ -388,20 +393,7 @@ export const Sidebar: React.FC = () => {
           )}
         </Button>
         
-        <div className={cn(
-          "flex items-center transition-all",
-          isCollapsed ? "justify-center" : "gap-3"
-        )}>
-          <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center border border-primary/10 shrink-0">
-            <Users className="h-4 w-4 text-primary" />
-          </div>
-          {!isCollapsed && (
-            <div className="flex flex-col min-w-0">
-              <span className="text-xs font-bold truncate">Yönetici</span>
-              <span className="text-[10px] text-muted-foreground truncate font-medium">admin@infrascope.io</span>
-            </div>
-          )}
-        </div>
+        <UserProfile collapsed={isCollapsed} />
       </div>
     </aside>
   );

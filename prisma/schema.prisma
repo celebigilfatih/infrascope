@@ -36,6 +36,9 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
+  activities    UserActivity[]
+  auditLogs     AuditLog[]
+
   @@index([email])
   @@index([status])
   @@map("users")
@@ -51,6 +54,65 @@ enum UserStatus {
   ACTIVE
   INACTIVE
   SUSPENDED
+}
+
+/// Permission definition for RBAC
+model Permission {
+  id          String           @id @default(cuid())
+  resource    String           // e.g., "users", "alarms", "devices"
+  action      String           // "read", "write", "delete"
+  description String?
+  roles       RolePermission[]
+
+  @@unique([resource, action])
+  @@map("permissions")
+}
+
+/// Mapping between roles and permissions
+model RolePermission {
+  id           String     @id @default(cuid())
+  roleId       UserRole
+  permissionId String
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+/// User activity tracking
+model UserActivity {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action    String   // "login", "edit_user", "delete_alarm"
+  details   Json?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@map("user_activities")
+}
+
+/// User invitation with email verification
+model Invitation {
+  id         String           @id @default(cuid())
+  email      String           @unique
+  role       UserRole         @default(VIEWER)
+  token      String           @unique
+  invitedBy  String
+  status     InvitationStatus @default(PENDING)
+  expiresAt  DateTime
+  acceptedAt DateTime?
+  createdAt  DateTime         @default(now())
+
+  @@index([token])
+  @@index([status])
+  @@map("invitations")
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
 }
 
 /// Physical building location
@@ -388,16 +450,24 @@ model Dependency {
 
 /// Audit trail for changes
 model AuditLog {
-  id        String   @id @default(cuid())
-  entity    String
-  entityId  String
-  action    String
-  changes   Json?
-  userId    String?
-  timestamp DateTime @default(now())
+  id         String   @id @default(cuid())
+  entity     String
+  entityId   String
+  action     String
+  changes    Json?
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  resource   String?  // "user", "alarm", "device"
+  resourceId String?  // ID of affected resource
+  details    Json?
+  ipAddress  String?
+  userAgent  String?
+  timestamp  DateTime @default(now())
 
   @@index([entityId])
   @@index([timestamp])
+  @@index([userId])
+  @@index([action])
   @@map("audit_logs")
 }
 

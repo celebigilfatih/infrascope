@@ -1,10 +1,24 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import { Skeleton, CardSkeleton } from '@/components/ui/skeleton';
+
+// Simple metric card skeleton for dashboard
+function MetricCardSkeleton() {
+  return (
+    <Card className="border-border/50 h-full">
+      <CardContent className="p-4">
+        <Skeleton className="h-3 w-16 mb-2" />
+        <Skeleton className="h-7 w-12 mb-1" />
+        <Skeleton className="h-2 w-full" />
+      </CardContent>
+    </Card>
+  );
+}
 import {
   RefreshCcw,
   AlertTriangle,
@@ -124,11 +138,69 @@ export default function DashboardPage() {
   const [nmsLoading, setNmsLoading] = useState(true);
   const [nmsReachable, setNmsReachable] = useState<boolean | null>(null);
 
+  // Phase 1: Load summary instantly (DB-only, ~100-200ms)
+  // Phase 2: Load detail data progressively (external APIs)
   useEffect(() => {
-    loadAll();
-  }, []);
+    loadSummary();
+    loadDetailData();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const loadAll = () => {
+  const loadSummary = async () => {
+    try {
+      const res = await fetch('/api/dashboard/summary');
+      const json = await res.json();
+      if (!json) return;
+
+      // Populate VMware from summary
+      if (json.vmware) {
+        const vm = json.vmware;
+        setVmware({
+          summary: {
+            clusters: vm.clusters || 0,
+            hosts: vm.hosts || 0,
+            hostsOnline: vm.hostsOnline || 0,
+            hostsOffline: vm.hostsOffline || 0,
+            vms: vm.vms || 0,
+            vmRunning: vm.vmRunning || 0,
+            vmStopped: vm.vmStopped || 0,
+            datastores: vm.datastores || 0,
+            totalStorageTB: vm.totalStorageTB || 0,
+            usedStorageTB: vm.usedStorageTB || 0,
+            totalCpuCores: 0,
+            totalMemoryGB: 0,
+          },
+          hosts: vm.hostsList || [],
+          datastores: vm.topDatastores || [],
+          oldSnapshots: [],
+        });
+        setVmwareLoading(false);
+      }
+
+      // Populate FortiGate from summary (policy count only, live data comes from Phase 2)
+      if (json.fortigate) {
+        const fg = json.fortigate;
+        setFirewall(prev => prev ? prev : {
+          policies: fg.policiesProcessed || 0,
+          addresses: 0,
+          sslVpnSessions: 0,
+          ipsecTunnels: [],
+          quarantineCount: 0,
+        });
+        setFirewallLoading(false);
+      }
+
+      // Populate NMS from summary
+      if (json.nms) {
+        const n = json.nms;
+        setNmsReachable(n.pollingActive);
+        setNmsLoading(false);
+      }
+    } catch (err) {
+      console.warn('[Dashboard] Summary load failed:', err);
+    }
+  };
+
+  const loadDetailData = async () => {
     loadVmwareData();
     loadFirewallData();
     loadSSLUsers();
@@ -249,13 +321,18 @@ export default function DashboardPage() {
           <h1 className="text-xl font-bold">Kontrol Paneli</h1>
           <p className="text-xs text-muted-foreground">VMware ve Güvenlik Duvarı kritik metrikleri</p>
         </div>
-        <Button variant="outline" size="sm" onClick={loadAll} disabled={loading}>
+        <Button variant="outline" size="sm" onClick={() => { loadSummary(); loadDetailData(); }} disabled={loading}>
           <RefreshCcw className={cn('mr-2 h-4 w-4', loading && 'animate-spin')} />
           Yenile
         </Button>
       </div>
 
       {/* VMware & Firewall Stats Row */}
+      <Suspense fallback={
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6">
+          {Array.from({ length: 6 }).map((_, i) => <MetricCardSkeleton key={i} />)}
+        </div>
+      }>
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6">
         <Link href="/virtualization/vms">
           <Card className="border-border/50 hover:shadow-md transition-shadow cursor-pointer h-full">
@@ -264,11 +341,11 @@ export default function DashboardPage() {
                 <Monitor className="h-4 w-4 text-blue-500" />
                 <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">VM</span>
               </div>
-              <div className="text-2xl font-black">{vmwareLoading ? '...' : summary?.vms || 0}</div>
+              <div className="text-2xl font-black">{summary?.vms ?? '—'}</div>
               <div className="flex items-center gap-1 mt-1">
-                <span className="text-[10px] text-emerald-500 font-medium">{summary?.vmRunning || 0} aktif</span>
+                <span className="text-[10px] text-emerald-500 font-medium">{summary?.vmRunning ?? 0} aktif</span>
                 <span className="text-[10px] text-muted-foreground">·</span>
-                <span className="text-[10px] text-rose-500 font-medium">{summary?.vmStopped || 0} kapalı</span>
+                <span className="text-[10px] text-rose-500 font-medium">{summary?.vmStopped ?? 0} kapalı</span>
               </div>
             </CardContent>
           </Card>
@@ -347,6 +424,7 @@ export default function DashboardPage() {
           </Card>
         </Link>
       </div>
+      </Suspense>
 
       {/* Main Grid: 3 columns */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
@@ -366,11 +444,8 @@ export default function DashboardPage() {
             </div>
           </CardHeader>
           <CardContent>
-            {vmwareLoading ? (
-              <div className="text-xs text-muted-foreground text-center py-6">Yükleniyor...</div>
-            ) : (
-              <div className="space-y-2">
-                {vmware?.hosts.slice(0, 6).map((host) => (
+            <Suspense fallback={<div className="space-y-2">{Array.from({length:6}).map((_,i)=><Skeleton key={i} className="h-6 w-full"/>)}</div>}>
+            {vmware?.hosts.slice(0, 6).map((host) => (
                   <div key={host.id} className="flex items-center justify-between py-2 border-b border-border/30 last:border-0">
                     <div className="flex items-center gap-2 min-w-0">
                       <div className={cn('w-2 h-2 rounded-full shrink-0', host.status === 'connected' ? 'bg-emerald-500' : 'bg-rose-500')} />
@@ -386,8 +461,7 @@ export default function DashboardPage() {
                   </div>
                 ))}
                 {(!vmware?.hosts || vmware.hosts.length === 0) && <div className="text-xs text-muted-foreground text-center py-4">Host bulunamadı</div>}
-              </div>
-            )}
+            </Suspense>
           </CardContent>
         </Card>
 
@@ -632,7 +706,7 @@ export default function DashboardPage() {
               <div className="text-xs text-muted-foreground text-center py-4">Tünel bulunamadı</div>
             ) : (
               <div className="space-y-2">
-                {firewall.ipsecTunnels.slice(0, 5).map((t, idx) => (
+                {firewall?.ipsecTunnels.slice(0, 5).map((t, idx) => (
                   <div key={idx} className="flex items-center justify-between py-1.5 border-b border-border/30 last:border-0">
                     <div className="flex items-center gap-2 min-w-0">
                       <div className={cn('w-2 h-2 rounded-full shrink-0', t.status === 'up' ? 'bg-emerald-500' : 'bg-rose-500')} />

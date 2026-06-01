@@ -98,10 +98,18 @@ Open [http://localhost:3000/dashboard](http://localhost:3000/dashboard) in your 
 
 ## 📚 Documentation
 
-- **[QUICK_START.md](./QUICK_START.md)** - 5-minute setup guide
-- **[SETUP.md](./SETUP.md)** - Detailed setup and development guide
-- **[ARCHITECTURE.md](./ARCHITECTURE.md)** - Architecture, design decisions, and extensibility
-- **[PROJECT_SUMMARY.md](./PROJECT_SUMMARY.md)** - Complete project overview and deliverables
+> ⚠️ **Note:** Older top-level docs (`INDEX.md`, `ARCHITECTURE.md`, `QUICK_START.md`,
+> `NEXT_STEPS.md`, `PROJECT_SUMMARY.md`, `DELIVERABLES.md`) describe the v1.0 (2024)
+> state of the project and have been moved to [`docs/_archive/`](./docs/_archive/).
+> They no longer reflect reality — do not use them as a reference.
+
+The authoritative knowledge base lives under [`docs/`](./docs/):
+
+- **[docs/README.md](./docs/README.md)** — Documentation map and Quest anchor protocol
+- **[docs/00-product/CONSTITUTION.md](./docs/00-product/CONSTITUTION.md)** — Product principles & architecture invariants (read first)
+- **[docs/30-runbooks/](./docs/30-runbooks/)** — Incident playbooks (FA lockout, port-down race, datastore critical, ...)
+- _(planned)_ `docs/10-architecture/` — ADRs, data flow, bounded contexts
+- _(planned)_ `docs/20-modules/` — Per-domain READMEs (alarms, integrations, topology, ...)
 
 ## 🏗️ Architecture
 

@@ -130,6 +130,33 @@ export {
   getDnsBlockedEvents,
 } from './dns-events';
 
+// NMS (SNMP) alarms — Prisma nmsInterface / nmsHealthMetric queries
+export {
+  getNmsPortDownEvents,
+  getNmsDeviceUnreachableEvents,
+  getNmsBackupFailedEvents,
+} from './nms';
+
+// VMware / vCenter alarms — cached_events source=vmware JSONB filter
+export {
+  getDatastoreSpaceCriticalEvents,
+  getDatastoreSpaceLowEvents,
+  getVmCreatedEvents,
+  getVmDeletedEvents,
+  getVmPoweredOnEvents,
+  getVmPoweredOffEvents,
+  getVmSuspendedEvents,
+  getVmRestartedEvents,
+  getVmCpuCriticalEvents,
+  getVmMemoryCriticalEvents,
+  getVmReconfiguredEvents,
+  getVmClonedEvents,
+  getVmMigratedEvents,
+  getSnapshotCreatedEvents,
+  getSnapshotDeletedEvents,
+  getSnapshotRevertedEvents,
+} from './vmware';
+
 // ─── Registry ─────────────────────────────────────────────────────────────────
 
 import type { AlarmQueryFn } from './types';
@@ -177,6 +204,29 @@ import {
 } from './vpn-events';
 import { getIpsHighSeverityEvents, getMalwareDetectedEvents, getAppCtrlViolationEvents, getShadowItEvents, getWebFilterBlockEvents, getIocHitEvents } from './security-events';
 import { getDnsTunnelSuspectEvents } from './dns-events';
+import {
+  getNmsPortDownEvents,
+  getNmsDeviceUnreachableEvents,
+  getNmsBackupFailedEvents,
+} from './nms';
+import {
+  getDatastoreSpaceCriticalEvents,
+  getDatastoreSpaceLowEvents,
+  getVmCreatedEvents,
+  getVmDeletedEvents,
+  getVmPoweredOnEvents,
+  getVmPoweredOffEvents,
+  getVmSuspendedEvents,
+  getVmRestartedEvents,
+  getVmCpuCriticalEvents,
+  getVmMemoryCriticalEvents,
+  getVmReconfiguredEvents,
+  getVmClonedEvents,
+  getVmMigratedEvents,
+  getSnapshotCreatedEvents,
+  getSnapshotDeletedEvents,
+  getSnapshotRevertedEvents,
+} from './vmware';
 
 /**
  * Maps alarm codes to their dedicated, type-safe query functions.
@@ -234,6 +284,35 @@ export const ALARM_QUERY_REGISTRY = new Map<string, AlarmQueryFn>([
 
   // ── DNS (FortiAnalyzer cache) ───────────────────────────────────────────────
   ['DNS_TUNNEL_SUSPECT',       getDnsTunnelSuspectEvents],
+
+  // ── NMS / SNMP (Prisma nmsInterface / nmsHealthMetric — no FA fallback) ─────
+  // NMS alarms query Prisma tables populated by the Python NMS service,
+  // NOT FortiAnalyzer logs. FA fallback returns [] (NMS data is never in FA).
+  ['NMS_PORT_DOWN',             getNmsPortDownEvents],
+  ['NMS_DEVICE_UNREACHABLE',    getNmsDeviceUnreachableEvents],
+  ['NMS_BACKUP_FAILED',         getNmsBackupFailedEvents],     // Stub — not yet implemented
+
+  // ── VMware / vCenter (cached_events source=vmware — no FA fallback) ──────────
+  // VMware alarms use cached_events with rawLog.source='vmware' JSONB filter.
+  // The current detection engine path (evaluateVMwareAlarm) calls vmwareService
+  // directly; these registry entries ensure performLogSearch() never falls
+  // through to generic FA log queries for VMware-sourced alarms.
+  ['DATASTORE_SPACE_CRITICAL',  getDatastoreSpaceCriticalEvents],
+  ['DATASTORE_SPACE_LOW',       getDatastoreSpaceLowEvents],
+  ['VM_CREATED',                getVmCreatedEvents],
+  ['VM_DELETED',                getVmDeletedEvents],
+  ['VM_POWERED_ON',             getVmPoweredOnEvents],
+  ['VM_POWERED_OFF',            getVmPoweredOffEvents],
+  ['VM_SUSPENDED',              getVmSuspendedEvents],
+  ['VM_RESTARTED',              getVmRestartedEvents],
+  ['VM_CPU_CRITICAL',           getVmCpuCriticalEvents],
+  ['VM_MEMORY_CRITICAL',        getVmMemoryCriticalEvents],
+  ['VM_RECONFIGURED',           getVmReconfiguredEvents],
+  ['VM_CLONED',                 getVmClonedEvents],
+  ['VM_MIGRATED',               getVmMigratedEvents],
+  ['SNAPSHOT_CREATED',          getSnapshotCreatedEvents],
+  ['SNAPSHOT_DELETED',          getSnapshotDeletedEvents],
+  ['SNAPSHOT_REVERTED',         getSnapshotRevertedEvents],
 ]);
 
 /**

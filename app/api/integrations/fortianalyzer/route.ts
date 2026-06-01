@@ -6,24 +6,47 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import FortiAnalyzerService from '@/lib/integrations/fortianalyzer';
+import FortiAnalyzerService, { initSharedFortiAnalyzerService } from '@/lib/integrations/fortianalyzer';
 import { FortiGateService } from '@/lib/integrations/fortigate';
 import { prisma } from '@/lib/prisma';
 
 // ─── In-memory cache for heavy FA queries ───────────────────────────────────
-const FAZ_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const FAZ_CACHE_TTL = 5 * 60 * 1000; // 5 minutes default
 
-function getCached(key: string) {
+function getCached(key: string, ttlMs?: number) {
   const store = (globalThis as any);
   if (!store.fazCache) store.fazCache = {};
   const entry = store.fazCache[key];
-  if (entry && Date.now() - entry.timestamp < FAZ_CACHE_TTL) return entry.data;
+  if (entry && Date.now() - entry.timestamp < (ttlMs ?? FAZ_CACHE_TTL)) return entry.data;
   return null;
 }
 function setCache(key: string, data: unknown) {
   const store = (globalThis as any);
   if (!store.fazCache) store.fazCache = {};
   store.fazCache[key] = { data, timestamp: Date.now() };
+}
+
+/**
+ * Poll FortiAnalyzer log search results with exponential backoff.
+ * Starts at startIntervalMs, doubles each attempt, returns as soon as data arrives.
+ * Total timeout budget: startIntervalMs * (2^maxAttempts - 1)
+ */
+async function pollForResult(
+  service: InstanceType<typeof FortiAnalyzerService>,
+  tid: number,
+  limit: number,
+  maxAttempts: number = 5,
+  startIntervalMs: number = 1000,
+): Promise<any[] | null> {
+  let interval = startIntervalMs;
+  for (let i = 0; i < maxAttempts; i++) {
+    await new Promise(resolve => setTimeout(resolve, interval));
+    const logs = await service.fetchLogResults(tid, 0, limit);
+    if (logs && logs.length > 0) return logs;
+    interval = Math.min(interval * 2, 8000); // cap at 8s
+  }
+  // Final attempt
+  return service.fetchLogResults(tid, 0, limit);
 }
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -46,6 +69,10 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ success: false, connected: false, error: 'Host, username and password are required.' });
       }
 
+      // Intentionally NOT using initSharedFortiAnalyzerService() here:
+      // test action uses user-supplied credentials which may differ from the
+      // saved singleton config. A temporary instance validates the new creds
+      // without polluting the shared session state.
       const service = new FortiAnalyzerService({ host, username, password });
       const loggedIn = await service.login();
       if (loggedIn) {
@@ -143,7 +170,7 @@ export async function GET(request: NextRequest) {
       password?: string;
     };
 
-    const service = new FortiAnalyzerService({
+    const service = initSharedFortiAnalyzerService({
       host: faConfig.host,
       username: faConfig.username || 'infrascope',
       password: faConfig.password || 'Thor.7485-app',
@@ -169,18 +196,22 @@ export async function GET(request: NextRequest) {
       data = await service.getEventLogs(50);
       console.log('FortiAnalyzer event logs data:', JSON.stringify(data, null, 2));
     } else if (dataType === 'config-revisions') {
-      // Admin system logs from FortiAnalyzer (login/logout, config changes - exclude perf-stats and empty users)
-      // Fallback to FortiGate direct API if FortiAnalyzer returns empty
-      const tid = await service.startLogSearch('event', 1000, 'subtype == system and action != perf-stats and user != "" and user != "fgtinfra" and user != "siem"');
-      if (tid) {
-        await new Promise(resolve => setTimeout(resolve, 6000));
-        data = await service.fetchLogResults(tid, 0, 500);
+      // Admin system logs — 2-min server-side cache (data changes infrequently)
+      const cacheKey = 'config_revisions_500';
+      const cached = getCached(cacheKey, 2 * 60 * 1000);
+      if (cached) {
+        data = cached;
       } else {
-        data = [];
-      }
-      
-      // If FortiAnalyzer returned empty, try NMS EventCache (PostgreSQL)
-      if (!data || data.length === 0) {
+        // FortiAnalyzer log search with exponential backoff
+        const tid = await service.startLogSearch('event', 1000, 'subtype == system and action != perf-stats and user != "" and user != "fgtinfra" and user != "siem"');
+        if (tid) {
+          data = await pollForResult(service, tid, 500, 5, 1000);
+        } else {
+          data = [];
+        }
+        
+        // If FortiAnalyzer returned empty, try NMS EventCache (PostgreSQL)
+        if (!data || data.length === 0) {
         console.log('[ConfigRevisions] FortiAnalyzer returned empty, trying NMS EventCache...');
         try {
           // Query NMS database for recent event logs
@@ -228,11 +259,15 @@ export async function GET(request: NextRequest) {
           console.error('[ConfigRevisions] NMS EventCache error:', nmsError);
         }
       }
+      // Cache config-revisions result (2-min TTL for admin event data)
+      if (data && Array.isArray(data) && data.length > 0) {
+        setCache(cacheKey, data);
+      }
+      } // end else (non-cached config-revisions branch)
     } else if (dataType === 'traffic') {
       const tid = await service.startLogSearch('traffic', 10);
       if (tid) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        data = await service.fetchLogResults(tid, 0, 10);
+        data = await pollForResult(service, tid, 10, 2, 500);
       }
     } else if (dataType === 'ips-critical') {
       // IPS attack logs — critical severity, with 5-min server-side cache
@@ -249,20 +284,13 @@ export async function GET(request: NextRequest) {
 
       const tid = await service.startLogSearch('attack', limit, 'severity == critical');
       if (tid) {
-        // Poll up to 4 × 4s = 16s (reduced from 6 × 5s = 30s)
-        for (let i = 0; i < 4; i++) {
-          await new Promise(resolve => setTimeout(resolve, 4000));
-          const logs = await service.fetchLogResults(tid, 0, limit);
-          if (logs && logs.length > 0) {
-            setCache(cacheKey, logs);
-            const res = NextResponse.json({ success: true, data: logs, type: dataType, count: logs.length });
-            res.headers.set('X-Cache', 'MISS');
-            return res;
-          }
+        const logs = await pollForResult(service, tid, limit, 5, 1000);
+        if (logs && logs.length > 0) {
+          setCache(cacheKey, logs);
+          const res = NextResponse.json({ success: true, data: logs, type: dataType, count: logs.length });
+          res.headers.set('X-Cache', 'MISS');
+          return res;
         }
-        // Final attempt
-        const logs = await service.fetchLogResults(tid, 0, limit);
-        if (logs && logs.length > 0) setCache(cacheKey, logs);
         return NextResponse.json({ success: true, data: logs || [], type: dataType, count: (logs || []).length });
       }
       return NextResponse.json({ success: true, data: [], type: dataType, count: 0 });
@@ -273,14 +301,7 @@ export async function GET(request: NextRequest) {
       const limit = parseInt(searchParams.get('limit') || '50', 10);
       const tid = await service.startLogSearch(logtype, limit, filter || undefined);
       if (tid) {
-        for (let i = 0; i < 4; i++) {
-          await new Promise(resolve => setTimeout(resolve, 5000));
-          const logs = await service.fetchLogResults(tid, 0, limit);
-          if (logs && logs.length > 0) {
-            return NextResponse.json({ success: true, data: logs, count: logs.length });
-          }
-        }
-        const logs = await service.fetchLogResults(tid, 0, limit);
+        const logs = await pollForResult(service, tid, limit, 5, 1000);
         return NextResponse.json({ success: true, data: logs || [], count: (logs || []).length });
       }
       return NextResponse.json({ success: true, data: [], count: 0 });

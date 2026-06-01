@@ -5,7 +5,7 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import FortiAnalyzerService from '@/lib/integrations/fortianalyzer';
+import FortiAnalyzerService, { initSharedFortiAnalyzerService } from '@/lib/integrations/fortianalyzer';
 import { AlarmDetectionEngine } from '@/lib/alarms/detection-engine';
 
 async function runVMwareAlarmCheck() {
@@ -20,7 +20,7 @@ async function runVMwareAlarmCheck() {
     }
 
     const config = faConfig.config as { host: string; username?: string; password?: string };
-    const service = new FortiAnalyzerService({
+    const service = initSharedFortiAnalyzerService({
       host: config.host,
       username: config.username || 'infrascope',
       password: config.password || 'Thor.7485-app',
