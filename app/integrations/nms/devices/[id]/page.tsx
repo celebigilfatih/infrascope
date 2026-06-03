@@ -59,6 +59,8 @@ interface DbNmsInterface {
   inErrors: number;
   outErrors: number;
   mtu: number;
+  downSince: string | null;
+  operUpSince: string | null;
   lastPolledAt: string | null;
   monitored: boolean;
 }
@@ -215,8 +217,8 @@ export default function ViewNmsDevicePage() {
     URL.revokeObjectURL(url);
   };
 
-  const loadDevice = async () => {
-    setLoading(true);
+  const loadDevice = async (silent = false) => {
+    if (!silent) setLoading(true);
     setError(null);
     try {
       const res = await fetch(`/api/integrations/nms/devices/${deviceId}`);
@@ -234,12 +236,19 @@ export default function ViewNmsDevicePage() {
     } catch (e: any) {
       setError(e.message);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
   useEffect(() => {
     if (deviceId) { loadDevice(); loadBackups(); }
+  }, [deviceId]);
+
+  // Auto-refresh every 30s to match SNMP polling interval
+  useEffect(() => {
+    if (!deviceId) return;
+    const interval = setInterval(() => loadDevice(true), 30000);
+    return () => clearInterval(interval);
   }, [deviceId]);
 
   const formatDate = (ts: string | null) => {
@@ -406,7 +415,7 @@ export default function ViewNmsDevicePage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={loadDevice} className="gap-2">
+              <Button variant="outline" size="sm" onClick={() => loadDevice()} className="gap-2">
                 <RefreshCw className="h-4 w-4" />
                 Refresh
               </Button>
@@ -686,6 +695,7 @@ export default function ViewNmsDevicePage() {
                           <span className="flex items-center gap-1"><ArrowUp className="h-3 w-3 text-orange-500" />Giden</span>
                         </th>
                         <th className="text-left px-4 py-2.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">Hatalar</th>
+                        <th className="text-left px-4 py-2.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">Yoklama</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -745,6 +755,9 @@ export default function ViewNmsDevicePage() {
                                 ) : (
                                   <span className="text-muted-foreground">0</span>
                                 )}
+                              </td>
+                              <td className="px-4 py-2.5 text-xs text-muted-foreground">
+                                {iface.lastPolledAt ? formatRelative(iface.lastPolledAt) : '—'}
                               </td>
                             </tr>
                           );

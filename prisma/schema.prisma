@@ -246,6 +246,9 @@ model Device {
   snmpPort          Int?     @default(161) @map("snmp_port")
   pollingEnabled    Boolean  @default(false) @map("polling_enabled")
   pollingInterval   Int?     @default(30) @map("polling_interval")  // seconds
+  sshUsername       String?  @map("ssh_username")
+  sshPassword       String?  @map("ssh_password")
+  sshPort           Int?     @default(22) @map("ssh_port")
   lastPolledAt      DateTime? @map("last_polled_at")
   
   // Relationships

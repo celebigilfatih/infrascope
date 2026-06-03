@@ -75,6 +75,8 @@ export async function GET(_req: NextRequest, { params }: Params) {
         inErrors: true,
         outErrors: true,
         mtu: true,
+        downSince: true,
+        operUpSince: true,
         lastPolledAt: true,
         monitored: true,
       },

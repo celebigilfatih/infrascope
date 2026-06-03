@@ -51,5 +51,11 @@ Thumbs.db
 
 # Cover
 
+# Python virtual environment
+.venv/
+
+# Host-side SNMP poller logs
+logs/
+
 # Large database backups
 nms_service/*.sql

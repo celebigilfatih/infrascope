@@ -130,6 +130,13 @@ class NMSOrchestrator:
                 self.poller.register_device(device_cfg)
                 
                 # Register for SSH polling (fallback)
+                ssh_username = device.ssh_username or "admin"
+                ssh_password = device.ssh_password or ""
+                # Store per-device credentials so they take priority over global defaults
+                if ssh_username and ssh_password:
+                    self.ssh_poller.set_device_credentials(
+                        device.management_ip, ssh_username, ssh_password
+                    )
                 ssh_cfg = SSHDeviceConfig(
                     device_id=device.nms_device_id,
                     device_name=device.name,

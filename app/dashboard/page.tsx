@@ -138,12 +138,77 @@ export default function DashboardPage() {
   const [nmsLoading, setNmsLoading] = useState(true);
   const [nmsReachable, setNmsReachable] = useState<boolean | null>(null);
 
+  // Cache helpers for instant display on returning visits
+  const CACHE_KEY = 'dashboard_data_cache';
+  const CACHE_TTL = 60000; // 60 seconds
+
+  const getCachedData = () => {
+    try {
+      const raw = localStorage.getItem(CACHE_KEY);
+      if (!raw) return null;
+      const { data, ts } = JSON.parse(raw);
+      if (Date.now() - ts > CACHE_TTL) {
+        localStorage.removeItem(CACHE_KEY);
+        return null;
+      }
+      return data;
+    } catch { return null; }
+  };
+
+  const setCachedData = (data: Record<string, unknown>) => {
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ data, ts: Date.now() }));
+    } catch { /* quota exceeded, ignore */ }
+  };
+
+  // Timeout wrapper to prevent hanging on slow APIs
+  const fetchWithTimeout = async (url: string, ms = 5000) => {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), ms);
+    try {
+      const res = await fetch(url, { signal: ctrl.signal });
+      clearTimeout(timer);
+      return res;
+    } catch (e) {
+      clearTimeout(timer);
+      throw e;
+    }
+  };
+
   // Phase 1: Load summary instantly (DB-only, ~100-200ms)
   // Phase 2: Load detail data progressively (external APIs)
   useEffect(() => {
+    // Show cached data instantly if available (returning user)
+    const cached = getCachedData();
+    if (cached) {
+      if (cached.vmware) setVmware(cached.vmware);
+      if (cached.vmware) setVmwareLoading(false);
+      if (cached.firewall) setFirewall(cached.firewall);
+      if (cached.firewall) setFirewallLoading(false);
+      if (cached.sslUsers) setSslUsers(cached.sslUsers);
+      if (cached.sslUsers) setSslUsersLoading(false);
+      if (cached.nmsDevices) setNmsDevices(cached.nmsDevices);
+      if (cached.nmsAlarms) setNmsAlarms(cached.nmsAlarms);
+      if (cached.nmsReachable != null) setNmsReachable(cached.nmsReachable);
+      if (cached.nmsDevices) setNmsLoading(false);
+    }
     loadSummary();
     loadDetailData();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Save to cache whenever data finishes loading
+  useEffect(() => {
+    if (!vmwareLoading && !firewallLoading && !sslUsersLoading && !nmsLoading) {
+      setCachedData({
+        vmware: vmware || null,
+        firewall: firewall || null,
+        sslUsers: sslUsers || [],
+        nmsDevices: nmsDevices || [],
+        nmsAlarms: nmsAlarms || [],
+        nmsReachable: nmsReachable,
+      });
+    }
+  }, [vmware, vmwareLoading, firewall, firewallLoading, sslUsers, sslUsersLoading, nmsDevices, nmsAlarms, nmsLoading, nmsReachable]);
 
   const loadSummary = async () => {
     try {
@@ -211,8 +276,8 @@ export default function DashboardPage() {
     try {
       setNmsLoading(true);
       const [devRes, alarmRes] = await Promise.allSettled([
-        fetch('/api/integrations/nms/network-devices'),
-        fetch('/api/integrations/nms/alarms?status=active'),
+        fetchWithTimeout('/api/integrations/nms/network-devices', 5000),
+        fetchWithTimeout('/api/integrations/nms/alarms?status=active', 5000),
       ]);
       if (devRes.status === 'fulfilled' && devRes.value.ok) {
         const data = await devRes.value.json();
@@ -235,7 +300,7 @@ export default function DashboardPage() {
   const loadVmwareData = async () => {
     try {
       setVmwareLoading(true);
-      const res = await fetch('/api/integrations/vmware?type=dashboard');
+      const res = await fetchWithTimeout('/api/integrations/vmware?type=dashboard', 5000);
       const json = await res.json();
       if (!json.error) setVmware(json);
     } finally {
@@ -243,35 +308,57 @@ export default function DashboardPage() {
     }
   };
 
+  // Load firewall data incrementally — each API updates state independently
   const loadFirewallData = async () => {
-    try {
-      setFirewallLoading(true);
-      const [syncRes, sslRes, ipsecRes, quarantineRes] = await Promise.allSettled([
-        fetch('/api/integrations/fortigate?type=sync-status').then((r) => r.json()),
-        fetch('/api/integrations/fortigate?vpn=ssl-summary').then((r) => r.json()),
-        fetch('/api/integrations/fortigate?vpn=ipsec').then((r) => r.json()),
-        fetch('/api/security/quarantine').then((r) => r.json()),
-      ]);
-      const sync = syncRes.status === 'fulfilled' ? syncRes.value?.data : null;
-      const ssl = sslRes.status === 'fulfilled' ? sslRes.value?.data : null;
-      const ipsecData = ipsecRes.status === 'fulfilled' ? ipsecRes.value?.data : [];
-      const qData = quarantineRes.status === 'fulfilled' ? quarantineRes.value : null;
-      setFirewall({
-        policies: sync?.policiesProcessed || 0,
-        addresses: sync?.addressesProcessed || 0,
-        sslVpnSessions: ssl?.active_sessions || 0,
-        ipsecTunnels: Array.isArray(ipsecData) ? ipsecData : [],
-        quarantineCount: qData?.count || 0,
-      });
-    } finally {
-      setFirewallLoading(false);
-    }
+    setFirewallLoading(true);
+
+    // Sync status (~730ms) — updates policies/addresses immediately
+    fetchWithTimeout('/api/integrations/fortigate?type=sync-status', 5000)
+      .then(r => r.json())
+      .then(j => {
+        const d = j?.data;
+        setFirewall(prev => ({
+          policies: d?.policiesProcessed || 0,
+          addresses: d?.addressesProcessed || 0,
+          sslVpnSessions: prev?.sslVpnSessions || 0,
+          ipsecTunnels: prev?.ipsecTunnels || [],
+          quarantineCount: prev?.quarantineCount || 0,
+        }));
+      })
+      .catch(() => {});
+
+    // SSL summary (~770ms) — updates sessions count
+    fetchWithTimeout('/api/integrations/fortigate?vpn=ssl-summary', 5000)
+      .then(r => r.json())
+      .then(j => {
+        const d = j?.data;
+        setFirewall(prev => prev ? { ...prev, sslVpnSessions: d?.active_sessions || 0 } : prev);
+      })
+      .catch(() => {});
+
+    // IPSec tunnels (~785ms) — updates tunnel list
+    fetchWithTimeout('/api/integrations/fortigate?vpn=ipsec', 5000)
+      .then(r => r.json())
+      .then(j => {
+        const d = j?.data;
+        setFirewall(prev => prev ? { ...prev, ipsecTunnels: Array.isArray(d) ? d : [] } : prev);
+      })
+      .catch(() => {});
+
+    // Quarantine (~1.5s, slowest) — updates quarantine count last
+    fetchWithTimeout('/api/security/quarantine', 6000)
+      .then(r => r.json())
+      .then(d => {
+        setFirewall(prev => prev ? { ...prev, quarantineCount: d?.count || 0 } : prev);
+      })
+      .catch(() => {})
+      .finally(() => setFirewallLoading(false));
   };
 
   const loadSSLUsers = async () => {
     try {
       setSslUsersLoading(true);
-      const res = await fetch('/api/integrations/fortigate?vpn=ssl');
+      const res = await fetchWithTimeout('/api/integrations/fortigate?vpn=ssl', 5000);
       const json = await res.json();
       setSslUsers(json.data || []);
     } catch {
