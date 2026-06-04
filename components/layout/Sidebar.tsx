@@ -213,6 +213,7 @@ export const Sidebar: React.FC = () => {
         { name: 'Audit Log', href: '/settings/audit', icon: FileText },
         { name: 'Alert Rules', href: '/settings/alerts', icon: AlertTriangle },
         { name: 'API Keys', href: '/settings/keys', icon: Key },
+        { name: 'License', href: '/settings/license', icon: Key },
       ]
     },
   ];

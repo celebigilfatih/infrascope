@@ -38,7 +38,13 @@ export function UserProfile({ collapsed = false, compact = false }: UserProfileP
     return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    // Clear server-side session cookie
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch {
+      // Continue even if logout endpoint fails
+    }
     localStorage.removeItem('user');
     window.dispatchEvent(new Event('storage'));
     router.push('/login');

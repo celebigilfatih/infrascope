@@ -18,6 +18,9 @@
 
 import { prisma } from '@/lib/prisma';
 import { runAlarmCheck } from '@/lib/alarms/alarm-runner';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('alarm-monitor');
 
 const WATCHDOG_INTERVAL_MINUTES = 15;    // How often the watchdog polls
 const WATCHDOG_MAX_GAP_MINUTES = 30;     // Max acceptable gap between checks
@@ -39,13 +42,13 @@ export class AlarmMonitor {
 
   start() {
     if (this.isRunning) {
-      console.log('[AlarmMonitor] Already running');
+      log.info('Already running');
       return;
     }
 
-    console.log(
-      `[AlarmMonitor] Starting watchdog (${this.checkIntervalMinutes} min interval, ` +
-        `${WATCHDOG_STARTUP_DELAY_MINUTES} min startup delay)`
+    log.info(
+      { checkIntervalMinutes: this.checkIntervalMinutes, startupDelayMinutes: WATCHDOG_STARTUP_DELAY_MINUTES },
+      'Starting watchdog'
     );
     this.isRunning = true;
     this.consecutiveErrors = 0;
@@ -54,13 +57,13 @@ export class AlarmMonitor {
     this.startupTimeoutId = setTimeout(() => {
       if (!this.isRunning) return;
       this.runWatchdog().catch((err) =>
-        console.error('[AlarmMonitor] Startup watchdog check failed:', err)
+        log.error({ err }, 'Startup watchdog check failed')
       );
 
       this.intervalId = setInterval(() => {
         if (!this.isRunning) return;
         this.runWatchdog().catch((err) =>
-          console.error('[AlarmMonitor] Scheduled watchdog check failed:', err)
+          log.error({ err }, 'Scheduled watchdog check failed')
         );
       }, this.checkIntervalMinutes * 60 * 1000);
     }, WATCHDOG_STARTUP_DELAY_MINUTES * 60 * 1000);
@@ -68,11 +71,11 @@ export class AlarmMonitor {
 
   stop() {
     if (!this.isRunning) {
-      console.log('[AlarmMonitor] Not running');
+      log.info('Not running');
       return;
     }
 
-    console.log('[AlarmMonitor] Stopping...');
+    log.info('Stopping...');
     this.isRunning = false;
 
     if (this.startupTimeoutId) {
@@ -91,9 +94,9 @@ export class AlarmMonitor {
 
   private scheduleRecovery() {
     const RECOVERY_DELAY_MS = 10 * 60 * 1000;
-    console.log('[AlarmMonitor] Scheduling auto-recovery in 10 minutes...');
+    log.info({ delayMs: RECOVERY_DELAY_MS }, 'Scheduling auto-recovery');
     this.recoveryTimeoutId = setTimeout(() => {
-      console.log('[AlarmMonitor] Auto-recovery: attempting restart...');
+      log.info('Auto-recovery: attempting restart');
       this.start();
     }, RECOVERY_DELAY_MS);
   }
@@ -128,16 +131,17 @@ export class AlarmMonitor {
 
       if (lastCheckMs < maxGapMs) {
         const minutesAgo = Math.round(lastCheckMs / 60000);
-        console.log(
-          `[AlarmMonitor] Watchdog OK — last check ${minutesAgo}m ago ` +
-            `(threshold: ${WATCHDOG_MAX_GAP_MINUTES}m)`
+        log.info(
+          { minutesAgo, threshold: WATCHDOG_MAX_GAP_MINUTES },
+          'Watchdog OK — last check recent'
         );
         return;
       }
 
       const minutesAgo = lastLog ? Math.round(lastCheckMs / 60000) : '∞';
-      console.warn(
-        `[AlarmMonitor] Watchdog: last check ${minutesAgo}m ago — triggering recovery...`
+      log.warn(
+        { minutesAgo },
+        'Watchdog: last check too old — triggering recovery'
       );
 
       // Direct in-process call — no HTTP, no connection drop risk
@@ -146,19 +150,19 @@ export class AlarmMonitor {
       this.lastCheckTime = new Date();
       this.consecutiveErrors = 0;
 
-      console.log(
-        `[AlarmMonitor] Recovery done: ${result.summary.triggered} triggered, ` +
-          `${result.summary.errors} errors`
+      log.info(
+        { triggered: result.summary.triggered, errors: result.summary.errors },
+        'Recovery done'
       );
     } catch (error) {
       this.consecutiveErrors++;
-      console.error(
-        `[AlarmMonitor] Watchdog check failed (${this.consecutiveErrors}/${this.MAX_CONSECUTIVE_ERRORS}):`,
-        error
+      log.error(
+        { err: error, consecutiveErrors: this.consecutiveErrors, maxErrors: this.MAX_CONSECUTIVE_ERRORS },
+        'Watchdog check failed'
       );
 
       if (this.consecutiveErrors >= this.MAX_CONSECUTIVE_ERRORS) {
-        console.error('[AlarmMonitor] Too many consecutive errors, stopping monitor');
+        log.error({ consecutiveErrors: this.consecutiveErrors }, 'Too many consecutive errors, stopping monitor');
         this.stop();
         this.scheduleRecovery();
 
@@ -177,7 +181,7 @@ export class AlarmMonitor {
             },
           });
         } catch (alarmError) {
-          console.error('[AlarmMonitor] Failed to create failure alarm:', alarmError);
+          log.error({ err: alarmError }, 'Failed to create failure alarm');
         }
       }
     }
@@ -187,7 +191,7 @@ export class AlarmMonitor {
     if (!this.isRunning) {
       throw new Error('Monitor is not running');
     }
-    console.log('[AlarmMonitor] Force watchdog check requested');
+    log.info('Force watchdog check requested');
     await this.runWatchdog();
   }
 }

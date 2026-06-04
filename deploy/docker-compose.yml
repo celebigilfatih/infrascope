@@ -1,0 +1,104 @@
+# InfraScope On-Premise Deployment
+# Customer Docker Compose Configuration
+#
+# Usage:
+#   1. Copy .env.example to .env and configure your license key
+#   2. Run: docker compose up -d
+#   3. Access: http://localhost:3000
+#
+# For support: support@infrascope.com
+
+version: '3.8'
+
+services:
+  # ── PostgreSQL Database ──────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: infrascope-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-infrascope}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-infrascope-prod}
+      POSTGRES_DB: ${POSTGRES_DB:-infrascope}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-infrascope}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - infrascope-net
+
+  # ── InfraScope Application ───────────────────────────────────────
+  app:
+    image: ${REGISTRY:-registry.infrascope.com}/infrascope:${VERSION:-latest}
+    container_name: infrascope-app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Database
+      DATABASE_URL: postgresql://${POSTGRES_USER:-infrascope}:${POSTGRES_PASSWORD:-infrascope-prod}@postgres:5432/${POSTGRES_DB:-infrascope}
+      
+      # License Configuration (REQUIRED)
+      LICENSE_KEY: ${LICENSE_KEY}
+      LICENSE_SERVER_URL: ${LICENSE_SERVER_URL:-https://license.infrascope.com}
+      
+      # Authentication
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-change-me-in-production}
+      
+      # Application
+      NODE_ENV: production
+      NEXT_PUBLIC_APP_NAME: ${APP_NAME:-InfraScope}
+      NEXT_PUBLIC_APP_VERSION: ${VERSION:-latest}
+      
+      # Optional: SNMP Community (for network devices)
+      SNMP_COMMUNITY: ${SNMP_COMMUNITY:-public}
+      
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    volumes:
+      # Persist machine ID for license activation
+      - ./data/machine-id:/app/.machine-id
+      # License cache for offline grace period
+      - ./data/license-cache:/app/.license-cache
+      # Application logs
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - infrascope-net
+
+  # ── SNMP Poller (Optional - for network monitoring) ─────────────
+  # Note: On macOS, run SNMP poller on host due to Docker UDP limitations
+  # Uncomment below for Linux deployments
+  # snmp-poller:
+  #   image: ${REGISTRY:-registry.infrascope.com}/infrascope-poller:${VERSION:-latest}
+  #   container_name: infrascope-poller
+  #   restart: unless-stopped
+  #   depends_on:
+  #     - app
+  #   environment:
+  #     DATABASE_URL: postgresql://${POSTGRES_USER:-infrascope}:${POSTGRES_PASSWORD:-infrascope-prod}@postgres:5432/${POSTGRES_DB:-infrascope}
+  #     SNMP_COMMUNITY: ${SNMP_COMMUNITY:-public}
+  #     POLL_INTERVAL: ${POLL_INTERVAL:-60}
+  #   network_mode: host  # Required for SNMP UDP
+  #   networks:
+  #     - infrascope-net
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  infrascope-net:
+    driver: bridge

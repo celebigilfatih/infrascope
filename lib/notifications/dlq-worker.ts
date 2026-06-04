@@ -15,6 +15,9 @@
 
 import { prisma } from '@/lib/prisma';
 import { sendAlarmEmail, AlarmEmailData } from './email';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('dlq-worker');
 
 // Exponential backoff intervals in milliseconds
 const BACKOFF_INTERVALS = [
@@ -62,10 +65,10 @@ export async function addToDLQ(
       },
     });
     
-    console.log(`[DLQ] Added failed notification for alarm event ${alarmEventId}, next retry at ${nextRetry.toISOString()}`);
+    log.info({ alarmEventId, nextRetry: nextRetry.toISOString() }, 'Added failed notification to DLQ');
   } catch (dlqError) {
     // Log but don't throw — DLQ failure shouldn't break main flow
-    console.error(`[DLQ] Failed to add entry for ${alarmEventId}:`, dlqError);
+    log.error({ err: dlqError, alarmEventId }, 'Failed to add DLQ entry');
   }
 }
 
@@ -106,7 +109,7 @@ export async function processDLQ(): Promise<{
       return stats;
     }
 
-    console.log(`[DLQ] Processing ${pendingEntries.length} pending notifications...`);
+    log.info({ count: pendingEntries.length }, 'Processing pending notifications');
 
     for (const entry of pendingEntries) {
       stats.processed++;
@@ -139,7 +142,7 @@ export async function processDLQ(): Promise<{
             },
           });
 
-          console.log(`[DLQ] ✅ Retry successful for ${entry.alarmEvent.alarm.code} (${entry.id})`);
+          log.info({ alarmCode: entry.alarmEvent.alarm.code, entryId: entry.id }, 'Retry successful');
           stats.succeeded++;
         } else {
           // Send returned false (rate limited, etc.) — retry later
@@ -161,7 +164,7 @@ export async function processDLQ(): Promise<{
             },
           });
           
-          console.error(`[DLQ] ❌ Permanently failed after ${newAttempts} attempts: ${entry.alarmEvent.alarm.code} (${entry.id})`);
+          log.error({ alarmCode: entry.alarmEvent.alarm.code, entryId: entry.id, attempts: newAttempts }, 'Permanently failed after max attempts');
           stats.permanentlyFailed++;
         } else {
           // Schedule next retry with exponential backoff
@@ -177,16 +180,16 @@ export async function processDLQ(): Promise<{
             },
           });
           
-          console.log(`[DLQ] ⏳ Retry ${newAttempts}/${entry.maxAttempts} failed for ${entry.alarmEvent.alarm.code}, next at ${nextRetry.toISOString()}`);
+          log.info({ alarmCode: entry.alarmEvent.alarm.code, entryId: entry.id, attempts: newAttempts, maxAttempts: entry.maxAttempts, nextRetry: nextRetry.toISOString() }, 'Retry failed, scheduled next attempt');
           stats.failed++;
         }
       }
     }
 
-    console.log(`[DLQ] Batch complete: ${stats.succeeded} succeeded, ${stats.failed} retrying, ${stats.permanentlyFailed} permanently failed`);
+    log.info({ succeeded: stats.succeeded, failed: stats.failed, permanentlyFailed: stats.permanentlyFailed }, 'Batch complete');
     return stats;
   } catch (error) {
-    console.error('[DLQ] Error processing queue:', error);
+    log.error({ err: error }, 'Error processing queue');
     return stats;
   }
 }
@@ -221,7 +224,7 @@ export async function getDLQStats(): Promise<{
         : null,
     };
   } catch (error) {
-    console.error('[DLQ] Error getting stats:', error);
+    log.error({ err: error }, 'Error getting stats');
     return { pending: 0, delivered: 0, failedPermanent: 0, oldestPendingAge: null };
   }
 }
@@ -241,12 +244,12 @@ export async function cleanupDLQ(): Promise<number> {
     });
     
     if (deleted.count > 0) {
-      console.log(`[DLQ] Cleaned up ${deleted.count} old entries`);
+      log.info({ deletedCount: deleted.count }, 'Cleaned up old entries');
     }
     
     return deleted.count;
   } catch (error) {
-    console.error('[DLQ] Cleanup failed:', error);
+    log.error({ err: error }, 'Cleanup failed');
     return 0;
   }
 }

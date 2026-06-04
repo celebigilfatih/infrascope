@@ -1054,7 +1054,23 @@ model AlarmEvent {
   @@index([alarmId])
   @@index([createdAt])
   @@index([severity])
+  @@index([createdAt, acknowledged])
   @@map("alarm_events")
+}
+
+/// Atomic cooldown tracking for alarm deduplication.
+/// Unique constraint on (alarmId, deviceName) prevents concurrent alarm checks
+/// from firing duplicate alarms for the same entity.
+model AlarmCooldown {
+  id            String   @id @default(cuid())
+  alarmId       String
+  deviceName    String   // Username for per-user alarms, or "deviceId:portIndex" for NMS
+  cooldownUntil DateTime
+  createdAt     DateTime @default(now())
+
+  @@unique([alarmId, deviceName])
+  @@index([cooldownUntil])
+  @@map("alarm_cooldowns")
 }
 
 /// Alarm check log for monitoring
@@ -1357,4 +1373,114 @@ model NmsBackup {
   @@index([nmsDeviceId])
   @@index([createdAt])
   @@map("nms_backups")
+}
+
+// ============================================================================
+// License Management (SaaS On-Premise)
+// ============================================================================
+
+/// Customer entity for license management
+model Customer {
+  id          String         @id @default(cuid())
+  companyName String         @map("company_name")
+  contactName String         @map("contact_name")
+  email       String         @unique
+  phone       String?
+  tier        LicenseTier    @default(STANDARD)
+  status      CustomerStatus @default(ACTIVE)
+  notes       String?        @db.Text
+  licenses    License[]
+  activations LicenseActivation[]
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@map("customers")
+}
+
+/// License key with tier, limits, and validity period
+model License {
+  id             String        @id @default(cuid())
+  key            String        @unique // e.g. "IS-2026-XXXX-XXXX"
+  customerId     String        @map("customer_id")
+  customer       Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  tier           LicenseTier
+  maxDevices     Int           @default(50) @map("max_devices")
+  maxUsers       Int           @default(5)  @map("max_users")
+  validFrom      DateTime      @map("valid_from")
+  validUntil     DateTime      @map("valid_until")
+  status         LicenseStatus @default(ACTIVE)
+  activationLimit Int          @default(1) @map("activation_limit")
+  activations    LicenseActivation[]
+  heartbeats     LicenseHeartbeat[]
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  @@index([customerId])
+  @@index([status])
+  @@index([key])
+  @@map("licenses")
+}
+
+/// Tracks each machine activation for a license
+model LicenseActivation {
+  id          String           @id @default(cuid())
+  licenseId   String           @map("license_id")
+  license     License          @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  customerId  String           @map("customer_id")
+  customer    Customer         @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  machineId   String           @map("machine_id") // Hardware fingerprint hash
+  activatedAt DateTime         @default(now()) @map("activated_at")
+  lastSeenAt  DateTime?        @map("last_seen_at")
+  ipAddress   String?          @map("ip_address")
+  hostname    String?
+  version     String?          // App version at activation
+  status      ActivationStatus @default(ACTIVE)
+  usageData   Json?            @map("usage_data") // { deviceCount, userCount, ... }
+
+  @@unique([licenseId, machineId])
+  @@index([customerId])
+  @@index([status])
+  @@map("license_activations")
+}
+
+/// Heartbeat log for usage tracking
+model LicenseHeartbeat {
+  id          String   @id @default(cuid())
+  licenseId   String   @map("license_id")
+  license     License  @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  machineId   String   @map("machine_id")
+  deviceCount Int      @default(0) @map("device_count")
+  userCount   Int      @default(0) @map("user_count")
+  appVersion  String?  @map("app_version")
+  ipAddress   String?  @map("ip_address")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([licenseId, createdAt])
+  @@map("license_heartbeats")
+}
+
+enum LicenseTier {
+  TRIAL
+  STANDARD
+  ENTERPRISE
+}
+
+enum LicenseStatus {
+  ACTIVE
+  EXPIRED
+  REVOKED
+  SUSPENDED
+}
+
+enum CustomerStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum ActivationStatus {
+  ACTIVE
+  DEACTIVATED
+  EXPIRED
 }

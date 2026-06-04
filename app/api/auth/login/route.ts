@@ -1,17 +1,21 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyPassword } from '@/lib/auth/password';
+import { signSessionToken, SESSION_COOKIE_NAME, SESSION_MAX_AGE } from '@/lib/auth/session';
+import { validateBody } from '@/lib/validators';
+import { loginSchema } from '@/lib/validators/auth';
 
 export async function POST(request: Request) {
   try {
-    const { email, password } = await request.json();
-
-    if (!email || !password) {
+    const rawBody = await request.json();
+    const parsed = validateBody(rawBody, loginSchema);
+    if (!parsed.success) {
       return NextResponse.json(
-        { success: false, error: 'Email and password are required' },
+        { success: false, error: parsed.error },
         { status: 400 }
       );
     }
+    const { email, password } = parsed.data;
 
     // Find user
     const user = await prisma.user.findUnique({
@@ -76,8 +80,14 @@ export async function POST(request: Request) {
       console.warn('Failed to log activity (non-fatal):', activityError);
     }
 
-    // Return user (without password)
-    return NextResponse.json({
+    // Create session token and set httpOnly cookie
+    const token = await signSessionToken({
+      userId: user.id,
+      role: user.role,
+      email: user.email,
+    });
+
+    const response = NextResponse.json({
       success: true,
       user: {
         id: user.id,
@@ -87,6 +97,16 @@ export async function POST(request: Request) {
         status: user.status.toLowerCase(),
       },
     });
+
+    response.cookies.set(SESSION_COOKIE_NAME, token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      path: '/',
+      maxAge: SESSION_MAX_AGE,
+    });
+
+    return response;
   } catch (error) {
     console.error('Login error:', error);
     return NextResponse.json(

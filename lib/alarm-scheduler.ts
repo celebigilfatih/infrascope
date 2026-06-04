@@ -16,8 +16,12 @@
 
 import { prisma } from '@/lib/prisma';
 import { runAlarmCheck, initializeAlarmRunner } from '@/lib/alarms/alarm-runner';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('alarm-scheduler');
 
 let schedulerInterval: NodeJS.Timeout | null = null;
+let tickInProgress = false;
 
 /**
  * Start the alarm scheduler.
@@ -25,16 +29,22 @@ let schedulerInterval: NodeJS.Timeout | null = null;
  */
 export function startAlarmScheduler() {
   if (schedulerInterval) {
-    console.log('[AlarmScheduler] Already running, skipping initialization');
+    log.info('Already running, skipping initialization');
     return;
   }
 
   // Clean up any RUNNING locks left by a previous process before starting
   initializeAlarmRunner().catch((err) =>
-    console.warn('[AlarmScheduler] initializeAlarmRunner failed (non-fatal):', err)
+    log.warn({ err }, 'initializeAlarmRunner failed (non-fatal)')
   );
 
   schedulerInterval = setInterval(async () => {
+    // Prevent overlapping ticks if previous check is still running
+    if (tickInProgress) {
+      log.warn('Previous tick still running, skipping this interval');
+      return;
+    }
+    tickInProgress = true;
     const tickStart = Date.now();
     try {
       // ── Proactive stale lock cleanup ──────────────────────────────────────
@@ -54,27 +64,26 @@ export function startAlarmScheduler() {
           },
         });
         if (stale.count > 0) {
-          console.warn(
-            `[AlarmScheduler] 🧹 Cleaned up ${stale.count} stale RUNNING lock(s) before tick`
-          );
+          log.warn({ staleCount: stale.count }, 'Cleaned up stale RUNNING locks before tick');
         }
       } catch (cleanupErr) {
-        console.warn('[AlarmScheduler] Stale lock cleanup failed (non-fatal):', cleanupErr);
+        log.warn({ err: cleanupErr }, 'Stale lock cleanup failed (non-fatal)');
       }
 
-      console.log('[AlarmScheduler] Starting scheduled alarm check...');
+      log.info('Starting scheduled alarm check');
 
       const result = await runAlarmCheck();
       const duration = Date.now() - tickStart;
 
       if (result.success) {
-        console.log(
-          `[AlarmScheduler] ✅ Check completed: ${result.summary.triggered} triggered, ` +
-            `${result.summary.errors} errors (${duration}ms)`
+        log.info(
+          { triggered: result.summary.triggered, errors: result.summary.errors, duration },
+          'Check completed'
         );
       } else {
-        console.error(
-          `[AlarmScheduler] ❌ Check failed: ${result.error} (${duration}ms)`
+        log.error(
+          { error: result.error, duration },
+          'Check failed'
         );
       }
 
@@ -102,14 +111,16 @@ export function startAlarmScheduler() {
       } catch { /* never crash the scheduler over a heartbeat write */ }
     } catch (error) {
       const duration = Date.now() - tickStart;
-      console.error(
-        `[AlarmScheduler] ❌ Unexpected error (${duration}ms):`,
-        error
+      log.error(
+        { err: error, duration },
+        'Unexpected error'
       );
+    } finally {
+      tickInProgress = false;
     }
   }, 600_000); // 10 minutes
 
-  console.log('[AlarmScheduler] ✅ Started — checks will run every 10 minutes');
+  log.info('Started — checks will run every 10 minutes');
 }
 
 /**
@@ -119,7 +130,7 @@ export function stopAlarmScheduler() {
   if (schedulerInterval) {
     clearInterval(schedulerInterval);
     schedulerInterval = null;
-    console.log('[AlarmScheduler] Stopped');
+    log.info('Stopped');
   }
 }
 

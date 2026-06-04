@@ -33,6 +33,8 @@ export default function LoginPage() {
       const data = await res.json();
 
       if (data.success) {
+        // Session is now managed via httpOnly cookie (set by server).
+        // localStorage is only for UI display, not for auth decisions.
         localStorage.setItem('user', JSON.stringify(data.user));
         // Pre-warm dashboard summary API (starts fetching while user navigates)
         fetch('/api/dashboard/summary').catch(() => {});

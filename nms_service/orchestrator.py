@@ -55,6 +55,9 @@ class NMSOrchestrator:
         # Active poll set — prevents parallel polls for the same device
         self._active_polls: Set[int] = set()
         self._active_lock = threading.Lock()
+        # Device IDs whose previous poll was cancelled — skip one cycle to let
+        # the thread finish winding down before re-submitting
+        self._pending_cancellations: Set[int] = set()
         self._topo_lock = threading.Lock()       # protects last_topology_poll
         self._last_poll_lock = threading.Lock()  # protects last_device_poll
         # Persistent thread pool — avoids ThreadPoolExecutor.__exit__ blocking
@@ -189,6 +192,10 @@ class NMSOrchestrator:
         # Poll deduplication — prevent parallel polls for the same device
         with self._active_lock:
             if nms_device_id in self._active_polls:
+                return False
+            # Skip devices whose previous poll was cancelled (thread may still be winding down)
+            if nms_device_id in self._pending_cancellations:
+                self._pending_cancellations.discard(nms_device_id)
                 return False
             self._active_polls.add(nms_device_id)
 
@@ -394,14 +401,18 @@ class NMSOrchestrator:
             except Exception as e:
                 logger.error(f"Thread error for device {did}: {e}")
 
-        # Log timed-out devices (they'll finish in background)
+        # Log timed-out devices and cancel their futures to prevent zombie threads
         if not_done:
             names = []
             for future in not_done:
                 did = future_map[future]
                 device = self.device_map.get(did)
                 names.append(device.name if device else str(did))
+                # Cancel the future so the thread pool can reclaim the worker
+                future.cancel()
+                self._pending_cancellations.add(did)
             logger.warning(f"Poll timeout (>{MAX_CYCLE_SECONDS}s): {', '.join(names)}")
+            logger.info(f"Cancelled {len(not_done)} timed-out future(s)")
 
         elapsed = time.time() - cycle_start
         if polled > 0:

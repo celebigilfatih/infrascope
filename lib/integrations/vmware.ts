@@ -11,6 +11,9 @@
 
 import { PrismaClient, DeviceType, DeviceStatus, DeviceCriticality } from '@prisma/client';
 import { execSync } from 'child_process';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('vmware');
 
 const prisma = new PrismaClient();
 
@@ -191,7 +194,7 @@ export class VMwareService {
       });
 
       if (!response.ok) {
-        console.error(`[VMware] SOAP authentication failed: ${response.status}`);
+        log.error({ status: response.status }, 'SOAP authentication failed');
         return false;
       }
 
@@ -201,15 +204,15 @@ export class VMwareService {
         const match = setCookie.match(/vmware_soap_session=([^;]+)/);
         if (match) {
           this.sessionCookie = `vmware_soap_session=${match[1]}`;
-          console.log('[VMware] SOAP authentication successful');
+          log.info('SOAP authentication successful');
           return true;
         }
       }
 
-      console.error('[VMware] Failed to extract SOAP session cookie');
+      log.error('Failed to extract SOAP session cookie');
       return false;
     } catch (error) {
-      console.error('[VMware] SOAP authentication error:', error);
+      log.error({ err: error }, 'SOAP authentication error');
       return false;
     }
   }
@@ -231,7 +234,7 @@ export class VMwareService {
       if (!this.sessionCookie || !this.sessionCookie.includes('vmware_soap_session')) {
         const authenticated = await this.authenticateSOAP();
         if (!authenticated) {
-          console.error('[VMware] SOAP authentication required but failed');
+          log.error('SOAP authentication required but failed');
           return [];
         }
       }
@@ -239,14 +242,14 @@ export class VMwareService {
       // Step 1: Get ServiceContent to find EventManager
       const serviceContent = await this.retrieveServiceContent();
       if (!serviceContent.eventManager) {
-        console.error('[VMware] EventManager not found in ServiceContent');
+        log.error('EventManager not found in ServiceContent');
         return [];
       }
 
       // Step 2: Create EventHistoryCollector
       const collector = await this.createEventHistoryCollector(serviceContent.eventManager, minutesBack, eventTypes);
       if (!collector) {
-        console.error('[VMware] Failed to create EventHistoryCollector');
+        log.error('Failed to create EventHistoryCollector');
         return [];
       }
 
@@ -261,7 +264,7 @@ export class VMwareService {
       
       return events;
     } catch (error) {
-      console.error('[VMware] Error querying SOAP events:', error);
+      log.error({ err: error }, 'Error querying SOAP events');
       return [];
     }
   }
@@ -348,16 +351,16 @@ export class VMwareService {
     });
 
     const xmlText = await response.text();
-    console.log('[VMware] CreateCollector response:', xmlText.substring(0, 500));
+    log.info({ response: xmlText.substring(0, 500) }, 'CreateCollector response');
     
     // Extract collector reference
     const collectorMatch = xmlText.match(/<returnval[^>]*type="EventHistoryCollector"[^>]*>([^<]+)<\/returnval>/);
     if (collectorMatch) {
-      console.log('[VMware] Created EventHistoryCollector:', collectorMatch[1]);
+      log.info({ collector: collectorMatch[1] }, 'Created EventHistoryCollector');
       return collectorMatch[1];
     }
     
-    console.error('[VMware] Failed to create EventHistoryCollector, response:', xmlText.substring(0, 500));
+    log.error({ response: xmlText.substring(0, 500) }, 'Failed to create EventHistoryCollector');
     return null;
   }
 
@@ -399,8 +402,8 @@ export class VMwareService {
     });
 
     const xmlText = await response.text();
-    console.log('[VMware] ReadPreviousEvents response length:', xmlText.length);
-    console.log('[VMware] ReadPreviousEvents response sample:', xmlText.substring(0, 2000));
+    log.info({ length: xmlText.length }, 'ReadPreviousEvents response length');
+    log.info({ sample: xmlText.substring(0, 2000) }, 'ReadPreviousEvents response sample');
     
     return this.parseEventResponseSOAP(xmlText);
   }
@@ -429,7 +432,7 @@ export class VMwareService {
       body: soapEnvelope,
     });
     
-    console.log('[VMware] Reset EventHistoryCollector');
+    log.info('Reset EventHistoryCollector');
   }
 
   /**
@@ -456,7 +459,7 @@ export class VMwareService {
       body: soapEnvelope,
     });
     
-    console.log('[VMware] Destroyed EventHistoryCollector');
+    log.info('Destroyed EventHistoryCollector');
   }
 
   /**
@@ -511,10 +514,10 @@ export class VMwareService {
         }
       }
 
-      console.log(`[VMware] Parsed ${events.length} SOAP events`);
+      log.info({ count: events.length }, 'Parsed SOAP events');
       return events;
     } catch (error) {
-      console.error('[VMware] Error parsing SOAP events:', error);
+      log.error({ err: error }, 'Error parsing SOAP events');
       return [];
     }
   }
@@ -562,7 +565,7 @@ export class VMwareService {
     });
 
     const xmlText = await response.text();
-    console.log('[VMware] LatestEvent response:', xmlText.substring(0, 1500));
+    log.info({ response: xmlText.substring(0, 1500) }, 'LatestEvent response');
     
     // Parse latest event
     const eventTypeMatch = xmlText.match(/xsi:type="([^"]+)"/);
@@ -648,7 +651,7 @@ export class VMwareService {
 
     // If 401 Unauthorized and haven't retried, refresh session and retry once
     if (response.status === 401 && !_retried) {
-      console.log('[VMware] Session expired, re-authenticating...');
+      log.info('Session expired, re-authenticating');
       const authSuccess = await this.authenticate();
       if (authSuccess) {
         return this.restRequest<T>(endpoint, options, true);
@@ -657,7 +660,7 @@ export class VMwareService {
 
     // If 404, try legacy /rest/ endpoint
     if (response.status === 404) {
-      console.log(`[VMware] Trying legacy endpoint for ${endpoint}`);
+      log.info({ endpoint }, 'Trying legacy endpoint');
       response = await fetch(`https://${this.config.host}/rest/${endpoint}`, {
         ...options,
         headers: {
@@ -673,7 +676,7 @@ export class VMwareService {
 
       // Also retry legacy endpoint on 401
       if (response.status === 401 && !_retried) {
-        console.log('[VMware] Legacy session expired, re-authenticating...');
+        log.info('Legacy session expired, re-authenticating');
         const authSuccess = await this.authenticate();
         if (authSuccess) {
           return this.restRequest<T>(endpoint, options, true);
@@ -697,7 +700,7 @@ export class VMwareService {
       process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
       // Try vSphere 7+ REST API authentication first (/api/session)
-      console.log(`[VMware] Authenticating to ${this.config.host} as ${this.config.username}`);
+      log.info({ host: this.config.host, username: this.config.username }, 'Authenticating');
       
       let response = await fetch(`https://${this.config.host}/api/session`, {
         method: 'POST',
@@ -711,11 +714,11 @@ export class VMwareService {
         const sessionId = await response.text();
         // vSphere 7 returns session ID as plain text with quotes
         this.sessionCookie = sessionId.replace(/"/g, '');
-        console.log('[VMware] Authentication successful (vSphere 7+ API)');
+        log.info('Authentication successful (vSphere 7+ API)');
         return true;
       }
 
-      console.log(`[VMware] vSphere 7 API failed (${response.status}), trying legacy endpoint...`);
+      log.info({ status: response.status }, 'vSphere 7 API failed, trying legacy endpoint');
 
       // Try legacy REST API authentication (vCenter 6.5-6.7)
       response = await fetch(`https://${this.config.host}/rest/com/vmware/cis/session`, {
@@ -728,16 +731,16 @@ export class VMwareService {
       if (response.ok) {
         const data = await response.json() as { value: string };
         this.sessionCookie = data.value;
-        console.log('[VMware] Authentication successful (legacy API)');
+        log.info('Authentication successful (legacy API)');
         return true;
       }
 
-      console.error(`[VMware] Authentication failed: ${response.status} ${response.statusText}`);
+      log.error({ status: response.status, statusText: response.statusText }, 'Authentication failed');
       const errorBody = await response.text();
-      console.error(`[VMware] Error body: ${errorBody}`);
+      log.error({ errorBody }, 'Error body');
       return false;
     } catch (error) {
-      console.error('[VMware] Authentication error:', error);
+      log.error({ err: error }, 'Authentication error');
       return false;
     }
   }
@@ -783,7 +786,7 @@ export class VMwareService {
             },
           });
 
-          console.log(`[VMware] Testing ${ep.name} (${ep.path}): ${response.status}`);
+          log.info({ name: ep.name, path: ep.path, status: response.status }, 'Testing endpoint');
           
           if (response.ok || response.status === 400) {
             // 400 means endpoint exists but needs params
@@ -796,7 +799,7 @@ export class VMwareService {
             };
           }
         } catch (err) {
-          console.log(`[VMware] ${ep.name} test failed:`, err);
+          log.info({ name: ep.name, err }, 'Endpoint test failed');
         }
       }
 
@@ -852,7 +855,7 @@ export class VMwareService {
         });
         
         if (!legacyResponse.ok) {
-          console.log('[VMware] Tasks API not available');
+          log.info('Tasks API not available');
           return [];
         }
         
@@ -863,7 +866,7 @@ export class VMwareService {
       const data = await response.json();
       return this.parseTasksResponse(data, minutesBack);
     } catch (error) {
-      console.error('[VMware] Error fetching tasks:', error);
+      log.error({ err: error }, 'Error fetching tasks');
       return [];
     }
   }
@@ -960,13 +963,13 @@ export class VMwareService {
       const data = JSON.parse(pyResult);
       if (data.success && data.hosts) {
         hostDetails = data.hosts;
-        console.log(`[VMware] Fetched detailed info for ${hostDetails.length} hosts via PyVmomi`);
+        log.info({ count: hostDetails.length }, 'Fetched detailed host info via PyVmomi');
       } else if (data.error) {
-        console.warn('[VMware] PyVmomi host details error:', data.error);
+        log.warn({ error: data.error }, 'PyVmomi host details error');
       }
     } catch (err) {
       // PyVmomi failed - will use REST API fallback
-      console.warn('[VMware] PyVmomi host details unavailable, using REST API fallback');
+      log.warn('PyVmomi host details unavailable, using REST API fallback');
     }
 
     // Create a map for quick lookup by name
@@ -1068,10 +1071,10 @@ export class VMwareService {
         }
       }
 
-      console.log(`[VMware] Found ${events.length} VM lifecycle events via SOAP`);
+      log.info({ count: events.length }, 'Found VM lifecycle events via SOAP');
       return events;
     } catch (error) {
-      console.error('[VMware] Error fetching VM lifecycle events:', error);
+      log.error({ err: error }, 'Error fetching VM lifecycle events');
       return [];
     }
   }
@@ -1131,10 +1134,10 @@ export class VMwareService {
         }
       }
 
-      console.log(`[VMware] Found ${events.length} snapshot events via SOAP`);
+      log.info({ count: events.length }, 'Found snapshot events via SOAP');
       return events;
     } catch (error) {
-      console.error('[VMware] Error fetching snapshot events:', error);
+      log.error({ err: error }, 'Error fetching snapshot events');
       return [];
     }
   }
@@ -1162,7 +1165,7 @@ export class VMwareService {
         message: evt.message,
       }));
     } catch (error) {
-      console.error('[VMware] Error in fetchEventsByTypes:', error);
+      log.error({ err: error }, 'Error in fetchEventsByTypes');
       return [];
     }
   }
@@ -1198,7 +1201,7 @@ export class VMwareService {
       const match = xmlText.match(/<returnval[^>]*type="ContainerView"[^>]*>([^<]+)<\/returnval>/);
       return match ? match[1] : null;
     } catch (err) {
-      console.error('[VMware] createContainerView error:', err);
+      log.error({ err }, 'createContainerView error');
       return null;
     }
   }
@@ -1228,7 +1231,7 @@ export class VMwareService {
         body: soapEnvelope,
       });
     } catch (err) {
-      console.warn('[VMware] destroyView error (non-fatal):', err);
+      log.warn({ err }, 'destroyView error (non-fatal)');
     }
   }
 
@@ -1251,14 +1254,14 @@ export class VMwareService {
       if (!this.sessionCookie || !this.sessionCookie.includes('vmware_soap_session')) {
         const authenticated = await this.authenticateSOAP();
         if (!authenticated) {
-          console.error('[VMware] SOAP authentication required for fetchHostQuickStats');
+          log.error('SOAP authentication required for fetchHostQuickStats');
           return [];
         }
       }
 
       const serviceContent = await this.retrieveServiceContent();
       if (!serviceContent.viewManager || !serviceContent.rootFolder) {
-        console.error('[VMware] viewManager or rootFolder not found in ServiceContent');
+        log.error('viewManager or rootFolder not found in ServiceContent');
         return [];
       }
 
@@ -1268,7 +1271,7 @@ export class VMwareService {
         'HostSystem'
       );
       if (!containerView) {
-        console.error('[VMware] Failed to create ContainerView for HostSystem');
+        log.error('Failed to create ContainerView for HostSystem');
         return [];
       }
 
@@ -1379,10 +1382,10 @@ export class VMwareService {
         });
       }
 
-      console.log(`[VMware] fetchHostQuickStats: ${results.length} hosts retrieved`);
+      log.info({ count: results.length }, 'fetchHostQuickStats: hosts retrieved');
       return results;
     } catch (error) {
-      console.error('[VMware] Error in fetchHostQuickStats:', error);
+      log.error({ err: error }, 'Error in fetchHostQuickStats');
       return [];
     }
   }
@@ -1424,10 +1427,10 @@ export class VMwareService {
           };
         });
       
-      console.log(`[VMware] Found ${recentSnapshots.length} recently created snapshots (last ${timeWindowMinutes} minutes)`);
+      log.info({ count: recentSnapshots.length, timeWindowMinutes }, 'Found recently created snapshots');
       return recentSnapshots;
     } catch (error) {
-      console.error('[VMware] Error fetching recently created snapshots:', error);
+      log.error({ err: error }, 'Error fetching recently created snapshots');
       return [];
     }
   }
@@ -1461,12 +1464,12 @@ export class VMwareService {
             vmToHostMap.set(vm.vm, host.host.value);
           }
         } catch (err) {
-          console.warn(`[VMware] Failed to fetch VMs for host ${host.name}:`, (err as Error).message);
+          log.warn({ hostName: host.name, err: (err as Error).message }, 'Failed to fetch VMs for host');
         }
       }
-      console.log(`[VMware] Built VM->Host mapping for ${vmToHostMap.size} VMs`);
+      log.info({ count: vmToHostMap.size }, 'Built VM->Host mapping');
     } catch (err) {
-      console.warn('[VMware] Failed to build VM->Host mapping:', (err as Error).message);
+      log.warn({ err: (err as Error).message }, 'Failed to build VM->Host mapping');
     }
 
     // Fetch detailed info for VMs (IP address from guest identity)
@@ -1940,7 +1943,7 @@ export class VMwareService {
       }>>(`vcenter/events?begin_time=${encodeURIComponent(beginTime)}&end_time=${encodeURIComponent(endTime)}&types=VmPoweredOnEvent`);
 
       if (!response || !Array.isArray(response)) {
-        console.log('[VMware] No events returned from API');
+        log.info('No events returned from API');
         return [];
       }
 
@@ -1965,10 +1968,10 @@ export class VMwareService {
           description: evt.description?.default_message || 'VM powered on',
         }));
 
-      console.log(`[VMware] Found ${powerOnEvents.length} power-on events (filtered out backup accounts)`);
+      log.info({ count: powerOnEvents.length }, 'Found power-on events (filtered out backup accounts)');
       return powerOnEvents;
     } catch (error) {
-      console.error('[VMware] Error fetching power-on events:', error);
+      log.error({ err: error }, 'Error fetching power-on events');
       return [];
     }
   }
@@ -2024,22 +2027,22 @@ export class VMwareService {
               isGracefulShutdown: evt.type === 'VmGuestShutdownEvent',
             }));
 
-          console.log(`[VMware] Found ${powerOffEvents.length} power-off events (filtered)`);
+          log.info({ count: powerOffEvents.length }, 'Found power-off events (filtered)');
           return powerOffEvents;
         }
       } catch (restError) {
-        console.log('[VMware] REST Events API not available, using SOAP EventManager');
+        log.info('REST Events API not available, using SOAP EventManager');
         
         // Fallback to SOAP API
         // Note: This requires proper SOAP implementation which is complex
         // For now, we'll disable the alarm instead of returning current state
-        console.log('[VMware] SOAP EventManager not yet implemented');
-        console.log('[VMware] VM_POWERED_OFF alarm will remain disabled until Events API is available');
+        log.info('SOAP EventManager not yet implemented');
+        log.info('VM_POWERED_OFF alarm will remain disabled until Events API is available');
       }
 
       return [];
     } catch (error) {
-      console.error('[VMware] Error fetching power-off events:', error);
+      log.error({ err: error }, 'Error fetching power-off events');
       return [];
     }
   }
@@ -2064,7 +2067,7 @@ export class VMwareService {
       // Check cache
       const cached = snapshotCache.get(cacheKey);
       if (cached && (now - cached.timestamp) < CACHE_TTL) {
-        console.log('[VMware] Returning cached snapshots');
+        log.info('Returning cached snapshots');
         return cached.data;
       }
       
@@ -2079,7 +2082,7 @@ export class VMwareService {
       const data = JSON.parse(result);
       
       if (!data.success) {
-        console.error(`[VMware] Batch snapshot fetch error: ${data.error}`);
+        log.error({ error: data.error }, 'Batch snapshot fetch error');
         return [];
       }
       
@@ -2087,11 +2090,11 @@ export class VMwareService {
       
       // Cache result
       snapshotCache.set(cacheKey, { data: snapshots, timestamp: now });
-      console.log(`[VMware] Cached ${snapshots.length} snapshots`);
+      log.info({ count: snapshots.length }, 'Cached snapshots');
       
       return snapshots;
     } catch (error) {
-      console.error('[VMware] Error fetching all snapshots:', error);
+      log.error({ err: error }, 'Error fetching all snapshots');
       return [];
     }
   }
@@ -2128,7 +2131,7 @@ export class VMwareService {
       const data = JSON.parse(result);
       
       if (!data.success) {
-        console.error(`[VMware] Snapshot fetch error: ${data.error}`);
+        log.error({ error: data.error }, 'Snapshot fetch error');
         return [];
       }
       
@@ -2139,7 +2142,7 @@ export class VMwareService {
       
       return snapshots;
     } catch (error) {
-      console.error('[VMware] Error fetching snapshots:', error);
+      log.error({ err: error }, 'Error fetching snapshots');
       return [];
     }
   }

@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyPassword, hashPassword, validatePasswordStrength } from '@/lib/auth/password';
 import { logAudit } from '@/lib/audit/logger';
+import { validateBody } from '@/lib/validators';
+import { changePasswordSchema } from '@/lib/validators/users';
 
 /**
  * Change a user's password.
@@ -11,15 +13,15 @@ import { logAudit } from '@/lib/audit/logger';
  */
 export async function PATCH(request: Request) {
   try {
-    const body = await request.json();
-    const { userId, currentPassword, newPassword } = body;
-
-    if (!userId || !newPassword) {
+    const rawBody = await request.json();
+    const parsed = validateBody(rawBody, changePasswordSchema);
+    if (!parsed.success) {
       return NextResponse.json(
-        { success: false, error: 'userId and newPassword are required' },
+        { success: false, error: parsed.error },
         { status: 400 }
       );
     }
+    const { userId, currentPassword, newPassword } = parsed.data;
 
     // Validate new password strength
     const validation = validatePasswordStrength(newPassword);

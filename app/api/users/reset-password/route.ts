@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma';
 import { hashPassword, validatePasswordStrength } from '@/lib/auth/password';
 import { logAudit } from '@/lib/audit/logger';
 import { sendPasswordResetEmail } from '@/lib/email/sendInvitation';
+import { validateBody } from '@/lib/validators';
+import { resetPasswordConfirmSchema } from '@/lib/validators/users';
 import crypto from 'crypto';
 
 // Password reset token model stored in SystemConfig with special key pattern
@@ -77,15 +79,15 @@ export async function POST(request: Request) {
 // Verify token and set new password
 export async function PATCH(request: Request) {
   try {
-    const body = await request.json();
-    const { token, newPassword } = body;
-
-    if (!token || !newPassword) {
+    const rawBody = await request.json();
+    const parsed = validateBody(rawBody, resetPasswordConfirmSchema);
+    if (!parsed.success) {
       return NextResponse.json(
-        { success: false, error: 'Token and newPassword are required' },
+        { success: false, error: parsed.error },
         { status: 400 }
       );
     }
+    const { token, newPassword } = parsed.data;
 
     // Validate password strength
     const validation = validatePasswordStrength(newPassword);

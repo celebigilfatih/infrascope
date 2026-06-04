@@ -1,19 +1,23 @@
 /**
  * FortiAnalyzer Circuit Breaker
- * 
+ *
  * Prevents cascading failures when FortiAnalyzer is unavailable.
  * Pattern: If FA fails N consecutive times, open the circuit for M minutes.
- * 
+ *
  * States:
  * - CLOSED: Normal operation, requests go through
  * - OPEN: FA unavailable, requests fail fast (no actual API call)
  * - HALF_OPEN: After cool-down, allow one test request to check recovery
- * 
+ *
  * Benefits:
  * - Prevents wasting resources on failing FA requests
  * - Allows FA time to recover without being hammered
  * - Fast failure for downstream components
  */
+
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('fa-circuit-breaker');
 
 // Circuit breaker configuration
 const FAILURE_THRESHOLD = 3;        // Open circuit after 3 consecutive failures
@@ -58,7 +62,7 @@ export function canCallFA(): { allowed: boolean; reason?: string } {
         // Transition to HALF_OPEN
         circuitState.state = 'HALF_OPEN';
         circuitState.successCount = 0;
-        console.log('[FA-CircuitBreaker] Transitioning to HALF_OPEN (testing recovery)');
+        log.info('Transitioning to HALF_OPEN (testing recovery)');
         return { allowed: true, reason: 'Testing recovery after cool-down' };
       }
       
@@ -90,7 +94,7 @@ export function recordFASuccess(): void {
 
     case 'HALF_OPEN':
       circuitState.successCount++;
-      console.log(`[FA-CircuitBreaker] Success in HALF_OPEN (${circuitState.successCount}/${SUCCESS_THRESHOLD})`);
+      log.info({ successCount: circuitState.successCount, threshold: SUCCESS_THRESHOLD }, 'Success in HALF_OPEN');
       
       if (circuitState.successCount >= SUCCESS_THRESHOLD) {
         // Enough successes, close the circuit
@@ -98,7 +102,7 @@ export function recordFASuccess(): void {
         circuitState.failureCount = 0;
         circuitState.successCount = 0;
         circuitState.lastError = null;
-        console.log('[FA-CircuitBreaker] Circuit CLOSED - FA recovered');
+        log.info('Circuit CLOSED - FA recovered');
       }
       break;
 
@@ -120,13 +124,13 @@ export function recordFAFailure(error: string): void {
       circuitState.lastFailureTime = now;
       circuitState.lastError = error.substring(0, 200);
       
-      console.log(`[FA-CircuitBreaker] Failure ${circuitState.failureCount}/${FAILURE_THRESHOLD}`);
+      log.info({ failureCount: circuitState.failureCount, threshold: FAILURE_THRESHOLD }, 'Failure recorded');
       
       if (circuitState.failureCount >= FAILURE_THRESHOLD) {
         // Trip the circuit
         circuitState.state = 'OPEN';
         circuitState.openUntil = now + RECOVERY_TIMEOUT_MS;
-        console.warn(`[FA-CircuitBreaker] Circuit OPEN - FA failing. Will retry at ${new Date(circuitState.openUntil).toISOString()}`);
+        log.warn({ retryAt: new Date(circuitState.openUntil).toISOString() }, 'Circuit OPEN - FA failing');
       }
       break;
 
@@ -136,7 +140,7 @@ export function recordFAFailure(error: string): void {
       circuitState.openUntil = now + RECOVERY_TIMEOUT_MS;
       circuitState.lastError = error.substring(0, 200);
       circuitState.successCount = 0;
-      console.warn(`[FA-CircuitBreaker] Recovery failed, circuit re-OPENED until ${new Date(circuitState.openUntil).toISOString()}`);
+      log.warn({ retryAt: new Date(circuitState.openUntil).toISOString() }, 'Recovery failed, circuit re-OPENED');
       break;
 
     case 'OPEN':
@@ -177,7 +181,7 @@ export function resetCircuitBreaker(): void {
     openUntil: null,
     lastError: null,
   };
-  console.log('[FA-CircuitBreaker] Circuit manually reset to CLOSED');
+  log.info('Circuit manually reset to CLOSED');
 }
 
 /**
@@ -205,7 +209,7 @@ export async function withCircuitBreaker<T>(
   } catch (error) {
     const errorMsg = (error as Error).message || 'Unknown error';
     recordFAFailure(errorMsg);
-    console.error(`[FA-CircuitBreaker] ${operationName} failed:`, errorMsg);
+    log.error({ err: errorMsg, operationName }, 'Operation failed');
     throw error;
   }
 }

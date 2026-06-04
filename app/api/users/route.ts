@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { logAudit } from '@/lib/audit/logger';
+import { validateBody } from '@/lib/validators';
+import { updateUserSchema } from '@/lib/validators/users';
 
 export async function GET() {
   try {
@@ -118,8 +120,15 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
-    const body = await request.json();
-    const { id, name, email, role, status } = body;
+    const rawBody = await request.json();
+    const parsed = validateBody(rawBody, updateUserSchema);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { success: false, error: parsed.error },
+        { status: 400 }
+      );
+    }
+    const { id, name, email, role, status } = parsed.data;
 
     const updateData: Record<string, unknown> = {};
     if (name) updateData.name = name;

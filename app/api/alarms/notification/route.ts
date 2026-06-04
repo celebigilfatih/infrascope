@@ -7,6 +7,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { sendTestEmail } from '@/lib/notifications/email';
+import { validateBody } from '@/lib/validators';
+import { notificationConfigSchema } from '@/lib/validators/alarms';
 
 export async function GET() {
   try {
@@ -50,28 +52,25 @@ export async function GET() {
 
 export async function PUT(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { smtpHost, smtpPort, smtpUser, smtpPass, smtpSecure, recipients, enabled } = body as {
-      smtpHost?: string;
-      smtpPort?: number;
-      smtpUser?: string;
-      smtpPass?: string;
-      smtpSecure?: boolean;
-      recipients?: string[];
-      enabled?: boolean;
-    };
+    const rawBody = await request.json();
+    const parsed = validateBody(rawBody, notificationConfigSchema);
+    if (!parsed.success) {
+      return NextResponse.json({ success: false, error: parsed.error }, { status: 400 });
+    }
+    const { smtpHost, smtpPort, smtpUser, smtpPass, smtpSecure, recipients } = parsed.data;
+    const enabled = (rawBody as Record<string, unknown>).enabled as boolean | undefined;
 
     // Build config object, preserving existing password if not provided
     const existing = await prisma.notificationConfig.findUnique({ where: { channel: 'email' } });
     const existingConfig = (existing?.config as Record<string, unknown>) || {};
 
     const newConfig = {
-      smtpHost: smtpHost || existingConfig.smtpHost || 'mail.webmahsul.com.tr',
+      smtpHost: smtpHost || existingConfig.smtpHost || '',
       smtpPort: smtpPort || existingConfig.smtpPort || 587,
-      smtpUser: smtpUser || existingConfig.smtpUser || 'alert@webmahsul.com.tr',
-      smtpPass: (smtpPass && smtpPass !== '********') ? smtpPass : existingConfig.smtpPass || 'Thor.7485-Scope',
+      smtpUser: smtpUser || existingConfig.smtpUser || '',
+      smtpPass: (smtpPass && smtpPass !== '********') ? smtpPass : existingConfig.smtpPass || '',
       smtpSecure: smtpSecure !== undefined ? smtpSecure : existingConfig.smtpSecure || false,
-      recipients: recipients || existingConfig.recipients || ['alert@webmahsul.com.tr'],
+      recipients: recipients || existingConfig.recipients || [],
     };
 
     const result = await prisma.notificationConfig.upsert({

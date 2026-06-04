@@ -28,6 +28,9 @@
 
 import type { AlarmQueryContext, QueryResult } from './types';
 import { prisma } from '@/lib/prisma';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('fortigate-cmdb');
 
 // Maps CMDB endpoint paths to FortiAnalyzer cfgpath values stored in cached_events.
 // FortiGate uses dot-separated cfgpath (e.g. 'firewall.policy') while CMDB endpoints
@@ -111,7 +114,7 @@ async function cmdbDiff(
 
   const fg = getFortiGateService();
   if (!fg) {
-    console.warn(`[AlarmQuery] ${ctx.alarmCode}: FortiGate service not available`);
+    log.warn({ alarmCode: ctx.alarmCode }, 'FortiGate service not available');
     return emptyResult(ctx, description);
   }
 
@@ -120,18 +123,18 @@ async function cmdbDiff(
   const durationMs = Date.now() - start;
 
   if (isFirstRun) {
-    console.log(`[AlarmQuery] ${ctx.alarmCode}: CMDB snapshot initialized (${endpoint}) — first run, no alarm`);
+    log.info({ alarmCode: ctx.alarmCode, endpoint }, 'CMDB snapshot initialized — first run, no alarm');
     return emptyResult(ctx, `${description} [first-run]`, durationMs);
   }
 
   if (!changed) {
-    console.log(`[AlarmQuery] ${ctx.alarmCode}: CMDB no change (${durationMs}ms) | ${endpoint}`);
+    log.info({ alarmCode: ctx.alarmCode, durationMs, endpoint }, 'CMDB no change');
     return emptyResult(ctx, description, durationMs);
   }
 
   // Change detected — compute detailed diff
   const count = Array.isArray(current) ? current.length : 1;
-  console.log(`[AlarmQuery] ${ctx.alarmCode}: CMDB CHANGE detected (${durationMs}ms) | ${endpoint} | items: ${count}`);
+  log.info({ alarmCode: ctx.alarmCode, durationMs, endpoint, count }, 'CMDB CHANGE detected');
 
   // Get previous snapshot data for detailed diff
   const fgService = getFortiGateService();
@@ -148,11 +151,11 @@ async function cmdbDiff(
   
   let diffDetails: any = null;
   if (prevItems && currItems) {
-    console.log(`[AlarmQuery] ${ctx.alarmCode}: computing diff — prev: ${prevItems.length} items, curr: ${currItems.length} items`);
+    log.info({ alarmCode: ctx.alarmCode, prevItems: prevItems.length, currItems: currItems.length }, 'Computing diff');
     diffDetails = computeArrayDiff(prevItems, currItems);
-    console.log(`[AlarmQuery] ${ctx.alarmCode}: diff result — added: ${diffDetails.added.length}, removed: ${diffDetails.removed.length}, modified: ${diffDetails.modified.length}`);
+    log.info({ alarmCode: ctx.alarmCode, added: diffDetails.added.length, removed: diffDetails.removed.length, modified: diffDetails.modified.length }, 'Diff result');
   } else {
-    console.warn(`[AlarmQuery] ${ctx.alarmCode}: cannot compute diff — prevItems: ${!!prevItems}, currItems: ${!!currItems}, prev type: ${typeof prevData}, curr type: ${typeof current}`);
+    log.warn({ alarmCode: ctx.alarmCode, hasPrevItems: !!prevItems, hasCurrItems: !!currItems, prevType: typeof prevData, currType: typeof current }, 'Cannot compute diff');
   }
 
   // ── Enrich with admin user info from FortiAnalyzer cached_events ──────────
@@ -183,7 +186,7 @@ async function cmdbDiff(
   }));
 
   if (adminUsers.length > 0) {
-    console.log(`[AlarmQuery] ${ctx.alarmCode}: enriched with admin user(s): ${adminUsers.map(u => u.user).join(', ')}`);
+    log.info({ alarmCode: ctx.alarmCode, adminUsers: adminUsers.map(u => u.user) }, 'Enriched with admin user(s)');
   }
 
   return {
@@ -403,7 +406,7 @@ export async function cmdbCoreConfigChange(ctx: AlarmQueryContext): Promise<Quer
     return emptyResult(ctx, 'core config (no change)', durationMs);
   }
 
-  console.log(`[AlarmQuery] ${ctx.alarmCode}: CORE CONFIG CHANGE detected (${durationMs}ms) | ${changedEndpoints.join(', ')}`);
+  log.info({ alarmCode: ctx.alarmCode, durationMs, changedEndpoints }, 'CORE CONFIG CHANGE detected');
   return {
     events: [{
       changedEndpoints,

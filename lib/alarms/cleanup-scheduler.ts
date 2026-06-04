@@ -4,21 +4,30 @@
  */
 
 import { prisma } from '@/lib/prisma';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('cleanup-scheduler');
 
 interface CleanupConfig {
   enabledByDefault: boolean;
   retentionDaysAcknowledged: number; // Delete acknowledged alarms after N days
   retentionDaysUnacknowledged: number; // Keep unacknowledged alarms longer
+  retentionDaysNmsMetrics: number; // Delete NMS time-series metrics after N days
+  retentionDaysNmsBackups: number; // Delete NMS config backups after N days
   runSchedule: string; // Cron expression or 'daily'
   maxAlarmsPerRun: number; // Limit deletes per run to avoid locking
+  maxNmsPerRun: number; // Limit NMS metric deletes per run
 }
 
 const DEFAULT_CONFIG: CleanupConfig = {
   enabledByDefault: true,
   retentionDaysAcknowledged: 30, // 30 days for acknowledged
   retentionDaysUnacknowledged: 90, // 90 days for unacknowledged
+  retentionDaysNmsMetrics: 7, // 7 days for NMS time-series metrics
+  retentionDaysNmsBackups: 30, // 30 days for NMS config backups
   runSchedule: 'daily',
   maxAlarmsPerRun: 10000,
+  maxNmsPerRun: 50000,
 };
 
 class AlarmCleanupScheduler {
@@ -29,6 +38,8 @@ class AlarmCleanupScheduler {
   private cleanupStats = {
     acknowledgedDeleted: 0,
     unacknowledgedDeleted: 0,
+    nmsMetricsDeleted: 0,
+    nmsBackupsDeleted: 0,
     lastRun: null as Date | null,
   };
 
@@ -41,16 +52,14 @@ class AlarmCleanupScheduler {
    */
   start() {
     if (this.intervalId) {
-      console.log('[AlarmCleanup] Scheduler already running');
+      log.info('Scheduler already running');
       return;
     }
 
-    console.log(
-      `[AlarmCleanup] Starting scheduler (enabled=${this.config.enabledByDefault})`
-    );
+    log.info({ enabled: this.config.enabledByDefault }, 'Starting scheduler');
 
     if (!this.config.enabledByDefault) {
-      console.log('[AlarmCleanup] Cleanup is disabled');
+      log.info('Cleanup is disabled');
       return;
     }
 
@@ -65,7 +74,7 @@ class AlarmCleanupScheduler {
     if (this.intervalId) {
       clearInterval(this.intervalId);
       this.intervalId = null;
-      console.log('[AlarmCleanup] Scheduler stopped');
+      log.info('Scheduler stopped');
     }
   }
 
@@ -84,8 +93,9 @@ class AlarmCleanupScheduler {
 
     const timeUntilScheduled = scheduledTime.getTime() - now.getTime();
 
-    console.log(
-      `[AlarmCleanup] Scheduled for ${scheduledTime.toISOString()} (in ${Math.round(timeUntilScheduled / 1000 / 60)} minutes)`
+    log.info(
+      { scheduledTime: scheduledTime.toISOString(), minutesUntil: Math.round(timeUntilScheduled / 1000 / 60) },
+      'Cleanup scheduled'
     );
 
     // Schedule initial run
@@ -104,7 +114,7 @@ class AlarmCleanupScheduler {
    */
   private async runCleanup() {
     if (this.isRunning) {
-      console.log('[AlarmCleanup] Cleanup already in progress, skipping');
+      log.info('Cleanup already in progress, skipping');
       return;
     }
 
@@ -112,7 +122,7 @@ class AlarmCleanupScheduler {
     const startTime = Date.now();
 
     try {
-      console.log('[AlarmCleanup] Starting cleanup cycle...');
+      log.info('Starting cleanup cycle');
 
       // Delete old acknowledged alarms
       const acknowledgedCutoff = new Date();
@@ -164,17 +174,75 @@ class AlarmCleanupScheduler {
 
       const totalDeleted =
         acknowledgedDeleted.count + unacknowledgedDeleted.count;
+
+      // ── NMS Metrics Cleanup ──────────────────────────────────────────────
+      // Delete old NMS time-series metrics (HealthMetric, DeviceMetric, InterfaceMetric)
+      // These grow unboundedly without retention and can bloat PostgreSQL significantly.
+      const nmsMetricsCutoff = new Date();
+      nmsMetricsCutoff.setDate(
+        nmsMetricsCutoff.getDate() - this.config.retentionDaysNmsMetrics
+      );
+
+      let nmsMetricsDeleted = 0;
+      try {
+        // NmsHealthMetric — uses collectedAt
+        const healthDeleted = await (prisma as any).nmsHealthMetric.deleteMany({
+          where: { collectedAt: { lt: nmsMetricsCutoff } },
+        });
+        nmsMetricsDeleted += healthDeleted.count;
+
+        // NmsDeviceMetric — uses collectedAt
+        const deviceDeleted = await (prisma as any).nmsDeviceMetric.deleteMany({
+          where: { collectedAt: { lt: nmsMetricsCutoff } },
+        });
+        nmsMetricsDeleted += deviceDeleted.count;
+
+        // NmsInterfaceMetric — uses collectedAt
+        const ifaceDeleted = await (prisma as any).nmsInterfaceMetric.deleteMany({
+          where: { collectedAt: { lt: nmsMetricsCutoff } },
+        });
+        nmsMetricsDeleted += ifaceDeleted.count;
+
+        if (nmsMetricsDeleted > 0) {
+          log.info({ nmsMetricsDeleted, retentionDays: this.config.retentionDaysNmsMetrics }, 'Deleted NMS metrics');
+        }
+      } catch (err) {
+        log.error({ err }, 'NMS metrics cleanup failed');
+      }
+
+      // Delete old NMS config backups
+      const nmsBackupsCutoff = new Date();
+      nmsBackupsCutoff.setDate(
+        nmsBackupsCutoff.getDate() - this.config.retentionDaysNmsBackups
+      );
+
+      let nmsBackupsDeleted = 0;
+      try {
+        const backupsDeleted = await (prisma as any).nmsBackup.deleteMany({
+          where: { createdAt: { lt: nmsBackupsCutoff } },
+        });
+        nmsBackupsDeleted = backupsDeleted.count;
+        if (nmsBackupsDeleted > 0) {
+          log.info({ nmsBackupsDeleted, retentionDays: this.config.retentionDaysNmsBackups }, 'Deleted NMS backups');
+        }
+      } catch (err) {
+        log.error({ err }, 'NMS backups cleanup failed');
+      }
+
       const duration = Date.now() - startTime;
 
       this.lastRunTime = new Date();
       this.cleanupStats = {
         acknowledgedDeleted: acknowledgedDeleted.count,
         unacknowledgedDeleted: unacknowledgedDeleted.count,
+        nmsMetricsDeleted,
+        nmsBackupsDeleted,
         lastRun: this.lastRunTime,
       };
 
-      console.log(
-        `[AlarmCleanup] Cleanup completed in ${duration}ms: ${acknowledgedDeleted.count} acknowledged, ${unacknowledgedDeleted.count} unacknowledged deleted`
+      log.info(
+        { duration, acknowledgedDeleted: acknowledgedDeleted.count, unacknowledgedDeleted: unacknowledgedDeleted.count, nmsMetricsDeleted, nmsBackupsDeleted },
+        'Cleanup completed'
       );
 
       // Log to audit trail
@@ -187,18 +255,22 @@ class AlarmCleanupScheduler {
             changes: {
               acknowledgedDeleted: acknowledgedDeleted.count,
               unacknowledgedDeleted: unacknowledgedDeleted.count,
+              nmsMetricsDeleted,
+              nmsBackupsDeleted,
               retentionDaysAcknowledged:
                 this.config.retentionDaysAcknowledged,
               retentionDaysUnacknowledged:
                 this.config.retentionDaysUnacknowledged,
+              retentionDaysNmsMetrics: this.config.retentionDaysNmsMetrics,
+              retentionDaysNmsBackups: this.config.retentionDaysNmsBackups,
             },
           },
         });
       } catch (err) {
-        console.error('[AlarmCleanup] Failed to log to audit trail:', err);
+        log.error({ err }, 'Failed to log to audit trail');
       }
     } catch (error) {
-      console.error('[AlarmCleanup] Error during cleanup:', error);
+      log.error({ err: error }, 'Error during cleanup');
     } finally {
       this.isRunning = false;
     }
@@ -310,4 +382,3 @@ export function stopAlarmCleanupScheduler(): void {
 }
 
 export default AlarmCleanupScheduler;
-

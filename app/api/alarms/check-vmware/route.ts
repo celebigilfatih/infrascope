@@ -20,10 +20,15 @@ async function runVMwareAlarmCheck() {
     }
 
     const config = faConfig.config as { host: string; username?: string; password?: string };
+
+    if (!config.password) {
+      return { success: false, error: 'FortiAnalyzer password not configured' };
+    }
+
     const service = initSharedFortiAnalyzerService({
       host: config.host,
-      username: config.username || 'infrascope',
-      password: config.password || 'Thor.7485-app',
+      username: config.username,
+      password: config.password,
     });
 
     // Create alarm engine

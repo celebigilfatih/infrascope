@@ -15,6 +15,9 @@
 
 import nodemailer from 'nodemailer';
 import { prisma } from '@/lib/prisma';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('email');
 
 // ============================================================================
 // TYPES
@@ -49,12 +52,12 @@ export interface AlarmEmailData {
 // ============================================================================
 
 const DEFAULT_EMAIL_CONFIG: EmailConfig = {
-  smtpHost: 'mail.webmahsul.com.tr',
-  smtpPort: 587,
-  smtpUser: 'alert@webmahsul.com.tr',
-  smtpPass: 'Thor.7485-Scope',
+  smtpHost: process.env.SMTP_HOST || '',
+  smtpPort: parseInt(process.env.SMTP_PORT || '587'),
+  smtpUser: process.env.SMTP_USER || '',
+  smtpPass: process.env.SMTP_PASS || '',
   smtpSecure: false,
-  recipients: ['alert@webmahsul.com.tr'],
+  recipients: process.env.SMTP_RECIPIENTS ? process.env.SMTP_RECIPIENTS.split(',') : [],
 };
 
 // Rate limiting constants
@@ -92,7 +95,7 @@ export async function getEmailConfig(): Promise<EmailConfig> {
       return config.config as unknown as EmailConfig;
     }
   } catch (error) {
-    console.error('[Email] Failed to load config from DB, using defaults:', error);
+    log.error({ err: error }, 'Failed to load config from DB, using defaults');
   }
   return DEFAULT_EMAIL_CONFIG;
 }
@@ -127,7 +130,7 @@ async function getTransporter(): Promise<any> {
   });
   
   transporterConfig = configKey;
-  console.log('[Email] SMTP transporter created (pooled)');
+  log.info('SMTP transporter created (pooled)');
   return cachedTransporter;
 }
 
@@ -145,7 +148,7 @@ function isHourlyLimitExceeded(): boolean {
   if (now > hourlyResetTime) {
     emailCountThisHour = 0;
     hourlyResetTime = now + 60 * 60 * 1000;
-    console.log('[Email] Hourly counter reset');
+    log.info('Hourly counter reset');
   }
   
   return emailCountThisHour >= MAX_EMAILS_PER_HOUR;
@@ -380,7 +383,7 @@ function buildAlarmEmailHtml(data: AlarmEmailData): string {
     <!-- Footer -->
     <div style="padding:16px 24px;background:#f8fafc;border-top:1px solid #e2e8f0;text-align:center;">
       <div style="font-size:11px;color:#94a3b8;">InfraScope Alarm Management System</div>
-      <div style="font-size:10px;color:#cbd5e1;margin-top:4px;">${timestamp}</div>
+      <div style="font-size:10px;color:#cbd5c1;margin-top:4px;">${timestamp}</div>
     </div>
   </div>
 </body>
@@ -409,18 +412,18 @@ export async function sendAlarmEmail(data: AlarmEmailData, options?: { bypassCoo
   
   // Check hourly rate limit (never bypassed for safety)
   if (isHourlyLimitExceeded()) {
-    console.log(`[Email] ⏸️ Hourly limit (${MAX_EMAILS_PER_HOUR}) exceeded, skipping: ${data.alarmCode}`);
+    log.info({ alarmCode: data.alarmCode, maxPerHour: MAX_EMAILS_PER_HOUR }, 'Hourly limit exceeded, skipping');
     return false;
   }
   
   // Check per-alarm cooldown (can be bypassed for retries of failed notifications)
   if (!bypassCooldown && isAlarmInCooldown(data.alarmCode)) {
-    console.log(`[Email] ⏸️ Alarm in cooldown, skipping: ${data.alarmCode}`);
+    log.info({ alarmCode: data.alarmCode }, 'Alarm in cooldown, skipping');
     return false;
   }
   
   try {
-    console.log(`[Email] 📧 Sending email for ${data.alarmCode}...`);
+    log.info({ alarmCode: data.alarmCode }, 'Sending email');
     
     const config = await getEmailConfig();
     const transporter = await getTransporter();
@@ -439,13 +442,13 @@ export async function sendAlarmEmail(data: AlarmEmailData, options?: { bypassCoo
     recordAlarmSent(data.alarmCode);
     
     const elapsed = Date.now() - startTime;
-    console.log(`[Email] ✅ Sent in ${elapsed}ms: ${info.messageId} (${data.alarmCode})`);
+    log.info({ elapsed, messageId: info.messageId, alarmCode: data.alarmCode }, 'Email sent');
     
     return true;
   } catch (error) {
     const elapsed = Date.now() - startTime;
     const errorMsg = (error as Error).message || 'Unknown error';
-    console.error(`[Email] ❌ Failed after ${elapsed}ms for ${data.alarmCode}:`, error);
+    log.error({ err: error, elapsed, alarmCode: data.alarmCode }, 'Failed to send email');
     
     // Only clear the cached transporter for connection/auth errors.
     // Temporary message-delivery failures (recipient unknown, relay issues)
@@ -462,7 +465,7 @@ export async function sendAlarmEmail(data: AlarmEmailData, options?: { bypassCoo
     if (isConnectionError) {
       cachedTransporter = null;
       transporterConfig = null;
-      console.warn('[Email] Connection/auth error — transporter cleared for reconnect');
+      log.warn('Connection/auth error — transporter cleared for reconnect');
     }
     
     // Add to DLQ for retry (only if alarmEventId is provided and not already a DLQ retry)
@@ -472,7 +475,7 @@ export async function sendAlarmEmail(data: AlarmEmailData, options?: { bypassCoo
         const { addToDLQ } = await import('./dlq-worker');
         await addToDLQ(data.alarmEventId, data, errorMsg);
       } catch (dlqError) {
-        console.error(`[Email] Failed to add to DLQ:`, dlqError);
+        log.error({ err: dlqError }, 'Failed to add to DLQ');
       }
     }
     
@@ -531,11 +534,11 @@ export async function sendTestEmail(configOverride?: Partial<EmailConfig>): Prom
       `,
     });
 
-    console.log(`[Email] ✅ Test email sent: ${info.messageId}`);
+    log.info({ messageId: info.messageId }, 'Test email sent');
     return { success: true };
   } catch (error) {
     const errMsg = (error as Error).message || 'Unknown error';
-    console.error('[Email] ❌ Test email failed:', errMsg);
+    log.error({ errMsg }, 'Test email failed');
     return { success: false, error: errMsg };
   }
 }

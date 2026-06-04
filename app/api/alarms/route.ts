@@ -5,6 +5,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { validateBody } from '@/lib/validators';
+import { acknowledgeAlarmsSchema } from '@/lib/validators/alarms';
 
 export async function GET(request: NextRequest) {
   try {
@@ -112,22 +114,18 @@ export async function GET(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { ids, acknowledged, acknowledgedBy } = body as {
-      ids: string[];
-      acknowledged: boolean;
-      acknowledgedBy?: string;
-    };
-
-    if (!ids || !Array.isArray(ids) || ids.length === 0) {
-      return NextResponse.json({ success: false, error: 'ids array required' }, { status: 400 });
+    const rawBody = await request.json();
+    const parsed = validateBody(rawBody, acknowledgeAlarmsSchema);
+    if (!parsed.success) {
+      return NextResponse.json({ success: false, error: parsed.error }, { status: 400 });
     }
+    const { ids, acknowledged } = parsed.data;
 
     const updated = await prisma.alarmEvent.updateMany({
       where: { id: { in: ids } },
       data: {
         acknowledged: acknowledged !== false,
-        acknowledgedBy: acknowledgedBy || 'admin',
+        acknowledgedBy: 'admin',
         acknowledgedAt: acknowledged !== false ? new Date() : null,
       },
     });

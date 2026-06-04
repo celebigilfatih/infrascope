@@ -1,8 +1,19 @@
 import https from 'https';
+import { createLogger } from '@/lib/logger';
 
-// Disable SSL verification for self-signed FortiAnalyzer certificates
+const log = createLogger('fortianalyzer');
+
+// Disable SSL verification for self-signed FortiAnalyzer certificates (development ONLY).
+// In production, TLS must always be enforced — setting this env var there is a critical
+// security vulnerability that allows MITM attacks on FortiAnalyzer API credentials.
 if (typeof process !== 'undefined' && process.env.NODE_ENV === 'development') {
   process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+} else if (typeof process !== 'undefined' && process.env.NODE_ENV === 'production' && process.env.NODE_TLS_REJECT_UNAUTHORIZED === '0') {
+  log.error(
+    'CRITICAL SECURITY: NODE_TLS_REJECT_UNAUTHORIZED=0 is set in production! ' +
+    'This disables TLS certificate verification and exposes FortiAnalyzer credentials to MITM attacks. ' +
+    'Remove this environment variable immediately.'
+  );
 }
 
 // Helper to make HTTPS requests with self-signed cert bypass
@@ -53,27 +64,27 @@ async function withRetry<T>(
     } catch (error) {
       lastError = error as Error;
       const errorMessage = lastError.message || '';
-      
+
       // Check if error is retryable
       const isRetryable = retryConfig.retryableErrors.some(retryable =>
         errorMessage.includes(retryable) || lastError?.name === retryable
       );
-      
+
       if (!isRetryable || attempt === retryConfig.maxRetries - 1) {
         throw lastError;
       }
-      
+
       // Exponential backoff with jitter
       const delay = Math.min(
         retryConfig.baseDelay * Math.pow(2, attempt) + Math.random() * 1000,
         retryConfig.maxDelay
       );
-      
-      console.log(`[Retry] Attempt ${attempt + 1}/${retryConfig.maxRetries} failed, retrying in ${Math.round(delay)}ms...`);
+
+      log.info({ attempt: attempt + 1, maxRetries: retryConfig.maxRetries, delayMs: Math.round(delay) }, 'Retry attempt failed, retrying');
       await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
-  
+
   throw lastError;
 }
 
@@ -196,7 +207,7 @@ class FortiAnalyzerService {
     if (this.config.accessToken) return; // API keys don't expire
     const state = getGlobalLoginState(this.config.host);
     if (state.session || this.session) {
-      console.warn(`[FortiAnalyzer] ⚠️  Invalidating session: ${reason}`);
+      log.warn({ reason }, 'Invalidating session');
     }
     state.session = null;
     state.lastLoginTime = 0;
@@ -236,7 +247,7 @@ class FortiAnalyzerService {
       } as any).catch(() => null); // best-effort, ignore network errors
 
       clearTimeout(timeoutId);
-      console.log('[FortiAnalyzer] 👋 Logged out — server-side session released');
+      log.info('Logged out — server-side session released');
     } catch {
       // Best-effort: we're about to replace the session anyway
     } finally {
@@ -302,10 +313,9 @@ class FortiAnalyzerService {
     // succession cause FA to permanently lock the account.
     if (Date.now() < state.backoffUntil) {
       const waitSec = Math.round((state.backoffUntil - Date.now()) / 1000);
-      console.warn(
-        `[FortiAnalyzer] 🚫 Login suppressed — backoff active ` +
-        `(${waitSec}s remaining, ${state.consecutiveFailures} consecutive failure(s)). ` +
-        `Account may be locked on FA; unlock via System → Administrators → infrascope → Unlock.`
+      log.warn(
+        { waitSec, consecutiveFailures: state.consecutiveFailures },
+        'Login suppressed — backoff active. Account may be locked on FA; unlock via System → Administrators → infrascope → Unlock'
       );
       return false;
     }
@@ -314,7 +324,7 @@ class FortiAnalyzerService {
     // If another instance is already logging in, wait for its result instead
     // of firing a second simultaneous login request.
     if (state.isConnecting) {
-      console.log('[FortiAnalyzer] Waiting for in-progress login from another instance...');
+      log.info('Waiting for in-progress login from another instance');
       const sess = await new Promise<string | null>((resolve) =>
         state.connectionQueue.push(resolve)
       );
@@ -337,7 +347,7 @@ class FortiAnalyzerService {
     };
 
     try {
-      console.log(`[FortiAnalyzer] 🔑 Logging in as ${this.config.username} at ${new Date().toISOString()}...`);
+      log.info({ username: this.config.username }, 'Logging in');
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 60000);
@@ -357,7 +367,7 @@ class FortiAnalyzerService {
         }),
       } as any).catch((err) => {
         clearTimeout(timeoutId);
-        console.error('[FortiAnalyzer] Login request failed:', err.message);
+        log.error({ err }, 'Login request failed');
         return null;
       });
 
@@ -368,7 +378,7 @@ class FortiAnalyzerService {
         const bMs = this.calcBackoffMs(state.consecutiveFailures);
         state.backoffUntil = Date.now() + bMs;
         state.session = null;
-        console.error(`[FortiAnalyzer] ❌ Login request failed (failure #${state.consecutiveFailures}). Backoff: ${Math.round(bMs / 60000)}min`);
+        log.error({ consecutiveFailures: state.consecutiveFailures, backoffMin: Math.round(bMs / 60000) }, 'Login request failed');
         releaseWithSession(null);
         return false;
       }
@@ -390,7 +400,7 @@ class FortiAnalyzerService {
         state.lastFailureAt = 0;
         this.session = state.session;
         this.lastLoginTime = state.lastLoginTime;
-        console.log('[FortiAnalyzer] ✅ Login successful — failure counter reset');
+        log.info('Login successful — failure counter reset');
         releaseWithSession(state.session);
         return true;
       }
@@ -405,16 +415,15 @@ class FortiAnalyzerService {
       // code=-22 = FA account locked (too many failed logins)
       if (status?.code === -22) {
         state.isAccountLocked = true;
-        console.error(
-          `[FortiAnalyzer] 🔒 Account LOCKED (code=-22) — unlock via FA GUI: System → Administrators → infrascope → Unlock. ` +
-          `Next attempt in ${Math.round(bMs / 60000)}min.`
+        log.error(
+          { code: -22, backoffMin: Math.round(bMs / 60000) },
+          'Account LOCKED — unlock via FA GUI: System → Administrators → infrascope → Unlock'
         );
       } else {
         state.isAccountLocked = false;
-        console.error(
-          `[FortiAnalyzer] ❌ Login failed at ${new Date().toISOString()}: ` +
-          `code=${status?.code} msg=${status?.message} ` +
-          `(failure #${state.consecutiveFailures}, next attempt in ${Math.round(bMs / 60000)}min)`
+        log.error(
+          { code: status?.code, message: status?.message, consecutiveFailures: state.consecutiveFailures, backoffMin: Math.round(bMs / 60000) },
+          'Login failed'
         );
       }
       releaseWithSession(null);
@@ -426,7 +435,7 @@ class FortiAnalyzerService {
       state.session = null;
       state.lastFailureAt = Date.now();
       this.session = null;
-      console.error(`[FortiAnalyzer] ❌ Login threw at ${new Date().toISOString()} (failure #${state.consecutiveFailures}):`, error);
+      log.error({ err: error, consecutiveFailures: state.consecutiveFailures }, 'Login threw exception');
       releaseWithSession(null);
       return false;
     }
@@ -477,7 +486,7 @@ class FortiAnalyzerService {
       }
       return null;
     } catch (error) {
-      console.error('Failed to get status:', error);
+      log.error({ err: error }, 'Failed to get status');
       return null;
     }
   }
@@ -527,7 +536,7 @@ class FortiAnalyzerService {
       }
       return null;
     } catch (error) {
-      console.error('Failed to get ADOMs:', error);
+      log.error({ err: error }, 'Failed to get ADOMs');
       return null;
     }
   }
@@ -544,12 +553,12 @@ class FortiAnalyzerService {
     try {
       // FortiGate cihazlarından config revision geçmişini çek
       const devices = await this.getDevices();
-      console.log('Available devices for config logs:', devices);
-      
+      log.info({ devices }, 'Available devices for config logs');
+
       // Şimdilik boş döndürüyoruz, daha sonra geliştirilebilir
       return [];
     } catch (error) {
-      console.error('Failed to get config logs:', error);
+      log.error({ err: error }, 'Failed to get config logs');
       return [];
     }
   }
@@ -561,8 +570,8 @@ class FortiAnalyzerService {
     try {
       // FortiGate cihazlarından config revision geçmişini çek
       const devices = await this.getDevices();
-      console.log('Available devices for config revisions:', devices);
-      
+      log.info({ devices }, 'Available devices for config revisions');
+
       // Şimdilik mock data döndürüyoruz
       // Gerçek entegrasyon için FortiGate servisiyle bağlanabilir
       const mockRevisions: Array<Record<string, unknown>> = [
@@ -583,10 +592,10 @@ class FortiAnalyzerService {
           device: 'FG4H0FT922903137'
         }
       ];
-      
+
       return mockRevisions;
     } catch (error) {
-      console.error('Failed to get config revisions:', error);
+      log.error({ err: error }, 'Failed to get config revisions');
       return [];
     }
   }
@@ -639,7 +648,7 @@ class FortiAnalyzerService {
       }
       return [];
     } catch (error) {
-      console.error('Failed to get devices:', error);
+      log.error({ err: error }, 'Failed to get devices');
       return [];
     }
   }
@@ -659,7 +668,7 @@ class FortiAnalyzerService {
       const now = new Date();
       const end = new Date(now.getTime() + 24 * 60 * 60 * 1000);
       const start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-      
+
       const formatDate = (d: Date) => {
         return d.toISOString().slice(0, 19).replace('T', ' ');
       };
@@ -667,7 +676,7 @@ class FortiAnalyzerService {
       // Device filter can be configured via environment variable
       // Use 'All_FortiGate' for all devices or specific device serial like 'FG4H0FT922903115'
       const deviceFilter = process.env.FA_DEVICE_FILTER || 'All_FortiGate';
-      
+
       const params: Record<string, unknown> = {
         url: '/logview/adom/root/logsearch',
         apiver: 3,
@@ -884,7 +893,7 @@ class FortiAnalyzerService {
           this.invalidateSession(`getFortiView add outer error code=${addData.error.code}`);
           return null;
         }
-        console.error(`FortiView ${viewName} add error:`, addData.error);
+        log.error({ viewName, error: addData.error }, 'FortiView add error');
         return null;
       }
       if (Array.isArray(addData.result)) {
@@ -895,7 +904,7 @@ class FortiAnalyzerService {
             this.invalidateSession(`getFortiView add status code=${first.status.code}`);
             return null;
           }
-          console.error(`FortiView ${viewName} add status error:`, first.status);
+          log.error({ viewName, status: first.status }, 'FortiView add status error');
           return null;
         }
         tid = first?.tid ?? null;
@@ -904,11 +913,11 @@ class FortiAnalyzerService {
       }
 
       if (!tid) {
-        console.error(`FortiView ${viewName} add: no tid in response:`, JSON.stringify(addData));
+        log.error({ viewName, response: addData }, 'FortiView add: no tid in response');
         return null;
       }
 
-      console.log(`FortiView ${viewName}: task started with tid=${tid}`);
+      log.info({ viewName, tid }, 'FortiView task started');
 
       // Step 2: Poll for results (max 60 seconds)
       for (let i = 0; i < 12; i++) {
@@ -946,7 +955,7 @@ class FortiAnalyzerService {
             this.invalidateSession(`getFortiView poll outer error code=${getData.error.code}`);
             return null;
           }
-          console.error('FortiView get error:', getData.error);
+          log.error({ error: getData.error }, 'FortiView get error');
           return null;
         }
 
@@ -958,7 +967,7 @@ class FortiAnalyzerService {
           return null;
         }
         if (result && result.percentage >= 90 && result.data && result.data.length > 0) {
-          console.log(`FortiView ${viewName}: completed at ${result.percentage}% with ${result.data.length} rows`);
+          log.info({ viewName, percentage: result.percentage, rowCount: result.data.length }, 'FortiView completed');
           return {
             data: result.data,
             totalCount: result['total-count-all'],
@@ -966,13 +975,13 @@ class FortiAnalyzerService {
         }
 
         // Still processing, continue polling
-        console.log(`FortiView ${viewName}: ${result?.percentage || 0}% complete...`);
+        log.info({ viewName, percentage: result?.percentage || 0 }, 'FortiView progress');
       }
 
-      console.warn(`FortiView ${viewName} timed out`);
+      log.warn({ viewName }, 'FortiView timed out');
       return null;
     } catch (error) {
-      console.error(`Failed to get FortiView ${viewName}:`, error);
+      log.error({ err: error, viewName }, 'Failed to get FortiView');
       return null;
     }
   }
@@ -1036,13 +1045,13 @@ class FortiAnalyzerService {
       }
 
       if (data.error) {
-        console.error('[MITRE] Error in response:', data.error);
+        log.error({ error: data.error }, 'MITRE error in response');
         return null;
       }
 
       return data;
     } catch (error) {
-      console.error('[MITRE] Exception:', error);
+      log.error({ err: error }, 'MITRE exception');
       return null;
     }
   }
@@ -1104,13 +1113,13 @@ class FortiAnalyzerService {
       }
 
       if (data.error) {
-        console.error(`MITRE Technique ${techId} get error:`, data.error);
+        log.error({ techId, error: data.error }, 'MITRE technique get error');
         return null;
       }
 
       return data.result;
     } catch (error) {
-      console.error(`Failed to get MITRE Technique ${techId}:`, error);
+      log.error({ err: error, techId }, 'Failed to get MITRE technique');
       return null;
     }
   }
@@ -1153,7 +1162,7 @@ export function initSharedFortiAnalyzerService(config: FortiAnalyzerConfig): For
     return _sharedInstance;
   }
   _sharedInstance = new FortiAnalyzerService(config);
-  console.log('[FortiAnalyzer] Shared singleton instance created');
+  log.info('Shared singleton instance created');
   return _sharedInstance;
 }
 

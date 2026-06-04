@@ -37,10 +37,17 @@ export async function GET(request: NextRequest) {
       password?: string;
     };
 
+    if (!faConfig.password) {
+      return NextResponse.json({
+        success: false,
+        error: 'FortiAnalyzer password not configured',
+      }, { status: 400 });
+    }
+
     const service = initSharedFortiAnalyzerService({
       host: faConfig.host,
-      username: faConfig.username || 'infrascope',
-      password: faConfig.password || 'Thor.7485-app',
+      username: faConfig.username,
+      password: faConfig.password,
     });
 
     // Login first

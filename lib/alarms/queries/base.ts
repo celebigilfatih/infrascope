@@ -11,6 +11,9 @@
 import { prisma } from '@/lib/prisma';
 import type FortiAnalyzerService from '@/lib/integrations/fortianalyzer';
 import type { AlarmQueryContext, QueryResult, QueryStats, CachedEventWhere } from './types';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('alarm-queries');
 
 // ─── Public Helpers ───────────────────────────────────────────────────────────
 
@@ -59,19 +62,20 @@ export async function runAlarmQuery(
         usedFallback: false,
         queryDescription,
       };
-      console.log(
-        `[AlarmQuery] ${ctx.alarmCode}: cache — ${events.length} events (${durationMs}ms) | ${queryDescription}`
+      log.info(
+        { alarmCode: ctx.alarmCode, eventCount: events.length, durationMs, queryDescription },
+        'Cache query completed'
       );
 
       // Optional soft fallback: if cache says 0 but this is a critical alarm,
       // do a quick FA verification. Only fires when softFallback=true.
       if (events.length === 0 && options.softFallback) {
-        console.log(`[AlarmQuery] ${ctx.alarmCode}: cache empty — soft fallback to FA...`);
+        log.info({ alarmCode: ctx.alarmCode }, 'Cache empty — soft fallback to FA');
         const faStart = Date.now();
         try {
           const faEvents = await faQueryFn(ctx.faService);
           if (faEvents.length > 0) {
-            console.log(`[AlarmQuery] ${ctx.alarmCode}: FA found ${faEvents.length} events cache missed`);
+            log.info({ alarmCode: ctx.alarmCode, eventCount: faEvents.length }, 'FA found events cache missed');
             return {
               events: faEvents,
               stats: {
@@ -84,14 +88,14 @@ export async function runAlarmQuery(
             };
           }
         } catch (faErr) {
-          console.warn(`[AlarmQuery] ${ctx.alarmCode}: soft FA fallback failed:`, faErr);
+          log.warn({ alarmCode: ctx.alarmCode, err: faErr }, 'Soft FA fallback failed');
         }
         return { events: [], stats: { ...stats, durationMs: Date.now() - start } };
       }
 
       return { events, stats };
     } catch (cacheErr) {
-      console.warn(`[AlarmQuery] ${ctx.alarmCode}: cache query failed, falling back to FA:`, cacheErr);
+      log.warn({ alarmCode: ctx.alarmCode, err: cacheErr }, 'Cache query failed, falling back to FA');
     }
   }
 
@@ -108,13 +112,14 @@ export async function runAlarmQuery(
       usedFallback: useCache === false && ctx.cacheIsFresh, // we had fresh cache but bypassed it
       queryDescription,
     };
-    console.log(
-      `[AlarmQuery] ${ctx.alarmCode}: FA direct — ${events.length} events (${durationMs}ms) | ${queryDescription}`
+    log.info(
+      { alarmCode: ctx.alarmCode, eventCount: events.length, durationMs, queryDescription },
+      'FA direct query completed'
     );
     return { events, stats };
   } catch (faErr) {
     const durationMs = Date.now() - start;
-    console.error(`[AlarmQuery] ${ctx.alarmCode}: FA query FAILED (${durationMs}ms):`, faErr);
+    log.error({ alarmCode: ctx.alarmCode, durationMs, err: faErr }, 'FA query FAILED');
     return {
       events: [],
       stats: {
@@ -188,7 +193,7 @@ export async function queryFortiAnalyzerDirect(
 
   const tid = await startLogSearchWithTimeout();
   if (!tid) {
-    console.warn(`[AlarmQuery] FA: no TID returned for ${logtype} filter="${filter.substring(0, 80)}"`);
+    log.warn({ logtype, filter: filter.substring(0, 80) }, 'No TID returned from FA');
     return [];
   }
 
@@ -201,7 +206,7 @@ export async function queryFortiAnalyzerDirect(
     await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
     logs = await fa.fetchLogResults(tid, 0, limit);
     if (logs && logs.length > 0) {
-      console.log(`[AlarmQuery] FA ${logtype}: ${logs.length} results after ${attempt + 1} poll(s)`);
+      log.info({ logtype, resultCount: logs.length, pollAttempts: attempt + 1 }, 'FA results received');
       break;
     }
   }

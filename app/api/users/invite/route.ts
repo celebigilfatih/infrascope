@@ -2,19 +2,21 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { sendInvitationEmail } from '@/lib/email/sendInvitation';
 import { logAudit } from '@/lib/audit/logger';
+import { validateBody } from '@/lib/validators';
+import { inviteUserSchema } from '@/lib/validators/users';
 import crypto from 'crypto';
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { email, role } = body;
-
-    if (!email) {
+    const rawBody = await request.json();
+    const parsed = validateBody(rawBody, inviteUserSchema);
+    if (!parsed.success) {
       return NextResponse.json(
-        { success: false, error: 'Email is required' },
+        { success: false, error: parsed.error },
         { status: 400 }
       );
     }
+    const { email, role } = parsed.data;
 
     // Determine the inviter from server-side context.
     // TODO: Replace with real session-based user lookup when auth is implemented.
@@ -54,7 +56,7 @@ export async function POST(request: Request) {
     const invitation = await prisma.invitation.create({
       data: {
         email,
-        role: role?.toUpperCase() || 'VIEWER',
+        role: (role?.toUpperCase() || 'VIEWER') as 'ADMIN' | 'EDITOR' | 'VIEWER',
         token,
         invitedBy,
         status: 'PENDING',

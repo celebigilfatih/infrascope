@@ -9,6 +9,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import FortiAnalyzerService, { initSharedFortiAnalyzerService } from '@/lib/integrations/fortianalyzer';
 import { FortiGateService } from '@/lib/integrations/fortigate';
 import { prisma } from '@/lib/prisma';
+import { validateBody } from '@/lib/validators';
+import { fortianalyzerConfigSchema } from '@/lib/validators/integrations';
 
 // ─── In-memory cache for heavy FA queries ───────────────────────────────────
 const FAZ_CACHE_TTL = 5 * 60 * 1000; // 5 minutes default
@@ -56,7 +58,11 @@ export async function POST(request: NextRequest) {
     const { action, config: reqConfig } = body;
 
     if (action === 'test') {
-      const { host, username, password: rawPassword } = reqConfig as { host: string; username: string; password?: string };
+      const parsed = validateBody(reqConfig || {}, fortianalyzerConfigSchema);
+      if (!parsed.success) {
+        return NextResponse.json({ success: false, connected: false, error: parsed.error });
+      }
+      const { host, username, password: rawPassword } = parsed.data;
 
       // If password is blank, use the saved password from DB
       let password = rawPassword;
@@ -65,8 +71,8 @@ export async function POST(request: NextRequest) {
         password = (existing?.config as any)?.password || '';
       }
 
-      if (!host || !username || !password) {
-        return NextResponse.json({ success: false, connected: false, error: 'Host, username and password are required.' });
+      if (!password) {
+        return NextResponse.json({ success: false, connected: false, error: 'Password is required.' });
       }
 
       // Intentionally NOT using initSharedFortiAnalyzerService() here:
@@ -83,7 +89,11 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'save-config') {
-      const { host, username, password } = reqConfig as { host: string; username: string; password?: string };
+      const parsed = validateBody(reqConfig || {}, fortianalyzerConfigSchema);
+      if (!parsed.success) {
+        return NextResponse.json({ success: false, error: parsed.error });
+      }
+      const { host, username, password } = parsed.data;
 
       // Fetch existing config to preserve password if not provided
       const existing = await prisma.integrationConfig.findFirst({
@@ -170,10 +180,17 @@ export async function GET(request: NextRequest) {
       password?: string;
     };
 
+    if (!faConfig.password) {
+      return NextResponse.json({
+        success: false,
+        error: 'FortiAnalyzer password not configured',
+      }, { status: 400 });
+    }
+
     const service = initSharedFortiAnalyzerService({
       host: faConfig.host,
-      username: faConfig.username || 'infrascope',
-      password: faConfig.password || 'Thor.7485-app',
+      username: faConfig.username,
+      password: faConfig.password,
     });
 
     // Login first

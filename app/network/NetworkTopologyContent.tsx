@@ -193,6 +193,18 @@ const connectionStyles: Record<string, { color: string; dash: string; width: num
   'OTHER': { color: '#6B7280', dash: '5,5', width: 3, label: 'Diğer Bağlantı', icon: '❓' },
 };
 
+
+// Static nodeTypes/edgeTypes — frozen to stabilize references across Turbopack Fast Refresh
+const nodeTypes = Object.freeze({
+  building: BuildingNode,
+  device: DeviceNode,
+});
+
+const edgeTypes = Object.freeze({
+  custom: CustomEdge,
+  building: BuildingConnectionEdge,
+});
+
 const NetworkTopologyPage = () => {
   const router = useRouter();
   const [devices, setDevices] = useState<Device[]>([]);
@@ -246,17 +258,7 @@ const NetworkTopologyPage = () => {
   const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
   const [contextMenuNode, setContextMenuNode] = useState<Node | null>(null);
   
-  // Memoized node types to prevent re-creation on every render
-  const nodeTypes = useMemo(() => ({
-    building: BuildingNode,
-    device: DeviceNode,
-  }), []);
-  
-  // Memoized edge types to prevent re-creation on every render
-  const edgeTypes = useMemo(() => ({
-    custom: CustomEdge,
-    building: BuildingConnectionEdge,
-  }), []);
+
   
   // Export topology as PNG
   const onExport = useCallback(() => {
@@ -1422,10 +1424,14 @@ const NetworkTopologyPage = () => {
     expandedBuildings
   ]);
 
-  useEffect(() => {
+  // Sync topology computation to ReactFlow state — use functional updates to avoid loop
+  const prevTopoRef = React.useRef({ n: '', e: '' });
+  const topoKey = `${topologyNodes.length}:${topologyEdges.length}`;
+  if (topoKey !== prevTopoRef.current.n) {
+    prevTopoRef.current = { n: topoKey, e: topoKey };
     setNodes(topologyNodes);
     setEdges(topologyEdges);
-  }, [topologyNodes, topologyEdges, setNodes, setEdges]);
+  }
 
 
 
@@ -2281,8 +2287,8 @@ const NetworkTopologyPage = () => {
             ) : (
               // TOPOLOGY VIEWS
               <div className="flex-1 flex overflow-hidden">
-                <div className="flex-1 relative min-w-0">
-                  <ReactFlow
+                <div className="flex-1 relative min-w-0 h-full w-full">
+                  <ReactFlow style={{ width: "100%", height: "100%" }}
                     nodes={nodes}
                     edges={edges}
                     nodeTypes={nodeTypes}

@@ -1,5 +1,8 @@
 import nodemailer from 'nodemailer';
 import { getEmailConfig } from '@/lib/notifications/email';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('send-invitation');
 
 function escapeHtml(str: string): string {
   return str
@@ -29,8 +32,8 @@ export async function sendInvitationEmail(params: InvitationEmailParams): Promis
   const isDev = process.env.NODE_ENV === 'development';
 
   if (isDev) {
-    console.log(`[Invitation Email] DEV MODE - Verification URL: ${verificationUrl}`);
-    console.log(`[Invitation Email] To: ${to}, Role: ${role}, Invited by: ${invitedBy}`);
+    log.info({ verificationUrl }, 'DEV MODE - Verification URL');
+    log.info({ to, role, invitedBy }, 'DEV MODE - Invitation email details');
     return true;
   }
 
@@ -78,10 +81,10 @@ export async function sendInvitationEmail(params: InvitationEmailParams): Promis
       `,
     });
 
-    console.log(`[Invitation Email] Sent to ${to}`);
+    log.info({ to }, 'Invitation email sent');
     return true;
   } catch (error) {
-    console.error('[Invitation Email] Failed to send:', error);
+    log.error({ err: error as Error }, 'Failed to send invitation email');
     return false;
   }
 }
@@ -101,8 +104,8 @@ export async function sendPasswordResetEmail(params: {
   const isDev = process.env.NODE_ENV === 'development';
 
   if (isDev) {
-    console.log(`[Password Reset Email] DEV MODE - Reset URL: ${resetUrl}`);
-    console.log(`[Password Reset Email] To: ${to}, User: ${userName}`);
+    log.info({ resetUrl }, 'DEV MODE - Password reset URL');
+    log.info({ to, userName }, 'DEV MODE - Password reset email details');
     return true;
   }
 
@@ -147,10 +150,10 @@ export async function sendPasswordResetEmail(params: {
       `,
     });
 
-    console.log(`[Password Reset Email] Sent to ${to}`);
+    log.info({ to }, 'Password reset email sent');
     return true;
   } catch (error) {
-    console.error('[Password Reset Email] Failed to send:', error);
+    log.error({ err: error as Error }, 'Failed to send password reset email');
     return false;
   }
 }

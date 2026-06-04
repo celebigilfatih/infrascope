@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 
 export interface CorrelationResult {
   relationshipsCreated: number;
@@ -389,24 +389,10 @@ export class TopologyRelationshipEngine {
 
   async getTopologyGraph(organizationId?: string) {
     try {
-      // Build organization filter using raw query for complex OR condition
-      let baseWhere = '';
-      if (organizationId) {
-        baseWhere = `WHERE r."sourceDeviceId" IN (SELECT id FROM "devices" WHERE "organizationId" = '${organizationId}')
-                     OR r."targetDeviceId" IN (SELECT id FROM "devices" WHERE "organizationId" = '${organizationId}')`;
-      }
-
-      const relationships = await this.prisma.$queryRaw`
-        SELECT 
-          r.id, r."sourceDeviceId", r."targetDeviceId", r."relationshipType", 
-          r.confidence, r.source, r.properties,
-          sd.id as sd_id, sd.name as sd_name, sd.type as sd_type, sd.status as sd_status, sd.metadata as sd_metadata,
-          td.id as td_id, td.name as td_name, td.type as td_type, td.status as td_status, td.metadata as td_metadata
-        FROM "relationships" r
-        JOIN "devices" sd ON r."sourceDeviceId" = sd.id
-        JOIN "devices" td ON r."targetDeviceId" = td.id
-        ${baseWhere}
-      ` as Array<{
+      // Use parameterized queries to prevent SQL injection.
+      // Prisma's tagged template literal ($queryRaw`...`) automatically
+      // parameterizes interpolated values.
+      type TopologyRow = {
         id: string;
         sourceDeviceId: string;
         targetDeviceId: string;
@@ -424,7 +410,33 @@ export class TopologyRelationshipEngine {
         td_type: string;
         td_status: string;
         td_metadata: any;
-      }>;
+      };
+
+      const sql = organizationId
+        ? Prisma.sql`
+            SELECT
+              r.id, r."sourceDeviceId", r."targetDeviceId", r."relationshipType",
+              r.confidence, r.source, r.properties,
+              sd.id as sd_id, sd.name as sd_name, sd.type as sd_type, sd.status as sd_status, sd.metadata as sd_metadata,
+              td.id as td_id, td.name as td_name, td.type as td_type, td.status as td_status, td.metadata as td_metadata
+            FROM "relationships" r
+            JOIN "devices" sd ON r."sourceDeviceId" = sd.id
+            JOIN "devices" td ON r."targetDeviceId" = td.id
+            WHERE r."sourceDeviceId" IN (SELECT id FROM "devices" WHERE "organizationId" = ${organizationId})
+               OR r."targetDeviceId" IN (SELECT id FROM "devices" WHERE "organizationId" = ${organizationId})
+          `
+        : Prisma.sql`
+            SELECT
+              r.id, r."sourceDeviceId", r."targetDeviceId", r."relationshipType",
+              r.confidence, r.source, r.properties,
+              sd.id as sd_id, sd.name as sd_name, sd.type as sd_type, sd.status as sd_status, sd.metadata as sd_metadata,
+              td.id as td_id, td.name as td_name, td.type as td_type, td.status as td_status, td.metadata as td_metadata
+            FROM "relationships" r
+            JOIN "devices" sd ON r."sourceDeviceId" = sd.id
+            JOIN "devices" td ON r."targetDeviceId" = td.id
+          `;
+
+      const relationships = await this.prisma.$queryRaw<TopologyRow[]>(sql);
 
       const nodes: TopologyNode[] = [];
       const edges: TopologyEdge[] = [];

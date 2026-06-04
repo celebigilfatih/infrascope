@@ -10,7 +10,9 @@
 import { PrismaClient, DeviceType, DeviceStatus, DeviceCriticality } from '@prisma/client';
 import * as https from 'https';
 import * as querystring from 'querystring';
+import { createLogger } from '@/lib/logger';
 
+const log = createLogger('fortigate');
 const prisma = new PrismaClient();
 
 // Configuration Types
@@ -219,7 +221,7 @@ export class FortiGateService {
       this.csrfToken = null;
       this.csrfCookie = null;
       this.sessionExpiry = 0;
-      console.log('[FortiGate] Session logged out and cleared');
+      log.info('Session logged out and cleared');
     });
   }
 
@@ -376,7 +378,7 @@ export class FortiGateService {
         type: (iface.type || 'physical') as 'physical' | 'vlan' | 'tunnel',
       }));
     } catch (error) {
-      console.error('Failed to fetch interfaces:', error);
+      log.error({ err: error }, 'Failed to fetch interfaces');
       return [];
     }
   }
@@ -415,7 +417,7 @@ export class FortiGateService {
         vrf: vlan.vrf,
       }));
     } catch (error) {
-      console.error('Failed to fetch VLANs:', error);
+      log.error({ err: error }, 'Failed to fetch VLANs');
       return [];
     }
   }
@@ -457,7 +459,7 @@ export class FortiGateService {
         status: policy.status,
       }));
     } catch (error) {
-      console.error('Failed to fetch firewall policies:', error);
+      log.error({ err: error }, 'Failed to fetch firewall policies');
       return [];
     }
   }
@@ -487,7 +489,7 @@ export class FortiGateService {
         country: addr.country,
       }));
     } catch (error) {
-      console.error('Failed to fetch addresses:', error);
+      log.error({ err: error }, 'Failed to fetch addresses');
       return [];
     }
   }
@@ -502,7 +504,7 @@ export class FortiGateService {
       const data = await this.apiRequest<{ results: FortiGateVIP[] }>('/cmdb/firewall/vip');
       return data.results || [];
     } catch (error) {
-      console.error('Failed to fetch VIPs:', error);
+      log.error({ err: error }, 'Failed to fetch VIPs');
       return [];
     }
   }
@@ -535,7 +537,7 @@ export class FortiGateService {
       }
       return null;
     } catch (error) {
-      console.error('Failed to fetch SD-WAN:', error);
+      log.error({ err: error }, 'Failed to fetch SD-WAN');
       return null;
     }
   }
@@ -567,7 +569,7 @@ export class FortiGateService {
       }
       return null;
     } catch (error) {
-      console.error('Failed to fetch HA status:', error);
+      log.error({ err: error }, 'Failed to fetch HA status');
       return null;
     }
   }
@@ -933,7 +935,7 @@ export class FortiGateService {
         out_bytes: user.subsessions?.[0]?.out_bytes || 0,
       }));
     } catch (error) {
-      console.error('Failed to get SSL-VPN users:', error);
+      log.error({ err: error }, 'Failed to get SSL-VPN users');
       return [];
     }
   }
@@ -994,7 +996,7 @@ export class FortiGateService {
       const res = await fetch(url, { headers: authH });
 
       if (!res.ok) {
-        console.warn(`[FortiGate] getCmdbChanges(${endpoint}) HTTP ${res.status}`);
+        log.warn({ endpoint, status: res.status }, 'getCmdbChanges HTTP error');
         return { changed: false, isFirstRun: false, current: null };
       }
 
@@ -1019,12 +1021,12 @@ export class FortiGateService {
       // Update the live snapshot (for next cycle) and frozen snapshot (so this cycle's baseline is preserved)
       this._cmdbSnapshotStore.set(endpoint, fingerprint);
       if (changed) {
-        console.log(`[FortiGate] CMDB change detected: ${endpoint}`);
+        log.info({ endpoint }, 'CMDB change detected');
       }
 
       return { changed, isFirstRun, current };
     } catch (error) {
-      console.error(`[FortiGate] getCmdbChanges(${endpoint}) error:`, error);
+      log.error({ err: error, endpoint }, 'getCmdbChanges error');
       return { changed: false, isFirstRun: false, current: null };
     }
   }
@@ -1047,7 +1049,7 @@ export class FortiGateService {
     this._cmdbResponseCache.clear();
     // Freeze current snapshots so all alarms in this cycle compare against the same baseline
     this._frozenSnapshots = new Map(this._cmdbSnapshotStore);
-    console.log('[FortiGate] CMDB response cache cleared for fresh cycle');
+    log.info('CMDB response cache cleared for fresh cycle');
   }
 
   /**
@@ -1141,7 +1143,7 @@ export class FortiGateService {
           this._eventLogCache.set(cacheKey, { ts: Date.now(), data: logs });
           resolve(logs);
         } catch (error) {
-          console.error(`[FortiGate] getEventLogs failed (filter=${filter}):`, error);
+          log.error({ err: error, filter }, 'getEventLogs failed');
           // Cache empty result briefly to avoid hammering a failing endpoint
           this._eventLogCache.set(cacheKey, { ts: Date.now(), data: [] });
           resolve([]);
@@ -1227,7 +1229,7 @@ export class FortiGateService {
         connection_count: tunnel.connection_count,
       }));
     } catch (error) {
-      console.error('Failed to get IPsec tunnels:', error);
+      log.error({ err: error }, 'Failed to get IPsec tunnels');
       return [];
     }
   }
@@ -1278,7 +1280,7 @@ export class FortiGateService {
         })),
       };
     } catch (error) {
-      console.error('Failed to get config revisions:', error);
+      log.error({ err: error }, 'Failed to get config revisions');
       return { hasUnsavedChanges: false, revisions: [] };
     }
   }
@@ -1332,7 +1334,7 @@ export class FortiGateService {
         iface.name && iface.name !== 'lo'
       );
     } catch (error) {
-      console.error('Failed to get interface stats:', error);
+      log.error({ err: error }, 'Failed to get interface stats');
       return [];
     }
   }
@@ -1382,7 +1384,7 @@ export class FortiGateService {
         interface: entry.interface || '-',
       }));
     } catch (error) {
-      console.error('Failed to fetch quarantined IPs:', error);
+      log.error({ err: error }, 'Failed to fetch quarantined IPs');
       return [];
     }
   }
@@ -1398,7 +1400,7 @@ export class FortiGateService {
       });
       return true;
     } catch (error) {
-      console.error(`Failed to release quarantine for ${ip}:`, error);
+      log.error({ err: error, ip }, 'Failed to release quarantine');
       return false;
     }
   }
@@ -1415,7 +1417,7 @@ export class FortiGateService {
       await this.apiRequest('/monitor/user/banned/add_users', 'POST', payload);
       return true;
     } catch (error) {
-      console.error(`Failed to add ${ip} to quarantine:`, error);
+      log.error({ err: error, ip }, 'Failed to add to quarantine');
       return false;
     }
   }

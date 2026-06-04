@@ -6,6 +6,9 @@
 
 import { prisma } from '@/lib/prisma';
 import FortiAnalyzerService from '@/lib/integrations/fortianalyzer';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('event-cache');
 
 export interface CachedEventFilters {
   logtype: string;
@@ -49,7 +52,7 @@ export class EventCacheService {
    * can await the first sync before evaluating alarms against the cache.
    */
   async startBackgroundSync(): Promise<number> {
-    console.log('[EventCache] Starting background sync job (base interval: 5 minutes, with backoff)...');
+    log.info('Starting background sync job (base interval: 5 minutes, with backoff)...');
 
     // Initial sync — await it so callers can wait for a warm cache
     let initialSuccessCount = 0;
@@ -58,14 +61,14 @@ export class EventCacheService {
       if (initialSuccessCount > 0) {
         this.lastSyncTime = new Date();
         this.consecutiveSyncFailures = 0;
-        console.log(`[EventCache] ✅ Initial sync completed (${initialSuccessCount}/7 logtypes)`);
+        log.info({ successCount: initialSuccessCount, totalLogtypes: 7 }, 'Initial sync completed');
       } else {
         this.consecutiveSyncFailures++;
-        console.error('[EventCache] ❌ Initial sync — all logtypes failed, cache NOT marked fresh');
+        log.error('Initial sync — all logtypes failed, cache NOT marked fresh');
       }
     } catch (err) {
       this.consecutiveSyncFailures++;
-      console.error('[EventCache] ❌ Initial sync threw:', err);
+      log.error({ err }, 'Initial sync threw');
     }
 
     // Schedule recurring syncs in the background (non-blocking)
@@ -81,11 +84,11 @@ export class EventCacheService {
   private scheduleNextSync() {
     const delayMs = this.nextSyncDelayMs();
     const delayMin = Math.round(delayMs / 60000);
-    console.log(`[EventCache] Next sync in ${delayMin}m (consecutive failures: ${this.consecutiveSyncFailures})`);
+    log.info({ delayMin, consecutiveFailures: this.consecutiveSyncFailures }, 'Next sync scheduled');
 
     setTimeout(async () => {
       if (this.syncInProgress) {
-        console.warn('[EventCache] Previous sync still running, skipping this cycle...');
+        log.warn('Previous sync still running, skipping this cycle');
         this.consecutiveSyncFailures++;
         this.scheduleNextSync();
         return;
@@ -96,17 +99,17 @@ export class EventCacheService {
         if (successCount > 0) {
           this.lastSyncTime = new Date();
           this.consecutiveSyncFailures = 0;
-          console.log(`[EventCache] ✅ Sync completed at ${new Date().toISOString()} (${successCount}/7 logtypes) — failure counter reset`);
+          log.info({ successCount, totalLogtypes: 7 }, 'Sync completed — failure counter reset');
         } else {
           // All logtypes failed — do NOT update lastSyncTime.
           // The cache will become stale after FRESH_THRESHOLD_MS, forcing alarm checks
           // to use live FA queries (which will correctly fail and be reported as FAILED).
           this.consecutiveSyncFailures++;
-          console.error(`[EventCache] ❌ Sync at ${new Date().toISOString()} — all logtypes failed, backing off (failure #${this.consecutiveSyncFailures})`);
+          log.error({ consecutiveFailures: this.consecutiveSyncFailures }, 'All logtypes failed, backing off');
         }
       } catch (error) {
         this.consecutiveSyncFailures++;
-        console.error('[EventCache] ❌ Sync threw unexpectedly (failure #' + this.consecutiveSyncFailures + '):', error);
+        log.error({ err: error, consecutiveFailures: this.consecutiveSyncFailures }, 'Sync threw unexpectedly');
       }
 
       this.scheduleNextSync();
@@ -152,29 +155,29 @@ export class EventCacheService {
     // Fetch last 24 hours - covers all alarm time windows (most alarms check 30-120 min, longest is 24h)
     const startTime = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-    console.log(`[EventCache] Starting sync: ${logtypes.length} logtypes, last 24 hours...`);
+    log.info({ logtypeCount: logtypes.length }, 'Starting sync: last 24 hours');
 
     try {
       // Pre-flight login check — one attempt before touching any logtype.
       // If FA is blocked/unreachable, abort the entire sync immediately instead of
       // making N separate login calls (each of which resets FA's block timer).
-      console.log('[EventCache] Pre-flight login check...');
+      log.info('Pre-flight login check');
       const canLogin = await this.faService.login();
       if (!canLogin) {
         const elapsedS = Math.round((Date.now() - syncStart) / 1000);
-        console.error(`[EventCache] ❌ Pre-flight login failed — aborting sync (${elapsedS}s). FA may be rate-limiting logins.`);
+        log.error({ elapsedS }, 'Pre-flight login failed — aborting sync. FA may be rate-limiting logins');
         return 0;
       }
-      console.log('[EventCache] ✅ Pre-flight login OK — starting logtype sync...');
+      log.info('Pre-flight login OK — starting logtype sync');
 
       for (const logtype of logtypes) {
         try {
           const logtypeStart = Date.now();
           await this.syncLogType(logtype, startTime, now);
-          console.log(`[EventCache] ${logtype}: Sync took ${Date.now() - logtypeStart}ms`);
+          log.info({ logtype, durationMs: Date.now() - logtypeStart }, 'Sync completed for logtype');
           successCount++;
         } catch (error) {
-          console.error(`[EventCache] Failed to sync ${logtype}:`, error);
+          log.error({ err: error, logtype }, 'Failed to sync logtype');
         }
       }
 
@@ -184,9 +187,9 @@ export class EventCacheService {
         try {
           const filterStart = Date.now();
           await this.syncLogTypeWithFilter('event', filter, startTime, now);
-          console.log(`[EventCache] event (${filter}): Targeted sync took ${Date.now() - filterStart}ms`);
+          log.info({ logtype: 'event', filter, durationMs: Date.now() - filterStart }, 'Targeted sync completed');
         } catch (error) {
-          console.error(`[EventCache] ❌ Failed to sync event with filter "${filter}":`, error instanceof Error ? error.message : String(error));
+          log.error({ err: error, logtype: 'event', filter }, 'Failed to sync event with filter');
         }
       }
 
@@ -197,13 +200,13 @@ export class EventCacheService {
           where: { eventTime: { lt: cutoff } },
         });
         if (deleted.count > 0) {
-          console.log(`[EventCache] Cleaned up ${deleted.count} expired events`);
+          log.info({ count: deleted.count }, 'Cleaned up expired events');
         }
       } catch (cleanupError) {
-        console.warn('[EventCache] Cleanup failed:', cleanupError);
+        log.warn({ err: cleanupError }, 'Cleanup failed');
       }
 
-      console.log(`[EventCache] Full sync completed in ${Math.round((Date.now() - syncStart) / 1000)}s — ${successCount}/${logtypes.length} logtypes succeeded`);
+      log.info({ durationS: Math.round((Date.now() - syncStart) / 1000), successCount, totalLogtypes: logtypes.length }, 'Full sync completed');
       return successCount;
     } finally {
       // CRITICAL: always release the lock, even if an unexpected error escapes all inner catches.
@@ -218,7 +221,7 @@ export class EventCacheService {
    * Sync a single log type
    */
   private async syncLogType(logtype: string, startTime: Date, endTime: Date) {
-    console.log(`[EventCache] Syncing ${logtype}...`);
+    log.info({ logtype }, 'Syncing logtype');
 
     // Login to FortiAnalyzer
     const loggedIn = await this.faService.login();
@@ -229,7 +232,7 @@ export class EventCacheService {
     // Start log search (limit: 5000 events per logtype)
     const tid = await this.faService.startLogSearch(logtype, 5000, '');
     if (!tid) {
-      console.warn(`[EventCache] No results for ${logtype}, skipping...`);
+      log.warn({ logtype }, 'No results for logtype, skipping');
       return;
     }
 
@@ -240,14 +243,14 @@ export class EventCacheService {
       await new Promise(resolve => setTimeout(resolve, 5000)); // wait 5s between polls
       initialLogs = await this.faService.fetchLogResults(tid, 0, 1000);
       if (initialLogs && initialLogs.length > 0) {
-        console.log(`[EventCache] ${logtype}: Got results after ${attempt + 1} poll(s)`);
+        log.info({ logtype, polls: attempt + 1 }, 'Got results after polling');
         break;
       }
-      console.log(`[EventCache] ${logtype}: Poll ${attempt + 1}/8 - waiting for FA...`);
+      log.info({ logtype, poll: attempt + 1, maxPolls: 8 }, 'Waiting for FA results');
     }
 
     if (!initialLogs || initialLogs.length === 0) {
-      console.log(`[EventCache] ${logtype}: No results after polling, skipping`);
+      log.info({ logtype }, 'No results after polling, skipping');
       return;
     }
 
@@ -258,7 +261,7 @@ export class EventCacheService {
     });
     if (recentLogsFirst.length > 0) {
       await this.saveEvents(logtype, recentLogsFirst);
-      console.log(`[EventCache] ${logtype}: Saved ${recentLogsFirst.length} events`);
+      log.info({ logtype, count: recentLogsFirst.length }, 'Saved events');
     }
 
     let totalFetched = recentLogsFirst.length;
@@ -270,7 +273,7 @@ export class EventCacheService {
 
       while (totalFetched < 5000) {
         const logs = await this.faService.fetchLogResults(tid, offset, limit);
-        
+
         if (!logs || logs.length === 0) {
           break;
         }
@@ -284,7 +287,7 @@ export class EventCacheService {
         if (recentLogs.length > 0) {
           await this.saveEvents(logtype, recentLogs);
           totalFetched += recentLogs.length;
-          console.log(`[EventCache] ${logtype}: Saved ${recentLogs.length} more events (${totalFetched} total)`);
+          log.info({ logtype, count: recentLogs.length, totalFetched }, 'Saved more events');
         }
 
         if (logs.length < limit) {
@@ -295,14 +298,14 @@ export class EventCacheService {
       }
     }
 
-    console.log(`[EventCache] ${logtype}: Sync complete - ${totalFetched} events saved`);
+    log.info({ logtype, totalFetched }, 'Sync complete');
   }
 
   /**
    * Sync a single log type with a specific filter (targeted sync for high-priority events)
    */
   private async syncLogTypeWithFilter(logtype: string, filter: string, startTime: Date, endTime: Date) {
-    console.log(`[EventCache] Syncing ${logtype} with filter: ${filter}...`);
+    log.info({ logtype, filter }, 'Syncing logtype with filter');
 
     // Login to FortiAnalyzer
     const loggedIn = await this.faService.login();
@@ -313,7 +316,7 @@ export class EventCacheService {
     // Start log search with filter (limit: 1000 events - FortiAnalyzer max)
     const tid = await this.faService.startLogSearch(logtype, 1000, filter);
     if (!tid) {
-      console.warn(`[EventCache] No results for ${logtype} with filter "${filter}", skipping...`);
+      log.warn({ logtype, filter }, 'No results for logtype with filter, skipping');
       return;
     }
 
@@ -323,14 +326,14 @@ export class EventCacheService {
       await new Promise(resolve => setTimeout(resolve, 3000)); // wait 3s between polls
       logs = await this.faService.fetchLogResults(tid, 0, 1000);
       if (logs && logs.length > 0) {
-        console.log(`[EventCache] ${logtype} (${filter}): Got ${logs.length} results after ${attempt + 1} poll(s)`);
+        log.info({ logtype, filter, resultCount: logs.length, polls: attempt + 1 }, 'Got results after polling');
         break;
       }
-      console.log(`[EventCache] ${logtype} (${filter}): Poll ${attempt + 1}/6 - waiting for FA...`);
+      log.info({ logtype, filter, poll: attempt + 1, maxPolls: 6 }, 'Waiting for FA results');
     }
 
     if (!logs || logs.length === 0) {
-      console.log(`[EventCache] ${logtype} (${filter}): No results after polling, skipping`);
+      log.info({ logtype, filter }, 'No results after polling, skipping');
       return;
     }
 
@@ -351,9 +354,9 @@ export class EventCacheService {
 
     if (recentLogs.length > 0) {
       await this.saveEvents(logtype, recentLogs);
-      console.log(`[EventCache] ${logtype} (${filter}): Saved ${recentLogs.length} targeted events`);
+      log.info({ logtype, filter, count: recentLogs.length }, 'Saved targeted events');
     } else {
-      console.log(`[EventCache] ${logtype} (${filter}): No events in time range`);
+      log.info({ logtype, filter }, 'No events in time range');
     }
   }
 
@@ -456,22 +459,44 @@ export class EventCacheService {
   }
 
   /**
-   * Extract simple equality conditions from a filter string that map directly to DB columns.
-   * Supports: action, subtype, user, vdom, level (most common alarm filter fields).
-   * Returns a Prisma-compatible where fragment.
+   * Extract filter conditions from a FortiAnalyzer-style filter string that can be
+   * pushed to the DB WHERE clause. Returns a Prisma-compatible where fragment.
+   * Supports:
+   *   - Equality:  action == auth-logon       → { action: 'auth-logon' }
+   *   - LIKE:      msg like %attribute%       → { msg: { contains: 'attribute' } }
+   *   - NOT LIKE:  msg not like %attribute%   → { msg: { not: { contains: 'attribute' } } }
+   * Only fields mapped to DB columns are pushed; others are left for client-side filtering.
    */
-  private extractDbFilters(filter: string): Record<string, string> {
-    const COLUMN_FIELDS = ['action', 'subtype', 'user', 'vdom', 'level', 'devname'];
-    const dbFilters: Record<string, string> = {};
+  private extractDbFilters(filter: string): Record<string, any> {
+    const COLUMN_FIELDS = new Set(['action', 'subtype', 'user', 'vdom', 'level', 'devname', 'msg', 'service', 'app', 'apprisk', 'srccountry', 'dstcountry']);
+    const dbFilters: Record<string, any> = {};
 
-    // Split by AND-like operators to get individual conditions
     const conditions = filter.split(/&&|\band\b/i).map(c => c.trim());
     for (const cond of conditions) {
-      const match = cond.match(/^(\w+)\s*==\s*["']?([^"'\s]+)["']?$/);
-      if (match) {
-        const [, field, value] = match;
-        if (COLUMN_FIELDS.includes(field.toLowerCase())) {
-          dbFilters[field] = value;
+      // Try LIKE / NOT LIKE first
+      const likeMatch = cond.match(/^(\w+)\s+(not\s+like|like)\s+["']?(%?[^"'\s%]+%?)["']?$/i);
+      if (likeMatch) {
+        const [, field, op, pattern] = likeMatch;
+        const fieldName = field.toLowerCase();
+        if (COLUMN_FIELDS.has(fieldName)) {
+          // Strip % wildcards → Prisma contains
+          const term = pattern.replace(/%/g, '');
+          if (op.toLowerCase().includes('not')) {
+            dbFilters[fieldName] = { not: { contains: term, mode: 'insensitive' } };
+          } else {
+            dbFilters[fieldName] = { contains: term, mode: 'insensitive' };
+          }
+        }
+        continue;
+      }
+
+      // Equality: field == value
+      const eqMatch = cond.match(/^(\w+)\s*==\s*["']?([^"'\s]+)["']?$/);
+      if (eqMatch) {
+        const [, field, value] = eqMatch;
+        const fieldName = field.toLowerCase();
+        if (COLUMN_FIELDS.has(fieldName)) {
+          dbFilters[fieldName] = value;
         }
       }
     }
@@ -484,12 +509,12 @@ export class EventCacheService {
    */
   async queryCachedEvents(filters: CachedEventFilters): Promise<Array<Record<string, unknown>>> {
     const { logtype, filter, startTime, endTime, limit = 1000 } = filters;
-    // For cache queries, always fetch up to 1000 events regardless of the caller's limit.
+    // For cache queries, fetch up to 5000 events — the DB is fast enough to handle this.
     // The caller's limit was designed for live FA API calls (slow); for the local DB cache
     // (fast) we need all events in the window so the in-memory filter can find matches.
-    const dbLimit = Math.max(limit, 1000);
+    const dbLimit = Math.max(limit, 5000);
 
-    console.log(`[EventCache] Query: ${logtype} from ${startTime.toISOString()} to ${endTime.toISOString()}`);
+    log.info({ logtype, startTime, endTime }, 'Querying cached events');
 
     try {
       // Extract DB-level column filters from the filter string.
@@ -512,18 +537,18 @@ export class EventCacheService {
         take: dbLimit,
       });
 
-      console.log(`[EventCache] Found ${events.length} cached events for ${logtype}` + (Object.keys(dbColumnFilters).length ? ` (DB filter: ${JSON.stringify(dbColumnFilters)})` : ''));
+      log.info({ logtype, count: events.length, dbFilters: Object.keys(dbColumnFilters).length ? dbColumnFilters : undefined }, 'Found cached events');
 
       // Apply remaining client-side filter conditions (complex conditions not handled by DB)
       if (filter) {
         const filtered = this.applyFilter(events, filter);
-        console.log(`[EventCache] Filter matched ${filtered.length}/${events.length} for ${logtype} | filter: ${filter.substring(0, 60)}`);
+        log.info({ logtype, matched: filtered.length, total: events.length, filter: filter.substring(0, 60) }, 'Filter matched events');
         return filtered;
       }
 
       return events.map((e: any) => e.rawLog);
     } catch (error) {
-      console.error('[EventCache] Query failed:', error);
+      log.error({ err: error }, 'Query failed');
       return [];
     }
   }
@@ -600,33 +625,33 @@ export class EventCacheService {
    */
   async forceSync(): Promise<void> {
     if (this.syncInProgress) {
-      console.log('[EventCache] forceSync: sync already in progress — waiting for completion (max 3 min)...');
+      log.info('forceSync: sync already in progress — waiting for completion (max 3 min)');
       const deadline = Date.now() + 3 * 60 * 1000;
       while (this.syncInProgress && Date.now() < deadline) {
         await new Promise(resolve => setTimeout(resolve, 2000));
       }
       if (this.syncInProgress) {
-        console.warn('[EventCache] forceSync: timed out waiting for running sync');
+        log.warn('forceSync: timed out waiting for running sync');
       } else {
-        console.log('[EventCache] forceSync: running sync completed');
+        log.info('forceSync: running sync completed');
       }
       return;
     }
 
-    console.log('[EventCache] forceSync: triggering immediate sync...');
+    log.info('forceSync: triggering immediate sync');
     try {
       const successCount = await this.syncAllEventTypes();
       if (successCount > 0) {
         this.lastSyncTime = new Date();
         this.consecutiveSyncFailures = 0;
-        console.log(`[EventCache] forceSync: ✅ completed (${successCount}/7 logtypes)`);
+        log.info({ successCount, totalLogtypes: 7 }, 'forceSync completed');
       } else {
         this.consecutiveSyncFailures++;
-        console.warn('[EventCache] forceSync: ⚠️ all logtypes failed — cache remains stale');
+        log.warn('forceSync: all logtypes failed — cache remains stale');
       }
     } catch (err) {
       this.consecutiveSyncFailures++;
-      console.warn('[EventCache] forceSync: ❌ threw unexpectedly:', err);
+      log.warn({ err }, 'forceSync: threw unexpectedly');
     }
   }
 

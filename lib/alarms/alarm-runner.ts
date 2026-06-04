@@ -34,6 +34,9 @@ import { AlarmDetectionEngine } from '@/lib/alarms/detection-engine';
 import { FortiGateService } from '@/lib/integrations/fortigate';
 import { processDLQ, cleanupDLQ, getDLQStats } from '@/lib/notifications/dlq-worker';
 import { sendAlarmEmail } from '@/lib/notifications/email';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('alarm-runner');
 
 // ── FortiGate singleton ───────────────────────────────────────────────────────
 // Must persist between alarm check runs so CMDB snapshot store survives.
@@ -68,10 +71,10 @@ async function getOrInitFortiGateService(): Promise<FortiGateService | null> {
       },
     });
     _sharedFortiGateConfigHash = configHash;
-    console.log('[AlarmRunner] FortiGate singleton (re)initialized');
+    log.info('FortiGate singleton (re)initialized');
     return _sharedFortiGateService;
   } catch (err) {
-    console.error('[AlarmRunner] FortiGate init error:', err);
+    log.error({ err }, 'FortiGate init error');
     return null;
   }
 }
@@ -110,9 +113,9 @@ async function maybeSendFAHealthAlert(): Promise<void> {
       message: bodyLines,
       timestamp: new Date(),
     }, { bypassCooldown: true });
-    console.warn(`[AlarmRunner] 📧 FA health alert sent (${health.consecutiveFailures} failures)`);
+    log.warn({ consecutiveFailures: health.consecutiveFailures }, 'FA health alert sent');
   } catch (err) {
-    console.error('[AlarmRunner] Failed to send FA health alert:', err);
+    log.error({ err }, 'Failed to send FA health alert');
   }
 }
 
@@ -166,14 +169,15 @@ export async function initializeAlarmRunner(): Promise<void> {
       data: { status: 'ORPHANED' },
     });
     if (orphaned.count > 0) {
-      console.warn(
-        `[AlarmRunner] 🧹 Cleaned up ${orphaned.count} orphan RUNNING lock(s) from previous process`
+      log.warn(
+        { count: orphaned.count },
+        'Cleaned up orphan RUNNING lock(s) from previous process'
       );
     } else {
-      console.log('[AlarmRunner] ✅ No orphan locks found');
+      log.info('No orphan locks found');
     }
   } catch (err) {
-    console.warn('[AlarmRunner] Could not clean up orphan locks (non-fatal):', err);
+    log.warn({ err }, 'Could not clean up orphan locks (non-fatal)');
   }
 }
 
@@ -183,8 +187,9 @@ export async function runAlarmCheck(): Promise<AlarmCheckResult> {
   if (checkStartTime !== null) {
     const elapsed = Date.now() - checkStartTime;
     if (elapsed < MAX_LOCK_DURATION_MS) {
-      console.log(
-        `[AlarmRunner] ⚠️ Already running (${Math.round(elapsed / 1000)}s elapsed), skipping`
+      log.info(
+        { elapsedSec: Math.round(elapsed / 1000) },
+        'Already running, skipping'
       );
       return (
         lastResult ?? {
@@ -196,9 +201,9 @@ export async function runAlarmCheck(): Promise<AlarmCheckResult> {
         }
       );
     }
-    console.warn(
-      `[AlarmRunner] 🔄 Stale lock detected (${Math.round(elapsed / 1000)}s > ` +
-        `${MAX_LOCK_DURATION_MS / 1000}s), force resetting`
+    log.warn(
+      { elapsedSec: Math.round(elapsed / 1000), maxLockSec: MAX_LOCK_DURATION_MS / 1000 },
+      'Stale lock detected, force resetting'
     );
   }
 
@@ -215,7 +220,7 @@ export async function runAlarmCheck(): Promise<AlarmCheckResult> {
     });
     if (recentRunning) {
       const ageS = Math.round((Date.now() - recentRunning.checkTime.getTime()) / 1000);
-      console.log(`[AlarmRunner] ⚠️ DB guard: another instance started ${ageS}s ago, skipping`);
+      log.info({ ageSec: ageS }, 'DB guard: another instance recently started, skipping');
       return (
         lastResult ?? {
           success: false,
@@ -228,12 +233,12 @@ export async function runAlarmCheck(): Promise<AlarmCheckResult> {
     }
   } catch (dbGuardErr) {
     // Non-fatal: if DB guard check fails, proceed with in-process mutex only
-    console.warn('[AlarmRunner] DB guard check failed (non-fatal):', dbGuardErr);
+    log.warn({ err: dbGuardErr }, 'DB guard check failed (non-fatal)');
   }
 
   checkStartTime = Date.now();
   const startTime = checkStartTime;
-  console.log(`[AlarmRunner] 🔒 Lock acquired at ${new Date().toISOString()}`);
+  log.info('Lock acquired');
 
   // Insert RUNNING sentinel row — lets other instances detect us via DB guard above
   let runLogId: string | null = null;
@@ -250,7 +255,7 @@ export async function runAlarmCheck(): Promise<AlarmCheckResult> {
     });
     runLogId = runLog.id;
   } catch (sentinelErr) {
-    console.warn('[AlarmRunner] Could not insert RUNNING sentinel (non-fatal):', sentinelErr);
+    log.warn({ err: sentinelErr }, 'Could not insert RUNNING sentinel (non-fatal)');
   }
 
   try {
@@ -275,10 +280,15 @@ export async function runAlarmCheck(): Promise<AlarmCheckResult> {
       password?: string;
     };
 
+    if (!faConfig.password) {
+      log.error('FortiAnalyzer password not configured — skipping alarm evaluation');
+      return { success: false, error: 'FortiAnalyzer password not configured', triggered: [], errors: [{ code: 'ALL', error: 'FA password missing' }], summary: { total: 0, triggered: 0, skippedCooldown: 0, errors: 1 } };
+    }
+
     const service = initSharedFortiAnalyzerService({
       host: faConfig.host,
-      username: faConfig.username || 'infrascope',
-      password: faConfig.password || 'Thor.7485-app',
+      username: faConfig.username,
+      password: faConfig.password,
     });
 
     const engine = new AlarmDetectionEngine(service);
@@ -294,9 +304,7 @@ export async function runAlarmCheck(): Promise<AlarmCheckResult> {
     // ── Run evaluation with 10-minute timeout ──────────────────────────────
     // Normal runs complete in 85-120 s. 10 min = generous hard limit.
     const GLOBAL_TIMEOUT_MS = 10 * 60 * 1000;
-    console.log(
-      `[AlarmRunner] Starting evaluation (${GLOBAL_TIMEOUT_MS / 1000}s timeout)...`
-    );
+    log.info({ timeoutSec: GLOBAL_TIMEOUT_MS / 1000 }, 'Starting evaluation');
 
     const results = await Promise.race([
       engine.evaluateAllAlarms(),
@@ -308,7 +316,7 @@ export async function runAlarmCheck(): Promise<AlarmCheckResult> {
       ),
     ]).catch((err) => {
       // Log timeout or any other error immediately
-      console.error('[AlarmRunner] Evaluation failed:', err.message);
+      log.error({ err }, 'Evaluation failed');
       throw err;
     });
 
@@ -342,11 +350,11 @@ export async function runAlarmCheck(): Promise<AlarmCheckResult> {
 
     const durationSec = Math.round(durationMs / 1000);
     const alarmsPerSec = parseFloat((results.length / (durationMs / 1000)).toFixed(1));
-    console.log(
-      `[AlarmRunner] ✅ Done in ${durationSec}s: ${triggered.length} triggered, ` +
-        `${errors.length} errors, ${cooldowns.length} cooldowns`
+    log.info(
+      { durationSec, triggered: triggered.length, errors: errors.length, cooldowns: cooldowns.length },
+      'Evaluation complete'
     );
-    console.log(`[AlarmRunner] Performance: ${alarmsPerSec} alarms/sec`);
+    log.info({ alarmsPerSec }, 'Performance metric');
 
     // ── Write to DB (update RUNNING → final status) ────────────────────────
     const finalLogData = {
@@ -361,30 +369,28 @@ export async function runAlarmCheck(): Promise<AlarmCheckResult> {
     } else {
       await prisma.alarmCheckLog.create({ data: { checkTime: new Date(), ...finalLogData } });
     }
-    console.log(`[AlarmRunner] Logged to alarm_check_logs`);
+    log.info('Logged to alarm_check_logs');
 
     // ── DLQ processing ─────────────────────────────────────────────────────
     try {
       const dlqStats = await getDLQStats();
       if (dlqStats.pending > 0) {
-        console.log(
-          `[AlarmRunner] DLQ has ${dlqStats.pending} pending notifications, processing...`
-        );
+        log.info({ pending: dlqStats.pending }, 'DLQ has pending notifications, processing');
         const dlqResult = await processDLQ();
-        console.log(
-          `[AlarmRunner] DLQ: ${dlqResult.succeeded} delivered, ${dlqResult.failed} retrying, ` +
-            `${dlqResult.permanentlyFailed} permanently failed`
+        log.info(
+          { succeeded: dlqResult.succeeded, failed: dlqResult.failed, permanentlyFailed: dlqResult.permanentlyFailed },
+          'DLQ processing complete'
         );
       }
       await cleanupDLQ();
     } catch (dlqErr) {
-      console.error('[AlarmRunner] DLQ error (non-fatal):', dlqErr);
+      log.error({ err: dlqErr }, 'DLQ error (non-fatal)');
     }
 
     // ── FA health alert ─────────────────────────────────────────
     // After every check, if FA has been failing, notify ops team once per hour.
     maybeSendFAHealthAlert().catch((err) =>
-      console.error('[AlarmRunner] maybeSendFAHealthAlert failed (non-fatal):', err)
+      log.error({ err }, 'maybeSendFAHealthAlert failed (non-fatal)')
     );
 
     lastResult = {
@@ -412,15 +418,15 @@ export async function runAlarmCheck(): Promise<AlarmCheckResult> {
     return lastResult;
   } catch (error) {
     const durationMs = Date.now() - startTime;
-    console.error(
-      `[AlarmRunner] ❌ Error after ${Math.round(durationMs / 1000)}s:`,
-      error
+    log.error(
+      { err: error, durationSec: Math.round(durationMs / 1000) },
+      'Error during alarm check'
     );
 
     // Timeout detection - force cleanup if stuck
     const isTimeout = (error as Error).message.includes('timeout');
     if (isTimeout) {
-      console.warn('[AlarmRunner] ⚠️ TIMEOUT DETECTED - forcing lock cleanup');
+      log.warn('Timeout detected - forcing lock cleanup');
       checkStartTime = null; // Force reset the in-process lock
     }
 
@@ -440,11 +446,9 @@ export async function runAlarmCheck(): Promise<AlarmCheckResult> {
       } else {
         await prisma.alarmCheckLog.create({ data: { checkTime: new Date(), ...failedLogData } });
       }
-      console.log(
-        `[AlarmRunner] Logged FAILED check to alarm_check_logs (${durationMs}ms)`
-      );
+      log.info({ durationMs }, 'Logged FAILED check to alarm_check_logs');
     } catch (logErr) {
-      console.error('[AlarmRunner] Failed to write FAILED log:', logErr);
+      log.error({ err: logErr }, 'Failed to write FAILED log');
     }
 
     return {
@@ -457,6 +461,6 @@ export async function runAlarmCheck(): Promise<AlarmCheckResult> {
   } finally {
     // ── Always release lock ────────────────────────────────────────────────
     checkStartTime = null;
-    console.log(`[AlarmRunner] 🔓 Lock released at ${new Date().toISOString()}`);
+    log.info('Lock released');
   }
 }

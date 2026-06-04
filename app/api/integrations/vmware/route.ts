@@ -17,6 +17,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { VMwareService } from '@/lib/integrations/vmware';
 import { prisma } from '@/lib/prisma';
+import { validateBody } from '@/lib/validators';
+import { vmwareTestSchema, vmwareSaveConfigSchema } from '@/lib/validators/integrations';
 
 // Helper: Get capacity trends from time series data
 async function getCapacityTrends(days: number) {
@@ -808,18 +810,20 @@ export async function POST(request: NextRequest) {
 
     if (action === 'test') {
       // Test connection without saving
-      const vmwareConfig = config as {
-        host: string;
-        username: string;
-        password: string;
-        thumbprint?: string;
+      const parsed = validateBody(config || {}, vmwareTestSchema);
+      if (!parsed.success) {
+        return NextResponse.json({ success: false, error: parsed.error }, { status: 400 });
+      }
+      const { host, username, password, thumbprint } = {
+        ...parsed.data,
+        thumbprint: (config as any)?.thumbprint as string | undefined,
       };
 
       const service = new VMwareService({
-        host: vmwareConfig.host.replace(/^https?:\/\//i, '').replace(/\/+$/, ''),
-        username: vmwareConfig.username,
-        password: vmwareConfig.password,
-        thumbprint: vmwareConfig.thumbprint,
+        host: host.replace(/^https?:\/\//i, '').replace(/\/+$/, ''),
+        username,
+        password,
+        thumbprint,
         pollingInterval: 10,
         enabledModules: {
           datacenters: true,
@@ -916,24 +920,15 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'save-config') {
+      // Validate config with Zod
+      const parsed = validateBody(config || {}, vmwareSaveConfigSchema);
+      if (!parsed.success) {
+        return NextResponse.json({ success: false, error: parsed.error }, { status: 400 });
+      }
       // Sanitize host: strip protocol prefix and trailing slashes before saving
-      const rawConfig = config as {
-        host: string;
-        username: string;
-        password: string;
-        thumbprint?: string;
-        pollingInterval: number;
-        enabledModules: {
-          datacenters: boolean;
-          clusters: boolean;
-          hosts: boolean;
-          vms: boolean;
-          datastores: boolean;
-        };
-      };
       const newConfig = {
-        ...rawConfig,
-        host: rawConfig.host.replace(/^https?:\/\//i, '').replace(/\/+$/, ''),
+        ...parsed.data,
+        host: parsed.data.host.replace(/^https?:\/\//i, '').replace(/\/+$/, ''),
       };
 
       // If password is empty (page never loads it for security), preserve the existing stored password

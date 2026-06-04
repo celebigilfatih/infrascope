@@ -48,6 +48,7 @@ interface HealthStatus {
   version: string;
   services: {
     scheduler: boolean;
+    schedulerHeartbeatStale: boolean;
     monitor: boolean;
   };
   datasources: {
@@ -315,15 +316,17 @@ async function getAlarmStats(): Promise<{ totalDefinitions: number; enabledDefin
 }
 
 /**
- * Ensure alarm services are running - starts them if stopped
+ * Ensure alarm services are running - starts them if stopped.
+ * Also checks scheduler heartbeat to detect frozen schedulers.
  */
-function ensureAlarmServicesRunning() {
+async function ensureAlarmServicesRunning() {
   const schedulerStatus = getSchedulerStatus();
   const monitorStatus = getAlarmMonitor().getStatus();
-  
+
   let schedulerOk = schedulerStatus.running;
   let monitorOk = monitorStatus.running;
-  
+  let schedulerHeartbeatStale = false;
+
   // Start scheduler if not running
   if (!schedulerOk) {
     console.log('[Health] Scheduler not running, starting...');
@@ -335,7 +338,36 @@ function ensureAlarmServicesRunning() {
       console.error('[Health] Failed to start scheduler:', err);
     }
   }
-  
+
+  // Check heartbeat staleness — detect frozen scheduler even if interval is set
+  if (schedulerOk) {
+    try {
+      const heartbeat = await (prisma as any).systemConfig?.findUnique?.({
+        where: { key: 'scheduler_last_tick' },
+      });
+      if (heartbeat?.value) {
+        const parsed = JSON.parse(heartbeat.value);
+        const lastTickTime = parsed.ts ? new Date(parsed.ts).getTime() : 0;
+        const ageMinutes = lastTickTime ? (Date.now() - lastTickTime) / 60000 : Infinity;
+        const STALE_THRESHOLD_MINUTES = 20;
+
+        if (ageMinutes > STALE_THRESHOLD_MINUTES) {
+          schedulerHeartbeatStale = true;
+          console.warn(
+            `[Health] Scheduler heartbeat stale: last tick ${Math.round(ageMinutes)}m ago (threshold: ${STALE_THRESHOLD_MINUTES}m). Scheduler may be frozen.`
+          );
+          schedulerOk = false;
+        }
+      } else if (heartbeat === null || heartbeat === undefined) {
+        // No heartbeat at all — scheduler may have never completed a tick
+        // Only flag as stale if scheduler has been running for a while
+        // (give it grace on fresh start)
+      }
+    } catch {
+      // Heartbeat check failed (table may not exist yet) — don't affect status
+    }
+  }
+
   // Start monitor if not running
   if (!monitorOk) {
     console.log('[Health] Monitor not running, starting...');
@@ -347,13 +379,13 @@ function ensureAlarmServicesRunning() {
       console.error('[Health] Failed to start monitor:', err);
     }
   }
-  
-  return { schedulerOk, monitorOk };
+
+  return { schedulerOk, monitorOk, schedulerHeartbeatStale };
 }
 
 export async function GET(_request: NextRequest) {
   // Ensure alarm services are running (auto-restart if stopped)
-  const { schedulerOk, monitorOk } = ensureAlarmServicesRunning();
+  const { schedulerOk, monitorOk, schedulerHeartbeatStale } = await ensureAlarmServicesRunning();
   
   // Check all datasources + DLQ stats in parallel
   const [dbHealth, fazHealth, vmwareHealth, nmsHealth, alarmStats, dlqStats] = await Promise.all([
@@ -381,6 +413,7 @@ export async function GET(_request: NextRequest) {
     version: '1.0.0',
     services: {
       scheduler: schedulerOk,
+      schedulerHeartbeatStale,
       monitor: monitorOk,
     },
     datasources: {

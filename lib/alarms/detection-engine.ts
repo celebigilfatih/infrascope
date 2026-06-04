@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { createLogger } from '@/lib/logger';
 import FortiAnalyzerService from '@/lib/integrations/fortianalyzer';
 import { VMwareService } from '@/lib/integrations/vmware';
 import { FortiGateService, FortiGateConfig } from '@/lib/integrations/fortigate';
@@ -7,6 +8,8 @@ import type { AlarmDetectionLogic, CorrelationRule } from './alarm-definitions';
 import { EventCacheService } from './event-cache';
 import { ALARM_QUERY_REGISTRY, BYPASS_CACHE_ALARMS } from './queries';
 import { createDefaultSuppressionEngine, SuppressionEvent } from './suppression-engine';
+
+const log = createLogger('detection-engine');
 
 interface AlarmDef {
   id: string;
@@ -111,17 +114,17 @@ export class AlarmDetectionEngine {
 
   private async initializeVMware() {
     try {
-      console.log('[AlarmEngine] Initializing VMware service...');
+      log.info('Initializing VMware service');
       const vmwareConfig = await prisma.integrationConfig.findFirst({
         where: { type: 'VMWARE_VCENTER', enabled: true },
       });
       
       if (!vmwareConfig) {
-        console.log('[AlarmEngine] No enabled VMware integration found in database');
+        log.info('No enabled VMware integration found in database');
         return;
       }
       
-      console.log(`[AlarmEngine] Found VMware config: ${vmwareConfig.name}`);
+      log.info({ configName: vmwareConfig.name }, 'Found VMware config');
       
       if (vmwareConfig && vmwareConfig.config) {
         const config = vmwareConfig.config as any;
@@ -142,31 +145,31 @@ export class AlarmDetectionEngine {
         // Authenticate
         const authenticated = await this.vmwareService.authenticate();
         if (!authenticated) {
-          console.error('[AlarmEngine] VMware authentication failed');
+          log.error('VMware authentication failed');
           this.vmwareService = null;
         } else {
-          console.log('[AlarmEngine] VMware service initialized and authenticated');
+          log.info('VMware service initialized and authenticated');
         }
       }
     } catch (error) {
-      console.error('[AlarmEngine] Error initializing VMware service:', error);
+      log.error({ err: error }, 'Error initializing VMware service');
       this.vmwareService = null;
     }
   }
 
   private async initializeFortiGate() {
     try {
-      console.log('[AlarmEngine] Initializing FortiGate service...');
+      log.info('Initializing FortiGate service');
       const fgConfig = await prisma.integrationConfig.findFirst({
         where: { type: 'FORTIGATE', enabled: true },
       });
       
       if (!fgConfig) {
-        console.log('[AlarmEngine] No enabled FortiGate integration found in database');
+        log.info('No enabled FortiGate integration found in database');
         return;
       }
       
-      console.log(`[AlarmEngine] Found FortiGate config: ${fgConfig.name}`);
+      log.info({ configName: fgConfig.name }, 'Found FortiGate config');
       
       if (fgConfig && fgConfig.config) {
         const config = fgConfig.config as any;
@@ -184,10 +187,10 @@ export class AlarmDetectionEngine {
             sdwan: true,
           },
         });
-        console.log('[AlarmEngine] FortiGate service initialized');
+        log.info('FortiGate service initialized');
       }
     } catch (error) {
-      console.error('[AlarmEngine] Error initializing FortiGate service:', error);
+      log.error({ err: error }, 'Error initializing FortiGate service');
       this.fortiGateService = null;
     }
   }
@@ -203,19 +206,19 @@ export class AlarmDetectionEngine {
     const isCacheValid = Date.now() - this.vmwareCache.timestamp < this.vmwareCache.ttl;
     
     if (isCacheValid && this.vmwareCache[key]) {
-      console.log(`[AlarmEngine] Using cached ${key} data (${Math.round((Date.now() - this.vmwareCache.timestamp) / 1000)}s old)`);
+      log.info({ key, ageSeconds: Math.round((Date.now() - this.vmwareCache.timestamp) / 1000) }, 'Using cached VMware data');
       return this.vmwareCache[key] as T[];
     }
     
     // Fetch fresh data
-    console.log(`[AlarmEngine] Fetching fresh ${key} data from vCenter...`);
+    log.info({ key }, 'Fetching fresh data from vCenter');
     const data = await fetchFn();
     
     // Update cache
     this.vmwareCache[key] = data;
     this.vmwareCache.timestamp = Date.now();
     
-    console.log(`[AlarmEngine] Cached ${data.length} ${key} (TTL: ${this.vmwareCache.ttl / 1000}s)`);
+    log.info({ key, count: data.length, ttlSeconds: this.vmwareCache.ttl / 1000 }, 'Cached VMware data');
     return data;
   }
 
@@ -231,7 +234,7 @@ export class AlarmDetectionEngine {
       timestamp: Date.now(),
       ttl: 5 * 60 * 1000
     };
-    console.log('[AlarmEngine] VMware cache cleared for new check run');
+    log.info('VMware cache cleared for new check run');
   }
 
   private async initializeEventCache() {
@@ -242,19 +245,19 @@ export class AlarmDetectionEngine {
     if (_sharedCacheInitialized && _sharedEventCache) {
       this.eventCache = _sharedEventCache;
       this.cacheInitialized = true;
-      console.log('[AlarmEngine] ✅ Reusing shared Event Cache (already initialized)');
+      log.info('Reusing shared Event Cache (already initialized)');
       return;
     }
     
     try {
-      console.log('[AlarmEngine] Initializing shared Event Cache service...');
+      log.info('Initializing shared Event Cache service');
       _sharedEventCache = new EventCacheService(this.service);
       this.eventCache = _sharedEventCache;
       
       // startBackgroundSync() is async — it awaits the initial sync then schedules
       // recurring syncs in the background. We race it against a 3-minute timeout so
       // we don't block alarm evaluation forever if FA is very slow or unreachable.
-      console.log('[AlarmEngine] Waiting for initial event cache sync (timeout: 3 min)...');
+      log.info('Waiting for initial event cache sync (timeout: 3 min)');
       const SYNC_TIMEOUT_MS = 3 * 60 * 1000;
       const syncCount = await Promise.race([
         _sharedEventCache.startBackgroundSync(),
@@ -262,16 +265,16 @@ export class AlarmDetectionEngine {
       ]);
 
       if (syncCount === -1) {
-        console.warn('[AlarmEngine] ⚠️ Initial event cache sync timed out after 3 min — proceeding (cache may be stale)');
+        log.warn('Initial event cache sync timed out after 3 min — proceeding (cache may be stale)');
       } else {
-        console.log(`[AlarmEngine] ✅ Initial event cache sync done: ${syncCount}/7 logtypes succeeded`);
+        log.info({ syncCount, total: 7 }, 'Initial event cache sync done');
       }
       
       _sharedCacheInitialized = true;
       this.cacheInitialized = true;
-      console.log('[AlarmEngine] ✅ Shared Event cache initialized');
+      log.info('Shared Event cache initialized');
     } catch (error) {
-      console.error('[AlarmEngine] Failed to initialize event cache:', error);
+      log.error({ err: error }, 'Failed to initialize event cache');
       // Continue without cache (fallback to live API)
       this.eventCache = null;
       _sharedEventCache = null;
@@ -286,9 +289,21 @@ export class AlarmDetectionEngine {
     const results: EvaluationResult[] = [];
 
     try {
+      // Prune expired alarm cooldowns to keep the table small
+      try {
+        const pruned = await prisma.alarmCooldown.deleteMany({
+          where: { cooldownUntil: { lt: new Date() } },
+        });
+        if (pruned.count > 0) {
+          log.info({ count: pruned.count }, 'Pruned expired alarm cooldowns');
+        }
+      } catch {
+        // Table may not exist yet (before migration)
+      }
+
       // Log suppression engine status
       const suppressionStats = this.getSuppressionStats();
-      console.log(`[AlarmEngine] Suppression engine: ${suppressionStats.enabledRules}/${suppressionStats.totalRules} rules active`);
+      log.info({ enabledRules: suppressionStats.enabledRules, totalRules: suppressionStats.totalRules }, 'Suppression engine status');
 
       // Initialize VMware service on first run
       if (!this.vmwareInitialized) {
@@ -321,12 +336,12 @@ export class AlarmDetectionEngine {
 
       // Log email service state — makes rate-limit/cooldown/SMTP issues immediately visible
       const emailStats = getEmailStats();
-      console.log(`[AlarmEngine] Email state: ${emailStats.emailsThisHour}/${emailStats.maxPerHour} this hour, cooldowns: ${emailStats.activeCooldowns}, transporter: ${emailStats.transporterActive}, reset in: ${emailStats.hourlyResetIn}min`);
+      log.info({ emailsThisHour: emailStats.emailsThisHour, maxPerHour: emailStats.maxPerHour, activeCooldowns: emailStats.activeCooldowns, transporterActive: emailStats.transporterActive, hourlyResetIn: emailStats.hourlyResetIn }, 'Email state');
 
       // Log cache state
       if (this.eventCache) {
         const cacheStatus = this.eventCache.getCacheStatus();
-        console.log(`[AlarmEngine] Cache state: lastSync=${cacheStatus.lastSyncTime?.toISOString() ?? 'never'}, fresh=${cacheStatus.isFresh}, syncInProgress=${cacheStatus.syncInProgress}`);
+        log.info({ lastSync: cacheStatus.lastSyncTime?.toISOString() ?? 'never', isFresh: cacheStatus.isFresh, syncInProgress: cacheStatus.syncInProgress }, 'Cache state');
 
         // ── Cache Freshness Guarantee ────────────────────────────────────────────
         // If cache is stale and no sync is running, force an immediate sync before
@@ -334,7 +349,7 @@ export class AlarmDetectionEngine {
         // data when the background scheduler has fallen behind (FA downtime, backoff).
         // We cap the wait at 2 minutes so the alarm check never hangs indefinitely.
         if (!cacheStatus.isFresh) {
-          console.warn('[AlarmEngine] ⚠️ Cache is stale — forcing sync before evaluation (max 2 min)...');
+          log.warn('Cache is stale — forcing sync before evaluation (max 2 min)');
           try {
             await Promise.race([
               this.eventCache.forceSync(),
@@ -342,12 +357,12 @@ export class AlarmDetectionEngine {
             ]);
             const refreshed = this.eventCache.getCacheStatus();
             if (refreshed.isFresh) {
-              console.log('[AlarmEngine] ✅ Cache freshened successfully — proceeding with fresh data');
+              log.info('Cache freshened successfully — proceeding with fresh data');
             } else {
-              console.warn('[AlarmEngine] ⚠️ Cache still stale after force sync — proceeding with live FA fallback');
+              log.warn('Cache still stale after force sync — proceeding with live FA fallback');
             }
           } catch (forceSyncErr) {
-            console.warn('[AlarmEngine] ⚠️ forceSync threw (non-fatal):', forceSyncErr);
+            log.warn({ err: forceSyncErr }, 'forceSync threw (non-fatal)');
           }
         }
       }
@@ -358,7 +373,7 @@ export class AlarmDetectionEngine {
       });
 
       if (alarms.length === 0) {
-        console.log('[AlarmEngine] No enabled alarms found');
+        log.info('No enabled alarms found');
         return results;
       }
 
@@ -375,12 +390,12 @@ export class AlarmDetectionEngine {
         return (priorityOrder[a.severity] || 5) - (priorityOrder[b.severity] || 5);
       });
 
-      console.log(`[AlarmEngine] Evaluating ${sortedAlarms.length} enabled alarms (sorted by priority)...`);
+      log.info({ count: sortedAlarms.length }, 'Evaluating enabled alarms (sorted by priority)');
 
       // Login once for all evaluations
       const loggedIn = await this.service.login();
       if (!loggedIn) {
-        console.error('[AlarmEngine] Failed to login to FortiAnalyzer');
+        log.error('Failed to login to FortiAnalyzer');
         throw new Error('FortiAnalyzer login failed — cannot evaluate alarms');
       }
 
@@ -413,7 +428,7 @@ export class AlarmDetectionEngine {
         logTypeGroups.get(logtype)!.push(alarmDef);
       }
 
-      console.log(`[AlarmEngine] LogTypeGroups: ${JSON.stringify([...logTypeGroups.keys()])}, FortiGateSslvpnAlarms: ${fortiGateSslvpnAlarms.length}`);
+      log.info({ logTypeGroups: [...logTypeGroups.keys()], fortiGateSslvpnAlarmCount: fortiGateSslvpnAlarms.length }, 'LogTypeGroups summary');
 
       // Check overall cache freshness to decide how to run logtype groups:
       //  - Cache FRESH  → full parallel (all groups + all filter batches at once = fast DB reads, zero FA load)
@@ -430,12 +445,12 @@ export class AlarmDetectionEngine {
       if (overallCacheFresh) {
         // FAST PATH: All logtype groups in full parallel — cache serves all queries
         const groupPromises = groupEntries.map(async ([logtype, groupAlarms]) => {
-          console.log(`[AlarmEngine] Starting parallel evaluation: ${logtype} group (${groupAlarms.length} alarms)...`);
+          log.info({ logtype, alarmCount: groupAlarms.length }, 'Starting parallel evaluation');
           try {
             const groupResult = await this.evaluateLogTypeGroupOptimized(logtype, groupAlarms);
             return { logtype, results: groupResult, error: null };
           } catch (error) {
-            console.error(`[AlarmEngine] Error evaluating ${logtype} group:`, error);
+            log.error({ err: error, logtype }, 'Error evaluating logtype group');
             const errorResults = groupAlarms.map(a => ({
               alarmCode: a.code, triggered: false, matchCount: 0, events: [],
               error: (error as Error).message,
@@ -448,14 +463,14 @@ export class AlarmDetectionEngine {
         // SAFE PATH: Run logtype groups one-at-a-time; each group caps itself at 5 concurrent
         // live FA calls via runWithConcurrency inside evaluateLogTypeGroupOptimized.
         // Global max live-FA concurrency = 5 (avoids overwhelming FortiAnalyzer).
-        console.warn(`[AlarmEngine] Cache stale — running logtype groups SEQUENTIALLY to limit FA load`);
+        log.warn('Cache stale — running logtype groups sequentially to limit FA load');
         for (const [logtype, groupAlarms] of groupEntries) {
-          console.log(`[AlarmEngine] Starting sequential evaluation: ${logtype} group (${groupAlarms.length} alarms)...`);
+          log.info({ logtype, alarmCount: groupAlarms.length }, 'Starting sequential evaluation');
           try {
             const groupResult = await this.evaluateLogTypeGroupOptimized(logtype, groupAlarms);
             groupResults.push({ logtype, results: groupResult, error: null });
           } catch (error) {
-            console.error(`[AlarmEngine] Error evaluating ${logtype} group:`, error);
+            log.error({ err: error, logtype }, 'Error evaluating logtype group');
             const errorResults = groupAlarms.map(a => ({
               alarmCode: a.code, triggered: false, matchCount: 0, events: [],
               error: (error as Error).message,
@@ -468,20 +483,20 @@ export class AlarmDetectionEngine {
       // Collect results from all groups
       for (const { logtype, results: groupResult, error } of groupResults) {
         if (error) {
-          console.error(`[AlarmEngine] Group ${logtype} failed: ${error}`);
+          log.error({ logtype, error }, 'Group evaluation failed');
         }
         results.push(...groupResult);
       }
 
       // Evaluate FortiGate SSL-VPN alarms (uses FortiGate API, not FortiAnalyzer)
       if (fortiGateSslvpnAlarms.length > 0) {
-        console.log(`[AlarmEngine] Evaluating ${fortiGateSslvpnAlarms.length} FortiGate SSL-VPN alarms...`);
+        log.info({ count: fortiGateSslvpnAlarms.length }, 'Evaluating FortiGate SSL-VPN alarms');
         for (const alarm of fortiGateSslvpnAlarms) {
           try {
             const result = await this.evaluateFortiGateSslvpnAlarm(alarm);
             results.push(result);
           } catch (error) {
-            console.error(`[AlarmEngine] FortiGate SSL-VPN error ${alarm.code}:`, error);
+            log.error({ err: error, alarmCode: alarm.code }, 'FortiGate SSL-VPN evaluation error');
             results.push({ alarmCode: alarm.code, triggered: false, matchCount: 0, events: [], error: (error as Error).message });
           }
         }
@@ -489,14 +504,14 @@ export class AlarmDetectionEngine {
 
       // Evaluate correlation alarms (after regular alarms, so precursor events exist)
       if (correlationAlarms.length > 0) {
-        console.log(`[AlarmEngine] Evaluating ${correlationAlarms.length} correlation alarms...`);
+        log.info({ count: correlationAlarms.length }, 'Evaluating correlation alarms');
         // Correlation alarms are fast (DB queries only), evaluate sequentially
         for (const alarm of correlationAlarms) {
           try {
             const result = await this.evaluateCorrelationAlarm(alarm);
             results.push(result);
           } catch (error) {
-            console.error(`[AlarmEngine] Correlation error ${alarm.code}:`, error);
+            log.error({ err: error, alarmCode: alarm.code }, 'Correlation evaluation error');
             results.push({ alarmCode: alarm.code, triggered: false, matchCount: 0, events: [], error: (error as Error).message });
           }
         }
@@ -507,10 +522,10 @@ export class AlarmDetectionEngine {
         const nmsResults = await this.evaluateNmsAlarms();
         results.push(...nmsResults);
       } catch (nmsErr) {
-        console.error('[AlarmEngine] NMS alarm evaluation error:', nmsErr);
+        log.error({ err: nmsErr }, 'NMS alarm evaluation error');
       }
 
-      console.log(`[AlarmEngine] Evaluation complete: ${results.filter(r => r.triggered).length} triggered, ${results.filter(r => r.error && r.error !== 'cooldown-active' && r.error !== 'cache-empty').length} errors, ${results.filter(r => r.error === 'cooldown-active').length} on-cooldown, ${results.filter(r => r.error === 'cache-empty').length} cache-empty`);
+      log.info({ triggered: results.filter(r => r.triggered).length, errors: results.filter(r => r.error && r.error !== 'cooldown-active' && r.error !== 'cache-empty').length, onCooldown: results.filter(r => r.error === 'cooldown-active').length, cacheEmpty: results.filter(r => r.error === 'cache-empty').length }, 'Evaluation complete');
       
       // Retry any failed notifications from previous cycles
       await this.retryFailedNotifications();
@@ -523,7 +538,7 @@ export class AlarmDetectionEngine {
       if (msg.includes('login failed') || msg.includes('cannot evaluate')) {
         throw error;
       }
-      console.error('[AlarmEngine] Critical error in evaluateAllAlarms:', error);
+      log.error({ err: error }, 'Critical error in evaluateAllAlarms');
       // Return results collected so far for non-critical partial failures
       return results;
     }
@@ -554,7 +569,7 @@ export class AlarmDetectionEngine {
         return; // No failed notifications to retry
       }
       
-      console.log(`[AlarmEngine] Retrying ${failedAlarms.length} failed notifications...`);
+      log.info({ count: failedAlarms.length }, 'Retrying failed notifications');
       
       for (const event of failedAlarms) {
         try {
@@ -579,14 +594,14 @@ export class AlarmDetectionEngine {
               where: { id: event.id },
               data: { notifiedAt: new Date(), notifyChannel: 'email' },
             });
-            console.log(`[AlarmEngine] ✅ Retry successful for ${event.alarm.code} (${event.id})`);
+            log.info({ alarmCode: event.alarm.code, eventId: event.id }, 'Retry successful for notification');
           }
         } catch (retryErr) {
-          console.error(`[AlarmEngine] Retry failed for ${event.alarm.code}:`, retryErr);
+          log.error({ err: retryErr, alarmCode: event.alarm.code }, 'Retry failed for notification');
         }
       }
     } catch (error) {
-      console.error('[AlarmEngine] Error in retryFailedNotifications:', error);
+      log.error({ err: error }, 'Error in retryFailedNotifications');
       // Don't throw - this is a best-effort retry, shouldn't break the main flow
     }
   }
@@ -673,7 +688,7 @@ export class AlarmDetectionEngine {
 
     // Step 2: Secondary log search (if defined)
     if (rules.secondaryLogtype && rules.secondaryFilter) {
-      console.log(`[AlarmEngine] Correlation ${alarm.code}: secondary search logtype=${rules.secondaryLogtype} filter="${rules.secondaryFilter}"`);
+      log.info({ alarmCode: alarm.code, secondaryLogtype: rules.secondaryLogtype, secondaryFilter: rules.secondaryFilter }, 'Correlation secondary search');
       const limit = 50;
       const tid = await this.service.startLogSearch(rules.secondaryLogtype, limit, rules.secondaryFilter);
       if (!tid) {
@@ -786,7 +801,7 @@ export class AlarmDetectionEngine {
    */
   private async evaluateLogTypeGroupOptimized(logtype: string, alarms: AlarmDef[]): Promise<EvaluationResult[]> {
     const results: EvaluationResult[] = [];
-    console.log(`[AlarmEngine] Optimized evaluation: ${logtype} group (${alarms.length} alarms)...`);
+    log.info({ logtype, alarmCount: alarms.length }, 'Optimized evaluation starting');
 
     // Handle VMware alarms separately (already optimized)
     if (logtype === 'vmware') {
@@ -795,7 +810,7 @@ export class AlarmDetectionEngine {
           const result = await this.evaluateVMwareAlarm(alarm);
           results.push(result);
         } catch (error) {
-          console.error(`[AlarmEngine] Error evaluating VMware alarm ${alarm.code}:`, error);
+          log.error({ err: error, alarmCode: alarm.code }, 'Error evaluating VMware alarm');
           results.push({ alarmCode: alarm.code, triggered: false, matchCount: 0, events: [], error: (error as Error).message });
         }
       }
@@ -821,7 +836,7 @@ export class AlarmDetectionEngine {
       filterMap.get(filter)!.push(alarm);
     }
 
-    console.log(`[AlarmEngine] ${logtype} group has ${filterMap.size} unique filters`);
+    log.info({ logtype, filterCount: filterMap.size }, 'Unique filters in group');
 
     // Determine concurrency limit:
     // - Cache fresh → all batches run in parallel (fast DB queries, no FA load)
@@ -831,7 +846,7 @@ export class AlarmDetectionEngine {
     const isCacheFresh = cacheStatus?.isFresh ?? false;
     const concurrencyLimit = isCacheFresh ? Infinity : 5;
     if (!isCacheFresh && filterMap.size > 0) {
-      console.warn(`[AlarmEngine] Cache stale for ${logtype} — using live FA fallback with concurrency=${concurrencyLimit}`);
+      log.warn({ logtype, concurrencyLimit }, 'Cache stale — using live FA fallback');
     }
 
     // Step 2: For each unique filter, fetch logs ONCE and evaluate all alarms
@@ -841,7 +856,7 @@ export class AlarmDetectionEngine {
         // Fetch logs once for this filter
         const limit = Math.min(Math.max(...filterAlarms.map(a => a.detectionLogic.threshold * 2)), 1000);
         
-        console.log(`[AlarmEngine] Batch fetching ${logtype} logs (limit=${limit}): filter="${filter}"`);
+        log.info({ logtype, limit, filter }, 'Batch fetching logs');
         
         // Single log search for entire batch.
         // Pick the first alarm that has a dedicated query in the registry — this
@@ -873,7 +888,7 @@ export class AlarmDetectionEngine {
                 ? undefined  // FA queried OK but found 0 matching logs — alarm not triggered (normal)
                 : 'search-timeout');  // FA returned no TID — real failure (session error, invalid filter, etc.)
           if (errorReason === 'search-timeout') {
-            console.warn(`[AlarmEngine] ⚠️ Batch search failed (no TID) for ${logtype} filter: "${filter.substring(0, 120)}" — ${filterAlarms.length} alarm(s) affected`);
+            log.warn({ logtype, filter: filter.substring(0, 120), affectedAlarms: filterAlarms.length }, 'Batch search failed (no TID)');
           }
           return filterAlarms.map(alarm => ({
             alarmCode: alarm.code,
@@ -896,10 +911,7 @@ export class AlarmDetectionEngine {
               orderBy: { createdAt: 'desc' },
             });
             if (recentEvent) {
-              console.log(
-                `[AlarmEngine] ${alarm.code}: SKIPPED — cooldown active until ` +
-                new Date(recentEvent.createdAt.getTime() + alarm.cooldownMinutes * 60 * 1000).toISOString()
-              );
+              log.info({ alarmCode: alarm.code, cooldownUntil: new Date(recentEvent.createdAt.getTime() + alarm.cooldownMinutes * 60 * 1000).toISOString() }, 'Alarm SKIPPED — cooldown active');
               return { alarmCode: alarm.code, triggered: false, matchCount: 0, events: [], error: 'cooldown-active' as string };
             }
         
@@ -921,36 +933,52 @@ export class AlarmDetectionEngine {
         } else if (logic.clientCheck === 'geo-anomaly') {
           filteredLogs = this.filterGeoAnomaly(recentLogs);
         } else if (logic.clientCheck === 'per-user-dedup') {
-          // Fire one alarm per user: skip users who already have a recent alarm (per-user cooldown)
+          // Fire one alarm per user: use atomic AlarmCooldown to prevent race conditions.
+          // The unique constraint on (alarmId, deviceName) ensures only one concurrent
+          // check can claim the cooldown slot per user.
           const cooldownMs = alarm.cooldownMinutes * 60 * 1000;
-          const userCooldownThreshold = new Date(Date.now() - cooldownMs);
+          const cooldownUntil = new Date(Date.now() + cooldownMs);
           // Group logs by user and take the most recent event per user
           const userLatestLog = new Map<string, Record<string, unknown>>();
-          for (const log of recentLogs) {
-            const u = (log.user as string) || '';
+          for (const entry of recentLogs) {
+            const u = (entry.user as string) || '';
             if (!u) continue;
-            if (!userLatestLog.has(u)) userLatestLog.set(u, log);
+            if (!userLatestLog.has(u)) userLatestLog.set(u, entry);
           }
-          // Filter out users already alerted
+          // Atomically claim cooldown slot per user
           const newUserLogs: Array<Record<string, unknown>> = [];
-          for (const [username, log] of userLatestLog.entries()) {
-            const alreadyAlerted = await prisma.alarmEvent.findFirst({
-              where: {
-                alarmId: alarm.id,
-                deviceName: username,
-                createdAt: { gte: userCooldownThreshold },
-              },
-            });
-            if (!alreadyAlerted) {
-              newUserLogs.push(log);
-            } else {
-              console.log(`[AlarmEngine] ${alarm.code}: Skipping ${username} — already alerted (per-user cooldown)`);
+          for (const [username, entry] of userLatestLog.entries()) {
+            try {
+              // Check if an active cooldown exists
+              const existing = await prisma.alarmCooldown.findUnique({
+                where: { alarmId_deviceName: { alarmId: alarm.id, deviceName: username } },
+              });
+              if (existing && existing.cooldownUntil > new Date()) {
+                log.info({ alarmCode: alarm.code, username }, 'Skipping user — already alerted (per-user cooldown)');
+                continue;
+              }
+              // Atomically claim or extend the cooldown slot
+              await prisma.alarmCooldown.upsert({
+                where: { alarmId_deviceName: { alarmId: alarm.id, deviceName: username } },
+                create: { alarmId: alarm.id, deviceName: username, cooldownUntil },
+                update: { cooldownUntil },
+              });
+              newUserLogs.push(entry);
+            } catch (err: any) {
+              // P2002 = unique constraint violation → another check claimed it first
+              if (err?.code === 'P2002') {
+                log.info({ alarmCode: alarm.code, username }, 'Skipping user — cooldown claimed by concurrent check');
+              } else {
+                log.error({ err: err?.message, alarmCode: alarm.code, username }, 'Cooldown check failed');
+                // On unexpected error, fall through — still fire alarm to avoid missing alerts
+                newUserLogs.push(entry);
+              }
             }
           }
           // Fire one alarm per new user
           for (const userLog of newUserLogs) {
             const u = userLog.user as string;
-            console.log(`[AlarmEngine] ${alarm.code}: New connection detected for user ${u}`);
+            log.info({ alarmCode: alarm.code, user: u }, 'New connection detected for user');
             await this.fireAlarm(alarm, [userLog]);
           }
           return {
@@ -964,27 +992,41 @@ export class AlarmDetectionEngine {
           // Only events outside business hours (18:00-08:00 + weekends), one alarm per user per cooldown
           const offHoursLogs = this.filterOffHours(recentLogs);
           const cooldownMs = alarm.cooldownMinutes * 60 * 1000;
-          const userCooldownThreshold = new Date(Date.now() - cooldownMs);
+          const cooldownUntil = new Date(Date.now() + cooldownMs);
           const userLatestLog = new Map<string, Record<string, unknown>>();
-          for (const log of offHoursLogs) {
-            const u = (log.user as string) || '';
+          for (const entry of offHoursLogs) {
+            const u = (entry.user as string) || '';
             if (!u) continue;
-            if (!userLatestLog.has(u)) userLatestLog.set(u, log);
+            if (!userLatestLog.has(u)) userLatestLog.set(u, entry);
           }
           const newUserLogs: Array<Record<string, unknown>> = [];
-          for (const [username, log] of userLatestLog.entries()) {
-            const alreadyAlerted = await prisma.alarmEvent.findFirst({
-              where: { alarmId: alarm.id, deviceName: username, createdAt: { gte: userCooldownThreshold } },
-            });
-            if (!alreadyAlerted) {
-              newUserLogs.push(log);
-            } else {
-              console.log(`[AlarmEngine] ${alarm.code}: Skipping ${username} — already alerted off-hours (per-user cooldown)`);
+          for (const [username, entry] of userLatestLog.entries()) {
+            try {
+              const existing = await prisma.alarmCooldown.findUnique({
+                where: { alarmId_deviceName: { alarmId: alarm.id, deviceName: username } },
+              });
+              if (existing && existing.cooldownUntil > new Date()) {
+                log.info({ alarmCode: alarm.code, username }, 'Skipping user — already alerted off-hours (per-user cooldown)');
+                continue;
+              }
+              await prisma.alarmCooldown.upsert({
+                where: { alarmId_deviceName: { alarmId: alarm.id, deviceName: username } },
+                create: { alarmId: alarm.id, deviceName: username, cooldownUntil },
+                update: { cooldownUntil },
+              });
+              newUserLogs.push(entry);
+            } catch (err: any) {
+              if (err?.code === 'P2002') {
+                log.info({ alarmCode: alarm.code, username }, 'Skipping user — cooldown claimed by concurrent check');
+              } else {
+                log.error({ err: err?.message, alarmCode: alarm.code, username }, 'Cooldown check failed');
+                newUserLogs.push(entry);
+              }
             }
           }
           for (const userLog of newUserLogs) {
             const u = userLog.user as string;
-            console.log(`[AlarmEngine] ${alarm.code}: Off-hours login detected for user ${u}`);
+            log.info({ alarmCode: alarm.code, user: u }, 'Off-hours login detected for user');
             await this.fireAlarm(alarm, [userLog]);
           }
           return {
@@ -1066,13 +1108,13 @@ export class AlarmDetectionEngine {
               events: triggered ? filteredLogs.slice(0, 5) : [],
             };
           } catch (alarmErr) {
-            console.error(`[AlarmEngine] Error evaluating alarm ${alarm.code}:`, alarmErr);
+            log.error({ err: alarmErr, alarmCode: alarm.code }, 'Error evaluating alarm');
             return { alarmCode: alarm.code, triggered: false, matchCount: 0, events: [], error: (alarmErr as Error).message };
           }
         }));
         return alarmResults;
       } catch (batchErr) {
-        console.error(`[AlarmEngine] Batch failed for filter "${filter}" (${logtype}):`, batchErr);
+        log.error({ err: batchErr, filter, logtype }, 'Batch failed');
         return filterAlarms.map(alarm => ({
           alarmCode: alarm.code,
           triggered: false,
@@ -1092,7 +1134,7 @@ export class AlarmDetectionEngine {
       } else {
         // This should never happen now that each batch has try/catch,
         // but just in case: mark all alarms in the group as errors
-        console.error(`[AlarmEngine] Unexpected batch rejection (${logtype}):`, outcome.reason);
+        log.error({ reason: outcome.reason, logtype }, 'Unexpected batch rejection');
       }
     }
 
@@ -1129,7 +1171,7 @@ export class AlarmDetectionEngine {
    */
   private async evaluateLogTypeGroup(logtype: string, alarms: AlarmDef[]): Promise<EvaluationResult[]> {
     const results: EvaluationResult[] = [];
-    console.log(`[AlarmEngine] Evaluating ${logtype} group with ${alarms.length} alarms...`);
+    log.info({ logtype, alarmCount: alarms.length }, 'Evaluating logtype group (legacy)');
 
     // Handle VMware alarms separately
     if (logtype === 'vmware') {
@@ -1138,7 +1180,7 @@ export class AlarmDetectionEngine {
           const result = await this.evaluateVMwareAlarm(alarm);
           results.push(result);
         } catch (error) {
-          console.error(`[AlarmEngine] Error evaluating VMware alarm ${alarm.code}:`, error);
+          log.error({ err: error, alarmCode: alarm.code }, 'Error evaluating VMware alarm');
           results.push({ alarmCode: alarm.code, triggered: false, matchCount: 0, events: [], error: (error as Error).message });
         }
       }
@@ -1151,7 +1193,7 @@ export class AlarmDetectionEngine {
         const result = await this.evaluateSingleAlarm(alarm, logtype);
         results.push(result);
       } catch (error) {
-        console.error(`[AlarmEngine] Error evaluating ${alarm.code}:`, error);
+        log.error({ err: error, alarmCode: alarm.code }, 'Error evaluating alarm');
         results.push({ alarmCode: alarm.code, triggered: false, matchCount: 0, events: [], error: (error as Error).message });
       }
     }
@@ -1195,7 +1237,7 @@ export class AlarmDetectionEngine {
     // Cap limit at 1000 max (FortiAnalyzer API constraint)
     const limit = Math.min(Math.max(logic.threshold * 2, 50), 1000);
 
-    console.log(`[AlarmEngine] Searching ${alarm.code}: logtype=${logtype} filter="${filter}"`);
+    log.info({ alarmCode: alarm.code, logtype, filter }, 'Searching alarm logs');
     
     // Add timeout for log search (CMDB alarms need more time)
     const CMDB_ALARMS = new Set([
@@ -1308,7 +1350,7 @@ export class AlarmDetectionEngine {
         const tid = result.events.length > 0 ? 'dedicated-query' : 'dedicated-query-empty';
         return { tid, logs: result.events };
       } catch (err) {
-        console.error(`[AlarmEngine] Dedicated query failed for ${alarm.code}, falling back to generic:`, err);
+        log.error({ err, alarmCode: alarm.code }, 'Dedicated query failed, falling back to generic');
         // Fall through to generic path on error
       }
     }
@@ -1326,7 +1368,7 @@ export class AlarmDetectionEngine {
         });
 
         if (cachedLogs.length > 0) {
-          console.log(`[AlarmEngine] ✅ Cache hit: ${cachedLogs.length} events for ${alarm.code}`);
+          log.info({ eventCount: cachedLogs.length, alarmCode: alarm.code }, 'Cache hit');
           return { tid: 'cache', logs: cachedLogs };
         }
 
@@ -1335,25 +1377,25 @@ export class AlarmDetectionEngine {
         const cacheStatus = this.eventCache.getCacheStatus();
         if (!cacheStatus.isFresh) {
           // Cache is stale (last sync >5min ago) — fall through to live FA as safety net
-          console.warn(`[AlarmEngine] Cache is stale (last sync: ${cacheStatus.lastSyncTime?.toISOString() ?? 'never'}) — falling back to live FA for ${alarm.code}`);
+          log.warn({ lastSync: cacheStatus.lastSyncTime?.toISOString() ?? 'never', alarmCode: alarm.code }, 'Cache is stale — falling back to live FA');
         } else {
           // Cache is fresh and has zero matching events — authoritative empty result
-          console.log(`[AlarmEngine] Cache clean for ${alarm.code} (${logtype}) — no events in window, skipping FA`);
+          log.info({ alarmCode: alarm.code, logtype }, 'Cache clean — no events in window, skipping FA');
           return { tid: 'cache-empty', logs: [] };
         }
       } catch (cacheError) {
-        console.warn('[AlarmEngine] Cache query failed, falling back to live API:', cacheError);
+        log.warn({ err: cacheError }, 'Cache query failed, falling back to live API');
       }
     }
 
     // Fallback to live FortiAnalyzer API — used when cache is not initialized OR stale
-    console.log(`[AlarmEngine] Live FA search for ${alarm.code} (${logtype})...`);
+    log.info({ alarmCode: alarm.code, logtype }, 'Live FA search');
     
     try {
       const tid = await this.service.startLogSearch(logtype, limit, filter || undefined);
       
       if (!tid) {
-        console.warn(`[AlarmEngine] FortiAnalyzer search returned no TID for ${logtype}`);
+        log.warn({ logtype }, 'FortiAnalyzer search returned no TID');
         return { tid: null, logs: [] };
       }
 
@@ -1365,10 +1407,10 @@ export class AlarmDetectionEngine {
         if (logs && logs.length > 0) break;
       }
 
-      console.log(`[AlarmEngine] ✅ Live API returned ${logs?.length || 0} events for ${logtype}`);
+      log.info({ eventCount: logs?.length || 0, logtype }, 'Live API returned events');
       return { tid: String(tid), logs: logs || [] };
     } catch (error) {
-      console.error(`[AlarmEngine] ❌ FortiAnalyzer search failed for ${logtype}:`, error);
+      log.error({ err: error, logtype }, 'FortiAnalyzer search failed');
       return { tid: null, logs: [] };
     }
   }
@@ -1395,12 +1437,12 @@ export class AlarmDetectionEngine {
 
     // Check if VMware service is available
     if (!this.vmwareService) {
-      console.warn(`[AlarmEngine] VMware service not available for alarm ${alarm.code}`);
+      log.warn({ alarmCode: alarm.code }, 'VMware service not available');
       return { alarmCode: alarm.code, triggered: false, matchCount: 0, events: [], error: 'vmware-service-unavailable' };
     }
 
     try {
-      console.log(`[AlarmEngine] Evaluating VMware alarm ${alarm.code}: filter="${logic.filter}"`);
+      log.info({ alarmCode: alarm.code, filter: logic.filter }, 'Evaluating VMware alarm');
 
       // Fetch VMware data based on alarm type
       let vmwareData: Array<Record<string, unknown>> = [];
@@ -1434,9 +1476,9 @@ export class AlarmDetectionEngine {
       // Snapshot Events - SNAPSHOT_CREATED uses snapshot list, others use SOAP events
       else if (alarm.code === 'SNAPSHOT_CREATED') {
         // Use snapshot list to detect recently created snapshots (more reliable than SOAP events)
-        console.log(`[AlarmEngine] SNAPSHOT_CREATED: fetching recent snapshots (window=${logic.timeWindowMinutes}min)...`);
+        log.info({ timeWindowMinutes: logic.timeWindowMinutes }, 'SNAPSHOT_CREATED: fetching recent snapshots');
         const recentSnapshots = await this.vmwareService.fetchRecentlyCreatedSnapshots(logic.timeWindowMinutes);
-        console.log(`[AlarmEngine] SNAPSHOT_CREATED: found ${recentSnapshots.length} recent snapshots`);
+        log.info({ count: recentSnapshots.length }, 'SNAPSHOT_CREATED: found recent snapshots');
         vmwareData = recentSnapshots.map(snap => ({
           type: 'snapshot_created',
           snapshotCreated: true,  // Boolean for filter matching
@@ -1579,7 +1621,7 @@ export class AlarmDetectionEngine {
         // Exclude automated operations — only fire for manual/admin actions
         const filtered = events.filter(evt => !this.isTrustedAutomation(evt));
         if (filtered.length < events.length) {
-          console.log(`[AlarmEngine] VM_CLONED: excluded ${events.length - filtered.length} Veeam/VMware automation event(s), kept ${filtered.length} manual`);
+          log.info({ excluded: events.length - filtered.length, kept: filtered.length }, 'VM_CLONED: excluded automation events');
         }
         vmwareData = filtered.map(evt => ({
           type: 'vm_event',
@@ -1622,10 +1664,10 @@ export class AlarmDetectionEngine {
         }
         
         if (suppressedCount > 0) {
-          console.log(`[AlarmEngine] VM_MIGRATED: suppressed ${suppressedCount} event(s) via suppression engine`);
+          log.info({ suppressedCount }, 'VM_MIGRATED: suppressed events via suppression engine');
         }
         if (keptIndices.length < events.length) {
-          console.log(`[AlarmEngine] VM_MIGRATED: kept ${keptIndices.length} event(s), suppressed ${suppressedCount} event(s)`);
+          log.info({ kept: keptIndices.length, suppressed: suppressedCount }, 'VM_MIGRATED: suppression summary');
         }
         
         // Map back to original events using indices
@@ -1647,7 +1689,7 @@ export class AlarmDetectionEngine {
         // Exclude automated operations — only fire for manual/admin actions
         const filtered = events.filter(evt => !this.isTrustedAutomation(evt));
         if (filtered.length < events.length) {
-          console.log(`[AlarmEngine] VM_RECONFIGURED: excluded ${events.length - filtered.length} Veeam/VMware automation event(s), kept ${filtered.length} manual`);
+          log.info({ excluded: events.length - filtered.length, kept: filtered.length }, 'VM_RECONFIGURED: excluded automation events');
         }
         vmwareData = filtered.map(evt => ({
           type: 'vm_event',
@@ -1685,7 +1727,7 @@ export class AlarmDetectionEngine {
         });
         
         if (filtered.length < events.length) {
-          console.log(`[AlarmEngine] ESXI_MAINTENANCE_OUT_OF_HOURS: excluded ${events.length - filtered.length} automation event(s)`);
+          log.info({ excluded: events.length - filtered.length }, 'ESXI_MAINTENANCE_OUT_OF_HOURS: excluded automation events');
         }
         
         vmwareData = filtered.map(evt => ({
@@ -1856,7 +1898,7 @@ export class AlarmDetectionEngine {
       }
 
       if (vmwareData.length === 0) {
-        console.log(`[AlarmEngine] No VMware data found for ${alarm.code}`);
+        log.info({ alarmCode: alarm.code }, 'No VMware data found');
         return { alarmCode: alarm.code, triggered: false, matchCount: 0, events: [] };
       }
 
@@ -1885,7 +1927,7 @@ export class AlarmDetectionEngine {
       const triggered = matchCount >= logic.threshold;
 
       if (triggered) {
-        console.log(`[AlarmEngine] VMware alarm ${alarm.code} triggered: ${matchCount} matches`);
+        log.info({ alarmCode: alarm.code, matchCount }, 'VMware alarm triggered');
         await this.fireAlarm(alarm, matchingData);
       }
 
@@ -1896,7 +1938,7 @@ export class AlarmDetectionEngine {
         events: matchingData.slice(0, 5),
       };
     } catch (error) {
-      console.error(`[AlarmEngine] Error evaluating VMware alarm ${alarm.code}:`, error);
+      log.error({ err: error, alarmCode: alarm.code }, 'Error evaluating VMware alarm');
       return { alarmCode: alarm.code, triggered: false, matchCount: 0, events: [], error: (error as Error).message };
     }
   }
@@ -1914,7 +1956,7 @@ export class AlarmDetectionEngine {
         // Supported: field > value, field < value, field == value, field != value
         const comparison = filter.match(/(\w+)\s*(==|!=|>|<|>=|<=)\s*(\w+|\d+\.?\d*)/);        
         if (!comparison) {
-          console.warn(`[AlarmEngine] Could not parse VMware filter: ${filter}`);
+          log.warn({ filter }, 'Could not parse VMware filter');
           return false;
         }
 
@@ -1953,7 +1995,7 @@ export class AlarmDetectionEngine {
             return false;
         }
       } catch (error) {
-        console.error(`[AlarmEngine] Error applying VMware filter "${filter}":`, error);
+        log.error({ err: error, filter }, 'Error applying VMware filter');
         return false;
       }
     });
@@ -2015,27 +2057,27 @@ export class AlarmDetectionEngine {
 
     // Check if FortiGate service is available
     if (!this.fortiGateService) {
-      console.warn(`[AlarmEngine] FortiGate service not available for alarm ${alarm.code}`);
+      log.warn({ alarmCode: alarm.code }, 'FortiGate service not available');
       return { alarmCode: alarm.code, triggered: false, matchCount: 0, events: [], error: 'fortigate-service-unavailable' };
     }
 
     try {
-      console.log(`[AlarmEngine] Evaluating FortiGate SSL-VPN alarm ${alarm.code}`);
+      log.info({ alarmCode: alarm.code }, 'Evaluating FortiGate SSL-VPN alarm');
 
       // Get currently connected SSL-VPN users from FortiGate
       const sslvpnUsers = await this.fortiGateService.getSSLVPNUsers();
 
       if (!sslvpnUsers || sslvpnUsers.length === 0) {
-        console.log(`[AlarmEngine] No active SSL-VPN users found`);
+        log.info('No active SSL-VPN users found');
         return { alarmCode: alarm.code, triggered: false, matchCount: 0, events: [] };
       }
 
       // Debug: print active users and their login timestamps
       const now2 = new Date();
-      console.log(`[AlarmEngine][${alarm.code}] Active SSL-VPN users (${sslvpnUsers.length}):`);
+      log.info({ alarmCode: alarm.code, userCount: sslvpnUsers.length }, 'Active SSL-VPN users');
       for (const u of sslvpnUsers) {
         const loginAge = Math.round((now2.getTime() - u.last_login_timestamp * 1000) / 60000);
-        console.log(`  - ${u.user_name} (${u.remote_host}) login=${loginAge}min ago interface=${u.interface}`);
+        log.info({ userName: u.user_name, remoteHost: u.remote_host, loginAgeMinutes: loginAge, interface: u.interface }, 'SSL-VPN user detail');
       }
 
       // Check if this is off-hours or business-hours alarm
@@ -2125,12 +2167,12 @@ export class AlarmDetectionEngine {
           });
           if (!recentUserAlarm) {
             const logPrefix = isOffHoursAlarm ? 'VPN_OFF_HOURS' : 'SSLVPN_CONNECTION';
-            console.log(`[AlarmEngine] ${logPrefix}: New connection for ${username} (${userData.remoteIp || 'unknown IP'})`);
+            log.info({ logPrefix, username, remoteIp: userData.remoteIp || 'unknown IP' }, 'New SSL-VPN connection');
             await this.fireAlarm(alarm, [userData]);
             firedCount++;
           } else {
             const logPrefix = isOffHoursAlarm ? 'VPN_OFF_HOURS' : 'SSLVPN_CONNECTION';
-            console.log(`[AlarmEngine] ${logPrefix}: Skipping ${username} — already alerted (cooldown active)`);
+            log.info({ logPrefix, username }, 'Skipping SSL-VPN user — already alerted (cooldown active)');
           }
         }
         return {
@@ -2146,9 +2188,9 @@ export class AlarmDetectionEngine {
 
       if (triggered) {
         if (isOffHoursAlarm) {
-          console.log(`[AlarmEngine] OFF-HOURS SSL-VPN DETECTED: ${matchCount} users`);
+          log.info({ matchCount }, 'OFF-HOURS SSL-VPN detected');
         } else {
-          console.log(`[AlarmEngine] BUSINESS-HOURS SSL-VPN DETECTED: ${matchCount} users`);
+          log.info({ matchCount }, 'BUSINESS-HOURS SSL-VPN detected');
         }
         await this.fireAlarm(alarm, matchedUsers);
       }
@@ -2160,7 +2202,7 @@ export class AlarmDetectionEngine {
         events: matchedUsers.slice(0, 5),
       };
     } catch (error) {
-      console.error(`[AlarmEngine] Error evaluating FortiGate SSL-VPN alarm ${alarm.code}:`, error);
+      log.error({ err: error, alarmCode: alarm.code }, 'Error evaluating FortiGate SSL-VPN alarm');
       return {
         alarmCode: alarm.code,
         triggered: false,
@@ -2230,7 +2272,7 @@ export class AlarmDetectionEngine {
       ...firstLog,
     };
     if (await this.isWhitelisted(alarm.code, rawDataForWhitelist)) {
-      console.log(`[AlarmEngine] ⚠️ WHITELISTED: ${alarm.code} - ${title} (suppressed)`);
+      log.info({ alarmCode: alarm.code, title }, 'WHITELISTED — alarm suppressed');
       return;  // Don't fire alarm, method returns void
     }
 
@@ -2248,7 +2290,7 @@ export class AlarmDetectionEngine {
       },
     });
 
-    console.log(`[AlarmEngine] ALARM FIRED: ${alarm.code} - ${title}`);
+    log.info({ alarmCode: alarm.code, title }, 'ALARM FIRED');
 
     // Send email notification
     if (alarm.notifyEmail) {
@@ -2274,7 +2316,7 @@ export class AlarmDetectionEngine {
           });
         }
       } catch (emailErr) {
-        console.error(`[AlarmEngine] Failed to send email for ${alarm.code}:`, emailErr);
+        log.error({ err: emailErr, alarmCode: alarm.code }, 'Failed to send alarm email');
       }
     }
   }
@@ -2391,7 +2433,7 @@ export class AlarmDetectionEngine {
         return valueStr === whitelistValue || valueStr.includes(whitelistValue);
       });
     } catch (err) {
-      console.error('[AlarmEngine] Whitelist check failed:', err);
+      log.error({ err }, 'Whitelist check failed');
       return false; // Fail open - don't suppress alarms on DB errors
     }
   }
@@ -3934,12 +3976,20 @@ export class AlarmDetectionEngine {
             if (idx == null || nmsDevId == null) continue;
             const cur = await (prisma as any).nmsInterface.findFirst({
               where: { nmsDeviceId: nmsDevId, interfaceIndex: idx },
-              select: { operStatus: true, monitored: true },
+              select: { operStatus: true, monitored: true, operUpSince: true },
             });
             if (!cur) continue;
-            // Resolve if port is now UP OR no longer monitored
-            if (cur.operStatus === 'up' || cur.monitored === false) {
+            // Resolve if port is no longer monitored (always)
+            if (cur.monitored === false) {
               toAckIds.push(ev.id);
+            } else if (cur.operStatus === 'up') {
+              // Only resolve if port has been UP for at least 5 minutes
+              // (prevents false resolves during flapping: DOWN→UP→DOWN)
+              const AUTO_RESOLVE_MIN_UP_MS = 5 * 60 * 1000;
+              const upSince = cur.operUpSince ? new Date(cur.operUpSince).getTime() : null;
+              if (upSince && (Date.now() - upSince >= AUTO_RESOLVE_MIN_UP_MS)) {
+                toAckIds.push(ev.id);
+              }
             }
           }
           if (toAckIds.length > 0) {
@@ -3947,11 +3997,11 @@ export class AlarmDetectionEngine {
               where: { id: { in: toAckIds } },
               data: { acknowledged: true, acknowledgedBy: 'system:auto-resolve', acknowledgedAt: new Date() },
             });
-            console.log(`[AlarmEngine] NMS PORT_DOWN auto-resolved ${toAckIds.length} alarm(s) (port UP or unmonitored)`);
+            log.info({ count: toAckIds.length }, 'NMS PORT_DOWN auto-resolved alarms (port UP >= 5min or unmonitored)');
           }
         }
       } catch (e) {
-        console.warn('[AlarmEngine] PORT_DOWN auto-resolve failed:', (e as Error).message);
+        log.warn({ err: (e as Error).message }, 'PORT_DOWN auto-resolve failed');
       }
 
       try {
@@ -3971,7 +4021,6 @@ export class AlarmDetectionEngine {
         }) as Array<any>;
 
         // Track created events in this evaluation to prevent duplicates
-        // (race condition: two events created 1ms apart bypass DB cooldown check)
         const createdPortsThisEval = new Set<string>();
 
         for (const iface of downInterfaces) {
@@ -3999,21 +4048,48 @@ export class AlarmDetectionEngine {
           const downMinutes = Math.round(downDurationMs / 60000);
           const title = `Port Down: ${ifaceLabel} on ${deviceName}`;
           const message = `Interface ${ifaceLabel} (index ${iface.interfaceIndex}) on ${deviceName} has been DOWN for ${downMinutes} minutes.`;
-          // Cooldown check — use device + port name for deduplication
+          // Atomic cooldown check using AlarmCooldown table.
+          // The unique constraint on (alarmId, deviceName) prevents concurrent
+          // checks from both firing for the same port.
           const cooldownMs = portDownAlarm.cooldownMinutes * 60 * 1000;
-          const existing = await prisma.alarmEvent.findFirst({
-            where: {
-              alarmId: portDownAlarm.id,
-              deviceName,
-              AND: [
-                { createdAt: { gte: new Date(Date.now() - cooldownMs) } },
-                { rawData: { path: ['interface_name'], equals: iface.interfaceName } },
-              ],
-            },
-          });
-          if (existing) {
-            results.push({ alarmCode: 'NMS_PORT_DOWN', triggered: false, matchCount: 0, events: [], error: 'cooldown-active' });
-            continue;
+          const cooldownUntil = new Date(Date.now() + cooldownMs);
+          const cooldownKey = `${portDownAlarm.id}:${portKey}`;
+          try {
+            // Check for active cooldown
+            const existingCooldown = await prisma.alarmCooldown.findUnique({
+              where: { alarmId_deviceName: { alarmId: portDownAlarm.id, deviceName: portKey } },
+            });
+            if (existingCooldown && existingCooldown.cooldownUntil > new Date()) {
+              results.push({ alarmCode: 'NMS_PORT_DOWN', triggered: false, matchCount: 0, events: [], error: 'cooldown-active' });
+              continue;
+            }
+            // Atomically claim or extend the cooldown slot
+            await prisma.alarmCooldown.upsert({
+              where: { alarmId_deviceName: { alarmId: portDownAlarm.id, deviceName: portKey } },
+              create: { alarmId: portDownAlarm.id, deviceName: portKey, cooldownUntil },
+              update: { cooldownUntil },
+            });
+          } catch (err: any) {
+            // P2002 = unique constraint violation → another check claimed it first
+            if (err?.code === 'P2002') {
+              results.push({ alarmCode: 'NMS_PORT_DOWN', triggered: false, matchCount: 0, events: [], error: 'cooldown-active' });
+              continue;
+            }
+            // On unexpected error, fall through to legacy check as safety net
+            const existing = await prisma.alarmEvent.findFirst({
+              where: {
+                alarmId: portDownAlarm.id,
+                deviceName,
+                AND: [
+                  { createdAt: { gte: new Date(Date.now() - cooldownMs) } },
+                  { rawData: { path: ['interface_name'], equals: iface.interfaceName } },
+                ],
+              },
+            });
+            if (existing) {
+              results.push({ alarmCode: 'NMS_PORT_DOWN', triggered: false, matchCount: 0, events: [], error: 'cooldown-active' });
+              continue;
+            }
           }
 
           const event = await prisma.alarmEvent.create({
@@ -4039,7 +4115,7 @@ export class AlarmDetectionEngine {
           // Mark this port as created to prevent duplicate in same loop
           createdPortsThisEval.add(portKey);
           results.push({ alarmCode: 'NMS_PORT_DOWN', triggered: true, matchCount: 1, events: [{ id: event.id }] });
-          console.log(`[AlarmEngine] NMS PORT_DOWN: ${ifaceLabel} on ${deviceName} (down ${downMinutes}m)`);
+          log.info({ interface: ifaceLabel, deviceName, downMinutes }, 'NMS PORT_DOWN');
         }
       } catch (e) {
         results.push({ alarmCode: 'NMS_PORT_DOWN', triggered: false, matchCount: 0, events: [], error: (e as Error).message });
@@ -4117,7 +4193,7 @@ export class AlarmDetectionEngine {
             },
           });
           results.push({ alarmCode: code, triggered: true, matchCount: 1, events: [{ id: event.id }] });
-          console.log(`[AlarmEngine] NMS ${code}: ${deviceName} = ${value.toFixed(1)}${unit}`);
+          log.info({ code, deviceName, value: value.toFixed(1), unit }, 'NMS health alarm triggered');
         }
       } catch (e) {
         results.push({ alarmCode: code, triggered: false, matchCount: 0, events: [], error: (e as Error).message });
@@ -4159,11 +4235,11 @@ export class AlarmDetectionEngine {
               where: { id: { in: toAckIds } },
               data: { acknowledged: true, acknowledgedBy: 'system:auto-resolve', acknowledgedAt: new Date() },
             });
-            console.log(`[AlarmEngine] NMS DEVICE_UNREACHABLE auto-resolved ${toAckIds.length} alarm(s) (device reporting again)`);
+            log.info({ count: toAckIds.length }, 'NMS DEVICE_UNREACHABLE auto-resolved alarms (device reporting again)');
           }
         }
       } catch (e) {
-        console.warn('[AlarmEngine] DEVICE_UNREACHABLE auto-resolve failed:', (e as Error).message);
+        log.warn({ err: (e as Error).message }, 'DEVICE_UNREACHABLE auto-resolve failed');
       }
 
       try {
@@ -4267,7 +4343,7 @@ export class AlarmDetectionEngine {
             },
           });
           results.push({ alarmCode: 'NMS_DEVICE_UNREACHABLE', triggered: true, matchCount: 1, events: [{ id: event.id }] });
-          console.log(`[AlarmEngine] NMS DEVICE_UNREACHABLE: ${device.name} (silent ${silentMinutes}m)`);
+          log.info({ deviceName: device.name, silentMinutes }, 'NMS DEVICE_UNREACHABLE');
         }
       } catch (e) {
         results.push({ alarmCode: 'NMS_DEVICE_UNREACHABLE', triggered: false, matchCount: 0, events: [], error: (e as Error).message });

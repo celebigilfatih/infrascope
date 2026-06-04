@@ -89,9 +89,21 @@ export default function ConfigRevisionsPage() {
   useMemo(() => {
     if (apiResult?.success && Array.isArray(apiResult.data)) {
       const EXCLUDED_USERS = ['siem', 'fgtinfra'];
-      setLogs(apiResult.data.filter((log: AdminLog) =>
-        !EXCLUDED_USERS.includes((log.user || '').toLowerCase())
-      ));
+      // Only show firewall config management actions (exclude login/logout/ban-ip)
+      const CONFIG_ACTIONS = new Set(['Edit', 'Add', 'Delete', 'Move', 'Clone', 'config-change', 'backup', 'restore', 'upgrade', 'reboot', 'shutdown']);
+      setLogs(apiResult.data.filter((log: AdminLog) => {
+        const user = (log.user || '').toLowerCase();
+        // Exclude system/service users
+        if (EXCLUDED_USERS.includes(user)) return false;
+        // Exclude ban-ip related entries (in msg, cfgpath, or cfgattr)
+        const msgLower = (log.msg || '').toLowerCase();
+        const cfgpathLower = (log.cfgpath || '').toLowerCase();
+        const cfgattrLower = (log.cfgattr || '').toLowerCase();
+        if (msgLower.includes('ban-ip') || cfgpathLower.includes('ban-ip') || cfgattrLower.includes('ban-ip')) return false;
+        // Only show config change actions (firewall management)
+        if (!CONFIG_ACTIONS.has(log.action || '')) return false;
+        return true;
+      }));
       setError(null);
     } else if (apiResult && !apiResult.success) {
       setError(apiResult.error || 'Veri yüklenemedi');
@@ -116,11 +128,7 @@ export default function ConfigRevisionsPage() {
     return filteredLogs.slice(start, start + ITEMS_PER_PAGE);
   }, [filteredLogs, currentPage]);
 
-  const loginCount = useMemo(() => logs.filter(l => l.action === 'login').length, [logs]);
-  const logoutCount = useMemo(() => logs.filter(l => l.action === 'logout').length, [logs]);
-  const configChangeCount = useMemo(() => logs.filter(l =>
-    l.action !== 'login' && l.action !== 'logout' && l.action !== 'perf-stats'
-  ).length, [logs]);
+  const configChangeCount = useMemo(() => logs.length, [logs]);
   const uniqueAdmins = useMemo(() => [...new Set(logs.map(l => l.user).filter(Boolean))], [logs]);
   const uniqueDevices = useMemo(() => [...new Set(logs.map(l => l.devname).filter(Boolean))], [logs]);
 
@@ -173,9 +181,9 @@ export default function ConfigRevisionsPage() {
     <div className="p-6 space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Admin İşlem Logları</h1>
+          <h1 className="text-2xl font-bold">Firewall Konfigürasyon Değişiklikleri</h1>
           <p className="text-muted-foreground">
-            FortiGate üzerindeki admin kullanıcı işlemleri (giriş/çıkış, konfigürasyon değişiklikleri)
+            FortiGate üzerinde firewall yöneten kullanıcıların yaptığı konfigürasyon değişiklikleri
           </p>
         </div>
         <Button onClick={() => refreshLogs()} variant="outline" disabled={isLoading}>
@@ -185,23 +193,11 @@ export default function ConfigRevisionsPage() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card><CardContent className="p-4">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-full bg-blue-500/20"><History className="h-5 w-5 text-blue-500" /></div>
-            <div><p className="text-sm text-muted-foreground">Toplam Log</p><p className="text-2xl font-bold">{logs.length}</p></div>
-          </div>
-        </CardContent></Card>
-        <Card><CardContent className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-full bg-green-500/20"><LogIn className="h-5 w-5 text-green-500" /></div>
-            <div><p className="text-sm text-muted-foreground">Giriş</p><p className="text-2xl font-bold">{loginCount}</p></div>
-          </div>
-        </CardContent></Card>
-        <Card><CardContent className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-full bg-orange-500/20"><LogOut className="h-5 w-5 text-orange-500" /></div>
-            <div><p className="text-sm text-muted-foreground">Çıkış</p><p className="text-2xl font-bold">{logoutCount}</p></div>
+            <div><p className="text-sm text-muted-foreground">Toplam Değişiklik</p><p className="text-2xl font-bold">{logs.length}</p></div>
           </div>
         </CardContent></Card>
         <Card><CardContent className="p-4">
