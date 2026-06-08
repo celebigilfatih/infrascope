@@ -6,11 +6,13 @@ let cachedOrganizations: any = null;
 let cacheTimestamp: number = 0;
 const CACHE_TTL = 60000; // 60 seconds
 
-export async function GET(_request: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
-    // Return cached data if available and not expired
     const now = Date.now();
-    if (cachedOrganizations && (now - cacheTimestamp) < CACHE_TTL) {
+    const fresh = request.nextUrl.searchParams.get('fresh');
+
+    // Return cached data if available, not expired, and not explicitly bypassed
+    if (!fresh && cachedOrganizations && (now - cacheTimestamp) < CACHE_TTL) {
       return NextResponse.json({
         success: true,
         data: cachedOrganizations,
@@ -107,6 +109,10 @@ export async function POST(request: NextRequest) {
         description
       }
     });
+
+    // Invalidate cache after mutation
+    cachedOrganizations = null;
+    cacheTimestamp = 0;
 
     return NextResponse.json({
       success: true,

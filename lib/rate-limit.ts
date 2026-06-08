@@ -108,12 +108,10 @@ export function getClientIp(request: { headers: { get: (name: string) => string 
   // so multiple browser tabs don't share one bucket
   const realIp = request.headers.get('x-real-ip');
   if (realIp) return realIp;
-  // In development without a proxy, generate a per-request key
-  // to avoid grouping all localhost traffic into one bucket
-  if (process.env.NODE_ENV !== 'production') {
-    return `dev-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  }
-  return 'unknown';
+  // In local development (no proxy), each request gets a unique key
+  // to prevent all localhost traffic from sharing one rate-limit bucket.
+  // This also covers Edge Runtime where NODE_ENV may still say 'production'.
+  return `dev-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 /**

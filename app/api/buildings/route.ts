@@ -101,6 +101,10 @@ export async function POST(request: NextRequest) {
       }
     });
 
+    // Invalidate local cache so next GET returns fresh data
+    cachedBuildings = null;
+    cacheTimestamp = 0;
+
     return NextResponse.json({
       success: true,
       data: building,

@@ -144,7 +144,7 @@ export default function LocationsPage() {
     try {
       setLoading(true);
       setError(null);
-      const response: any = await apiGet('/api/organizations');
+      const response: any = await apiGet('/api/organizations?fresh=1');
       if (response.success) {
         setOrganizations(response.data);
       } else {

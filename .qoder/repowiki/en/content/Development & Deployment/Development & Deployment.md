@@ -10,6 +10,10 @@
 - [Dockerfile.dev](file://Dockerfile.dev)
 - [docker-compose.yml](file://docker-compose.yml)
 - [docker-compose.prod.yml](file://docker-compose.prod.yml)
+- [deploy/docker-compose.yml](file://deploy/docker-compose.yml)
+- [deploy/install-guide.html](file://deploy/install-guide.html)
+- [deploy/install.sh](file://deploy/install.sh)
+- [deploy/update.sh](file://deploy/update.sh)
 - [scripts/entrypoint.sh](file://scripts/entrypoint.sh)
 - [scripts/wait-for-db.sh](file://scripts/wait-for-db.sh)
 - [scripts/dev-startup.sh](file://scripts/dev-startup.sh)
@@ -19,6 +23,14 @@
 - [nms_service/discovery_worker.py](file://nms_service/discovery_worker.py)
 - [lib/prisma.ts](file://lib/prisma.ts)
 </cite>
+
+## Update Summary
+**Changes Made**
+- Added comprehensive on-premise deployment infrastructure with new Docker Compose configuration
+- Integrated professional installation and update scripts for production deployments
+- Enhanced deployment documentation with interactive installer and rollback procedures
+- Updated licensing system with automated activation and cache management
+- Improved production deployment with enhanced security configurations
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -33,7 +45,7 @@
 10. [Appendices](#appendices)
 
 ## Introduction
-This document provides a comprehensive guide to developing, building, and deploying the InfraScope platform. It covers development environment setup, local database configuration, debugging workflows, the build process and optimization strategies, containerization and orchestration, production deployment configurations, scaling and high availability, monitoring and observability, and operational best practices. Practical examples and diagrams illustrate key processes such as container startup, database readiness checks, alarm service initialization, and multi-service orchestration.
+This document provides a comprehensive guide to developing, building, and deploying the InfraScope platform. It covers development environment setup, local database configuration, debugging workflows, the build process and optimization strategies, containerization and orchestration, production deployment configurations, scaling and high availability, monitoring and observability, and operational best practices. The platform now includes enhanced on-premise deployment infrastructure with professional installation tools, automated licensing management, and streamlined update procedures.
 
 ## Project Structure
 InfraScope is a Next.js 14 application with a PostgreSQL-backed Prisma ORM and an internal Python-based Network Monitoring Sidecar (NMS). The repository includes:
@@ -43,7 +55,8 @@ InfraScope is a Next.js 14 application with a PostgreSQL-backed Prisma ORM and a
 - Utilities and database client under lib/
 - Scripts for container entrypoints and database waits under scripts/
 - NMS service under nms_service/ with its own Dockerfile and FastAPI endpoints
-- Dockerfiles and docker-compose configurations for development and production
+- Enhanced Docker configurations for both development and production environments
+- Professional deployment tools under deploy/ directory
 
 ```mermaid
 graph TB
@@ -55,12 +68,18 @@ end
 subgraph "Services"
 NMS["NMS Sidecar<br/>nms_service/main.py"]
 end
+subgraph "Deployment Infrastructure"
+DEPLOY["On-Premise Deployment<br/>deploy/"]
+INSTALL["Installation Tools<br/>install.sh, update.sh"]
+LICENSE["License Management<br/>.env, .machine-id"]
+end
 subgraph "Infrastructure"
 DB["PostgreSQL"]
 DOCKER_DEV["Dockerfile.dev"]
 DOCKER_PROD["Dockerfile"]
 DC_DEV["docker-compose.yml"]
 DC_PROD["docker-compose.prod.yml"]
+DC_DEPLOY["deploy/docker-compose.yml"]
 end
 WEB --> API
 API --> PRISMA
@@ -75,6 +94,11 @@ DC_DEV --> WEB
 DC_DEV --> NMS
 DC_PROD --> DB
 DC_PROD --> WEB
+DC_DEPLOY --> DB
+DC_DEPLOY --> WEB
+DC_DEPLOY --> INSTALL
+INSTALL --> LICENSE
+DEPLOY --> LICENSE
 ```
 
 **Diagram sources**
@@ -82,6 +106,9 @@ DC_PROD --> WEB
 - [Dockerfile:1-115](file://Dockerfile#L1-L115)
 - [docker-compose.yml:1-153](file://docker-compose.yml#L1-L153)
 - [docker-compose.prod.yml:1-135](file://docker-compose.prod.yml#L1-L135)
+- [deploy/docker-compose.yml:1-105](file://deploy/docker-compose.yml#L1-L105)
+- [deploy/install.sh:1-170](file://deploy/install.sh#L1-L170)
+- [deploy/update.sh:1-169](file://deploy/update.sh#L1-L169)
 - [nms_service/Dockerfile:1-30](file://nms_service/Dockerfile#L1-L30)
 - [nms_service/main.py:1-483](file://nms_service/main.py#L1-L483)
 - [lib/prisma.ts:1-21](file://lib/prisma.ts#L1-L21)
@@ -90,17 +117,22 @@ DC_PROD --> WEB
 - [README.md:106-164](file://README.md#L106-L164)
 - [docker-compose.yml:5-153](file://docker-compose.yml#L5-L153)
 - [docker-compose.prod.yml:7-135](file://docker-compose.prod.yml#L7-L135)
+- [deploy/docker-compose.yml:1-105](file://deploy/docker-compose.yml#L1-L105)
 
 ## Core Components
 - Next.js Application: Single-page application with API routes, TypeScript, and Tailwind CSS.
 - Prisma ORM: Database client singleton with configurable query logging.
 - NMS Sidecar: Python FastAPI service for SNMP/SSH polling, discovery, and topology collection.
-- Containerization: Multi-stage Docker build for production and a lightweight development image with hot reload.
-- Orchestration: Docker Compose for local development and production-grade orchestration.
+- Enhanced Containerization: Multi-stage Docker build for production and a lightweight development image with hot reload.
+- Professional Deployment Tools: Interactive installer and updater scripts for on-premise deployments.
+- Licensing System: Automated license activation with cache management and offline support.
+- Production-Grade Orchestration: Docker Compose configurations for both development and production environments.
 
 Key capabilities:
 - Local development with hot reload and persistent database.
+- Professional on-premise deployment with automated installation and updates.
 - Production-ready container with health checks, non-root user, and pre-warmed routes.
+- Automated license management with activation, caching, and graceful degradation.
 - Internal NMS service exposing endpoints for device polling, discovery, backups, and topology.
 
 **Section sources**
@@ -109,12 +141,15 @@ Key capabilities:
 - [nms_service/main.py:1-483](file://nms_service/main.py#L1-L483)
 - [Dockerfile.dev:1-51](file://Dockerfile.dev#L1-L51)
 - [Dockerfile:1-115](file://Dockerfile#L1-L115)
+- [deploy/install.sh:1-170](file://deploy/install.sh#L1-L170)
+- [deploy/update.sh:1-169](file://deploy/update.sh#L1-L169)
 
 ## Architecture Overview
 The system comprises:
 - Web tier: Next.js serving pages and API routes.
 - Database tier: PostgreSQL with Prisma managing schema and migrations.
 - Sidecar tier: NMS service for network telemetry and discovery.
+- Deployment tier: Professional on-premise deployment with automated tools.
 - Containerization: Separate images for development and production, orchestrated by Docker Compose.
 
 ```mermaid
@@ -126,6 +161,10 @@ PRISMA["Prisma Client"]
 PG["PostgreSQL"]
 NMS["NMS FastAPI"]
 NMS_DB["NMS Tables"]
+DEPLOY["Deployment Tools"]
+INSTALL["Installer"]
+UPDATE["Updater"]
+LICENSE["License Manager"]
 CLIENT --> NEXT
 NEXT --> API
 API --> PRISMA
@@ -133,16 +172,25 @@ PRISMA --> PG
 NEXT --> NMS
 NMS --> NMS_DB
 NMS_DB --> PG
+DEPLOY --> INSTALL
+DEPLOY --> UPDATE
+DEPLOY --> LICENSE
+INSTALL --> NEXT
+UPDATE --> NEXT
+LICENSE --> NEXT
 ```
 
 **Diagram sources**
 - [nms_service/main.py:39-51](file://nms_service/main.py#L39-L51)
 - [lib/prisma.ts:10-20](file://lib/prisma.ts#L10-L20)
 - [docker-compose.yml:78-115](file://docker-compose.yml#L78-L115)
+- [deploy/install.sh:160-170](file://deploy/install.sh#L160-L170)
+- [deploy/update.sh:145-169](file://deploy/update.sh#L145-L169)
 
 **Section sources**
 - [README.md:108-126](file://README.md#L108-L126)
 - [docker-compose.yml:78-115](file://docker-compose.yml#L78-L115)
+- [deploy/docker-compose.yml:1-105](file://deploy/docker-compose.yml#L1-105)
 
 ## Detailed Component Analysis
 
@@ -199,13 +247,16 @@ Operational tip:
 - [scripts/entrypoint.sh:69-88](file://scripts/entrypoint.sh#L69-L88)
 - [lib/prisma.ts:13-16](file://lib/prisma.ts#L13-L16)
 
-### Containerization and Orchestration
+### Enhanced Containerization and Orchestration
 - Development containerization:
   - Dockerfile.dev builds a lightweight image with hot reload and development dependencies.
   - docker-compose.yml defines services for web, db, and NMS sidecar with volume mounts for hot reload.
 - Production containerization:
   - Dockerfile performs a multi-stage build, installs runtime dependencies, and sets a non-root user.
   - docker-compose.prod.yml defines production-grade settings including health checks, read-only root filesystem, and security options.
+- On-premise deployment:
+  - deploy/docker-compose.yml provides production-ready configuration with health checks and volume mounts.
+  - Professional installation and update scripts automate deployment procedures.
 
 ```mermaid
 sequenceDiagram
@@ -235,6 +286,44 @@ Web-->>Dev : "Server ready on port 3000"
 - [Dockerfile.dev:1-51](file://Dockerfile.dev#L1-L51)
 - [docker-compose.prod.yml:36-75](file://docker-compose.prod.yml#L36-L75)
 - [Dockerfile:56-115](file://Dockerfile#L56-L115)
+- [deploy/docker-compose.yml:1-105](file://deploy/docker-compose.yml#L1-L105)
+
+### Professional Deployment Tools
+- Interactive Installer (install.sh):
+  - Checks Docker and Docker Compose prerequisites
+  - Creates directory structure for data and logs
+  - Generates secure authentication secrets
+  - Pulls Docker images from registry
+  - Starts services automatically
+- Update Manager (update.sh):
+  - Creates database backups before updates
+  - Pulls new versions from registry
+  - Runs database migrations safely
+  - Performs health checks after updates
+  - Provides rollback instructions
+
+**Section sources**
+- [deploy/install.sh:1-170](file://deploy/install.sh#L1-L170)
+- [deploy/update.sh:1-169](file://deploy/update.sh#L1-L169)
+
+### Licensing System and Activation
+- Automated License Activation:
+  - Machine ID generation for unique identification
+  - License key validation against central server
+  - JWT token caching for offline operation
+  - Grace period support (7 days) for network outages
+- License Cache Management:
+  - Persistent storage in data/license-cache volume
+  - Automatic cache refresh during online periods
+  - Restricted mode when cache expires
+- Configuration Management:
+  - .env file with license server URL and keys
+  - Volume mounting for persistence across updates
+
+**Section sources**
+- [deploy/docker-compose.yml:47-69](file://deploy/docker-compose.yml#L47-L69)
+- [deploy/install.sh:83-109](file://deploy/install.sh#L83-L109)
+- [deploy/update.sh:42-59](file://deploy/update.sh#L42-L59)
 
 ### NMS Sidecar: Polling, Discovery, and Topology
 - FastAPI endpoints expose:
@@ -306,7 +395,12 @@ StartAlarms --> End(["Ready"])
 **Section sources**
 - [DEV_WORKFLOW.md:1-106](file://DEV_WORKFLOW.md#L1-L106)
 
-### Production Deployment Procedures
+### Professional Production Deployment Procedures
+- Enhanced production deployment with:
+  - Automated installer for on-premise environments
+  - Secure license management with cache persistence
+  - Professional update procedures with rollback support
+  - Health checks and monitoring integration
 - Build the production image using the multi-stage Dockerfile.
 - Use docker-compose.prod.yml to orchestrate services with health checks, security hardening, and read-only root filesystem.
 - Expose the service on the desired port and ensure environment variables are configured for production.
@@ -314,6 +408,9 @@ StartAlarms --> End(["Ready"])
 **Section sources**
 - [Dockerfile:1-115](file://Dockerfile#L1-L115)
 - [docker-compose.prod.yml:36-75](file://docker-compose.prod.yml#L36-L75)
+- [deploy/docker-compose.yml:1-105](file://deploy/docker-compose.yml#L1-L105)
+- [deploy/install.sh:160-170](file://deploy/install.sh#L160-L170)
+- [deploy/update.sh:145-169](file://deploy/update.sh#L145-L169)
 
 ### Scaling and High Availability
 - Horizontal scaling:
@@ -323,19 +420,25 @@ StartAlarms --> End(["Ready"])
   - Keep the web application and NMS sidecar in separate containers for independent scaling.
 - Health checks:
   - Leverage existing health endpoints for load balancer probes and orchestrator restart policies.
+- License management:
+  - Centralized license server for multiple on-premise installations.
+  - Graceful degradation with cached licenses for network outages.
 
 Note: The repository includes commented optional Caddy and Redis configurations for production-grade setups.
 
 **Section sources**
 - [docker-compose.prod.yml:76-92](file://docker-compose.prod.yml#L76-L92)
+- [deploy/docker-compose.yml:81-96](file://deploy/docker-compose.yml#L81-L96)
 
 ### Monitoring, Logging, and Observability
 - Health endpoints:
   - Web application exposes a health endpoint for readiness checks.
   - NMS sidecar exposes a health endpoint indicating poller status and registered devices.
+  - Deployment tools provide status reporting and rollback capabilities.
 - Logging:
   - NMS logs are persisted to a dedicated volume for inspection.
   - Prisma client logging is configurable and disabled by default to reduce I/O overhead.
+  - Application logs stored in mounted volume for persistent access.
 - Recommendations:
   - Integrate structured logging and metrics collection in production.
   - Use a centralized logging stack and APM for end-to-end observability.
@@ -344,11 +447,16 @@ Note: The repository includes commented optional Caddy and Redis configurations 
 - [nms_service/main.py:91-98](file://nms_service/main.py#L91-L98)
 - [docker-compose.yml:109-114](file://docker-compose.yml#L109-L114)
 - [lib/prisma.ts:13-16](file://lib/prisma.ts#L13-L16)
+- [deploy/docker-compose.yml:65-71](file://deploy/docker-compose.yml#L65-L71)
 
 ### Security Considerations
 - Production hardening:
   - Non-root user, read-only root filesystem, and health checks.
   - Restrict database exposure and use environment variables for secrets.
+- License security:
+  - Machine ID generation prevents unauthorized reuse across systems.
+  - License cache encryption for sensitive token storage.
+  - Graceful degradation prevents unauthorized access during outages.
 - Development caution:
   - NEXTAUTH_SECRET and TLS settings are highlighted for development; change them before production.
 - Secrets management:
@@ -358,14 +466,16 @@ Note: The repository includes commented optional Caddy and Redis configurations 
 - [Dockerfile:68-115](file://Dockerfile#L68-L115)
 - [docker-compose.prod.yml:45-71](file://docker-compose.prod.yml#L45-L71)
 - [docker-compose.yml:37-50](file://docker-compose.yml#L37-L50)
+- [deploy/docker-compose.yml:47-69](file://deploy/docker-compose.yml#L47-L69)
 
 ## Dependency Analysis
-The application’s primary dependencies and their roles:
+The application's primary dependencies and their roles:
 - Next.js 14: Frontend framework and API routing.
 - Prisma: Database client and migrations.
 - PostgreSQL: Relational database for application and NMS data.
 - NMS Python service: SNMP/SSH polling and discovery.
 - Docker: Containerization and orchestration.
+- Deployment tools: Professional installer and updater scripts.
 
 ```mermaid
 graph LR
@@ -375,18 +485,26 @@ PG["PostgreSQL"]
 NMS_PY["Python NMS"]
 NMS_FASTAPI["FastAPI"]
 NMS_DB["NMS Tables"]
+INSTALL["Installer Script"]
+UPDATE["Updater Script"]
+LICENSE["License System"]
 NEXT --> PRISMA
 PRISMA --> PG
 NEXT --> NMS_FASTAPI
 NMS_FASTAPI --> NMS_PY
 NMS_PY --> NMS_DB
 NMS_DB --> PG
+INSTALL --> NEXT
+UPDATE --> NEXT
+LICENSE --> NEXT
 ```
 
 **Diagram sources**
 - [package.json:16-57](file://package.json#L16-L57)
 - [nms_service/Dockerfile:1-30](file://nms_service/Dockerfile#L1-L30)
 - [nms_service/main.py:20-34](file://nms_service/main.py#L20-L34)
+- [deploy/install.sh:111-130](file://deploy/install.sh#L111-L130)
+- [deploy/update.sh:61-73](file://deploy/update.sh#L61-L73)
 
 **Section sources**
 - [package.json:16-57](file://package.json#L16-L57)
@@ -402,11 +520,15 @@ NMS_DB --> PG
 - Operational tips:
   - Use type checking and linting to catch regressions early.
   - Monitor database performance and adjust connection pooling and indexes as needed.
+- Deployment optimizations:
+  - Automated installer reduces manual configuration errors.
+  - Update scripts provide safe rollback capabilities.
 
 **Section sources**
 - [Dockerfile:6-41](file://Dockerfile#L6-L41)
 - [scripts/entrypoint.sh:66-77](file://scripts/entrypoint.sh#L66-L77)
 - [lib/prisma.ts:13-16](file://lib/prisma.ts#L13-L16)
+- [deploy/install.sh:160-170](file://deploy/install.sh#L160-L170)
 
 ## Troubleshooting Guide
 Common issues and resolutions:
@@ -421,13 +543,21 @@ Common issues and resolutions:
   - Run type checking and clear Next.js cache if necessary.
 - Development container rebuilds:
   - Rebuild the development image if Dockerfile.dev changes.
+- License activation failures:
+  - Verify license key format and network connectivity to license server.
+  - Check machine ID persistence in data/machine-id volume.
+- Update failures:
+  - Review database backup creation and migration logs.
+  - Use rollback procedure if update fails.
 
 **Section sources**
 - [README.md:357-392](file://README.md#L357-L392)
 - [DEV_WORKFLOW.md:54-106](file://DEV_WORKFLOW.md#L54-L106)
+- [deploy/install.sh:28-54](file://deploy/install.sh#L28-L54)
+- [deploy/update.sh:42-98](file://deploy/update.sh#L42-L98)
 
 ## Conclusion
-InfraScope provides a robust foundation for enterprise infrastructure management with a modern frontend, a PostgreSQL-backed backend, and an internal NMS sidecar for network telemetry. The repository includes comprehensive development and production configurations, enabling rapid iteration and secure, scalable deployments. By following the documented workflows and leveraging the provided scripts and Docker configurations, teams can confidently develop, test, and operate InfraScope in diverse environments.
+InfraScope provides a robust foundation for enterprise infrastructure management with a modern frontend, a PostgreSQL-backed backend, and an internal NMS sidecar for network telemetry. The enhanced deployment infrastructure includes professional installation tools, automated licensing management, and streamlined update procedures. The repository now supports both development and production environments with comprehensive configuration options, enabling rapid iteration and secure, scalable deployments. By following the documented workflows and leveraging the provided scripts and Docker configurations, teams can confidently develop, test, and operate InfraScope in diverse environments.
 
 ## Appendices
 
@@ -445,8 +575,21 @@ InfraScope provides a robust foundation for enterprise infrastructure management
 
 ### Appendix B: Production Environment Variables
 - Required variables include database credentials, API URLs, and authentication settings.
+- License configuration requires LICENSE_KEY and license server URL.
 - Ensure secrets are managed securely and not committed to source control.
 
 **Section sources**
 - [README.md:332-341](file://README.md#L332-L341)
 - [docker-compose.prod.yml:45-53](file://docker-compose.prod.yml#L45-L53)
+- [deploy/docker-compose.yml:47-58](file://deploy/docker-compose.yml#L47-L58)
+
+### Appendix C: Deployment Tools Reference
+- Installation: ./install.sh - Interactive installer with prerequisite checks
+- Updates: ./update.sh [version] - Safe update with backup and rollback
+- License management: Automatic activation and cache management
+- Monitoring: Health checks and status reporting
+
+**Section sources**
+- [deploy/install.sh:1-170](file://deploy/install.sh#L1-L170)
+- [deploy/update.sh:1-169](file://deploy/update.sh#L1-L169)
+- [deploy/install-guide.html:576-628](file://deploy/install-guide.html#L576-L628)

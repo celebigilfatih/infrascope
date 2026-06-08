@@ -9,10 +9,6 @@ import ReactFlow, {
   Background,
   Controls,
   MiniMap,
-  useNodesState,
-  useEdgesState,
-  addEdge,
-  Connection,
   Panel,
   ReactFlowProvider,
   ConnectionLineType,
@@ -194,16 +190,8 @@ const connectionStyles: Record<string, { color: string; dash: string; width: num
 };
 
 
-// Static nodeTypes/edgeTypes — frozen to stabilize references across Turbopack Fast Refresh
-const nodeTypes = Object.freeze({
-  building: BuildingNode,
-  device: DeviceNode,
-});
-
-const edgeTypes = Object.freeze({
-  custom: CustomEdge,
-  building: BuildingConnectionEdge,
-});
+// nodeTypes/edgeTypes are defined outside the component.
+// We wrap them in useMemo below to stabilize references across Turbopack Fast Refresh.
 
 const NetworkTopologyPage = () => {
   const router = useRouter();
@@ -213,8 +201,17 @@ const NetworkTopologyPage = () => {
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [nodes, setNodes, onNodesChange] = useNodesState([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  // Stable nodeTypes/edgeTypes via useMemo — survives Turbopack Fast Refresh module re-evaluation
+  const nodeTypes = React.useMemo(() => ({
+    building: BuildingNode,
+    device: DeviceNode,
+  }), []);
+  const edgeTypes = React.useMemo(() => ({
+    custom: CustomEdge,
+    building: BuildingConnectionEdge,
+  }), []);
+
+  // Topology is fully controlled by useMemo — no separate state needed
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [viewMode, setViewMode] = useState<'physical' | 'services' | 'hierarchy' | 'zoom' | 'building'>('building');
@@ -282,67 +279,7 @@ const NetworkTopologyPage = () => {
     }
   }, []);
 
-  // Auto-layout function for better node positioning
-  const applyAutoLayout = useCallback(() => {
-    if (viewMode === 'building') {
-      // For building view, re-organize buildings in a better grid
-      const buildingNodes = nodes.filter(n => n.type === 'building');
-      const spacing = 400;
-      const cols = Math.ceil(Math.sqrt(buildingNodes.length));
-      
-      const newNodes = nodes.map((node) => {
-        if (node.type === 'building') {
-          const index = buildingNodes.findIndex(n => n.id === node.id);
-          const row = Math.floor(index / cols);
-          const col = index % cols;
-          return {
-            ...node,
-            position: { x: col * spacing + 100, y: row * spacing + 100 },
-          };
-        }
-        return node;
-      });
-      setNodes(newNodes);
-    } else {
-      // For physical/services view, organize devices in a grid
-      const deviceNodes = nodes.filter(n => n.type === 'device');
-      const spacing = 280;
-      const cols = Math.ceil(Math.sqrt(deviceNodes.length));
-      
-      const newNodes = nodes.map((node) => {
-        if (node.type === 'device') {
-          const index = deviceNodes.findIndex(n => n.id === node.id);
-          const row = Math.floor(index / cols);
-          const col = index % cols;
-          return {
-            ...node,
-            position: { x: col * spacing + 50, y: row * spacing + 50 },
-          };
-        }
-        return node;
-      });
-      setNodes(newNodes);
-    }
-  }, [nodes, viewMode, setNodes]);
-
-  // const applyAutoLayout = useCallback(() => {
-  //   // Basic grid layout for devices in non-building views
-  //   if (viewMode !== 'building') {
-  //     const spacing = 250;
-  //     const cols = Math.ceil(Math.sqrt(nodes.length));
-  //     
-  //     const newNodes = nodes.map((node, index) => {
-  //       if (node.data.isGroup) return node;
-  //       const row = Math.floor(index / cols);
-  //       const col = index % cols;
-  //       return {
-  //         ...node,
-  //         position: { x: col * spacing, y: row * spacing },
-  //       };
-  //     });
-  //     setNodes(newNodes);
-  //   }
-  // }, [nodes, viewMode, setNodes]);
+  // Auto-layout is disabled when using controlled topology (positions computed by useMemo)
 
   useEffect(() => {
     loadData();
@@ -455,10 +392,7 @@ const NetworkTopologyPage = () => {
     setFilterCriticality('all');
   };
 
-  const onConnect = useCallback(
-    (params: Connection) => setEdges(eds => addEdge(params, eds)),
-    [setEdges]
-  );
+  // onConnect removed — nodes are not connectable in controlled topology mode
 
   const handleNodeClick = (node: Node) => {
     setSelectedNode(node);
@@ -1424,14 +1358,7 @@ const NetworkTopologyPage = () => {
     expandedBuildings
   ]);
 
-  // Sync topology computation to ReactFlow state — use functional updates to avoid loop
-  const prevTopoRef = React.useRef({ n: '', e: '' });
-  const topoKey = `${topologyNodes.length}:${topologyEdges.length}`;
-  if (topoKey !== prevTopoRef.current.n) {
-    prevTopoRef.current = { n: topoKey, e: topoKey };
-    setNodes(topologyNodes);
-    setEdges(topologyEdges);
-  }
+  // Sync removed — topologyNodes/topologyEdges passed directly to ReactFlow
 
 
 
@@ -1621,13 +1548,7 @@ const NetworkTopologyPage = () => {
                     <Download className="h-4 w-4" />
                     Dışa Aktar
                   </Button>
-                                    
-                  {/* Auto-layout Button */}
-                  <Button variant="outline" onClick={applyAutoLayout} className="gap-2" title="Otomatik Düzen">
-                    <BoxSelect className="h-4 w-4" />
-                    Otomatik Düzen
-                  </Button>
-                                    
+
                   {/* Results Count */}
                   <div className="ml-auto">
                     <Badge variant="outline" className="px-3 py-1 bg-background/50 border-border/50">
@@ -2287,21 +2208,27 @@ const NetworkTopologyPage = () => {
             ) : (
               // TOPOLOGY VIEWS
               <div className="flex-1 flex overflow-hidden">
-                <div className="flex-1 relative min-w-0 h-full w-full">
+                <div className="flex-1 relative min-w-0 w-full" style={{ minHeight: 'calc(100vh - 250px)' }}>
                   <ReactFlow style={{ width: "100%", height: "100%" }}
-                    nodes={nodes}
-                    edges={edges}
+                    nodes={topologyNodes}
+                    edges={topologyEdges}
                     nodeTypes={nodeTypes}
                     edgeTypes={edgeTypes}
-                    onNodesChange={onNodesChange}
-                    onEdgesChange={onEdgesChange}
-                    onConnect={onConnect}
                     onNodeClick={(_, node) => handleNodeClick(node)}
                     onNodeContextMenu={handleNodeContextMenu}
                     onEdgeClick={handleEdgeClick}
+                    nodesDraggable={false}
+                    nodesConnectable={false}
                     onMove={(_, viewport) => {
                       if (viewMode === 'building') {
-                        setSemanticZoom(viewport.zoom);
+                        // Only update state when zoom crosses a threshold boundary
+                        // to prevent onMove → setSemanticZoom → useMemo → setNodes → onMove loop
+                        const z = viewport.zoom;
+                        setSemanticZoom(prev => {
+                          const prevBucket = prev <= 0.5 ? 0 : prev <= 0.8 ? 1 : prev <= 1.2 ? 2 : prev <= 1.5 ? 3 : 4;
+                          const nextBucket = z <= 0.5 ? 0 : z <= 0.8 ? 1 : z <= 1.2 ? 2 : z <= 1.5 ? 3 : 4;
+                          return prevBucket !== nextBucket ? z : prev;
+                        });
                       }
                     }}
                     fitView

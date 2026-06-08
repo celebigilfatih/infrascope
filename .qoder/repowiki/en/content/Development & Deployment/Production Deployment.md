@@ -2,6 +2,10 @@
 
 <cite>
 **Referenced Files in This Document**
+- [deploy/docker-compose.yml](file://deploy/docker-compose.yml)
+- [deploy/install.sh](file://deploy/install.sh)
+- [deploy/update.sh](file://deploy/update.sh)
+- [deploy/install-guide.html](file://deploy/install-guide.html)
 - [docker-compose.prod.yml](file://docker-compose.prod.yml)
 - [Dockerfile](file://Dockerfile)
 - [Dockerfile.dev](file://Dockerfile.dev)
@@ -13,7 +17,16 @@
 - [app/api/health/alarms/route.ts](file://app/api/health/alarms/route.ts)
 - [lib/prisma.ts](file://lib/prisma.ts)
 - [package.json](file://package.json)
+- [docs/PRODUCTION_READINESS_AUDIT.md](file://docs/PRODUCTION_READINESS_AUDIT.md)
 </cite>
+
+## Update Summary
+**Changes Made**
+- Added comprehensive on-premise deployment artifacts including new Docker Compose configuration
+- Integrated interactive installation and update scripts for streamlined production setup
+- Enhanced production readiness documentation with detailed operational procedures
+- Expanded deployment documentation to cover complete lifecycle management
+- Added security hardening guidelines and production troubleshooting procedures
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -28,253 +41,468 @@
 10. [Appendices](#appendices)
 
 ## Introduction
-This document provides a comprehensive guide for deploying InfraScope in production. It covers the production Docker Compose configuration, database initialization and backup procedures, deployment strategies, zero-downtime deployment and rollback practices, monitoring and observability, security hardening, SSL configuration, and scaling approaches. Practical commands and health checks are included to streamline operational tasks.
+This document provides a comprehensive guide for deploying InfraScope in production environments. It covers the complete production deployment lifecycle including on-premise Docker Compose configuration, interactive installation and update procedures, database initialization and backup processes, deployment strategies, zero-downtime deployment practices, monitoring and observability, security hardening, SSL configuration, and scaling approaches. The guide includes practical commands, health checks, and maintenance procedures to ensure reliable operations.
 
 ## Project Structure
-The production deployment relies on a multi-service Docker Compose stack with a PostgreSQL database, a Next.js web application, and optional services. The stack defines a dedicated network and named volumes for persistence. Health checks are integrated at both the container and application levels.
+The production deployment utilizes a comprehensive on-premise deployment package that includes complete installation automation, update procedures, and operational documentation. The deployment package consists of three primary Docker Compose configurations and supporting scripts for seamless production setup.
 
 ```mermaid
 graph TB
-subgraph "Network"
-NET["infrascope-network"]
+subgraph "Production Deployment Package"
+DEPLOY["deploy/ Directory"]
+COMPOSE["docker-compose.yml<br/>Complete on-premise setup"]
+INSTALL["install.sh<br/>Interactive installer"]
+UPDATE["update.sh<br/>Safe update manager"]
+GUIDE["install-guide.html<br/>Comprehensive documentation"]
+ENDPOINT["Health Check Endpoints"]
+ENDPOINT --> HEALTH["/api/health<br/>Overall system status"]
+ENDPOINT --> ALARM_HEALTH["/api/health/alarms<br/>Alarm subsystem status"]
+ENDPOINT --> DB_HEALTH["Database connectivity"]
+ENDPOINT --> FA_HEALTH["FortiAnalyzer status"]
+ENDPOINT --> VM_HEALTH["VMware status"]
+ENDPOINT --> NMS_HEALTH["NMS integration status"]
 end
-DB["PostgreSQL Service<br/>Container: db"]
-WEB["Next.js Web Service<br/>Container: web"]
-CADDY["Reverse Proxy (Optional)<br/>Container: caddy"]
-DB --- NET
-WEB --- NET
-CADDY --- WEB
 ```
 
 **Diagram sources**
-- [docker-compose.prod.yml:7-135](file://docker-compose.prod.yml#L7-L135)
+- [deploy/docker-compose.yml:1-105](file://deploy/docker-compose.yml#L1-L105)
+- [deploy/install.sh:1-170](file://deploy/install.sh#L1-L170)
+- [deploy/update.sh:1-169](file://deploy/update.sh#L1-L169)
+- [deploy/install-guide.html:1-938](file://deploy/install-guide.html#L1-L938)
 
 **Section sources**
-- [docker-compose.prod.yml:5-135](file://docker-compose.prod.yml#L5-L135)
+- [deploy/docker-compose.yml:1-105](file://deploy/docker-compose.yml#L1-L105)
+- [deploy/install.sh:1-170](file://deploy/install.sh#L1-L170)
+- [deploy/update.sh:1-169](file://deploy/update.sh#L1-L169)
+- [deploy/install-guide.html:1-938](file://deploy/install-guide.html#L1-L938)
 
 ## Core Components
-- Production Docker Compose: Defines services for PostgreSQL, Next.js, and optional reverse proxy and Redis. Includes health checks, security options, and persistent volumes.
-- Next.js Production Image: Multi-stage build with non-root user, slim base image, health checks, and entrypoint script for migrations and warm-up.
-- Database Initialization and Backup: Initialization script for extensions and schema; backup script for logical dumps with compression and retention.
-- Health Checks: Application-level health endpoints for overall system and alarm subsystems, plus container-level health checks.
+The production deployment package includes several key components designed for enterprise-grade deployment and operations:
+
+- **Complete On-Premise Docker Compose**: Production-ready configuration with PostgreSQL, Next.js application, and optional SNMP poller service
+- **Interactive Installation Scripts**: Automated setup with prerequisite checking, environment configuration, and service deployment
+- **Safe Update Procedures**: Comprehensive update process with automatic database backup, migration execution, and rollback support
+- **Production Hardening**: Multi-stage Docker builds, non-root execution, health checks, and security optimizations
+- **Comprehensive Documentation**: HTML-based installation guide with architecture diagrams and operational procedures
+- **Health Monitoring**: Advanced health endpoints for system-wide and alarm-specific monitoring
 
 **Section sources**
-- [docker-compose.prod.yml:7-135](file://docker-compose.prod.yml#L7-L135)
+- [deploy/docker-compose.yml:11-105](file://deploy/docker-compose.yml#L11-L105)
+- [deploy/install.sh:28-170](file://deploy/install.sh#L28-L170)
+- [deploy/update.sh:42-169](file://deploy/update.sh#L42-L169)
 - [Dockerfile:56-115](file://Dockerfile#L56-L115)
-- [docker/postgres-init.sql:1-38](file://docker/postgres-init.sql#L1-L38)
-- [docker/postgres-backup.sh:1-37](file://docker/postgres-backup.sh#L1-L37)
-- [app/api/health/route.ts:1-255](file://app/api/health/route.ts#L1-L255)
+- [app/api/health/route.ts:1-440](file://app/api/health/route.ts#L1-L440)
 - [app/api/health/alarms/route.ts:1-198](file://app/api/health/alarms/route.ts#L1-L198)
 
 ## Architecture Overview
-The production architecture centers around a single-host or orchestrated deployment using Docker Compose. The Next.js application connects to PostgreSQL via an internal network. Optional reverse proxy and Redis can be enabled for SSL termination and caching.
+The production architecture supports both single-host and orchestrated deployments with comprehensive security and monitoring capabilities. The system includes a centralized PostgreSQL database, Next.js web application, and optional services for enhanced functionality.
 
 ```mermaid
 graph TB
-subgraph "Production Host"
+subgraph "Production Environment"
 subgraph "Docker Network"
-DB["db (PostgreSQL)"]
-WEB["web (Next.js)"]
-REDIS["redis (Optional)"]
-CADDY["caddy (Reverse Proxy, Optional)"]
+DB["PostgreSQL Service<br/>Container: postgres"]
+APP["Next.js Application<br/>Container: app"]
+SNMP["SNMP Poller (Optional)<br/>Container: snmp-poller"]
+end
+subgraph "Production Services"
+LICENSE["License Management<br/>Machine ID & Cache"]
+LOGS["Application Logs<br/>Persistent Volume"]
+DATA["Data Persistence<br/>Machine ID & License Cache"]
 end
 end
-CLIENT["Clients/Browsers"] --> CADDY
-CADDY --> WEB
-WEB --> DB
-WEB -. optional .-> REDIS
+CLIENT["Clients/Browsers"] --> APP
+APP --> DB
+APP -. optional .-> SNMP
+DB -.-> LICENSE
+APP -.-> LOGS
+APP -.-> DATA
 ```
 
 **Diagram sources**
-- [docker-compose.prod.yml:7-135](file://docker-compose.prod.yml#L7-L135)
+- [deploy/docker-compose.yml:14-105](file://deploy/docker-compose.yml#L14-L105)
 
 ## Detailed Component Analysis
 
-### Production Docker Compose Configuration
-Key production settings:
-- PostgreSQL service with environment-driven credentials, health checks, and persistent volume.
-- Next.js service with production environment variables, health checks, read-only root filesystem, and temporary filesystems for cache and temp.
-- Optional reverse proxy and Redis services included for production hardening and performance.
+### Complete On-Premise Docker Compose Configuration
+The deployment package provides a comprehensive Docker Compose configuration that includes all necessary services for production deployment:
 
-Operational commands:
-- Start services: docker compose -f docker-compose.prod.yml up -d
-- Stop services: docker compose -f docker-compose.prod.yml down
-- View logs: docker compose -f docker-compose.prod.yml logs -f
+**Database Service (PostgreSQL)**
+- Multi-stage build with Alpine Linux base
+- Configurable environment variables for credentials and database settings
+- Health check using pg_isready command
+- Persistent volume configuration for data durability
+- Port exposure with configurable mapping
 
-Security and isolation:
-- Health checks for early failure detection.
-- Security options and read-only root filesystem for the web service.
-- Internal-only exposure of the database with localhost binding.
+**Application Service (Next.js)**
+- Production-ready image with multi-stage build
+- Environment variable configuration for database connectivity, authentication, and licensing
+- Health check against internal health API endpoint
+- Persistent volumes for machine ID, license cache, and application logs
+- Configurable port exposure
 
-**Section sources**
-- [docker-compose.prod.yml:7-135](file://docker-compose.prod.yml#L7-L135)
-
-### Next.js Production Image and Entrypoint
-Build characteristics:
-- Multi-stage build for minimal image size and secure runtime.
-- Non-root user and slim base image.
-- Health check embedded in the image definition.
-
-Entrypoint responsibilities:
-- Waits for the database to be ready.
-- Runs Prisma migrations and regenerates the client.
-- Seeds the database in development mode.
-- Starts alarm scheduler and monitor after server readiness.
-- Pre-warms frequently accessed routes to reduce cold-start latency.
+**Optional SNMP Poller Service**
+- Separate container for network device monitoring
+- Host networking mode for UDP protocol support
+- Configurable polling intervals and community strings
 
 **Section sources**
-- [Dockerfile:56-115](file://Dockerfile#L56-L115)
-- [scripts/entrypoint.sh:1-88](file://scripts/entrypoint.sh#L1-L88)
+- [deploy/docker-compose.yml:14-105](file://deploy/docker-compose.yml#L14-L105)
 
-### Database Initialization and Backup
-Initialization:
-- Extensions and schema creation are handled by an initialization script mounted during first boot.
-- Default timezone and audit logging table are prepared.
+### Interactive Installation Script
+The installation script provides a guided setup experience with comprehensive validation and configuration:
 
-Backup:
-- Logical dump using pg_dump with gzip compression.
-- Automatic cleanup of backups older than seven days.
-- Executed inside the database container via the mounted script.
+**Prerequisite Validation**
+- Docker and Docker Compose detection and verification
+- Docker daemon status checking
+- Error reporting and guidance for missing components
+
+**Directory Structure Creation**
+- Automatic creation of required directories (data/, logs/)
+- Proper permission setting for persistent volumes
+
+**Environment Configuration**
+- Template-based .env file creation
+- License key input with validation
+- Random NEXTAUTH_SECRET generation for security
+- Database credential configuration
+
+**Service Deployment**
+- Docker image pulling with registry access verification
+- Service startup with progress reporting
+- Installation completion with access instructions
+
+**Section sources**
+- [deploy/install.sh:28-170](file://deploy/install.sh#L28-L170)
+
+### Safe Update Procedure
+The update script ensures safe deployment of new versions with comprehensive backup and validation:
+
+**Pre-Update Backup**
+- Database backup creation with timestamped filenames
+- Backup directory structure and permissions management
+- Backup verification and cleanup of old backups
+
+**Version Management**
+- Target version specification and validation
+- Registry access verification for new images
+- Version tracking in .env configuration
+
+**Migration Execution**
+- Database migration execution with error handling
+- Service restart with health verification
+- Post-update validation and cleanup
+
+**Rollback Support**
+- Automatic rollback instructions for failed updates
+- Backup restoration guidance
+- Version downgrade procedures
+
+**Section sources**
+- [deploy/update.sh:42-169](file://deploy/update.sh#L42-L169)
+
+### Production Hardening and Security
+The production deployment includes comprehensive security measures and operational hardening:
+
+**Container Security**
+- Non-root user execution with dedicated group
+- Read-only root filesystem for application container
+- Security options including no-new-privileges
+- Temporary filesystems for cache and temporary data
+
+**Database Security**
+- Local-only port binding (127.0.0.1)
+- Environment-driven credential management
+- Health check configuration for early failure detection
+- Persistent volume configuration for data durability
+
+**Application Security**
+- Strict transport security headers
+- Health check endpoints for monitoring
+- Environment variable validation
+- Service dependency management
+
+**Section sources**
+- [docker-compose.prod.yml:30-75](file://docker-compose.prod.yml#L30-L75)
+- [Dockerfile:68-101](file://Dockerfile#L68-L101)
+
+### Health Monitoring and Observability
+The deployment includes comprehensive health monitoring and observability features:
+
+**Application-Level Health Checks**
+- Overall system health endpoint (/api/health) with component status aggregation
+- Alarm subsystem health endpoint (/api/health/alarms) for monitoring critical components
+- Database connectivity verification
+- External integration health monitoring (FortiAnalyzer, VMware, NMS)
+
+**Component Monitoring**
+- Scheduler heartbeat monitoring with staleness detection
+- Event cache synchronization status
+- Detection engine performance metrics
+- Email notification delivery status
+- Circuit breaker state monitoring
+- Dead letter queue (DLQ) backlog monitoring
+
+**External Monitoring Integration**
+- HTTP 200/503 status codes for health endpoint responses
+- Structured JSON responses with detailed component information
+- Integration with monitoring systems like Zabbix, Uptime Kuma, and cron-based monitors
+
+**Section sources**
+- [app/api/health/route.ts:386-440](file://app/api/health/route.ts#L386-L440)
+- [app/api/health/alarms/route.ts:54-198](file://app/api/health/alarms/route.ts#L54-L198)
+
+### Database Management and Backup
+The deployment includes robust database management and backup capabilities:
+
+**Database Initialization**
+- Extension and schema creation during first boot
+- Default timezone and audit logging table preparation
+- Initialization script mounting for container persistence
+
+**Backup Operations**
+- Logical dump using pg_dump with gzip compression
+- Automatic cleanup of backups older than seven days
+- Timestamped backup file naming for easy identification
+- Backup directory structure with proper permissions
+
+**Backup Verification**
+- Backup file size reporting
+- Location verification and accessibility
+- Cleanup operation confirmation
 
 **Section sources**
 - [docker/postgres-init.sql:1-38](file://docker/postgres-init.sql#L1-L38)
 - [docker/postgres-backup.sh:1-37](file://docker/postgres-backup.sh#L1-L37)
 
-### Health Checks and Monitoring
-Application-level health:
-- Overall health endpoint aggregates database, FortiAnalyzer, VMware, alarm statistics, and DLQ metrics.
-- Alarm subsystem health endpoint evaluates scheduler, event cache, detection, email, FA circuit breaker, and DLQ.
+### Production Readiness and Operational Procedures
+The deployment package includes comprehensive production readiness documentation and operational procedures:
 
-Container-level health:
-- PostgreSQL health check using pg_isready.
-- Next.js health check against the internal health API.
+**Installation Guide**
+- Step-by-step installation process with screenshots
+- Architecture diagrams showing vendor and customer deployment
+- License lifecycle management documentation
+- Tier feature comparison matrix
 
-Observability:
-- Health endpoints return structured JSON with status and component details.
-- Use external monitors (e.g., Zabbix, Uptime Kuma) to poll the alarm health endpoint.
+**Deployment Lifecycle**
+- Initial installation procedures
+- Routine maintenance operations
+- Update and rollback procedures
+- Troubleshooting guides for common issues
 
-**Section sources**
-- [app/api/health/route.ts:1-255](file://app/api/health/route.ts#L1-L255)
-- [app/api/health/alarms/route.ts:1-198](file://app/api/health/alarms/route.ts#L1-L198)
-- [docker-compose.prod.yml:25-68](file://docker-compose.prod.yml#L25-L68)
-
-### Prisma Client Configuration
-- Singleton client instance with configurable query logging.
-- Query logging disabled by default to minimize I/O overhead.
-
-**Section sources**
-- [lib/prisma.ts:1-21](file://lib/prisma.ts#L1-L21)
-
-### Development vs Production Images
-- Development image supports hot reload and includes additional Python packages for VMware integration.
-- Production image is optimized for size and security with non-root execution and health checks.
+**Security and Compliance**
+- License management and activation procedures
+- Machine ID and cache management
+- Grace period and restricted mode operations
+- Offline activation scenarios
 
 **Section sources**
-- [Dockerfile.dev:1-51](file://Dockerfile.dev#L1-L51)
-- [Dockerfile:56-115](file://Dockerfile#L56-L115)
+- [deploy/install-guide.html:1-938](file://deploy/install-guide.html#L1-L938)
+- [docs/PRODUCTION_READINESS_AUDIT.md:1-543](file://docs/PRODUCTION_READINESS_AUDIT.md#L1-L543)
 
 ## Dependency Analysis
-Runtime dependencies and startup order:
-- Next.js web service depends on PostgreSQL being healthy.
-- Entrypoint ensures database readiness, applies migrations, and warms routes before starting the server.
+The production deployment follows a well-defined dependency hierarchy with clear startup ordering and service coordination:
+
+**Startup Dependencies**
+- Database service must be healthy before application startup
+- Application service requires database connectivity for migrations
+- Alarm services depend on application health endpoint readiness
+- SNMP poller service requires network connectivity and configuration
+
+**Service Coordination**
+- Health check endpoints coordinate service startup and monitoring
+- Environment variables manage inter-service communication
+- Volume mounts ensure data persistence across deployments
+- Network configuration enables service-to-service communication
 
 ```mermaid
 sequenceDiagram
 participant Compose as "Docker Compose"
-participant DB as "PostgreSQL (db)"
-participant Web as "Next.js (web)"
-participant Entrypoint as "Entrypoint Script"
-Compose->>DB : Start service
+participant DB as "PostgreSQL Service"
+participant App as "Application Service"
+participant Installer as "Installation Script"
+Compose->>DB : Start database service
 DB-->>Compose : Health OK
-Compose->>Web : Start service
-Web->>Entrypoint : Execute
-Entrypoint->>DB : Wait until ready
-Entrypoint->>Entrypoint : Run migrations
-Entrypoint->>Web : Start server
-Web-->>Compose : Health OK
+Compose->>App : Start application service
+App->>DB : Wait for database readiness
+App->>App : Run migrations and seed
+App-->>Compose : Health OK
+Installer->>Compose : Deploy complete
 ```
 
 **Diagram sources**
-- [docker-compose.prod.yml:58-60](file://docker-compose.prod.yml#L58-L60)
-- [scripts/entrypoint.sh:11-41](file://scripts/entrypoint.sh#L11-L41)
+- [deploy/docker-compose.yml:40-42](file://deploy/docker-compose.yml#L40-L42)
+- [scripts/entrypoint.sh:11-31](file://scripts/entrypoint.sh#L11-L31)
 
 **Section sources**
-- [docker-compose.prod.yml:58-60](file://docker-compose.prod.yml#L58-L60)
-- [scripts/entrypoint.sh:11-41](file://scripts/entrypoint.sh#L11-L41)
+- [deploy/docker-compose.yml:40-42](file://deploy/docker-compose.yml#L40-L42)
+- [scripts/entrypoint.sh:11-31](file://scripts/entrypoint.sh#L11-L31)
 
 ## Performance Considerations
-- Use the production Dockerfile for optimized builds and minimal runtime footprint.
-- Enable reverse proxy (Caddy) for SSL/TLS termination and HTTP/2.
-- Consider adding Redis for caching frequently accessed data and reducing database load.
-- Keep query logging disabled in production to avoid I/O overhead.
+Production deployment considerations include optimization for enterprise environments:
 
-[No sources needed since this section provides general guidance]
+**Container Optimization**
+- Multi-stage Docker builds for reduced image size
+- Non-root user execution for security compliance
+- Health checks for early failure detection
+- Temporary filesystems for improved performance
+
+**Database Performance**
+- Connection pooling configuration for concurrent access
+- Index optimization for query performance
+- Backup scheduling to minimize performance impact
+- Monitoring for performance degradation
+
+**Application Performance**
+- Static asset optimization for faster delivery
+- API endpoint caching for reduced database load
+- Background job scheduling for maintenance tasks
+- Resource monitoring for capacity planning
+
+**Scalability Considerations**
+- Horizontal scaling through multiple service instances
+- Load balancing for high availability
+- Database clustering for increased capacity
+- Caching layers for improved response times
 
 ## Troubleshooting Guide
-Common production issues and resolutions:
-- Database not ready: Verify health check and ensure environment variables are set. Use the entrypoint wait mechanism and the wait-for-db script for manual verification.
-- Migration failures: Review migration logs and confirm Prisma client generation. Re-run migrations after resolving schema conflicts.
-- Health endpoint returns degraded/unhealthy: Inspect alarm subsystem health, DLQ backlog, and datasource connectivity.
-- Backup failures: Confirm backup script execution permissions and disk space availability.
+Comprehensive troubleshooting procedures for production environments:
 
-Operational commands:
-- View logs: docker compose -f docker-compose.prod.yml logs -f
-- Access database: docker compose -f docker-compose.prod.yml exec db psql
-- Run backup: docker compose -f docker-compose.prod.yml exec db /usr/local/bin/backup-db.sh
+**Common Production Issues**
+- Database connectivity failures: Verify network configuration and credentials
+- Migration failures: Check migration logs and database permissions
+- Health endpoint failures: Review alarm subsystem status and component dependencies
+- License activation issues: Verify machine ID persistence and cache validity
+- Update failures: Check backup creation and rollback procedures
+
+**Diagnostic Commands**
+- Service status verification: `docker compose ps`
+- Log inspection: `docker compose logs -f`
+- Database connectivity testing: `docker compose exec db psql`
+- Health endpoint testing: `curl http://localhost:3000/api/health`
+
+**Recovery Procedures**
+- Service restart: `docker compose restart`
+- Database backup restoration: `docker compose exec db psql < backup.sql`
+- License cache regeneration: Remove cache directory and restart service
+- Configuration validation: Verify .env file syntax and values
+
+**Monitoring and Alerting**
+- Health endpoint integration with monitoring systems
+- Log aggregation and analysis
+- Performance metric collection and alerting
+- Capacity planning and resource monitoring
 
 **Section sources**
-- [scripts/wait-for-db.sh:1-29](file://scripts/wait-for-db.sh#L1-L29)
-- [docker/postgres-backup.sh:1-37](file://docker/postgres-backup.sh#L1-L37)
-- [docker-compose.prod.yml:127-134](file://docker-compose.prod.yml#L127-L134)
+- [deploy/update.sh:118-169](file://deploy/update.sh#L118-L169)
+- [deploy/install.sh:132-170](file://deploy/install.sh#L132-L170)
 
 ## Conclusion
-This production deployment guide outlines a secure, observable, and maintainable setup for InfraScope. By leveraging the provided Docker Compose configuration, health checks, and backup procedures, teams can achieve reliable operations with clear monitoring signals and straightforward maintenance workflows.
-
-[No sources needed since this section summarizes without analyzing specific files]
+The enhanced production deployment package provides a comprehensive solution for enterprise-grade InfraScope deployment. With interactive installation and update procedures, robust security hardening, comprehensive monitoring capabilities, and detailed operational documentation, teams can achieve reliable and maintainable production operations. The package addresses critical production concerns including license management, database backup, health monitoring, and disaster recovery procedures.
 
 ## Appendices
 
 ### A. Production Deployment Commands
-- Start production stack: docker compose -f docker-compose.prod.yml up -d
-- Stop production stack: docker compose -f docker-compose.prod.yml down
-- Tail logs: docker compose -f docker-compose.prod.yml logs -f
-- Access database: docker compose -f docker-compose.prod.yml exec db psql
-- Run backup: docker compose -f docker-compose.prod.yml exec db /usr/local/bin/backup-db.sh
+**Installation Commands**
+- Interactive installation: `./install.sh`
+- Service startup: `docker compose up -d`
+- Service shutdown: `docker compose down`
+- Log monitoring: `docker compose logs -f`
+
+**Database Operations**
+- Database access: `docker compose exec db psql`
+- Backup creation: `docker compose exec db /usr/local/bin/backup-db.sh`
+- Backup restoration: `docker compose exec -i db psql < backup.sql`
+
+**Application Management**
+- Service restart: `docker compose restart`
+- Health verification: `curl http://localhost:3000/api/health`
+- Alarm health: `curl http://localhost:3000/api/health/alarms`
 
 **Section sources**
-- [docker-compose.prod.yml:127-134](file://docker-compose.prod.yml#L127-L134)
-- [docker/postgres-backup.sh:1-37](file://docker/postgres-backup.sh#L1-L37)
+- [deploy/install.sh:132-158](file://deploy/install.sh#L132-L158)
+- [deploy/update.sh:100-116](file://deploy/update.sh#L100-L116)
+- [docker/postgres-backup.sh:16-37](file://docker/postgres-backup.sh#L16-L37)
 
 ### B. Zero-Downtime Deployment and Rollback
-- Strategy: Deploy a new web service version behind a reverse proxy or load balancer, verify health endpoints, then switch traffic and remove the old service.
-- Rollback: Re-deploy the previous working image tag and repeat the verification steps.
+**Zero-Downtime Strategy**
+- Blue-Green deployment using separate service instances
+- Load balancer traffic switching after health verification
+- Database migration during maintenance window
+- Rollback using previous service version
 
-[No sources needed since this section provides general guidance]
-
-### C. Scaling and High Availability
-- Horizontal scaling: Run multiple web service replicas behind a reverse proxy or platform-native load balancer.
-- Database HA: Use managed PostgreSQL with replication or a high-availability cluster; ensure connection pooling and read replicas if needed.
-- Caching: Add Redis for session storage and caching to reduce database pressure.
-
-[No sources needed since this section provides general guidance]
-
-### D. Security Hardening Checklist
-- Use HTTPS via reverse proxy (Caddy) with TLS certificates.
-- Restrict database exposure to internal network; avoid publishing ports externally.
-- Enable health checks and failover mechanisms.
-- Rotate secrets regularly and restrict filesystem permissions.
-
-[No sources needed since this section provides general guidance]
-
-### E. SSL Configuration
-- Configure the reverse proxy (Caddy) with TLS certificates and domain names.
-- Ensure NEXTAUTH_URL and related URLs use HTTPS in production.
-
-[No sources needed since this section provides general guidance]
-
-### F. Monitoring and Observability
-- Use the alarm health endpoint for external monitoring.
-- Integrate with platform-specific monitoring systems to track health endpoint responses and alert on degraded/unhealthy statuses.
+**Rollback Procedures**
+- Version rollback using .env configuration
+- Database backup restoration for failed updates
+- Service restart with previous configuration
+- Monitoring verification after rollback
 
 **Section sources**
-- [app/api/health/alarms/route.ts:54-197](file://app/api/health/alarms/route.ts#L54-L197)
+- [deploy/update.sh:145-169](file://deploy/update.sh#L145-L169)
+
+### C. Scaling and High Availability
+**Horizontal Scaling**
+- Multiple application service instances behind load balancer
+- Database clustering for high availability
+- Redis caching layer for improved performance
+- Load balancer configuration for traffic distribution
+
+**High Availability Configuration**
+- Database replication setup
+- Application service redundancy
+- Load balancer health checks
+- Automatic failover procedures
+
+**Capacity Planning**
+- Resource utilization monitoring
+- Performance baseline establishment
+- Growth projection and capacity planning
+- Cost optimization strategies
+
+### D. Security Hardening Checklist
+**Production Security**
+- HTTPS termination with SSL certificates
+- Database access restriction to internal network
+- Regular security updates and patches
+- Secret management and rotation procedures
+- Network segmentation and firewall rules
+
+**Compliance Requirements**
+- Audit logging and monitoring
+- Data retention and privacy compliance
+- Access control and authentication
+- Disaster recovery and business continuity
+
+**Section sources**
+- [docker-compose.prod.yml:30-75](file://docker-compose.prod.yml#L30-L75)
+- [docs/PRODUCTION_READINESS_AUDIT.md:265-309](file://docs/PRODUCTION_READINESS_AUDIT.md#L265-L309)
+
+### E. SSL Configuration
+**Certificate Management**
+- Certificate installation and renewal procedures
+- TLS configuration for application and database
+- Certificate validation and testing
+- Automated certificate renewal setup
+
+**Security Best Practices**
+- Strong cipher suite configuration
+- Certificate authority validation
+- Private key protection and management
+- Certificate monitoring and alerting
+
+### F. Monitoring and Observability
+**Health Monitoring**
+- Integration with external monitoring systems
+- Alerting configuration for critical failures
+- Performance metrics collection and analysis
+- Capacity planning and trend analysis
+
+**Operational Metrics**
+- Service uptime and availability
+- Response time and throughput metrics
+- Error rates and failure patterns
+- Resource utilization and capacity trends
+
+**Section sources**
+- [app/api/health/route.ts:386-440](file://app/api/health/route.ts#L386-L440)
+- [app/api/health/alarms/route.ts:54-198](file://app/api/health/alarms/route.ts#L54-L198)

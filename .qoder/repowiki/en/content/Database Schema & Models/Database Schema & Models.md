@@ -11,7 +11,22 @@
 - [prisma.ts](file://lib/prisma.ts)
 - [migrate_nms_db.sql](file://scripts/migrate_nms_db.sql)
 - [detection-engine.ts](file://lib/alarms/detection-engine.ts)
+- [client.ts](file://lib/license/client.ts)
+- [jwt.ts](file://lib/license/jwt.ts)
+- [activate/route.ts](file://app/api/license/activate/route.ts)
+- [validate/route.ts](file://app/api/license/validate/route.ts)
+- [heartbeat/route.ts](file://app/api/license/heartbeat/route.ts)
+- [status/route.ts](file://app/api/license/status/route.ts)
 </cite>
+
+## Update Summary
+**Changes Made**
+- Added comprehensive licensing infrastructure documentation including new Customer, License, LicenseActivation, and LicenseHeartbeat entities
+- Documented license management APIs: activation, validation, heartbeat, and status endpoints
+- Added license tier enumeration and status tracking mechanisms
+- Included JWT token signing and verification for license validation
+- Updated enterprise extension tables to include licensing capabilities
+- Added audit capabilities for license management operations
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -19,17 +34,18 @@
 3. [Core Components](#core-components)
 4. [Architecture Overview](#architecture-overview)
 5. [Detailed Component Analysis](#detailed-component-analysis)
-6. [Dependency Analysis](#dependency-analysis)
-7. [Performance Considerations](#performance-considerations)
-8. [Troubleshooting Guide](#troubleshooting-guide)
-9. [Conclusion](#conclusion)
-10. [Appendices](#appendices)
+6. [License Management System](#license-management-system)
+7. [Dependency Analysis](#dependency-analysis)
+8. [Performance Considerations](#performance-considerations)
+9. [Troubleshooting Guide](#troubleshooting-guide)
+10. [Conclusion](#conclusion)
+11. [Appendices](#appendices)
 
 ## Introduction
-This document provides comprehensive data model documentation for the InfraScope database schema. It details entity relationships across the hierarchical location structure (Organizations, Buildings, Floors, Rooms, Racks, and Units), Device entities with parent-child relationships for VMs and JSONB metadata, Network Interface, Switch Port, and Connection entities for network topology management, Application and Service entities with port/protocol tracking and dependency relationships, audit logs, health snapshots, and enterprise extension tables. It also documents primary/foreign keys, indexes, constraints, data validation rules, business logic enforcement, data lifecycle and retention considerations, migration strategies, and performance characteristics.
+This document provides comprehensive data model documentation for the InfraScope database schema. It details entity relationships across the hierarchical location structure (Organizations, Buildings, Floors, Rooms, Racks, and Units), Device entities with parent-child relationships for VMs and JSONB metadata, Network Interface, Switch Port, and Connection entities for network topology management, Application and Service entities with port/protocol tracking and dependency relationships, audit logs, health snapshots, enterprise extension tables, and the complete licensing infrastructure. It also documents primary/foreign keys, indexes, constraints, data validation rules, business logic enforcement, data lifecycle and retention considerations, migration strategies, and performance characteristics.
 
 ## Project Structure
-InfraScope uses Prisma for schema definition and migrations. The schema is defined in a single Prisma schema file and applied through SQL migrations. The database initialization script sets up required Postgres extensions and schema permissions. A dedicated Prisma client singleton ensures consistent database access across the application.
+InfraScope uses Prisma for schema definition and migrations. The schema is defined in a single Prisma schema file and applied through SQL migrations. The database initialization script sets up required Postgres extensions and schema permissions. A dedicated Prisma client singleton ensures consistent database access across the application. The licensing system includes JWT token management and comprehensive license validation workflows.
 
 ```mermaid
 graph TB
@@ -45,6 +61,8 @@ end
 subgraph "Runtime"
 INIT["docker/postgres-init.sql"]
 CLIENT["lib/prisma.ts"]
+JWT["lib/license/jwt.ts"]
+CLIENTLIB["lib/license/client.ts"]
 end
 PRISMA --> M1
 PRISMA --> M2
@@ -52,6 +70,8 @@ PRISMA --> M3
 PRISMA --> M4
 INIT --> PRISMA
 CLIENT --> PRISMA
+JWT --> CLIENTLIB
+CLIENTLIB --> PRISMA
 ```
 
 **Diagram sources**
@@ -62,14 +82,18 @@ CLIENT --> PRISMA
 - [add_nms_integration migration.sql](file://prisma/migrations/20260331134657_add_nms_integration/migration.sql)
 - [postgres-init.sql](file://docker/postgres-init.sql)
 - [prisma.ts](file://lib/prisma.ts)
+- [jwt.ts](file://lib/license/jwt.ts)
+- [client.ts](file://lib/license/client.ts)
 
 **Section sources**
 - [schema.prisma](file://prisma/schema.prisma)
 - [prisma.ts](file://lib/prisma.ts)
 - [postgres-init.sql](file://docker/postgres-init.sql)
+- [jwt.ts](file://lib/license/jwt.ts)
+- [client.ts](file://lib/license/client.ts)
 
 ## Core Components
-This section outlines the primary entities and their relationships, focusing on the hierarchical location structure, device hierarchy, networking, applications/services, and enterprise extensions.
+This section outlines the primary entities and their relationships, focusing on the hierarchical location structure, device hierarchy, networking, applications/services, enterprise extensions, and the comprehensive licensing infrastructure.
 
 - Hierarchical Location Structure
   - Organization: Top-level tenant container with unique constraints on name and code.
@@ -109,18 +133,25 @@ This section outlines the primary entities and their relationships, focusing on 
 - Observability and Alarms
   - AuditLog: Immutable audit trail with JSONB changes.
   - DeviceHealthSnapshot: Historical device status and metrics.
-  - Alarm Definitions/Events/Check Logs/Cached Events/Notification DLQ/Whitelist: Alarm management system.
+  - Alarm Management System: Comprehensive alarm definitions, events, cooldowns, cached events, notification DLQ, and whitelist.
 
 - NMS Integration Tables
   - NmsInterface/NmsHealthMetric/NmsTopologyLink/NmsDiscoveryScan/NmsDiscoveredDevice/NmsDeviceMetric/NmsInterfaceMetric/NmsBackup: SNMP-based integration tables.
+
+- **License Management System** *(Updated)*
+  - Customer: License holder with company information, contact details, tier, and status.
+  - License: License key with tier, limits, validity period, activation limit, and status tracking.
+  - LicenseActivation: Tracks machine activations with usage data and status.
+  - LicenseHeartbeat: Records periodic usage patterns and device/user counts.
 
 **Section sources**
 - [schema.prisma](file://prisma/schema.prisma)
 - [enterprise_extension migration.sql](file://prisma/migrations/20260130053347_enterprise_extension/migration.sql)
 - [add_nms_integration migration.sql](file://prisma/migrations/20260331134657_add_nms_integration/migration.sql)
+- [client.ts](file://lib/license/client.ts)
 
 ## Architecture Overview
-The database architecture centers on a normalized relational schema with JSONB fields for flexible metadata and time-series tables for observability. Prisma manages schema evolution through migrations, while the application uses a singleton Prisma client for consistent access.
+The database architecture centers on a normalized relational schema with JSONB fields for flexible metadata and time-series tables for observability. Prisma manages schema evolution through migrations, while the application uses a singleton Prisma client for consistent access. The licensing system adds JWT-based token validation and comprehensive usage tracking capabilities.
 
 ```mermaid
 erDiagram
@@ -156,12 +187,19 @@ DEVICE ||--o{ NMS_TOPOLOGY_LINK : "discovers"
 DEVICE ||--o{ NMS_DEVICE_METRIC : "metrics"
 DEVICE ||--o{ NMS_INTERFACE_METRIC : "metrics"
 DEVICE ||--o{ NMS_BACKUP : "backups"
+CUSTOMER ||--o{ LICENSE : "holds"
+LICENSE ||--o{ LICENSE_ACTIVATION : "activates"
+LICENSE ||--o{ LICENSE_HEARTBEAT : "reports"
+LICENSE_ACTIVATION ||--|| CUSTOMER : "belongs_to"
+LICENSE_ACTIVATION ||--|| LICENSE : "belongs_to"
+LICENSE_HEARTBEAT ||--|| LICENSE : "belongs_to"
 ```
 
 **Diagram sources**
 - [schema.prisma](file://prisma/schema.prisma)
 - [enterprise_extension migration.sql](file://prisma/migrations/20260130053347_enterprise_extension/migration.sql)
 - [add_nms_integration migration.sql](file://prisma/migrations/20260331134657_add_nms_integration/migration.sql)
+- [client.ts](file://lib/license/client.ts)
 
 ## Detailed Component Analysis
 
@@ -400,7 +438,7 @@ D --- U2
   - Primary key: id
   - Indexes: (deviceId, timestamp)
 - Alarm Management Tables
-  - AlarmDefinition, AlarmEvent, AlarmCheckLog, CachedEvent, NotificationConfig, SystemConfig, NotificationDLQ, AlarmWhitelist
+  - AlarmDefinition, AlarmEvent, AlarmCooldown, AlarmCheckLog, CachedEvent, NotificationConfig, SystemConfig, NotificationDLQ, AlarmWhitelist
   - JSONB fields for flexible payloads
   - Indexes optimized for time-series and lookup performance
 
@@ -441,8 +479,198 @@ D --- U2
 - [schema.prisma](file://prisma/schema.prisma)
 - [add_nms_integration migration.sql](file://prisma/migrations/20260331134657_add_nms_integration/migration.sql)
 
+## License Management System
+
+### Licensing Infrastructure Overview
+The InfraScope licensing system provides comprehensive license management for both trial and commercial deployments. It includes customer management, license key validation, machine activation tracking, and periodic usage reporting.
+
+### Core Licensing Entities
+
+#### Customer Entity
+- Represents the license holder with company and contact information
+- Supports different tiers (TRIAL, STANDARD, ENTERPRISE)
+- Tracks customer status (ACTIVE, INACTIVE, SUSPENDED)
+- Links to multiple licenses and activations
+
+#### License Entity
+- Contains the license key with unique constraint
+- Links to a Customer through foreign key relationship
+- Defines license tier, device/user limits, and validity period
+- Tracks activation limit and current status
+- Maintains creation/update timestamps
+
+#### LicenseActivation Entity
+- Tracks individual machine activations for each license
+- Uses composite unique constraint (licenseId, machineId)
+- Stores machine identification, IP address, hostname, and version
+- Maintains activation status and usage data JSONB field
+- Records activation and last seen timestamps
+
+#### LicenseHeartbeat Entity
+- Records periodic usage reports from activated installations
+- Tracks device and user counts, application version, and IP address
+- Provides time-series data for license usage monitoring
+- Supports license limit warnings and expiration tracking
+
+```mermaid
+classDiagram
+class Customer {
++string id
++string companyName
++string contactName
++string email
++string? phone
++LicenseTier tier
++CustomerStatus status
++string? notes
++DateTime createdAt
++DateTime updatedAt
+}
+class License {
++string id
++string key
++string customerId
++LicenseTier tier
++int maxDevices
++int maxUsers
++DateTime validFrom
++DateTime validUntil
++LicenseStatus status
++int activationLimit
++DateTime createdAt
++DateTime updatedAt
+}
+class LicenseActivation {
++string id
++string licenseId
++string customerId
++string machineId
++DateTime activatedAt
++DateTime? lastSeenAt
++string? ipAddress
++string? hostname
++string? version
++ActivationStatus status
++Json? usageData
+}
+class LicenseHeartbeat {
++string id
++string licenseId
++string machineId
++int deviceCount
++int userCount
++string? appVersion
++string? ipAddress
++DateTime createdAt
+}
+Customer --> License : "holds"
+License --> LicenseActivation : "activates"
+License --> LicenseHeartbeat : "reports"
+LicenseActivation --> Customer : "belongs_to"
+LicenseActivation --> License : "belongs_to"
+LicenseHeartbeat --> License : "belongs_to"
+```
+
+**Diagram sources**
+- [schema.prisma](file://prisma/schema.prisma)
+- [client.ts](file://lib/license/client.ts)
+
+### License Management APIs
+
+#### Activation Endpoint
+- **POST /api/license/activate**
+- Validates license key and machine ID
+- Checks license status and activation limits
+- Creates or updates license activation record
+- Issues JWT token for subsequent validation
+- Returns activation token and license state
+
+#### Validation Endpoint
+- **POST /api/license/validate**
+- Validates existing license activation
+- Checks license status, customer status, and expiry
+- Updates last seen timestamp for active activations
+- Reissues JWT token if expired or missing
+- Returns validation status and license state
+
+#### Heartbeat Endpoint
+- **POST /api/license/heartbeat**
+- Records periodic usage data from activated installations
+- Updates activation last seen and usage data
+- Generates warnings for approaching license limits
+- Tracks device and user counts, application version
+- Returns success status and warnings
+
+#### Status Endpoint
+- **GET /api/license/status**
+- Provides current license status and usage statistics
+- Used by administrative license management interface
+- Combines license information with system usage metrics
+
+### License Validation Workflow
+
+```mermaid
+sequenceDiagram
+participant Client as "On-Premise Client"
+participant Server as "License Server"
+participant DB as "Database"
+Client->>Server : POST /api/license/activate
+Server->>DB : Validate license key
+DB-->>Server : License details
+Server->>DB : Check activation limits
+Server->>DB : Create/Update activation
+Server->>Server : Sign JWT token
+Server-->>Client : Token + License State
+loop Periodic Validation
+Client->>Server : POST /api/license/validate
+Server->>DB : Validate activation
+DB-->>Server : Activation details
+Server->>DB : Update last seen
+Server-->>Client : Validation + Token (if needed)
+end
+loop Periodic Heartbeat
+Client->>Server : POST /api/license/heartbeat
+Server->>DB : Record heartbeat
+Server->>DB : Update activation usage
+Server-->>Client : Success + Warnings
+end
+```
+
+**Diagram sources**
+- [activate/route.ts](file://app/api/license/activate/route.ts)
+- [validate/route.ts](file://app/api/license/validate/route.ts)
+- [heartbeat/route.ts](file://app/api/license/heartbeat/route.ts)
+- [client.ts](file://lib/license/client.ts)
+
+### License Token Management
+- Uses JWT (JSON Web Tokens) for secure license validation
+- Tokens signed with HS256 algorithm using configurable secret
+- Token expiration aligned with license expiry date
+- Supports automatic token refresh and renewal
+- Includes license metadata in token payload for offline validation
+
+### License Tier Enumeration
+- TRIAL: Limited functionality with grace period support
+- STANDARD: Basic commercial license with standard limits
+- ENTERPRISE: Full commercial license with enhanced limits
+
+### License Status Tracking
+- ACTIVE: License is valid and active
+- EXPIRED: License has passed validity period
+- REVOKED: License has been manually revoked
+- SUSPENDED: License has been temporarily suspended
+
+**Section sources**
+- [schema.prisma](file://prisma/schema.prisma)
+- [client.ts](file://lib/license/client.ts)
+- [jwt.ts](file://lib/license/jwt.ts)
+- [activate/route.ts](file://app/api/license/activate/route.ts)
+- [validate/route.ts](file://app/api/license/validate/route.ts)
+- [heartbeat/route.ts](file://app/api/license/heartbeat/route.ts)
+- [status/route.ts](file://app/api/license/status/route.ts)
+
 ## Dependency Analysis
-This section maps direct and indirect dependencies among entities, highlighting foreign keys and indexes that enforce referential integrity and enable efficient queries.
+This section maps direct and indirect dependencies among entities, highlighting foreign keys and indexes that enforce referential integrity and enable efficient queries. The licensing system introduces new relationships between customers, licenses, activations, and heartbeats.
 
 ```mermaid
 graph LR
@@ -474,6 +702,12 @@ DEV --> NMS_TL["nms_topology_links"]
 DEV --> NMS_DM["nms_device_metrics"]
 DEV --> NMS_IM["nms_interface_metrics"]
 DEV --> NMS_BK["nms_backups"]
+CUST["customers"] --> LIC["licenses"]
+LIC --> LACT["license_activations"]
+LIC --> LHB["license_heartbeats"]
+LACT --> CUST
+LACT --> LIC
+LHB --> LIC
 ```
 
 **Diagram sources**
@@ -481,12 +715,14 @@ DEV --> NMS_BK["nms_backups"]
 - [initial_schema migration.sql](file://prisma/migrations/20260101220408_initial_schema/migration.sql)
 - [enterprise_extension migration.sql](file://prisma/migrations/20260130053347_enterprise_extension/migration.sql)
 - [add_nms_integration migration.sql](file://prisma/migrations/20260331134657_add_nms_integration/migration.sql)
+- [client.ts](file://lib/license/client.ts)
 
 **Section sources**
 - [schema.prisma](file://prisma/schema.prisma)
 - [initial_schema migration.sql](file://prisma/migrations/20260101220408_initial_schema/migration.sql)
 - [enterprise_extension migration.sql](file://prisma/migrations/20260130053347_enterprise_extension/migration.sql)
 - [add_nms_integration migration.sql](file://prisma/migrations/20260331134657_add_nms_integration/migration.sql)
+- [client.ts](file://lib/license/client.ts)
 
 ## Performance Considerations
 - Indexes
@@ -502,12 +738,18 @@ DEV --> NMS_BK["nms_backups"]
   - Relationships: sourceDeviceId, targetDeviceId, relationshipType
   - NMS: nms_interfaces (nmsDeviceId, interfaceIndex), nms_health_metrics (nmsDeviceId, collectedAt), nms_topology_links (nmsDeviceId), nms_device_metrics (nmsDeviceId, metricType, collectedAt), nms_interface_metrics (nmsDeviceId, interfaceIndex, collectedAt), nms_backups (nmsDeviceId)
   - Alarms: alarm_events (alarmId, createdAt, severity), cached_events (logtype, eventTime), notification_dlq (status, nextRetry), alarm_whitelist (alarmCode, enabled)
+  - **License System**: licenses (customerId, status, key), license_activations (licenseId, machineId, status), license_heartbeats (licenseId, createdAt)
 - JSONB Usage
   - metadata fields on Device, Service, AuditLog, FirewallPolicy, FirewallAddress, AlarmDefinition, AlarmEvent, CachedEvent, NotificationDLQ, AlarmWhitelist enable flexible schema evolution without altering core tables.
+  - **License usageData JSONB field** stores dynamic usage statistics for each activation.
 - Time-Series Optimization
-  - Indexed composite keys on timestamps (e.g., device_health_snapshots, nms_health_metrics, nms_device_metrics, cached_events) support efficient range queries.
+  - Indexed composite keys on timestamps (e.g., device_health_snapshots, nms_health_metrics, nms_device_metrics, cached_events, license_heartbeats) support efficient range queries.
+  - **License heartbeat indexing** enables efficient license usage trend analysis.
 - Prisma Client
   - Singleton client configured to minimize logging overhead; adjust PRISMA_LOG_QUERIES for diagnostics.
+- **JWT Token Management**
+  - Efficient token validation reduces server load for license verification.
+  - Token caching minimizes repeated server requests for license validation.
 
 **Section sources**
 - [schema.prisma](file://prisma/schema.prisma)
@@ -515,6 +757,7 @@ DEV --> NMS_BK["nms_backups"]
 - [enterprise_extension migration.sql](file://prisma/migrations/20260130053347_enterprise_extension/migration.sql)
 - [add_nms_integration migration.sql](file://prisma/migrations/20260331134657_add_nms_integration/migration.sql)
 - [prisma.ts](file://lib/prisma.ts)
+- [jwt.ts](file://lib/license/jwt.ts)
 
 ## Troubleshooting Guide
 - Audit Trail
@@ -527,32 +770,44 @@ DEV --> NMS_BK["nms_backups"]
   - The migration script inserts NMS switches into devices with unique nms_device_id; verify uniqueness and conflict resolution.
 - Prisma Client
   - Ensure the singleton client is initialized and logging is disabled unless needed for diagnostics.
+- **License System Troubleshooting**
+  - **Activation Failures**: Check license key validity, customer status, and activation limits before attempting reactivation.
+  - **Validation Errors**: Verify JWT token signature and expiration; ensure license server connectivity.
+  - **Heartbeat Issues**: Monitor license_heartbeats table for missing reports; check network connectivity from client installations.
+  - **Grace Period**: During server unavailability, system operates in grace mode with cached license state.
+  - **Token Management**: Verify LICENSE_JWT_SECRET environment variable for proper JWT token signing and verification.
 
 **Section sources**
 - [schema.prisma](file://prisma/schema.prisma)
 - [detection-engine.ts](file://lib/alarms/detection-engine.ts)
 - [migrate_nms_db.sql](file://scripts/migrate_nms_db.sql)
 - [prisma.ts](file://lib/prisma.ts)
+- [client.ts](file://lib/license/client.ts)
+- [jwt.ts](file://lib/license/jwt.ts)
 
 ## Conclusion
-InfraScope’s database schema combines a robust hierarchical location model, flexible Device metadata, comprehensive network topology management, and enterprise-grade observability and alarm systems. Prisma-driven migrations maintain schema integrity, while JSONB fields and time-series tables accommodate evolving requirements. Carefully designed indexes and constraints ensure performance and data consistency across the platform.
+InfraScope's database schema combines a robust hierarchical location model, flexible Device metadata, comprehensive network topology management, enterprise-grade observability and alarm systems, and a sophisticated licensing infrastructure. Prisma-driven migrations maintain schema integrity, while JSONB fields and time-series tables accommodate evolving requirements. The licensing system provides comprehensive license management with JWT-based validation, machine activation tracking, and usage monitoring. Carefully designed indexes and constraints ensure performance and data consistency across the platform, supporting both trial and commercial deployment scenarios.
 
 ## Appendices
 
 ### Data Lifecycle and Retention Policies
-- Time-series tables (DeviceHealthSnapshot, NmsHealthMetric, NmsDeviceMetric, NmsInterfaceMetric, CachedEvent) should implement retention policies to manage growth. Recommended strategies:
-  - Partitioning by time (monthly/quarterly) for CachedEvent and NMS metrics.
+- Time-series tables (DeviceHealthSnapshot, NmsHealthMetric, NmsDeviceMetric, NmsInterfaceMetric, CachedEvent, LicenseHeartbeat) should implement retention policies to manage growth. Recommended strategies:
+  - Partitioning by time (monthly/quarterly) for CachedEvent, NMS metrics, and license heartbeats.
   - Archival jobs to move older data to cold storage.
   - Automated cleanup tasks to remove records older than 90–180 days based on compliance requirements.
+  - **License data retention**: Consider 2-year retention for license_heartbeats and license_activations for audit purposes.
 - Audit logs and alarm events can be retained per regulatory needs; consider compression and archival after initial review periods.
 
 ### Migration Strategies
 - Incremental Migrations
   - Use Prisma migrations to evolve the schema safely; each migration defines enums, tables, indexes, and foreign keys.
+  - **License system migrations**: New licensing tables are included in the main schema definition with appropriate foreign key relationships.
 - Data Migration
   - Use SQL scripts (e.g., migrate_nms_db.sql) to seed or transform data during environment setup.
+  - **Legacy license data**: Existing license information can be migrated to new licensing tables during system upgrade.
 - Rollback Planning
   - Keep previous migration artifacts; revert cautiously with careful index and constraint handling.
+  - **License rollback**: Ensure proper cleanup of JWT secrets and license cache files during rollback procedures.
 
 ### Sample Data Structures (Conceptual)
 - Device
@@ -573,5 +828,23 @@ InfraScope’s database schema combines a robust hierarchical location model, fl
   - id, sourceDeviceId, targetDeviceId, relationshipType, properties, source, confidence
 - NMS Tables
   - NmsInterface, NmsHealthMetric, NmsTopologyLink, NmsDiscoveryScan, NmsDiscoveredDevice, NmsDeviceMetric, NmsInterfaceMetric, NmsBackup
+- **License System Tables** *(Updated)*
+  - Customer: id, company_name, contact_name, email, phone, tier, status, notes, created_at, updated_at
+  - License: id, key, customer_id, tier, max_devices, max_users, valid_from, valid_until, status, activation_limit, created_at, updated_at
+  - LicenseActivation: id, license_id, customer_id, machine_id, activated_at, last_seen_at, ip_address, hostname, version, status, usage_data
+  - LicenseHeartbeat: id, license_id, machine_id, device_count, user_count, app_version, ip_address, created_at
 
-[No sources needed since this section provides conceptual summaries]
+### License System Configuration
+- **Environment Variables**:
+  - LICENSE_SERVER_URL: Central license server endpoint (default: https://license.infrascope.com)
+  - LICENSE_JWT_SECRET: Secret key for JWT token signing and verification
+  - LICENSE_KEY: Customer license key for on-premise installations
+- **Cache Management**:
+  - Local cache file for license state persistence during network outages
+  - 7-day grace period for server unavailability
+  - Automatic cache validation and renewal
+- **Security Considerations**:
+  - JWT tokens include license metadata and expiration
+  - Token verification validates signature and expiration
+  - Usage data is transmitted securely with authorization headers
+  - License keys are masked in logs and responses
