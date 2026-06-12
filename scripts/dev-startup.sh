@@ -52,6 +52,19 @@ echo "   - API: $APP_URL/api"
 echo "   - Dashboard: $APP_URL/dashboard"
 echo "   - Health: $APP_URL/api/health"
 
+# Pre-warm routes in background AFTER a 30s delay to avoid
+# conflicting with the user's initial page load (Turbopack HMR)
+(
+  sleep 30
+  echo "🔥 Pre-warming routes (background)..."
+  curl -s "$APP_URL/dashboard" > /dev/null 2>&1
+  curl -s "$APP_URL/devices" > /dev/null 2>&1
+  curl -s "$APP_URL/api/devices?limit=10&mode=minimal" > /dev/null 2>&1
+  curl -s "$APP_URL/api/services?limit=10&mode=minimal" > /dev/null 2>&1
+  curl -s "$APP_URL/api/buildings" > /dev/null 2>&1
+  echo "🚀 Route pre-warming complete."
+) &
+
 # Keep this process alive so the container doesn't exit
 # (next dev runs as a sibling process via &, container exits if this exits)
 exec tail -f /dev/null

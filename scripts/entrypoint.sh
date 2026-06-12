@@ -40,48 +40,5 @@ fi
 echo "✅ Database ready!"
 echo "🌐 Starting Next.js application on port $PORT..."
 
-# Start alarm services in background after server is ready
-(
-  echo "⏰ Waiting for server to be ready before starting alarm services..."
-  sleep 15  # Wait for Next.js to compile and start
-  
-  # Use internal container port (PORT env var, default 3000)
-  APP_PORT=${PORT:-3000}
-  
-  # Wait for health endpoint to respond
-  for i in $(seq 1 30); do
-    if curl -s "http://localhost:${APP_PORT}/api/health" > /dev/null 2>&1; then
-      echo "✅ Server is ready! Starting alarm services..."
-      
-      # Start alarm scheduler
-      curl -s -X POST "http://localhost:${APP_PORT}/api/alarms/scheduler" > /dev/null 2>&1
-      echo "⏰ Alarm scheduler started (15 minute interval)"
-      
-      # Start alarm monitor
-      curl -s -X POST "http://localhost:${APP_PORT}/api/alarms/monitor" \
-        -H "Content-Type: application/json" \
-        -d '{"action":"start","intervalMinutes":5}' > /dev/null 2>&1
-      echo "🔔 Alarm monitor started (5 minute interval)"
-
-      # Pre-warm most visited routes to trigger compilation at startup
-      # so users don't wait 10-30s on first visit
-      echo "🔥 Pre-warming routes to compile them at startup..."
-      curl -s "http://localhost:${APP_PORT}/dashboard" > /dev/null 2>&1
-      echo "  ✓ /dashboard compiled"
-      curl -s "http://localhost:${APP_PORT}/devices" > /dev/null 2>&1
-      echo "  ✓ /devices compiled"
-      curl -s "http://localhost:${APP_PORT}/api/devices?limit=10&mode=minimal" > /dev/null 2>&1
-      curl -s "http://localhost:${APP_PORT}/api/services?limit=10&mode=minimal" > /dev/null 2>&1
-      curl -s "http://localhost:${APP_PORT}/api/buildings" > /dev/null 2>&1
-      echo "  ✓ Core APIs compiled"
-      echo "🚀 All pre-warming complete. First page loads will now be instant!"
-      
-      break
-    fi
-    echo "   Waiting for server... Attempt $i/30"
-    sleep 2
-  done
-) &
-
-# Execute the main application
+# Alarm services + pre-warming handled by dev-startup.sh
 exec "$@"

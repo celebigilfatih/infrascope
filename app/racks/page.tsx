@@ -202,77 +202,6 @@ export default function RacksPage() {
     return r.maxUnits > 0 && (used / r.maxUnits) * 100 >= 90;
   }).length;
 
-  const FormModal = ({ isEdit }: { isEdit: boolean }) => (
-    <Dialog open={isEdit ? !!editRack : addOpen} onOpenChange={(o) => { if (!o) { isEdit ? setEditRack(null) : setAddOpen(false); } }}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>{isEdit ? 'Rack Düzenle' : 'Yeni Rack Ekle'}</DialogTitle>
-          <DialogDescription>{isEdit ? 'Rack bilgilerini güncelleyin.' : 'Yeni rack kaydı oluşturun.'}</DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4 py-2">
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Rack Adı *</label>
-            <Input placeholder="Kabinet_1" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Oda *</label>
-            <Select value={form.roomId} onValueChange={v => setForm({ ...form, roomId: v })}>
-              <SelectTrigger><SelectValue placeholder="Oda seçin" /></SelectTrigger>
-              <SelectContent>
-                {rooms.map(r => (
-                  <SelectItem key={r.id} value={r.id}>
-                    {r.name}{r.floor?.building ? ` (${r.floor.building.name})` : ''}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Tip</label>
-              <Select value={form.type} onValueChange={v => setForm({ ...form, type: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="RACK_42U">42U Rack</SelectItem>
-                  <SelectItem value="RACK_45U">45U Rack</SelectItem>
-                  <SelectItem value="CUSTOM">Özel</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Max Ünite (U)</label>
-              <Input type="number" min={1} max={100} value={form.maxUnits} onChange={e => setForm({ ...form, maxUnits: e.target.value })} />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Durum</label>
-              <Select value={form.operationalStatus} onValueChange={v => setForm({ ...form, operationalStatus: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="OPERATIONAL">Operasyonel</SelectItem>
-                  <SelectItem value="MAINTENANCE">Bakımda</SelectItem>
-                  <SelectItem value="DECOMMISSIONED">Devre Dışı</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Konum</label>
-              <Input placeholder="Örn: Sıra A" value={form.position} onChange={e => setForm({ ...form, position: e.target.value })} />
-            </div>
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => isEdit ? setEditRack(null) : setAddOpen(false)} disabled={saving}>İptal</Button>
-          <Button onClick={handleSave} disabled={saving}>
-            {saving ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : null}
-            {isEdit ? 'Güncelle' : 'Oluştur'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
@@ -415,10 +344,144 @@ export default function RacksPage() {
       )}
 
       {/* Add Modal */}
-      <FormModal isEdit={false} />
+      <Dialog open={addOpen} onOpenChange={o => { if (!o) setAddOpen(false); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Yeni Rack Ekle</DialogTitle>
+            <DialogDescription>Yeni rack kaydı oluşturun.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Rack Adı *</label>
+              <Input placeholder="Kabinet_1" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Oda *</label>
+              <Select value={form.roomId} onValueChange={v => setForm({ ...form, roomId: v })}>
+                <SelectTrigger><SelectValue placeholder="Oda seçin" /></SelectTrigger>
+                <SelectContent>
+                  {rooms.map(r => (
+                    <SelectItem key={r.id} value={r.id}>
+                      {r.name}{r.floor?.building ? ` (${r.floor.building.name})` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Tip</label>
+                <Select value={form.type} onValueChange={v => setForm({ ...form, type: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="RACK_42U">42U Rack</SelectItem>
+                    <SelectItem value="RACK_45U">45U Rack</SelectItem>
+                    <SelectItem value="CUSTOM">Özel</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Max Ünite (U)</label>
+                <Input type="number" min={1} max={100} value={form.maxUnits} onChange={e => setForm({ ...form, maxUnits: e.target.value })} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Durum</label>
+                <Select value={form.operationalStatus} onValueChange={v => setForm({ ...form, operationalStatus: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="OPERATIONAL">Operasyonel</SelectItem>
+                    <SelectItem value="MAINTENANCE">Bakımda</SelectItem>
+                    <SelectItem value="DECOMMISSIONED">Devre Dışı</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Konum</label>
+                <Input placeholder="Örn: Sıra A" value={form.position} onChange={e => setForm({ ...form, position: e.target.value })} />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddOpen(false)} disabled={saving}>İptal</Button>
+            <Button onClick={handleSave} disabled={saving}>
+              {saving ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : null}
+              Oluştur
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Modal */}
-      <FormModal isEdit={true} />
+      <Dialog open={!!editRack} onOpenChange={o => { if (!o) setEditRack(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Rack Düzenle</DialogTitle>
+            <DialogDescription>Rack bilgilerini güncelleyin.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Rack Adı *</label>
+              <Input placeholder="Kabinet_1" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Oda *</label>
+              <Select value={form.roomId} onValueChange={v => setForm({ ...form, roomId: v })}>
+                <SelectTrigger><SelectValue placeholder="Oda seçin" /></SelectTrigger>
+                <SelectContent>
+                  {rooms.map(r => (
+                    <SelectItem key={r.id} value={r.id}>
+                      {r.name}{r.floor?.building ? ` (${r.floor.building.name})` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Tip</label>
+                <Select value={form.type} onValueChange={v => setForm({ ...form, type: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="RACK_42U">42U Rack</SelectItem>
+                    <SelectItem value="RACK_45U">45U Rack</SelectItem>
+                    <SelectItem value="CUSTOM">Özel</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Max Ünite (U)</label>
+                <Input type="number" min={1} max={100} value={form.maxUnits} onChange={e => setForm({ ...form, maxUnits: e.target.value })} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Durum</label>
+                <Select value={form.operationalStatus} onValueChange={v => setForm({ ...form, operationalStatus: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="OPERATIONAL">Operasyonel</SelectItem>
+                    <SelectItem value="MAINTENANCE">Bakımda</SelectItem>
+                    <SelectItem value="DECOMMISSIONED">Devre Dışı</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Konum</label>
+                <Input placeholder="Örn: Sıra A" value={form.position} onChange={e => setForm({ ...form, position: e.target.value })} />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditRack(null)} disabled={saving}>İptal</Button>
+            <Button onClick={handleSave} disabled={saving}>
+              {saving ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : null}
+              Güncelle
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Confirmation */}
       <Dialog open={!!deleteRack} onOpenChange={o => { if (!o) setDeleteRack(null); }}>

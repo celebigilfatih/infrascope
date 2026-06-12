@@ -62,11 +62,10 @@
 
 ## Update Summary
 **Changes Made**
-- Added comprehensive authentication endpoints (login, logout, me) with session management
-- Added complete license management endpoints (activate, validate, heartbeat, status)
-- Enhanced security middleware with rate limiting and permission enforcement
-- Integrated license validation middleware for protected routes
-- Updated authentication and authorization flows throughout the API
+- Enhanced rate limiting system with differentiated policies (10 requests per minute for authentication vs 100 for general API)
+- Improved development environment handling for Edge Runtime and localhost traffic isolation
+- Updated security middleware to apply rate limiting to all API routes including public ones
+- Added comprehensive rate limiting configuration with sliding window implementation
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -85,7 +84,7 @@ This document describes the InfraScope RESTful API surface for public and intern
 - Public endpoints for organizations, buildings, devices, services, floors, rooms, racks, network connections, topology, integrations, health, security, and users.
 - **New**: Authentication endpoints (login, logout, me) with session-based authentication.
 - **New**: License management endpoints (activate, validate, heartbeat, status) for enterprise licensing.
-- **Enhanced**: Security middleware with rate limiting, permission enforcement, and license validation.
+- **Enhanced**: Security middleware with comprehensive rate limiting, permission enforcement, and license validation.
 - Internal service endpoints for network monitoring and discovery (NMS service).
 - Request/response schemas, HTTP methods, URL patterns, authentication, error handling, status codes, and practical examples.
 - API versioning, rate limiting, security considerations, testing strategies, and performance optimization tips.
@@ -96,7 +95,8 @@ The API is implemented as Next.js App Router handlers under app/api. Data access
 ```mermaid
 graph TB
 Client["Client"] --> Middleware["Security Middleware<br/>middleware.ts"]
-Middleware --> PublicAPI["Next.js API Routes<br/>app/api/*"]
+Middleware --> RateLimit["Rate Limiting<br/>lib/rate-limit.ts"]
+RateLimit --> PublicAPI["Next.js API Routes<br/>app/api/*"]
 PublicAPI --> Prisma["Prisma Client<br/>lib/prisma.ts"]
 PublicAPI --> Utils["Utilities<br/>lib/api.ts"]
 PublicAPI --> Auth["Auth Utilities<br/>lib/auth/*"]
@@ -130,7 +130,7 @@ NMS -. "Internal only (Docker network)" .- PublicAPI
 
 ## Core Components
 - Public REST API: Implemented as Next.js App Router handlers returning JSON with standardized success/error envelopes.
-- **Enhanced**: Security middleware with rate limiting, session verification, and permission enforcement.
+- **Enhanced**: Security middleware with comprehensive rate limiting, session verification, and permission enforcement.
 - **New**: Authentication system with JWT-based sessions and bcrypt password hashing.
 - **New**: License management system with JWT-based license tokens and validation.
 - Data persistence: Prisma Client singleton configured with environment-aware logging.
@@ -140,7 +140,8 @@ NMS -. "Internal only (Docker network)" .- PublicAPI
 Key behaviors:
 - Standardized response envelope: success flag, data payload, timestamps, and optional cached metadata.
 - Error responses: structured error messages and explicit HTTP status codes.
-- **Enhanced**: Rate limiting with different configurations for auth vs general API endpoints.
+- **Enhanced**: Comprehensive rate limiting with different configurations for auth (10 req/min) vs general API (100 req/min).
+- **Enhanced**: Enhanced development environment handling with Edge Runtime and localhost traffic isolation.
 - **Enhanced**: Permission-based access control using role-based resource permissions.
 - Caching: Select endpoints cache results for short TTLs to reduce DB load.
 - Pagination: Devices and services endpoints support page/limit with bounded limits.
@@ -148,6 +149,7 @@ Key behaviors:
 **Section sources**
 - [middleware.ts:35-131](file://middleware.ts#L35-L131)
 - [lib/rate-limit.ts:12-22](file://lib/rate-limit.ts#L12-L22)
+- [lib/rate-limit.ts:101-115](file://lib/rate-limit.ts#L101-L115)
 - [lib/auth/session.ts:34-61](file://lib/auth/session.ts#L34-L61)
 - [lib/auth/password.ts:9-18](file://lib/auth/password.ts#L9-L18)
 - [app/api/organizations/route.ts:9-88](file://app/api/organizations/route.ts#L9-L88)
@@ -161,6 +163,7 @@ Key behaviors:
 High-level interactions:
 - Clients call Next.js API routes for public resources.
 - Security middleware intercepts all API requests for rate limiting, authentication, and authorization.
+- Rate limiting applies to all API routes including public ones with differentiated policies.
 - Routes use Prisma to query the database and return JSON.
 - Internal NMS service runs independently and exposes endpoints for device polling, backups, discovery, and topology.
 
@@ -168,11 +171,14 @@ High-level interactions:
 sequenceDiagram
 participant C as "Client"
 participant M as "Security Middleware"
+participant RL as "Rate Limiter"
 participant R as "Next.js Route"
 participant P as "Prisma"
 participant DB as "PostgreSQL"
 C->>M : HTTP Request (with cookies)
-M->>M : Rate Limit Check
+M->>RL : Check Rate Limit (per-route policy)
+RL->>RL : Apply sliding window (10/100 req/min)
+RL-->>M : Allow/Deny with Retry-After
 M->>M : Session Verification
 M->>M : Permission Check
 M->>R : Forward if authorized
@@ -185,6 +191,7 @@ R-->>C : JSON {success, data, ...}
 
 **Diagram sources**
 - [middleware.ts:35-131](file://middleware.ts#L35-L131)
+- [lib/rate-limit.ts:32-68](file://lib/rate-limit.ts#L32-L68)
 - [app/api/organizations/route.ts:23-64](file://app/api/organizations/route.ts#L23-L64)
 - [lib/prisma.ts:10-20](file://lib/prisma.ts#L10-L20)
 
@@ -200,6 +207,7 @@ R-->>C : JSON {success, data, ...}
   - Response: Success with user info and httpOnly session cookie
   - Status codes: 200 OK, 400 Bad Request, 401 Unauthorized, 403 Forbidden, 500 Internal Server Error
   - Security: Password verification, account status validation, rate limiting
+  - Rate limiting: 10 requests per minute (auth policy)
   - Example curl: curl -s -X POST https://host/api/auth/login -H "Content-Type: application/json" -d '{"email":"user@example.com","password":"Password123!"}'
 
 - Logout Endpoint (/api/auth/logout):
@@ -207,6 +215,7 @@ R-->>C : JSON {success, data, ...}
   - Response: Success with cleared session cookie
   - Status codes: 200 OK, 500 Internal Server Error
   - Security: Clears httpOnly session cookie
+  - Rate limiting: 10 requests per minute (auth policy)
   - Example curl: curl -s -X POST https://host/api/auth/logout
 
 - Profile Endpoint (/api/auth/me):
@@ -214,6 +223,7 @@ R-->>C : JSON {success, data, ...}
   - Response: User profile information
   - Status codes: 200 OK, 401 Unauthorized, 403 Forbidden, 500 Internal Server Error
   - Security: Session verification required
+  - Rate limiting: 10 requests per minute (auth policy)
   - Example curl: curl -s -H "Cookie: infrascope_session=..." https://host/api/auth/me
 
 **Section sources**
@@ -222,6 +232,7 @@ R-->>C : JSON {success, data, ...}
 - [app/api/auth/me/route.ts:6-68](file://app/api/auth/me/route.ts#L6-L68)
 - [lib/auth/session.ts:34-61](file://lib/auth/session.ts#L34-L61)
 - [lib/auth/password.ts:16-18](file://lib/auth/password.ts#L16-L18)
+- [lib/rate-limit.ts:120-125](file://lib/rate-limit.ts#L120-L125)
 
 ### License Management Endpoints
 **New**: Complete license management system for enterprise licensing.
@@ -233,6 +244,7 @@ R-->>C : JSON {success, data, ...}
   - Response: { token: string, state: LicenseState }
   - Status codes: 200 OK, 400 Bad Request, 403 Forbidden, 404 Not Found, 500 Internal Server Error
   - Security: License validation, activation limits, machine ID tracking
+  - Rate limiting: 100 requests per minute (general API policy)
   - Example curl: curl -s -X POST https://host/api/license/activate -H "Content-Type: application/json" -d '{"licenseKey":"ABC123","machineId":"HOST001"}'
 
 - Validate Endpoint (/api/license/validate):
@@ -241,6 +253,7 @@ R-->>C : JSON {success, data, ...}
   - Response: { valid: boolean, state: LicenseState, token?: string }
   - Status codes: 200 OK, 400 Bad Request, 403 Forbidden, 404 Not Found, 500 Internal Server Error
   - Security: License validation, activation verification, periodic heartbeat
+  - Rate limiting: 100 requests per minute (general API policy)
   - Example curl: curl -s -X POST https://host/api/license/validate -H "Content-Type: application/json" -d '{"licenseKey":"ABC123","machineId":"HOST001"}'
 
 - Heartbeat Endpoint (/api/license/heartbeat):
@@ -249,6 +262,7 @@ R-->>C : JSON {success, data, ...}
   - Response: { success: boolean, warnings?: string[] }
   - Status codes: 200 OK, 400 Bad Request, 403 Forbidden, 404 Not Found, 500 Internal Server Error
   - Security: License validation, usage tracking, limit warnings
+  - Rate limiting: 100 requests per minute (general API policy)
   - Example curl: curl -s -X POST https://host/api/license/heartbeat -H "Content-Type: application/json" -d '{"licenseKey":"ABC123","machineId":"HOST001","deviceCount":10}'
 
 - Status Endpoint (/api/license/status):
@@ -256,6 +270,7 @@ R-->>C : JSON {success, data, ...}
   - Response: { license, usage: { deviceCount, userCount } }
   - Status codes: 200 OK, 500 Internal Server Error
   - Security: Admin-only access via license middleware
+  - Rate limiting: 100 requests per minute (general API policy)
   - Example curl: curl -s https://host/api/license/status
 
 **Section sources**
@@ -273,6 +288,7 @@ R-->>C : JSON {success, data, ...}
 - Response envelope: success, data, timestamp, cached (when applicable).
 - Status codes: 200 OK, 201 Created, 400 Bad Request, 500 Internal Server Error.
 - **Enhanced**: Protected by security middleware with permission checks.
+- **Enhanced**: Rate limited at 100 requests per minute (general API policy).
 - Example curl:
   - GET: curl -s https://host/api/organizations
   - POST: curl -s -X POST https://host/api/organizations -H "Content-Type: application/json" -d '{"name":"Org","code":"O1"}'
@@ -280,6 +296,7 @@ R-->>C : JSON {success, data, ...}
 **Section sources**
 - [app/api/organizations/route.ts:9-88](file://app/api/organizations/route.ts#L9-L88)
 - [middleware.ts:63-90](file://middleware.ts#L63-L90)
+- [lib/rate-limit.ts:120-125](file://lib/rate-limit.ts#L120-L125)
 
 ### Buildings
 - Base URL: /api/buildings
@@ -289,6 +306,7 @@ R-->>C : JSON {success, data, ...}
 - Response envelope: success, data, timestamp, cached (when applicable).
 - Status codes: 200 OK, 201 Created, 400 Bad Request, 500 Internal Server Error.
 - **Enhanced**: Protected by security middleware with permission checks.
+- **Enhanced**: Rate limited at 100 requests per minute (general API policy).
 - Example curl:
   - GET: curl -s https://host/api/buildings
   - POST: curl -s -X POST https://host/api/buildings -H "Content-Type: application/json" -d '{"name":"B1","organizationId":"<id>"}'
@@ -296,6 +314,7 @@ R-->>C : JSON {success, data, ...}
 **Section sources**
 - [app/api/buildings/route.ts:9-79](file://app/api/buildings/route.ts#L9-L79)
 - [middleware.ts:63-90](file://middleware.ts#L63-L90)
+- [lib/rate-limit.ts:120-125](file://lib/rate-limit.ts#L120-L125)
 
 ### Devices
 - Base URL: /api/devices
@@ -307,6 +326,7 @@ R-->>C : JSON {success, data, ...}
 - Response envelope: success, data, total, page, limit, totalPages, timestamp.
 - Status codes: 200 OK, 201 Created, 400 Bad Request, 500 Internal Server Error.
 - **Enhanced**: Protected by security middleware with permission checks.
+- **Enhanced**: Rate limited at 100 requests per minute (general API policy).
 - Example curl:
   - GET: curl -s "https://host/api/devices?page=1&limit=25&mode=minimal"
   - POST: curl -s -X POST https://host/api/devices -H "Content-Type: application/json" -d '{"name":"Server1","type":"PHYSICAL_SERVER","rackId":"<id>"}'
@@ -314,6 +334,7 @@ R-->>C : JSON {success, data, ...}
 **Section sources**
 - [app/api/devices/route.ts:10-94](file://app/api/devices/route.ts#L10-L94)
 - [middleware.ts:63-90](file://middleware.ts#L63-L90)
+- [lib/rate-limit.ts:120-125](file://lib/rate-limit.ts#L120-L125)
 
 ### Services
 - Base URL: /api/services
@@ -325,6 +346,7 @@ R-->>C : JSON {success, data, ...}
 - Response envelope: success, data, total, page, limit, totalPages, timestamp.
 - Status codes: 200 OK, 201 Created, 400 Bad Request, 500 Internal Server Error.
 - **Enhanced**: Protected by security middleware with permission checks.
+- **Enhanced**: Rate limited at 100 requests per minute (general API policy).
 - Example curl:
   - GET: curl -s "https://host/api/services?limit=50"
   - POST: curl -s -X POST https://host/api/services -H "Content-Type: application/json" -d '{"name":"Web","type":"TCP","port":80,"deviceId":"<id>"}'
@@ -332,6 +354,7 @@ R-->>C : JSON {success, data, ...}
 **Section sources**
 - [app/api/services/route.ts:4-75](file://app/api/services/route.ts#L4-L75)
 - [middleware.ts:63-90](file://middleware.ts#L63-L90)
+- [lib/rate-limit.ts:120-125](file://lib/rate-limit.ts#L120-L125)
 
 ### Floors
 - Base URL: /api/floors
@@ -341,6 +364,7 @@ R-->>C : JSON {success, data, ...}
 - Response envelope: success, data, timestamp, cached (when applicable).
 - Status codes: 200 OK, 201 Created, 400 Bad Request, 500 Internal Server Error.
 - **Enhanced**: Protected by security middleware with permission checks.
+- **Enhanced**: Rate limited at 100 requests per minute (general API policy).
 - Example curl:
   - GET: curl -s https://host/api/floors
   - POST: curl -s -X POST https://host/api/floors -H "Content-Type: application/json" -d '{"name":"F1","floorNumber":1,"buildingId":"<id>"}'
@@ -348,6 +372,7 @@ R-->>C : JSON {success, data, ...}
 **Section sources**
 - [app/api/floors/route.ts:9-70](file://app/api/floors/route.ts#L9-L70)
 - [middleware.ts:63-90](file://middleware.ts#L63-L90)
+- [lib/rate-limit.ts:120-125](file://lib/rate-limit.ts#L120-L125)
 
 ### Rooms
 - Base URL: /api/rooms
@@ -357,6 +382,7 @@ R-->>C : JSON {success, data, ...}
 - Response envelope: success, data, timestamp, cached (when applicable).
 - Status codes: 200 OK, 201 Created, 400 Bad Request, 500 Internal Server Error.
 - **Enhanced**: Protected by security middleware with permission checks.
+- **Enhanced**: Rate limited at 100 requests per minute (general API policy).
 - Example curl:
   - GET: curl -s https://host/api/rooms
   - POST: curl -s -X POST https://host/api/rooms -H "Content-Type: application/json" -d '{"name":"R101","floorId":"<id>"}'
@@ -364,6 +390,7 @@ R-->>C : JSON {success, data, ...}
 **Section sources**
 - [app/api/rooms/route.ts:9-72](file://app/api/rooms/route.ts#L9-L72)
 - [middleware.ts:63-90](file://middleware.ts#L63-L90)
+- [lib/rate-limit.ts:120-125](file://lib/rate-limit.ts#L120-L125)
 
 ### Racks
 - Base URL: /api/racks
@@ -373,6 +400,7 @@ R-->>C : JSON {success, data, ...}
 - Response envelope: success, data, timestamp, cached (when applicable).
 - Status codes: 200 OK, 201 Created, 400 Bad Request, 500 Internal Server Error.
 - **Enhanced**: Protected by security middleware with permission checks.
+- **Enhanced**: Rate limited at 100 requests per minute (general API policy).
 - Example curl:
   - GET: curl -s https://host/api/racks
   - POST: curl -s -X POST https://host/api/racks -H "Content-Type: application/json" -d '{"name":"A-01","roomId":"<id>"}'
@@ -380,6 +408,7 @@ R-->>C : JSON {success, data, ...}
 **Section sources**
 - [app/api/racks/route.ts:9-67](file://app/api/racks/route.ts#L9-L67)
 - [middleware.ts:63-90](file://middleware.ts#L63-L90)
+- [lib/rate-limit.ts:120-125](file://lib/rate-limit.ts#L120-L125)
 
 ### Network Connections
 - Base URL: /api/network-connections
@@ -389,6 +418,7 @@ R-->>C : JSON {success, data, ...}
 - Response envelope: success, data, timestamp.
 - Status codes: 200 OK, 201 Created, 400 Bad Request, 500 Internal Server Error.
 - **Enhanced**: Protected by security middleware with permission checks.
+- **Enhanced**: Rate limited at 100 requests per minute (general API policy).
 - Example curl:
   - GET: curl -s https://host/api/network-connections
   - POST: curl -s -X POST https://host/api/network-connections -H "Content-Type: application/json" -d '{"name":"Link1","sourcePortId":"<id>","destPortId":"<id>"}'
@@ -396,6 +426,7 @@ R-->>C : JSON {success, data, ...}
 **Section sources**
 - [app/api/network-connections/route.ts:4-34](file://app/api/network-connections/route.ts#L4-L34)
 - [middleware.ts:63-90](file://middleware.ts#L63-L90)
+- [lib/rate-limit.ts:120-125](file://lib/rate-limit.ts#L120-L125)
 
 ### Topology
 - Base URL: /api/topology
@@ -407,6 +438,7 @@ R-->>C : JSON {success, data, ...}
 - Response envelope: depends on action; errors return { error } with 400/500.
 - Status codes: 200 OK, 400 Bad Request, 500 Internal Server Error.
 - **Enhanced**: Protected by security middleware with permission checks.
+- **Enhanced**: Rate limited at 100 requests per minute (general API policy).
 - Example curl:
   - GET graph: curl -s "https://host/api/topology?action=graph"
   - GET stats: curl -s "https://host/api/topology?action=stats"
@@ -415,6 +447,7 @@ R-->>C : JSON {success, data, ...}
 **Section sources**
 - [app/api/topology/route.ts:4-28](file://app/api/topology/route.ts#L4-L28)
 - [middleware.ts:63-90](file://middleware.ts#L63-L90)
+- [lib/rate-limit.ts:120-125](file://lib/rate-limit.ts#L120-L125)
 
 ### Integrations
 Public integration endpoints under /api/integrations expose data and actions related to external systems.
@@ -422,6 +455,7 @@ Public integration endpoints under /api/integrations expose data and actions rel
 - FortiAnalyzer
   - Base: /api/integrations/fortianalyzer
   - Methods: GET (status), POST (MITRE mapping)
+  - Rate limiting: 100 requests per minute (general API policy)
   - Example curl:
     - GET: curl -s https://host/api/integrations/fortianalyzer
     - POST: curl -s -X POST https://host/api/integrations/fortianalyzer/mitre -H "Content-Type: application/json" -d '{}'
@@ -429,16 +463,19 @@ Public integration endpoints under /api/integrations expose data and actions rel
 - FortiGate
   - Base: /api/integrations/fortigate
   - Methods: GET (status)
+  - Rate limiting: 100 requests per minute (general API policy)
   - Example curl: curl -s https://host/api/integrations/fortigate
 
 - Zabbix
   - Base: /api/integrations/zabbix
   - Methods: GET (status)
+  - Rate limiting: 100 requests per minute (general API policy)
   - Example curl: curl -s https://host/api/integrations/zabbix
 
 - VMware
   - Base: /api/integrations/vmware
   - Methods: GET (status)
+  - Rate limiting: 100 requests per minute (general API policy)
   - Example curl: curl -s https://host/api/integrations/vmware
 
 - NMS (Network Monitoring Service)
@@ -458,6 +495,7 @@ Public integration endpoints under /api/integrations expose data and actions rel
     - /discovery/[scanId]: GET
     - /discovery/[scanId]/results: GET
     - /discovery/[scanId]/import: POST
+  - Rate limiting: 100 requests per minute (general API policy)
   - Example curl:
     - GET devices: curl -s https://host/api/integrations/nms/devices
     - POST discovery: curl -s -X POST https://host/api/integrations/nms/discovery -H "Content-Type: application/json" -d '{"cidr":"192.168.1.0/24"}'
@@ -487,36 +525,43 @@ Public integration endpoints under /api/integrations expose data and actions rel
 - Methods:
   - GET: Application health endpoint.
   - GET /api/health/alarms: Alarm-related health checks.
-- Example curl:
-  - GET: curl -s https://host/api/health
-  - GET: curl -s https://host/api/health/alarms
+  - Rate limiting: 100 requests per minute (general API policy)
+  - Example curl:
+    - GET: curl -s https://host/api/health
+    - GET: curl -s https://host/api/health/alarms
 
 **Section sources**
 - [app/api/health/route.ts](file://app/api/health/route.ts)
 - [app/api/health/alarms/route.ts](file://app/api/health/alarms/route.ts)
+- [lib/rate-limit.ts:120-125](file://lib/rate-limit.ts#L120-L125)
 
 ### Security
 - Quarantine
   - Base: /api/security/quarantine
   - Methods: GET (status)
+  - Rate limiting: 100 requests per minute (general API policy)
   - Example curl: curl -s https://host/api/security/quarantine
 
 - Risky Rules
   - Base: /api/security/risky-rules
   - Methods: GET (status)
+  - Rate limiting: 100 requests per minute (general API policy)
   - Example curl: curl -s https://host/api/security/risky-rules
 
 **Section sources**
 - [app/api/security/quarantine/route.ts](file://app/api/security/quarantine/route.ts)
 - [app/api/security/risky-rules/route.ts](file://app/api/security/risky-rules/route.ts)
+- [lib/rate-limit.ts:120-125](file://lib/rate-limit.ts#L120-L125)
 
 ### Users
 - Base URL: /api/users
 - Methods: GET (status)
+- Rate limiting: 100 requests per minute (general API policy)
 - Example curl: curl -s https://host/api/users
 
 **Section sources**
 - [app/api/users/route.ts](file://app/api/users/route.ts)
+- [lib/rate-limit.ts:120-125](file://lib/rate-limit.ts#L120-L125)
 
 ### Internal Service API: NMS (Network Monitoring Service)
 The NMS service is internal-only and runs on a dedicated port. It provides:
@@ -593,7 +638,8 @@ Orchestrator --> DB["PostgreSQL"]
 - Caching: Several endpoints cache results for short TTLs to reduce DB load.
 - Pagination: Devices and services enforce upper bounds on limit and compute total pages.
 - Minimal mode: Devices and services support minimal mode to avoid heavy joins for dashboards.
-- **Enhanced**: Rate limiting with different configurations for auth (10 req/min) vs general API (100 req/min).
+- **Enhanced**: Comprehensive rate limiting with different configurations for auth (10 req/min) vs general API (100 req/min).
+- **Enhanced**: Enhanced development environment handling with Edge Runtime and localhost traffic isolation.
 - **Enhanced**: Session-based authentication reduces repeated password verification overhead.
 - **New**: License token validation is lightweight and cached in memory.
 - NMS polling: Concurrent polling with dynamic intervals and SSH fallback reduces timeouts and improves reliability.
@@ -606,11 +652,13 @@ Recommendations:
 - Apply client-side caching for repeated reads of static data.
 - **New**: Implement exponential backoff for license validation failures.
 - **New**: Use session cookies instead of API keys for better security and performance.
+- **New**: Configure rate limit headers to optimize request scheduling and implement client-side backoff strategies.
 
 **Section sources**
 - [app/api/devices/route.ts:42-71](file://app/api/devices/route.ts#L42-L71)
 - [app/api/services/route.ts:10-27](file://app/api/services/route.ts#L10-L27)
 - [lib/rate-limit.ts:12-22](file://lib/rate-limit.ts#L12-L22)
+- [lib/rate-limit.ts:101-115](file://lib/rate-limit.ts#L101-L115)
 - [lib/auth/session.ts:34-61](file://lib/auth/session.ts#L34-L61)
 - [lib/license/middleware.ts:175-182](file://lib/license/middleware.ts#L175-L182)
 - [nms_service/orchestrator.py:61-70](file://nms_service/orchestrator.py#L61-L70)
@@ -622,7 +670,7 @@ Common issues and resolutions:
 - Database errors: Unexpected failures return 500 with error message.
 - **New**: Authentication failures: Invalid credentials return 401, session expiration returns 401.
 - **New**: Authorization failures: Insufficient permissions return 403 with required resource/action.
-- **New**: Rate limiting: Excessive requests return 429 with Retry-After header.
+- **New**: Rate limiting: Excessive requests return 429 with Retry-After header and rate limit policy explanation.
 - **New**: License validation failures: Invalid license returns 403 with grace mode information.
 - NMS device not registered: Poll/backups return 404 when device is not registered.
 - SSH backup failures: May return 502 if no output or connection errors occur.
@@ -651,7 +699,7 @@ Client-side helpers:
 - [lib/api.ts:51-56](file://lib/api.ts#L51-L56)
 
 ## Conclusion
-InfraScope provides a comprehensive REST API for infrastructure modeling and monitoring, with public endpoints for organizations, buildings, devices, services, and topology, plus robust integration endpoints for Fortinet, Zabbix, VMware, and the internal NMS service. **Enhanced** with a complete authentication system using JWT sessions, **enhanced** with rate limiting and permission enforcement, and **new** with comprehensive license management for enterprise deployments. Responses follow a consistent envelope, with caching, pagination, and error handling designed for production use. The NMS service offers scalable SNMP/SSH polling, discovery, and topology retrieval for network monitoring.
+InfraScope provides a comprehensive REST API for infrastructure modeling and monitoring, with public endpoints for organizations, buildings, devices, services, and topology, plus robust integration endpoints for Fortinet, Zabbix, VMware, and the internal NMS service. **Enhanced** with a complete authentication system using JWT sessions, **enhanced** with comprehensive rate limiting and permission enforcement, and **new** with comprehensive license management for enterprise deployments. Responses follow a consistent envelope, with caching, pagination, and error handling designed for production use. The NMS service offers scalable SNMP/SSH polling, discovery, and topology retrieval for network monitoring.
 
 ## Appendices
 
@@ -663,35 +711,47 @@ InfraScope provides a comprehensive REST API for infrastructure modeling and mon
 - [nms_service/main.py:40-42](file://nms_service/main.py#L40-L42)
 
 ### Rate Limiting
-**Enhanced**: Comprehensive rate limiting implemented across all API routes.
+**Enhanced**: Comprehensive rate limiting system implemented with differentiated policies.
 
-- **Auth endpoints** (/api/auth/*): Strict limit of 10 requests per minute to prevent brute-force attacks.
-- **General API endpoints** (/api/* excluding auth): Generous limit of 100 requests per minute to prevent abuse.
+- **Auth endpoints** (/api/auth/*): Strict limit of 10 requests per minute to prevent brute-force attacks and credential stuffing.
+- **General API endpoints** (/api/* excluding auth): Generous limit of 100 requests per minute to prevent abuse while allowing normal API usage.
 - **Implementation**: In-memory sliding window with automatic cleanup to prevent memory leaks.
-- **IP Detection**: Uses x-forwarded-for header for production, with development fallbacks.
+- **IP Detection**: Uses x-forwarded-for header for production, with development fallbacks including Edge Runtime isolation.
 - **Headers**: Returns Retry-After header with seconds until reset on 429 responses.
+- **Development Isolation**: Each localhost request gets a unique key (`dev-{timestamp}-{random}`) to prevent all traffic from sharing one rate-limit bucket, covering both local development and Edge Runtime scenarios.
+
+Policy Details:
+- **Sliding Window**: Only timestamps within the last 60 seconds count toward the limit.
+- **Memory Management**: Automatic pruning removes old entries and implements LRU eviction when store exceeds 10,000 entries.
+- **Cleanup Strategy**: Periodic cleanup runs every 1000 requests to maintain optimal performance.
+- **Graceful Degradation**: Rate limiting continues to work even with memory pressure.
 
 Recommendations:
 - Implement exponential backoff client-side for 429 responses.
 - Consider upgrading to Redis-based rate limiting for multi-instance deployments.
 - Monitor rate limit violations in production logs.
+- Use appropriate rate limit headers to optimize request scheduling.
+- For development, expect isolated rate limiting buckets per browser tab/connection.
 
 **Section sources**
 - [lib/rate-limit.ts:12-22](file://lib/rate-limit.ts#L12-L22)
 - [lib/rate-limit.ts:122-127](file://lib/rate-limit.ts#L122-L127)
+- [lib/rate-limit.ts:101-115](file://lib/rate-limit.ts#L101-L115)
 - [middleware.ts:43-55](file://middleware.ts#L43-L55)
+- [lib/rate-limit.ts:120-125](file://lib/rate-limit.ts#L120-L125)
 
 ### Security Considerations
 **Enhanced**: Comprehensive security implementation with multiple layers.
 
 - **Authentication**: JWT-based session management with httpOnly cookies, secure flags, and SameSite protection.
 - **Authorization**: Role-based access control with resource-specific permissions.
-- **Rate Limiting**: Application-level rate limiting for all API endpoints.
+- **Rate Limiting**: Application-level rate limiting for all API endpoints with differentiated policies.
 - **Input Validation**: Zod schema validation for all request bodies.
 - **Password Security**: bcrypt hashing with configurable rounds.
 - **License Validation**: JWT-based license tokens with automatic renewal.
 - **TLS Safety**: Production security check for NODE_TLS_REJECT_UNAUTHORIZED.
 - **Internal Service**: NMS service is intended for internal Docker network exposure only.
+- **Development Protection**: Enhanced localhost traffic isolation prevents rate limiting conflicts in development environments.
 
 Best Practices:
 - Always use HTTPS in production environments.
@@ -699,6 +759,7 @@ Best Practices:
 - Regularly rotate JWT secrets and license keys.
 - Monitor authentication attempts and rate limit violations.
 - Implement proper session timeout handling.
+- Configure appropriate rate limit headers for client-side optimization.
 
 **Section sources**
 - [middleware.ts:35-131](file://middleware.ts#L35-L131)
@@ -709,14 +770,15 @@ Best Practices:
 
 ### Testing Strategies
 - Use the included testing guides for quick start and API testing.
-- **New**: Test authentication flow: login → me → logout.
-- **New**: Test license management: activate → validate → heartbeat → status.
+- **New**: Test authentication flow: login → me → logout with rate limiting considerations.
+- **New**: Test license management: activate → validate → heartbeat → status with rate limiting.
+- **New**: Test rate limiting behavior: exceed auth limit (10/min) vs general API limit (100/min).
 - Example scenarios:
   - List organizations and buildings.
   - Create devices and services, then paginate and filter.
   - Trigger NMS discovery scans and poll results.
   - Retrieve health and interface metrics for devices.
-  - Test rate limiting by sending multiple requests quickly.
+  - Test rate limiting by sending multiple requests quickly to different endpoint types.
 
 **Section sources**
 - [docs/API_TESTING_GUIDE.md](file://docs/API_TESTING_GUIDE.md)
@@ -725,24 +787,29 @@ Best Practices:
 ### Client Implementation Guidelines
 - Use the client helpers to centralize HTTP calls and error handling.
 - **New**: Implement session-based authentication with cookie management.
-- **New**: Handle rate limit responses with exponential backoff.
+- **New**: Handle rate limit responses with exponential backoff and Retry-After headers.
 - **New**: Implement license token refresh logic.
+- **New**: Respect differentiated rate limits for auth vs general API endpoints.
 - Respect pagination and limits; prefer minimal mode for dashboards.
 - Cache responses for frequently accessed static lists.
 - **New**: Implement proper error handling for authentication, authorization, and rate limit failures.
+- **New**: Configure client-side rate limiting awareness for different endpoint categories.
 
 **Section sources**
 - [lib/api.ts:1-57](file://lib/api.ts#L1-L57)
 - [lib/auth/session.ts:101-107](file://lib/auth/session.ts#L101-L107)
 - [lib/rate-limit.ts:52-54](file://lib/rate-limit.ts#L52-L54)
+- [lib/rate-limit.ts:120-125](file://lib/rate-limit.ts#L120-L125)
 
 ### Performance Optimization Tips
 - Enable Prisma query logging only during diagnostics.
 - Adjust NMS concurrency and intervals based on device counts and network conditions.
 - Use minimal mode for listing endpoints to reduce payload sizes.
 - **New**: Implement client-side session caching to reduce authentication overhead.
-- **New**: Use rate limit headers to optimize request scheduling.
+- **New**: Use rate limit headers to optimize request scheduling and implement intelligent backoff strategies.
 - **New**: Implement license token caching with automatic refresh.
+- **New**: Configure client-side awareness of auth endpoint rate limits (10/min) vs general API limits (100/min).
+- **New**: Optimize development workflows by understanding localhost traffic isolation behavior.
 
 **Section sources**
 - [lib/prisma.ts:13-15](file://lib/prisma.ts#L13-L15)
@@ -751,3 +818,4 @@ Best Practices:
 - [ALARM_PERFORMANCE_OPTIMIZATION.md](file://ALARM_PERFORMANCE_OPTIMIZATION.md)
 - [lib/auth/session.ts:34-40](file://lib/auth/session.ts#L34-L40)
 - [lib/rate-limit.ts:32-68](file://lib/rate-limit.ts#L32-L68)
+- [lib/rate-limit.ts:101-115](file://lib/rate-limit.ts#L101-L115)

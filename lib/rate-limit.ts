@@ -26,13 +26,34 @@ const MAX_STORE_SIZE = 10_000;
 let callCount = 0;
 
 /**
+ * IPs that indicate local development environment (Docker Desktop, localhost).
+ * These should bypass rate limiting because all browser traffic appears to come
+ * from the same gateway IP in Docker Desktop environments.
+ */
+const DEV_BYPASS_IPS = new Set([
+  '127.0.0.1',
+  '::1',
+  '::ffff:127.0.0.1',
+  '::ffff:192.168.65.1',  // Docker Desktop macOS/Windows host gateway
+  '192.168.65.1',
+  '172.17.0.1',            // Docker bridge gateway (Linux)
+  '::ffff:172.17.0.1',
+]);
+
+/**
  * Check if a request from the given IP is rate-limited.
  * Uses a sliding window: only timestamps within `windowMs` of now count.
+ * Bypasses rate limiting for local development IPs.
  */
 export function isRateLimited(
   ip: string,
   config: RateLimitConfig
 ): { limited: boolean; retryAfterMs: number } {
+  // Bypass rate limiting for local development IPs
+  if (DEV_BYPASS_IPS.has(ip)) {
+    return { limited: false, retryAfterMs: 0 };
+  }
+
   const now = Date.now();
   const windowStart = now - config.windowMs;
 

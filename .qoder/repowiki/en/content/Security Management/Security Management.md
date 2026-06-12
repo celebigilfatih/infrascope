@@ -20,17 +20,17 @@
 - [app/api/auth/logout/route.ts](file://app/api/auth/logout/route.ts)
 - [app/api/auth/me/route.ts](file://app/api/auth/me/route.ts)
 - [lib/validators/auth.ts](file://lib/validators/auth.ts)
+- [lib/auth/password.ts](file://lib/auth/password.ts)
 </cite>
 
 ## Update Summary
 **Changes Made**
-- Added comprehensive authentication system documentation with JWT-based session management
-- Documented new security middleware with rate limiting and RBAC enforcement
-- Updated firewall policy management to reflect new authentication requirements
-- Enhanced security analytics with rate limiting and session-based access controls
-- Added security dashboard components with session-aware access
-- Updated MITRE ATT&CK integration with proper authentication flow
-- Documented enhanced logging and audit capabilities
+- Enhanced authentication system documentation with comprehensive JWT-based session management
+- Added bcrypt password hashing integration with secure password validation
+- Updated session cookie implementation with httpOnly and SameSite attributes
+- Documented automatic Retry-After header support for rate limiting
+- Added comprehensive password strength validation and security requirements
+- Enhanced security middleware with improved rate limiting and session handling
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -45,7 +45,7 @@
 10. [Appendices](#appendices)
 
 ## Introduction
-This document describes the security management capabilities implemented in the codebase, focusing on firewall policy risk assessment, quarantine management for compromised devices, security analytics derived from Fortinet devices, and MITRE ATT&CK integration. The system has undergone a complete security infrastructure overhaul featuring JWT-based authentication, session management, security middleware, rate limiting, and enhanced logging. It explains how firewall policies are fetched and analyzed for risky configurations, how quarantined IP addresses are managed via FortiGate, how security events are queried and correlated, and how MITRE ATT&CK data is surfaced from FortiAnalyzer. The new authentication system replaces the previous x-user-role header approach with secure session tokens, providing robust protection against spoofing and unauthorized access.
+This document describes the security management capabilities implemented in the codebase, focusing on firewall policy risk assessment, quarantine management for compromised devices, security analytics derived from Fortinet devices, and MITRE ATT&CK integration. The system has undergone a complete security infrastructure overhaul featuring JWT-based authentication, comprehensive password hashing with bcrypt, secure session management, enhanced rate limiting with automatic Retry-After headers, and robust logging capabilities. The new authentication system replaces the previous x-user-role header approach with secure session tokens, providing comprehensive protection against spoofing, unauthorized access, and credential theft.
 
 ## Project Structure
 Security management spans frontend pages, backend API routes, authentication middleware, and integration libraries for Fortinet devices:
@@ -53,7 +53,7 @@ Security management spans frontend pages, backend API routes, authentication mid
 - Quarantine management: API endpoint and UI page for managing quarantined IPs with RBAC enforcement
 - Security analytics: Alarm queries for IPS, malware, application control, web filter, IOC hits, and traffic anomalies with rate limiting
 - MITRE ATT&CK integration: API route to query FortiAnalyzer for ATT&CK matrix and technique details with session-based authentication
-- Authentication system: JWT-based session management with httpOnly cookies and comprehensive middleware protection
+- Authentication system: JWT-based session management with bcrypt password hashing, httpOnly cookies, and comprehensive middleware protection
 
 ```mermaid
 graph TB
@@ -70,6 +70,7 @@ MITRE["MITRE API<br/>app/api/integrations/fortianalyzer/mitre/route.ts"]
 end
 subgraph "Authentication"
 SESSION["JWT Session<br/>lib/auth/session.ts"]
+PASSWORD["Password Hashing<br/>lib/auth/password.ts"]
 PERM["RBAC System<br/>lib/auth/permissions.ts"]
 RL["Rate Limiting<br/>lib/rate-limit.ts"]
 LOG["Enhanced Logging<br/>lib/logger.ts"]
@@ -86,6 +87,7 @@ MID --> RR
 MID --> QZ
 MID --> MITRE
 AUTH --> SESSION
+AUTH --> PASSWORD
 RR --> FG
 QZ --> FG
 MITRE --> FA
@@ -95,6 +97,7 @@ SE --> FA
 **Diagram sources**
 - [middleware.ts](file://middleware.ts)
 - [lib/auth/session.ts](file://lib/auth/session.ts)
+- [lib/auth/password.ts](file://lib/auth/password.ts)
 - [lib/auth/permissions.ts](file://lib/auth/permissions.ts)
 - [lib/rate-limit.ts](file://lib/rate-limit.ts)
 - [lib/logger.ts](file://lib/logger.ts)
@@ -102,16 +105,19 @@ SE --> FA
 - [app/api/auth/logout/route.ts](file://app/api/auth/logout/route.ts)
 - [app/api/auth/me/route.ts](file://app/api/auth/me/route.ts)
 - [app/api/security/risky-rules/route.ts](file://app/api/security/risky-rules/route.ts)
+- [app/security/risks/page.tsx](file://app/security/risks/page.tsx)
 - [app/api/security/quarantine/route.ts](file://app/api/security/quarantine/route.ts)
-- [app/api/integrations/fortianalyzer/mitre/route.ts](file://app/api/integrations/fortianalyzer/mitre/route.ts)
+- [app/security/quarantine/page.tsx](file://app/security/quarantine/page.tsx)
+- [lib/alarms/queries/security-events.ts](file://lib/alarms/queries/security-events.ts)
 - [lib/integrations/fortigate.ts](file://lib/integrations/fortigate.ts)
 - [lib/integrations/fortianalyzer.ts](file://lib/integrations/fortianalyzer.ts)
-- [lib/alarms/queries/security-events.ts](file://lib/alarms/queries/security-events.ts)
+- [app/api/integrations/fortianalyzer/mitre/route.ts](file://app/api/integrations/fortianalyzer/mitre/route.ts)
 
 **Section sources**
 - [SECURITY_RISKS_CONFIGURATION.md](file://docs/SECURITY_RISKS_CONFIGURATION.md)
 - [middleware.ts](file://middleware.ts)
 - [lib/auth/session.ts](file://lib/auth/session.ts)
+- [lib/auth/password.ts](file://lib/auth/password.ts)
 - [lib/auth/permissions.ts](file://lib/auth/permissions.ts)
 - [lib/rate-limit.ts](file://lib/rate-limit.ts)
 - [lib/logger.ts](file://lib/logger.ts)
@@ -128,14 +134,21 @@ SE --> FA
 - [app/api/integrations/fortianalyzer/mitre/route.ts](file://app/api/integrations/fortianalyzer/mitre/route.ts)
 
 ## Core Components
-- **JWT-Based Authentication System**
+- **Enhanced JWT-Based Authentication System**
   - Secure session tokens using HS256 algorithm with httpOnly cookies
   - Session duration of 8 hours with automatic expiration handling
   - Replacement of spoofable x-user-role header with secure token-based authentication
-- **Security Middleware with RBAC**
-  - Comprehensive API protection with rate limiting and permission enforcement
+  - Comprehensive password hashing using bcrypt with 12 rounds for enhanced security
+- **Comprehensive Password Security**
+  - Bcrypt password hashing with configurable rounds for optimal security/performance balance
+  - Password strength validation with minimum 8 characters, uppercase, numbers, and special characters
+  - Maximum password length enforcement of 72 characters for bcrypt compatibility
+  - Password strength scoring system for user feedback and security guidance
+- **Security Middleware with Advanced RBAC and Rate Limiting**
+  - Comprehensive API protection with intelligent rate limiting and automatic Retry-After headers
   - Role-based access control using synchronized permission matrix
-  - Automatic authentication requirement for protected routes
+  - Automatic authentication requirement for protected routes with enhanced error handling
+  - Production-grade TLS safety checks and security validation
 - **Risk Assessment (Firewall Policy Analysis)**
   - API endpoint analyzes firewall policies for risky configurations with session authentication
   - UI displays critical and high risks with search and pagination capabilities
@@ -145,13 +158,14 @@ SE --> FA
   - UI shows quarantined entries with source categorization and expiration management
 - **Security Analytics**
   - Alarm queries for IPS high severity, malware detections, application control violations, web filter blocks, IOC hits, and high outbound traffic
-  - Rate limiting protects against abuse while maintaining performance
+  - Intelligent rate limiting with automatic Retry-After headers for abuse prevention
 - **MITRE ATT&CK Integration**
   - API route to query FortiAnalyzer for ATT&CK matrix and technique details with session-based authentication
   - Enhanced security with proper session validation and rate limiting
 
 **Section sources**
 - [lib/auth/session.ts](file://lib/auth/session.ts)
+- [lib/auth/password.ts](file://lib/auth/password.ts)
 - [middleware.ts](file://middleware.ts)
 - [lib/auth/permissions.ts](file://lib/auth/permissions.ts)
 - [lib/rate-limit.ts](file://lib/rate-limit.ts)
@@ -166,7 +180,7 @@ SE --> FA
 - [app/api/integrations/fortianalyzer/mitre/route.ts](file://app/api/integrations/fortianalyzer/mitre/route.ts)
 
 ## Architecture Overview
-The security management architecture integrates Fortinet devices via REST and JSON-RPC APIs, with comprehensive authentication, authorization, and rate limiting through custom middleware. The new JWT-based authentication system replaces the previous header-based approach, providing robust protection against spoofing and unauthorized access.
+The security management architecture integrates Fortinet devices via REST and JSON-RPC APIs, with comprehensive authentication, authorization, rate limiting, and enhanced logging through custom middleware. The new JWT-based authentication system with bcrypt password hashing provides robust protection against credential theft, spoofing, and unauthorized access.
 
 ```mermaid
 sequenceDiagram
@@ -174,22 +188,26 @@ participant Browser as "Browser"
 participant MW as "Security Middleware<br/>middleware.ts"
 participant Auth as "Auth API<br/>/api/auth/*"
 participant Session as "JWT Session<br/>lib/auth/session.ts"
+participant Password as "Password Hashing<br/>lib/auth/password.ts"
 participant UI_Risks as "Risks UI<br/>page.tsx"
 participant API_RR as "Risky Rules API<br/>route.ts"
 Browser->>Auth : POST /api/auth/login
-Auth->>Session : Validate credentials & create token
-Session-->>Auth : JWT token
-Auth-->>Browser : Set httpOnly session cookie
+Auth->>Password : Verify password with bcrypt
+Password-->>Auth : Password verification result
+Auth->>Session : Validate credentials & create JWT token
+Session-->>Auth : Signed JWT token
+Auth-->>Browser : Set httpOnly session cookie with Retry-After support
 Browser->>MW : Request protected API
 MW->>Session : Verify session token
 Session-->>MW : Valid session payload
 MW->>API_RR : Forward authenticated request
-API_RR-->>Browser : Protected resource
+API_RR-->>Browser : Protected resource with rate limiting
 ```
 
 **Diagram sources**
 - [middleware.ts](file://middleware.ts)
 - [lib/auth/session.ts](file://lib/auth/session.ts)
+- [lib/auth/password.ts](file://lib/auth/password.ts)
 - [app/api/auth/login/route.ts](file://app/api/auth/login/route.ts)
 - [app/api/auth/logout/route.ts](file://app/api/auth/logout/route.ts)
 - [app/api/auth/me/route.ts](file://app/api/auth/me/route.ts)
@@ -205,14 +223,14 @@ participant Public as "Public Routes<br/>/api/auth/*"
 participant Protected as "Protected Routes<br/>/api/security/*"
 Client->>Public : Access public auth routes
 Public->>MW : Request processed
-MW->>RL : Check rate limit (no limit)
-RL-->>MW : Allow request
+MW->>RL : Check rate limit (10 req/min for auth)
+RL-->>MW : Rate limit decision with Retry-After
 Client->>Protected : Access protected routes
 Protected->>MW : Request processed
-MW->>RL : Check rate limit (100 req/min)
-RL-->>MW : Rate limit decision
+MW->>RL : Check rate limit (100 req/min for general)
+RL-->>MW : Rate limit decision with automatic Retry-After
 MW->>MW : Authenticate via session cookie
-MW-->>Client : Authorized or rejected
+MW-->>Client : Authorized or rejected with proper headers
 ```
 
 **Diagram sources**
@@ -226,23 +244,32 @@ MW-->>Client : Authorized or rejected
 
 ## Detailed Component Analysis
 
-### JWT-Based Authentication System
-The new authentication system replaces the spoofable x-user-role header with a secure JWT-based approach using httpOnly cookies:
+### Enhanced JWT-Based Authentication System with Bcrypt Integration
+The new authentication system provides comprehensive security through JWT-based session management with bcrypt password hashing:
 
-- **Token Generation**: HS256-signed JWT tokens with 8-hour expiration
-- **Cookie Security**: httpOnly, secure (HTTPS only), SameSite=strict cookies
+- **Token Generation**: HS256-signed JWT tokens with 8-hour expiration using jose library
+- **Cookie Security**: httpOnly, secure (HTTPS only), SameSite=strict cookies with proper path and maxAge
 - **Session Management**: Centralized session verification with automatic expiration handling
 - **Secret Management**: Uses NEXTAUTH_SECRET environment variable for token signing
-- **Validation**: Robust token verification with proper error handling for expired or invalid tokens
+- **Password Security**: Bcrypt hashing with 12 rounds for optimal security/performance balance
+- **Password Validation**: Comprehensive strength requirements with minimum 8 characters, uppercase, numbers, and special characters
+- **Automatic Rate Limiting**: Intelligent rate limiting with automatic Retry-After headers for abuse prevention
 
 ```mermaid
 flowchart TD
 Start(["User Login"]) --> Validate["Validate Credentials<br/>lib/validators/auth.ts"]
 Validate --> AuthOK{"Credentials Valid?"}
 AuthOK -- No --> Deny["Return 401 Unauthorized"]
-AuthOK -- Yes --> CreateToken["Create JWT Session<br/>lib/auth/session.ts"]
-CreateToken --> SetCookie["Set httpOnly Cookie<br/>Secure + SameSite"]
+AuthOK -- Yes --> LoadUser["Load User from Database"]
+LoadUser --> CheckStatus{"User Active?"}
+CheckStatus -- No --> Deactivated["Return 403 Account Deactivated"]
+CheckStatus -- Yes --> HashCheck["Verify Password with bcrypt<br/>lib/auth/password.ts"]
+HashCheck --> ValidPass{"Password Valid?"}
+ValidPass -- No --> Deny
+ValidPass -- Yes --> CreateToken["Create JWT Session<br/>lib/auth/session.ts"]
+CreateToken --> SetCookie["Set httpOnly Cookie<br/>Secure + SameSite + Retry-After"]
 SetCookie --> Success["Return User Data + Session"]
+Deactivated --> End
 Deny --> End
 Success --> End
 ```
@@ -250,23 +277,60 @@ Success --> End
 **Diagram sources**
 - [app/api/auth/login/route.ts](file://app/api/auth/login/route.ts)
 - [lib/auth/session.ts](file://lib/auth/session.ts)
+- [lib/auth/password.ts](file://lib/auth/password.ts)
 - [lib/validators/auth.ts](file://lib/validators/auth.ts)
 
 **Section sources**
 - [lib/auth/session.ts](file://lib/auth/session.ts)
+- [lib/auth/password.ts](file://lib/auth/password.ts)
 - [app/api/auth/login/route.ts](file://app/api/auth/login/route.ts)
 - [app/api/auth/logout/route.ts](file://app/api/auth/logout/route.ts)
 - [app/api/auth/me/route.ts](file://app/api/auth/me/route.ts)
 - [lib/validators/auth.ts](file://lib/validators/auth.ts)
 
-### Security Middleware with RBAC and Rate Limiting
-The middleware provides comprehensive protection through multiple layers:
+### Advanced Password Security with Bcrypt Integration
+The password security system implements comprehensive protection through bcrypt-based hashing and validation:
 
-- **Rate Limiting**: Sliding window implementation with different limits for auth vs general API
-- **Authentication**: Session-based authentication replacing header spoofing
+- **Password Hashing**: Bcrypt with 12 rounds for optimal security/performance balance
+- **Password Validation**: Minimum 8 characters, maximum 72 characters, uppercase letter, number, and special character requirements
+- **Password Strength Scoring**: 0-4 scale for UI feedback with color-coded strength indicators
+- **Security Compliance**: Maximum password length enforced for bcrypt compatibility
+- **User Experience**: Real-time password strength feedback and validation errors
+
+```mermaid
+flowchart TD
+PasswordInput["Password Input"] --> LengthCheck{"Length 8-72 chars?"}
+LengthCheck -- No --> LengthError["Show length error"]
+LengthCheck -- Yes --> UpperCheck{"Has uppercase?"}
+UpperCheck -- No --> UpperError["Show uppercase error"]
+UpperCheck -- Yes --> NumCheck{"Has number?"}
+NumCheck -- No --> NumError["Show number error"]
+NumCheck -- Yes --> SpecialCheck{"Has special char?"}
+SpecialCheck -- No --> SpecialError["Show special char error"]
+SpecialCheck -- Yes --> Valid["Password Valid"]
+LengthError --> PasswordInput
+UpperError --> PasswordInput
+NumError --> PasswordInput
+SpecialError --> PasswordInput
+Valid --> Hash["Hash with bcrypt (12 rounds)"]
+Hash --> Store["Store hashed password"]
+```
+
+**Diagram sources**
+- [lib/auth/password.ts](file://lib/auth/password.ts)
+
+**Section sources**
+- [lib/auth/password.ts](file://lib/auth/password.ts)
+
+### Security Middleware with Enhanced RBAC, Rate Limiting, and Retry-After Headers
+The middleware provides comprehensive protection through multiple layers with intelligent rate limiting:
+
+- **Rate Limiting**: Sliding window implementation with automatic Retry-After headers for abuse prevention
+- **Authentication**: Session-based authentication replacing header spoofing with enhanced security
 - **Authorization**: Role-based access control with synchronized permission matrix
 - **Route Protection**: Automatic protection for all /api/ routes except public endpoints
 - **TLS Safety**: Production security check for TLS verification settings
+- **Error Handling**: Comprehensive error responses with proper HTTP status codes and Retry-After headers
 
 ```mermaid
 flowchart TD
@@ -299,14 +363,14 @@ Forbidden --> End
 - [lib/auth/session.ts](file://lib/auth/session.ts)
 - [lib/auth/permissions.ts](file://lib/auth/permissions.ts)
 
-### Risk Assessment: Firewall Policy Management with Authentication
-The risk assessment system now operates under the new security framework:
+### Risk Assessment: Firewall Policy Management with Enhanced Authentication
+The risk assessment system now operates under the new comprehensive security framework:
 
 - **Data source**: FortiGate firewall policies via FortiGate service with authenticated sessions
 - **Analysis logic**: Detects risky configurations such as any-to-any rules, unused policies, permissive services, external exposure, and missing security features
 - **Output**: Ranked risks by severity with counts and statistics
 - **UI**: Filters to critical/high, search, pagination, and summary cards with session-aware access
-- **Security**: Protected by middleware with RBAC and rate limiting
+- **Security**: Protected by middleware with RBAC, rate limiting, and automatic Retry-After headers
 
 ```mermaid
 flowchart TD
@@ -339,14 +403,14 @@ Cache --> Return["Return risks + stats"]
 - [lib/auth/permissions.ts](file://lib/auth/permissions.ts)
 - [lib/rate-limit.ts](file://lib/rate-limit.ts)
 
-### Quarantine Management: Compromise Containment with RBAC
-The quarantine management system now enforces comprehensive access controls:
+### Quarantine Management: Compromise Containment with Enhanced Security
+The quarantine management system now enforces comprehensive access controls with enhanced security:
 
 - **API supports**: Listing, adding, and releasing quarantined IPs via FortiGate integration
-- **Authentication**: FortiGate service uses session-based authentication
-- **RBAC enforcement**: Only authorized users can manage quarantines
+- **Authentication**: FortiGate service uses session-based authentication with enhanced security
+- **RBAC enforcement**: Only authorized users can manage quarantines with comprehensive permission checks
 - **UI provides**: Search, pagination, source categorization (manual, IPS, AV, DoS), expiration badges, and action buttons
-- **Security**: Protected by middleware with rate limiting and permission checks
+- **Security**: Protected by middleware with rate limiting, automatic Retry-After headers, and permission checks
 
 ```mermaid
 sequenceDiagram
@@ -386,13 +450,13 @@ API-->>UI : Success/Failure
 - [lib/auth/session.ts](file://lib/auth/session.ts)
 - [lib/auth/permissions.ts](file://lib/auth/permissions.ts)
 
-### Security Analytics: Event Monitoring and Correlation with Rate Limiting
-The security analytics system now operates under comprehensive protection:
+### Security Analytics: Event Monitoring and Correlation with Intelligent Rate Limiting
+The security analytics system now operates under comprehensive protection with intelligent rate limiting:
 
 - **Alarm queries**: Cover high-severity IPS events, malware detections, application control violations, web filter blocks, IOC hits, and high outbound traffic
-- **Rate limiting**: Applied to prevent abuse while maintaining performance
+- **Intelligent Rate Limiting**: Applied to prevent abuse while maintaining performance with automatic Retry-After headers
 - **Query strategy**: Prefer cached data with soft fallback to FortiAnalyzer for high-value events to minimize missed detections
-- **Security**: Protected by middleware with authentication and rate limiting
+- **Security**: Protected by middleware with authentication, rate limiting, and automatic Retry-After headers
 
 ```mermaid
 flowchart TD
@@ -422,14 +486,14 @@ Dedup --> Result["Return combined results"]
 - [lib/auth/session.ts](file://lib/auth/session.ts)
 - [lib/rate-limit.ts](file://lib/rate-limit.ts)
 
-### MITRE ATT&CK Framework Integration with Session Authentication
-The MITRE ATT&CK integration now operates under the new security framework:
+### MITRE ATT&CK Framework Integration with Enhanced Session Authentication
+The MITRE ATT&CK integration now operates under the new comprehensive security framework:
 
 - **API route**: To FortiAnalyzer's ATT&CK views with session-based authentication
 - **Matrix view**: By domain (e.g., enterprise) with optional time range and ADOM
 - **Technique details**: With optional time range and domain parameters
 - **Authentication**: Handled via session login with proper token validation
-- **Security**: Protected by middleware with rate limiting and RBAC
+- **Security**: Protected by middleware with rate limiting, automatic Retry-After headers, and RBAC
 
 ```mermaid
 sequenceDiagram
@@ -462,44 +526,47 @@ API-->>Client : JSON response
 - [lib/auth/session.ts](file://lib/auth/session.ts)
 
 ### Enhanced Logging and Audit Capabilities
-The system now includes comprehensive logging and audit capabilities:
+The system now includes comprehensive logging and audit capabilities with structured logging:
 
-- **Structured logging**: Using Pino with component-based naming
-- **Production logging**: JSON output format for easy parsing
-- **Development logging**: Console-friendly output with debug level
+- **Structured logging**: Using Pino with component-based naming and proper log levels
+- **Production logging**: JSON output format for easy parsing and monitoring
+- **Development logging**: Console-friendly output with debug level and enhanced readability
 - **Audit logging**: Structured audit trails with action, resource, and user information
 - **Security logging**: Critical security events and middleware violations logged with appropriate severity
+- **Component isolation**: Separate loggers for different system components with consistent formatting
 
 **Section sources**
 - [lib/logger.ts](file://lib/logger.ts)
 
 ## Dependency Analysis
-The security infrastructure introduces several new dependencies and relationships:
+The enhanced security infrastructure introduces several new dependencies and relationships:
 
 - **Authentication System Dependencies**:
   - JWT session management requires jose library for token signing/verification
-  - Rate limiting depends on in-memory store with sliding window algorithm
-  - Middleware depends on session verification and permission checking
+  - Bcrypt password hashing requires bcryptjs library for secure password storage
+  - Rate limiting depends on in-memory store with sliding window algorithm and automatic Retry-After headers
+  - Middleware depends on session verification, password validation, and permission checking
 - **Risk Assessment Dependencies**:
   - FortiGate service for policy retrieval with session authentication
   - UI page for rendering with session-aware access
-  - Middleware for protection and rate limiting
+  - Middleware for protection, rate limiting, and automatic Retry-After headers
 - **Quarantine Dependencies**:
   - FortiGate service for CRUD operations with session authentication
   - Integration configuration storage with RBAC
-  - Middleware for protection and permission enforcement
+  - Middleware for protection, rate limiting, and permission enforcement
 - **Security Analytics Dependencies**:
-  - Cached event store with rate limiting
+  - Cached event store with intelligent rate limiting and automatic Retry-After headers
   - FortiAnalyzer service for direct queries with session authentication
   - Middleware for protection and rate limiting
 - **MITRE ATT&CK Dependencies**:
   - FortiAnalyzer service for session-based queries
-  - Middleware for protection and rate limiting
+  - Middleware for protection, rate limiting, and automatic Retry-After headers
 
 ```mermaid
 graph LR
 SUBGRAPH "Authentication Layer"
 SESSION["JWT Session<br/>lib/auth/session.ts"] --> MW["Security Middleware<br/>middleware.ts"]
+PASSWORD["Bcrypt Password<br/>lib/auth/password.ts"] --> AUTH["Auth Endpoints<br/>/api/auth/*"]
 PERM["RBAC System<br/>lib/auth/permissions.ts"] --> MW
 RL["Rate Limiting<br/>lib/rate-limit.ts"] --> MW
 LOG["Enhanced Logging<br/>lib/logger.ts"] --> MW
@@ -508,6 +575,8 @@ SUBGRAPH "API Layer"
 MW --> RR["Risky Rules API<br/>app/api/security/risky-rules/route.ts"]
 MW --> QZ["Quarantine API<br/>app/api/security/quarantine/route.ts"]
 MW --> MITRE["MITRE API<br/>app/api/integrations/fortianalyzer/mitre/route.ts"]
+AUTH --> SESSION
+AUTH --> PASSWORD
 END
 SUBGRAPH "Integration Layer"
 RR --> FG["FortiGate Service<br/>lib/integrations/fortigate.ts"]
@@ -519,10 +588,14 @@ END
 
 **Diagram sources**
 - [lib/auth/session.ts](file://lib/auth/session.ts)
+- [lib/auth/password.ts](file://lib/auth/password.ts)
 - [lib/auth/permissions.ts](file://lib/auth/permissions.ts)
 - [lib/rate-limit.ts](file://lib/rate-limit.ts)
 - [lib/logger.ts](file://lib/logger.ts)
 - [middleware.ts](file://middleware.ts)
+- [app/api/auth/login/route.ts](file://app/api/auth/login/route.ts)
+- [app/api/auth/logout/route.ts](file://app/api/auth/logout/route.ts)
+- [app/api/auth/me/route.ts](file://app/api/auth/me/route.ts)
 - [app/api/security/risky-rules/route.ts](file://app/api/security/risky-rules/route.ts)
 - [app/api/security/quarantine/route.ts](file://app/api/security/quarantine/route.ts)
 - [app/api/integrations/fortianalyzer/mitre/route.ts](file://app/api/integrations/fortianalyzer/mitre/route.ts)
@@ -532,10 +605,14 @@ END
 
 **Section sources**
 - [lib/auth/session.ts](file://lib/auth/session.ts)
+- [lib/auth/password.ts](file://lib/auth/password.ts)
 - [lib/auth/permissions.ts](file://lib/auth/permissions.ts)
 - [lib/rate-limit.ts](file://lib/rate-limit.ts)
 - [lib/logger.ts](file://lib/logger.ts)
 - [middleware.ts](file://middleware.ts)
+- [app/api/auth/login/route.ts](file://app/api/auth/login/route.ts)
+- [app/api/auth/logout/route.ts](file://app/api/auth/logout/route.ts)
+- [app/api/auth/me/route.ts](file://app/api/auth/me/route.ts)
 - [app/api/security/risky-rules/route.ts](file://app/api/security/risky-rules/route.ts)
 - [app/api/security/quarantine/route.ts](file://app/api/security/quarantine/route.ts)
 - [app/api/integrations/fortianalyzer/mitre/route.ts](file://app/api/integrations/fortianalyzer/mitre/route.ts)
@@ -544,40 +621,50 @@ END
 - [lib/alarms/queries/security-events.ts](file://lib/alarms/queries/security-events.ts)
 
 ## Performance Considerations
-The new security infrastructure maintains performance while adding robust protection:
+The enhanced security infrastructure maintains performance while adding robust protection:
 
 - **Caching**: Risk analysis results are cached for five minutes to reduce repeated API calls
-- **Rate Limiting**: Different limits for auth (10 req/min) vs general API (100 req/min) to balance security and usability
+- **Intelligent Rate Limiting**: Different limits for auth (10 req/min) vs general API (100 req/min) with automatic Retry-After headers to balance security and usability
 - **Parallelism**: UI can lazy-load summaries and fetch detailed risks on demand; consider parallelizing multiple data sources when extending
 - **Indexing and filtering**: Use indexed fields (e.g., level, action) to optimize queries and reduce payload sizes
 - **Retries and backoff**: FortiAnalyzer service implements retry logic and exponential backoff to handle transient failures and avoid account lockouts
 - **Memory Management**: Rate limiter uses in-memory sliding window with bounded store size (10,000 entries) to prevent memory leaks
 - **Session Optimization**: JWT tokens are compact and verified server-side without database round-trips
+- **Password Hashing**: Bcrypt with 12 rounds provides optimal security/performance balance for password verification
+- **Automatic Cleanup**: Rate limiter includes periodic cleanup to prevent memory leaks and maintain optimal performance
 
 **Section sources**
 - [app/api/security/risky-rules/route.ts](file://app/api/security/risky-rules/route.ts)
 - [lib/rate-limit.ts](file://lib/rate-limit.ts)
 - [lib/integrations/fortianalyzer.ts](file://lib/integrations/fortianalyzer.ts)
 - [lib/auth/session.ts](file://lib/auth/session.ts)
+- [lib/auth/password.ts](file://lib/auth/password.ts)
 
 ## Troubleshooting Guide
-The new security infrastructure introduces several troubleshooting scenarios:
+The enhanced security infrastructure introduces several troubleshooting scenarios:
 
 - **Authentication Issues**
   - Verify JWT secret (NEXTAUTH_SECRET) is properly configured in all environments
   - Check session cookie settings (httpOnly, secure, SameSite) in production
   - Confirm token expiration (8 hours) and renewal mechanisms
   - Validate session verification errors in middleware logs
+  - Check bcrypt library installation and version compatibility
 - **Rate Limiting Problems**
   - Monitor rate limit thresholds for auth (10 req/min) vs general API (100 req/min)
   - Check client IP extraction from x-forwarded-for headers
   - Verify rate limiter store size and memory usage
-  - Review Retry-After headers in 429 responses
+  - Review automatic Retry-After headers in 429 responses
+  - Monitor rate limiter cleanup intervals and memory optimization
 - **RBAC and Authorization**
   - Verify user roles in database match expected values (ADMIN, EDITOR, VIEWER)
   - Check permission matrix seeding and synchronization
   - Confirm route-to-resource mapping in middleware
   - Validate method-to-action mapping (GET=read, POST=write, etc.)
+- **Password Security Issues**
+  - Verify bcrypt library is properly installed and configured
+  - Check password length limits and validation rules
+  - Monitor password strength scoring and validation errors
+  - Validate bcrypt rounds configuration (12 rounds optimal)
 - **Risk Assessment**
   - Verify FortiGate integration configuration exists and is enabled
   - Confirm firewall policies endpoint returns data and is reachable
@@ -595,10 +682,12 @@ The new security infrastructure introduces several troubleshooting scenarios:
   - Verify TLS safety checks in production environments
   - Check route protection for both mapped and unmapped resources
   - Review permission enforcement for edge cases
+  - Monitor automatic Retry-After header generation and client handling
 
 **Section sources**
 - [middleware.ts](file://middleware.ts)
 - [lib/auth/session.ts](file://lib/auth/session.ts)
+- [lib/auth/password.ts](file://lib/auth/password.ts)
 - [lib/rate-limit.ts](file://lib/rate-limit.ts)
 - [lib/auth/permissions.ts](file://lib/auth/permissions.ts)
 - [app/api/security/risky-rules/route.ts](file://app/api/security/risky-rules/route.ts)
@@ -607,30 +696,33 @@ The new security infrastructure introduces several troubleshooting scenarios:
 - [app/api/integrations/fortianalyzer/mitre/route.ts](file://app/api/integrations/fortianalyzer/mitre/route.ts)
 
 ## Conclusion
-The security management implementation has undergone a comprehensive overhaul, providing a robust foundation for firewall policy risk assessment, quarantine operations, security analytics, and MITRE ATT&CK integration. The new JWT-based authentication system replaces the spoofable x-user-role header approach with secure session tokens, while the security middleware enforces comprehensive rate limiting and RBAC. By leveraging FortiGate and FortiAnalyzer APIs with enhanced security measures, the system enables rapid identification of risky configurations, containment of compromised devices, and actionable insights grounded in standardized frameworks. The enhanced logging and audit capabilities provide comprehensive visibility into security operations. Extending the platform involves integrating additional risk sources, enhancing correlation engines, and enriching dashboards with trend analysis and compliance reporting, all while maintaining the strong security foundation established by the new infrastructure.
+The security management implementation has undergone a comprehensive overhaul, providing a robust foundation for firewall policy risk assessment, quarantine operations, security analytics, and MITRE ATT&CK integration. The new JWT-based authentication system with bcrypt password hashing replaces the spoofable x-user-role header approach with secure session tokens, while the enhanced security middleware enforces comprehensive rate limiting with automatic Retry-After headers and RBAC. The integration of bcrypt password hashing provides industry-standard cryptographic security for credential storage, and the automatic Retry-After header support enhances user experience during rate limiting scenarios. By leveraging FortiGate and FortiAnalyzer APIs with enhanced security measures, the system enables rapid identification of risky configurations, containment of compromised devices, and actionable insights grounded in standardized frameworks. The enhanced logging and audit capabilities provide comprehensive visibility into security operations. Extending the platform involves integrating additional risk sources, enhancing correlation engines, and enriching dashboards with trend analysis and compliance reporting, all while maintaining the strong security foundation established by the new infrastructure.
 
 ## Appendices
 
 ### Practical Examples
 - **Security Configuration**
-  - Configure JWT secret (NEXTAUTH_SECRET) in environment variables
-  - Set up FortiGate integration with REST access and enable policy module
+  - Configure JWT secret (NEXTAUTH_SECRET) in environment variables for all environments
+  - Set up bcrypt library with 12 rounds for optimal security/performance balance
+  - Configure FortiGate integration with REST access and enable policy module
   - Configure FortiAnalyzer integration with credentials and session handling
-  - Set up rate limiting thresholds (10 auth requests/min, 100 general requests/min)
+  - Set up rate limiting thresholds (10 auth requests/min, 100 general requests/min) with automatic Retry-After headers
 - **Risk Scoring**
   - Use severity weights and counts to compute risk summaries; extend with likelihood/exposure for quantitative scoring
   - Implement session-aware risk scoring with user role context
 - **Incident Investigation**
   - Use security event queries to identify high-severity IPS, malware, and IOC hits; correlate with firewall policies and quarantined IPs
-  - Leverage enhanced logging for comprehensive audit trails
+  - Leverage enhanced logging for comprehensive audit trails with structured JSON output
 - **Authentication Setup**
-  - Implement JWT-based login with httpOnly cookie storage
-  - Configure session expiration and renewal mechanisms
+  - Implement JWT-based login with httpOnly cookie storage and proper security headers
+  - Configure bcrypt password hashing with strength validation and automatic Retry-After headers
   - Set up proper CORS and security headers for production deployment
+  - Implement comprehensive password strength requirements and validation feedback
 
 **Section sources**
 - [SECURITY_RISKS_CONFIGURATION.md](file://docs/SECURITY_RISKS_CONFIGURATION.md)
 - [lib/auth/session.ts](file://lib/auth/session.ts)
+- [lib/auth/password.ts](file://lib/auth/password.ts)
 - [lib/rate-limit.ts](file://lib/rate-limit.ts)
 - [lib/logger.ts](file://lib/logger.ts)
 - [lib/alarms/queries/security-events.ts](file://lib/alarms/queries/security-events.ts)

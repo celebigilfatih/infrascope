@@ -7,12 +7,21 @@
 - [CustomEdge.tsx](file://components/topology/CustomEdge.tsx)
 - [ConnectionWizard.tsx](file://components/topology/ConnectionWizard.tsx)
 - [SemanticZoomController.tsx](file://components/topology/SemanticZoomController.tsx)
+- [NetworkTopologyContent.tsx](file://app/network/NetworkTopologyContent.tsx)
 - [relationship-engine.ts](file://lib/topology/relationship-engine.ts)
 - [semanticZoom.ts](file://lib/semanticZoom.ts)
 - [route.ts](file://app/api/topology/route.ts)
 - [route.ts](file://app/api/building-connections/route.ts)
 - [route.ts](file://app/api/network-connections/route.ts)
 </cite>
+
+## Update Summary
+**Changes Made**
+- Updated NetworkTopologyContent.tsx section to reflect controlled topology approach with useMemo hooks
+- Added documentation for stabilized nodeTypes/edgeTypes references
+- Updated performance considerations for controlled topology vs state-managed approach
+- Revised React Flow configuration to reflect disabled auto-layout and draggable/connectable properties
+- Enhanced architecture overview to show controlled data flow from useMemo
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -28,6 +37,8 @@
 
 ## Introduction
 This document explains the InfraScope topology and network visualization subsystem with a focus on interactive graph representation and network mapping. It covers React Flow integration, node and edge rendering, layout strategies, building and device node components, custom edge rendering, connection wizards, topology editing capabilities, semantic zoom for large-scale visualization, user interaction patterns, and performance considerations. It also provides practical guidance for customizing node styles, adding new connection types, and extending visualization features.
+
+**Updated** The system now uses a controlled topology approach with useMemo hooks for optimal performance and stability.
 
 ## Project Structure
 The topology visualization is implemented as a set of React components integrated with a React Flow canvas and backed by a topology relationship engine and API endpoints. The key parts are:
@@ -45,6 +56,7 @@ DN["DeviceNode.tsx"]
 CE["CustomEdge.tsx"]
 CZ["SemanticZoomController.tsx"]
 CW["ConnectionWizard.tsx"]
+NTC["NetworkTopologyContent.tsx"]
 end
 subgraph "Data Layer"
 RE["relationship-engine.ts"]
@@ -55,17 +67,18 @@ AT["/api/topology/route.ts"]
 ABC["/api/building-connections/route.ts"]
 ANC["/api/network-connections/route.ts"]
 end
+NTC --> |"controlled topology with useMemo"| RE
 BN --> |"renders"| RE
 DN --> |"renders"| RE
 CE --> |"uses"| RE
 CZ --> |"controls viewport"| RE
 CW --> |"creates"| ANC
-CW --> |"creates"| ABC
 AT --> |"returns"| RE
 RE --> |"queries"| PRISMA["Prisma ORM"]
 ```
 
 **Diagram sources**
+- [NetworkTopologyContent.tsx:196-212](file://app/network/NetworkTopologyContent.tsx#L196-L212)
 - [BuildingNode.tsx:1-176](file://components/topology/BuildingNode.tsx#L1-L176)
 - [DeviceNode.tsx:1-112](file://components/topology/DeviceNode.tsx#L1-L112)
 - [CustomEdge.tsx:1-156](file://components/topology/CustomEdge.tsx#L1-L156)
@@ -78,6 +91,7 @@ RE --> |"queries"| PRISMA["Prisma ORM"]
 - [route.ts:1-78](file://app/api/network-connections/route.ts#L1-L78)
 
 **Section sources**
+- [NetworkTopologyContent.tsx:196-212](file://app/network/NetworkTopologyContent.tsx#L196-L212)
 - [BuildingNode.tsx:1-176](file://components/topology/BuildingNode.tsx#L1-L176)
 - [DeviceNode.tsx:1-112](file://components/topology/DeviceNode.tsx#L1-L112)
 - [CustomEdge.tsx:1-156](file://components/topology/CustomEdge.tsx#L1-L156)
@@ -93,12 +107,16 @@ RE --> |"queries"| PRISMA["Prisma ORM"]
 - BuildingNode: Renders a building node with status, optional expansion actions, and connection handles around the perimeter. Handles hover-triggered handles and scaling based on zoom.
 - DeviceNode: Renders a device node with role, vendor, status, IP address, location, and port metrics. Includes top and bottom handles for connections.
 - CustomEdge: Provides styled edges for device-to-device connections with connection-type-specific visuals and labels. Includes a specialized BuildingConnectionEdge for inter-building links.
-- SemanticZoomController: Controls zoom level via React Flow’s viewport, emitting zoom changes for downstream consumers.
+- SemanticZoomController: Controls zoom level via React Flow's viewport, emitting zoom changes for downstream consumers.
 - ConnectionWizard: A modal wizard to create network connections between devices, validating selections and invoking creation callbacks.
+- NetworkTopologyContent: **Controlled topology component** that generates nodes and edges using useMemo for optimal performance and stability.
 - Topology Relationship Engine: Builds graph data (nodes and edges) from relationships, computes positions, and supports correlation of relationships from device metadata.
 - Semantic Zoom Utilities: Provide zoom-driven visibility rules for nodes and edges and human-readable zoom descriptions.
 
+**Updated** NetworkTopologyContent now uses a controlled approach with useMemo for topology generation, eliminating state management overhead.
+
 **Section sources**
+- [NetworkTopologyContent.tsx:196-212](file://app/network/NetworkTopologyContent.tsx#L196-L212)
 - [BuildingNode.tsx:1-176](file://components/topology/BuildingNode.tsx#L1-L176)
 - [DeviceNode.tsx:1-112](file://components/topology/DeviceNode.tsx#L1-L112)
 - [CustomEdge.tsx:1-156](file://components/topology/CustomEdge.tsx#L1-L156)
@@ -108,37 +126,88 @@ RE --> |"queries"| PRISMA["Prisma ORM"]
 - [semanticZoom.ts:1-32](file://lib/semanticZoom.ts#L1-L32)
 
 ## Architecture Overview
-The visualization pipeline integrates frontend UI components with backend APIs and a topology engine:
-- Frontend renders nodes and edges using React Flow.
+The visualization pipeline integrates frontend UI components with backend APIs and a topology engine using a controlled topology approach:
+- Frontend renders nodes and edges using React Flow with controlled data from useMemo.
 - Nodes and edges are configured with data supplied by the topology engine via the topology API.
 - The semantic zoom controller adjusts the viewport to reveal or hide hierarchical details.
 - The connection wizard posts new connections to the appropriate API endpoints.
+- **Updated** Controlled topology eliminates state management overhead and improves performance.
 
 ```mermaid
 sequenceDiagram
 participant UI as "React Flow Canvas"
+participant NTC as "NetworkTopologyContent"
 participant BN as "BuildingNode"
 participant DN as "DeviceNode"
 participant CE as "CustomEdge"
 participant API as "Topology API"
 participant Engine as "TopologyRelationshipEngine"
-UI->>API : "GET /api/topology?action=graph"
+NTC->>NTC : "useMemo generates topologyNodes/topologyEdges"
+NTC->>API : "GET /api/topology?action=graph"
 API->>Engine : "getTopologyGraph()"
 Engine-->>API : "{ nodes, edges }"
-API-->>UI : "JSON graph"
-UI->>BN : "Render building nodes"
-UI->>DN : "Render device nodes"
-UI->>CE : "Render edges with styles"
+API-->>NTC : "JSON graph"
+NTC->>BN : "Render building nodes"
+NTC->>DN : "Render device nodes"
+NTC->>CE : "Render edges with styles"
+UI->>BN : "Render controlled nodes"
+UI->>DN : "Render controlled nodes"
+UI->>CE : "Render controlled edges"
 ```
 
 **Diagram sources**
-- [route.ts:1-51](file://app/api/topology/route.ts#L1-L51)
-- [relationship-engine.ts:390-474](file://lib/topology/relationship-engine.ts#L390-L474)
+- [NetworkTopologyContent.tsx:1364-1359](file://app/network/NetworkTopologyContent.tsx#L1364-L1359)
+- [route.ts:1-51](file://app/api/topology/route.ts#L1-51)
+- [relationship-engine.ts:390-474](file://lib/topology/relationship-engine.ts#L390-474)
 - [BuildingNode.tsx:1-176](file://components/topology/BuildingNode.tsx#L1-L176)
 - [DeviceNode.tsx:1-112](file://components/topology/DeviceNode.tsx#L1-L112)
 - [CustomEdge.tsx:1-156](file://components/topology/CustomEdge.tsx#L1-L156)
 
 ## Detailed Component Analysis
+
+### NetworkTopologyContent Component
+**Updated** The core topology component now uses a controlled approach with useMemo for optimal performance.
+
+- Purpose: **Controlled topology generation** using useMemo to stabilize nodeTypes/edgeTypes references and eliminate auto-layout.
+- Controlled topology approach:
+  - Uses useMemo to generate topologyNodes and topologyEdges from device data.
+  - Stabilizes nodeTypes and edgeTypes with useMemo for Turbopack Fast Refresh compatibility.
+  - Eliminates auto-layout functionality for better performance control.
+  - Disables draggable and connectable node properties.
+- Rendering:
+  - Passes controlled nodes and edges directly to React Flow.
+  - Uses semantic zoom for building view navigation.
+  - Supports multiple view modes: building, physical, services, hierarchy, and zoom.
+- Performance optimizations:
+  - useMemo prevents unnecessary re-computation of topology data.
+  - Stabilized nodeTypes/edgeTypes reduce component re-renders.
+  - Disabled auto-layout eliminates layout thrashing.
+
+```mermaid
+flowchart TD
+Start(["NetworkTopologyContent"]) --> StableRefs["Stabilize nodeTypes/edgeTypes with useMemo"]
+StableRefs --> ControlledTopo["Controlled topology generation with useMemo"]
+ControlledTopo --> Views{"View Mode"}
+Views --> Building["Building View"]
+Views --> Physical["Physical View"]
+Views --> Services["Services View"]
+Views --> Hierarchy["Hierarchy View"]
+Views --> Zoom["Zoom View"]
+Building --> ReactFlow["Pass to ReactFlow (controlled)"]
+Physical --> ReactFlow
+Services --> ReactFlow
+Hierarchy --> ReactFlow
+Zoom --> ReactFlow
+ReactFlow --> End(["Optimized Rendering"])
+```
+
+**Diagram sources**
+- [NetworkTopologyContent.tsx:196-212](file://app/network/NetworkTopologyContent.tsx#L196-L212)
+- [NetworkTopologyContent.tsx:1364-1359](file://app/network/NetworkTopologyContent.tsx#L1364-L1359)
+
+**Section sources**
+- [NetworkTopologyContent.tsx:196-212](file://app/network/NetworkTopologyContent.tsx#L196-L212)
+- [NetworkTopologyContent.tsx:1364-1359](file://app/network/NetworkTopologyContent.tsx#L1364-L1359)
 
 ### BuildingNode Component
 - Purpose: Visual representation of a building with status, city, device counts, and expandability.
@@ -195,7 +264,7 @@ Ports --> End(["Done"])
 ### CustomEdge Component
 - Purpose: Render network connections with connection-type-specific styles and labels.
 - Rendering:
-  - Straight path edges using React Flow’s path generator.
+  - Straight path edges using React Flow's path generator.
   - Styles keyed by connection type (fiber, copper, wireless, VPN, building).
   - Optional inline labels rendered with an EdgeLabelRenderer.
 - Specialized edge:
@@ -297,7 +366,7 @@ ForEach --> Done(["Return { nodes, edges }"])
 ```
 
 **Diagram sources**
-- [relationship-engine.ts:390-474](file://lib/topology/relationship-engine.ts#L390-L474)
+- [relationship-engine.ts:390-474](file://lib/topology/relationship-engine.ts#L390-474)
 
 **Section sources**
 - [relationship-engine.ts:1-516](file://lib/topology/relationship-engine.ts#L1-L516)
@@ -332,6 +401,7 @@ Desc --> End(["Done"])
 - CustomEdge consumes connection type and label data to render styles and labels.
 - SemanticZoomController coordinates with React Flow to adjust the viewport.
 - ConnectionWizard posts to network and building connection APIs to create new relationships.
+- **Updated** NetworkTopologyContent uses controlled data flow with useMemo for optimal performance.
 - The topology API delegates to the TopologyRelationshipEngine, which queries Prisma for relationships and device metadata.
 
 ```mermaid
@@ -341,7 +411,8 @@ UI --> DN["DeviceNode"]
 UI --> CE["CustomEdge"]
 UI --> CZ["SemanticZoomController"]
 UI --> CW["ConnectionWizard"]
-BN --> API["Topology API"]
+NTC["NetworkTopologyContent"] --> API["Topology API"]
+BN --> API
 DN --> API
 CE --> API
 API --> Engine["TopologyRelationshipEngine"]
@@ -351,6 +422,7 @@ CW --> BldAPI["Building Connections API"]
 ```
 
 **Diagram sources**
+- [NetworkTopologyContent.tsx:196-212](file://app/network/NetworkTopologyContent.tsx#L196-L212)
 - [BuildingNode.tsx:1-176](file://components/topology/BuildingNode.tsx#L1-L176)
 - [DeviceNode.tsx:1-112](file://components/topology/DeviceNode.tsx#L1-L112)
 - [CustomEdge.tsx:1-156](file://components/topology/CustomEdge.tsx#L1-L156)
@@ -362,34 +434,46 @@ CW --> BldAPI["Building Connections API"]
 - [route.ts:1-76](file://app/api/building-connections/route.ts#L1-L76)
 
 **Section sources**
+- [NetworkTopologyContent.tsx:196-212](file://app/network/NetworkTopologyContent.tsx#L196-L212)
 - [route.ts:1-51](file://app/api/topology/route.ts#L1-L51)
 - [relationship-engine.ts:1-516](file://lib/topology/relationship-engine.ts#L1-L516)
 - [route.ts:1-78](file://app/api/network-connections/route.ts#L1-L78)
 - [route.ts:1-76](file://app/api/building-connections/route.ts#L1-L76)
 
 ## Performance Considerations
-- Large graphs
+**Updated** Performance improvements with controlled topology approach:
+
+- **Controlled topology optimization**
+  - useMemo prevents unnecessary re-computation of topology data.
+  - Stabilized nodeTypes/edgeTypes reduce component re-renders during Fast Refresh.
+  - Elimination of auto-layout reduces layout thrashing and improves responsiveness.
+- **Large graphs**
   - Use semantic zoom to progressively reveal hierarchy and reduce clutter.
   - Filter nodes and edges at high zoom levels to minimize DOM and rendering cost.
-- Rendering
+- **Rendering**
+  - Controlled data flow eliminates state management overhead.
+  - Disabled draggable/connectable properties improve performance.
   - Memoize node and edge components to avoid unnecessary re-renders.
   - Keep label rendering lightweight; defer heavy computations off the main thread.
-- Data updates
+- **Data updates**
   - Paginate or stream graph segments for very large organizations.
   - Debounce zoom and pan events to limit frequent re-computations.
-- Backend
+- **Backend**
   - Cache frequently accessed relationship statistics.
   - Use indexed queries for device metadata and relationships.
-- Real-time updates
+- **Real-time updates**
   - Poll or subscribe to incremental topology deltas and apply selective updates.
   - Batch updates to the graph to reduce layout thrashing.
 
-[No sources needed since this section provides general guidance]
+**Section sources**
+- [NetworkTopologyContent.tsx:196-212](file://app/network/NetworkTopologyContent.tsx#L196-L212)
+- [NetworkTopologyContent.tsx:1364-1359](file://app/network/NetworkTopologyContent.tsx#L1364-L1359)
 
 ## Troubleshooting Guide
 - Nodes not appearing
   - Verify the topology API returns nodes and edges; check organization filters.
   - Ensure device metadata includes positions or that hashing produces valid coordinates.
+  - **Updated** Check that useMemo is properly generating topology data.
 - Edges missing
   - Confirm that both source and target nodes are present after filtering.
   - Check that edge labels and styles are applied conditionally on data presence.
@@ -398,17 +482,20 @@ CW --> BldAPI["Building Connections API"]
 - Connection creation fails
   - Validate required fields in the wizard and API constraints.
   - Inspect API responses for constraint violations or missing fields.
+- **Updated** Controlled topology issues
+  - Verify useMemo dependencies are correctly specified.
+  - Check that nodeTypes/edgeTypes references are stable across Fast Refresh cycles.
+  - Ensure React Flow receives controlled nodes/edges without auto-layout conflicts.
 
 **Section sources**
-- [relationship-engine.ts:390-474](file://lib/topology/relationship-engine.ts#L390-L474)
+- [relationship-engine.ts:390-474](file://lib/topology/relationship-engine.ts#L390-474)
 - [semanticZoom.ts:20-23](file://lib/semanticZoom.ts#L20-L23)
 - [route.ts:36-78](file://app/api/network-connections/route.ts#L36-L78)
 - [route.ts:31-76](file://app/api/building-connections/route.ts#L31-L76)
+- [NetworkTopologyContent.tsx:196-212](file://app/network/NetworkTopologyContent.tsx#L196-L212)
 
 ## Conclusion
-InfraScope’s topology and network visualization combine React Flow with a robust topology engine and semantic zoom to deliver an interactive, scalable view of infrastructure. Building and device nodes, custom edges, and a connection wizard enable efficient exploration and editing of network relationships. By leveraging zoom-driven filtering and optimized rendering, the system remains responsive even at large scales.
-
-[No sources needed since this section summarizes without analyzing specific files]
+InfraScope's topology and network visualization combine React Flow with a robust topology engine and semantic zoom to deliver an interactive, scalable view of infrastructure. **Updated** The controlled topology approach with useMemo provides optimal performance and stability. Building and device nodes, custom edges, and a connection wizard enable efficient exploration and editing of network relationships. By leveraging zoom-driven filtering, optimized rendering, and controlled data flow, the system remains responsive even at large scales.
 
 ## Appendices
 
@@ -460,26 +547,32 @@ InfraScope’s topology and network visualization combine React Flow with a robu
 ### Node Positioning Algorithms
 - Metadata-based positioning: use device metadata position if present.
 - Hash-based fallback: compute deterministic coordinates from device ID to spread nodes evenly.
+- **Updated** Controlled positioning eliminates auto-layout conflicts.
 
 **Section sources**
 - [relationship-engine.ts:476-500](file://lib/topology/relationship-engine.ts#L476-L500)
+- [NetworkTopologyContent.tsx:1364-1359](file://app/network/NetworkTopologyContent.tsx#L1364-L1359)
 
 ### Dynamic Updates
 - On zoom changes, recompute visibility and re-render filtered sets.
 - On topology refresh, merge incremental changes to avoid full reloads.
+- **Updated** useMemo prevents unnecessary re-computation of topology data.
 
 **Section sources**
 - [semanticZoom.ts:10-23](file://lib/semanticZoom.ts#L10-L23)
 - [SemanticZoomController.tsx:11-49](file://components/topology/SemanticZoomController.tsx#L11-L49)
+- [NetworkTopologyContent.tsx:1364-1359](file://app/network/NetworkTopologyContent.tsx#L1364-L1359)
 
 ### User Interaction Patterns
-- Drag-and-drop: leverage React Flow’s built-in node dragging; update backend on drop completion.
-- Selection: use React Flow’s selection state; highlight connected edges and nodes.
+- Drag-and-drop: **Disabled** in controlled topology mode for performance.
+- Selection: use React Flow's selection state; highlight connected edges and nodes.
 - Context actions: expose expand/show-details actions from node components.
+- **Updated** Controlled topology eliminates drag-and-drop overhead.
 
 **Section sources**
 - [BuildingNode.tsx:24-176](file://components/topology/BuildingNode.tsx#L24-L176)
 - [DeviceNode.tsx:22-112](file://components/topology/DeviceNode.tsx#L22-L112)
+- [NetworkTopologyContent.tsx:2220-2221](file://app/network/NetworkTopologyContent.tsx#L2220-L2221)
 
 ### Customization Guidelines
 - Node styles
@@ -492,5 +585,9 @@ InfraScope’s topology and network visualization combine React Flow with a robu
   - Integrate tooltips and contextual menus for nodes and edges.
   - Add grouping and collapsing for large clusters.
   - Implement panning and zoom inertia for smoother navigation.
+- **Updated** Controlled topology customization
+  - Use useMemo for complex calculations to maintain performance.
+  - Stabilize nodeTypes/edgeTypes with useMemo for Fast Refresh compatibility.
+  - Consider performance implications when adding new view modes.
 
 [No sources needed since this section provides general guidance]

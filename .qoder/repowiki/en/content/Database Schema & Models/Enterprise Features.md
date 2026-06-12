@@ -18,16 +18,17 @@
 - [status/route.ts](file://app/api/license/status/route.ts)
 - [page.tsx](file://app/settings/license/page.tsx)
 - [install-guide.html](file://deploy/install-guide.html)
+- [middleware.ts](file://middleware.ts)
 </cite>
 
 ## Update Summary
 **Changes Made**
-- Added comprehensive enterprise licensing system documentation covering license activation, validation, heartbeat, and status checking
-- Documented JWT token management for secure license validation
-- Added machine identification system for on-premise deployments
-- Included feature gating mechanisms across TRIAL, STANDARD, and ENTERPRISE tiers
-- Added license management APIs and administrative interfaces
-- Integrated licensing with existing enterprise features (VMware, firewall, integrations)
+- Enhanced license management system documentation with comprehensive JWT-based license token validation
+- Updated heartbeat monitoring and status tracking workflows for enterprise deployments
+- Improved license validation cycle with grace period handling and restricted mode transitions
+- Added detailed machine identification system for on-premise deployments
+- Expanded feature gating mechanisms across TRIAL, STANDARD, and ENTERPRISE tiers
+- Integrated comprehensive license management APIs and administrative interfaces
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -35,7 +36,7 @@
 3. [Core Components](#core-components)
 4. [Architecture Overview](#architecture-overview)
 5. [Detailed Component Analysis](#detailed-component-analysis)
-6. [Enterprise Licensing System](#enterprise-licensing-system)
+6. [Enhanced License Management System](#enhanced-license-management-system)
 7. [License Management APIs](#license-management-apis)
 8. [Feature Gating and Access Control](#feature-gating-and-access-control)
 9. [Dependency Analysis](#dependency-analysis)
@@ -45,7 +46,9 @@
 13. [Appendices](#appendices)
 
 ## Introduction
-This document provides comprehensive data model documentation for enterprise-level extensions in the platform, including the new enterprise licensing system for on-premise deployments. The licensing system encompasses license activation, validation, heartbeat monitoring, status checking, JWT token management, machine identification, and feature gating across TRIAL, STANDARD, and ENTERPRISE tiers. It covers VLAN management, VMware integration, firewall policies, capacity monitoring, virtual machine snapshot management, and integration configuration/logging.
+This document provides comprehensive data model documentation for enterprise-level extensions in the platform, including the enhanced enterprise licensing system for on-premise deployments. The licensing system encompasses license activation, validation, heartbeat monitoring, status checking, JWT token management, machine identification, and feature gating across TRIAL, STANDARD, and ENTERPRISE tiers. It covers VLAN management, VMware integration, firewall policies, capacity monitoring, virtual machine snapshot management, and integration configuration/logging.
+
+**Updated** Enhanced with comprehensive JWT-based license token validation, heartbeat monitoring, and status tracking for enterprise deployments.
 
 ## Project Structure
 Enterprise features are defined in the Prisma schema and implemented across backend services, UI pages, and licensing infrastructure. The schema defines core models for licensing (Customer, License, LicenseActivation, LicenseHeartbeat), alongside existing enterprise models for VLANs, subnets, firewall integration, VMware clusters/datastores, capacity metrics, VM snapshots, relationships, and integration configurations. The licensing system integrates with the VMware integration module and other enterprise features.
@@ -72,11 +75,13 @@ LIC["License"]
 LACT["LicenseActivation"]
 LHB["LicenseHeartbeat"]
 end
-subgraph "Licensing System"
+subgraph "Enhanced Licensing System"
 JWT["JWT Token Management"]
 MID["Machine ID Generation"]
 FS["Feature Gating"]
 API["License APIs"]
+HB["Heartbeat Monitoring"]
+STATUS["Status Tracking"]
 end
 ORG --> VLAN
 ORG --> SUB
@@ -98,6 +103,8 @@ LIC --> LHB
 JWT --> API
 MID --> API
 FS --> API
+HB --> API
+STATUS --> API
 ```
 
 **Diagram sources**
@@ -133,9 +140,11 @@ FS --> API
 - VmSnapshot: Snapshot records for virtual machines, including current snapshot flags and sizing.
 - Relationship: Edge relationships between devices (contains, connects_to, virtual_runs_on, cluster_contains, vlan_member, firewall_policy, service_dependency, HA_pair, uplink, spanning_tree).
 - IntegrationConfig and IntegrationSyncLog: Centralized configuration and logs for external system integrations (Zabbix, VMware vCenter, Fortinet, SNMP, cloud providers, API).
-- **License Management**: Complete licensing infrastructure including Customer, License, LicenseActivation, and LicenseHeartbeat models with tier-based access control.
-- **JWT Token System**: Secure token-based validation for license state verification and feature gating.
-- **Machine Identification**: Stable hardware fingerprinting for on-premise deployment tracking and license activation binding.
+- **Enhanced License Management**: Complete licensing infrastructure including Customer, License, LicenseActivation, and LicenseHeartbeat models with tier-based access control, JWT token validation, heartbeat monitoring, and status tracking.
+- **JWT Token System**: Secure token-based validation for license state verification and feature gating with automatic renewal and expiration handling.
+- **Machine Identification**: Stable hardware fingerprinting for on-premise deployment tracking and license activation binding with Docker, Linux, macOS, and fallback strategies.
+- **Heartbeat Monitoring**: Periodic usage reporting and system health tracking with configurable intervals and warning systems.
+- **Status Tracking**: Comprehensive license status monitoring with grace period detection, expiration warnings, and administrative oversight.
 
 **Section sources**
 - [schema.prisma:591-608](file://prisma/schema.prisma#L591-L608)
@@ -149,7 +158,7 @@ FS --> API
 - [schema.prisma:1382-1487](file://prisma/schema.prisma#L1382-L1487)
 
 ## Architecture Overview
-The enterprise data model centers around organizations and their infrastructure assets, now enhanced with comprehensive licensing capabilities. VLANs and subnets define network topology and IP allocation. Firewall models integrate with Fortinet devices. VMware models connect to vCenter for compute and storage visibility. Capacity metrics enable time-series monitoring. Snapshots track VM lifecycle. Relationships capture topology and dependencies. Integration configuration and logs manage external system connectivity. The licensing system provides tier-based access control, machine identification, JWT token validation, and administrative oversight.
+The enterprise data model centers around organizations and their infrastructure assets, now enhanced with comprehensive licensing capabilities. VLANs and subnets define network topology and IP allocation. Firewall models integrate with Fortinet devices. VMware models connect to vCenter for compute and storage visibility. Capacity metrics enable time-series monitoring. Snapshots track VM lifecycle. Relationships capture topology and dependencies. Integration configuration and logs manage external system connectivity. The enhanced licensing system provides tier-based access control, machine identification, JWT token validation, heartbeat monitoring, and administrative oversight with comprehensive status tracking.
 
 ```mermaid
 classDiagram
@@ -540,16 +549,16 @@ INTEGRATION_CONFIG ||--o{ INTEGRATION_SYNC_LOG : "logs"
 **Section sources**
 - [schema.prisma:765-801](file://prisma/schema.prisma#L765-L801)
 
-## Enterprise Licensing System
+## Enhanced License Management System
 
-### License Management Infrastructure
-The enterprise licensing system provides comprehensive license management for on-premise deployments with three distinct tiers: TRIAL, STANDARD, and ENTERPRISE. The system includes complete infrastructure for license activation, validation, heartbeat monitoring, and administrative oversight.
+### Comprehensive License Infrastructure
+The enhanced enterprise licensing system provides comprehensive license management for on-premise deployments with three distinct tiers: TRIAL, STANDARD, and ENTERPRISE. The system includes complete infrastructure for license activation, validation, heartbeat monitoring, status tracking, and administrative oversight with JWT token validation and machine identification.
 
-**License Models:**
+**Enhanced License Models:**
 - **Customer**: Represents license holders with company information, contact details, tier assignment, and status tracking
 - **License**: Contains license key, tier level, usage limits (devices/users), validity periods, activation limits, and status
 - **LicenseActivation**: Tracks machine activations with hardware fingerprints, IP addresses, versions, and usage data
-- **LicenseHeartbeat**: Monitors ongoing usage patterns and system health
+- **LicenseHeartbeat**: Monitors ongoing usage patterns, system health, and heartbeat reporting with configurable intervals
 
 ```mermaid
 erDiagram
@@ -566,16 +575,17 @@ LICENSE_HEARTBEAT ||--|| LICENSE : "belongs to"
 **Section sources**
 - [schema.prisma:1382-1487](file://prisma/schema.prisma#L1382-L1487)
 
-### License Activation Process
-The license activation process establishes secure bindings between license keys and on-premise installations using machine identification and JWT token validation.
+### Advanced License Activation Process
+The enhanced license activation process establishes secure bindings between license keys and on-premise installations using machine identification and JWT token validation with improved error handling and status tracking.
 
-**Activation Workflow:**
+**Enhanced Activation Workflow:**
 1. Client requests license activation with license key and machine ID
 2. Server validates license key and customer status
 3. Checks activation limits and existing activations
-4. Creates/upserts license activation record
-5. Issues signed JWT token with license details
-6. Returns token and license state to client
+4. Creates/upserts license activation record with usage data
+5. Issues signed JWT token with license details and expiration
+6. Returns token and comprehensive license state to client
+7. Updates activation last seen timestamp and IP address
 
 ```mermaid
 sequenceDiagram
@@ -589,42 +599,43 @@ Server->>DB : Check activation limits
 DB-->>Server : Current activations
 Server->>DB : Upsert license activation
 DB-->>Server : Activation saved
-Server->>Server : Sign JWT token
+Server->>Server : Sign JWT token with expiration
 Server-->>Client : {token, state}
-Note over Client,Server : Machine ID + License Key = Secure Binding
+Note over Client,Server : Enhanced JWT validation + machine ID binding
 ```
 
 **Diagram sources**
-- [activate/route.ts:16-138](file://app/api/license/activate/route.ts#L16-L138)
+- [activate/route.ts:16-147](file://app/api/license/activate/route.ts#L16-L147)
 - [client.ts:119-142](file://lib/license/client.ts#L119-L142)
 
 **Section sources**
-- [activate/route.ts:16-138](file://app/api/license/activate/route.ts#L16-L138)
+- [activate/route.ts:16-147](file://app/api/license/activate/route.ts#L16-L147)
 - [client.ts:119-142](file://lib/license/client.ts#L119-L142)
 
-### License Validation and Heartbeat
-The validation system operates on a 24-hour cycle with intelligent caching and grace period handling for network outages.
+### Comprehensive License Validation and Heartbeat System
+The enhanced validation system operates on a 24-hour cycle with intelligent caching, grace period handling, and comprehensive status tracking for network outages and system health monitoring.
 
-**Validation Logic:**
-- **Normal Operation**: Server validation with JWT token verification
-- **Grace Period**: 7-day grace period using cached license state during outages
-- **Restricted Mode**: Read-only operation after grace period expiration
-- **Heartbeat Monitoring**: Periodic usage reporting (every 6-12 hours)
+**Enhanced Validation Logic:**
+- **Normal Operation**: Server validation with JWT token verification and automatic renewal
+- **Grace Period**: 7-day grace period using cached license state during outages with status tracking
+- **Restricted Mode**: Read-only operation after grace period expiration with comprehensive warnings
+- **Heartbeat Monitoring**: Periodic usage reporting (every 6-12 hours) with warning generation
+- **Status Tracking**: Real-time license status monitoring with administrative oversight
 
 ```mermaid
 flowchart TD
-Start(["License Validation Cycle"]) --> CheckKey{"License Key Present?"}
+Start(["Enhanced License Validation Cycle"]) --> CheckKey{"License Key Present?"}
 CheckKey --> |No| TrialMode["TRIAL Mode<br/>10 devices, 2 users<br/>30 day expiry"]
-CheckKey --> |Yes| TryValidate["Try Server Validation"]
+CheckKey --> |Yes| TryValidate["Try Server Validation<br/>+ JWT Token Verification"]
 TryValidate --> ValidateSuccess{"Validation Success?"}
-ValidateSuccess --> |Yes| UpdateState["Update State & Cache"]
-ValidateSuccess --> |No| TryActivate["Try Full Activation"]
+ValidateSuccess --> |Yes| UpdateState["Update State & Cache<br/>+ Heartbeat Recording"]
+ValidateSuccess --> |No| TryActivate["Try Full Activation<br/>+ Enhanced Error Handling"]
 TryActivate --> ActivateSuccess{"Activation Success?"}
 ActivateSuccess --> |Yes| UpdateState
 ActivateSuccess --> |No| CheckGrace{"Within Grace Period?"}
-CheckGrace --> |Yes| UseCache["Use Cached State<br/>Grace Mode Active"]
-CheckGrace --> |No| Restricted["Restricted Mode<br/>Read-only Access"]
-UpdateState --> ScheduleNext["Schedule Next Validation<br/>(24 hours)"]
+CheckGrace --> |Yes| UseCache["Use Cached State<br/>Grace Mode Active<br/>+ Status Tracking"]
+CheckGrace --> |No| Restricted["Restricted Mode<br/>Read-only Access<br/>+ Comprehensive Warnings"]
+UpdateState --> ScheduleNext["Schedule Next Validation<br/>(24 hours)<br/>+ Heartbeat Monitoring"]
 UseCache --> ScheduleNext
 Restricted --> End(["End"])
 ScheduleNext --> End
@@ -638,14 +649,15 @@ ScheduleNext --> End
 - [client.ts:180-265](file://lib/license/client.ts#L180-L265)
 - [install-guide.html:641-669](file://deploy/install-guide.html#L641-L669)
 
-### JWT Token Management
-The system uses JWT tokens for secure license validation with automatic renewal and expiration handling.
+### Advanced JWT Token Management
+The enhanced system uses JWT tokens for secure license validation with automatic renewal, expiration handling, and comprehensive error management for license state verification and feature gating.
 
-**Token Features:**
+**Enhanced Token Features:**
 - HS256 signing algorithm with configurable secret
 - Payload includes license details, tier, limits, and machine ID
-- Automatic expiration matching license validity
-- Verification with proper error handling for expired tokens
+- Automatic expiration matching license validity with renewal logic
+- Comprehensive verification with proper error handling for expired tokens
+- Enhanced security with license server secret management
 
 ```mermaid
 classDiagram
@@ -667,29 +679,30 @@ LicenseTokenPayload --> JWTUtilities : "signed/verified by"
 ```
 
 **Diagram sources**
-- [jwt.ts:13-57](file://lib/license/jwt.ts#L13-L57)
+- [jwt.ts:13-58](file://lib/license/jwt.ts#L13-L58)
 
 **Section sources**
-- [jwt.ts:13-57](file://lib/license/jwt.ts#L13-L57)
+- [jwt.ts:13-58](file://lib/license/jwt.ts#L13-L58)
 
-### Machine Identification System
-The machine identification system creates stable hardware fingerprints for secure license binding across different deployment environments.
+### Sophisticated Machine Identification System
+The enhanced machine identification system creates stable hardware fingerprints for secure license binding across different deployment environments with improved Docker, Linux, macOS, and fallback strategies.
 
-**Identification Strategies:**
-- **Docker**: Container hostname + volume UUID for persistent identification
+**Enhanced Identification Strategies:**
+- **Docker**: Container hostname + volume UUID for persistent identification with marker persistence
 - **Linux**: `/etc/machine-id` for system-wide unique identification
 - **macOS**: IOPlatformSerialNumber via ioreg for hardware-bound identification
-- **Fallback**: Random UUID persisted to `.machine-id` file for portability
+- **Fallback**: Random UUID persisted to `.machine-id` file with enhanced error handling
+- **Enhanced Persistence**: Improved file system handling and cross-platform compatibility
 
 ```mermaid
 flowchart TD
-Start(["Generate Machine ID"]) --> CheckDocker{"Running in Docker?"}
-CheckDocker --> |Yes| DockerID["Use container hostname + volume UUID"]
+Start(["Enhanced Machine ID Generation"]) --> CheckDocker{"Running in Docker?"}
+CheckDocker --> |Yes| DockerID["Use container hostname + volume UUID<br/>+ Enhanced Marker Persistence"]
 CheckDocker --> |No| CheckLinux{"Linux System?"}
-CheckLinux --> |Yes| LinuxID["Read /etc/machine-id"]
+CheckLinux --> |Yes| LinuxID["Read /etc/machine-id<br/>+ Enhanced Error Handling"]
 CheckLinux --> |No| CheckMac{"macOS System?"}
-CheckMac --> |Yes| MacID["Extract IOPlatformSerialNumber"]
-CheckMac --> |No| Fallback["Generate Random UUID<br/>Persist to .machine-id"]
+CheckMac --> |Yes| MacID["Extract IOPlatformSerialNumber<br/>+ SHA256 Hashing"]
+CheckMac --> |No| Fallback["Generate Random UUID<br/>+ Enhanced Persistence<br/>+ Cross-platform Support"]
 DockerID --> End(["Stable Machine ID"])
 LinuxID --> End
 MacID --> End
@@ -697,62 +710,110 @@ Fallback --> End
 ```
 
 **Diagram sources**
-- [machine-id.ts:31-82](file://lib/license/machine-id.ts#L31-L82)
+- [machine-id.ts:31-102](file://lib/license/machine-id.ts#L31-L102)
 
 **Section sources**
-- [machine-id.ts:31-82](file://lib/license/machine-id.ts#L31-L82)
+- [machine-id.ts:31-102](file://lib/license/machine-id.ts#L31-L102)
+
+### Enhanced Heartbeat Monitoring and Status Tracking
+The enhanced heartbeat system provides comprehensive usage tracking, system health monitoring, and status reporting with configurable intervals and warning generation for enterprise deployments.
+
+**Enhanced Heartbeat Features:**
+- **Periodic Reporting**: Every 6-12 hours with configurable intervals
+- **Usage Tracking**: Device count, user count, and application version monitoring
+- **Warning Generation**: Approaching limit warnings and expiration alerts
+- **Status Recording**: IP address, timestamp, and usage data persistence
+- **Administrative Oversight**: Comprehensive status tracking for license management
+
+**Section sources**
+- [heartbeat/route.ts:14-125](file://app/api/license/heartbeat/route.ts#L14-L125)
+- [client.ts:292-297](file://lib/license/client.ts#L292-L297)
+
+### Comprehensive Status Tracking System
+The enhanced status tracking system provides detailed license information, usage statistics, and administrative oversight with comprehensive warning generation and status indicators.
+
+**Enhanced Status Features:**
+- **License Status Display**: Visual indicators (Active, Expiring Soon, Grace Period, Invalid)
+- **Technical Details**: License key and machine ID display with masking
+- **Usage Statistics**: Device and user count monitoring
+- **Warning Generation**: Comprehensive warnings for approaching limits and expiration
+- **Administrative Interface**: Enhanced UI with feature comparison and license management
+
+**Section sources**
+- [page.tsx:176-486](file://app/settings/license/page.tsx#L176-L486)
+- [status/route.ts:12-38](file://app/api/license/status/route.ts#L12-L38)
 
 ## License Management APIs
 
-### Activation API
-The activation endpoint handles initial license key registration and machine binding.
+### Enhanced Activation API
+The enhanced activation endpoint handles initial license key registration and machine binding with improved error handling and comprehensive status reporting.
 
 **Endpoint**: `POST /api/license/activate`
-**Purpose**: Register license key on a machine for the first time
+**Purpose**: Register license key on a machine for the first time with enhanced validation
 **Request**: `{ licenseKey: string, machineId: string }`
 **Response**: `{ token: string, state: LicenseState }`
+**Enhanced Features**: 
+- Comprehensive error handling and status reporting
+- Enhanced activation limit checking
+- Improved machine ID validation
+- Detailed license state information
 
 **Section sources**
-- [activate/route.ts:16-138](file://app/api/license/activate/route.ts#L16-L138)
+- [activate/route.ts:16-147](file://app/api/license/activate/route.ts#L16-L147)
 
-### Validation API
-The validation endpoint performs periodic license state verification and token renewal.
+### Enhanced Validation API
+The enhanced validation endpoint performs periodic license state verification and token renewal with automatic JWT token management and comprehensive status tracking.
 
 **Endpoint**: `POST /api/license/validate`
-**Purpose**: Validate existing license activation and refresh tokens
+**Purpose**: Validate existing license activation and refresh tokens with enhanced JWT handling
 **Request**: `{ licenseKey: string, machineId: string, token?: string }`
 **Response**: `{ valid: boolean, state: LicenseState, token?: string }`
+**Enhanced Features**:
+- Automatic JWT token renewal when expired
+- Enhanced validation logic with comprehensive error handling
+- Improved activation status checking
+- Detailed state information with warnings
 
 **Section sources**
-- [validate/route.ts:16-156](file://app/api/license/validate/route.ts#L16-L156)
+- [validate/route.ts:16-157](file://app/api/license/validate/route.ts#L16-L157)
 
-### Heartbeat API
-The heartbeat endpoint tracks ongoing usage patterns and system health.
+### Enhanced Heartbeat API
+The enhanced heartbeat endpoint tracks ongoing usage patterns, system health, and license status with comprehensive warning generation and administrative oversight.
 
 **Endpoint**: `POST /api/license/heartbeat`
-**Purpose**: Report usage statistics and system health
+**Purpose**: Report usage statistics, system health, and license status with enhanced monitoring
 **Request**: `{ licenseKey: string, machineId: string, deviceCount?: number, userCount?: number, appVersion?: string }`
 **Response**: `{ success: boolean, warnings?: string[], daysRemaining: number }`
+**Enhanced Features**:
+- Comprehensive warning generation for approaching limits
+- Enhanced usage data recording
+- Improved error handling and status reporting
+- Detailed administrative oversight capabilities
 
 **Section sources**
-- [heartbeat/route.ts:14-124](file://app/api/license/heartbeat/route.ts#L14-L124)
+- [heartbeat/route.ts:14-125](file://app/api/license/heartbeat/route.ts#L14-L125)
 
-### Status API
-The status endpoint provides administrative license information and usage statistics.
+### Enhanced Status API
+The enhanced status endpoint provides comprehensive administrative license information, usage statistics, and license administration with enhanced status tracking.
 
 **Endpoint**: `GET /api/license/status`
-**Purpose**: Retrieve current license status for administrative monitoring
+**Purpose**: Retrieve current license status and usage statistics for administrative monitoring
 **Response**: `{ license: AdminLicenseInfo, usage: { deviceCount: number, userCount: number } }`
+**Enhanced Features**:
+- Comprehensive license status information
+- Enhanced usage statistics
+- Improved administrative oversight
+- Detailed warning generation
 
 **Section sources**
-- [status/route.ts:12-37](file://app/api/license/status/route.ts#L12-L37)
+- [status/route.ts:12-38](file://app/api/license/status/route.ts#L12-L38)
 
 ## Feature Gating and Access Control
 
-### License Tiers and Feature Matrix
-The licensing system implements tier-based feature gating across TRIAL, STANDARD, and ENTERPRISE tiers with granular access control.
+### Enhanced License Tiers and Feature Matrix
+The enhanced licensing system implements tier-based feature gating across TRIAL, STANDARD, and ENTERPRISE tiers with granular access control and comprehensive status tracking.
 
-**Feature Availability Matrix:**
+**Enhanced Feature Availability Matrix:**
 - **TRIAL**: Basic features with limitations (10 devices, 2 users, 30-day expiry)
 - **STANDARD**: Core enterprise features plus integrations (VMware, Fortinet, Zabbix)
 - **ENTERPRISE**: Advanced analytics, reporting, API access, and premium features
@@ -760,24 +821,24 @@ The licensing system implements tier-based feature gating across TRIAL, STANDARD
 **Core Features** (Always Available):
 - Dashboard, Devices, Locations, Racks, NMS, Alarms
 
-**Standard Features**:
+**Enhanced Standard Features**:
 - Integrations: VMware, Fortinet, Zabbix
 - Reports, Audit
 
-**Enterprise Features**:
+**Enhanced Enterprise Features**:
 - Advanced Reports, External API, Analytics, Premium Audit
 
 ```mermaid
 graph TB
-subgraph "License Tiers"
+subgraph "Enhanced License Tiers"
 TRIAL["TRIAL<br/>10 devices, 2 users<br/>30 days"]
-STANDARD["STANDARD<br/>Unlimited devices/users<br/>Full integrations"]
-ENTERPRISE["ENTERPRISE<br/>Premium features<br/>Advanced analytics"]
+STANDARD["STANDARD<br/>Unlimited devices/users<br/>Full integrations<br/>Enhanced Monitoring"]
+ENTERPRISE["ENTERPRISE<br/>Premium features<br/>Advanced analytics<br/>Comprehensive Oversight"]
 end
-subgraph "Feature Categories"
-CORE["Core Features<br/>Dashboard, Devices, Locations"]
-INT["Integrations<br/>VMware, Fortinet, Zabbix"]
-ADV["Advanced Features<br/>Reports, Analytics, API"]
+subgraph "Enhanced Feature Categories"
+CORE["Core Features<br/>Dashboard, Devices, Locations<br/>Enhanced Security"]
+INT["Integrations<br/>VMware, Fortinet, Zabbix<br/>Enhanced Monitoring"]
+ADV["Advanced Features<br/>Reports, Analytics, API<br/>Premium Features"]
 end
 TRIAL --> CORE
 STANDARD --> CORE
@@ -793,30 +854,33 @@ ENTERPRISE --> ADV
 **Section sources**
 - [features.ts:25-51](file://lib/license/features.ts#L25-L51)
 
-### Usage Limit Checking
-The system enforces usage limits through device and user count validation with configurable thresholds.
+### Enhanced Usage Limit Checking
+The enhanced system enforces usage limits through device and user count validation with configurable thresholds, comprehensive warning generation, and graceful degradation capabilities.
 
-**Limit Enforcement:**
+**Enhanced Limit Enforcement:**
 - Device count checks against `maxDevices` limit (90% threshold for warnings)
 - User count checks against `maxUsers` limit (90% threshold for warnings)
-- Automatic warnings when approaching limits
-- Graceful degradation when limits exceeded
+- Automatic warnings when approaching limits with enhanced messaging
+- Graceful degradation when limits exceeded with comprehensive status tracking
+- Enhanced administrative oversight with warning generation
 
 **Section sources**
 - [features.ts:78-90](file://lib/license/features.ts#L78-L90)
-- [heartbeat/route.ts:84-96](file://app/api/license/heartbeat/route.ts#L84-L96)
+- [heartbeat/route.ts:84-106](file://app/api/license/heartbeat/route.ts#L84-L106)
 
-### Administrative License Interface
-The administrative interface provides comprehensive license management with status monitoring, usage statistics, and license administration.
+### Enhanced Administrative License Interface
+The enhanced administrative interface provides comprehensive license management with status monitoring, usage statistics, license administration, and enhanced warning generation.
 
-**Administrative Features:**
-- License status display with visual indicators (Active, Expiring Soon, Grace Period, Invalid)
-- Technical details including license key and machine ID
-- Usage statistics (device and user counts)
+**Enhanced Administrative Features:**
+- License status display with enhanced visual indicators (Active, Expiring Soon, Grace Period, Invalid)
+- Technical details including license key and machine ID with enhanced masking
+- Usage statistics (device and user counts) with enhanced progress tracking
 - License information formatting with color-coded status indicators
+- Enhanced warning generation and administrative oversight
+- Comprehensive feature comparison matrix
 
 **Section sources**
-- [page.tsx:176-394](file://app/settings/license/page.tsx#L176-L394)
+- [page.tsx:176-486](file://app/settings/license/page.tsx#L176-L486)
 
 ## Dependency Analysis
 - Foreign keys enforce referential integrity across models:
@@ -865,15 +929,17 @@ LACT --> LHB
 ## Performance Considerations
 - Indexes on frequently queried fields (e.g., device IDs, timestamps, organization IDs, license keys) improve lookup performance for relationships, firewall policies, capacity metrics, and licensing operations.
 - Time-series partitioning strategies can be considered for CapacityMetric and LicenseHeartbeat to manage long histories efficiently.
-- Caching strategies (e.g., snapshot cache TTL, license state cache) reduce repeated API calls in integrations like VMware and licensing validation.
-- JWT token caching reduces cryptographic overhead during frequent validation cycles.
-- Grace period caching ensures minimal performance impact during network outages.
+- Caching strategies (e.g., snapshot cache TTL, license state cache, JWT token caching) reduce repeated API calls in integrations like VMware and licensing validation.
+- Enhanced JWT token caching reduces cryptographic overhead during frequent validation cycles.
+- Grace period caching ensures minimal performance impact during network outages with improved cache management.
+- Heartbeat monitoring with configurable intervals optimizes resource usage while maintaining comprehensive status tracking.
 
 ## Troubleshooting Guide
-- **Licensing Issues**
-  - Activation failures: Verify license key validity, customer status, and activation limits; check machine ID generation and JWT secret configuration.
-  - Validation failures: Confirm network connectivity to license server, token expiration, and proper JWT secret environment variable.
-  - Grace period problems: Check cache file permissions, disk space, and grace period configuration.
+- **Enhanced Licensing Issues**
+  - Activation failures: Verify license key validity, customer status, and activation limits; check machine ID generation and JWT secret configuration; review enhanced error messages.
+  - Validation failures: Confirm network connectivity to license server, token expiration, and proper JWT secret environment variable; check enhanced validation logs.
+  - Grace period problems: Check cache file permissions, disk space, and grace period configuration; verify enhanced status tracking.
+  - Heartbeat failures: Monitor heartbeat endpoint status, usage data recording, and warning generation; check enhanced administrative interface.
 - **VMware Integration**
   - Authentication failures: Verify vCenter credentials and certificate handling; ensure session cookies are refreshed.
   - SOAP session expiration: Re-bootstrap via SDK login when sessions expire.
@@ -884,6 +950,9 @@ LACT --> LHB
   - Missing metrics: Confirm collection intervals and resource tagging; check timestamp indexing.
 - **Integration Logs**
   - Review IntegrationSyncLog for detailed error messages and item counts to diagnose sync issues.
+- **Enhanced License Status**
+  - Monitor license status through enhanced administrative interface; check warning generation and status indicators.
+  - Verify heartbeat monitoring and usage tracking for comprehensive license oversight.
 
 **Section sources**
 - [vmware.md:119-127](file://docs/20-modules/integrations/vmware.md#L119-L127)
@@ -893,11 +962,11 @@ LACT --> LHB
 - [client.ts:230-265](file://lib/license/client.ts#L230-L265)
 
 ## Conclusion
-The enterprise feature set, enhanced with comprehensive licensing capabilities, builds a robust foundation for network and virtualization visibility, policy enforcement, and operational observability. The new licensing system provides secure on-premise deployment management with tier-based access control, machine identification, JWT token validation, and administrative oversight. The data models emphasize strong referential integrity, extensibility, and auditability. Integrations with VMware and Fortinet are first-class citizens, enabling real-time insights and automated workflows while maintaining strict license compliance.
+The enhanced enterprise feature set, with comprehensive licensing capabilities, builds a robust foundation for network and virtualization visibility, policy enforcement, and operational observability. The enhanced licensing system provides secure on-premise deployment management with tier-based access control, machine identification, JWT token validation, heartbeat monitoring, and administrative oversight with comprehensive status tracking. The data models emphasize strong referential integrity, extensibility, and auditability. Integrations with VMware and Fortinet are first-class citizens, enabling real-time insights and automated workflows while maintaining strict license compliance. The enhanced system provides comprehensive monitoring, warning generation, and administrative oversight for enterprise deployments.
 
 ## Appendices
 
-### Enterprise Feature Configuration Examples
+### Enhanced Enterprise Feature Configuration Examples
 - **VLAN/Subnet**
   - Create VLAN with optional subnet/gateway/VRF; assign to network interfaces and subnets.
 - **Firewall Policies**
@@ -908,26 +977,38 @@ The enterprise feature set, enhanced with comprehensive licensing capabilities, 
   - Aggregate CapacityMetric by resourceType/resourceId and metricType over time windows to identify growth trends and saturation points.
 - **Security and Audit**
   - Enable audit logging for sensitive changes; maintain encrypted integration configs; apply whitelists for known automation events.
-- **Licensing Setup**
-  - Configure license key and server URL environment variables; initialize license system on application startup; monitor license status through administrative interface.
+- **Enhanced Licensing Setup**
+  - Configure license key and server URL environment variables; initialize enhanced license system on application startup; monitor license status through administrative interface.
 - **Feature Gating**
-  - Implement tier-based feature access control; configure usage limits; handle grace period and restricted mode transitions.
+  - Implement tier-based feature access control; configure usage limits; handle grace period and restricted mode transitions with enhanced status tracking.
+- **Heartbeat Monitoring**
+  - Configure heartbeat intervals (6-12 hours); monitor usage patterns; generate warnings for approaching limits; track system health.
 
-### License Administration Interface
-The administrative license interface provides comprehensive monitoring and management capabilities:
+### Enhanced License Administration Interface
+The enhanced administrative license interface provides comprehensive monitoring and management capabilities with improved status tracking, warning generation, and administrative oversight:
 
-**Visual Status Indicators:**
-- **Active**: Green badge with check icon for valid, active licenses
-- **Expiring Soon**: Orange badge with clock icon for licenses with ≤30 days remaining
-- **Grace Period**: Yellow badge with warning triangle for temporary grace period
-- **Invalid**: Red badge with X circle for invalid or expired licenses
+**Enhanced Visual Status Indicators:**
+- **Active**: Green badge with check icon for valid, active licenses with enhanced status tracking
+- **Expiring Soon**: Orange badge with clock icon for licenses with ≤30 days remaining with warning generation
+- **Grace Period**: Yellow badge with warning triangle for temporary grace period with comprehensive monitoring
+- **Invalid**: Red badge with X circle for invalid or expired licenses with enhanced error reporting
 
-**Technical Information Display:**
-- License key masking for security
-- Machine ID display with shortened identifier
-- Tier and validity period information
-- Usage statistics and limit warnings
+**Enhanced Technical Information Display:**
+- License key masking for security with enhanced display
+- Machine ID display with shortened identifier and enhanced tracking
+- Tier and validity period information with comprehensive status indicators
+- Usage statistics and limit warnings with enhanced progress tracking
+- Warning generation and administrative oversight capabilities
+
+**Enhanced Administrative Features:**
+- Comprehensive license status monitoring with enhanced visibility
+- Technical details with enhanced masking and tracking
+- Usage statistics with enhanced progress visualization
+- Warning generation with comprehensive alerting
+- Feature comparison matrix with enhanced tier information
 
 **Section sources**
-- [page.tsx:176-394](file://app/settings/license/page.tsx#L176-L394)
+- [page.tsx:176-486](file://app/settings/license/page.tsx#L176-L486)
 - [install-guide.html:641-669](file://deploy/install-guide.html#L641-L669)
+- [heartbeat/route.ts:84-106](file://app/api/license/heartbeat/route.ts#L84-L106)
+- [client.ts:292-297](file://lib/license/client.ts#L292-L297)

@@ -5,6 +5,7 @@
 - [app/api/organizations/route.ts](file://app/api/organizations/route.ts)
 - [app/api/organizations/[id]/route.ts](file://app/api/organizations/[id]/route.ts)
 - [app/api/buildings/route.ts](file://app/api/buildings/route.ts)
+- [app/api/buildings/[id]/route.ts](file://app/api/buildings/[id]/route.ts)
 - [app/api/floors/route.ts](file://app/api/floors/route.ts)
 - [app/api/floors/[id]/route.ts](file://app/api/floors/[id]/route.ts)
 - [app/api/rooms/route.ts](file://app/api/rooms/route.ts)
@@ -17,10 +18,15 @@
 - [app/api/services/[id]/route.ts](file://app/api/services/[id]/route.ts)
 - [lib/prisma.ts](file://lib/prisma.ts)
 - [prisma/schema.prisma](file://prisma/schema.prisma)
-- [docs/API_ORGANIZATIONS.md](file://docs/API_ORGANIZATIONS.md)
-- [docs/API_BUILDINGS.md](file://docs/API_BUILDINGS.md)
-- [docs/API_FLOORS.md](file://docs/API_FLOORS.md)
+- [lib/api.ts](file://lib/api.ts)
 </cite>
+
+## Update Summary
+**Changes Made**
+- Added fresh parameter documentation for Organizations API cache bypass
+- Updated cache invalidation logic documentation for Buildings API
+- Added withCredentials support documentation for API client configuration
+- Enhanced cache management section with new bypass capabilities
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -28,14 +34,15 @@
 3. [Core Components](#core-components)
 4. [Architecture Overview](#architecture-overview)
 5. [Detailed Component Analysis](#detailed-component-analysis)
-6. [Dependency Analysis](#dependency-analysis)
-7. [Performance Considerations](#performance-considerations)
-8. [Troubleshooting Guide](#troubleshooting-guide)
-9. [Conclusion](#conclusion)
-10. [Appendices](#appendices)
+6. [Cache Management and Session Handling](#cache-management-and-session-handling)
+7. [Dependency Analysis](#dependency-analysis)
+8. [Performance Considerations](#performance-considerations)
+9. [Troubleshooting Guide](#troubleshooting-guide)
+10. [Conclusion](#conclusion)
+11. [Appendices](#appendices)
 
 ## Introduction
-This document provides comprehensive API documentation for InfraScope’s core resource management endpoints covering organizations, buildings, floors, rooms, racks, devices, and services. It explains HTTP methods, URL patterns, request/response schemas, validation rules, pagination, filtering, error handling, and operational constraints. It also covers caching, performance characteristics, and best practices for efficient consumption.
+This document provides comprehensive API documentation for InfraScope's core resource management endpoints covering organizations, buildings, floors, rooms, racks, devices, and services. It explains HTTP methods, URL patterns, request/response schemas, validation rules, pagination, filtering, error handling, and operational constraints. It also covers caching mechanisms, session management, performance characteristics, and best practices for efficient consumption.
 
 ## Project Structure
 InfraScope exposes REST-like endpoints under the Next.js App Router at app/api/<resource>. Each resource typically provides:
@@ -50,6 +57,7 @@ Client["Client"]
 Org["Organizations<br/>GET/POST"]
 OrgID["Organization Detail<br/>GET/PUT/DELETE"]
 Bld["Buildings<br/>GET/POST"]
+BldID["Building Detail<br/>GET/PUT/DELETE"]
 Flr["Floors<br/>GET/POST"]
 FlrID["Floor Detail<br/>GET/PUT/DELETE"]
 Rm["Rooms<br/>GET/POST"]
@@ -63,6 +71,7 @@ SvcID["Service Detail<br/>GET/PUT/DELETE"]
 Client --> Org
 Org --> OrgID
 Org --> Bld
+Bld --> BldID
 Bld --> Flr
 Flr --> FlrID
 Flr --> Rm
@@ -76,9 +85,10 @@ Svc --> SvcID
 ```
 
 **Diagram sources**
-- [app/api/organizations/route.ts:1-125](file://app/api/organizations/route.ts#L1-L125)
+- [app/api/organizations/route.ts:1-131](file://app/api/organizations/route.ts#L1-L131)
 - [app/api/organizations/[id]/route.ts](file://app/api/organizations/[id]/route.ts#L1-L68)
-- [app/api/buildings/route.ts:1-118](file://app/api/buildings/route.ts#L1-L118)
+- [app/api/buildings/route.ts:1-122](file://app/api/buildings/route.ts#L1-L122)
+- [app/api/buildings/[id]/route.ts](file://app/api/buildings/[id]/route.ts#L1-L300)
 - [app/api/floors/route.ts:1-107](file://app/api/floors/route.ts#L1-L107)
 - [app/api/floors/[id]/route.ts](file://app/api/floors/[id]/route.ts#L1-L318)
 - [app/api/rooms/route.ts:1-113](file://app/api/rooms/route.ts#L1-L113)
@@ -112,8 +122,8 @@ Each component supports:
 
 **Section sources**
 - [prisma/schema.prisma:10-133](file://prisma/schema.prisma#L10-L133)
-- [app/api/organizations/route.ts:1-125](file://app/api/organizations/route.ts#L1-L125)
-- [app/api/buildings/route.ts:1-118](file://app/api/buildings/route.ts#L1-L118)
+- [app/api/organizations/route.ts:1-131](file://app/api/organizations/route.ts#L1-L131)
+- [app/api/buildings/route.ts:1-122](file://app/api/buildings/route.ts#L1-L122)
 - [app/api/floors/route.ts:1-107](file://app/api/floors/route.ts#L1-L107)
 - [app/api/rooms/route.ts:1-113](file://app/api/rooms/route.ts#L1-L113)
 - [app/api/racks/route.ts:1-122](file://app/api/racks/route.ts#L1-L122)
@@ -126,6 +136,7 @@ The API follows a layered architecture:
 - Prisma client performs database operations with optimized queries and includes
 - Caching is applied at the handler level for frequently accessed collections
 - Error responses are standardized with success flags and timestamps
+- Session management is handled through withCredentials support for cross-domain requests
 
 ```mermaid
 sequenceDiagram
@@ -133,31 +144,40 @@ participant C as "Client"
 participant H as "HTTP Handler"
 participant P as "Prisma Client"
 participant DB as "PostgreSQL"
-C->>H : "HTTP Request"
+C->>H : "HTTP Request (withCredentials)"
 H->>P : "Execute query (findMany/findUnique/update/delete)"
 P->>DB : "SQL"
 DB-->>P : "Rows"
 P-->>H : "Result"
 H-->>C : "JSON Response (success/error)"
+Note over C,H : Cache bypass with fresh parameter
 ```
 
 **Diagram sources**
 - [lib/prisma.ts:1-21](file://lib/prisma.ts#L1-L21)
-- [app/api/organizations/route.ts:1-125](file://app/api/organizations/route.ts#L1-L125)
+- [app/api/organizations/route.ts:1-131](file://app/api/organizations/route.ts#L1-L131)
 - [app/api/devices/route.ts:1-142](file://app/api/devices/route.ts#L1-L142)
+- [lib/api.ts:1-58](file://lib/api.ts#L1-L58)
 
 ## Detailed Component Analysis
 
 ### Organizations
 - Base URL: /api/organizations
 - Methods:
-  - GET: List organizations with optional caching
+  - GET: List organizations with optional cache bypass
   - POST: Create organization
 - Detail URL: /api/organizations/[id]
 - Methods:
   - GET: Retrieve organization with nested buildings
   - PUT: Update organization
   - DELETE: Delete organization (fails if buildings exist)
+
+**Updated** Organizations API now supports cache bypass via the `fresh` parameter
+
+Cache bypass mechanism:
+- Query parameter: `fresh` (any value)
+- When present, forces fresh database query regardless of cache status
+- Useful for real-time data synchronization and immediate consistency requirements
 
 Validation and constraints:
 - name and code are required on creation
@@ -179,11 +199,12 @@ Common errors:
 Example curl:
 - Create: curl -X POST http://localhost:3000/api/organizations -H "Content-Type: application/json" -d '{...}'
 - List: curl http://localhost:3000/api/organizations
+- Bypass cache: curl "http://localhost:3000/api/organizations?fresh=true"
 - Update: curl -X PUT http://localhost:3000/api/organizations/:id -H "Content-Type: application/json" -d '{...}'
 - Delete: curl -X DELETE http://localhost:3000/api/organizations/:id
 
 **Section sources**
-- [app/api/organizations/route.ts:1-125](file://app/api/organizations/route.ts#L1-L125)
+- [app/api/organizations/route.ts:1-131](file://app/api/organizations/route.ts#L1-L131)
 - [app/api/organizations/[id]/route.ts](file://app/api/organizations/[id]/route.ts#L1-L68)
 - [prisma/schema.prisma:10-25](file://prisma/schema.prisma#L10-L25)
 
@@ -197,6 +218,13 @@ Example curl:
   - GET: Retrieve building with organization and floors
   - PUT: Update building
   - DELETE: Delete building (fails if floors exist)
+
+**Updated** Buildings API now includes cache invalidation logic after mutations
+
+Cache invalidation behavior:
+- After successful POST/PUT/DELETE operations, local cache is immediately invalidated
+- Ensures subsequent GET requests return fresh data
+- Prevents stale data issues in distributed environments
 
 Filters:
 - organizationId, city, country, search (case-insensitive substring)
@@ -222,7 +250,8 @@ Example curl:
 - Delete: curl -X DELETE http://localhost:3000/api/buildings/:id
 
 **Section sources**
-- [app/api/buildings/route.ts:1-118](file://app/api/buildings/route.ts#L1-L118)
+- [app/api/buildings/route.ts:1-122](file://app/api/buildings/route.ts#L1-L122)
+- [app/api/buildings/[id]/route.ts](file://app/api/buildings/[id]/route.ts#L1-L300)
 - [prisma/schema.prisma:56-76](file://prisma/schema.prisma#L56-L76)
 
 ### Floors
@@ -411,6 +440,48 @@ Example curl:
 - [app/api/services/[id]/route.ts](file://app/api/services/[id]/route.ts#L1-L452)
 - [prisma/schema.prisma:344-368](file://prisma/schema.prisma#L344-L368)
 
+## Cache Management and Session Handling
+
+### Cache Bypass Mechanism
+The Organizations API provides a fresh parameter to bypass caching for real-time data requirements:
+
+**Fresh Parameter Usage:**
+- URL: `/api/organizations?fresh=true`
+- Any non-empty value will trigger cache bypass
+- Forces immediate database query regardless of cache freshness
+- Useful for monitoring dashboards and real-time synchronization
+
+**Cache Invalidation Logic:**
+- Buildings API automatically invalidates cache after POST/PUT/DELETE operations
+- Ensures immediate consistency across distributed systems
+- Prevents stale data issues in multi-instance deployments
+
+### Session Management
+**Updated** API client configuration now supports cross-domain session management:
+
+The API client uses `withCredentials: true` to handle sessions across domain boundaries:
+
+```javascript
+const api = axios.create({
+  baseURL: '',
+  withCredentials: true,  // Enables cookie/session sharing
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+```
+
+**Benefits:**
+- Maintains authentication state across subdomains
+- Supports secure session cookies for enterprise deployments
+- Enables seamless integration with reverse proxies and load balancers
+
+**Section sources**
+- [app/api/organizations/route.ts:12](file://app/api/organizations/route.ts#L12)
+- [app/api/organizations/route.ts:113-116](file://app/api/organizations/route.ts#L113-L116)
+- [app/api/buildings/route.ts:104-107](file://app/api/buildings/route.ts#L104-L107)
+- [lib/api.ts:1-9](file://lib/api.ts#L1-L9)
+
 ## Dependency Analysis
 Entity relationships and cascading behavior are defined in the Prisma schema. Key points:
 - Organization → Buildings
@@ -457,12 +528,15 @@ DEPENDENCY }o--|| DEVICE : "targets"
   - Selective field projection and targeted includes reduce payload sizes
 - Logging:
   - Prisma logs disabled by default to reduce I/O overhead
+- Cache bypass:
+  - Fresh parameter allows immediate data refresh when needed
 
 Best practices:
 - Prefer minimal mode for listing endpoints when full nesting is unnecessary
 - Use filters (e.g., buildingId, floorId) to narrow result sets
+- Use fresh parameter for real-time monitoring and immediate consistency
 - Batch operations should leverage pagination and limit to avoid timeouts
-- Respect cache TTLs to reduce database load
+- Respect cache TTLs to reduce database load while balancing freshness needs
 
 **Section sources**
 - [app/api/organizations/route.ts:4-8](file://app/api/organizations/route.ts#L4-L8)
@@ -487,12 +561,18 @@ Common issues and resolutions:
   - Duplicate port/protocol per device
 - 500 Internal Error:
   - Unexpected server-side failures; inspect server logs
+- Cache Issues:
+  - Use fresh parameter to bypass cache for immediate data
+  - Wait for cache TTL to expire naturally
+  - Check cache invalidation after mutations
 
 Operational tips:
 - Validate inputs against documented constraints before sending requests
 - Use minimal mode for listing to reduce payload and latency
 - Apply appropriate filters to limit result sets
 - Monitor cache behavior and adjust TTLs if needed
+- Use fresh parameter for real-time monitoring requirements
+- Leverage withCredentials for cross-domain session management
 
 **Section sources**
 - [app/api/floors/[id]/route.ts](file://app/api/floors/[id]/route.ts#L176-L195)
@@ -502,12 +582,13 @@ Operational tips:
 - [app/api/services/[id]/route.ts](file://app/api/services/[id]/route.ts#L282-L307)
 
 ## Conclusion
-InfraScope’s core API provides robust, validated, and performant endpoints for managing infrastructure resources. By leveraging pagination, selective includes, caching, and strict validation, clients can efficiently operate at scale while maintaining referential integrity and predictable error handling.
+InfraScope's core API provides robust, validated, and performant endpoints for managing infrastructure resources. By leveraging pagination, selective includes, caching with bypass capabilities, automatic cache invalidation, and strict validation, clients can efficiently operate at scale while maintaining referential integrity and predictable error handling. The enhanced session management support enables seamless cross-domain operation in enterprise environments.
 
 ## Appendices
 
 ### Authentication and Security
 - Authentication and authorization mechanisms are not implemented in the analyzed routes. Access control should be enforced at the application layer or reverse proxy before reaching these endpoints.
+- Session management now supports cross-domain cookies through withCredentials configuration.
 
 ### Rate Limiting and API Versioning
 - No explicit rate limiting or API versioning is implemented in the analyzed code. Consider adding middleware for rate limiting and versioning headers or URL segments for future-proofing.
@@ -521,7 +602,7 @@ All endpoints return a consistent envelope:
 - cached: boolean (for cached endpoints)
 
 **Section sources**
-- [app/api/organizations/route.ts:70-87](file://app/api/organizations/route.ts#L70-L87)
+- [app/api/organizations/route.ts:72-89](file://app/api/organizations/route.ts#L72-L89)
 - [app/api/buildings/route.ts:65-78](file://app/api/buildings/route.ts#L65-L78)
 - [app/api/floors/route.ts:56-69](file://app/api/floors/route.ts#L56-L69)
 - [app/api/rooms/route.ts:58-71](file://app/api/rooms/route.ts#L58-L71)

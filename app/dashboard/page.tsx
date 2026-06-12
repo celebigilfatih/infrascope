@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, Suspense, useCallback } from 'react';
+import React, { useState, useEffect, useRef, Suspense, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -161,10 +161,17 @@ export default function DashboardPage() {
     } catch { /* quota exceeded, ignore */ }
   };
 
-  // Timeout wrapper to prevent hanging on slow APIs
+  // Shared abort controller — aborted on unmount to prevent stale fetches
+  const abortRef = useRef<AbortController | null>(null);
+
+  // Timeout wrapper: combines component unmount abort + per-request timeout
   const fetchWithTimeout = async (url: string, ms = 5000) => {
+    const parentSignal = abortRef.current?.signal;
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), ms);
+    // If parent aborts, abort this request too
+    const onParentAbort = () => ctrl.abort();
+    parentSignal?.addEventListener('abort', onParentAbort);
     try {
       const res = await fetch(url, { signal: ctrl.signal });
       clearTimeout(timer);
@@ -172,12 +179,17 @@ export default function DashboardPage() {
     } catch (e) {
       clearTimeout(timer);
       throw e;
+    } finally {
+      parentSignal?.removeEventListener('abort', onParentAbort);
     }
   };
 
   // Phase 1: Load summary instantly (DB-only, ~100-200ms)
   // Phase 2: Load detail data progressively (external APIs)
   useEffect(() => {
+    abortRef.current = new AbortController();
+    const ctrl = abortRef.current;
+
     // Show cached data instantly if available (returning user)
     const cached = getCachedData();
     if (cached) {
@@ -194,6 +206,8 @@ export default function DashboardPage() {
     }
     loadSummary();
     loadDetailData();
+
+    return () => { ctrl.abort(); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Save to cache whenever data finishes loading
@@ -210,9 +224,11 @@ export default function DashboardPage() {
     }
   }, [vmware, vmwareLoading, firewall, firewallLoading, sslUsers, sslUsersLoading, nmsDevices, nmsAlarms, nmsLoading, nmsReachable]);
 
+  const isAborted = (e: unknown) => e instanceof DOMException && e.name === 'AbortError';
+
   const loadSummary = async () => {
     try {
-      const res = await fetch('/api/dashboard/summary');
+      const res = await fetch('/api/dashboard/summary', { signal: abortRef.current?.signal });
       const json = await res.json();
       if (!json) return;
 
@@ -261,7 +277,7 @@ export default function DashboardPage() {
         setNmsLoading(false);
       }
     } catch (err) {
-      console.warn('[Dashboard] Summary load failed:', err);
+      if (!isAborted(err)) console.warn('[Dashboard] Summary load failed:', err);
     }
   };
 
@@ -276,8 +292,8 @@ export default function DashboardPage() {
     try {
       setNmsLoading(true);
       const [devRes, alarmRes] = await Promise.allSettled([
-        fetchWithTimeout('/api/integrations/nms/network-devices', 5000),
-        fetchWithTimeout('/api/integrations/nms/alarms?status=active', 5000),
+        fetchWithTimeout('/api/integrations/nms/network-devices'),
+        fetchWithTimeout('/api/integrations/nms/alarms?status=active'),
       ]);
       if (devRes.status === 'fulfilled' && devRes.value.ok) {
         const data = await devRes.value.json();
@@ -290,8 +306,8 @@ export default function DashboardPage() {
         const data = await alarmRes.value.json();
         setNmsAlarms(data.data || []);
       }
-    } catch {
-      setNmsReachable(false);
+    } catch (err) {
+      if (!isAborted(err)) setNmsReachable(false);
     } finally {
       setNmsLoading(false);
     }
@@ -300,9 +316,11 @@ export default function DashboardPage() {
   const loadVmwareData = async () => {
     try {
       setVmwareLoading(true);
-      const res = await fetchWithTimeout('/api/integrations/vmware?type=dashboard', 5000);
+      const res = await fetchWithTimeout('/api/integrations/vmware?type=dashboard');
       const json = await res.json();
       if (!json.error) setVmware(json);
+    } catch (err) {
+      // AbortError = component unmounted; others = silently ignored
     } finally {
       setVmwareLoading(false);
     }
@@ -313,7 +331,7 @@ export default function DashboardPage() {
     setFirewallLoading(true);
 
     // Sync status (~730ms) — updates policies/addresses immediately
-    fetchWithTimeout('/api/integrations/fortigate?type=sync-status', 5000)
+    fetchWithTimeout('/api/integrations/fortigate?type=sync-status')
       .then(r => r.json())
       .then(j => {
         const d = j?.data;
@@ -328,7 +346,7 @@ export default function DashboardPage() {
       .catch(() => {});
 
     // SSL summary (~770ms) — updates sessions count
-    fetchWithTimeout('/api/integrations/fortigate?vpn=ssl-summary', 5000)
+    fetchWithTimeout('/api/integrations/fortigate?vpn=ssl-summary')
       .then(r => r.json())
       .then(j => {
         const d = j?.data;
@@ -337,7 +355,7 @@ export default function DashboardPage() {
       .catch(() => {});
 
     // IPSec tunnels (~785ms) — updates tunnel list
-    fetchWithTimeout('/api/integrations/fortigate?vpn=ipsec', 5000)
+    fetchWithTimeout('/api/integrations/fortigate?vpn=ipsec')
       .then(r => r.json())
       .then(j => {
         const d = j?.data;
@@ -346,7 +364,7 @@ export default function DashboardPage() {
       .catch(() => {});
 
     // Quarantine (~1.5s, slowest) — updates quarantine count last
-    fetchWithTimeout('/api/security/quarantine', 6000)
+    fetchWithTimeout('/api/security/quarantine')
       .then(r => r.json())
       .then(d => {
         setFirewall(prev => prev ? { ...prev, quarantineCount: d?.count || 0 } : prev);
@@ -358,11 +376,11 @@ export default function DashboardPage() {
   const loadSSLUsers = async () => {
     try {
       setSslUsersLoading(true);
-      const res = await fetchWithTimeout('/api/integrations/fortigate?vpn=ssl', 5000);
+      const res = await fetchWithTimeout('/api/integrations/fortigate?vpn=ssl');
       const json = await res.json();
       setSslUsers(json.data || []);
-    } catch {
-      setSslUsers([]);
+    } catch (err) {
+      if (!isAborted(err)) setSslUsers([]);
     } finally {
       setSslUsersLoading(false);
     }
