@@ -62,10 +62,11 @@
 
 ## Update Summary
 **Changes Made**
-- Enhanced rate limiting system with differentiated policies (10 requests per minute for authentication vs 100 for general API)
-- Improved development environment handling for Edge Runtime and localhost traffic isolation
-- Updated security middleware to apply rate limiting to all API routes including public ones
-- Added comprehensive rate limiting configuration with sliding window implementation
+- Enhanced rate limiting system with new sliding window algorithm implementation
+- Added development environment bypass logic for Docker Desktop and localhost traffic
+- Improved IP detection with x-forwarded-for header processing and fallback mechanisms
+- Implemented more granular request throttling policies with differentiated auth/general API limits
+- Added comprehensive cleanup strategy with memory management and LRU eviction
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -711,22 +712,38 @@ InfraScope provides a comprehensive REST API for infrastructure modeling and mon
 - [nms_service/main.py:40-42](file://nms_service/main.py#L40-L42)
 
 ### Rate Limiting
-**Enhanced**: Comprehensive rate limiting system implemented with differentiated policies.
+**Enhanced**: Comprehensive rate limiting system implemented with new sliding window algorithm and enhanced development environment handling.
 
 - **Auth endpoints** (/api/auth/*): Strict limit of 10 requests per minute to prevent brute-force attacks and credential stuffing.
 - **General API endpoints** (/api/* excluding auth): Generous limit of 100 requests per minute to prevent abuse while allowing normal API usage.
-- **Implementation**: In-memory sliding window with automatic cleanup to prevent memory leaks.
-- **IP Detection**: Uses x-forwarded-for header for production, with development fallbacks including Edge Runtime isolation.
+- **Algorithm**: Sliding window implementation that tracks timestamps within the last 60 seconds for each client IP.
+- **Development Environment Bypass**: Special handling for Docker Desktop and localhost traffic to prevent rate limiting conflicts.
+- **IP Detection**: Enhanced detection using x-forwarded-for header with fallback mechanisms for development environments.
 - **Headers**: Returns Retry-After header with seconds until reset on 429 responses.
-- **Development Isolation**: Each localhost request gets a unique key (`dev-{timestamp}-{random}`) to prevent all traffic from sharing one rate-limit bucket, covering both local development and Edge Runtime scenarios.
+- **Memory Management**: Automatic cleanup prevents memory leaks with periodic pruning and LRU eviction.
 
-Policy Details:
+**Enhanced Development Environment Handling**:
+- **Docker Desktop IPs**: Specific IP addresses bypass rate limiting to prevent all browser traffic from sharing one rate-limit bucket.
+- **Localhost Traffic**: Each request gets a unique key (`dev-{timestamp}-{random}`) to isolate traffic between browser tabs and Edge Runtime scenarios.
+- **Reverse Proxy Support**: Proper handling of x-forwarded-for headers in production environments.
+
+**Enhanced IP Detection Logic**:
+- **Production**: Uses x-forwarded-for header for accurate client IP identification behind load balancers.
+- **Development**: Falls back to x-real-ip header or generates unique per-request keys for isolation.
+- **Edge Runtime**: Maintains development isolation even when NODE_ENV indicates production.
+
+**Enhanced Cleanup Strategy**:
+- **Periodic Cleanup**: Runs every 1000 requests to remove stale entries and maintain optimal performance.
+- **Memory Pressure Handling**: LRU eviction removes oldest 20% of entries when store exceeds 10,000 items.
+- **Graceful Degradation**: System continues operating under memory pressure with reduced effectiveness.
+
+**Policy Details**:
 - **Sliding Window**: Only timestamps within the last 60 seconds count toward the limit.
 - **Memory Management**: Automatic pruning removes old entries and implements LRU eviction when store exceeds 10,000 entries.
 - **Cleanup Strategy**: Periodic cleanup runs every 1000 requests to maintain optimal performance.
 - **Graceful Degradation**: Rate limiting continues to work even with memory pressure.
 
-Recommendations:
+**Recommendations**:
 - Implement exponential backoff client-side for 429 responses.
 - Consider upgrading to Redis-based rate limiting for multi-instance deployments.
 - Monitor rate limit violations in production logs.
@@ -751,15 +768,16 @@ Recommendations:
 - **License Validation**: JWT-based license tokens with automatic renewal.
 - **TLS Safety**: Production security check for NODE_TLS_REJECT_UNAUTHORIZED.
 - **Internal Service**: NMS service is intended for internal Docker network exposure only.
-- **Development Protection**: Enhanced localhost traffic isolation prevents rate limiting conflicts in development environments.
+- **Enhanced Development Protection**: Comprehensive localhost traffic isolation prevents rate limiting conflicts in development environments.
 
-Best Practices:
+**Enhanced Best Practices**:
 - Always use HTTPS in production environments.
 - Store secrets in environment variables, not in code.
 - Regularly rotate JWT secrets and license keys.
 - Monitor authentication attempts and rate limit violations.
 - Implement proper session timeout handling.
 - Configure appropriate rate limit headers for client-side optimization.
+- Leverage development environment bypass logic for efficient local development.
 
 **Section sources**
 - [middleware.ts:35-131](file://middleware.ts#L35-L131)
@@ -773,12 +791,14 @@ Best Practices:
 - **New**: Test authentication flow: login → me → logout with rate limiting considerations.
 - **New**: Test license management: activate → validate → heartbeat → status with rate limiting.
 - **New**: Test rate limiting behavior: exceed auth limit (10/min) vs general API limit (100/min).
+- **New**: Test development environment bypass: verify localhost traffic isolation works correctly.
 - Example scenarios:
   - List organizations and buildings.
   - Create devices and services, then paginate and filter.
   - Trigger NMS discovery scans and poll results.
   - Retrieve health and interface metrics for devices.
   - Test rate limiting by sending multiple requests quickly to different endpoint types.
+  - Verify development environment bypass works with Docker Desktop and localhost.
 
 **Section sources**
 - [docs/API_TESTING_GUIDE.md](file://docs/API_TESTING_GUIDE.md)
@@ -790,10 +810,12 @@ Best Practices:
 - **New**: Handle rate limit responses with exponential backoff and Retry-After headers.
 - **New**: Implement license token refresh logic.
 - **New**: Respect differentiated rate limits for auth vs general API endpoints.
+- **New**: Implement development environment awareness for rate limiting behavior.
 - Respect pagination and limits; prefer minimal mode for dashboards.
 - Cache responses for frequently accessed static lists.
 - **New**: Implement proper error handling for authentication, authorization, and rate limit failures.
 - **New**: Configure client-side rate limiting awareness for different endpoint categories.
+- **New**: Account for development environment bypass logic in automated testing.
 
 **Section sources**
 - [lib/api.ts:1-57](file://lib/api.ts#L1-L57)
@@ -810,6 +832,7 @@ Best Practices:
 - **New**: Implement license token caching with automatic refresh.
 - **New**: Configure client-side awareness of auth endpoint rate limits (10/min) vs general API limits (100/min).
 - **New**: Optimize development workflows by understanding localhost traffic isolation behavior.
+- **New**: Leverage development environment bypass logic to improve local development experience.
 
 **Section sources**
 - [lib/prisma.ts:13-15](file://lib/prisma.ts#L13-L15)

@@ -139,6 +139,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [2025-06-12] — Dev Environment Stability & Performance Fixes
+
+### Fixed
+
+- **Docker Desktop rate limiting bypass** — All browser requests share Docker Desktop host gateway IP (`::ffff:192.168.65.1`), exhausting the 100 req/min limit. Added `DEV_BYPASS_IPS` Set in `lib/rate-limit.ts` that skips rate limiting for Docker Desktop gateway IPs, localhost IPs, and Docker bridge IPs. Permanent fix for recurring 429 "Too many requests" errors
+- **Modal input focus loss on /racks** — `FormModal` component defined inside `RacksPage` caused unmount/remount on every state change, losing input focus. Replaced with two inline `<Dialog>` blocks (Add + Edit) directly in the return JSX (`app/racks/page.tsx`)
+- **Fast Refresh infinite rebuild loop** — Duplicate route pre-warming in `entrypoint.sh` AND `dev-startup.sh` caused cascading Turbopack compilations, sending 17+ HMR rebuild messages to the browser. Removed duplicate pre-warming from `entrypoint.sh`; added 30s delay to `dev-startup.sh` pre-warming so it fires after user's initial page load
+- **AbortError on dashboard unmount** — `fetchWithTimeout` created independent AbortControllers that threw uncaught AbortErrors when the component unmounted during Fast Refresh rebuilds. Replaced with shared `AbortController` (`abortRef`) that gracefully aborts all in-flight requests on unmount, with per-request timeout + parent abort signal chaining (`app/dashboard/page.tsx`)
+- **Turbopack stale module cache** — `.next` cache inside Docker container had stale build artifacts from previous sessions. Fixed by clearing host-side `.next` directory (`rm -rf .next`) + container restart. The anonymous volume for `.next` (`- /app/.next` in docker-compose.yml) correctly isolates container cache from host
+
+### Changed
+
+- **`entrypoint.sh` simplified** — Removed background alarm pre-warming subshell (44 lines). Pre-warming is now handled exclusively by `dev-startup.sh` with a 30s delay to avoid Turbopack HMR conflicts
+- **`dev-startup.sh` pre-warming delay** — Route pre-warming (`/dashboard`, `/devices`, core APIs) now runs in a background subshell with 30s delay after alarm services start. Prevents compilation cascade during user's initial page load
+- **Dashboard fetch architecture** — All data loading functions (`loadSummary`, `loadVmwareData`, `loadNmsData`, `loadFirewallData`, `loadSSLUsers`) now use shared `AbortController` via `abortRef`. `isAborted()` helper silently handles AbortError. Per-request timeout uses child controller with parent signal chaining
+
+### Added
+
+- **npm packages** — `jose` (JWT), `pino` (logging), `@radix-ui/react-avatar`, `@radix-ui/react-popover`, `@radix-ui/react-separator` installed inside Docker container for dashboard/alerts page dependencies
+
+---
+
 ## Template for new releases
 
 ### Added

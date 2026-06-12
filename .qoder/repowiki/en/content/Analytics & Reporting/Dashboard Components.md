@@ -6,6 +6,7 @@
 - [app/dashboard/alerts/page.tsx](file://app/dashboard/alerts/page.tsx)
 - [app/dashboard/risks/page.tsx](file://app/dashboard/risks/page.tsx)
 - [app/dashboard/loading.tsx](file://app/dashboard/loading.tsx)
+- [app/dashboard/alerts/loading.tsx](file://app/dashboard/alerts/loading.tsx)
 - [app/layout.tsx](file://app/layout.tsx)
 - [components/layout/Header.tsx](file://components/layout/Header.tsx)
 - [components/layout/Sidebar.tsx](file://components/layout/Sidebar.tsx)
@@ -13,10 +14,21 @@
 - [components/ui/progress.tsx](file://components/ui/progress.tsx)
 - [components/ui/badge.tsx](file://components/ui/badge.tsx)
 - [components/ui/loading-bar.tsx](file://components/ui/loading-bar.tsx)
+- [components/ui/navigation-progress.tsx](file://components/ui/navigation-progress.tsx)
 - [app/api/alarms/route.ts](file://app/api/alarms/route.ts)
 - [app/api/integrations/nms/route.ts](file://app/api/integrations/nms/route.ts)
+- [app/api/dashboard/summary/route.ts](file://app/api/dashboard/summary/route.ts)
 - [lib/utils.ts](file://lib/utils.ts)
 </cite>
+
+## Update Summary
+**Changes Made**
+- Updated to reflect new sophisticated client-side dashboard implementation with multi-phase data loading
+- Added comprehensive caching mechanisms using localStorage with TTL expiration
+- Enhanced API integration patterns with AbortController-based request cancellation
+- Implemented progressive loading system replacing previous server-side approach
+- Added comprehensive error handling and timeout management
+- Updated architecture diagrams to show new client-side data flow patterns
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -24,49 +36,51 @@
 3. [Core Components](#core-components)
 4. [Architecture Overview](#architecture-overview)
 5. [Detailed Component Analysis](#detailed-component-analysis)
-6. [Dependency Analysis](#dependency-analysis)
-7. [Performance Considerations](#performance-considerations)
-8. [Troubleshooting Guide](#troubleshooting-guide)
-9. [Conclusion](#conclusion)
-10. [Appendices](#appendices)
+6. [Multi-Phase Data Loading System](#multi-phase-data-loading-system)
+7. [Caching and Performance Optimization](#caching-and-performance-optimization)
+8. [Enhanced API Integration Patterns](#enhanced-api-integration-patterns)
+9. [Dependency Analysis](#dependency-analysis)
+10. [Performance Considerations](#performance-considerations)
+11. [Troubleshooting Guide](#troubleshooting-guide)
+12. [Conclusion](#conclusion)
+13. [Appendices](#appendices)
 
 ## Introduction
-This document describes the dashboard components system in the Infrascope project. It covers the main dashboard page architecture with key metrics overview, recent activity feeds, and health indicators; the alerts dashboard for real-time security incidents and notification feeds; and the risks dashboard for security risk assessments and vulnerability analysis. It also documents dashboard loading states, skeleton components, and progressive loading patterns; the widget architecture, metric cards, and KPI displays; practical examples of dashboard customization, widget configuration, and real-time data updates; and responsive design patterns and mobile dashboard optimization.
+This document describes the sophisticated dashboard components system in the Infrascope project. The system has evolved from a simple server-side rendering approach to a complex client-side implementation featuring multi-phase data loading, intelligent caching, and enhanced API integration patterns. It covers the main dashboard page architecture with key metrics overview, recent activity feeds, and health indicators; the alerts dashboard for real-time security incidents and notification feeds; and the risks dashboard for security risk assessments and vulnerability analysis. The new implementation provides seamless user experience through progressive loading, localStorage caching, and comprehensive error handling.
 
 ## Project Structure
-The dashboard system is organized around three primary pages under the dashboard namespace, each backed by dedicated API routes and shared UI primitives. The layout integrates a global navigation progress indicator and a sidebar for cross-page navigation.
+The dashboard system is organized around three primary pages under the dashboard namespace, each backed by dedicated API routes and shared UI primitives. The layout integrates advanced navigation progress indicators and comprehensive loading states.
 
 ```mermaid
 graph TB
-subgraph "Layout"
+subgraph "Layout System"
 LAYOUT["RootLayout<br/>app/layout.tsx"]
-HEADER["Header<br/>components/layout/Header.tsx"]
-SIDEBAR["Sidebar<br/>components/layout/Sidebar.tsx"]
 NAVPROG["NavigationProgress<br/>components/ui/navigation-progress.tsx"]
-end
+LOADINGBAR["LoadingBar<br/>components/ui/loading-bar.tsx"]
+END
 subgraph "Dashboard Pages"
 MAIN_DASH["Main Dashboard<br/>app/dashboard/page.tsx"]
 ALERTS_DASH["Alerts Dashboard<br/>app/dashboard/alerts/page.tsx"]
 RISKS_DASH["Risks Dashboard<br/>app/dashboard/risks/page.tsx"]
-DASH_LOADING["Dashboard Skeleton<br/>app/dashboard/loading.tsx"]
-end
+MAIN_LOADING["Dashboard Skeleton<br/>app/dashboard/loading.tsx"]
+ALERTS_LOADING["Alerts Skeleton<br/>app/dashboard/alerts/loading.tsx"]
+END
 subgraph "UI Primitives"
 CARD["Card<br/>components/ui/card.tsx"]
 PROGRESS["Progress<br/>components/ui/progress.tsx"]
 BADGE["Badge<br/>components/ui/badge.tsx"]
 UTILS["Utility Functions<br/>lib/utils.ts"]
-end
+END
 subgraph "API Routes"
+SUMMARY_ROUTE["Dashboard Summary API<br/>app/api/dashboard/summary/route.ts"]
 ALARMS_ROUTE["Alarms API<br/>app/api/alarms/route.ts"]
 NMS_ROUTE["NMS Status API<br/>app/api/integrations/nms/route.ts"]
-end
-LAYOUT --> HEADER
-LAYOUT --> SIDEBAR
+END
 LAYOUT --> NAVPROG
+LAYOUT --> LOADINDBAR
 LAYOUT --> MAIN_DASH
 LAYOUT --> ALERTS_DASH
 LAYOUT --> RISKS_DASH
-LAYOUT --> DASH_LOADING
 MAIN_DASH --> CARD
 MAIN_DASH --> PROGRESS
 MAIN_DASH --> BADGE
@@ -77,122 +91,143 @@ ALERTS_DASH --> UTILS
 RISKS_DASH --> CARD
 RISKS_DASH --> BADGE
 RISKS_DASH --> UTILS
+MAIN_DASH --> SUMMARY_ROUTE
 MAIN_DASH --> ALARMS_ROUTE
 MAIN_DASH --> NMS_ROUTE
 ALERTS_DASH --> ALARMS_ROUTE
 ```
 
 **Diagram sources**
-- [app/layout.tsx:20-56](file://app/layout.tsx#L20-L56)
-- [components/layout/Header.tsx:18-79](file://components/layout/Header.tsx#L18-L79)
-- [components/layout/Sidebar.tsx:56-408](file://components/layout/Sidebar.tsx#L56-L408)
-- [app/dashboard/page.tsx:101-731](file://app/dashboard/page.tsx#L101-L731)
-- [app/dashboard/alerts/page.tsx:162-800](file://app/dashboard/alerts/page.tsx#L162-L800)
+- [app/layout.tsx:20-53](file://app/layout.tsx#L20-L53)
+- [components/ui/navigation-progress.tsx:13-88](file://components/ui/navigation-progress.tsx#L13-L88)
+- [components/ui/loading-bar.tsx:11-71](file://components/ui/loading-bar.tsx#L11-L71)
+- [app/dashboard/page.tsx:115-911](file://app/dashboard/page.tsx#L115-L911)
+- [app/dashboard/alerts/page.tsx:314-2238](file://app/dashboard/alerts/page.tsx#L314-L2238)
 - [app/dashboard/risks/page.tsx:20-239](file://app/dashboard/risks/page.tsx#L20-L239)
-- [app/dashboard/loading.tsx:3-112](file://app/dashboard/loading.tsx#L3-L112)
+- [app/dashboard/loading.tsx:3-113](file://app/dashboard/loading.tsx#L3-L113)
+- [app/dashboard/alerts/loading.tsx:3-51](file://app/dashboard/alerts/loading.tsx#L3-L51)
 - [components/ui/card.tsx:5-79](file://components/ui/card.tsx#L5-L79)
 - [components/ui/progress.tsx:6-26](file://components/ui/progress.tsx#L6-L26)
 - [components/ui/badge.tsx:6-40](file://components/ui/badge.tsx#L6-L40)
-- [app/api/alarms/route.ts:9-103](file://app/api/alarms/route.ts#L9-L103)
-- [app/api/integrations/nms/route.ts:8-52](file://app/api/integrations/nms/route.ts#L8-L52)
+- [app/api/dashboard/summary/route.ts:186-209](file://app/api/dashboard/summary/route.ts#L186-L209)
+- [app/api/alarms/route.ts:11-142](file://app/api/alarms/route.ts#L11-L142)
+- [app/api/integrations/nms/route.ts:8-53](file://app/api/integrations/nms/route.ts#L8-L53)
 
 **Section sources**
-- [app/layout.tsx:20-56](file://app/layout.tsx#L20-L56)
-- [components/layout/Header.tsx:18-79](file://components/layout/Header.tsx#L18-L79)
-- [components/layout/Sidebar.tsx:56-408](file://components/layout/Sidebar.tsx#L56-L408)
+- [app/layout.tsx:20-53](file://app/layout.tsx#L20-L53)
+- [components/ui/navigation-progress.tsx:13-88](file://components/ui/navigation-progress.tsx#L13-L88)
+- [components/ui/loading-bar.tsx:11-71](file://components/ui/loading-bar.tsx#L11-L71)
 
 ## Core Components
-- Main Dashboard page aggregates VMware and Fortinet metrics, NMS device and alarm status, and presents them in a responsive grid of metric cards and lists.
-- Alerts Dashboard displays real-time security incidents with filtering, pagination, acknowledgment, and enrichment features.
-- Risks Dashboard shows risk scores and categories for assets with a summary overview and a ranked list.
-- Shared UI primitives include Card, Progress, and Badge components, plus utility functions for class merging.
-- Loading states include a server-side skeleton for instant feedback and a client-side navigation progress indicator.
+- **Main Dashboard Page**: Implements sophisticated multi-phase data loading with localStorage caching, AbortController-based request cancellation, and progressive rendering
+- **Alerts Dashboard**: Features real-time polling with background refresh, comprehensive enrichment capabilities, and advanced filtering
+- **Risks Dashboard**: Provides static risk assessment data with dynamic calculations and trend analysis
+- **Shared UI Primitives**: Card, Progress, Badge components with utility functions for class merging
+- **Advanced Loading States**: Dual-layer skeleton system with server-side skeleton and client-side navigation progress indicators
+
+**Updated** The main dashboard now implements a sophisticated client-side data loading strategy with multi-phase initialization, caching, and comprehensive error handling.
 
 **Section sources**
-- [app/dashboard/page.tsx:101-731](file://app/dashboard/page.tsx#L101-L731)
-- [app/dashboard/alerts/page.tsx:162-800](file://app/dashboard/alerts/page.tsx#L162-L800)
+- [app/dashboard/page.tsx:115-911](file://app/dashboard/page.tsx#L115-L911)
+- [app/dashboard/alerts/page.tsx:314-2238](file://app/dashboard/alerts/page.tsx#L314-L2238)
 - [app/dashboard/risks/page.tsx:20-239](file://app/dashboard/risks/page.tsx#L20-L239)
 - [components/ui/card.tsx:5-79](file://components/ui/card.tsx#L5-L79)
 - [components/ui/progress.tsx:6-26](file://components/ui/progress.tsx#L6-L26)
 - [components/ui/badge.tsx:6-40](file://components/ui/badge.tsx#L6-L40)
-- [app/dashboard/loading.tsx:3-112](file://app/dashboard/loading.tsx#L3-L112)
-- [components/ui/loading-bar.tsx:11-70](file://components/ui/loading-bar.tsx#L11-L70)
+- [app/dashboard/loading.tsx:3-113](file://app/dashboard/loading.tsx#L3-L113)
+- [app/dashboard/alerts/loading.tsx:3-51](file://app/dashboard/alerts/loading.tsx#L3-L51)
 
 ## Architecture Overview
-The dashboard system follows a client-rendered page model with concurrent data fetching and progressive rendering. The main dashboard coordinates multiple data sources (VMware, Fortinet, NMS) and exposes links to deeper views. The alerts dashboard polls for updates and supports manual refresh and background checks. The risks dashboard provides a static example of risk scoring and categorization.
+The dashboard system follows a sophisticated client-rendered architecture with multi-phase data loading, intelligent caching, and progressive rendering. The main dashboard coordinates multiple data sources through a summary endpoint and individual API calls, while the alerts dashboard implements real-time polling with comprehensive enrichment capabilities.
 
 ```mermaid
 sequenceDiagram
 participant U as "User"
 participant Page as "Dashboard Page<br/>page.tsx"
-participant VM as "VMware API"
-participant FG as "Fortinet API"
-participant NMS as "NMS API"
-participant PRISMA as "Alarms API"
+participant Cache as "localStorage Cache"
+participant Summary as "Summary API<br/>/api/dashboard/summary"
+participant External as "External APIs"
 U->>Page : Open dashboard
-Page->>Page : loadAll()
-Page->>VM : fetch dashboard metrics
-Page->>FG : fetch sync/policies/ssl/ipsec/quarantine
-Page->>NMS : fetch devices and alarms
-Page->>PRISMA : fetch alarm events
-VM-->>Page : VMware summary/data
-FG-->>Page : Firewall metrics
-NMS-->>Page : Devices and alarms
-PRISMA-->>Page : Alarm events and stats
-Page-->>U : Render metrics grid and lists
+Page->>Cache : getCachedData()
+Cache-->>Page : Cached data (if available)
+Page->>Summary : GET /api/dashboard/summary
+Summary-->>Page : Combined metrics data
+Page->>External : Parallel API calls
+External-->>Page : Individual widget data
+Page->>Cache : setCachedData()
+Cache-->>Page : Persist data
+Page-->>U : Render with cached + live data
 ```
 
+**Updated** The architecture now features a dual-layer caching system with localStorage TTL expiration and comprehensive error handling.
+
 **Diagram sources**
-- [app/dashboard/page.tsx:127-210](file://app/dashboard/page.tsx#L127-L210)
-- [app/api/alarms/route.ts:9-71](file://app/api/alarms/route.ts#L9-L71)
-- [app/api/integrations/nms/route.ts:8-52](file://app/api/integrations/nms/route.ts#L8-L52)
+- [app/dashboard/page.tsx:141-162](file://app/dashboard/page.tsx#L141-L162)
+- [app/dashboard/page.tsx:189-225](file://app/dashboard/page.tsx#L189-L225)
+- [app/api/dashboard/summary/route.ts:186-209](file://app/api/dashboard/summary/route.ts#L186-L209)
 
 ## Detailed Component Analysis
 
 ### Main Dashboard Page
-The main dashboard composes:
-- Metric cards for VMware VMs, hosts, storage utilization, Fortinet policies/addresses, IPSec tunnels, and SSL-VPN sessions.
-- Lists for ESXi hosts, old snapshots, quarantine counts, datastore usage, IPSec tunnels, and SSL-VPN users.
-- NMS device stats and active alarms with connectivity status.
-- A compact resource summary grid.
+The main dashboard implements a sophisticated multi-phase data loading system:
 
-Key behaviors:
-- Concurrent data loading with Promise.allSettled to avoid blocking unrelated widgets.
-- Conditional styling for critical thresholds (e.g., storage used percent, down IPSec tunnels).
-- Responsive grid layouts using Tailwind classes for 1–6 columns depending on screen size.
-- Localized formatting helpers for durations and bytes.
+**Phase 1: Instant Summary Loading**
+- Loads combined metrics from `/api/dashboard/summary` in 100-200ms
+- Populates VMware and FortiGate summary data immediately
+- Sets initial loading states for all widgets
+
+**Phase 2: Progressive Detail Loading**
+- Concurrent loading of VMware, FortiGate, NMS, and SSL VPN data
+- Individual widget loading with independent error handling
+- Incremental updates for firewall data (sync status, policies, addresses)
+
+**Advanced Features:**
+- AbortController-based request cancellation on component unmount
+- Comprehensive timeout management with AbortSignal propagation
+- Intelligent caching with 60-second TTL expiration
+- Graceful degradation when external services are unavailable
 
 ```mermaid
 flowchart TD
-Start(["Render Main Dashboard"]) --> LoadAll["loadAll() triggers concurrent fetches"]
-LoadAll --> Vmware["Load VMware dashboard data"]
-LoadAll --> Firewall["Load Fortinet metrics"]
-LoadAll --> NMS["Load NMS devices and alarms"]
-LoadAll --> SSLUsers["Load SSL-VPN users"]
-Vmware --> Compute["Compute derived metrics<br/>storageUsedPct, vmRunPct,<br/>criticalDatastores, oldSnapshots"]
-Firewall --> Compute
-NMS --> Compute
-SSLUsers --> Compute
-Compute --> RenderGrid["Render metric cards and lists"]
-RenderGrid --> Responsive["Responsive grid layout"]
-Responsive --> End(["Interactive widgets"])
+Start(["Dashboard Mount"]) --> CacheCheck{"Check localStorage Cache"}
+CacheCheck --> |Cache Available| LoadCache["Load Cached Data Instantly"]
+CacheCheck --> |No Cache| LoadSummary["Load Summary Data"]
+LoadCache --> RenderInstant["Render with Cached Data"]
+LoadSummary --> RenderPartial["Render Partial Widgets"]
+RenderInstant --> LoadDetail["Load Detail Data Concurrently"]
+RenderPartial --> LoadDetail
+LoadDetail --> ProcessData["Process and Transform Data"]
+ProcessData --> UpdateState["Update Component State"]
+UpdateState --> SaveCache["Save to Cache"]
+SaveCache --> FinalRender["Final Render with Live Data"]
 ```
 
 **Diagram sources**
-- [app/dashboard/page.tsx:127-222](file://app/dashboard/page.tsx#L127-L222)
-- [app/dashboard/page.tsx:244-731](file://app/dashboard/page.tsx#L244-L731)
+- [app/dashboard/page.tsx:189-225](file://app/dashboard/page.tsx#L189-L225)
+- [app/dashboard/page.tsx:284-387](file://app/dashboard/page.tsx#L284-L387)
 
 **Section sources**
-- [app/dashboard/page.tsx:101-731](file://app/dashboard/page.tsx#L101-L731)
+- [app/dashboard/page.tsx:115-911](file://app/dashboard/page.tsx#L115-L911)
 
 ### Alerts Dashboard
-The alerts dashboard provides:
-- Severity-based statistics cards with icons and colors.
-- Filters for source type (firewall, switch, VMware) and severity/unacknowledged state.
-- A paginated table of alarm events with timestamps, sources, categories, severity, IPs, devices, acknowledgment status, and notifications.
-- Real-time updates via periodic polling and background checks.
-- Enrichment panels for policy changes, address objects, port details, and device ports.
-- Actions to acknowledge single or all alarms, whitelist/discard alarms, and bulk cleanup.
+The alerts dashboard provides comprehensive real-time monitoring with advanced features:
+
+**Real-time Polling System**
+- Automatic background refresh every 2 minutes
+- Silent refresh without disrupting user experience
+- Manual refresh capability with visual feedback
+
+**Advanced Enrichment Capabilities**
+- Policy change enrichment for firewall configuration changes
+- Address object enrichment for security policy modifications
+- Port details enrichment for network connectivity issues
+- Device port monitoring for infrastructure problems
+
+**Comprehensive Filtering and Management**
+- Severity-based statistics with color-coded badges
+- Multi-source filtering (firewall, switch, VMware)
+- Advanced search capabilities with server-side filtering
+- Bulk actions for acknowledgment and cleanup operations
 
 ```mermaid
 sequenceDiagram
@@ -201,41 +236,50 @@ participant Alerts as "Alerts Dashboard<br/>alerts/page.tsx"
 participant API as "Alarms API<br/>/api/alarms"
 participant Timer as "Auto-refresh Timer"
 U->>Alerts : Open alerts page
-Alerts->>API : GET /api/alarms?limit=200&filters
-API-->>Alerts : Events + stats + total
-Alerts-->>U : Render severity cards and table
-Timer->>API : GET /api/alarms (poll)
+Alerts->>API : GET /api/alarms?limit=25
+API-->>Alerts : Initial events + stats
+Alerts-->>U : Render with loading states
+Timer->>API : GET /api/alarms (silent refresh)
 API-->>Timer : Updated events
-Timer-->>Alerts : Trigger re-render
-U->>Alerts : Click "Alarm Tara"
-Alerts->>API : POST /api/alarms/check
-API-->>Alerts : Check summary
-Alerts->>API : GET /api/alarms (refresh)
-API-->>Alerts : Latest events
+Timer-->>Alerts : Trigger silent re-render
+U->>Alerts : Filter by severity/source
+Alerts->>API : GET /api/alarms?filtered
+API-->>Alerts : Filtered results
+Alerts-->>U : Update table with filtered data
 ```
 
 **Diagram sources**
-- [app/dashboard/alerts/page.tsx:215-310](file://app/dashboard/alerts/page.tsx#L215-L310)
-- [app/api/alarms/route.ts:9-71](file://app/api/alarms/route.ts#L9-L71)
+- [app/dashboard/alerts/page.tsx:484-488](file://app/dashboard/alerts/page.tsx#L484-L488)
+- [app/dashboard/alerts/page.tsx:371-403](file://app/dashboard/alerts/page.tsx#L371-L403)
 
 **Section sources**
-- [app/dashboard/alerts/page.tsx:162-800](file://app/dashboard/alerts/page.tsx#L162-L800)
-- [app/api/alarms/route.ts:9-103](file://app/api/alarms/route.ts#L9-L103)
+- [app/dashboard/alerts/page.tsx:314-2238](file://app/dashboard/alerts/page.tsx#L314-L2238)
 
 ### Risks Dashboard
-The risks dashboard demonstrates:
-- Average risk score calculation across assets.
-- Counts for critical risk assets and category breakdowns.
-- A trend indicator based on average score.
-- A ranked list of assets with risk scores, categories, types, issues, and last updated dates.
+The risks dashboard demonstrates static risk assessment with dynamic calculations:
+
+**Risk Calculation Engine**
+- Average risk score computation across all assets
+- Category-based risk distribution analysis
+- Trend analysis with visual indicators
+- Critical risk threshold detection
+
+**Asset Risk Visualization**
+- Color-coded risk scores with appropriate visual indicators
+- Category-based asset classification
+- Issue-based risk factor analysis
+- Timestamp-based risk recency tracking
 
 ```mermaid
 flowchart TD
-Start(["Render Risks Dashboard"]) --> Fetch["Simulate risk data fetch"]
-Fetch --> ComputeAvg["Compute average risk score"]
-ComputeAvg --> RenderOverview["Render overview cards"]
-RenderOverview --> RenderList["Render risk list sorted by score"]
-RenderList --> End(["Interactive cards"])
+Start(["Render Risks Dashboard"]) --> GenerateMock["Generate Mock Risk Data"]
+GenerateMock --> CalcAverage["Calculate Average Risk Score"]
+CalcAverage --> CalcCategories["Count Assets by Category"]
+CalcCategories --> CalcTrend["Determine Risk Trend Direction"]
+CalcTrend --> SortAssets["Sort Assets by Risk Score"]
+SortAssets --> RenderCards["Render Risk Overview Cards"]
+RenderCards --> RenderList["Render Risk Asset List"]
+RenderList --> End(["Interactive Risk Analysis"])
 ```
 
 **Diagram sources**
@@ -245,41 +289,19 @@ RenderList --> End(["Interactive cards"])
 - [app/dashboard/risks/page.tsx:20-239](file://app/dashboard/risks/page.tsx#L20-L239)
 
 ### Widget Architecture, Metric Cards, and KPI Displays
-- Metric cards are built with the shared Card component and styled with Tailwind utilities. They include icons, labels, values, and optional progress bars.
-- KPIs are computed from raw data (e.g., percentages, counts) and conditionally formatted for readability.
-- Badges are used for status and severity with consistent variants (success, destructive, secondary).
-- Progress bars visualize utilization and capacity metrics.
+The dashboard maintains a consistent widget architecture with enhanced data visualization:
 
-```mermaid
-classDiagram
-class Card {
-+header
-+title
-+description
-+content
-+footer
-}
-class Progress {
-+value
-}
-class Badge {
-+variant
-}
-class Utils {
-+cn(...)
-}
-Card <.. Progress : "used in"
-Card <.. Badge : "used in"
-Card <.. Utils : "uses"
-Progress <.. Utils : "uses"
-Badge <.. Utils : "uses"
-```
+**Metric Card Implementation**
+- Responsive grid layout with 1-6 columns based on screen size
+- Conditional styling for critical thresholds and warnings
+- Progress bars for utilization and capacity metrics
+- Interactive links to detailed views
 
-**Diagram sources**
-- [components/ui/card.tsx:5-79](file://components/ui/card.tsx#L5-L79)
-- [components/ui/progress.tsx:6-26](file://components/ui/progress.tsx#L6-L26)
-- [components/ui/badge.tsx:6-40](file://components/ui/badge.tsx#L6-L40)
-- [lib/utils.ts:4-6](file://lib/utils.ts#L4-L6)
+**KPI Calculation and Formatting**
+- Dynamic percentage calculations for storage and VM utilization
+- Threshold-based conditional styling for critical metrics
+- Human-readable formatting for durations and byte values
+- Real-time metric updates with smooth transitions
 
 **Section sources**
 - [components/ui/card.tsx:5-79](file://components/ui/card.tsx#L5-L79)
@@ -288,59 +310,168 @@ Badge <.. Utils : "uses"
 - [lib/utils.ts:4-6](file://lib/utils.ts#L4-L6)
 
 ### Dashboard Loading States, Skeleton Components, and Progressive Loading Patterns
-- Server-side skeleton: The dashboard loading component renders a static skeleton with animated placeholders to minimize perceived loading time while JavaScript initializes.
-- Client-side navigation progress: A global loading bar simulates progress during page transitions.
-- Per-widget loading: Widgets render minimal placeholders (e.g., dots, progress bars) while asynchronous data loads.
+The dashboard implements a sophisticated dual-layer loading system:
+
+**Server-side Skeleton Rendering**
+- Instant skeleton rendering during navigation
+- Pre-rendered placeholders for all dashboard sections
+- Animated loading states for improved perceived performance
+- Complete skeleton coverage for main dashboard and alerts
+
+**Client-side Navigation Progress**
+- Smooth progress bar during page transitions
+- Gradient animation with pulse effect
+- Automatic completion on navigation finish
+- Non-intrusive positioning at page top
+
+**Per-widget Loading States**
+- Skeleton components for individual metric cards
+- Progress indicators for complex data structures
+- Graceful degradation when data is unavailable
+- Suspense boundary support for React.lazy loading
 
 ```mermaid
 sequenceDiagram
 participant S as "Server"
 participant C as "Client"
 participant LB as "LoadingBar<br/>loading-bar.tsx"
+participant NP as "NavigationProgress<br/>navigation-progress.tsx"
 S-->>C : Serve dashboard skeleton
 C-->>C : Initialize client-side JS
+C->>NP : Start navigation progress
+NP-->>C : Show animated progress bar
 C->>LB : Start navigation
 LB-->>C : Show animated progress bar
 C-->>C : Replace skeletons with live data
+C->>NP : Complete navigation
+NP-->>C : Hide progress bar
+C->>LB : Complete navigation
+LB-->>C : Hide progress bar
 ```
 
 **Diagram sources**
-- [app/dashboard/loading.tsx:3-112](file://app/dashboard/loading.tsx#L3-L112)
-- [components/ui/loading-bar.tsx:11-70](file://components/ui/loading-bar.tsx#L11-L70)
+- [app/dashboard/loading.tsx:3-113](file://app/dashboard/loading.tsx#L3-L113)
+- [app/dashboard/alerts/loading.tsx:3-51](file://app/dashboard/alerts/loading.tsx#L3-L51)
+- [components/ui/loading-bar.tsx:11-71](file://components/ui/loading-bar.tsx#L11-L71)
+- [components/ui/navigation-progress.tsx:13-88](file://components/ui/navigation-progress.tsx#L13-L88)
 
 **Section sources**
-- [app/dashboard/loading.tsx:3-112](file://app/dashboard/loading.tsx#L3-L112)
-- [components/ui/loading-bar.tsx:11-70](file://components/ui/loading-bar.tsx#L11-L70)
+- [app/dashboard/loading.tsx:3-113](file://app/dashboard/loading.tsx#L3-L113)
+- [app/dashboard/alerts/loading.tsx:3-51](file://app/dashboard/alerts/loading.tsx#L3-L51)
+- [components/ui/loading-bar.tsx:11-71](file://components/ui/loading-bar.tsx#L11-L71)
+- [components/ui/navigation-progress.tsx:13-88](file://components/ui/navigation-progress.tsx#L13-L88)
 
-### Practical Examples: Customization, Widget Configuration, and Real-Time Updates
-- Customization examples:
-  - Adjust grid column counts by modifying responsive Tailwind classes on container elements.
-  - Swap icons and colors by updating severity/category configurations and mapping functions.
-  - Add new widgets by introducing new fetch functions and rendering blocks similar to existing ones.
-- Widget configuration:
-  - Use Badge variants to reflect statuses (e.g., success, destructive).
-  - Use Progress components for capacity and utilization metrics.
-  - Use Card headers and descriptions to contextualize KPIs.
-- Real-time updates:
-  - Alerts dashboard uses periodic polling and background checks to keep data fresh.
-  - Main dashboard supports manual refresh and leverages concurrent loading for resilience.
+## Multi-Phase Data Loading System
+The new dashboard implementation features a sophisticated multi-phase data loading architecture designed for optimal user experience and performance.
+
+### Phase 1: Immediate Response (100-200ms)
+The system immediately loads combined metrics from the summary endpoint, providing instant visual feedback while background processes continue.
+
+### Phase 2: Concurrent Detail Loading
+Multiple external API calls execute simultaneously, each responsible for specific widget data. This approach maximizes throughput while maintaining individual error isolation.
+
+### Phase 3: Progressive Enhancement
+Widgets render with cached data immediately, then update with live data as it becomes available, creating a seamless user experience.
+
+```mermaid
+gantt
+title Multi-Phase Data Loading
+dateFormat X
+axisFormat %s
+section Phase 1: Immediate Response
+Summary Load :0, 0.2
+section Phase 2: Concurrent Loading
+VMware Load :0.2, 0.8
+Firewall Load :0.2, 1.2
+NMS Load :0.2, 1.5
+SSL Users Load :0.2, 1.8
+section Phase 3: Progressive Enhancement
+Cache Update :0.2, 0.2
+Live Data :0.8, 0.8
+```
 
 **Section sources**
-- [app/dashboard/alerts/page.tsx:289-310](file://app/dashboard/alerts/page.tsx#L289-L310)
-- [app/dashboard/page.tsx:127-136](file://app/dashboard/page.tsx#L127-L136)
+- [app/dashboard/page.tsx:189-225](file://app/dashboard/page.tsx#L189-L225)
+- [app/dashboard/page.tsx:284-387](file://app/dashboard/page.tsx#L284-L387)
 
-### Responsive Design Patterns and Mobile Dashboard Optimization
-- Responsive grids: The main dashboard uses grid classes that adapt from 1 to 6 columns based on viewport size.
-- Compact summaries: The resource summary grid condenses multiple KPIs into a single row on smaller screens.
-- Collapsible sidebar: The sidebar collapses to icons-only mode on narrow screens, preserving navigation access.
-- Typography scaling: Text sizes adjust across breakpoints to maintain readability.
+## Caching and Performance Optimization
+The dashboard implements a comprehensive caching strategy using localStorage with intelligent TTL management and automatic cache invalidation.
+
+### Cache Implementation Details
+- **Cache Key**: `dashboard_data_cache` with timestamp
+- **TTL**: 60-second expiration period
+- **Cache Storage**: JSON-serialized data with timestamp
+- **Automatic Cleanup**: Expired cache entries are automatically removed
+
+### Cache Loading Strategy
+The system prioritizes user experience by immediately loading cached data while background processes refresh the cache with fresh data.
+
+### Performance Benefits
+- **Reduced API Calls**: Cached data eliminates redundant network requests
+- **Improved Responsiveness**: Instant widget rendering with cached data
+- **Graceful Degradation**: Cached data serves as fallback when external services are unavailable
+- **Bandwidth Conservation**: Minimizes network traffic for returning users
+
+```mermaid
+flowchart TD
+CacheCheck{"Cache Available?"}
+CacheCheck --> |Yes| LoadCache["Load Cached Data"]
+CacheCheck --> |No| LoadFresh["Load Fresh Data"]
+LoadCache --> Render["Render with Cached Data"]
+LoadFresh --> Render
+Render --> UpdateCache["Update Cache"]
+UpdateCache --> CacheCheck
+```
+
+**Diagram sources**
+- [app/dashboard/page.tsx:141-162](file://app/dashboard/page.tsx#L141-L162)
+- [app/dashboard/page.tsx:213-225](file://app/dashboard/page.tsx#L213-L225)
 
 **Section sources**
-- [app/dashboard/page.tsx:259-349](file://app/dashboard/page.tsx#L259-L349)
-- [components/layout/Sidebar.tsx:216-255](file://components/layout/Sidebar.tsx#L216-L255)
+- [app/dashboard/page.tsx:141-162](file://app/dashboard/page.tsx#L141-L162)
+- [app/dashboard/page.tsx:213-225](file://app/dashboard/page.tsx#L213-L225)
+
+## Enhanced API Integration Patterns
+The dashboard implements sophisticated API integration patterns with comprehensive error handling, timeout management, and request cancellation.
+
+### AbortController-Based Request Management
+Each component maintains a shared AbortController instance that is automatically cancelled when the component unmounts, preventing memory leaks and stale data processing.
+
+### Timeout Management System
+The `fetchWithTimeout` function provides comprehensive timeout handling with automatic request cancellation and error propagation.
+
+### Error Handling Strategy
+- **AbortError Handling**: Component unmounts gracefully without throwing errors
+- **Network Error Recovery**: External service failures don't crash the dashboard
+- **Graceful Degradation**: Missing data is handled with fallback states
+- **User Feedback**: Errors are logged but don't interrupt user experience
+
+### API Endpoint Optimization
+The `/api/dashboard/summary` endpoint consolidates multiple data sources into a single request, reducing network overhead from 10+ parallel fetches to a single optimized request.
+
+```mermaid
+sequenceDiagram
+participant Comp as "Component"
+participant AC as "AbortController"
+participant API as "API Endpoint"
+Comp->>AC : Create AbortController
+Comp->>API : fetchWithTimeout(url, ms)
+API-->>Comp : Response or Timeout
+Comp->>AC : Handle AbortError
+AC-->>Comp : Cancel pending requests
+Comp->>Comp : Clean up resources
+```
+
+**Diagram sources**
+- [app/dashboard/page.tsx:164-185](file://app/dashboard/page.tsx#L164-L185)
+- [app/api/dashboard/summary/route.ts:186-209](file://app/api/dashboard/summary/route.ts#L186-L209)
+
+**Section sources**
+- [app/dashboard/page.tsx:164-185](file://app/dashboard/page.tsx#L164-L185)
+- [app/api/dashboard/summary/route.ts:186-209](file://app/api/dashboard/summary/route.ts#L186-L209)
 
 ## Dependency Analysis
-The dashboard pages depend on shared UI primitives and API routes. The main dashboard coordinates multiple external systems, while the alerts dashboard focuses on alarm ingestion and enrichment.
+The dashboard system maintains clean separation of concerns with specialized components handling different aspects of the dashboard functionality.
 
 ```mermaid
 graph LR
@@ -348,6 +479,7 @@ MAIN["Main Dashboard<br/>page.tsx"] --> CARD["Card<br/>card.tsx"]
 MAIN --> PROG["Progress<br/>progress.tsx"]
 MAIN --> BADGE["Badge<br/>badge.tsx"]
 MAIN --> UTILS["Utils<br/>utils.ts"]
+MAIN --> SUMMARY["Summary API<br/>/api/dashboard/summary"]
 MAIN --> ALARMS["Alarms API<br/>/api/alarms"]
 MAIN --> NMSAPI["NMS API<br/>/api/integrations/nms"]
 ALERTS["Alerts Dashboard<br/>alerts/page.tsx"] --> CARD
@@ -357,49 +489,93 @@ ALERTS --> ALARMS
 RISKS["Risks Dashboard<br/>risks/page.tsx"] --> CARD
 RISKS --> BADGE
 RISKS --> UTILS
+LAYOUT["Layout<br/>layout.tsx"] --> NAVPROG["NavigationProgress"]
+LAYOUT --> LOADBAR["LoadingBar"]
+LAYOUT --> TOASTER["Toaster"]
 ```
 
 **Diagram sources**
-- [app/dashboard/page.tsx:101-731](file://app/dashboard/page.tsx#L101-L731)
-- [app/dashboard/alerts/page.tsx:162-800](file://app/dashboard/alerts/page.tsx#L162-L800)
+- [app/dashboard/page.tsx:115-911](file://app/dashboard/page.tsx#L115-L911)
+- [app/dashboard/alerts/page.tsx:314-2238](file://app/dashboard/alerts/page.tsx#L314-L2238)
 - [app/dashboard/risks/page.tsx:20-239](file://app/dashboard/risks/page.tsx#L20-L239)
 - [components/ui/card.tsx:5-79](file://components/ui/card.tsx#L5-L79)
 - [components/ui/progress.tsx:6-26](file://components/ui/progress.tsx#L6-L26)
 - [components/ui/badge.tsx:6-40](file://components/ui/badge.tsx#L6-L40)
 - [lib/utils.ts:4-6](file://lib/utils.ts#L4-L6)
-- [app/api/alarms/route.ts:9-103](file://app/api/alarms/route.ts#L9-L103)
-- [app/api/integrations/nms/route.ts:8-52](file://app/api/integrations/nms/route.ts#L8-L52)
+- [app/api/dashboard/summary/route.ts:186-209](file://app/api/dashboard/summary/route.ts#L186-L209)
+- [app/api/alarms/route.ts:11-142](file://app/api/alarms/route.ts#L11-L142)
+- [app/api/integrations/nms/route.ts:8-53](file://app/api/integrations/nms/route.ts#L8-L53)
+- [app/layout.tsx:20-53](file://app/layout.tsx#L20-L53)
 
 **Section sources**
-- [app/dashboard/page.tsx:101-731](file://app/dashboard/page.tsx#L101-L731)
-- [app/dashboard/alerts/page.tsx:162-800](file://app/dashboard/alerts/page.tsx#L162-L800)
+- [app/dashboard/page.tsx:115-911](file://app/dashboard/page.tsx#L115-L911)
+- [app/dashboard/alerts/page.tsx:314-2238](file://app/dashboard/alerts/page.tsx#L314-L2238)
 - [app/dashboard/risks/page.tsx:20-239](file://app/dashboard/risks/page.tsx#L20-L239)
 
 ## Performance Considerations
-- Concurrent data fetching reduces total load time by overlapping independent requests.
-- Minimal server-side skeleton ensures immediate visual feedback.
-- Client-side navigation progress improves perceived performance during route transitions.
-- Avoid heavy computations in render paths; precompute metrics and memoize where appropriate.
-- Use pagination and limits for large datasets (e.g., alarms API limit parameter).
+The new implementation significantly improves performance through several optimization strategies:
+
+### Network Optimization
+- **Summary Endpoint**: Consolidates 10+ API calls into a single optimized request
+- **Concurrent Loading**: Multiple external APIs load simultaneously
+- **Request Cancellation**: AbortController prevents wasted network resources
+- **Timeout Management**: Prevents hanging requests from blocking UI
+
+### Memory Management
+- **Automatic Cleanup**: Component unmounts cancel pending requests
+- **Cache Management**: Automatic TTL expiration prevents memory bloat
+- **Resource Cleanup**: Proper cleanup of event listeners and intervals
+
+### User Experience Optimization
+- **Progressive Loading**: Immediate visual feedback with incremental improvements
+- **Graceful Degradation**: System continues functioning with partial data
+- **Smooth Transitions**: Animated loading states improve perceived performance
+- **Intelligent Caching**: Returning users get instant data access
 
 ## Troubleshooting Guide
-- If widgets fail to load, verify network connectivity to external systems and confirm API endpoints are reachable.
-- For alerts not refreshing, check browser console for errors and ensure periodic timers are active.
-- For NMS-related issues, confirm the NMS service availability and that polling devices exist in the database.
-- For alarm acknowledgments, ensure the backend responds successfully and the UI reflects updated states.
+The enhanced dashboard system includes comprehensive error handling and debugging capabilities:
+
+### Common Issues and Solutions
+- **Dashboard Loading Delays**: Check network connectivity to external services and verify API endpoints are reachable
+- **Widget Data Not Updating**: Verify browser console for timeout errors and ensure AbortController is functioning properly
+- **Cache Corruption**: Clear localStorage cache entries and restart the application
+- **Memory Leaks**: Check for proper component unmounting and AbortController cleanup
+
+### Debugging Tools
+- **Console Logging**: Extensive logging for network requests, timeouts, and cache operations
+- **Network Monitoring**: Real-time monitoring of API request performance and failure rates
+- **Cache Inspection**: Direct inspection of localStorage cache contents and TTL values
+- **Component Lifecycle**: Monitoring of component mount/unmount cycles and cleanup operations
+
+### Performance Monitoring
+- **Request Timing**: Track API response times and identify slow endpoints
+- **Cache Hit Rates**: Monitor cache effectiveness and optimize TTL values
+- **Memory Usage**: Track memory consumption and identify potential leaks
+- **User Experience Metrics**: Monitor perceived performance and user satisfaction
 
 **Section sources**
-- [app/dashboard/alerts/page.tsx:289-310](file://app/dashboard/alerts/page.tsx#L289-L310)
-- [app/api/integrations/nms/route.ts:8-52](file://app/api/integrations/nms/route.ts#L8-L52)
+- [app/dashboard/page.tsx:227-282](file://app/dashboard/page.tsx#L227-L282)
+- [app/dashboard/alerts/page.tsx:484-488](file://app/dashboard/alerts/page.tsx#L484-L488)
 
 ## Conclusion
-The dashboard components system combines responsive layouts, shared UI primitives, and robust data-loading strategies to deliver a performant and user-friendly monitoring experience. The main dashboard consolidates key metrics, the alerts dashboard enables real-time incident management, and the risks dashboard provides risk insights. Progressive loading and skeleton components enhance perceived performance, while responsive design ensures usability across devices.
+The sophisticated dashboard components system represents a significant evolution from simple server-side rendering to a complex client-side implementation featuring multi-phase data loading, intelligent caching, and comprehensive error handling. The new architecture delivers exceptional user experience through progressive loading, localStorage caching with TTL expiration, and AbortController-based request management. The system maintains excellent performance characteristics while providing robust error handling and graceful degradation capabilities. The enhanced API integration patterns and comprehensive loading states ensure reliable operation even under adverse network conditions.
 
 ## Appendices
-- Example widget additions:
-  - Add a new metric card by defining a new fetch function and integrating it into the main dashboard’s concurrent loader.
-  - Extend filters in the alerts dashboard by adding new filter keys and mapping functions.
-- Best practices:
-  - Keep widget logic modular and reusable.
-  - Use consistent color and icon semantics for severity and status.
-  - Apply Tailwind responsive utilities to ensure optimal presentation on all devices.
+- **Customization Examples**:
+  - Add new metric cards by extending the summary endpoint and implementing appropriate fetch functions
+  - Configure caching TTL values by modifying the CACHE_TTL constant in the main dashboard
+  - Extend error handling by adding new exception types to the isAborted function
+  - Implement new loading states by adding new skeleton components and Suspense boundaries
+
+- **Best Practices**:
+  - Keep widget logic modular and reusable with proper error boundaries
+  - Use consistent color and icon semantics for severity and status indicators
+  - Apply AbortController patterns consistently across all data-fetching components
+  - Monitor cache hit rates and optimize TTL values based on data volatility
+  - Implement comprehensive logging for debugging and performance monitoring
+
+- **Performance Tuning**:
+  - Adjust cache TTL values based on data freshness requirements
+  - Optimize API endpoint responses to reduce latency
+  - Monitor memory usage and implement cleanup strategies for long-running sessions
+  - Analyze user interaction patterns to optimize loading priorities

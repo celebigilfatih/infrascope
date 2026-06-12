@@ -165,7 +165,8 @@ export default function DashboardPage() {
   const abortRef = useRef<AbortController | null>(null);
 
   // Timeout wrapper: combines component unmount abort + per-request timeout
-  const fetchWithTimeout = async (url: string, ms = 5000) => {
+  // Default 20s to accommodate Turbopack cold compilation (~12s on first request)
+  const fetchWithTimeout = async (url: string, ms = 20000) => {
     const parentSignal = abortRef.current?.signal;
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), ms);
@@ -316,7 +317,7 @@ export default function DashboardPage() {
   const loadVmwareData = async () => {
     try {
       setVmwareLoading(true);
-      const res = await fetchWithTimeout('/api/integrations/vmware?type=dashboard');
+      const res = await fetchWithTimeout('/api/integrations/vmware?type=dashboard', 30000);
       const json = await res.json();
       if (!json.error) setVmware(json);
     } catch (err) {
