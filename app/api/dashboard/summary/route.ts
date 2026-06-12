@@ -137,10 +137,10 @@ async function getNmsSummary() {
 
     try {
       const recentMetrics = await prisma.$queryRaw<
-        Array<{ collectedAt: Date }>
-      >`SELECT "collectedAt" FROM nms_health_metrics ORDER BY "collectedAt" DESC LIMIT 1`;
+        Array<{ collected_at: Date }>
+      >`SELECT "collected_at" FROM nms_health_metrics ORDER BY "collected_at" DESC LIMIT 1`;
       if (recentMetrics.length > 0) {
-        lastPollAt = recentMetrics[0].collectedAt.toISOString();
+        lastPollAt = recentMetrics[0].collected_at.toISOString();
         pollingActive = (Date.now() - new Date(lastPollAt).getTime()) < 600_000;
       }
     } catch {
