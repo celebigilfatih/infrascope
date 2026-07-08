@@ -28,6 +28,8 @@ pids
 *.pid
 *.seed
 *.pid.lock
+.license-cache
+data/license-cache/
 
 # OS files
 .DS_Store
