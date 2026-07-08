@@ -3,6 +3,9 @@ import { getSetupStatus } from '@/lib/setup/status';
 import { hasConfiguredLicense } from '@/lib/license/client';
 import { isLicenseServerMode } from '@/lib/license/server-mode';
 
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 export async function GET() {
   try {
     const status = await getSetupStatus();
