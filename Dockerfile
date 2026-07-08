@@ -75,6 +75,7 @@ WORKDIR /app
 # Environment variables
 ENV NODE_ENV=production
 ENV PORT=3000
+ENV HOSTNAME=0.0.0.0
 
 # Copy built application from builder stage
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
@@ -104,8 +105,8 @@ USER nextjs
 EXPOSE 3000
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
-    CMD node -e "require('http').get('http://localhost:3000/api/health', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})" || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=5 \
+    CMD node -e "const http=require('http'); const req=http.get('http://127.0.0.1:3000/api/health', r=>process.exit(r.statusCode===200?0:1)); req.on('error',()=>process.exit(1)); req.setTimeout(4000,()=>{req.destroy();process.exit(1);});"
 
 # Entrypoint script for database migrations and startup
 ENTRYPOINT ["./scripts/entrypoint.sh"]
