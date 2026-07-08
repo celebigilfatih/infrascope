@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { activateAndCacheLicense } from '@/lib/license/client';
 import { getSetupStatus } from '@/lib/setup/status';
+import { isLicenseServerMode } from '@/lib/license/server-mode';
 
 export async function POST(request: Request) {
   try {
@@ -9,6 +10,13 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { success: false, error: 'Setup is already completed' },
         { status: 403 }
+      );
+    }
+
+    if (isLicenseServerMode()) {
+      return NextResponse.json(
+        { success: false, error: 'License activation is not required on the central license server' },
+        { status: 404 }
       );
     }
 

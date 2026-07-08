@@ -14,6 +14,7 @@ type SetupStatus = {
   setupRequired: boolean;
   hasAdmin: boolean;
   licenseConfigured: boolean;
+  licenseServerMode: boolean;
 };
 
 type LicenseInfo = {
@@ -53,6 +54,9 @@ export default function SetupPage() {
           return;
         }
 
+        if (data.licenseServerMode) {
+          setStep(2);
+        }
         setStatus(data);
       } catch {
         setError('Kurulum durumu okunamadı.');
@@ -139,6 +143,9 @@ export default function SetupPage() {
     );
   }
 
+  const isLicenseServerMode = Boolean(status?.licenseServerMode);
+  const progressValue = isLicenseServerMode ? (step === 2 ? 50 : 100) : step === 1 ? 33 : step === 2 ? 66 : 100;
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <div className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-6 py-8">
@@ -153,7 +160,7 @@ export default function SetupPage() {
             </div>
           </div>
           <Badge className="border-emerald-500/30 bg-emerald-500/10 text-emerald-300">
-            On-Prem Docker
+            {isLicenseServerMode ? 'License Server' : 'On-Prem Docker'}
           </Badge>
         </div>
 
@@ -162,15 +169,18 @@ export default function SetupPage() {
             <div>
               <h2 className="text-4xl font-bold leading-tight">Kurulumu güvenli şekilde tamamlayın.</h2>
               <p className="mt-4 max-w-lg text-slate-400">
-                Lisans doğrulaması, şirket kaydı ve ilk admin hesabı burada oluşturulur.
-                Varsayılan admin şifresi yoktur.
+                {isLicenseServerMode
+                  ? 'Merkezi lisans sunucusu için şirket kaydı ve ilk admin hesabı burada oluşturulur. Varsayılan admin şifresi yoktur.'
+                  : 'Lisans doğrulaması, şirket kaydı ve ilk admin hesabı burada oluşturulur. Varsayılan admin şifresi yoktur.'}
               </p>
             </div>
 
             <div className="space-y-3">
-              <Progress value={step === 1 ? 33 : step === 2 ? 66 : 100} className="h-2 bg-slate-800" />
-              <div className="grid grid-cols-3 gap-2 text-xs text-slate-400">
-                <span className={step >= 1 ? 'text-emerald-300' : ''}>Lisans</span>
+              <Progress value={progressValue} className="h-2 bg-slate-800" />
+              <div className={`grid gap-2 text-xs text-slate-400 ${isLicenseServerMode ? 'grid-cols-2' : 'grid-cols-3'}`}>
+                {!isLicenseServerMode && (
+                  <span className={step >= 1 ? 'text-emerald-300' : ''}>Lisans</span>
+                )}
                 <span className={step >= 2 ? 'text-emerald-300' : ''}>Admin</span>
                 <span className={step >= 3 ? 'text-emerald-300' : ''}>Tamamlandı</span>
               </div>
