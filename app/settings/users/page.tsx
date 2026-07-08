@@ -133,6 +133,15 @@ function formatActivityAction(action: string): string {
   return labels[action] || action.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+function getPasswordChecks(password: string) {
+  return {
+    length: password.length >= 8,
+    uppercase: /[A-Z]/.test(password),
+    number: /[0-9]/.test(password),
+    special: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password),
+  };
+}
+
 // --- Main Component ---
 
 export default function UsersPage() {
@@ -163,6 +172,8 @@ export default function UsersPage() {
   // Create form state
   const [createName, setCreateName] = useState('');
   const [createEmail, setCreateEmail] = useState('');
+  const [createPassword, setCreatePassword] = useState('');
+  const [createConfirmPassword, setCreateConfirmPassword] = useState('');
   const [createRole, setCreateRole] = useState<string>('viewer');
 
   // Password change form state
@@ -244,6 +255,11 @@ export default function UsersPage() {
     return matchesSearch && matchesRole;
   });
 
+  const createPasswordChecks = getPasswordChecks(createPassword);
+  const isCreatePasswordValid =
+    Object.values(createPasswordChecks).every(Boolean) &&
+    createPassword === createConfirmPassword;
+
   // --- User CRUD Handlers ---
 
   const openEditDialog = (user: UserType) => {
@@ -295,8 +311,12 @@ export default function UsersPage() {
   };
 
   const handleCreateUser = async () => {
-    if (!createName || !createEmail) {
-      alert('Name and email are required');
+    if (!createName || !createEmail || !createPassword) {
+      alert('Name, email, and password are required');
+      return;
+    }
+    if (!isCreatePasswordValid) {
+      alert('Password does not meet requirements or confirmation does not match');
       return;
     }
     setIsSubmitting(true);
@@ -304,7 +324,12 @@ export default function UsersPage() {
       const response = await fetch('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: createName, email: createEmail, role: createRole }),
+        body: JSON.stringify({
+          name: createName,
+          email: createEmail,
+          password: createPassword,
+          role: createRole,
+        }),
       });
       const result = await response.json();
       if (result.success) {
@@ -312,6 +337,8 @@ export default function UsersPage() {
         setIsCreateDialogOpen(false);
         setCreateName('');
         setCreateEmail('');
+        setCreatePassword('');
+        setCreateConfirmPassword('');
         setCreateRole('viewer');
       } else {
         alert(`Error: ${result.error}`);
@@ -817,6 +844,69 @@ export default function UsersPage() {
               />
             </div>
             <div>
+              <label className="block text-sm font-medium mb-1">Password</label>
+              <Input
+                type="password"
+                value={createPassword}
+                onChange={(e) => setCreatePassword(e.target.value)}
+                placeholder="Create a password"
+              />
+              <div className="mt-2 grid grid-cols-1 gap-1 sm:grid-cols-2">
+                <div className="flex items-center gap-2 text-xs">
+                  {createPasswordChecks.length ? (
+                    <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                  ) : (
+                    <XCircle className="h-3.5 w-3.5 text-gray-300" />
+                  )}
+                  <span className={createPasswordChecks.length ? 'text-green-700 dark:text-green-400' : 'text-muted-foreground'}>
+                    8+ characters
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-xs">
+                  {createPasswordChecks.uppercase ? (
+                    <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                  ) : (
+                    <XCircle className="h-3.5 w-3.5 text-gray-300" />
+                  )}
+                  <span className={createPasswordChecks.uppercase ? 'text-green-700 dark:text-green-400' : 'text-muted-foreground'}>
+                    Uppercase
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-xs">
+                  {createPasswordChecks.number ? (
+                    <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                  ) : (
+                    <XCircle className="h-3.5 w-3.5 text-gray-300" />
+                  )}
+                  <span className={createPasswordChecks.number ? 'text-green-700 dark:text-green-400' : 'text-muted-foreground'}>
+                    Number
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-xs">
+                  {createPasswordChecks.special ? (
+                    <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                  ) : (
+                    <XCircle className="h-3.5 w-3.5 text-gray-300" />
+                  )}
+                  <span className={createPasswordChecks.special ? 'text-green-700 dark:text-green-400' : 'text-muted-foreground'}>
+                    Special
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Confirm Password</label>
+              <Input
+                type="password"
+                value={createConfirmPassword}
+                onChange={(e) => setCreateConfirmPassword(e.target.value)}
+                placeholder="Confirm password"
+              />
+              {createConfirmPassword && createPassword !== createConfirmPassword && (
+                <p className="text-xs text-red-500 mt-1">Passwords do not match</p>
+              )}
+            </div>
+            <div>
               <label className="block text-sm font-medium mb-1">Role</label>
               <Select value={createRole} onValueChange={setCreateRole}>
                 <SelectTrigger>
@@ -831,10 +921,20 @@ export default function UsersPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsCreateDialogOpen(false);
+                setCreateName('');
+                setCreateEmail('');
+                setCreatePassword('');
+                setCreateConfirmPassword('');
+                setCreateRole('viewer');
+              }}
+            >
               Cancel
             </Button>
-            <Button onClick={handleCreateUser} disabled={isSubmitting}>
+            <Button onClick={handleCreateUser} disabled={isSubmitting || !isCreatePasswordValid}>
               {isSubmitting ? 'Creating...' : 'Create User'}
             </Button>
           </DialogFooter>

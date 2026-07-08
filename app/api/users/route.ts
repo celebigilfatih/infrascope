@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
+import { UserRole, UserStatus } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logAudit } from '@/lib/audit/logger';
 import { validateBody } from '@/lib/validators';
-import { updateUserSchema } from '@/lib/validators/users';
+import { createUserSchema, updateUserSchema } from '@/lib/validators/users';
 import { checkUserLimit } from '@/lib/license/middleware';
+import { hashPassword, validatePasswordStrength } from '@/lib/auth/password';
 
 export async function GET() {
   try {
@@ -62,12 +64,33 @@ export async function POST(request: Request) {
     const licenseError = await checkUserLimit(currentUserCount);
     if (licenseError) return licenseError;
 
-    const body = await request.json();
-    const { name, email, role, status } = body;
+    const rawBody = await request.json();
+    const parsed = validateBody(rawBody, createUserSchema);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { success: false, error: parsed.error },
+        { status: 400 }
+      );
+    }
+
+    const { name, email, password, role, status } = parsed.data;
+    const normalizedEmail = email.toLowerCase();
+
+    const passwordValidation = validatePasswordStrength(password);
+    if (!passwordValidation.valid) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Password does not meet requirements',
+          details: passwordValidation.errors,
+        },
+        { status: 400 }
+      );
+    }
 
     // Check if email already exists
     const existingUser = await prisma.user.findUnique({
-      where: { email },
+      where: { email: normalizedEmail },
     });
 
     if (existingUser) {
@@ -80,9 +103,10 @@ export async function POST(request: Request) {
     const user = await prisma.user.create({
       data: {
         name,
-        email,
-        role: role?.toUpperCase() || 'VIEWER',
-        status: status?.toUpperCase() || 'ACTIVE',
+        email: normalizedEmail,
+        password: await hashPassword(password),
+        role: role.toUpperCase() as UserRole,
+        status: (status?.toUpperCase() || 'ACTIVE') as UserStatus,
       },
     });
 
