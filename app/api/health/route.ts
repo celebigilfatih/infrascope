@@ -12,6 +12,9 @@ import { getSharedFortiAnalyzerService, getFortiAnalyzerLoginHealth } from '@/li
 import { getEventCacheStatus } from '@/lib/alarms/detection-engine';
 import { getDLQStats } from '@/lib/notifications/dlq-worker';
 
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 interface FAHealthResult {
   status: 'healthy' | 'unhealthy' | 'unknown';
   responseTimeMs: number;

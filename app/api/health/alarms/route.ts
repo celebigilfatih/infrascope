@@ -35,6 +35,9 @@ import { getSchedulerStatus } from '@/lib/alarm-scheduler';
 import { getCircuitBreakerStatus } from '@/lib/integrations/fa-circuit-breaker';
 import { getDLQStats } from '@/lib/notifications/dlq-worker';
 
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 // Thresholds for staleness (in minutes)
 const SCHEDULER_STALE_THRESHOLD = 30;  // If no tick in 30 min → degraded
 const CACHE_STALE_THRESHOLD = 10;       // If no sync in 10 min → degraded
