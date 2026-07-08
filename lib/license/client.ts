@@ -8,18 +8,18 @@
  *
  * Environment variables:
  *   LICENSE_KEY          — Customer's license key (e.g. "IS-2026-XXXX-XXXX")
- *   LICENSE_SERVER_URL   — Central server URL (default: https://license.infrascope.com)
+ *   LICENSE_SERVER_URL   — Central server URL (default: https://lisans.webmahsul.com.tr)
  */
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, statSync } from 'fs';
 import path from 'path';
 import { getMachineId } from './machine-id';
 import type { LicenseTier, LicenseLimits } from './features';
 
-const LICENSE_SERVER_URL = process.env.LICENSE_SERVER_URL || 'https://license.infrascope.com';
-const LICENSE_KEY = process.env.LICENSE_KEY || '';
-const CACHE_FILE = path.join(process.cwd(), '.license-cache');
-const GRACE_PERIOD_DAYS = 7;
+const LICENSE_SERVER_URL = process.env.LICENSE_SERVER_URL || 'https://lisans.webmahsul.com.tr';
+const ENV_LICENSE_KEY = process.env.LICENSE_KEY || '';
+const LICENSE_CACHE_PATH = process.env.LICENSE_CACHE_PATH || path.join(process.cwd(), '.license-cache');
+const GRACE_PERIOD_DAYS = 14;
 const VALIDATE_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 export interface LicenseState {
@@ -47,6 +47,7 @@ export interface LicenseState {
 
 interface CacheData {
   token: string;
+  licenseKey: string;
   state: LicenseState;
   cachedAt: number; // epoch ms
 }
@@ -54,6 +55,21 @@ interface CacheData {
 // ── Singleton state ──────────────────────────────────────────────
 let currentState: LicenseState | null = null;
 let validationTimer: NodeJS.Timeout | null = null;
+
+function getCacheFile(): string {
+  try {
+    if (existsSync(LICENSE_CACHE_PATH) && statSync(LICENSE_CACHE_PATH).isDirectory()) {
+      return path.join(LICENSE_CACHE_PATH, 'license.json');
+    }
+  } catch {
+    // Fall through to the configured path.
+  }
+  return LICENSE_CACHE_PATH;
+}
+
+function getConfiguredLicenseKey(cache?: CacheData | null): string {
+  return ENV_LICENSE_KEY || cache?.licenseKey || '';
+}
 
 /**
  * Get the current license state (may be null before first validation).
@@ -92,14 +108,19 @@ export function getLicenseLimits(): LicenseLimits {
   };
 }
 
+export function hasConfiguredLicense(): boolean {
+  return Boolean(getConfiguredLicenseKey(readCache()));
+}
+
 // ── Cache management ─────────────────────────────────────────────
 
 function readCache(): CacheData | null {
   try {
-    if (!existsSync(CACHE_FILE)) return null;
-    const raw = readFileSync(CACHE_FILE, 'utf-8');
+    const cacheFile = getCacheFile();
+    if (!existsSync(cacheFile)) return null;
+    const raw = readFileSync(cacheFile, 'utf-8');
     const data = JSON.parse(raw) as CacheData;
-    if (!data.state || !data.cachedAt) return null;
+    if (!data.state || !data.cachedAt || !data.token) return null;
     return data;
   } catch {
     return null;
@@ -108,7 +129,9 @@ function readCache(): CacheData | null {
 
 function writeCache(data: CacheData): void {
   try {
-    writeFileSync(CACHE_FILE, JSON.stringify(data, null, 2));
+    const cacheFile = getCacheFile();
+    mkdirSync(path.dirname(cacheFile), { recursive: true });
+    writeFileSync(cacheFile, JSON.stringify(data, null, 2));
   } catch {
     // Read-only FS — ignore
   }
@@ -116,16 +139,19 @@ function writeCache(data: CacheData): void {
 
 // ── Server communication ─────────────────────────────────────────
 
-async function activateLicense(): Promise<LicenseState | null> {
-  if (!LICENSE_KEY) return null;
+async function activateLicense(licenseKey: string): Promise<{ token: string; state: LicenseState } | null> {
+  if (!licenseKey) return null;
 
   const machineId = getMachineId();
 
   try {
     const res = await fetch(`${LICENSE_SERVER_URL}/api/license/activate`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ licenseKey: LICENSE_KEY, machineId }),
+      headers: {
+        'Content-Type': 'application/json',
+        'x-app-version': process.env.NEXT_PUBLIC_APP_VERSION || process.env.APP_VERSION || 'unknown',
+      },
+      body: JSON.stringify({ licenseKey, machineId }),
     });
 
     if (!res.ok) {
@@ -134,14 +160,17 @@ async function activateLicense(): Promise<LicenseState | null> {
     }
 
     const data = await res.json();
-    return data.state as LicenseState;
+    if (!data.token || !data.state) return null;
+    return { token: data.token as string, state: data.state as LicenseState };
   } catch (err) {
     console.error('[License] Activation request failed:', (err as Error).message);
     return null;
   }
 }
 
-async function validateLicense(token: string): Promise<LicenseState | null> {
+async function validateLicense(licenseKey: string, token: string): Promise<{ token: string; state: LicenseState } | null> {
+  const machineId = getMachineId();
+
   try {
     const res = await fetch(`${LICENSE_SERVER_URL}/api/license/validate`, {
       method: 'POST',
@@ -149,18 +178,27 @@ async function validateLicense(token: string): Promise<LicenseState | null> {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
       },
+      body: JSON.stringify({ licenseKey, machineId, token }),
     });
 
     if (!res.ok) return null;
 
     const data = await res.json();
-    return data.state as LicenseState;
+    if (!data.state) return null;
+    return {
+      token: (data.token as string | undefined) || token,
+      state: data.state as LicenseState,
+    };
   } catch {
     return null;
   }
 }
 
-async function sendHeartbeat(token: string, usage: { deviceCount: number; userCount: number }): Promise<void> {
+async function sendHeartbeat(
+  licenseKey: string,
+  token: string,
+  usage: { deviceCount: number; userCount: number; appVersion?: string }
+): Promise<void> {
   try {
     await fetch(`${LICENSE_SERVER_URL}/api/license/heartbeat`, {
       method: 'POST',
@@ -168,7 +206,11 @@ async function sendHeartbeat(token: string, usage: { deviceCount: number; userCo
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
       },
-      body: JSON.stringify(usage),
+      body: JSON.stringify({
+        licenseKey,
+        machineId: getMachineId(),
+        ...usage,
+      }),
     });
   } catch {
     // Heartbeat failure is non-critical
@@ -178,8 +220,11 @@ async function sendHeartbeat(token: string, usage: { deviceCount: number; userCo
 // ── Validation logic ─────────────────────────────────────────────
 
 async function performValidation(): Promise<void> {
+  const cache = readCache();
+  const licenseKey = getConfiguredLicenseKey(cache);
+
   // No license key configured — use trial mode
-  if (!LICENSE_KEY) {
+  if (!licenseKey) {
     currentState = {
       valid: true,
       tier: 'TRIAL',
@@ -196,29 +241,30 @@ async function performValidation(): Promise<void> {
   }
 
   // Try to validate with server
-  const cache = readCache();
-  let newState: LicenseState | null = null;
+  let validationResult: { token: string; state: LicenseState } | null = null;
 
   if (cache?.token) {
     // Existing token — try validate first (lighter than activate)
-    newState = await validateLicense(cache.token);
+    validationResult = await validateLicense(licenseKey, cache.token);
   }
 
-  if (!newState) {
+  if (!validationResult) {
     // No token or validate failed — try full activation
-    newState = await activateLicense();
+    validationResult = await activateLicense(licenseKey);
   }
 
-  if (newState) {
+  if (validationResult) {
     // Server responded — update state and cache
+    const newState = validationResult.state;
     newState.machineId = getMachineId();
-    newState.licenseKey = maskKey(LICENSE_KEY);
+    newState.licenseKey = maskKey(licenseKey);
     newState.graceMode = false;
     newState.lastValidated = new Date().toISOString();
     currentState = newState;
 
     writeCache({
-      token: newState.licenseKey, // In production, use JWT from server
+      token: validationResult.token,
+      licenseKey,
       state: newState,
       cachedAt: Date.now(),
     });
@@ -238,7 +284,7 @@ async function performValidation(): Promise<void> {
         ...cache.state,
         graceMode: true,
         machineId: getMachineId(),
-        licenseKey: maskKey(LICENSE_KEY),
+        licenseKey: maskKey(licenseKey),
       };
       console.warn(
         `[License] Server unreachable, grace period active ` +
@@ -258,7 +304,7 @@ async function performValidation(): Promise<void> {
     daysRemaining: 0,
     graceMode: true,
     lastValidated: cache?.state?.lastValidated || '',
-    licenseKey: maskKey(LICENSE_KEY),
+    licenseKey: maskKey(licenseKey),
     machineId: getMachineId(),
   };
   console.error('[License] Grace period expired — running in restricted mode');
@@ -291,8 +337,13 @@ export async function initLicense(): Promise<LicenseState> {
  */
 export async function sendUsageHeartbeat(deviceCount: number, userCount: number): Promise<void> {
   const cache = readCache();
-  if (cache?.token) {
-    await sendHeartbeat(cache.token, { deviceCount, userCount });
+  const licenseKey = getConfiguredLicenseKey(cache);
+  if (cache?.token && licenseKey) {
+    await sendHeartbeat(licenseKey, cache.token, {
+      deviceCount,
+      userCount,
+      appVersion: process.env.NEXT_PUBLIC_APP_VERSION || process.env.APP_VERSION || 'unknown',
+    });
   }
 }
 
@@ -302,4 +353,30 @@ export async function sendUsageHeartbeat(deviceCount: number, userCount: number)
 export async function revalidateLicense(): Promise<LicenseState> {
   await performValidation();
   return currentState!;
+}
+
+/**
+ * Activate and cache a license key during first-run setup.
+ */
+export async function activateAndCacheLicense(licenseKey: string): Promise<LicenseState | null> {
+  const result = await activateLicense(licenseKey);
+  if (!result) return null;
+
+  const state = {
+    ...result.state,
+    machineId: getMachineId(),
+    licenseKey: maskKey(licenseKey),
+    graceMode: false,
+    lastValidated: new Date().toISOString(),
+  };
+
+  currentState = state;
+  writeCache({
+    token: result.token,
+    licenseKey,
+    state,
+    cachedAt: Date.now(),
+  });
+
+  return state;
 }

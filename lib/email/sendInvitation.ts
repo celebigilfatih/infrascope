@@ -4,6 +4,13 @@ import { createLogger } from '@/lib/logger';
 
 const log = createLogger('send-invitation');
 
+function getSmtpTlsOptions() {
+  return {
+    rejectUnauthorized:
+      process.env.NODE_ENV === 'production' || process.env.SMTP_TLS_INSECURE !== 'true',
+  };
+}
+
 function escapeHtml(str: string): string {
   return str
     .replace(/&/g, '&amp;')
@@ -48,7 +55,7 @@ export async function sendInvitationEmail(params: InvitationEmailParams): Promis
         user: config.smtpUser,
         pass: config.smtpPass,
       },
-      tls: { rejectUnauthorized: false },
+      tls: getSmtpTlsOptions(),
     });
 
     await transporter.sendMail({
@@ -120,7 +127,7 @@ export async function sendPasswordResetEmail(params: {
         user: config.smtpUser,
         pass: config.smtpPass,
       },
-      tls: { rejectUnauthorized: false },
+      tls: getSmtpTlsOptions(),
     });
 
     await transporter.sendMail({

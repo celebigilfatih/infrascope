@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -17,6 +17,27 @@ export default function LoginPage() {
   const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function redirectToSetupIfNeeded() {
+      try {
+        const res = await fetch('/api/setup/status', { cache: 'no-store' });
+        const data = await res.json();
+        if (!cancelled && data.setupRequired) {
+          router.push('/setup');
+        }
+      } catch {
+        // Keep login usable if setup status cannot be read.
+      }
+    }
+
+    redirectToSetupIfNeeded();
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

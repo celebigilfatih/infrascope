@@ -12,6 +12,7 @@ This directory contains historical/technical docs about the alarm subsystem.
 | `ALARM_EMAIL_LIST.md` | Email notification recipient config |
 | `ALARM_SOURCES_ANALYSIS.md` | Analysis of all alarm data sources |
 | `ALARM_SUPPRESSION_ENGINE.md` | Suppression/cooldown engine design |
+| `DEFINITIONS.md` | Auto-generated alarm catalog from `lib/alarms/alarm-definitions.ts` |
 | `FW_POLICY_CHANGED_FIX.md` | Firewall policy change alarm user attribution fix |
 | `NMS_ALARM_FALSE_POSITIVE_PREVENTION.md` | NMS_PORT_DOWN false positive prevention |
 
@@ -23,6 +24,4 @@ This directory contains historical/technical docs about the alarm subsystem.
 
 ## Planned
 
-- `README.md` — Engine overview, registry pattern, detection-engine contract
-- `DEFINITIONS.md` — Auto-generated alarm catalog (from `alarm-definitions.ts`)
 - `COOLDOWN.md` — Cooldown rules per alarm type

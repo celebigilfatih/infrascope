@@ -10,9 +10,13 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireLicenseServerMode } from '@/lib/license/server-mode';
 
 export async function POST(req: NextRequest) {
   try {
+    const modeError = requireLicenseServerMode();
+    if (modeError) return modeError;
+
     const { licenseKey, machineId, deviceCount, userCount, appVersion } = await req.json();
 
     if (!licenseKey || !machineId) {

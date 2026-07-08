@@ -8,7 +8,7 @@ async function failedLogin(i) {
     const r = https.request({
       hostname: '10.5.0.250', port: 443, path: '/logincheck', method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(d) },
-      rejectUnauthorized: false, timeout: 10000
+      rejectUnauthorized: process.env.FORTIGATE_TLS_INSECURE !== 'true', timeout: 10000
     }, (resp) => {
       let s = ''; resp.on('data', c => s += c);
       resp.on('end', () => { console.log(`Attempt ${i}: HTTP ${resp.statusCode}`); resolve(); });

@@ -30,20 +30,19 @@ docs/
 
 ## 2. Mimari
 
+- ✅ `10-architecture/OVERVIEW.md` — Mevcut sistem mimarisi, veri akışı ve invariantlar
+- ✅ `10-architecture/BOUNDED_CONTEXTS.md` — alarms / integrations / topology / inventory / audit / security / nms / virtualization
 - ✅ `10-architecture/adr/_template.md` — ADR şablonu
 - ✅ `10-architecture/adr/ADR-001-prefer-config-revisions-over-cmdb-diff.md` — CMDB-diff yerine FA config-events
 - ✅ `10-architecture/adr/ADR-002-alarm-query-registry-pattern.md` — Alarm query registry pattern
 - ✅ `10-architecture/adr/ADR-003-fa-session-management.md` — FA session lifecycle (logout + expiry detection)
-- _(planlı)_ `10-architecture/OVERVIEW.md` — Eski `ARCHITECTURE.md`'nin yerine geçecek, gerçek mevcut durum
-- _(planlı)_ `10-architecture/BOUNDED_CONTEXTS.md` — alarms / integrations / topology / inventory / audit / security
+- ✅ `10-architecture/adr/ADR-004-port-mapping-strategy.md` — Docker internal/external port mapping
 - _(planlı)_ `10-architecture/DATA_FLOW.md` — FA → cached_events → alarm-runner → UI
-- _(planlı)_ `10-architecture/adr/ADR-001-prefer-config-revisions-over-cmdb-diff.md`
-- _(planlı)_ `10-architecture/adr/ADR-002-alarm-query-registry-pattern.md`
 
 ## 3. Modül Detayları
 
 - ✅ `20-modules/alarms/README.md` — Engine, registry, definition + cooldown akışı
-- _(planlı)_ `20-modules/alarms/DEFINITIONS.md` — Auto-generated alarm kataloğu
+- ✅ `20-modules/alarms/DEFINITIONS.md` — Auto-generated alarm kataloğu
 - ✅ `20-modules/integrations/README.md` — Integration module overview (FA, FG, VMware, NMS)
 - ✅ `20-modules/integrations/fortianalyzer.md` — Session lifecycle, auth, batch query
 - ✅ `20-modules/integrations/fortigate.md` — CMDB diff, REST + SSH karışımı
@@ -60,7 +59,7 @@ docs/
 
 ## 5. Sürüm Tarihçesi
 
-- _(planlı)_ `../CHANGELOG.md` — Kullanıcı-görünür değişikliklerin tek kaynağı
+- ✅ `../CHANGELOG.md` — Kullanıcı-görünür değişikliklerin tek kaynağı
 
 ---
 

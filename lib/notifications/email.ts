@@ -79,6 +79,13 @@ const alarmCooldowns = new Map<string, number>();
 let cachedTransporter: any = null;
 let transporterConfig: string | null = null;
 
+function getSmtpTlsOptions() {
+  return {
+    rejectUnauthorized:
+      process.env.NODE_ENV === 'production' || process.env.SMTP_TLS_INSECURE !== 'true',
+  };
+}
+
 // ============================================================================
 // HELPERS: Configuration
 // ============================================================================
@@ -121,9 +128,7 @@ async function getTransporter(): Promise<any> {
       user: config.smtpUser,
       pass: config.smtpPass,
     },
-    tls: {
-      rejectUnauthorized: false, // Allow self-signed certs
-    },
+    tls: getSmtpTlsOptions(),
     pool: true,                  // Enable connection pooling
     maxConnections: 3,           // Max concurrent connections
     maxMessages: 100,            // Messages per connection before reconnect
@@ -503,9 +508,7 @@ export async function sendTestEmail(configOverride?: Partial<EmailConfig>): Prom
         user: config.smtpUser,
         pass: config.smtpPass,
       },
-      tls: {
-        rejectUnauthorized: false,
-      },
+      tls: getSmtpTlsOptions(),
     });
 
     // Verify connection

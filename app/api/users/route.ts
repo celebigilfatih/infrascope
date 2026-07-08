@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { logAudit } from '@/lib/audit/logger';
 import { validateBody } from '@/lib/validators';
 import { updateUserSchema } from '@/lib/validators/users';
+import { checkUserLimit } from '@/lib/license/middleware';
 
 export async function GET() {
   try {
@@ -57,6 +58,10 @@ function formatTimeAgo(date: Date): string {
 
 export async function POST(request: Request) {
   try {
+    const currentUserCount = await prisma.user.count();
+    const licenseError = await checkUserLimit(currentUserCount);
+    if (licenseError) return licenseError;
+
     const body = await request.json();
     const { name, email, role, status } = body;
 

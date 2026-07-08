@@ -35,6 +35,7 @@ import { FortiGateService } from '@/lib/integrations/fortigate';
 import { processDLQ, cleanupDLQ, getDLQStats } from '@/lib/notifications/dlq-worker';
 import { sendAlarmEmail } from '@/lib/notifications/email';
 import { createLogger } from '@/lib/logger';
+import { initLicense, isLicenseValid } from '@/lib/license/client';
 
 const log = createLogger('alarm-runner');
 
@@ -183,6 +184,29 @@ export async function initializeAlarmRunner(): Promise<void> {
 
 // ── Core runner ──────────────────────────────────────────────────────────────
 export async function runAlarmCheck(): Promise<AlarmCheckResult> {
+  try {
+    await initLicense();
+    if (!isLicenseValid()) {
+      log.warn('License invalid or grace period expired; skipping alarm evaluation');
+      return {
+        success: false,
+        error: 'License validation failed',
+        summary: { total: 0, triggered: 0, skippedCooldown: 0, errors: 1 },
+        triggered: [],
+        errors: [{ code: 'LICENSE', error: 'License validation failed' }],
+      };
+    }
+  } catch (licenseErr) {
+    log.error({ err: licenseErr }, 'License validation failed before alarm evaluation');
+    return {
+      success: false,
+      error: 'License validation failed',
+      summary: { total: 0, triggered: 0, skippedCooldown: 0, errors: 1 },
+      triggered: [],
+      errors: [{ code: 'LICENSE', error: 'License validation failed' }],
+    };
+  }
+
   // Mutex: skip if already running (in-process guard)
   if (checkStartTime !== null) {
     const elapsed = Date.now() - checkStartTime;

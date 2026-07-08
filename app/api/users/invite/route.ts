@@ -4,10 +4,15 @@ import { sendInvitationEmail } from '@/lib/email/sendInvitation';
 import { logAudit } from '@/lib/audit/logger';
 import { validateBody } from '@/lib/validators';
 import { inviteUserSchema } from '@/lib/validators/users';
+import { checkUserLimit } from '@/lib/license/middleware';
 import crypto from 'crypto';
 
 export async function POST(request: Request) {
   try {
+    const currentUserCount = await prisma.user.count();
+    const licenseError = await checkUserLimit(currentUserCount);
+    if (licenseError) return licenseError;
+
     const rawBody = await request.json();
     const parsed = validateBody(rawBody, inviteUserSchema);
     if (!parsed.success) {

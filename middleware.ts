@@ -3,13 +3,12 @@ import type { NextRequest } from 'next/server';
 import { canAccessSync, type Resource, type Action } from '@/lib/auth/permissions';
 import { verifySessionToken, SESSION_COOKIE_NAME } from '@/lib/auth/session';
 import { isRateLimited, getClientIp, getRateLimitConfig } from '@/lib/rate-limit';
-import { createLogger } from '@/lib/logger';
 
-const log = createLogger('middleware');
+const PUBLIC_PAGE_ROUTES = ['/login', '/logout', '/verify', '/reset-password', '/setup'];
 
 // P0-8: Runtime TLS safety check
 if (process.env.NODE_ENV === 'production' && process.env.NODE_TLS_REJECT_UNAUTHORIZED === '0') {
-  log.error('CRITICAL SECURITY: NODE_TLS_REJECT_UNAUTHORIZED=0 is set in production! TLS verification is disabled. Remove this setting immediately.');
+  throw new Error('NODE_TLS_REJECT_UNAUTHORIZED=0 is forbidden in production. Configure CA certificate paths instead.');
 }
 
 // Map API route prefixes to resource names
@@ -35,8 +34,29 @@ const METHOD_ACTION_MAP: Record<string, Action> = {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Only protect /api/ routes
   if (!pathname.startsWith('/api/')) {
+    const isPublicPage = PUBLIC_PAGE_ROUTES.some(
+      (route) => pathname === route || pathname.startsWith(`${route}/`)
+    ) || pathname === '/';
+    const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
+    const session = token ? await verifySessionToken(token) : null;
+
+    if (pathname === '/login' && session) {
+      const requestedNext = request.nextUrl.searchParams.get('next');
+      const nextPath = requestedNext?.startsWith('/') && !requestedNext.startsWith('//')
+        ? requestedNext
+        : '/dashboard';
+      return NextResponse.redirect(new URL(nextPath, request.url));
+    }
+
+    if (!session && !isPublicPage) {
+      const loginUrl = new URL('/login', request.url);
+      if (pathname !== '/') {
+        loginUrl.searchParams.set('next', `${pathname}${request.nextUrl.search}`);
+      }
+      return NextResponse.redirect(loginUrl);
+    }
+
     return NextResponse.next();
   }
 
@@ -54,9 +74,13 @@ export async function middleware(request: NextRequest) {
     );
   }
 
-  // Skip public API routes (no auth required, but rate limiting already applied above)
-  const publicRoutes = ['/api/auth/', '/api/health'];
-  if (publicRoutes.some((route) => pathname.startsWith(route))) {
+  // Skip public API routes (no session required, but rate limiting already applied above)
+  const publicApiPrefixes = ['/api/auth/', '/api/health', '/api/setup/', '/api/license-admin/'];
+  const publicApiRoutes = ['/api/license/activate', '/api/license/validate', '/api/license/heartbeat'];
+  if (
+    publicApiPrefixes.some((route) => pathname.startsWith(route)) ||
+    publicApiRoutes.includes(pathname)
+  ) {
     return NextResponse.next();
   }
 
@@ -131,5 +155,7 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/api/:path*'],
+  matcher: [
+    '/((?!_next|favicon.ico|images|.*\\..*).*)',
+  ],
 };

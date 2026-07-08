@@ -8,7 +8,7 @@ function post(body) {
     const r = https.request({
       hostname: FA_HOST, port: 443, path: '/jsonrpc', method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(d) },
-      rejectUnauthorized: false
+      rejectUnauthorized: process.env.FORTIANALYZER_TLS_INSECURE !== 'true'
     }, (resp) => {
       let s = ''; resp.on('data', c => s += c); resp.on('end', () => res(JSON.parse(s)));
     });

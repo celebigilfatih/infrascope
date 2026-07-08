@@ -1,542 +1,351 @@
 # InfraScope Production Readiness Audit
 
-**Date:** 2026-06-04
-**Auditor:** Senior Enterprise Architect & Production Reliability Auditor
-**Scope:** Full platform — 25 system areas
-**Codebase:** ~150,000+ lines across TypeScript, Python, SQL, YAML
+**Tarih:** 2026-06-14
+**Kapsam:** Auth/authz, API güvenliği, Prisma/DB, raw SQL, alarm engine, logging/monitoring, deployment/env/secrets, test coverage
+**Not:** İstenen `docs/PROJECT_CONSTITUTION.md` ve `docs/CODEX_WORKFLOW.md` dosyaları repo'da bulunamadı. Anchor olarak mevcut authoritative kaynak `docs/00-product/CONSTITUTION.md` kullanıldı.
+**Kural:** Kod değiştirilmedi; bu dosya yalnızca audit raporudur.
 
 ---
 
-# 1. Executive Summary
+## Genel Durum
 
-## Overall Architecture Quality
+InfraScope production'a yaklaşmış, domain modeli güçlü ve operasyonel alarm mantığı ciddi şekilde olgunlaşmış bir platformdur. Önceki mimari risklerin bir kısmı kapatılmış görünüyor: API middleware artık spoof edilebilir `x-user-role` yerine httpOnly JWT session cookie doğruluyor; alarm scheduler HTTP yerine in-process runner kullanıyor; alarm health endpoint'i scheduler/cache/detection/email/DLQ durumunu ayrıştırıyor; raw SQL injection riski topology tarafında parameterized `Prisma.sql` ile azaltılmış.
 
-InfraScope demonstrates **strong domain engineering** with sophisticated alarm detection, multi-vendor integration (FortiAnalyzer, FortiGate, VMware, SNMP/SSH NMS), and a well-considered shared PostgreSQL architecture. The platform shows clear architectural thinking in areas like event caching, alarm lifecycle management, and device correlation.
+Buna rağmen uygulama production için hâlâ **şartlı hazır değil**. Ana blokajlar authz kapsamının eksik olması, public olması gereken invite/reset akışlarının middleware tarafından kilitlenmesi, bazı güçlü API route'ların yalnızca "authenticated" bırakılması, entegrasyon servislerinde `new PrismaClient()` kullanımı, secrets/env hijyeninin zayıf olması, formal test runner/coverage yokluğu ve alarm/cache/NMS retention tarafındaki ölçek riskleridir.
 
-However, the platform carries **significant production risk** from fundamental security gaps (header-based auth), silent failure modes (scheduler hangs, cache suppression), unbounded data growth (NMS metrics tables), and operational blind spots (no structured logging, no metrics, false "healthy" status).
+**Production readiness tahmini:** 64/100
 
-## Production Readiness Score: 52/100
-
-| Category | Score | Weight | Weighted |
-|----------|-------|--------|----------|
-| Architecture & Design | 72 | 15% | 10.8 |
-| Alarm Engine Reliability | 45 | 15% | 6.8 |
-| Security | 25 | 15% | 3.8 |
-| Database & Query Layer | 50 | 10% | 5.0 |
-| Observability | 30 | 10% | 3.0 |
-| Deployment & Operations | 55 | 10% | 5.5 |
-| Scalability | 40 | 10% | 4.0 |
-| UI & Performance | 55 | 5% | 2.8 |
-| Resilience & Recovery | 45 | 5% | 2.3 |
-| Technical Debt | 50 | 5% | 2.5 |
-| **Total** | | **100%** | **52/100** |
-
-## Biggest Strengths
-
-1. **Domain-rich alarm detection engine** — 4,200+ lines of sophisticated correlation, cooldown, multi-source detection, and auto-resolve logic
-2. **Shared PostgreSQL architecture** — NMS writes directly to shared DB, eliminating HTTP ingestion bottleneck and data loss risk
-3. **Multi-vendor integration depth** — FortiAnalyzer session management, FortiGate cookie auth with CSRF handling, VMware vCenter API, SNMP/SSH fallback
-4. **Event cache resilience** — In-memory + PostgreSQL hybrid with exponential backoff, graceful degradation to live FA queries
-5. **Destructive action protection** — Last-admin deletion guard, device-with-children guard, rack-with-devices guard
-6. **Production Docker hardening** — Non-root user, read-only root filesystem, security_opt in prod compose
-
-## Biggest Risks
-
-1. **CRITICAL: Authentication is a fiction** — `x-user-role` header is trivially spoofable; RBAC is decorative
-2. **CRITICAL: Silent alarm suppression** — Cache 1000-row limit + client-side filtering can miss events; scheduler hangs undetected
-3. **CRITICAL: Unbounded table growth** — NMS metrics tables have no retention; storage exhaustion in weeks
-4. **HIGH: No structured logging** — `console.log/error` only; incident response is blind
-5. **HIGH: SQL injection** — Topology engine uses string interpolation in raw queries
-6. **HIGH: Hardcoded credentials** — VMware fallback password in source code
+| Alan | Durum | Not |
+|---|---|---|
+| Authentication | Orta | httpOnly JWT var; UI route guard ve public reset/invite akışı sorunlu |
+| Authorization | Zayıf-Orta | Sadece bazı API prefix'leri resource map'te; çok sayıda güçlü route auth-only |
+| API Security | Orta | Rate limit var; CSRF/idempotency/body-size/route-specific RBAC eksik |
+| Prisma/DB | Orta | Singleton var ama bazı servisler ayrı PrismaClient açıyor |
+| Raw SQL | Orta-İyi | Unsafe raw yok; tagged queryRaw kullanımı çoğunlukla güvenli |
+| Alarm Engine | Orta-İyi | Runner/watchdog iyi; cache cap ve büyük engine karmaşıklığı risk |
+| Observability | Orta | Pino var; metrics/tracing/alerting standardı eksik |
+| Deployment/Secrets | Zayıf-Orta | Prod compose var; env dosyaları tracked, dev secret fallback'leri var |
+| Test Coverage | Zayıf | Test framework yok; manuel scriptler var |
 
 ---
 
-# 2. Critical Risks
+## Güçlü Taraflar
 
-## CRITICAL-1: Header-Based Authentication Bypass
-
-| Attribute | Value |
-|-----------|-------|
-| **Severity** | CRITICAL |
-| **Impact** | Complete RBAC bypass; any user can perform any action |
-| **Likelihood** | Certain — trivially exploitable |
-| **File** | `middleware.ts:53-54` |
-
-```typescript
-const userRole = request.headers.get('x-user-role')?.toUpperCase() || 'VIEWER';
-```
-
-**Current behavior:** Middleware reads `x-user-role` header sent by the client. No validation against any session store, JWT, or database.
-
-**Expected behavior:** Role must be derived from a server-side session (signed JWT, database lookup, or session cookie).
-
-**Risk:** Any API consumer can set `x-user-role: ADMIN` and gain full system access.
-
-**Mitigation:** Implement server-side session management with signed tokens. Replace header-based role with JWT validation + database role lookup.
+- **Ürün anayasası ve mimari invariantlar var:** `docs/00-product/CONSTITUTION.md` net kurallar koyuyor: mock veri yok, alarm registry zorunlu, singleton integration client, tek Prisma client, TLS bypass production'da yasak.
+- **Session auth eski haline göre ciddi iyileşmiş:** `middleware.ts` artık `infrascope_session` httpOnly cookie içindeki JWT'yi `verifySessionToken()` ile doğruluyor.
+- **Rate limiting tüm API'lere uygulanıyor:** Middleware public route'ları bile rate limit'ten geçiriyor.
+- **Alarm runner güvenilirliği artmış:** `lib/alarms/alarm-runner.ts` HTTP trigger yerine direct in-process execution, in-process mutex, DB guard, RUNNING sentinel ve 10 dakikalık global timeout kullanıyor.
+- **Alarm health endpoint'i ayrıntılı:** `/api/health/alarms` scheduler heartbeat, event cache, detection, email, FA circuit breaker ve DLQ bileşenlerini ayrı raporluyor.
+- **FortiAnalyzer lifecycle dokümante ve uygulanmış:** logout/invalidate/backoff/circuit breaker modeli mevcut.
+- **Raw SQL injection riski azaltılmış:** Topology graph query'si artık `Prisma.sql` ile parameterized.
+- **Pino logger mevcut:** `lib/logger.ts` structured logging için ortak yardımcı sağlıyor.
+- **Production Docker temel sertleştirme içeriyor:** prod compose non-root runtime, no-new-privileges, read-only filesystem ve internal DB network yaklaşımı içeriyor.
 
 ---
 
-## CRITICAL-2: Silent Alarm Suppression via Cache Truncation
+## Kritik Eksikler
 
-| Attribute | Value |
-|-----------|-------|
-| **Severity** | CRITICAL |
-| **Impact** | Security events can be silently missed; operators unaware |
-| **Likelihood** | High — occurs whenever matching events exceed 1000 per logtype |
-| **File** | `lib/alarms/event-cache.ts:486-521` |
+### 1. Public auth akışları middleware ile çakışıyor
 
-**Current behavior:**
-1. EventCache queries `cached_events` with `take: 1000` (max 1000 rows)
-2. Client-side filtering (`applyFilter()`) further narrows results
-3. If matching events are at rows 1001+, they are silently dropped
-4. Alarm threshold is not met → alarm NOT fired → operator NOT notified
+`app/verify/page.tsx` ve `app/reset-password/page.tsx` sırasıyla `/api/users/verify` ve `/api/users/reset-password` çağırıyor. Ancak `middleware.ts` yalnızca `/api/auth/*` ve `/api/health` rotalarını public bırakıyor. `/api/users/*` resource map'e dahil olduğu için bu endpoint'ler session olmadan 401 alır.
 
-**Expected behavior:** Database-level filtering with pagination or cursor-based retrieval to guarantee all matching events are evaluated.
+**Etki:** Davet kabulü ve şifre sıfırlama production'da çalışmayabilir.
+**Riskli dosyalar:** `middleware.ts`, `app/api/users/verify/route.ts`, `app/api/users/reset-password/route.ts`, `app/verify/page.tsx`, `app/reset-password/page.tsx`
 
-**Risk:** Brute force login attempts, port scan events, or configuration changes that occur at high volume can push critical events past the 1000-row window. The alarm engine reports "no events found" when events exist but are beyond the limit.
+### 2. Authorization kapsamı yetersiz
 
-**Mitigation:** Replace `take: 1000` with DB-level WHERE predicates matching alarm filter criteria. Implement cursor-based pagination for large result sets.
+Middleware resource map sadece şu prefix'leri biliyor: users, alarms, devices, organizations, settings, audit, permissions. Bunun dışındaki route'lar için sadece geçerli session aranıyor; resource/action bazlı yetki uygulanmıyor.
 
----
+Örnek auth-only kalan güçlü alanlar:
+- `/api/integrations/*`
+- `/api/security/*`
+- `/api/firewall-policies`
+- `/api/topology`
+- `/api/reports`
+- `/api/license/*`
+- `/api/racks`, `/api/rooms`, `/api/floors`, `/api/services`
 
-## CRITICAL-3: Scheduler Can Hang Silently
+**Etki:** VIEWER gibi düşük yetkili kullanıcılar bazı operasyonel/entegrasyon/security endpoint'lerine erişebilir.
+**Riskli dosyalar:** `middleware.ts`, `lib/auth/permissions.ts`, `app/api/integrations/**`, `app/api/security/**`, `app/api/topology/route.ts`
 
-| Attribute | Value |
-|-----------|-------|
-| **Severity** | CRITICAL |
-| **Impact** | All alarm evaluation stops; operators see "healthy" status |
-| **Likelihood** | Medium — triggered by FA/DB timeouts |
-| **Files** | `lib/alarm-scheduler.ts:37-110`, `app/api/health/route.ts:328-336` |
+### 3. UI route'ları server-side korunmuyor
 
-**Current behavior:**
-1. Scheduler uses `setInterval(600_000)` — 10 minute intervals
-2. If `runAlarmCheck()` hangs (DB timeout, FA hang), `setInterval` queues the next execution
-3. Health endpoint checks `schedulerInterval !== null` → reports "healthy"
-4. No heartbeat verification; scheduler appears alive while actually frozen
+Middleware yalnızca `/api/*` matcher'ına bağlı. Sayfalar server-side session kontrolü yapmıyor. API'ler veri koruduğu için veri sızıntısı sınırlı olabilir, fakat kullanıcı protected UI shell'lerini görebilir ve auth deneyimi tutarsızdır.
 
-**Expected behavior:** Scheduler should have a hard timeout per tick. Health should verify recent heartbeat, not just that interval is set.
+**Etki:** Production UX ve security posture zayıf; route-level access control yok.
+**Riskli dosyalar:** `middleware.ts`, `app/layout.tsx`, protected app route'ları
 
-**Risk:** Hours of alarm detection blackout while dashboard shows green status.
+### 4. Session secret fallback production riski
 
-**Mitigation:**
-- Wrap `runAlarmCheck()` in `Promise.race()` with 10-minute timeout
-- Health endpoint should check `scheduler_last_tick` timestamp is within 15 minutes
-- Implement watchdog that kills and restarts frozen scheduler
+`lib/auth/session.ts` içinde `NEXTAUTH_SECRET` yoksa `infrascope-session-dev-secret` fallback kullanılıyor. `lib/license/jwt.ts` de secret fallback zinciri içeriyor.
 
----
+**Etki:** Yanlış env ile production başlarsa imzalı token güvenliği zayıflar.
+**Riskli dosyalar:** `lib/auth/session.ts`, `lib/license/jwt.ts`, `docker-compose.prod.yml`, `.env.production`
 
-## CRITICAL-4: NMS Metrics Tables Grow Without Bound
+### 5. Prisma singleton invariant tam uygulanmıyor
 
-| Attribute | Value |
-|-----------|-------|
-| **Severity** | CRITICAL |
-| **Impact** | Storage exhaustion; query performance degradation; backup failure |
-| **Likelihood** | Certain — continuous growth with no cleanup |
-| **File** | `prisma/schema.prisma` — `NmsHealthMetric`, `NmsInterfaceMetric`, `NmsDeviceMetric` |
+`lib/prisma.ts` singleton doğru kurulmuş; ancak bazı servisler doğrudan `new PrismaClient()` açıyor:
+- `lib/integrations/fortigate.ts`
+- `lib/integrations/vmware.ts`
+- `lib/integrations/zabbix.ts`
+- `lib/topology/relationship-engine.ts`
+- `lib/reports/reports-service.ts`
 
-**Current behavior:** NMS polling writes metrics every 5 minutes per device/interface. No retention policy, no cleanup job, no TTL.
+**Etki:** Connection pool şişmesi, hot reload/production concurrency altında gereksiz bağlantı, anayasa AI-3 ihlali.
+**Riskli dosyalar:** Yukarıdaki servisler
 
-**Growth calculation:**
-- 100 devices × 10 metrics × 288 polls/day = 288,000 rows/day
-- 1,000 interfaces × 5 metrics × 288 polls/day = 1,440,000 rows/day
-- **Total: ~1.7M rows/day, ~51M rows/month, ~630M rows/year**
-- At ~200 bytes/row: **~120GB/year of metric data**
+### 6. Env ve secret hijyeni production için yetersiz
 
-**Expected behavior:** Time-series retention policy (7-day raw, 30-day hourly aggregates, 1-year daily aggregates).
+`.env.local` ve `.env.production` git tarafından tracked görünüyor. `.gitignore` bu dosyaları ignore ediyor olsa da dosyalar geçmişte eklenmiş. Ayrıca dev compose içinde `NEXTAUTH_SECRET` ve DB password fallback'leri var; NMS config default SSH password içeriyor; test scriptlerinde gerçek görünümlü FortiAnalyzer credential stringleri var.
 
-**Mitigation:** Implement retention scheduler for NMS metrics tables. Consider TimescaleDB for proper time-series management.
+**Etki:** Secret sızıntısı ve yanlış env ile production başlatma riski.
+**Riskli dosyalar:** `.env.local`, `.env.production`, `docker-compose.yml`, `nms_service/core/config.py`, `scripts/test-fa-login.mjs`, `scripts/test-fa-events.js`, `scripts/create-admin.js`
 
----
+### 7. TLS bypass production gate'i kapatıldı, sertifika operasyonu izlenmeli
 
-## CRITICAL-5: Hardcoded Password in Source Code
+Middleware ve container entrypoint production'da `NODE_TLS_REJECT_UNAUTHORIZED=0` için fail-fast davranacak şekilde sertleştirildi. FortiAnalyzer, FortiGate ve VMware entegrasyonları global TLS bypass yerine merkezi TLS helper ve CA certificate path modeline taşındı.
 
-| Attribute | Value |
-|-----------|-------|
-| **Severity** | CRITICAL |
-| **Impact** | Credential exposure if code repository is compromised |
-| **Likelihood** | Already exposed — exists in git history |
-| **File** | `app/api/alarms/check-vmware/route.ts:25-26` |
+**Kalan operasyonel risk:** Müşteri self-signed cihaz sertifikalarını `*_TLS_CA_CERT_PATH` ile doğru mount etmezse entegrasyon bağlantıları başarısız olur.
+**Takip dosyaları:** `lib/security/tls.ts`, `scripts/entrypoint.sh`, `deploy/INSTALL.md`
 
-```typescript
-password: config.password || 'Thor.7485-app',
-```
+### 8. Test coverage yok
 
-**Risk:** Password persists in git history even after removal. If repo is public or compromised, FortiAnalyzer credentials are exposed.
+`package.json` içinde test script'i yok. Jest/Vitest/Playwright/Cypress dependency yok. Sadece manuel diagnostic/test scriptleri var.
 
-**Mitigation:**
-1. Rotate the password immediately
-2. Remove hardcoded fallback; fail explicitly if config is missing
-3. Scan git history for other embedded credentials
-4. Add pre-commit hooks to prevent secrets in code
+**Etki:** Auth, RBAC, alarm runner, query registry ve integration regressions production'a kaçabilir.
+**Riskli alanlar:** Auth middleware, alarm engine, integrations, Prisma migrations, NMS polling
 
 ---
 
-## CRITICAL-6: SQL Injection in Topology Engine
+## İnceleme Alanlarına Göre Notlar
 
-| Attribute | Value |
-|-----------|-------|
-| **Severity** | CRITICAL |
-| **Impact** | Database compromise; data exfiltration |
-| **Likelihood** | Medium — requires organizationId parameter manipulation |
-| **File** | `lib/topology/relationship-engine.ts:393-396` |
+### Authentication / Authorization
 
-```typescript
-baseWhere = `WHERE r."sourceDeviceId" IN (SELECT id FROM "devices"
-  WHERE "organizationId" = '${organizationId}')`
-```
+**İyi:**
+- Login bcrypt doğrulaması yapıyor.
+- Session httpOnly cookie olarak set ediliyor.
+- Cookie `secure` production'da true, `sameSite: strict`.
+- `/api/auth/me` session token'a ek olarak DB'den user status kontrol ediyor.
 
-**Mitigation:** Use Prisma parameterized queries or `$queryRaw` with `${Prisma.sql}` tagged template.
+**Eksik:**
+- `verifySessionToken()` token içindeki role'ü DB'den yeniden doğrulamıyor; role değişikliği token süresi bitene kadar etkili olmayabilir.
+- Middleware dynamic DB permission yerine `DEFAULT_PERMISSIONS` sync matrix kullanıyor; DB permission matrix UI'da değişse bile middleware'e yansımaz.
+- Public olması gereken invite/reset endpoint'ler public listesinde değil.
+- UI sayfalarında server-side auth guard yok.
+- Login brute-force protection sadece global IP rate limit'e dayanıyor; account/email bazlı lockout yok.
+- Login page "SSO" ve "2FA" destek metinleri gösteriyor, fakat gerçek SSO/2FA implementation görünmüyor.
 
----
+### API Route Güvenliği
 
-# 3. Scalability Review
+**İyi:**
+- Tüm `/api/*` rotaları middleware'den geçiyor.
+- Public rotalar da rate limited.
+- Bazı body validator'lar `zod` ile uygulanmış.
 
-## What Breaks First
+**Eksik:**
+- Çok sayıda route resource-level RBAC dışında kalıyor.
+- Manual alarm control endpoint'leri (`/api/alarms/check`, scheduler, monitor, seed) EDITOR seviyesinde write olarak erişilebilir; production'da ADMIN-only olması daha doğru.
+- CSRF token yok; SameSite strict iyi ama tüm state-changing endpoint'ler için explicit CSRF/idempotency standardı yok.
+- Body size limit, request schema coverage ve route-specific audit logging standart değil.
+- Error response'larda bazı route'lar `(error as Error).message` döndürüyor; internal detay sızdırabilir.
 
-1. **PostgreSQL** — NMS metrics tables will fill disk; connection pool exhausts under concurrent load (default pool, no tuning)
-2. **Alarm detection latency** — Stale cache forces sequential logtype evaluation; 7+ logtypes × 30s timeout = 3.5+ minutes per check
-3. **Topology rendering** — 3,460-line component with no virtualization; 500+ devices causes browser tab crash
-4. **NMS poll cycle** — 90s timeout doesn't cancel hung threads; overlapping cycles corrupt device state
+### Prisma ve Database Kullanımı
 
-## Scaling Bottlenecks
+**İyi:**
+- `lib/prisma.ts` connection limit ve pool timeout parametreleri ekliyor.
+- Prisma singleton ana API route'ların çoğunda kullanılıyor.
+- Migrations dizini mevcut.
+- Event cache 24 saatten eski FA cached event'leri siliyor.
 
-| Bottleneck | Current Limit | Breaking Point | File |
-|------------|---------------|----------------|------|
-| Prisma connection pool | Default (25) | ~50 concurrent API requests | `lib/prisma.ts` |
-| EventCache row limit | 1,000 rows | Any logtype with >1000 events/hour | `event-cache.ts:486` |
-| Alarm check duration | No hard timeout | FA slow → 10+ min check → queue backup | `alarm-scheduler.ts:37` |
-| NMS poll cycle | 90s + 30s sleep | Slow devices → cycle overlap | `orchestrator.py:430` |
-| Topology nodes | All rendered | ~500 devices | `NetworkTopologyContent.tsx` |
-| Alarm events table | No retention | ~1M events/year → slow queries | `prisma/schema.prisma` |
+**Eksik:**
+- Bazı servisler `new PrismaClient()` açıyor.
+- `scripts/entrypoint.sh` migration failure durumunda "warning" basıp devam ediyor. Production'da schema/code drift ile ayağa kalkma riski var.
+- NMS metric tabloları için retention/aggregation net görünmüyor.
+- `app/api/audit/export/route.ts` `take: 10000` ile büyük export yapıyor; pagination/streaming yok.
+- Offset pagination yoğun tablolarda büyüdükçe yavaşlar.
 
-## Concurrency Risks
+### Raw SQL / queryRaw / executeRaw Riskleri
 
-1. **Per-user cooldown race condition** — Two alarm checks can fire the same alarm for the same user (`detection-engine.ts:869-907`)
-2. **Active poll deduplication TOCTOU** — Two threads can poll the same device simultaneously (`orchestrator.py:189-199`)
-3. **SSH semaphore over-release** — Double `close()` allows extra concurrent connections (`ssh/poller.py:199`)
-4. **Correlation deadlock** — Correlation reads `alarmEvent` while `fireAlarm()` writes (`detection-engine.ts:594-781`)
+**İyi:**
+- `$queryRawUnsafe` ve `$executeRawUnsafe` bulunmadı.
+- Topology query parameterized `Prisma.sql` kullanıyor.
+- Reports raw query'leri çoğunlukla statik SQL.
 
----
+**Eksik/Risk:**
+- Raw SQL kullanan servisler merkezi review/test kapsamına alınmalı.
+- `ReportsService` kendi PrismaClient'ını açıyor.
+- Raw SQL ile erişilen tablo/kolonlar migration drift'ten daha kolay etkilenir; type coverage sınırlı.
 
-# 4. Reliability Review
+### Alarm Engine ve Alarm Runner
 
-## Silent Failure Risks
+**İyi:**
+- In-process runner eski HTTP drop/mutex lock riskini azaltıyor.
+- 10 dakikalık global evaluation timeout var.
+- DB-level RUNNING sentinel ve stale lock cleanup var.
+- Watchdog son check gecikirse recovery run tetikliyor.
+- `/api/health/alarms` dış watchdog için uygun.
+- `ALARM_QUERY_REGISTRY` pattern'i net.
 
-| Failure Mode | Detection | Impact | Recovery |
-|-------------|-----------|--------|----------|
-| Scheduler hangs | ❌ None (shows healthy) | All alarms stop | Manual restart |
-| Cache truncation | ❌ None | Alarms silently missed | Never recovers |
-| Email send failure | ⚠️ Log only | Operators not notified | DLQ retry (24h window) |
-| NMS poll timeout | ⚠️ Warning log | Stale device metrics | Next cycle (30s+ gaps) |
-| DB migration failure | ⚠️ Warning only | Schema/code mismatch | Manual intervention |
-| FortiAnalyzer session expiry | ✅ Auto-relogin | Brief detection gap | Automatic |
-| VMware vCenter disconnect | ✅ Fresh auth per call | Brief detection gap | Automatic |
+**Eksik/Risk:**
+- Detection engine çok büyük ve karmaşık; regression riski yüksek.
+- Event cache genel logtype sync'te 5000 event cap'e sahip. High-volume logtype'larda kritik event'ler targeted filter kapsamı dışında kalabilir.
+- Cache query DB-level filtreleri sadece bazı basit condition'ları push ediyor; karmaşık filtreler hâlâ client-side.
+- Scheduler/monitor state in-process; multi-replica production'da distributed lock/leader election yok.
+- Health endpoint `/api/health` scheduler/monitor auto-start side effect'i içeriyor; health check'in state değiştirmesi production'da tartışmalı.
 
-## Recovery Capability
+### Logging, Error Handling ve Monitoring
 
-**Good recovery:**
-- FortiAnalyzer session management with exponential backoff and auto-relogin
-- Health endpoint auto-restarts scheduler if process is dead
-- DLQ for email notification retries with backoff (1m → 5m → 30m → 2h → 12h)
+**İyi:**
+- Pino tabanlı `createLogger()` var.
+- Alarm/email/integration servislerinde structured logging kullanımı başlamış.
+- `/api/health` ve `/api/health/alarms` önemli sinyaller veriyor.
+- DLQ ve email throttling var.
 
-**Poor recovery:**
-- Scheduler hang: No watchdog, no heartbeat verification, false "healthy"
-- Cache stale mode: Forces sequential evaluation, no operator alert
-- NMS thread hang: `futures_wait` doesn't cancel; zombie threads persist
-- Migration failure: Application continues with mismatched schema
-- No automated rollback for failed deployments
+**Eksik:**
+- Çok sayıda route/component hâlâ `console.error` kullanıyor.
+- Request ID/correlation ID yok.
+- Metrics endpoint yok: Prometheus/OpenTelemetry/exporter yok.
+- Alerting health endpoint'e bırakılmış; dış monitor dokümantasyonu eksik.
+- Error taxonomy standart değil; route'lar farklı response shape kullanıyor.
 
-## Operational Resilience
+### Deployment / Env / Secrets
 
-**Strengths:**
-- `onDelete: SetNull` on AuditLog → User prevents FK constraint errors
-- Last-admin deletion protection
-- Device-with-children deletion protection
-- FortiAnalyzer exponential backoff prevents account lockout
+**İyi:**
+- Prod compose DB portunu localhost'a sınırlandırıyor.
+- Prod web no-new-privileges/read-only filesystem yaklaşımı var.
+- Docker docs secret generation checklist içeriyor.
 
-**Weaknesses:**
-- No circuit breaker pattern for external integrations
-- No bulkhead isolation between alarm evaluation groups
-- No graceful degradation mode (all-or-nothing behavior)
-- Single-app-instance deployment (no redundancy)
+**Eksik:**
+- `.env.local` ve `.env.production` tracked.
+- `.env.production` placeholder içeriyor ama gerçek production env dosyası gibi repo'da duruyor.
+- TLS bypass production'da fail-fast kapatıldı; self-signed cihazlar için CA certificate path operasyonu takip edilmeli.
+- Dockerfile build aşamasında `package-lock.json` kopyalanmıyor; deterministic build zayıflar.
+- Entrypoint migration failure'da devam ediyor.
+- NMS service prod compose içinde yok; deployment topolojisi dokümanla compose arasında net değil.
 
----
+### Test Coverage
 
-# 5. Security Review
+**Mevcut:**
+- `type-check` ve `lint` scriptleri var.
+- Manuel scripts: FA, VMware, event-cache, snapshot alarm vb.
 
-## Secrets
-
-| Secret | Storage | Risk |
-|--------|---------|------|
-| Database credentials | `.env` file (plaintext) | Exposure on host compromise |
-| FortiAnalyzer password | `IntegrationConfig.config` JSON (plaintext) | DB breach = credential exposure |
-| VMware password | `IntegrationConfig.config` JSON (plaintext) | Same as above |
-| FortiGate password | `IntegrationConfig.config` JSON (plaintext) | Same as above |
-| SSH credentials (NMS) | Database (plaintext) | Same as above |
-| Hardcoded fallback | `'Thor.7485-app'` in source code | Git history exposure |
-| NEXTAUTH_SECRET | `.env` file (placeholder) | Default values in templates |
-| TLS verification | `NODE_TLS_REJECT_UNAUTHORIZED=0` | MITM vulnerability |
-
-**Verdict:** No secrets are encrypted at rest. Database breach exposes all integration credentials.
-
-## RBAC
-
-| Aspect | Status | Risk |
-|--------|--------|------|
-| Role validation | ❌ Header-based (spoofable) | CRITICAL |
-| Permission enforcement | ✅ `canAccessSync()` in middleware | Bypassed by header spoofing |
-| Unmapped routes | ❌ Auto-allow | Routes not in `ROUTE_RESOURCE_MAP` bypass RBAC |
-| Rate limiting | ❌ None | Brute force, DDoS possible |
-| CORS | ❌ Not configured | CSRF possible |
-| Audit logging | ⚠️ Partial | IP/user-agent not captured from requests |
-
-## Auditability
-
-**Positive:** `lib/audit/logger.ts` provides structured audit logging with action, resource, resourceId, userId.
-
-**Gaps:**
-- `ipAddress` and `userAgent` fields never populated from HTTP requests
-- No audit logging for device DELETE, integration config changes, or alarm acknowledgment
-- Audit logs have no immutability constraint at DB level (UPDATE/DELETE possible)
-- No log integrity verification (hash chaining)
-
-## AI Safety
-
-**Status:** No AI/Explain engine exists in the codebase. No LLM integration, no AI-generated commands, no prompt injection risk. The "explain engine" and "AI command architecture" are planned features, not implemented.
-
-**Future concern:** When AI is implemented, the lack of approval workflows, command sanitization, and destructive action guards would be critical gaps.
+**Eksik:**
+- `npm test` yok.
+- Unit/integration/e2e framework yok.
+- Auth middleware, permissions, validators, alarm query registry, event cache parser, alarm runner lock/timeout behavior için otomatik test yok.
+- CI pipeline görünmüyor.
 
 ---
 
-# 6. Observability Review
+## P0 / P1 / P2 Görev Listesi
 
-## Missing Metrics
+### P0 — Production Blocker
 
-| Metric | Status | Impact |
-|--------|--------|--------|
-| Alarm check duration | ❌ Not tracked | Can't detect slow checks |
-| Alarm evaluation success rate | ❌ Not tracked | Can't detect failing detections |
-| Cache hit/miss ratio | ❌ Not tracked | Can't detect stale cache impact |
-| Scheduler heartbeat | ⚠️ Broken write | False "healthy" status |
-| FortiAnalyzer latency | ❌ Not tracked | Can't detect FA slowdown |
-| NMS poll cycle duration | ❌ Not tracked | Can't detect poll storms |
-| Database query latency | ❌ Not tracked | Can't detect slow queries |
-| Connection pool utilization | ❌ Not tracked | Can't detect pool exhaustion |
-| Email delivery success rate | ❌ Not tracked | Can't detect notification failures |
+1. **Public auth endpointlerini düzelt:** `/api/users/verify` ve `/api/users/reset-password` için güvenli public allowlist veya `/api/auth/*` altına taşıma.
+2. **RBAC resource map'i tamamla:** integrations, security, topology, reports, license, racks, rooms, floors, services için resource/action mapping ekle; yüksek riskli control endpoint'leri ADMIN-only yap.
+3. **Secret hijyenini düzelt:** `.env.local` ve `.env.production` tracked durumunu kaldır; gerçek credential içeren test scriptlerini temizle/rotate et; secret scan ekle.
+4. **Production env fail-fast ekle:** `NEXTAUTH_SECRET`, `DATABASE_URL`, TLS doğrulama, placeholder env ve dev-secret fallback durumunda production boot etmesin.
+5. **Prisma singleton ihlallerini kaldır:** integration/report/topology servislerinde `new PrismaClient()` yerine `lib/prisma.ts` kullan.
 
-## Missing Dashboards
+### P1 — High Priority
 
-- No Grafana/Prometheus integration
-- No SLA/SLO dashboards
-- No error rate tracking
-- No capacity planning metrics
-- No alarm detection latency histogram
+1. **Middleware DB-backed permission stratejisini netleştir:** Ya Edge-safe signed permission version kullan ya da API route-level DB permission guard ekle.
+2. **UI route guard ekle:** protected page'lerde server/client session guard ve role-aware redirect.
+3. **CSRF/idempotency standardı kur:** State-changing endpoint'ler için CSRF token veya same-site + origin check + idempotency key.
+4. **Alarm cache cap riskini azalt:** high-volume logtype'lar için cursor pagination ve filter-specific DB queries.
+5. **NMS metrics retention ekle:** raw retention, hourly/daily aggregation, cleanup scheduler.
+6. **Migration failure fail-fast:** production entrypoint migration deploy başarısızsa app başlamasın.
+7. **Structured error response standardı:** API error shape, internal message masking, correlation ID.
+8. **Test framework kur:** Vitest/Jest + Playwright veya API integration test altyapısı.
 
-## Debugging Difficulty
+### P2 — Hardening / Scale
 
-**High difficulty areas:**
-
-1. **Alarm suppression investigation** — No way to determine why a specific alarm wasn't fired (was it cooldown? cache miss? threshold not met? timeout?)
-2. **Cache staleness impact** — No metrics on how many alarms were evaluated with stale vs fresh cache
-3. **NMS polling gaps** — No tracking of missed polls or data gaps
-4. **Email delivery** — No DLQ dashboard; operators must query database directly
-5. **Scheduler health** — Broken heartbeat means operators can't distinguish "running" from "frozen"
-
-**Logging pattern:** All logging is `console.log/error/warn` with string prefixes like `[AlarmEngine]`. No structured output, no log levels, no request IDs, no trace correlation, no timestamps (beyond what the runtime provides).
+1. **Prometheus/OpenTelemetry metrics ekle:** alarm duration, cache hit/miss, scheduler heartbeat, DB pool, DLQ backlog.
+2. **Distributed scheduler lock:** multi-replica için DB advisory lock veya leader election.
+3. **Reports pagination/streaming:** büyük export/report sorgularını stream/paginate et.
+4. **Backup/restore runbook ve smoke test:** DB backup job ve restore doğrulama.
+5. **NMS prod compose/topoloji netleştirme:** NMS sidecar production deployment'a eklenmeli veya dokümanda opsiyonel olduğu açıkça belirtilmeli.
+6. **Dependency/security scanning:** `npm audit`, container scan, secret scan CI gate.
+7. **Audit log immutability hardening:** append-only enforcement ve update/delete guard.
 
 ---
 
-# 7. Technical Debt Review
+## İlk Uygulanması Gereken 5 Görev
 
-## Dangerous Shortcuts
+1. **Middleware public allowlist + RBAC map düzeltmesi**
+   - Reset/invite akışı çalışır hale gelsin.
+   - High-risk API route'lar ADMIN/EDITOR/VIEWER ayrımına bağlansın.
 
-| Shortcut | Location | Risk |
-|----------|----------|------|
-| `as any` type casts (32 files) | Integration services, detection engine | Runtime type errors in production |
-| `@ts-ignore` on private methods | `check-vmware/route.ts:56,61` | Fragile dependency on internal API |
-| Hardcoded fallback password | `check-vmware/route.ts:25-26` | Credential exposure |
-| `NODE_TLS_REJECT_UNAUTHORIZED=0` | `fortianalyzer.ts:4-5`, `docker-compose.yml:48` | MITM vulnerability |
-| Migration failures ignored | `entrypoint.sh:22-26` | Schema/code mismatch |
-| `take: 1000` + client-side filter | `event-cache.ts:486-521` | Silent alarm suppression |
-| NMS `wait=False` on shutdown | `orchestrator.py:446` | Data loss on restart |
+2. **Secrets/env production gate**
+   - Tracked env dosyaları temizlensin.
+   - Dev fallback secret'ler production'da hard fail versin.
+   - TLS bypass production'da boot blocker olsun.
 
-## Future Maintenance Risks
+3. **Prisma singleton refactor**
+   - `FortiGateService`, `VMwareService`, `ZabbixService`, `TopologyRelationshipEngine`, `ReportsService` singleton `prisma` importuna geçirilsin.
 
-1. **detection-engine.ts** — 4,286 lines in a single file; contains all alarm evaluation logic for 5+ integration types. Should be split into per-integration evaluators.
+4. **Auth/RBAC testleri**
+   - Login, cookie, `/api/auth/me`, public reset/verify, viewer/editor/admin permission matrix ve protected route regression testleri yazılsın.
 
-2. **NetworkTopologyContent.tsx** — 3,460 lines in a single React component. Impossible to unit test, difficult to debug, performance-unfriendly.
-
-3. **dashboard/alerts/page.tsx** — 2,237 lines with no table virtualization. Will degrade with alarm volume growth.
-
-4. **26 TODO/FIXME comments** including:
-   - VMware CPU/memory metrics always zero (`detection-engine.ts:1512-1531`)
-   - NMS backup failure tracking not implemented (`queries/nms.ts:183`)
-   - Auth integration incomplete (`users/invite/route.ts:20`)
-   - Disabled navigation items (`Sidebar.tsx:177,189`)
-
-5. **In-memory caching without invalidation** — Floors, buildings, racks routes use per-process TTL cache with no invalidation trigger. Multi-instance deployments will serve divergent data.
-
-6. **No API versioning** — All routes at `/api/` with no version prefix. Breaking changes require all clients to update simultaneously.
+5. **Alarm cache pagination/coverage testleri**
+   - `queryCachedEvents`, targeted sync, registry coverage ve high-volume >5000 event senaryoları test edilsin.
 
 ---
 
-# 8. Recommended Improvements
+## Riskli Dosyalar
 
-## Immediate Fixes (P0 — Block Production)
-
-| # | Fix | Effort | Impact |
-|---|-----|--------|--------|
-| 1 | Replace `x-user-role` header with server-side session (JWT + DB lookup) | HIGH | Eliminates CRITICAL auth bypass |
-| 2 | Remove hardcoded password; rotate `Thor.7485-app` | LOW | Eliminates credential exposure |
-| 3 | Fix SQL injection in `relationship-engine.ts` with parameterized queries | LOW | Eliminates injection vulnerability |
-| 4 | Add scheduler hard timeout (`Promise.race` with 10min limit) | LOW | Prevents silent scheduler freeze |
-| 5 | Fix health endpoint to verify heartbeat timestamp | LOW | Enables detection of frozen scheduler |
-| 6 | Add NMS metrics retention (7-day raw data cleanup) | MEDIUM | Prevents storage exhaustion |
-| 7 | Increase EventCache row limit to 5000+ with DB-level filtering | MEDIUM | Prevents silent alarm suppression |
-| 8 | Remove `NODE_TLS_REJECT_UNAUTHORIZED=0` from production config | LOW | Eliminates MITM vulnerability |
-
-## Short-Term Improvements (P1 — First Sprint)
-
-| # | Fix | Effort | Impact |
-|---|-----|--------|--------|
-| 9 | Implement structured logging (Pino/Winston) with JSON output, log levels, request IDs | MEDIUM | Enables incident response |
-| 10 | Add missing database indexes: `(logtype, eventTime)`, `(createdAt, acknowledged)`, `(collectedAt)` | LOW | Improves alarm query performance |
-| 11 | Add connection pool configuration to Prisma (`connection_limit`, `pool_timeout`) | LOW | Prevents connection exhaustion |
-| 12 | Implement rate limiting on API endpoints | MEDIUM | Prevents brute force/DoS |
-| 13 | Add NMS thread cancellation on poll timeout (`future.cancel()`) | MEDIUM | Prevents poll cycle overlap |
-| 14 | Fix per-user cooldown race condition with unique constraint | MEDIUM | Prevents duplicate alarms |
-| 15 | Add auto-resolve minimum duration requirement (port must be UP 5 min) | LOW | Prevents false clears on flapping |
-| 16 | Encrypt integration credentials at rest (field-level encryption) | HIGH | Protects against DB breach |
-| 17 | Add `Cache-Control` headers to topology API responses | LOW | Reduces unnecessary DB load |
-| 18 | Implement input validation framework (Zod) across API routes | MEDIUM | Prevents injection/bad input |
-
-## Long-Term Architecture Evolution (P2)
-
-| # | Fix | Effort | Impact |
-|---|-----|--------|--------|
-| 19 | Split `detection-engine.ts` (4,286 lines) into per-integration evaluator modules | HIGH | Maintainability, testability |
-| 20 | Refactor `NetworkTopologyContent.tsx` (3,460 lines) into composable components | HIGH | Performance, maintainability |
-| 21 | Implement table virtualization for alerts page (`react-window`) | MEDIUM | UI performance at scale |
-| 22 | Add Prometheus metrics export endpoint | MEDIUM | Enables SRE observability |
-| 23 | Implement zero-downtime deployment (reverse proxy, health-based routing) | HIGH | Eliminates deployment downtime |
-| 24 | Add automated rollback mechanism for failed deployments | MEDIUM | Reduces MTTR |
-| 25 | Consider TimescaleDB for NMS metrics time-series data | HIGH | Proper time-series management |
-| 26 | Implement distributed cache (Redis) replacing per-process in-memory caches | HIGH | Multi-instance consistency |
-| 27 | Add API versioning (`/api/v1/`) | MEDIUM | Backward compatibility |
-| 28 | Implement approval workflow for destructive actions | MEDIUM | Operational safety |
-| 29 | Add Prometheus/Grafana dashboards for alarm latency, cache health, poll cycle metrics | MEDIUM | SRE visibility |
-| 30 | Implement circuit breaker pattern for FortiAnalyzer/VMware/FortiGate integrations | MEDIUM | Cascade failure prevention |
+| Dosya | Risk |
+|---|---|
+| `middleware.ts` | Auth/RBAC merkezi; public route allowlist ve resource map eksik |
+| `lib/auth/session.ts` | Dev secret fallback; DB role refresh yok |
+| `lib/auth/permissions.ts` | Middleware dynamic DB permission yerine static matrix kullanıyor |
+| `app/api/users/verify/route.ts` | Public olması gereken invitation endpoint middleware altında auth ister |
+| `app/api/users/reset-password/route.ts` | Public olması gereken reset endpoint middleware altında auth ister |
+| `app/api/alarms/check/route.ts` | Manual alarm trigger; güçlü operasyonel endpoint |
+| `app/api/alarms/scheduler/route.ts` | Scheduler start/management; ADMIN-only olmalı |
+| `app/api/alarms/monitor/route.ts` | Monitor stop/force-check yapabiliyor; ADMIN-only olmalı |
+| `app/api/alarms/definitions/seed/route.ts` | Alarm definition seed/update yapıyor |
+| `lib/alarms/detection-engine.ts` | Çok büyük kritik engine; test coverage şart |
+| `lib/alarms/event-cache.ts` | Cache freshness, pagination, high-volume event coverage |
+| `lib/alarms/alarm-runner.ts` | Scheduler/runner lock, timeout, DB sentinel |
+| `lib/integrations/fortianalyzer.ts` | Session lifecycle, TLS, account lockout |
+| `lib/integrations/fortigate.ts` | Direct PrismaClient, TLS bypass, external API credentials |
+| `lib/integrations/vmware.ts` | Direct PrismaClient, `execSync` command construction, TLS bypass |
+| `lib/integrations/zabbix.ts` | Direct PrismaClient |
+| `lib/topology/relationship-engine.ts` | Raw SQL + direct PrismaClient fallback |
+| `lib/reports/reports-service.ts` | Raw SQL + direct PrismaClient fallback |
+| `scripts/entrypoint.sh` | Migration failure currently non-fatal |
+| `.env.local`, `.env.production` | Tracked env files |
+| `scripts/test-fa-login.mjs`, `scripts/test-fa-events.js` | Hardcoded credential-looking values |
+| `nms_service/core/config.py` | Default DB/SSH passwords |
 
 ---
 
-# 9. Failure Simulation Results
+## Önerilen Geliştirme Sırası
 
-## FortiAnalyzer Offline
+1. **Security correctness first**
+   - Public auth endpoints, RBAC map, session/role validation, UI guards.
 
-| Aspect | Current Behavior | Expected Behavior | Risk |
-|--------|-----------------|-------------------|------|
-| Event cache | Sync fails → exponential backoff (5m→60m) → cache stale | Graceful degradation with operator notification | **HIGH** — After 60min, no new FA events detected |
-| Alarm detection | Falls back to live FA queries (5 concurrent) → all timeout | Circuit breaker + cached last-known-state alarms | **HIGH** — 30s timeout × sequential logtypes = 3.5+ min checks |
-| Health endpoint | Shows "unhealthy" for FA | Correct | **LOW** |
-| Recovery | Auto-reconnect when FA returns | Correct | **LOW** |
+2. **Secrets and deployment gates**
+   - Env tracking cleanup, production fail-fast, TLS gate, deterministic Docker build.
 
-## PostgreSQL Slowdown
+3. **Database connection hygiene**
+   - Prisma singleton everywhere, migration failure behavior, retention jobs.
 
-| Aspect | Current Behavior | Expected Behavior | Risk |
-|--------|-----------------|-------------------|------|
-| Alarm checks | Slow queries → check exceeds 10min → queued | Hard timeout + skip | **HIGH** — Alarm queue backup |
-| API requests | No query timeout → request hangs | Statement timeout (5s) | **HIGH** — User-facing hangs |
-| NMS polling | SQLAlchemy pool blocks → poll stalls | Connection pool timeout | **HIGH** — All device metrics stale |
-| Topology | Full table scan → 30s+ response | Cached with TTL | **MEDIUM** |
+4. **Alarm reliability and scale**
+   - Cache pagination, registry coverage tests, multi-replica lock strategy.
 
-## SNMP Timeout Storm
+5. **Observability**
+   - Correlation ID, structured API error shape, metrics endpoint, external monitor runbook.
 
-| Aspect | Current Behavior | Expected Behavior | Risk |
-|--------|-----------------|-------------------|------|
-| Poll cycle | 90s timeout → not_done futures continue running | Cancel futures after timeout | **CRITICAL** — Zombie threads, cycle overlap |
-| Device status | All devices show offline simultaneously | Distinguish timeout from offline | **HIGH** — False alarm storm |
-| Recovery | Next cycle after 30s sleep | Immediate retry with jitter | **MEDIUM** |
+6. **Automated tests**
+   - Auth/RBAC unit tests, API integration tests, alarm query tests, Playwright smoke tests.
 
-## Massive Alarm Burst
-
-| Aspect | Current Behavior | Expected Behavior | Risk |
-|--------|-----------------|-------------------|------|
-| Cache | 1000-row limit truncates events | Unbounded or paginated retrieval | **CRITICAL** — Events beyond row 1000 missed |
-| Detection | Sequential evaluation in stale mode | Parallel evaluation with backpressure | **HIGH** — 3.5+ min per check |
-| Notifications | No priority queue; CRITICAL = LOW | Priority-based queue | **HIGH** — Critical alerts delayed |
-| DB growth | No alarm_event retention | Auto-cleanup with archival | **MEDIUM** |
-
-## Cache Corruption
-
-| Aspect | Current Behavior | Expected Behavior | Risk |
-|--------|-----------------|-------------------|------|
-| EventCache | Upsert with `.catch()` silently swallows errors | Error classification + retry | **HIGH** — Events silently dropped |
-| VMware cache | In-memory only; per-instance | Shared cache (Redis) | **MEDIUM** — Divergent state between instances |
-| API route caches | Per-process; no invalidation | Shared + event-driven invalidation | **MEDIUM** — Multi-instance data divergence |
-
-## Docker Container Restart
-
-| Aspect | Current Behavior | Expected Behavior | Risk |
-|--------|-----------------|-------------------|------|
-| NMS sidecar | `shutdown(wait=False)` → metrics lost | Graceful shutdown with flush | **MEDIUM** — Last metrics batch lost |
-| Web container | Scheduler restarts on next health check | Immediate scheduler start | **LOW** — 30s detection gap |
-| Database | Persistent volume survives | Correct | **LOW** |
-
-## Scheduler Freeze
-
-| Aspect | Current Behavior | Expected Behavior | Risk |
-|--------|-----------------|-------------------|------|
-| Detection | All alarm checks stop | Watchdog restarts frozen scheduler | **CRITICAL** |
-| Health endpoint | Reports "healthy" (interval is set) | Reports "unhealthy" (no recent heartbeat) | **CRITICAL** |
-| Operator visibility | None — must check logs | Dashboard alert on scheduler health | **CRITICAL** |
-
-## AI Provider Timeout (Future)
-
-| Aspect | Current Behavior | Expected Behavior | Risk |
-|--------|-----------------|-------------------|------|
-| Explain engine | Not implemented | 30s timeout + cached fallback | N/A |
-| AI commands | Not implemented | Approval queue + timeout + human override | N/A |
+7. **Operational hardening**
+   - Backup/restore verification, CI security scans, production NMS deployment clarity.
 
 ---
 
-# 10. Final Verdict
+## Kapanış
 
-## "Is InfraScope production-ready for enterprise environments?"
-
-**Honest answer: No — not in its current state.**
-
-InfraScope is a **technically impressive platform** with sophisticated domain logic and thoughtful architecture in many areas. However, it carries **three categories of blocking issues** that disqualify it from enterprise production deployment:
-
-### Blocking Conditions
-
-1. **Security is decorative, not functional.** The `x-user-role` header-based RBAC provides zero actual access control. Any API consumer can escalate to ADMIN. Combined with plaintext credential storage and hardcoded passwords, this is a non-starter for any security-conscious enterprise.
-
-2. **Silent failure modes are unacceptable for an alarm system.** The platform's core value proposition — detecting infrastructure alarms — can silently fail through cache truncation, scheduler hangs, or search timeouts. Worse, operators see "healthy" status during these failures. An alarm system that silently fails is worse than no alarm system.
-
-3. **Operational visibility is insufficient.** No structured logging, no metrics, no dashboards, and broken health monitoring mean that even if the system works correctly at launch, operators cannot detect, diagnose, or recover from failures in production.
-
-### Conditions for Production Readiness
-
-InfraScope can reach enterprise production readiness after:
-
-1. **Authentication is real** — Server-side session management with signed tokens
-2. **Alarms are guaranteed** — No silent suppression, hard timeouts, heartbeat verification
-3. **Operators can see** — Structured logging, metrics, and accurate health status
-4. **Data growth is bounded** — Retention policies on all time-series tables
-5. **Credentials are protected** — Encryption at rest, no hardcoded secrets
-6. **SQL is safe** — Parameterized queries, no string interpolation
-
-### Estimated Effort
-
-| Phase | Items | Effort |
-|-------|-------|--------|
-| P0 (Block production) | 8 items | ~80-100 hours |
-| P1 (First sprint) | 11 items | ~120-150 hours |
-| P2 (Architecture evolution) | 12 items | ~200-300 hours |
-| **Total** | **31 items** | **~400-550 hours** |
-
-### Parting Assessment
-
-InfraScope's **domain engineering is strong** — the alarm detection logic, multi-vendor integration, and shared PostgreSQL architecture are well-designed. The platform's problems are not in "what it does" but in "how safely it does it." The gap between functional correctness and production reliability is significant but bridgeable with focused investment in security, observability, and operational safety.
-
-**Score: 52/100 — Strong foundation, critical gaps. Fix the 8 P0 items and this platform becomes enterprise-ready.**
+InfraScope'un domain ve alarm mimarisi güçlü; production'a taşınmadan önce en kritik eksik güvenlik ve operasyonel guardrail katmanında. Kodun en riskli kısmı artık "hiç auth yok" değil; daha ince ama production için önemli bir problem var: **auth var, fakat kapsamı ve public/private route ayrımı tamamlanmamış**. Bu nedenle ilk sprint auth/RBAC/env/Prisma singleton ekseninde tutulmalı; ardından alarm cache ölçek ve test coverage işleri gelmeli.

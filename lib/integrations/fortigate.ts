@@ -11,6 +11,7 @@ import { PrismaClient, DeviceType, DeviceStatus, DeviceCriticality } from '@pris
 import * as https from 'https';
 import * as querystring from 'querystring';
 import { createLogger } from '@/lib/logger';
+import { getHttpsRequestTlsOptions, secureFetch } from '@/lib/security/tls';
 
 const log = createLogger('fortigate');
 const prisma = new PrismaClient();
@@ -207,7 +208,7 @@ export class FortiGateService {
         path: '/logout',
         method: 'GET',
         headers: { 'Cookie': cookieHeader },
-        rejectUnauthorized: false,
+        ...getHttpsRequestTlsOptions('FORTIGATE'),
       };
       const req = https.request(options, (res) => {
         res.resume();
@@ -250,7 +251,7 @@ export class FortiGateService {
           'Content-Type': 'application/x-www-form-urlencoded',
           'Content-Length': Buffer.byteLength(postData),
         },
-        rejectUnauthorized: false,
+        ...getHttpsRequestTlsOptions('FORTIGATE'),
       };
 
       const req = https.request(options, (res) => {
@@ -316,9 +317,8 @@ export class FortiGateService {
     method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET',
     body?: Record<string, unknown>
   ): Promise<T> {
-    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
     const authHeaders = await this.getAuthHeaders();
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+    const response = await secureFetch('FORTIGATE', `${this.baseUrl}${endpoint}`, {
       method,
       headers: {
         'Content-Type': 'application/json',
@@ -799,9 +799,8 @@ export class FortiGateService {
   }> {
     try {
       const authHeaders = await this.getAuthHeaders();
-      process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
       // Get system status
-      const statusRes = await fetch(`${this.baseUrl}/monitor/system/status`, {
+      const statusRes = await secureFetch('FORTIGATE', `${this.baseUrl}/monitor/system/status`, {
         headers: authHeaders,
       });
       if (!statusRes.ok) {
@@ -810,7 +809,7 @@ export class FortiGateService {
       const statusData = await statusRes.json() as { version: string; hostname: string; model: string; serial: string };
 
       // Get resource usage
-      const resourceRes = await fetch(`${this.baseUrl}/monitor/system/vdom-resource`, {
+      const resourceRes = await secureFetch('FORTIGATE', `${this.baseUrl}/monitor/system/vdom-resource`, {
         headers: authHeaders,
       });
       const resourceData = resourceRes.ok ? await resourceRes.json() as {
@@ -818,7 +817,7 @@ export class FortiGateService {
       } : null;
 
       // Get HA status
-      const haRes = await fetch(`${this.baseUrl}/monitor/system/ha-checksums`, {
+      const haRes = await secureFetch('FORTIGATE', `${this.baseUrl}/monitor/system/ha-checksums`, {
         headers: authHeaders,
       });
       const haData = haRes.ok ? await haRes.json() as {
@@ -826,7 +825,7 @@ export class FortiGateService {
       } : null;
 
       // Get SD-WAN status
-      const sdwanRes = await fetch(`${this.baseUrl}/monitor/virtual-wan/members`, {
+      const sdwanRes = await secureFetch('FORTIGATE', `${this.baseUrl}/monitor/virtual-wan/members`, {
         headers: authHeaders,
       });
       const sdwanData = sdwanRes.ok ? await sdwanRes.json() as {
@@ -834,7 +833,7 @@ export class FortiGateService {
       } : null;
 
       // Get license status
-      const licenseRes = await fetch(`${this.baseUrl}/monitor/license/status`, {
+      const licenseRes = await secureFetch('FORTIGATE', `${this.baseUrl}/monitor/license/status`, {
         headers: authHeaders,
       });
       const licenseData = licenseRes.ok ? await licenseRes.json() as {
@@ -899,7 +898,7 @@ export class FortiGateService {
     out_bytes: number;
   }>> {
     try {
-      const response = await fetch(`${this.baseUrl}/monitor/vpn/ssl`, {
+      const response = await secureFetch('FORTIGATE', `${this.baseUrl}/monitor/vpn/ssl`, {
         headers: await this.getAuthHeaders(),
       });
 
@@ -993,7 +992,7 @@ export class FortiGateService {
     try {
       const authH = await this.getAuthHeaders();
       const url = `${this.baseUrl}${endpoint}`;
-      const res = await fetch(url, { headers: authH });
+      const res = await secureFetch('FORTIGATE', url, { headers: authH });
 
       if (!res.ok) {
         log.warn({ endpoint, status: res.status }, 'getCmdbChanges HTTP error');
@@ -1130,7 +1129,7 @@ export class FortiGateService {
 
           const url = `${this.baseUrl}/monitor/log/event?${params}`;
           const authH = await this.getAuthHeaders();
-          const response = await fetch(url, {
+          const response = await secureFetch('FORTIGATE', url, {
             headers: authH,
           });
 
@@ -1197,7 +1196,7 @@ export class FortiGateService {
     connection_count: number;
   }>> {
     try {
-      const response = await fetch(`${this.baseUrl}/monitor/vpn/ipsec`, {
+      const response = await secureFetch('FORTIGATE', `${this.baseUrl}/monitor/vpn/ipsec`, {
         headers: await this.getAuthHeaders(),
       });
 
@@ -1248,7 +1247,7 @@ export class FortiGateService {
     }>;
   }> {
     try {
-      const response = await fetch(`${this.baseUrl}/monitor/system/config-revision`, {
+      const response = await secureFetch('FORTIGATE', `${this.baseUrl}/monitor/system/config-revision`, {
         headers: await this.getAuthHeaders(),
       });
 
@@ -1304,7 +1303,7 @@ export class FortiGateService {
     rx_errors: number;
   }>> {
     try {
-      const response = await fetch(`${this.baseUrl}/monitor/system/interface`, {
+      const response = await secureFetch('FORTIGATE', `${this.baseUrl}/monitor/system/interface`, {
         headers: await this.getAuthHeaders(),
       });
 

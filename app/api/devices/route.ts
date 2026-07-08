@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { checkDeviceLimit } from '@/lib/license/middleware';
 
 // Manually-managed device types (not auto-discovered from integrations)
 const MANUAL_DEVICE_TYPES = [
@@ -95,6 +96,10 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const currentDeviceCount = await prisma.device.count();
+    const licenseError = await checkDeviceLimit(currentDeviceCount);
+    if (licenseError) return licenseError;
+
     const body = await request.json();
     const { 
       name, type, vendor, model, serialNumber, assetTag, 

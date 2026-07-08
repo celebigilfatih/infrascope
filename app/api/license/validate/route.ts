@@ -11,10 +11,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { signLicenseToken, verifyLicenseToken } from '@/lib/license/jwt';
+import { requireLicenseServerMode } from '@/lib/license/server-mode';
 import type { LicenseState } from '@/lib/license/client';
 
 export async function POST(req: NextRequest) {
   try {
+    const modeError = requireLicenseServerMode();
+    if (modeError) return modeError;
+
     const { licenseKey, machineId, token } = await req.json();
 
     if (!licenseKey || !machineId) {

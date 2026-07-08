@@ -6,7 +6,7 @@ import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 
 // Pages that should not show sidebar/header
-const AUTH_ROUTES = ['/login', '/logout'];
+const AUTH_ROUTES = ['/login', '/logout', '/verify', '/reset-password', '/setup'];
 
 export function LayoutShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();

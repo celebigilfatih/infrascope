@@ -107,9 +107,10 @@ The authoritative knowledge base lives under [`docs/`](./docs/):
 
 - **[docs/README.md](./docs/README.md)** — Documentation map and Quest anchor protocol
 - **[docs/00-product/CONSTITUTION.md](./docs/00-product/CONSTITUTION.md)** — Product principles & architecture invariants (read first)
+- **[docs/10-architecture/OVERVIEW.md](./docs/10-architecture/OVERVIEW.md)** — Current architecture, data flow, background services, invariants
+- **[docs/10-architecture/BOUNDED_CONTEXTS.md](./docs/10-architecture/BOUNDED_CONTEXTS.md)** — Domain ownership and cross-context contracts
+- **[docs/20-modules/](./docs/20-modules/)** — Per-domain notes for alarms, integrations, inventory, topology, security
 - **[docs/30-runbooks/](./docs/30-runbooks/)** — Incident playbooks (FA lockout, port-down race, datastore critical, ...)
-- _(planned)_ `docs/10-architecture/` — ADRs, data flow, bounded contexts
-- _(planned)_ `docs/20-modules/` — Per-domain READMEs (alarms, integrations, topology, ...)
 
 ## 🏗️ Architecture
 

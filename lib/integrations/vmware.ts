@@ -12,6 +12,7 @@
 import { PrismaClient, DeviceType, DeviceStatus, DeviceCriticality } from '@prisma/client';
 import { execSync } from 'child_process';
 import { createLogger } from '@/lib/logger';
+import { secureFetch } from '@/lib/security/tls';
 
 const log = createLogger('vmware');
 
@@ -170,7 +171,6 @@ export class VMwareService {
    */
   async authenticateSOAP(): Promise<boolean> {
     try {
-      process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
       const soapEnvelope = `<?xml version="1.0" encoding="UTF-8"?>
 <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
@@ -184,7 +184,7 @@ export class VMwareService {
    </soapenv:Body>
 </soapenv:Envelope>`;
 
-      const response = await fetch(`https://${this.config.host}/sdk`, {
+      const response = await secureFetch('VMWARE', `https://${this.config.host}/sdk`, {
         method: 'POST',
         headers: {
           'Content-Type': 'text/xml; charset=utf-8',
@@ -287,7 +287,7 @@ export class VMwareService {
    </soapenv:Body>
 </soapenv:Envelope>`;
 
-    const response = await fetch(`https://${this.config.host}/sdk`, {
+    const response = await secureFetch('VMWARE', `https://${this.config.host}/sdk`, {
       method: 'POST',
       headers: {
         'Content-Type': 'text/xml; charset=utf-8',
@@ -340,7 +340,7 @@ export class VMwareService {
    </soapenv:Body>
 </soapenv:Envelope>`;
 
-    const response = await fetch(`https://${this.config.host}/sdk`, {
+    const response = await secureFetch('VMWARE', `https://${this.config.host}/sdk`, {
       method: 'POST',
       headers: {
         'Content-Type': 'text/xml; charset=utf-8',
@@ -391,7 +391,7 @@ export class VMwareService {
    </soapenv:Body>
 </soapenv:Envelope>`;
 
-    const response = await fetch(`https://${this.config.host}/sdk`, {
+    const response = await secureFetch('VMWARE', `https://${this.config.host}/sdk`, {
       method: 'POST',
       headers: {
         'Content-Type': 'text/xml; charset=utf-8',
@@ -422,7 +422,7 @@ export class VMwareService {
    </soapenv:Body>
 </soapenv:Envelope>`;
 
-    await fetch(`https://${this.config.host}/sdk`, {
+    await secureFetch('VMWARE', `https://${this.config.host}/sdk`, {
       method: 'POST',
       headers: {
         'Content-Type': 'text/xml; charset=utf-8',
@@ -449,7 +449,7 @@ export class VMwareService {
    </soapenv:Body>
 </soapenv:Envelope>`;
 
-    await fetch(`https://${this.config.host}/sdk`, {
+    await secureFetch('VMWARE', `https://${this.config.host}/sdk`, {
       method: 'POST',
       headers: {
         'Content-Type': 'text/xml; charset=utf-8',
@@ -554,7 +554,7 @@ export class VMwareService {
    </soapenv:Body>
 </soapenv:Envelope>`;
 
-    const response = await fetch(`https://${this.config.host}/sdk`, {
+    const response = await secureFetch('VMWARE', `https://${this.config.host}/sdk`, {
       method: 'POST',
       headers: {
         'Content-Type': 'text/xml; charset=utf-8',
@@ -633,10 +633,9 @@ export class VMwareService {
    */
   private async restRequest<T>(endpoint: string, options?: RequestInit, _retried = false): Promise<T> {
     // Disable SSL verification for self-signed certificates
-    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
     // Try vSphere 7+ API first (/api/)
-    let response = await fetch(`https://${this.config.host}/api/${endpoint}`, {
+    let response = await secureFetch('VMWARE', `https://${this.config.host}/api/${endpoint}`, {
       ...options,
       headers: {
         'Content-Type': 'application/json',
@@ -661,7 +660,7 @@ export class VMwareService {
     // If 404, try legacy /rest/ endpoint
     if (response.status === 404) {
       log.info({ endpoint }, 'Trying legacy endpoint');
-      response = await fetch(`https://${this.config.host}/rest/${endpoint}`, {
+      response = await secureFetch('VMWARE', `https://${this.config.host}/rest/${endpoint}`, {
         ...options,
         headers: {
           'Content-Type': 'application/json',
@@ -697,12 +696,11 @@ export class VMwareService {
   async authenticate(): Promise<boolean> {
     try {
       // Disable SSL verification for self-signed certificates (common in vCenter)
-      process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
       // Try vSphere 7+ REST API authentication first (/api/session)
       log.info({ host: this.config.host, username: this.config.username }, 'Authenticating');
       
-      let response = await fetch(`https://${this.config.host}/api/session`, {
+      let response = await secureFetch('VMWARE', `https://${this.config.host}/api/session`, {
         method: 'POST',
         headers: {
           'Authorization': `Basic ${Buffer.from(`${this.config.username}:${this.config.password}`).toString('base64')}`,
@@ -721,7 +719,7 @@ export class VMwareService {
       log.info({ status: response.status }, 'vSphere 7 API failed, trying legacy endpoint');
 
       // Try legacy REST API authentication (vCenter 6.5-6.7)
-      response = await fetch(`https://${this.config.host}/rest/com/vmware/cis/session`, {
+      response = await secureFetch('VMWARE', `https://${this.config.host}/rest/com/vmware/cis/session`, {
         method: 'POST',
         headers: {
           'Authorization': `Basic ${Buffer.from(`${this.config.username}:${this.config.password}`).toString('base64')}`,
@@ -768,7 +766,6 @@ export class VMwareService {
     error?: string;
   }> {
     try {
-      process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
       
       // Test vSphere REST API endpoints
       const endpoints = [
@@ -779,7 +776,7 @@ export class VMwareService {
 
       for (const ep of endpoints) {
         try {
-          const response = await fetch(`https://${this.config.host}/${ep.path}`, {
+          const response = await secureFetch('VMWARE', `https://${this.config.host}/${ep.path}`, {
             headers: {
               'Content-Type': 'application/json',
               'vmware-api-session-id': this.sessionCookie || '',
@@ -835,10 +832,9 @@ export class VMwareService {
     error?: string;
   }>> {
     try {
-      process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
       
       // vSphere 7+ REST API: /api/vcenter/tasks
-      const response = await fetch(`https://${this.config.host}/api/vcenter/tasks`, {
+      const response = await secureFetch('VMWARE', `https://${this.config.host}/api/vcenter/tasks`, {
         headers: {
           'Content-Type': 'application/json',
           'vmware-api-session-id': this.sessionCookie || '',
@@ -847,7 +843,7 @@ export class VMwareService {
 
       if (!response.ok) {
         // Try legacy endpoint
-        const legacyResponse = await fetch(`https://${this.config.host}/rest/vcenter/tasks`, {
+        const legacyResponse = await secureFetch('VMWARE', `https://${this.config.host}/rest/vcenter/tasks`, {
           headers: {
             'Content-Type': 'application/json',
             'vmware-use-header-authn': this.sessionCookie || '',
@@ -1188,7 +1184,7 @@ export class VMwareService {
 </soapenv:Envelope>`;
 
     try {
-      const response = await fetch(`https://${this.config.host}/sdk`, {
+      const response = await secureFetch('VMWARE', `https://${this.config.host}/sdk`, {
         method: 'POST',
         headers: {
           'Content-Type': 'text/xml; charset=utf-8',
@@ -1221,7 +1217,7 @@ export class VMwareService {
 </soapenv:Envelope>`;
 
     try {
-      await fetch(`https://${this.config.host}/sdk`, {
+      await secureFetch('VMWARE', `https://${this.config.host}/sdk`, {
         method: 'POST',
         headers: {
           'Content-Type': 'text/xml; charset=utf-8',
@@ -1312,7 +1308,7 @@ export class VMwareService {
    </soapenv:Body>
 </soapenv:Envelope>`;
 
-      const response = await fetch(`https://${this.config.host}/sdk`, {
+      const response = await secureFetch('VMWARE', `https://${this.config.host}/sdk`, {
         method: 'POST',
         headers: {
           'Content-Type': 'text/xml; charset=utf-8',
@@ -1797,7 +1793,7 @@ export class VMwareService {
       }
 
       // Try to get version info
-      const response = await fetch(`https://${this.config.host}/rest/appliance/version`, {
+      const response = await secureFetch('VMWARE', `https://${this.config.host}/rest/appliance/version`, {
         headers: { 'Authorization': `Basic ${Buffer.from(`${this.config.username}:${this.config.password}`).toString('base64')}` },
       });
 
@@ -1821,7 +1817,7 @@ export class VMwareService {
    */
   async powerOnVM(vmId: string): Promise<{ success: boolean; error?: string }> {
     try {
-      const response = await fetch(`https://${this.config.host}/rest/vcenter/vm/${vmId}/power/start`, {
+      const response = await secureFetch('VMWARE', `https://${this.config.host}/rest/vcenter/vm/${vmId}/power/start`, {
         method: 'POST',
         headers: {
           'vmware-api-session-id': this.sessionCookie || '',
@@ -1839,7 +1835,7 @@ export class VMwareService {
   async powerOffVM(vmId: string): Promise<{ success: boolean; error?: string }> {
     try {
       // Try graceful shutdown first
-      const response = await fetch(`https://${this.config.host}/rest/vcenter/vm/${vmId}/guest/power?action=shutdown`, {
+      const response = await secureFetch('VMWARE', `https://${this.config.host}/rest/vcenter/vm/${vmId}/guest/power?action=shutdown`, {
         method: 'POST',
         headers: {
           'vmware-api-session-id': this.sessionCookie || '',
@@ -1856,7 +1852,7 @@ export class VMwareService {
    */
   async forceStopVM(vmId: string): Promise<{ success: boolean; error?: string }> {
     try {
-      const response = await fetch(`https://${this.config.host}/rest/vcenter/vm/${vmId}/power/stop`, {
+      const response = await secureFetch('VMWARE', `https://${this.config.host}/rest/vcenter/vm/${vmId}/power/stop`, {
         method: 'POST',
         headers: {
           'vmware-api-session-id': this.sessionCookie || '',
@@ -1873,7 +1869,7 @@ export class VMwareService {
    */
   async suspendVM(vmId: string): Promise<{ success: boolean; error?: string }> {
     try {
-      const response = await fetch(`https://${this.config.host}/rest/vcenter/vm/${vmId}/power/suspend`, {
+      const response = await secureFetch('VMWARE', `https://${this.config.host}/rest/vcenter/vm/${vmId}/power/suspend`, {
         method: 'POST',
         headers: {
           'vmware-api-session-id': this.sessionCookie || '',
@@ -1890,7 +1886,7 @@ export class VMwareService {
    */
   async resetVM(vmId: string): Promise<{ success: boolean; error?: string }> {
     try {
-      const response = await fetch(`https://${this.config.host}/rest/vcenter/vm/${vmId}/power/reset`, {
+      const response = await secureFetch('VMWARE', `https://${this.config.host}/rest/vcenter/vm/${vmId}/power/reset`, {
         method: 'POST',
         headers: {
           'vmware-api-session-id': this.sessionCookie || '',
@@ -2152,7 +2148,7 @@ export class VMwareService {
    */
   async createSnapshot(vmId: string, name: string, description?: string, memory?: boolean): Promise<{ success: boolean; snapshotId?: string; error?: string }> {
     try {
-      const response = await fetch(`https://${this.config.host}/rest/vcenter/vm/${vmId}/snapshot`, {
+      const response = await secureFetch('VMWARE', `https://${this.config.host}/rest/vcenter/vm/${vmId}/snapshot`, {
         method: 'POST',
         headers: {
           'vmware-api-session-id': this.sessionCookie || '',
@@ -2189,7 +2185,7 @@ export class VMwareService {
    */
   async deleteSnapshot(vmId: string, snapshotId: string): Promise<{ success: boolean; error?: string }> {
     try {
-      const response = await fetch(`https://${this.config.host}/rest/vcenter/vm/${vmId}/snapshot/${snapshotId}`, {
+      const response = await secureFetch('VMWARE', `https://${this.config.host}/rest/vcenter/vm/${vmId}/snapshot/${snapshotId}`, {
         method: 'DELETE',
         headers: {
           'vmware-api-session-id': this.sessionCookie || '',
@@ -2213,7 +2209,7 @@ export class VMwareService {
    */
   async revertSnapshot(vmId: string, snapshotId: string): Promise<{ success: boolean; error?: string }> {
     try {
-      const response = await fetch(`https://${this.config.host}/rest/vcenter/vm/${vmId}/snapshot/${snapshotId}?action=revert`, {
+      const response = await secureFetch('VMWARE', `https://${this.config.host}/rest/vcenter/vm/${vmId}/snapshot/${snapshotId}?action=revert`, {
         method: 'POST',
         headers: {
           'vmware-api-session-id': this.sessionCookie || '',

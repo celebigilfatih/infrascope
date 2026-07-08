@@ -8,9 +8,6 @@ const VCENTER_HOST = '10.5.56.10';
 const USERNAME = 'fatih@BUSKI.LOCAL';
 const PASSWORD = process.env.VCENTER_PASSWORD || '';
 
-// Ignore self-signed certs
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-
 async function request(method, path, body = null, sessionId = null) {
   return new Promise((resolve, reject) => {
     const options = {
@@ -21,6 +18,7 @@ async function request(method, path, body = null, sessionId = null) {
       headers: {
         'Content-Type': 'application/json',
       },
+      rejectUnauthorized: process.env.VMWARE_TLS_INSECURE !== 'true',
     };
 
     if (sessionId) {

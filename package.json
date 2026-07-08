@@ -11,7 +11,10 @@
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
     "db:seed": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' prisma/seed.ts",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "license:create": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/license/create-license.ts",
+    "deploy:package:customer": "bash scripts/package-customer-deploy.sh",
+    "security:tls-check": "node scripts/check-production-tls.js"
   },
   "dependencies": {
     "@prisma/client": "^5.0.0",
@@ -63,6 +66,7 @@
     "tailwindcss": "^3.3.0",
     "tailwindcss-animate": "^1.0.7",
     "three": "^0.170.0",
+    "undici": "^6.26.0",
     "ws": "^8.14.0",
     "zod": "^4.4.3",
     "zustand": "^4.4.0"

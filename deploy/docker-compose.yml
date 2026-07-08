@@ -2,13 +2,10 @@
 # Customer Docker Compose Configuration
 #
 # Usage:
-#   1. Copy .env.example to .env and configure your license key
-#   2. Run: docker compose up -d
-#   3. Access: http://localhost:3000
+#   1. Run ./install.sh
+#   2. Access ${APP_URL:-http://localhost:3000}/setup
 #
 # For support: support@infrascope.com
-
-version: '3.8'
 
 services:
   # ── PostgreSQL Database ──────────────────────────────────────────
@@ -18,12 +15,10 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-infrascope}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-infrascope-prod}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       POSTGRES_DB: ${POSTGRES_DB:-infrascope}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-infrascope}"]
       interval: 10s
@@ -34,7 +29,7 @@ services:
 
   # ── InfraScope Application ───────────────────────────────────────
   app:
-    image: ${REGISTRY:-registry.infrascope.com}/infrascope:${VERSION:-latest}
+    image: ${REGISTRY:-registry.infrascope.com}/infrascope:${VERSION:-1.0.0}
     container_name: infrascope-app
     restart: unless-stopped
     depends_on:
@@ -42,23 +37,31 @@ services:
         condition: service_healthy
     environment:
       # Database
-      DATABASE_URL: postgresql://${POSTGRES_USER:-infrascope}:${POSTGRES_PASSWORD:-infrascope-prod}@postgres:5432/${POSTGRES_DB:-infrascope}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-infrascope}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-infrascope}
       
       # License Configuration (REQUIRED)
       LICENSE_KEY: ${LICENSE_KEY}
-      LICENSE_SERVER_URL: ${LICENSE_SERVER_URL:-https://license.infrascope.com}
+      LICENSE_SERVER_URL: ${LICENSE_SERVER_URL:-https://lisans.webmahsul.com.tr}
+      LICENSE_CACHE_PATH: /app/.license-cache
+      MACHINE_ID_PATH: /app/.machine-id
       
       # Authentication
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
-      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-change-me-in-production}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?NEXTAUTH_SECRET is required}
       
       # Application
       NODE_ENV: production
       NEXT_PUBLIC_APP_NAME: ${APP_NAME:-InfraScope}
-      NEXT_PUBLIC_APP_VERSION: ${VERSION:-latest}
+      NEXT_PUBLIC_APP_VERSION: ${VERSION:-1.0.0}
+      APP_VERSION: ${VERSION:-1.0.0}
       
       # Optional: SNMP Community (for network devices)
       SNMP_COMMUNITY: ${SNMP_COMMUNITY:-public}
+
+      # Optional: trusted CA certificates for self-signed infrastructure TLS.
+      FORTIANALYZER_TLS_CA_CERT_PATH: ${FORTIANALYZER_TLS_CA_CERT_PATH:-}
+      FORTIGATE_TLS_CA_CERT_PATH: ${FORTIGATE_TLS_CA_CERT_PATH:-}
+      VMWARE_TLS_CA_CERT_PATH: ${VMWARE_TLS_CA_CERT_PATH:-}
       
     ports:
       - "${APP_PORT:-3000}:3000"
@@ -69,6 +72,8 @@ services:
       - ./data/license-cache:/app/.license-cache
       # Application logs
       - ./logs:/app/logs
+      # Optional trusted CA certificates for FortiAnalyzer/FortiGate/vCenter
+      - ./certs:/app/certs:ro
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
       interval: 30s
@@ -88,7 +93,7 @@ services:
   #   depends_on:
   #     - app
   #   environment:
-  #     DATABASE_URL: postgresql://${POSTGRES_USER:-infrascope}:${POSTGRES_PASSWORD:-infrascope-prod}@postgres:5432/${POSTGRES_DB:-infrascope}
+  #     DATABASE_URL: postgresql://${POSTGRES_USER:-infrascope}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-infrascope}
   #     SNMP_COMMUNITY: ${SNMP_COMMUNITY:-public}
   #     POLL_INTERVAL: ${POLL_INTERVAL:-60}
   #   network_mode: host  # Required for SNMP UDP

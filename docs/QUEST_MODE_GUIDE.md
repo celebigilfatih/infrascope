@@ -271,14 +271,15 @@ Knowledge capture:
 
 ---
 
-## Quest 6: Documentation OVERVIEW + BOUNDED_CONTEXTS
+## Quest 6: Documentation OVERVIEW + BOUNDED_CONTEXTS — Completed
 
-**Sorun:** `docs/10-architecture/OVERVIEW.md` ve `BOUNDED_CONTEXTS.md` planlı ama yok.
-Eski `ARCHITECTURE.md` (archive'de) geçersiz.
+**Durum:** Tamamlandı. `docs/10-architecture/OVERVIEW.md` ve
+`docs/10-architecture/BOUNDED_CONTEXTS.md` artık mevcut ve ana mimari kaynaklardır.
+Eski `ARCHITECTURE.md` archive'de kalır ve referans alınmaz.
 
-**Scope:** 2 dosya
+**Scope:** 2 dosya + `docs/README.md` indeks güncellemesi
 
-### Quest Prompt
+### Original Quest Prompt
 
 ```
 Anchors:
@@ -311,8 +312,8 @@ Task: Mevcut mimariyi dokümante et.
 3. Her dosyanın sonuna "Last updated: 2026-02-17" ekle.
 
 Knowledge capture:
-- [ ] CHANGELOG.md'ye ekle
-- [ ] docs/README.md → "planlı" olanları "✅" yap
+- [x] CHANGELOG.md'ye eklendi
+- [x] docs/README.md → "planlı" olanlar "✅" yapıldı
 ```
 
 ---
@@ -326,7 +327,7 @@ Knowledge capture:
 | 3 | Singleton pattern fix | 15 dk | Düşük (api route'lar etkilenir) |
 | 4 | Auto-generated alarm catalog | 45 dk | Yok (sadece docs) |
 | 5 | Health endpoint expansion | 1 saat | Orta (yeni endpoint behavior) |
-| 6 | Architecture docs | 1 saat | Yok (sadece docs) |
+| 6 | Architecture docs | Tamamlandı | Yok (sadece docs) |
 
 **Önerilen sıra:** 2 → 3 → 1 → 5 → 4 → 6
 (Önce bug fix'ler, sonra feature'lar, en son docs)

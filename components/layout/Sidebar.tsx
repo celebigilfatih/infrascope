@@ -62,6 +62,7 @@ export const Sidebar: React.FC = () => {
   const [mounted, setMounted] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
+  const [licenseAdminEnabled, setLicenseAdminEnabled] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -76,6 +77,24 @@ export const Sidebar: React.FC = () => {
       try { setCollapsedSections(JSON.parse(savedSections)); } catch {}
     }
   }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
+    let active = true;
+
+    fetch('/api/license-admin/mode')
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => {
+        if (active) setLicenseAdminEnabled(Boolean(data?.enabled));
+      })
+      .catch(() => {
+        if (active) setLicenseAdminEnabled(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [mounted]);
 
   // Auto-expand the section that contains the active page
   useEffect(() => {
@@ -214,6 +233,7 @@ export const Sidebar: React.FC = () => {
         { name: 'Alert Rules', href: '/settings/alerts', icon: AlertTriangle },
         { name: 'API Keys', href: '/settings/keys', icon: Key },
         { name: 'License', href: '/settings/license', icon: Key },
+        ...(licenseAdminEnabled ? [{ name: 'License Admin', href: '/license-admin', icon: Key }] : []),
       ]
     },
   ];

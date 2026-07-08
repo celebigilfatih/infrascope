@@ -13,12 +13,12 @@
  */
 
 import { execSync } from 'child_process';
-import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, statSync } from 'fs';
 import { createHash } from 'crypto';
 import { hostname } from 'os';
 import path from 'path';
 
-const MACHINE_ID_FILE = path.join(process.cwd(), '.machine-id');
+const MACHINE_ID_PATH = process.env.MACHINE_ID_PATH || path.join(process.cwd(), '.machine-id');
 
 function safeExec(cmd: string, timeout = 3000): string {
   try {
@@ -29,13 +29,13 @@ function safeExec(cmd: string, timeout = 3000): string {
 }
 
 function detectMachineId(): string {
+  const machineIdFile = resolveMachineIdFile();
+
   // 1. Docker container — use hostname (container ID) + volume marker
   if (existsSync('/.dockerenv')) {
     const hn = hostname();
-    // Try to read a stable marker from a mounted volume
-    const markerPath = '/app/.machine-id';
-    if (existsSync(markerPath)) {
-      return readFileSync(markerPath, 'utf-8').trim();
+    if (existsSync(machineIdFile)) {
+      return readFileSync(machineIdFile, 'utf-8').trim();
     }
     // Persist a generated ID for container stability
     const id = createHash('sha256')
@@ -43,7 +43,8 @@ function detectMachineId(): string {
       .digest('hex')
       .slice(0, 32);
     try {
-      writeFileSync(markerPath, id);
+      mkdirSync(path.dirname(machineIdFile), { recursive: true });
+      writeFileSync(machineIdFile, id);
     } catch {
       // Read-only FS — fall through
     }
@@ -65,8 +66,8 @@ function detectMachineId(): string {
   }
 
   // 4. Fallback — persisted random ID
-  if (existsSync(MACHINE_ID_FILE)) {
-    return readFileSync(MACHINE_ID_FILE, 'utf-8').trim();
+  if (existsSync(machineIdFile)) {
+    return readFileSync(machineIdFile, 'utf-8').trim();
   }
 
   const id = createHash('sha256')
@@ -74,11 +75,23 @@ function detectMachineId(): string {
     .digest('hex')
     .slice(0, 32);
   try {
-    writeFileSync(MACHINE_ID_FILE, id);
+    mkdirSync(path.dirname(machineIdFile), { recursive: true });
+    writeFileSync(machineIdFile, id);
   } catch {
     // Read-only FS
   }
   return id;
+}
+
+function resolveMachineIdFile(): string {
+  try {
+    if (existsSync(MACHINE_ID_PATH) && statSync(MACHINE_ID_PATH).isDirectory()) {
+      return path.join(MACHINE_ID_PATH, 'machine-id');
+    }
+  } catch {
+    // Fall through to the configured path.
+  }
+  return MACHINE_ID_PATH;
 }
 
 let cachedMachineId: string | null = null;

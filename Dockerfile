@@ -18,10 +18,10 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y python3 make g++ libc6 && rm -rf /var/lib/apt/lists/*
 
 # Copy package files
-COPY package.json ./
+COPY package.json package-lock.json ./
 
 # Install dependencies
-RUN npm install --legacy-peer-deps && npm cache clean --force
+RUN npm ci --legacy-peer-deps && npm cache clean --force
 
 # Copy Prisma schema
 COPY prisma ./prisma/
@@ -47,10 +47,10 @@ FROM node:20 AS deps
 WORKDIR /app
 
 # Copy package files
-COPY package.json ./
+COPY package.json package-lock.json ./
 
 # Install production dependencies only
-RUN npm install --omit=dev --legacy-peer-deps && npm cache clean --force
+RUN npm ci --omit=dev --legacy-peer-deps && npm cache clean --force
 
 # ============================================================================
 # STAGE 3: RUNTIME

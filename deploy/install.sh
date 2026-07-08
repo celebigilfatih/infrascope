@@ -59,9 +59,28 @@ create_directories() {
     
     mkdir -p data/machine-id
     mkdir -p data/license-cache
+    mkdir -p certs
     mkdir -p logs
     
     echo -e "${GREEN}✓ Directories created${NC}"
+}
+
+generate_secret() {
+    if command -v openssl &> /dev/null; then
+        openssl rand -base64 32 | tr -d '\n'
+    else
+        head -c 32 /dev/urandom | base64 | tr -d '\n'
+    fi
+}
+
+set_env_value() {
+    KEY="$1"
+    VALUE="$2"
+    if grep -q "^${KEY}=" .env; then
+        sed -i.bak "s|^${KEY}=.*|${KEY}=${VALUE}|" .env && rm -f .env.bak
+    else
+        echo "${KEY}=${VALUE}" >> .env
+    fi
 }
 
 # Setup environment file
@@ -80,32 +99,47 @@ setup_env() {
         echo -e "${YELLOW}! .env already exists, skipping${NC}"
     fi
     
-    # Prompt for license key
     echo ""
     echo -e "${BLUE}License Configuration${NC}"
-    echo "Enter your license key (format: IS-YYYY-XXXX-XXXX):"
+    echo "Enter your license key (format: IS-YYYY-XXXX-XXXX-XXXX):"
     read -r LICENSE_KEY
-    
-    if [ -z "$LICENSE_KEY" ]; then
-        echo -e "${YELLOW}! No license key provided. Running in TRIAL mode.${NC}"
-    else
-        # Update .env with license key
-        if grep -q "^LICENSE_KEY=" .env; then
-            sed -i.bak "s|^LICENSE_KEY=.*|LICENSE_KEY=${LICENSE_KEY}|" .env && rm -f .env.bak
-        else
-            echo "LICENSE_KEY=${LICENSE_KEY}" >> .env
-        fi
+
+    if [ -n "$LICENSE_KEY" ]; then
+        set_env_value "LICENSE_KEY" "$LICENSE_KEY"
         echo -e "${GREEN}✓ License key configured${NC}"
-    fi
-    
-    # Generate random NEXTAUTH_SECRET
-    SECRET=$(openssl rand -base64 32 2>/dev/null || head -c 32 /dev/urandom | base64)
-    if grep -q "^NEXTAUTH_SECRET=" .env; then
-        sed -i.bak "s|^NEXTAUTH_SECRET=.*|NEXTAUTH_SECRET=${SECRET}|" .env && rm -f .env.bak
     else
-        echo "NEXTAUTH_SECRET=${SECRET}" >> .env
+        echo -e "${YELLOW}! No license key provided. You can enter it in the setup wizard.${NC}"
+    fi
+
+    echo ""
+    echo -e "${BLUE}Application URL${NC}"
+    echo "Enter the public URL for this installation [http://localhost:3000]:"
+    read -r APP_URL
+    APP_URL=${APP_URL:-http://localhost:3000}
+    set_env_value "APP_URL" "$APP_URL"
+    set_env_value "NEXTAUTH_URL" "$APP_URL"
+
+    echo "Enter the host port to expose InfraScope [3000]:"
+    read -r APP_PORT
+    APP_PORT=${APP_PORT:-3000}
+    set_env_value "APP_PORT" "$APP_PORT"
+
+    CURRENT_NEXTAUTH_SECRET=$(grep "^NEXTAUTH_SECRET=" .env | cut -d= -f2-)
+    if [ -z "$CURRENT_NEXTAUTH_SECRET" ] || echo "$CURRENT_NEXTAUTH_SECRET" | grep -q "^change-me"; then
+        set_env_value "NEXTAUTH_SECRET" "$(generate_secret)"
     fi
     echo -e "${GREEN}✓ Generated secure session secret${NC}"
+
+    CURRENT_POSTGRES_PASSWORD=$(grep "^POSTGRES_PASSWORD=" .env | cut -d= -f2-)
+    if [ -z "$CURRENT_POSTGRES_PASSWORD" ] || [ "$CURRENT_POSTGRES_PASSWORD" = "infrascope-prod" ]; then
+        set_env_value "POSTGRES_PASSWORD" "$(generate_secret)"
+    fi
+    echo -e "${GREEN}✓ Generated secure database password${NC}"
+
+    CURRENT_VERSION=$(grep "^VERSION=" .env | cut -d= -f2-)
+    if [ -z "$CURRENT_VERSION" ] || [ "$CURRENT_VERSION" = "latest" ]; then
+        echo -e "${YELLOW}! VERSION is not pinned. Set VERSION=1.0.0 or your assigned release before production use.${NC}"
+    fi
 }
 
 # Pull Docker images
@@ -143,7 +177,10 @@ start_services() {
     echo -e "${GREEN}╚════════════════════════════════════════════════════════════════╝${NC}"
     echo ""
     echo -e "${BLUE}Access InfraScope:${NC}"
-    echo "  URL: http://localhost:3000"
+    set -a
+    source .env
+    set +a
+    echo "  URL: ${APP_URL:-http://localhost:${APP_PORT:-3000}}/setup"
     echo ""
     echo -e "${BLUE}Useful commands:${NC}"
     echo "  View logs:     docker compose logs -f"
@@ -151,9 +188,8 @@ start_services() {
     echo "  Restart:       docker compose restart"
     echo "  Update:        ./update.sh"
     echo ""
-    echo -e "${BLUE}Default credentials:${NC}"
-    echo "  Username: admin@infrascope.com"
-    echo "  Password: admin (change on first login)"
+    echo -e "${BLUE}First login:${NC}"
+    echo "  Complete the setup wizard to create the first admin user."
     echo ""
 }
 

@@ -1,26 +1,10 @@
-import https from 'https';
 import { createLogger } from '@/lib/logger';
+import { secureFetch } from '@/lib/security/tls';
 
 const log = createLogger('fortianalyzer');
 
-// Disable SSL verification for self-signed FortiAnalyzer certificates (development ONLY).
-// In production, TLS must always be enforced — setting this env var there is a critical
-// security vulnerability that allows MITM attacks on FortiAnalyzer API credentials.
-if (typeof process !== 'undefined' && process.env.NODE_ENV === 'development') {
-  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-} else if (typeof process !== 'undefined' && process.env.NODE_ENV === 'production' && process.env.NODE_TLS_REJECT_UNAUTHORIZED === '0') {
-  log.error(
-    'CRITICAL SECURITY: NODE_TLS_REJECT_UNAUTHORIZED=0 is set in production! ' +
-    'This disables TLS certificate verification and exposes FortiAnalyzer credentials to MITM attacks. ' +
-    'Remove this environment variable immediately.'
-  );
-}
-
-// Helper to make HTTPS requests with self-signed cert bypass
 function fetchWithAgent(url: string, options: RequestInit) {
-  // Node.js fetch doesn't support 'agent' option directly in RequestInit
-  // Using NODE_TLS_REJECT_UNAUTHORIZED env var instead (development only)
-  return fetch(url, options);
+  return secureFetch('FORTIANALYZER', url, options);
 }
 
 interface FortiAnalyzerConfig {
