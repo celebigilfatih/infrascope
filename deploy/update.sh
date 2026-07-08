@@ -62,7 +62,7 @@ backup_database() {
 pull_update() {
     echo -e "${YELLOW}Pulling new version...${NC}"
     
-    REGISTRY=${REGISTRY:-registry.infrascope.com}
+    REGISTRY=${REGISTRY:-ghcr.io/celebigilfatih}
     
     docker pull ${REGISTRY}/infrascope:${TARGET_VERSION} || {
         echo -e "${RED}Failed to pull image ${REGISTRY}/infrascope:${TARGET_VERSION}${NC}"

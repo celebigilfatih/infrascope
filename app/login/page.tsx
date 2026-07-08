@@ -17,6 +17,7 @@ export default function LoginPage() {
   const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [postLoginPath, setPostLoginPath] = useState('/dashboard');
 
   useEffect(() => {
     let cancelled = false;
@@ -25,6 +26,9 @@ export default function LoginPage() {
       try {
         const res = await fetch('/api/setup/status', { cache: 'no-store' });
         const data = await res.json();
+        if (!cancelled) {
+          setPostLoginPath(data.licenseServerMode ? '/license-admin' : '/dashboard');
+        }
         if (!cancelled && data.setupRequired) {
           router.push('/setup');
         }
@@ -38,6 +42,16 @@ export default function LoginPage() {
       cancelled = true;
     };
   }, [router]);
+
+  const resolvePostLoginPath = async () => {
+    try {
+      const res = await fetch('/api/setup/status', { cache: 'no-store' });
+      const data = await res.json();
+      return data.licenseServerMode ? '/license-admin' : '/dashboard';
+    } catch {
+      return postLoginPath;
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,9 +71,12 @@ export default function LoginPage() {
         // Session is now managed via httpOnly cookie (set by server).
         // localStorage is only for UI display, not for auth decisions.
         localStorage.setItem('user', JSON.stringify(data.user));
+        const targetPath = await resolvePostLoginPath();
         // Pre-warm dashboard summary API (starts fetching while user navigates)
-        fetch('/api/dashboard/summary').catch(() => {});
-        router.push('/dashboard');
+        if (targetPath === '/dashboard') {
+          fetch('/api/dashboard/summary').catch(() => {});
+        }
+        router.push(targetPath);
       } else {
         setError(data.error || 'Giriş başarısız');
       }

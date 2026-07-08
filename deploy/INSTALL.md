@@ -14,7 +14,8 @@ Do not copy `deploy/license-server/` to customer servers. That directory is only
 
 - Docker Engine
 - Docker Compose v2
-- Access to `registry.infrascope.com`
+- Access to `ghcr.io/celebigilfatih`
+- If the image is private, a GHCR token with `read:packages`
 - InfraScope license key
 
 ## Install
@@ -47,6 +48,13 @@ The installer will:
 - generate `NEXTAUTH_SECRET`
 - generate `POSTGRES_PASSWORD`
 - start the Docker services
+
+If GHCR access is private, log in before running the installer:
+
+```bash
+docker login ghcr.io
+docker pull ghcr.io/celebigilfatih/infrascope:1.0.0
+```
 
 ## First Setup
 

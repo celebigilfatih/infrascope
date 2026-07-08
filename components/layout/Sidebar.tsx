@@ -62,7 +62,7 @@ export const Sidebar: React.FC = () => {
   const [mounted, setMounted] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
-  const [licenseAdminEnabled, setLicenseAdminEnabled] = useState(false);
+  const [licenseServerMode, setLicenseServerMode] = useState<boolean | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -82,13 +82,13 @@ export const Sidebar: React.FC = () => {
     if (!mounted) return;
     let active = true;
 
-    fetch('/api/license-admin/mode')
+    fetch('/api/setup/status', { cache: 'no-store' })
       .then((response) => response.ok ? response.json() : null)
       .then((data) => {
-        if (active) setLicenseAdminEnabled(Boolean(data?.enabled));
+        if (active) setLicenseServerMode(Boolean(data?.licenseServerMode));
       })
       .catch(() => {
-        if (active) setLicenseAdminEnabled(false);
+        if (active) setLicenseServerMode(false);
       });
 
     return () => {
@@ -144,7 +144,7 @@ export const Sidebar: React.FC = () => {
     }
   };
 
-  const sections: SidebarSection[] = [
+  const customerSections: SidebarSection[] = [
     {
       title: 'Dashboard',
       items: [
@@ -233,10 +233,31 @@ export const Sidebar: React.FC = () => {
         { name: 'Alert Rules', href: '/settings/alerts', icon: AlertTriangle },
         { name: 'API Keys', href: '/settings/keys', icon: Key },
         { name: 'License', href: '/settings/license', icon: Key },
-        ...(licenseAdminEnabled ? [{ name: 'License Admin', href: '/license-admin', icon: Key }] : []),
       ]
     },
   ];
+
+  const licenseServerSections: SidebarSection[] = [
+    {
+      title: 'License Control',
+      items: [
+        { name: 'License Admin', href: '/license-admin', icon: Key },
+      ],
+    },
+    {
+      title: 'Administration',
+      items: [
+        { name: 'Users & Roles', href: '/settings/users', icon: Users },
+        { name: 'Invitations', href: '/settings/users/invitations', icon: Mail },
+        { name: 'Audit Log', href: '/settings/audit', icon: FileText },
+      ],
+    },
+  ];
+
+  const sections = licenseServerMode === null
+    ? []
+    : licenseServerMode ? licenseServerSections : customerSections;
+  const homeHref = licenseServerMode ? '/license-admin' : '/dashboard';
 
   return (
     <aside className={cn(
@@ -248,7 +269,7 @@ export const Sidebar: React.FC = () => {
         isCollapsed ? "px-4" : "px-6"
       )}>
         {!isCollapsed && (
-          <Link href="/dashboard" className="flex items-center gap-2 group overflow-hidden">
+          <Link href={homeHref} className="flex items-center gap-2 group overflow-hidden">
             <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-primary-foreground shadow-lg transition-colors duration-300 shrink-0">
               <Activity className="h-5 w-5" />
             </div>
@@ -263,9 +284,9 @@ export const Sidebar: React.FC = () => {
           </Link>
         )}
         {isCollapsed && (
-          <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-primary-foreground shadow-lg mx-auto">
+          <Link href={homeHref} className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-primary-foreground shadow-lg mx-auto">
             <Activity className="h-5 w-5" />
-          </div>
+          </Link>
         )}
         <Button 
           variant="ghost" 

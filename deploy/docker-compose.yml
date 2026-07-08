@@ -29,7 +29,7 @@ services:
 
   # ── InfraScope Application ───────────────────────────────────────
   app:
-    image: ${REGISTRY:-registry.infrascope.com}/infrascope:${VERSION:-1.0.0}
+    image: ${REGISTRY:-ghcr.io/celebigilfatih}/infrascope:${VERSION:-1.0.0}
     container_name: infrascope-app
     restart: unless-stopped
     depends_on:
@@ -87,7 +87,7 @@ services:
   # Note: On macOS, run SNMP poller on host due to Docker UDP limitations
   # Uncomment below for Linux deployments
   # snmp-poller:
-  #   image: ${REGISTRY:-registry.infrascope.com}/infrascope-poller:${VERSION:-latest}
+  #   image: ${REGISTRY:-ghcr.io/celebigilfatih}/infrascope-poller:${VERSION:-latest}
   #   container_name: infrascope-poller
   #   restart: unless-stopped
   #   depends_on:

@@ -3,8 +3,15 @@ import type { NextRequest } from 'next/server';
 import { canAccessSync, type Resource, type Action } from '@/lib/auth/permissions';
 import { verifySessionToken, SESSION_COOKIE_NAME } from '@/lib/auth/session';
 import { isRateLimited, getClientIp, getRateLimitConfig } from '@/lib/rate-limit';
+import { isLicenseServerMode } from '@/lib/license/server-mode';
 
 const PUBLIC_PAGE_ROUTES = ['/login', '/logout', '/verify', '/reset-password', '/setup'];
+const LICENSE_SERVER_HOME = '/license-admin';
+const LICENSE_SERVER_ALLOWED_PAGE_ROUTES = [
+  '/license-admin',
+  '/settings/users',
+  '/settings/audit',
+];
 
 // P0-8: Runtime TLS safety check
 if (process.env.NODE_ENV === 'production' && process.env.NODE_TLS_REJECT_UNAUTHORIZED === '0') {
@@ -31,22 +38,43 @@ const METHOD_ACTION_MAP: Record<string, Action> = {
   DELETE: 'delete',
 };
 
+function isRouteMatch(pathname: string, route: string): boolean {
+  return pathname === route || pathname.startsWith(`${route}/`);
+}
+
+function isSafeInternalPath(path: string | null): path is string {
+  return Boolean(path?.startsWith('/') && !path.startsWith('//'));
+}
+
+function isLicenseServerAllowedPage(pathname: string): boolean {
+  return LICENSE_SERVER_ALLOWED_PAGE_ROUTES.some((route) => isRouteMatch(pathname, route));
+}
+
+function normalizeLicenseServerNext(path: string, requestUrl: string): string {
+  const parsed = new URL(path, requestUrl);
+  return isLicenseServerAllowedPage(parsed.pathname)
+    ? `${parsed.pathname}${parsed.search}`
+    : LICENSE_SERVER_HOME;
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const licenseServerMode = isLicenseServerMode();
 
   if (!pathname.startsWith('/api/')) {
-    const isPublicPage = PUBLIC_PAGE_ROUTES.some(
-      (route) => pathname === route || pathname.startsWith(`${route}/`)
-    ) || pathname === '/';
+    const isPublicPage = PUBLIC_PAGE_ROUTES.some((route) => isRouteMatch(pathname, route)) || pathname === '/';
     const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
     const session = token ? await verifySessionToken(token) : null;
 
     if (pathname === '/login' && session) {
       const requestedNext = request.nextUrl.searchParams.get('next');
-      const nextPath = requestedNext?.startsWith('/') && !requestedNext.startsWith('//')
+      const nextPath = isSafeInternalPath(requestedNext)
         ? requestedNext
-        : '/dashboard';
-      return NextResponse.redirect(new URL(nextPath, request.url));
+        : (licenseServerMode ? LICENSE_SERVER_HOME : '/dashboard');
+      return NextResponse.redirect(new URL(
+        licenseServerMode ? normalizeLicenseServerNext(nextPath, request.url) : nextPath,
+        request.url
+      ));
     }
 
     if (!session && !isPublicPage) {
@@ -55,6 +83,15 @@ export async function middleware(request: NextRequest) {
         loginUrl.searchParams.set('next', `${pathname}${request.nextUrl.search}`);
       }
       return NextResponse.redirect(loginUrl);
+    }
+
+    if (
+      session &&
+      licenseServerMode &&
+      !isPublicPage &&
+      !isLicenseServerAllowedPage(pathname)
+    ) {
+      return NextResponse.redirect(new URL(LICENSE_SERVER_HOME, request.url));
     }
 
     return NextResponse.next();

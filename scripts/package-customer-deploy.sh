@@ -20,6 +20,7 @@ cp "${ROOT_DIR}/deploy/.env.example" "${PACKAGE_DIR}/.env.example"
 cp "${ROOT_DIR}/deploy/install.sh" "${PACKAGE_DIR}/install.sh"
 cp "${ROOT_DIR}/deploy/update.sh" "${PACKAGE_DIR}/update.sh"
 cp "${ROOT_DIR}/deploy/INSTALL.md" "${PACKAGE_DIR}/INSTALL.md"
+cp "${ROOT_DIR}/Kurulum/infrascope_customer_cookbook.html" "${PACKAGE_DIR}/infrascope_customer_cookbook.html"
 
 chmod +x "${PACKAGE_DIR}/install.sh" "${PACKAGE_DIR}/update.sh"
 

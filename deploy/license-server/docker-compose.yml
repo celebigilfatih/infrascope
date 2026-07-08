@@ -9,7 +9,7 @@
 
 services:
   app:
-    image: ${REGISTRY:-registry.infrascope.com}/infrascope:${VERSION:-1.0.0}
+    image: ${REGISTRY:-ghcr.io/celebigilfatih}/infrascope:${VERSION:-1.0.0}
     container_name: infrascope-license-app
     restart: unless-stopped
     environment:

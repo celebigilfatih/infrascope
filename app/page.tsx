@@ -14,7 +14,8 @@ export default function Home() {
         const res = await fetch('/api/setup/status', { cache: 'no-store' });
         const data = await res.json();
         if (!cancelled) {
-          router.push(data.setupRequired ? '/setup' : '/dashboard');
+          const target = data.licenseServerMode ? '/license-admin' : '/dashboard';
+          router.push(data.setupRequired ? '/setup' : target);
         }
       } catch {
         if (!cancelled) router.push('/dashboard');

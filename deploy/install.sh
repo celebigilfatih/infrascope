@@ -151,7 +151,7 @@ pull_images() {
     source .env
     set +a
     
-    REGISTRY=${REGISTRY:-registry.infrascope.com}
+    REGISTRY=${REGISTRY:-ghcr.io/celebigilfatih}
     VERSION=${VERSION:-latest}
     
     echo "Pulling ${REGISTRY}/infrascope:${VERSION}..."

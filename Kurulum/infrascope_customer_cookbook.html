@@ -1,0 +1,733 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>InfraScope - Son Kullanıcı Kurulum Cookbook</title>
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --paper: #ffffff;
+      --ink: #172033;
+      --muted: #5f6f86;
+      --line: #d9e2ef;
+      --brand: #059669;
+      --brand-dark: #047857;
+      --accent: #eff6ff;
+      --accent-line: #93c5fd;
+      --warn: #fff7ed;
+      --warn-line: #fdba74;
+      --danger: #fef2f2;
+      --danger-line: #fca5a5;
+      --code-bg: #111827;
+      --code-ink: #e5e7eb;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.62;
+    }
+
+    .page {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 32px 20px 56px;
+    }
+
+    header, main, .toc {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+    }
+
+    header {
+      padding: 30px;
+      margin-bottom: 18px;
+    }
+
+    .eyebrow {
+      margin-bottom: 8px;
+      color: var(--brand);
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: 32px;
+      line-height: 1.18;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin: 36px 0 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--line);
+      font-size: 22px;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      margin: 24px 0 8px;
+      font-size: 17px;
+      letter-spacing: 0;
+    }
+
+    p { margin: 0 0 12px; }
+    a { color: var(--brand-dark); }
+
+    main {
+      padding: 30px;
+    }
+
+    .toc {
+      padding: 20px 24px;
+      margin-bottom: 18px;
+    }
+
+    .toc h2 {
+      margin-top: 0;
+      font-size: 18px;
+    }
+
+    .toc ol {
+      columns: 2;
+      column-gap: 34px;
+    }
+
+    .meta {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .meta div {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #f8fafc;
+      padding: 12px 14px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .meta strong {
+      display: block;
+      color: var(--ink);
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+
+    ul, ol {
+      margin-top: 8px;
+      padding-left: 24px;
+    }
+
+    li { margin: 5px 0; }
+
+    code {
+      border-radius: 5px;
+      background: #edf2f7;
+      color: #0f172a;
+      padding: 2px 5px;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: .94em;
+    }
+
+    pre {
+      overflow-x: auto;
+      margin: 12px 0 18px;
+      border: 1px solid #0f172a;
+      border-radius: 10px;
+      background: var(--code-bg);
+      color: var(--code-ink);
+      padding: 16px;
+    }
+
+    pre code {
+      background: transparent;
+      color: inherit;
+      padding: 0;
+      white-space: pre;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 18px;
+      font-size: 14px;
+    }
+
+    th, td {
+      border: 1px solid var(--line);
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th { background: #f8fafc; }
+
+    .note, .warning, .danger {
+      margin: 14px 0;
+      border-radius: 10px;
+      padding: 13px 15px;
+    }
+
+    .note {
+      border: 1px solid var(--accent-line);
+      background: var(--accent);
+    }
+
+    .warning {
+      border: 1px solid var(--warn-line);
+      background: var(--warn);
+    }
+
+    .danger {
+      border: 1px solid var(--danger-line);
+      background: var(--danger);
+    }
+
+    .checklist li {
+      list-style: none;
+      margin-left: -22px;
+    }
+
+    .checklist li::before {
+      content: "✓";
+      color: var(--brand);
+      font-weight: 800;
+      margin-right: 8px;
+    }
+
+    .kbd {
+      display: inline-block;
+      border: 1px solid #cbd5e1;
+      border-bottom-width: 2px;
+      border-radius: 6px;
+      background: #f8fafc;
+      padding: 1px 6px;
+      font-size: .86em;
+      color: #334155;
+    }
+
+    footer {
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: 18px;
+      text-align: center;
+    }
+
+    @media (max-width: 760px) {
+      .page { padding: 18px 12px 40px; }
+      header, main, .toc { border-radius: 10px; padding: 20px; }
+      h1 { font-size: 26px; }
+      .toc ol { columns: 1; }
+      table { font-size: 13px; }
+    }
+
+    @media print {
+      body { background: #fff; }
+      .page { max-width: none; padding: 0; }
+      header, main, .toc { border: none; border-radius: 0; }
+      a { color: inherit; text-decoration: none; }
+      pre { white-space: pre-wrap; page-break-inside: avoid; }
+      table, .note, .warning, .danger { page-break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header>
+      <div class="eyebrow">InfraScope Customer Cookbook</div>
+      <h1>InfraScope Son Kullanıcı Kurulum ve İlk Kullanım Rehberi</h1>
+      <p>Bu doküman, müşteri IT ekibinin InfraScope'u kendi sunucusunda Docker ile kurması, lisansı aktive etmesi, ilk admin hesabını oluşturması, kurulumu doğrulaması ve temel operasyonları yönetmesi için hazırlanmıştır.</p>
+      <div class="meta">
+        <div><strong>Kurulum modeli</strong>Tek müşteri / tek Docker deployment</div>
+        <div><strong>Merkezi lisans servisi</strong>https://lisans.webmahsul.com.tr</div>
+        <div><strong>Önerilen uygulama portu</strong>8170</div>
+        <div><strong>Veri konumu</strong>Müşteri sunucusundaki PostgreSQL container</div>
+      </div>
+    </header>
+
+    <section class="toc" aria-label="İçindekiler">
+      <h2>İçindekiler</h2>
+      <ol>
+        <li><a href="#model">Kurulum Modeli</a></li>
+        <li><a href="#requirements">Gereksinimler</a></li>
+        <li><a href="#package">Kurulum Paketi</a></li>
+        <li><a href="#distribution">Dosyaları ve Image'ı Alma</a></li>
+        <li><a href="#windows-git">Windows Server Üzerinde Git ile Kurulum</a></li>
+        <li><a href="#precheck">Sunucu Ön Kontrolü</a></li>
+        <li><a href="#install">Adım Adım Kurulum</a></li>
+        <li><a href="#setup">İlk Açılış ve Admin Oluşturma</a></li>
+        <li><a href="#validate">Kurulumu Doğrulama</a></li>
+        <li><a href="#license">Lisans Durumu</a></li>
+        <li><a href="#certs">Self-Signed Sertifikalar</a></li>
+        <li><a href="#update">Güncelleme</a></li>
+        <li><a href="#operations">Günlük Operasyonlar</a></li>
+        <li><a href="#troubleshooting">Sorun Giderme</a></li>
+      </ol>
+    </section>
+
+    <main>
+      <section id="model">
+        <h2>1. Kurulum Modeli</h2>
+        <p>InfraScope müşteri ortamına <strong>on-premise Docker kurulumu</strong> olarak kurulur. Bu modelde uygulama ve PostgreSQL veritabanı müşteri sunucusunda çalışır. Müşteri verisi müşteri ortamında kalır.</p>
+        <p>Lisans aktivasyonu ve lisans doğrulama işlemleri InfraScope merkezi lisans servisi üzerinden yapılır:</p>
+        <pre><code>https://lisans.webmahsul.com.tr</code></pre>
+
+        <div class="warning">
+          <strong>Önemli:</strong> Merkezi lisans sunucusu müşteriye kurulmaz. Müşteri paketinde <code>deploy/license-server/</code>, <code>DEPLOYMENT_MODE=license-server</code> veya <code>LICENSE_SERVER_MODE=true</code> bulunmamalıdır.
+        </div>
+
+        <h3>Müşteri tarafında çalışan servisler</h3>
+        <ul>
+          <li><code>postgres</code>: InfraScope veritabanı.</li>
+          <li><code>app</code>: InfraScope web uygulaması ve API.</li>
+          <li>Opsiyonel entegrasyonlar: VMware, FortiGate, FortiAnalyzer, NMS ve SNMP yapılandırmaları.</li>
+        </ul>
+      </section>
+
+      <section id="requirements">
+        <h2>2. Gereksinimler</h2>
+        <table>
+          <thead>
+            <tr><th>Gereksinim</th><th>Açıklama</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Linux sunucu</td><td>Docker çalıştırabilecek bir sunucu. Production için sabit IP veya DNS önerilir.</td></tr>
+            <tr><td>Windows Server seçeneği</td><td>Ubuntu VM önerilir; WSL2 Ubuntu demo/POC için kullanılabilir. Docker ve Git komutları Linux ortamında çalıştırılır.</td></tr>
+            <tr><td>Docker Engine</td><td>Kurulu ve çalışır durumda olmalıdır.</td></tr>
+            <tr><td>Docker Compose v2</td><td><code>docker compose version</code> komutu çalışmalıdır.</td></tr>
+            <tr><td>Lisans key</td><td>InfraScope tarafından sağlanan <code>IS-YYYY-XXXX-XXXX-XXXX</code> formatında key.</td></tr>
+            <tr><td>İnternet erişimi</td><td>Sunucudan <code>https://lisans.webmahsul.com.tr</code> adresine erişim olmalıdır.</td></tr>
+            <tr><td>Uygulama portu</td><td>Önerilen port <code>8170</code>. Gerekirse farklı port seçilebilir.</td></tr>
+            <tr><td>Image erişimi</td><td>Verilen registry/image kaynağına erişim hazır olmalıdır.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="package">
+        <h2>3. Kurulum Paketi</h2>
+        <p>Müşteri sunucusuna yalnızca on-prem kurulum dosyaları kopyalanır:</p>
+        <pre><code>docker-compose.yml
+.env.example
+install.sh
+update.sh
+INSTALL.md
+infrascope_customer_cookbook.html</code></pre>
+
+        <p>Paket içinde bulunmaması gerekenler:</p>
+        <ul>
+          <li><code>deploy/license-server/</code> klasörü</li>
+          <li>Lisans oluşturma scriptleri</li>
+          <li>Merkezi lisans sunucusu veritabanı bilgileri</li>
+          <li><code>LICENSE_SERVER_MODE=true</code> veya <code>DEPLOYMENT_MODE=license-server</code> ayarları</li>
+        </ul>
+      </section>
+
+      <section id="distribution">
+        <h2>4. Dosyaları ve Image'ı Alma</h2>
+        <p>InfraScope kurulumu iki parçadan oluşur: küçük kurulum paketi ve Docker image. Kurulum paketi müşteriye güvenli bağlantı, dosya transferi veya destek ekibi tarafından sağlanır. Uygulama image'ı ise normalde registry üzerinden çekilir.</p>
+
+        <h3>4.1 Standart online kurulum</h3>
+        <p>Müşteriye verilen paket örnek olarak şu isimde olabilir:</p>
+        <pre><code>infrascope-customer-install-1.0.0.zip</code></pre>
+
+        <p>Sunucuda paketi açın:</p>
+        <pre><code>mkdir infrascope
+cd infrascope
+unzip /path/to/infrascope-customer-install-1.0.0.zip</code></pre>
+
+        <p>Image bilgisi <code>.env.example</code> içinde pinli gelir:</p>
+        <pre><code>REGISTRY=ghcr.io/celebigilfatih
+VERSION=1.0.0</code></pre>
+
+        <p><code>./install.sh</code> çalışırken aşağıdaki image'ı çeker:</p>
+        <pre><code>ghcr.io/celebigilfatih/infrascope:1.0.0</code></pre>
+
+        <h3>4.2 Git üzerinden kurulum paketini alma</h3>
+        <p>Kurulum paketi Git üzerinden de alınabilir. Bunun için müşteriye ana uygulama kaynak kodu reposu değil, yalnızca müşteri kurulum dosyalarını içeren ayrı bir private installer repo verilmelidir.</p>
+
+        <p>Önerilen repo içeriği:</p>
+        <pre><code>docker-compose.yml
+.env.example
+install.sh
+update.sh
+INSTALL.md
+infrascope_customer_cookbook.html</code></pre>
+
+        <p>Örnek Git akışı:</p>
+        <pre><code>git clone --branch v1.0.0 https://github.com/celebigilfatih/infrascope-customer-install.git infrascope
+cd infrascope
+cp .env.example .env
+chmod +x install.sh update.sh
+./install.sh</code></pre>
+
+        <div class="warning">
+          Müşteriye <code>celebigilfatih/infrascope</code> ana kaynak kod reposunu vermeyin. Ana repo lisans sunucusu dosyaları, geliştirme scriptleri, internal dokümantasyon veya müşteriye ait olmayan operasyonel parçalar içerebilir.
+        </div>
+
+        <p>Git ile alınan kurulum dosyaları sadece compose ve scriptleri getirir. Uygulama yine Docker image olarak <code>REGISTRY</code> ve <code>VERSION</code> değerlerine göre çekilir.</p>
+
+        <h3>4.3 Private registry erişimi gerekiyorsa</h3>
+        <p>Registry private ise InfraScope size kullanıcı adı ve <code>read:packages</code> yetkili access token sağlar. Kurulumdan önce login olun:</p>
+        <pre><code>docker login ghcr.io</code></pre>
+
+        <p>Ardından image erişimini test edin:</p>
+        <pre><code>docker pull ghcr.io/celebigilfatih/infrascope:1.0.0</code></pre>
+
+        <div class="warning">
+          Access token, lisans key ve <code>.env</code> değerleri gizlidir. Bunları ticket, e-posta veya ekran görüntüsünde paylaşmayın. Token sadece image pull ve gerekirse installer repo okuma yetkisine sahip olmalıdır.
+        </div>
+
+        <h3>4.4 Kısıtlı ağ / offline image aktarımı</h3>
+        <p>Sunucunun registry erişimi yoksa InfraScope destek ekibi aynı tag ile hazırlanmış image arşivi sağlayabilir:</p>
+        <pre><code>infrascope-image-1.0.0.tar</code></pre>
+
+        <p>Image'ı sunucuya kopyalayıp yükleyin:</p>
+        <pre><code>docker load -i infrascope-image-1.0.0.tar
+docker images | grep infrascope</code></pre>
+
+        <p>Arşiv içindeki image tag'i <code>.env</code> dosyasındaki <code>REGISTRY</code> ve <code>VERSION</code> ile aynı olmalıdır. Örnek:</p>
+        <pre><code>ghcr.io/celebigilfatih/infrascope:1.0.0</code></pre>
+
+        <div class="note">
+          İlk lisans aktivasyonu için sunucunun <code>https://lisans.webmahsul.com.tr</code> adresine erişebilmesi gerekir. Tamamen kapalı ağ senaryoları için kurulumdan önce InfraScope destek ekibiyle ayrıca planlama yapılmalıdır.
+        </div>
+      </section>
+
+      <section id="windows-git">
+        <h2>5. Windows Server Üzerinde Git ile Kurulum</h2>
+        <p>InfraScope mevcut haliyle Linux container olarak çalışır. Bu nedenle Windows Server üzerinde doğrudan Windows container olarak çalıştırılmaz. Windows Server kullanılacaksa önerilen model, Windows Server üzerinde küçük bir Ubuntu VM veya WSL2 Ubuntu ortamı çalıştırmak ve kurulumu bu Linux ortamı içinde yapmaktır.</p>
+
+        <div class="warning">
+          Production için en anlaşılır ve izole model <strong>Ubuntu VM</strong> kullanmaktır. WSL2 daha hızlı kurulur, ancak production operasyonlarında VM kadar net izolasyon ve yönetim sınırı sunmayabilir.
+        </div>
+
+        <h3>5.1 Önerilen model: Ubuntu VM</h3>
+        <ol>
+          <li>Windows Server üzerinde Hyper-V, VMware veya kurumunuzun kullandığı sanallaştırma katmanında Ubuntu Server VM oluşturun.</li>
+          <li>VM'e sabit IP verin veya DNS kaydı tanımlayın.</li>
+          <li>Windows firewall ve ağ kurallarında seçilen uygulama portunu açın. Önerilen port: <code>8170</code>.</li>
+          <li>Ubuntu içinde Docker Engine, Docker Compose v2 ve Git kurun.</li>
+          <li>Kurulum komutlarını Ubuntu shell içinde çalıştırın.</li>
+        </ol>
+
+        <p>Ubuntu içinde temel kontrol komutları:</p>
+        <pre><code>git --version
+docker --version
+docker compose version
+docker info
+curl -I https://lisans.webmahsul.com.tr</code></pre>
+
+        <h3>5.2 Alternatif model: WSL2 Ubuntu</h3>
+        <p>WSL2 Ubuntu kullanılacaksa Docker ve Git komutları Windows PowerShell yerine WSL Ubuntu shell içinde çalıştırılmalıdır. Kurulum klasörü Linux dosya sistemi altında tutulmalıdır.</p>
+        <pre><code>cd ~
+mkdir infrascope
+cd infrascope</code></pre>
+
+        <div class="note">
+          WSL2 modelinde port yönlendirme ve servis sürekliliği kurum politikasına göre ayrıca kontrol edilmelidir. Demo ve POC için pratik olabilir; uzun süreli production için Ubuntu VM tercih edilir.
+        </div>
+
+        <h3>5.3 Private installer repo clone</h3>
+        <p>Müşteriye ana kaynak kod reposu yerine yalnızca kurulum dosyalarını içeren private installer repo erişimi verilir:</p>
+        <pre><code>git clone --branch v1.0.0 https://github.com/celebigilfatih/infrascope-customer-install.git infrascope
+cd infrascope</code></pre>
+
+        <p>Private repo erişimi için read-only deploy key veya fine-grained GitHub token kullanılmalıdır. Token yalnızca installer repo erişimine sahip olmalıdır. GHCR private image için ayrıca <code>read:packages</code> yetkisi gerekir.</p>
+
+        <h3>5.4 Kurulum</h3>
+        <pre><code>cp .env.example .env
+chmod +x install.sh update.sh
+./install.sh</code></pre>
+
+        <p>Script çalışırken lisans key, uygulama URL'i ve port sorulur. Windows Server üzerindeki Ubuntu VM için uygulama URL'i genellikle şu şekilde olur:</p>
+        <pre><code>http://WINDOWS_SERVER_IP:8170</code></pre>
+
+        <h3>5.5 Image kaynağı</h3>
+        <p>Git sadece kurulum dosyalarını indirir. Uygulama kaynak koddan build edilmez; Docker image registry'den pinli sürümle çekilir:</p>
+        <pre><code>REGISTRY=ghcr.io/celebigilfatih
+VERSION=1.0.0</code></pre>
+
+        <p>Private registry gerekiyorsa Ubuntu shell içinde login olun:</p>
+        <pre><code>docker login ghcr.io
+docker pull ghcr.io/celebigilfatih/infrascope:1.0.0</code></pre>
+
+        <h3>5.6 Windows Server dış erişim kontrolü</h3>
+        <p>Kurulumdan sonra Windows Server veya VM ağ katmanında seçilen portun açık olduğundan emin olun. Tarayıcıdan şu adres açılmalıdır:</p>
+        <pre><code>http://WINDOWS_SERVER_IP:8170/setup</code></pre>
+
+        <div class="danger">
+          <strong>Kaynak kod paylaşımı yapmayın:</strong> <code>celebigilfatih/infrascope</code> ana repo müşteriye verilmemelidir. Müşteri sadece installer repo, lisans key ve gerekiyorsa registry erişimi almalıdır.
+        </div>
+      </section>
+
+      <section id="precheck">
+        <h2>6. Sunucu Ön Kontrolü</h2>
+        <p>Kuruluma başlamadan önce müşteri sunucusunda aşağıdaki komutları çalıştırın:</p>
+        <pre><code>docker --version
+docker compose version
+docker info
+curl -I https://lisans.webmahsul.com.tr</code></pre>
+
+        <p>Önerilen portun boş olduğunu kontrol edin:</p>
+        <pre><code>ss -ltnp | grep ':8170' || true</code></pre>
+
+        <p>Beklenen durum:</p>
+        <ul class="checklist">
+          <li>Docker komutları hata vermeden çalışır.</li>
+          <li><code>docker info</code> Docker daemon'a bağlanır.</li>
+          <li><code>lisans.webmahsul.com.tr</code> için HTTP response alınır.</li>
+          <li><code>8170</code> portu başka bir servis tarafından kullanılmıyordur.</li>
+        </ul>
+      </section>
+
+      <section id="install">
+        <h2>7. Adım Adım Kurulum</h2>
+        <h3>7.1 Kurulum klasörü oluşturma</h3>
+        <pre><code>mkdir infrascope
+cd infrascope</code></pre>
+
+        <h3>7.2 Paket dosyalarını kopyalama</h3>
+        <p>Size verilen kurulum paketindeki dosyaları bu klasöre kopyalayın. Sonra dosyaları kontrol edin:</p>
+        <pre><code>ls -la</code></pre>
+
+        <h3>7.3 Ortam dosyasını hazırlama</h3>
+        <pre><code>cp .env.example .env</code></pre>
+
+        <p><code>.env</code> dosyasında temel değerler kurulum scripti tarafından düzenlenir. Manuel kontrol etmek isterseniz:</p>
+        <pre><code>nano .env</code></pre>
+
+        <p>Temel lisans ayarları şu şekilde olmalıdır:</p>
+        <pre><code>LICENSE_SERVER_URL=https://lisans.webmahsul.com.tr
+LICENSE_KEY=IS-2026-XXXX-XXXX-XXXX</code></pre>
+
+        <h3>7.4 Script yetkileri</h3>
+        <pre><code>chmod +x install.sh update.sh</code></pre>
+
+        <h3>7.5 Kurulumu başlatma</h3>
+        <pre><code>./install.sh</code></pre>
+
+        <p>Script sizden aşağıdaki bilgileri ister:</p>
+        <table>
+          <thead>
+            <tr><th>Soru</th><th>Örnek Değer</th><th>Açıklama</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>License key</td><td><code>IS-2026-XXXX-XXXX-XXXX</code></td><td>InfraScope tarafından size verilen lisans key.</td></tr>
+            <tr><td>Application URL</td><td><code>http://SUNUCU_IP:8170</code></td><td>Kullanıcıların tarayıcıdan erişeceği adres.</td></tr>
+            <tr><td>Host port</td><td><code>8170</code></td><td>Sunucu üzerinde dışarı açılacak port.</td></tr>
+          </tbody>
+        </table>
+
+        <p>Script otomatik olarak şunları üretir ve hazırlar:</p>
+        <ul>
+          <li><code>NEXTAUTH_SECRET</code>: oturum güvenliği için gizli anahtar.</li>
+          <li><code>POSTGRES_PASSWORD</code>: PostgreSQL şifresi.</li>
+          <li><code>data/machine-id</code>: lisans aktivasyonu için kalıcı makine kimliği.</li>
+          <li><code>data/license-cache</code>: offline grace süresi için yerel lisans cache'i.</li>
+          <li><code>logs</code> ve <code>certs</code> klasörleri.</li>
+        </ul>
+
+        <div class="danger">
+          <strong>Güvenlik notu:</strong> <code>.env</code> dosyası şifre ve lisans bilgisi içerir. E-posta, ticket, ekran görüntüsü veya ortak paylaşım alanlarında paylaşmayın.
+        </div>
+      </section>
+
+      <section id="setup">
+        <h2>8. İlk Açılış ve Admin Oluşturma</h2>
+        <p>Kurulum tamamlandıktan sonra tarayıcıdan setup ekranını açın:</p>
+        <pre><code>http://SUNUCU_IP:8170/setup</code></pre>
+
+        <p>Farklı port seçtiyseniz URL'de kendi portunuzu kullanın:</p>
+        <pre><code>http://SUNUCU_IP:APP_PORT/setup</code></pre>
+
+        <h3>Setup wizard adımları</h3>
+        <ol>
+          <li>Lisans aktivasyonu yapılır.</li>
+          <li>Firma / organizasyon adı girilir.</li>
+          <li>İlk admin kullanıcısı oluşturulur.</li>
+          <li>Login ekranına yönlendirilir.</li>
+        </ol>
+
+        <div class="warning">
+          <strong>Default admin yoktur.</strong> İlk admin hesabı müşteri tarafından setup wizard içinde oluşturulur. Şifreyi InfraScope ekibi belirlemez ve saklamaz.
+        </div>
+
+        <h3>İlk login</h3>
+        <p>Setup tamamlandıktan sonra oluşturduğunuz admin e-posta ve şifresiyle giriş yapın:</p>
+        <pre><code>http://SUNUCU_IP:8170/login</code></pre>
+      </section>
+
+      <section id="validate">
+        <h2>9. Kurulumu Doğrulama</h2>
+        <p>Container durumunu kontrol edin:</p>
+        <pre><code>docker compose ps</code></pre>
+
+        <p>Uygulama ve veritabanı readiness kontrolü:</p>
+        <pre><code>curl -sf http://localhost:8170/api/health/ready</code></pre>
+
+        <p>Uygulama loglarını izlemek için:</p>
+        <pre><code>docker compose logs -f app</code></pre>
+
+        <p>Beklenen durum:</p>
+        <ul class="checklist">
+          <li><code>postgres</code> servisi çalışıyor ve healthy durumdadır.</li>
+          <li><code>app</code> servisi çalışıyor ve healthy durumdadır.</li>
+          <li><code>/api/health/ready</code> hata vermeden yanıt döner.</li>
+          <li>Tarayıcıdan login ekranı açılır.</li>
+          <li>Admin ile giriş sonrası dashboard açılır.</li>
+        </ul>
+
+        <div class="note">
+          <code>/api/health</code> veya <code>/api/health/alarms</code>, entegrasyonlar henüz yapılandırılmadıysa <code>degraded</code> dönebilir. Docker readiness için temel kontrol <code>/api/health/ready</code> endpoint'idir.
+        </div>
+      </section>
+
+      <section id="license">
+        <h2>10. Lisans Durumu</h2>
+        <p>Uygulamaya admin olarak giriş yaptıktan sonra lisans durumunu şu ekrandan kontrol edin:</p>
+        <pre><code>Settings → License</code></pre>
+
+        <p>Bu ekranda aşağıdaki bilgileri görebilirsiniz:</p>
+        <ul>
+          <li>Lisans durumu: active, grace veya restricted.</li>
+          <li>Plan / tier bilgisi.</li>
+          <li>Cihaz ve kullanıcı limitleri.</li>
+          <li>Geçerlilik tarihi ve kalan gün sayısı.</li>
+          <li>Makine kimliği ve son doğrulama zamanı.</li>
+        </ul>
+
+        <h3>Lisans doğrulama mantığı</h3>
+        <ul>
+          <li>İlk kurulumda lisans merkezi sunucudan aktive edilir.</li>
+          <li>Uygulama düzenli olarak lisansı doğrular ve heartbeat gönderir.</li>
+          <li>Lisans sunucusuna geçici erişim yoksa yerel cache ile grace süresi kullanılabilir.</li>
+          <li>Lisans iptal edilirse, askıya alınırsa veya süresi dolarsa ilgili kısıtlamalar uygulanır.</li>
+        </ul>
+      </section>
+
+      <section id="certs">
+        <h2>11. Self-Signed Sertifikalar</h2>
+        <p>FortiAnalyzer, FortiGate veya vCenter private/self-signed sertifika kullanıyorsa TLS doğrulamasını kapatmayın. Bunun yerine ilgili CA sertifikasını <code>./certs</code> klasörüne koyun.</p>
+
+        <p>Örnek dosya yerleşimi:</p>
+        <pre><code>certs/fortianalyzer-ca.pem
+certs/fortigate-ca.pem
+certs/vmware-ca.pem</code></pre>
+
+        <p><code>.env</code> içine gerekli path değerlerini girin:</p>
+        <pre><code>FORTIANALYZER_TLS_CA_CERT_PATH=/app/certs/fortianalyzer-ca.pem
+FORTIGATE_TLS_CA_CERT_PATH=/app/certs/fortigate-ca.pem
+VMWARE_TLS_CA_CERT_PATH=/app/certs/vmware-ca.pem</code></pre>
+
+        <div class="danger">
+          Production ortamında <code>NODE_TLS_REJECT_UNAUTHORIZED=0</code> kullanmayın. Bu ayar TLS doğrulamasını global olarak kapatır ve container production modda başlatılmamalıdır.
+        </div>
+
+        <p>Sertifika değişikliği sonrası uygulamayı yeniden başlatın:</p>
+        <pre><code>docker compose restart app</code></pre>
+      </section>
+
+      <section id="update">
+        <h2>12. Güncelleme</h2>
+        <p>Production kurulumlarda sürüm pinli olmalıdır. Size bildirilen sürüm numarasını kullanın; <code>latest</code> tercih edilmez.</p>
+
+        <h3>Önerilen güncelleme komutu</h3>
+        <pre><code>./update.sh 1.0.1</code></pre>
+
+        <p>Bu komut:</p>
+        <ul>
+          <li>Veritabanı yedeği alır.</li>
+          <li>Yeni image sürümünü indirir.</li>
+          <li>Gerekli migration işlemlerini çalıştırır.</li>
+          <li>Servisleri yeniden başlatır.</li>
+          <li>Readiness kontrolü yapar.</li>
+        </ul>
+
+        <p>Güncel sürümü <code>.env</code> içinde de kontrol edebilirsiniz:</p>
+        <pre><code>grep '^VERSION=' .env</code></pre>
+
+        <div class="warning">
+          <code>./update.sh</code> komutunu sürüm argümanı olmadan çalıştırmak <code>latest</code> hedefini kullanabilir. Müşteri production ortamlarında her zaman size bildirilen pinli sürümü kullanın.
+        </div>
+      </section>
+
+      <section id="operations">
+        <h2>13. Günlük Operasyonlar</h2>
+        <table>
+          <thead>
+            <tr><th>İşlem</th><th>Komut</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Servis durumunu gör</td><td><code>docker compose ps</code></td></tr>
+            <tr><td>App loglarını izle</td><td><code>docker compose logs -f app</code></td></tr>
+            <tr><td>PostgreSQL loglarını izle</td><td><code>docker compose logs -f postgres</code></td></tr>
+            <tr><td>Uygulamayı yeniden başlat</td><td><code>docker compose restart app</code></td></tr>
+            <tr><td>Tüm servisleri durdur</td><td><code>docker compose down</code></td></tr>
+            <tr><td>Tüm servisleri başlat</td><td><code>docker compose up -d</code></td></tr>
+            <tr><td>Readiness kontrolü</td><td><code>curl -sf http://localhost:8170/api/health/ready</code></td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="troubleshooting">
+        <h2>14. Sorun Giderme</h2>
+
+        <h3>Docker çalışmıyor</h3>
+        <pre><code>docker info</code></pre>
+        <p>Hata alırsanız Docker daemon çalışmıyor olabilir. Docker servisini başlatıp kurulumu tekrar deneyin.</p>
+
+        <h3>Port dolu</h3>
+        <pre><code>ss -ltnp | grep ':8170' || true</code></pre>
+        <p>Port doluysa <code>install.sh</code> çalışırken farklı bir port seçin veya <code>.env</code> içinde <code>APP_PORT</code> değerini değiştirip servisleri yeniden başlatın.</p>
+
+        <h3>Lisans sunucusuna erişilemiyor</h3>
+        <pre><code>curl -I https://lisans.webmahsul.com.tr</code></pre>
+        <p>Firewall, proxy, DNS veya outbound internet kısıtlarını kontrol edin. İlk aktivasyon için merkezi lisans sunucusuna erişim gerekir.</p>
+
+        <h3>Activation limit dolu</h3>
+        <p>Aynı lisans farklı bir sunucuda daha önce aktive edilmiş olabilir. InfraScope destek ekibi eski activation kaydını deaktive ettikten sonra yeni sunucuda tekrar aktivasyon yapılabilir.</p>
+
+        <h3>App healthy olmuyor</h3>
+        <pre><code>docker compose ps
+docker compose logs -f app
+docker compose logs -f postgres</code></pre>
+        <p>En yaygın nedenler eksik <code>NEXTAUTH_SECRET</code>, eksik <code>POSTGRES_PASSWORD</code>, yanlış <code>DATABASE_URL</code>, image erişim hatası veya migration hatasıdır.</p>
+
+        <h3>Setup ekranı tekrar açılmıyor</h3>
+        <p>En az bir admin kullanıcı oluşturulduktan sonra setup ekranı kapanır. Devam etmek için login ekranını kullanın:</p>
+        <pre><code>http://SUNUCU_IP:8170/login</code></pre>
+
+        <h3>Admin şifresi unutuldu</h3>
+        <p>Kurulumda default admin yoktur ve şifre InfraScope tarafından bilinmez. Şifre sıfırlama veya kullanıcı kurtarma süreci için kurum içi prosedürünüzü ve InfraScope destek kanalını kullanın.</p>
+      </section>
+
+      <section id="support">
+        <h2>15. Destek İçin Gerekli Bilgiler</h2>
+        <p>Destek talebi açarken gizli bilgileri paylaşmadan aşağıdaki çıktıları iletin:</p>
+        <pre><code>docker compose ps
+curl -sf http://localhost:8170/api/health/ready
+docker compose logs --tail=200 app</code></pre>
+
+        <div class="danger">
+          Destek talebinde <code>.env</code> dosyasını, lisans key'i, veritabanı şifresini veya kullanıcı şifrelerini paylaşmayın.
+        </div>
+      </section>
+    </main>
+
+    <footer>InfraScope son kullanıcı kurulum cookbook - müşteri IT ekipleri için hazırlanmıştır.</footer>
+  </div>
+</body>
+</html>
