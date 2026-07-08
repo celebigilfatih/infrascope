@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>InfraScope - Müşteri Demo Kurulum Runbook</title>
+  <style>
+    :root {
+      --bg: #f6f7fb;
+      --paper: #ffffff;
+      --ink: #1f2937;
+      --muted: #64748b;
+      --line: #dbe3ef;
+      --brand: #059669;
+      --brand-dark: #047857;
+      --code-bg: #111827;
+      --code-ink: #e5e7eb;
+      --warn-bg: #fff7ed;
+      --warn-line: #fdba74;
+      --info-bg: #eff6ff;
+      --info-line: #93c5fd;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.6;
+    }
+    .page { max-width: 1040px; margin: 0 auto; padding: 32px 20px 56px; }
+    header {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 28px;
+      margin-bottom: 22px;
+    }
+    .eyebrow {
+      color: var(--brand);
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    h1 { margin: 0 0 10px; font-size: 30px; line-height: 1.2; }
+    h2 {
+      margin: 34px 0 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--line);
+      font-size: 22px;
+    }
+    h3 { margin: 22px 0 8px; font-size: 17px; }
+    p { margin: 0 0 12px; }
+    a { color: var(--brand-dark); }
+    .meta {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px;
+      margin-top: 18px;
+    }
+    .meta div, .note, .warning {
+      border-radius: 10px;
+      padding: 12px 14px;
+    }
+    .meta div {
+      background: #f8fafc;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .meta strong { display: block; color: var(--ink); }
+    main {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 28px;
+    }
+    ul, ol { margin-top: 8px; padding-left: 24px; }
+    li { margin: 5px 0; }
+    code {
+      background: #eef2f7;
+      color: #0f172a;
+      border-radius: 5px;
+      padding: 2px 5px;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: .94em;
+    }
+    pre {
+      background: var(--code-bg);
+      color: var(--code-ink);
+      border-radius: 10px;
+      padding: 16px;
+      overflow-x: auto;
+      margin: 12px 0 18px;
+      border: 1px solid #0f172a;
+    }
+    pre code { background: transparent; color: inherit; padding: 0; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 18px;
+      font-size: 14px;
+    }
+    th, td { border: 1px solid var(--line); padding: 10px 12px; text-align: left; vertical-align: top; }
+    th { background: #f8fafc; }
+    .note { background: var(--info-bg); border: 1px solid var(--info-line); }
+    .warning { background: var(--warn-bg); border: 1px solid var(--warn-line); }
+    .checklist li { list-style: none; margin-left: -22px; }
+    .checklist li::before { content: "✓"; color: var(--brand); font-weight: 800; margin-right: 8px; }
+    footer { color: var(--muted); font-size: 13px; margin-top: 18px; text-align: center; }
+    @media print {
+      body { background: #fff; }
+      .page { padding: 0; max-width: none; }
+      header, main { border: none; border-radius: 0; }
+      pre { white-space: pre-wrap; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header>
+      <div class="eyebrow">InfraScope Demo Runbook</div>
+      <h1>Müşteri Sunucusu Demo Kurulumu ve Lisans Aktivasyonu</h1>
+      <p>Müşteri sunucusunda tek-tenant Docker kurulumu yapıp lisansı merkezi sunucudan aktive etmek için operasyon rehberi.</p>
+      <div class="meta">
+        <div><strong>Kategori</strong>Demo / onboarding</div>
+        <div><strong>Merkezi lisans sunucusu</strong>https://lisans.webmahsul.com.tr</div>
+        <div><strong>Önerilen demo portu</strong>8170</div>
+      </div>
+    </header>
+
+    <main>
+      <h2>1. Demo Modeli</h2>
+      <p>InfraScope müşteriye <strong>tek-tenant Docker deployment</strong> olarak kurulur. Müşteri verisi kendi PostgreSQL veritabanında kalır. Lisans üretimi, aktivasyon, validate ve heartbeat işlemleri merkezi lisans sunucusundan yönetilir.</p>
+
+      <h3>Müşteriye verilmeyecek parçalar</h3>
+      <ul>
+        <li><code>deploy/license-server/</code></li>
+        <li><code>DEPLOYMENT_MODE=license-server</code></li>
+        <li><code>LICENSE_SERVER_MODE=true</code></li>
+        <li>Lisans oluşturma scriptleri veya merkezi lisans DB erişimi</li>
+      </ul>
+
+      <h3>Müşteriye verilecek kritik bilgiler</h3>
+      <pre><code>LICENSE_SERVER_URL=https://lisans.webmahsul.com.tr
+LICENSE_KEY=IS-2026-XXXX-XXXX-XXXX</code></pre>
+
+      <h2>2. Demo Öncesi Lisans Hazırlığı</h2>
+      <p>Merkezi panele gir:</p>
+      <pre><code>https://lisans.webmahsul.com.tr/license-admin</code></pre>
+
+      <p><code>Create License</code> ile demo lisansı oluştur:</p>
+      <table>
+        <thead>
+          <tr><th>Alan</th><th>Değer</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Company</td><td>Müşteri firma adı</td></tr>
+          <tr><td>Contact</td><td>Müşteri yetkilisi</td></tr>
+          <tr><td>Email</td><td>Müşteri yetkilisi emaili</td></tr>
+          <tr><td>Tier</td><td><code>STANDARD</code></td></tr>
+          <tr><td>Max Devices</td><td><code>250</code></td></tr>
+          <tr><td>Max Users</td><td><code>10</code></td></tr>
+          <tr><td>Days</td><td><code>30</code></td></tr>
+          <tr><td>Activation Limit</td><td><code>1</code></td></tr>
+          <tr><td>Notes</td><td><code>POC / Demo license</code></td></tr>
+        </tbody>
+      </table>
+
+      <p>Oluşan key'i müşteriye ver. Demo için key formatı:</p>
+      <pre><code>IS-2026-XXXX-XXXX-XXXX</code></pre>
+
+      <h2>3. Müşteri Sunucusu Ön Kontrolü</h2>
+      <p>Müşteri sunucusunda:</p>
+      <pre><code>docker --version
+docker compose version
+docker info
+curl -I https://lisans.webmahsul.com.tr</code></pre>
+
+      <p>Port kontrolü:</p>
+      <pre><code>ss -ltnp | grep ':8170' || true</code></pre>
+
+      <h3>Beklenen</h3>
+      <ul class="checklist">
+        <li>Docker Engine çalışıyor.</li>
+        <li>Docker Compose v2 var.</li>
+        <li>Sunucudan <code>https://lisans.webmahsul.com.tr</code> erişilebilir.</li>
+        <li>Demo portu boş; önerilen port <code>8170</code>.</li>
+        <li>Image registry erişimi hazır veya image demo öncesi pull/build edilmiş.</li>
+      </ul>
+
+      <h2>4. Müşteri Sunucusunda İlk Kurulum</h2>
+      <p>Kurulum klasörü:</p>
+      <pre><code>mkdir infrascope
+cd infrascope</code></pre>
+
+      <p>Müşteri paketinde bulunacak dosyalar:</p>
+      <pre><code>docker-compose.yml
+.env.example
+install.sh
+update.sh
+INSTALL.md
+DEMO_INSTALL.md</code></pre>
+
+      <p>Kurulum:</p>
+      <pre><code>cp .env.example .env
+chmod +x install.sh update.sh
+./install.sh</code></pre>
+
+      <p>Script sorularında:</p>
+      <table>
+        <thead>
+          <tr><th>Soru</th><th>Demo değeri</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>License key</td><td>Merkezi panelden üretilen demo key</td></tr>
+          <tr><td>App URL</td><td><code>http://SUNUCU_IP:8170</code></td></tr>
+          <tr><td>Host port</td><td><code>8170</code></td></tr>
+          <tr><td>Version</td><td><code>.env.example</code> içindeki pinli sürüm, örn. <code>1.0.0</code></td></tr>
+        </tbody>
+      </table>
+
+      <p>Script otomatik üretir:</p>
+      <ul>
+        <li><code>NEXTAUTH_SECRET</code></li>
+        <li><code>POSTGRES_PASSWORD</code></li>
+        <li><code>data/license-cache</code></li>
+        <li><code>data/machine-id</code></li>
+      </ul>
+
+      <p>Servis kontrolü:</p>
+      <pre><code>docker compose ps
+docker compose logs -f app</code></pre>
+
+      <p>Container readiness kontrolü:</p>
+      <pre><code>curl -sf http://localhost:8170/api/health/ready</code></pre>
+
+      <div class="note">
+        <strong>Not:</strong> <code>/api/health</code> ve <code>/api/health/alarms</code>, entegrasyonlar yapılandırılmadan <code>degraded</code> dönebilir. Docker readiness için <code>/api/health/ready</code> kullanılır.
+      </div>
+
+      <h2>5. İlk Açılış Senaryosu</h2>
+      <p>Browser:</p>
+      <pre><code>http://SUNUCU_IP:8170/setup</code></pre>
+
+      <p>Wizard akışı:</p>
+      <ol>
+        <li>Lisans aktivasyonu.</li>
+        <li>Firma / organization adı.</li>
+        <li>İlk admin kullanıcı.</li>
+        <li>Login ekranına yönlendirme.</li>
+      </ol>
+
+      <div class="warning">
+        İlk admin bilgileri müşteri tarafından belirlenir. Default admin yoktur.
+      </div>
+
+      <h3>Login sonrası gösterilecekler</h3>
+      <ul>
+        <li>Dashboard açılır.</li>
+        <li><code>/settings/license</code> lisans durumunu gösterir.</li>
+        <li>Merkezi <code>/license-admin</code> panelinde aynı lisans için <code>activationCount: 1</code> görünür.</li>
+        <li>License detail içinde machine activation kaydı oluşur.</li>
+      </ul>
+
+      <h2>6. Demo Anlatım Notları</h2>
+      <ul>
+        <li>Her müşterinin ayrı Docker/Postgres kurulumu vardır.</li>
+        <li>Müşteri verisi müşteri sunucusunda kalır.</li>
+        <li>Lisans merkezi sunucudan doğrulanır.</li>
+        <li>Activation limit <code>1</code> ise lisans tek sunucuda aktiftir.</li>
+        <li>Sunucu değişirse eski activation merkezi panelden deactivate edilir.</li>
+        <li>Lisans suspend/revoke edilirse validate başarısız olur.</li>
+        <li>Merkezi lisans sunucusu müşteriye kurulmaz.</li>
+      </ul>
+
+      <h2>7. Fallback</h2>
+      <p>Müşteri sunucusunda Docker, port, firewall veya registry sorunu çıkarsa local demo kullan:</p>
+      <pre><code>http://localhost:8170/login</code></pre>
+
+      <p>Anlatım cümlesi:</p>
+      <pre><code>Kurulum modeli aynı; şu an local instance üzerinden müşteri on-prem kurulum akışını simüle ediyoruz.</code></pre>
+
+      <h2>8. Kabul Kriterleri</h2>
+      <ul class="checklist">
+        <li><code>docker compose ps</code> app ve postgres servislerini ayakta gösterir.</li>
+        <li><code>http://SUNUCU_IP:8170/setup</code> açılır.</li>
+        <li>Lisans aktivasyonu başarılı olur.</li>
+        <li>İlk admin oluşturulur.</li>
+        <li>Login yapılır ve dashboard açılır.</li>
+        <li>Merkezi panelde aktivasyon kaydı görünür.</li>
+      </ul>
+    </main>
+
+    <footer>InfraScope müşteri demo kurulum runbook'u</footer>
+  </div>
+</body>
+</html>

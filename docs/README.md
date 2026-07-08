@@ -57,6 +57,7 @@ docs/
 - ✅ **[DUPLICATE_PORT_DOWN_EVENTS.md](./30-runbooks/DUPLICATE_PORT_DOWN_EVENTS.md)** — NMS_PORT_DOWN race condition
 - ✅ **[DATASTORE_CRITICAL.md](./30-runbooks/DATASTORE_CRITICAL.md)** — VMware datastore doluluk
 - ✅ **[CUSTOMER_DEMO_INSTALL.md](./30-runbooks/CUSTOMER_DEMO_INSTALL.md)** — Müşteri sunucusunda demo kurulum + lisans aktivasyonu
+  - HTML kopyalar: `../Kurulum/customer_demo_install.html`, `../Kurulum/demo_install.html`
 
 ## 5. Sürüm Tarihçesi
 

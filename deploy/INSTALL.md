@@ -32,6 +32,13 @@ For a live customer demo, use the shorter operator checklist in:
 DEMO_INSTALL.md
 ```
 
+Browser-ready HTML copies are also available in:
+
+```text
+Kurulum/customer_demo_install.html
+Kurulum/demo_install.html
+```
+
 The installer will:
 
 - create required `data/` and `logs/` directories

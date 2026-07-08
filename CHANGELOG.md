@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- **Customer demo install runbook** — Added customer-server demo documentation for central license creation, Docker on-prem install, first admin setup, activation verification, and fallback demo flow (`docs/30-runbooks/CUSTOMER_DEMO_INSTALL.md`, `deploy/DEMO_INSTALL.md`).
+- **Customer demo install runbook** — Added customer-server demo documentation for central license creation, Docker on-prem install, first admin setup, activation verification, and fallback demo flow (`docs/30-runbooks/CUSTOMER_DEMO_INSTALL.md`, `deploy/DEMO_INSTALL.md`, `Kurulum/*.html`).
 - **Readiness health endpoint** — Added `/api/health/ready` as a lightweight app+database readiness endpoint for Docker health checks, separate from integration/alarm health.
 
 - **Authentication System** — Full login/logout flow with bcrypt password hashing, localStorage session management, and activity tracking:
