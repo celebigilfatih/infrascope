@@ -31,7 +31,7 @@ docker exec infrascope-web-dev netstat -tlnp | grep node
 
 # Check health check configuration
 docker inspect infrascope-web-dev --format='{{.Config.Healthcheck.Test}}'
-# Expected: [CMD curl -f http://localhost:3000/api/health]
+# Expected: [CMD curl -f http://localhost:3000/api/health/ready]
 
 # Restart container to apply fixes
 docker compose down && docker compose up -d
@@ -126,7 +126,7 @@ services:
     ports:
       - "8170:3000"  # External:Internal mapping
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health/ready"]
       # Must use INTERNAL port (3000), not external (8170)
 ```
 
@@ -152,8 +152,8 @@ The entrypoint already uses `$PORT` correctly:
 ```bash
 APP_PORT=${PORT:-3000}  # Default to 3000 if not set
 
-# Wait for health endpoint
-curl -s "http://localhost:${APP_PORT}/api/health"
+# Wait for readiness endpoint
+curl -s "http://localhost:${APP_PORT}/api/health/ready"
 
 # Start alarm scheduler
 curl -s -X POST "http://localhost:${APP_PORT}/api/alarms/scheduler"
@@ -219,12 +219,12 @@ docker compose up -d
 ### ❌ Using external port in health check
 ```yaml
 healthcheck:
-  test: ["CMD", "curl", "-f", "http://localhost:8170/api/health"]  # Wrong!
+  test: ["CMD", "curl", "-f", "http://localhost:8170/api/health/ready"]  # Wrong!
 ```
 
 ### ❌ Hardcoding port in entrypoint
 ```bash
-curl -s http://localhost:8170/api/health  # Breaks when PORT=3000
+curl -s http://localhost:8170/api/health/ready  # Breaks when PORT=3000
 ```
 
 ### ❌ Forgetting to kill zombie processes

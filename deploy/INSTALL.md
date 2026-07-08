@@ -26,6 +26,12 @@ cp .env.example .env
 ./install.sh
 ```
 
+For a live customer demo, use the shorter operator checklist in:
+
+```text
+DEMO_INSTALL.md
+```
+
 The installer will:
 
 - create required `data/` and `logs/` directories
@@ -67,10 +73,15 @@ Do not set `NODE_TLS_REJECT_UNAUTHORIZED=0` in production. The container will re
 
 ```bash
 docker compose ps
+curl -sf http://localhost:APP_PORT/api/health/ready
 docker compose logs -f app
 docker compose restart app
 docker compose down
 ```
+
+`/api/health/ready` checks application and database readiness for Docker health checks.
+`/api/health` and `/api/health/alarms` include integrations and may report `degraded`
+until FortiAnalyzer, VMware, NMS, or email are configured.
 
 ## Updates
 

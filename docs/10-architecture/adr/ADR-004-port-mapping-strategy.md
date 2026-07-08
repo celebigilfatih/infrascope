@@ -53,7 +53,7 @@ services:
     ports:
       - "8170:3000"  # External:Internal mapping
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health/ready"]
       interval: 60s
       timeout: 5s
       retries: 3
@@ -69,8 +69,8 @@ services:
 ```bash
 APP_PORT=${PORT:-3000}
 
-# Wait for health endpoint
-curl -s "http://localhost:${APP_PORT}/api/health"
+# Wait for readiness endpoint
+curl -s "http://localhost:${APP_PORT}/api/health/ready"
 
 # Start alarm scheduler
 curl -s -X POST "http://localhost:${APP_PORT}/api/alarms/scheduler"
@@ -134,12 +134,12 @@ docker ps --filter "name=infrascope-web" --format "{{.Status}}"
 # Expected: Up X minutes (healthy)
 
 # 3. Test internal health endpoint
-docker exec infrascope-web-dev curl -s http://localhost:3000/api/health | jq
-# Expected: {"status":"ok",...}
+docker exec infrascope-web-dev curl -s http://localhost:3000/api/health/ready | jq
+# Expected: {"status":"ready",...}
 
 # 4. Test external access
-curl -s http://localhost:8170/api/health | jq
-# Expected: {"status":"ok",...}
+curl -s http://localhost:8170/api/health/ready | jq
+# Expected: {"status":"ready",...}
 
 # 5. Verify Next.js binding
 docker exec infrascope-web-dev ss -tlnp | grep node

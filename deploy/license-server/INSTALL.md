@@ -63,7 +63,7 @@ production.
 Check health:
 
 ```bash
-curl https://lisans.webmahsul.com.tr/api/health
+curl https://lisans.webmahsul.com.tr/api/health/ready
 ```
 
 ## Create a License

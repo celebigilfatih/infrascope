@@ -123,15 +123,15 @@ health_check() {
     RETRY_COUNT=0
     
     while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-        if curl -sf http://localhost:${APP_PORT:-3000}/api/health > /dev/null 2>&1; then
-            echo -e "${GREEN}✓ Application is healthy${NC}"
+        if curl -sf http://localhost:${APP_PORT:-3000}/api/health/ready > /dev/null 2>&1; then
+            echo -e "${GREEN}✓ Application is ready${NC}"
             return 0
         fi
         sleep 2
         RETRY_COUNT=$((RETRY_COUNT + 1))
     done
     
-    echo -e "${YELLOW}! Application health check timed out. Check logs: docker compose logs app${NC}"
+    echo -e "${YELLOW}! Application readiness check timed out. Check logs: docker compose logs app${NC}"
     return 1
 }
 

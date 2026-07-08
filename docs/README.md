@@ -56,6 +56,7 @@ docs/
 - ✅ **[FA_ACCOUNT_LOCKED.md](./30-runbooks/FA_ACCOUNT_LOCKED.md)** — FortiAnalyzer hesap kilitleri
 - ✅ **[DUPLICATE_PORT_DOWN_EVENTS.md](./30-runbooks/DUPLICATE_PORT_DOWN_EVENTS.md)** — NMS_PORT_DOWN race condition
 - ✅ **[DATASTORE_CRITICAL.md](./30-runbooks/DATASTORE_CRITICAL.md)** — VMware datastore doluluk
+- ✅ **[CUSTOMER_DEMO_INSTALL.md](./30-runbooks/CUSTOMER_DEMO_INSTALL.md)** — Müşteri sunucusunda demo kurulum + lisans aktivasyonu
 
 ## 5. Sürüm Tarihçesi
 

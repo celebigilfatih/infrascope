@@ -10,6 +10,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Customer demo install runbook** — Added customer-server demo documentation for central license creation, Docker on-prem install, first admin setup, activation verification, and fallback demo flow (`docs/30-runbooks/CUSTOMER_DEMO_INSTALL.md`, `deploy/DEMO_INSTALL.md`).
+- **Readiness health endpoint** — Added `/api/health/ready` as a lightweight app+database readiness endpoint for Docker health checks, separate from integration/alarm health.
+
 - **Authentication System** — Full login/logout flow with bcrypt password hashing, localStorage session management, and activity tracking:
   - Login page (`/login`) with modern gradient UI, email/password validation, and error handling
   - Logout page (`/logout`) with confirmation dialog
@@ -51,6 +54,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Docker healthcheck false negatives before integrations are configured** — Customer and license-server compose health checks now use `/api/health/ready` so unconfigured FortiAnalyzer/VMware/NMS alarm health does not mark a fresh demo install unhealthy.
 - **Port conflict: package.json hardcoded PORT=8170 vs Docker PORT=3000** — `npm run dev` and `npm run start` scripts now use `${PORT:-3000}` instead of hardcoded `8170`. Next.js now respects the `PORT` env var from `docker-compose.yml`, aligning container health checks (port 3000) with actual Next.js binding. Prevents `unhealthy` container status and 500 errors when running via Docker
 
 ### Changed
