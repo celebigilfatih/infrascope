@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+APP_DIR="${INFRASCOPE_HOME:-/opt/infrascope}"
+
+if [ ! -d "${APP_DIR}" ]; then
+  echo "InfraScope appliance directory not found: ${APP_DIR}" >&2
+  exit 1
+fi
+
+cd "${APP_DIR}"
+
+if [ -f .env ]; then
+  set -a
+  # shellcheck disable=SC1091
+  source .env
+  set +a
+fi
+
+APP_PORT="${APP_PORT:-8170}"
+
+echo "InfraScope appliance status"
+echo "Home: ${APP_DIR}"
+echo "URL:  ${APP_URL:-http://localhost:${APP_PORT}}"
+echo ""
+
+docker compose ps
+
+echo ""
+echo "Readiness:"
+if curl -sf "http://localhost:${APP_PORT}/api/health/ready" > /dev/null 2>&1; then
+  echo "  OK: http://localhost:${APP_PORT}/api/health/ready"
+else
+  echo "  NOT READY: check logs with 'docker compose logs app'"
+fi
+
+echo ""
+echo "Recent app logs:"
+docker compose logs --tail=30 app || true
+

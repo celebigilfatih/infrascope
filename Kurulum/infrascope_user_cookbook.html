@@ -1,0 +1,1444 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>InfraScope - Kullanım Cookbook</title>
+  <link rel="icon" href="../public/images/favicon.svg" type="image/svg+xml">
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --paper: #ffffff;
+      --ink: #172033;
+      --muted: #5f6f86;
+      --line: #d9e2ef;
+      --brand: #2563eb;
+      --brand-dark: #1d4ed8;
+      --accent: #eff6ff;
+      --accent-line: #93c5fd;
+      --ok: #ecfdf5;
+      --ok-line: #86efac;
+      --warn: #fff7ed;
+      --warn-line: #fdba74;
+      --danger: #fef2f2;
+      --danger-line: #fca5a5;
+      --code-bg: #111827;
+      --code-ink: #e5e7eb;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.62;
+    }
+
+    .page {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 32px 20px 56px;
+    }
+
+    header, main, .toc {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+    }
+
+    header {
+      padding: 30px;
+      margin-bottom: 18px;
+    }
+
+    main { padding: 30px; }
+
+    .eyebrow {
+      margin-bottom: 8px;
+      color: var(--brand);
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: 32px;
+      line-height: 1.18;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin: 36px 0 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--line);
+      font-size: 22px;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      margin: 24px 0 8px;
+      font-size: 17px;
+      letter-spacing: 0;
+    }
+
+    p { margin: 0 0 12px; }
+    a { color: var(--brand-dark); }
+
+    .toc {
+      padding: 20px 24px;
+      margin-bottom: 18px;
+    }
+
+    .toc h2 {
+      margin-top: 0;
+      font-size: 18px;
+    }
+
+    .toc ol {
+      columns: 2;
+      column-gap: 34px;
+    }
+
+    .meta {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .meta div {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #f8fafc;
+      padding: 12px 14px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .meta strong {
+      display: block;
+      color: var(--ink);
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+
+    ul, ol {
+      margin-top: 8px;
+      padding-left: 24px;
+    }
+
+    li { margin: 5px 0; }
+
+    code {
+      border-radius: 5px;
+      background: #edf2f7;
+      color: #0f172a;
+      padding: 2px 5px;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: .94em;
+      overflow-wrap: anywhere;
+    }
+
+    pre {
+      overflow-x: auto;
+      margin: 12px 0 18px;
+      border: 1px solid #0f172a;
+      border-radius: 10px;
+      background: var(--code-bg);
+      color: var(--code-ink);
+      padding: 16px;
+    }
+
+    pre code {
+      background: transparent;
+      color: inherit;
+      padding: 0;
+      overflow-wrap: normal;
+      white-space: pre;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 18px;
+      font-size: 14px;
+    }
+
+    th, td {
+      border: 1px solid var(--line);
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th { background: #f8fafc; }
+
+    .note, .success, .warning, .danger {
+      margin: 14px 0;
+      border-radius: 10px;
+      padding: 14px 16px;
+    }
+
+    .note {
+      background: var(--accent);
+      border: 1px solid var(--accent-line);
+    }
+
+    .success {
+      background: var(--ok);
+      border: 1px solid var(--ok-line);
+    }
+
+    .warning {
+      background: var(--warn);
+      border: 1px solid var(--warn-line);
+    }
+
+    .danger {
+      background: var(--danger);
+      border: 1px solid var(--danger-line);
+    }
+
+    .section-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 14px;
+      margin: 14px 0 18px;
+    }
+
+    .tile {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fbfdff;
+      padding: 14px;
+    }
+
+    .tile h3 {
+      margin-top: 0;
+      font-size: 15px;
+    }
+
+    .kbd {
+      border: 1px solid #cbd5e1;
+      border-bottom-width: 2px;
+      border-radius: 6px;
+      background: #f8fafc;
+      color: #0f172a;
+      padding: 1px 6px;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 12px;
+    }
+
+    .small { color: var(--muted); font-size: 13px; }
+
+    @media print {
+      body { background: white; }
+      .page { max-width: none; padding: 0; }
+      header, main, .toc {
+        border: none;
+        border-radius: 0;
+      }
+      .toc ol { columns: 2; }
+      h2 { break-after: avoid; }
+      pre, table, .note, .warning, .danger, .success, .tile { break-inside: avoid; }
+      a { color: inherit; text-decoration: none; }
+    }
+
+    @media (max-width: 760px) {
+      .page { padding: 16px 10px 36px; }
+      header, main { padding: 20px; }
+      h1 { font-size: 26px; }
+      .toc ol { columns: 1; }
+    }
+
+    /* Modern InfraScope cookbook shell */
+    :root {
+      --bg: #f7f8fb;
+      --paper: #ffffff;
+      --ink: #18181b;
+      --muted: #71717a;
+      --line: #e4e4e7;
+      --brand: #10b981;
+      --brand-dark: #047857;
+      --accent: #ecfdf5;
+      --accent-line: #a7f3d0;
+      --ok: #ecfdf5;
+      --ok-line: #86efac;
+      --warn: #fff7ed;
+      --warn-line: #fed7aa;
+      --danger: #fef2f2;
+      --danger-line: #fecaca;
+      --code-bg: #111827;
+      --code-ink: #e5e7eb;
+      --shadow: 0 18px 45px rgba(24, 24, 27, .08);
+      --sidebar: #ffffff;
+      --sidebar-ink: #27272a;
+      --sidebar-muted: #71717a;
+    }
+
+    html { scroll-padding-top: 18px; }
+
+    body {
+      background:
+        radial-gradient(circle at top right, rgba(16, 185, 129, .12), transparent 32rem),
+        linear-gradient(180deg, #fbfbfc 0%, var(--bg) 42%, #f4f5f8 100%);
+      color: var(--ink);
+    }
+
+    .app-shell {
+      display: grid;
+      grid-template-columns: 292px minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      position: sticky;
+      top: 0;
+      align-self: start;
+      height: 100vh;
+      overflow-y: auto;
+      border-right: 1px solid var(--line);
+      background: rgba(255, 255, 255, .92);
+      backdrop-filter: blur(18px);
+      padding: 22px 16px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 4px 8px 18px;
+    }
+
+    .brand-mark {
+      display: grid;
+      place-items: center;
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: var(--brand);
+      color: #052e1d;
+      font-weight: 900;
+      letter-spacing: 0;
+      box-shadow: 0 12px 28px rgba(16, 185, 129, .26);
+    }
+
+    .brand strong {
+      display: block;
+      color: var(--sidebar-ink);
+      line-height: 1.15;
+    }
+
+    .brand span {
+      display: block;
+      color: var(--sidebar-muted);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .search-box {
+      display: block;
+      padding: 0 8px 12px;
+    }
+
+    .search-box span {
+      display: block;
+      margin-bottom: 7px;
+      color: var(--sidebar-muted);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+
+    .search-box input {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #f8fafc;
+      color: var(--ink);
+      outline: none;
+      padding: 11px 12px;
+      font: inherit;
+      font-size: 14px;
+      line-height: 1.2;
+      transition: border-color .16s ease, box-shadow .16s ease, background .16s ease;
+    }
+
+    .search-box input:focus {
+      border-color: var(--brand);
+      background: #ffffff;
+      box-shadow: 0 0 0 3px rgba(16, 185, 129, .16);
+    }
+
+    .search-status {
+      margin: 0 8px 12px;
+      color: var(--sidebar-muted);
+      font-size: 12px;
+    }
+
+    .sidebar .toc {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      margin: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      padding: 0;
+    }
+
+    .sidebar .toc a {
+      display: grid;
+      grid-template-columns: 30px minmax(0, 1fr);
+      gap: 9px;
+      align-items: center;
+      min-height: 38px;
+      border-radius: 9px;
+      color: var(--sidebar-ink);
+      padding: 8px 10px;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 650;
+      line-height: 1.25;
+    }
+
+    .sidebar .toc a:hover {
+      background: #f4f4f5;
+      color: #09090b;
+    }
+
+    .sidebar .toc a.is-active {
+      background: var(--accent);
+      color: var(--brand-dark);
+    }
+
+    .nav-index {
+      color: var(--sidebar-muted);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .04em;
+    }
+
+    .sidebar-footer {
+      margin: 16px 8px 0;
+      border-top: 1px solid var(--line);
+      color: var(--sidebar-muted);
+      padding-top: 14px;
+      font-size: 12px;
+    }
+
+    .page {
+      width: min(100%, 1080px);
+      max-width: none;
+      min-width: 0;
+      margin: 0 auto;
+      padding: 28px 32px 64px;
+    }
+
+    .page > header,
+    main {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, .94);
+      box-shadow: var(--shadow);
+      min-width: 0;
+    }
+
+    .page > header {
+      margin-bottom: 18px;
+      padding: 28px 30px;
+    }
+
+    main {
+      padding: 8px 30px 30px;
+    }
+
+    .eyebrow {
+      color: var(--brand-dark);
+      letter-spacing: .06em;
+    }
+
+    h1 {
+      max-width: 780px;
+      color: #09090b;
+      font-size: clamp(28px, 4vw, 42px);
+      line-height: 1.08;
+      overflow-wrap: break-word;
+    }
+
+    h2 {
+      scroll-margin-top: 24px;
+      border-bottom-color: var(--line);
+      color: #111827;
+      font-size: 23px;
+    }
+
+    h3 { color: #27272a; }
+
+    .hero-copy {
+      max-width: 820px;
+      color: var(--muted);
+      font-size: 15px;
+    }
+
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    .quick-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 0;
+      min-height: 36px;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: #ffffff;
+      color: #27272a;
+      padding: 8px 12px;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .quick-link.primary {
+      border-color: transparent;
+      background: var(--brand);
+      color: #052e1d;
+    }
+
+    .meta {
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      margin-top: 22px;
+      min-width: 0;
+    }
+
+    .meta div,
+    .tile {
+      border-radius: 9px;
+      background: #fafafa;
+      min-width: 0;
+    }
+
+    .tile {
+      transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease;
+    }
+
+    .tile:hover {
+      transform: translateY(-1px);
+      border-color: var(--accent-line);
+      box-shadow: 0 10px 26px rgba(24, 24, 27, .06);
+    }
+
+    table {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      border-collapse: separate;
+      border-spacing: 0;
+      overflow: hidden;
+    }
+
+    th,
+    td {
+      border-width: 0 0 1px;
+    }
+
+    tr:last-child td { border-bottom: 0; }
+
+    th {
+      background: #fafafa;
+      color: #3f3f46;
+      font-size: 12px;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+
+    .note,
+    .success,
+    .warning,
+    .danger {
+      border-radius: 9px;
+    }
+
+    .search-empty {
+      border: 1px dashed var(--line);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, .82);
+      color: var(--muted);
+      margin-bottom: 18px;
+      padding: 18px 20px;
+      text-align: center;
+    }
+
+    .is-hidden { display: none !important; }
+
+    @media print {
+      .app-shell { display: block; }
+      .sidebar,
+      .hero-actions,
+      .search-empty { display: none !important; }
+      .page { width: auto; padding: 0; }
+      .page > header,
+      main {
+        box-shadow: none;
+        background: #ffffff;
+      }
+    }
+
+    @media (max-width: 1020px) {
+      .app-shell { grid-template-columns: 1fr; }
+
+      .sidebar {
+        position: relative;
+        height: auto;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .sidebar .toc {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      }
+
+      .page {
+        width: 100%;
+        padding: 18px 18px 42px;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .sidebar { padding: 16px 12px; }
+      .brand { padding-bottom: 14px; }
+      .sidebar .toc {
+        display: flex;
+        flex-direction: row;
+        gap: 8px;
+        overflow-x: auto;
+        padding-bottom: 4px;
+        scroll-snap-type: x proximity;
+      }
+
+      .sidebar .toc a {
+        grid-template-columns: 24px max-content;
+        min-width: max-content;
+        border: 1px solid var(--line);
+        background: #ffffff;
+        scroll-snap-align: start;
+      }
+
+      .sidebar-footer { display: none; }
+      .page { padding: 14px 10px 36px; }
+      .page > header,
+      main { padding: 20px; }
+      main { padding-top: 4px; }
+      h1 { font-size: 28px; }
+      .hero-actions { gap: 8px; }
+      .quick-link {
+        flex: 1 1 100%;
+        white-space: normal;
+      }
+      .meta,
+      .section-grid { grid-template-columns: 1fr; }
+      table { display: block; overflow-x: auto; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Cookbook menüsü">
+      <div class="brand">
+        <div class="brand-mark">IS</div>
+        <div>
+          <strong>InfraScope</strong>
+          <span>User Cookbook</span>
+        </div>
+      </div>
+
+      <label class="search-box" for="cookbook-search">
+        <span>Arama</span>
+        <input id="cookbook-search" type="search" placeholder="Bölüm, ekran veya işlem ara..." autocomplete="off">
+      </label>
+
+      <div class="search-status" id="search-status">16 bölüm gösteriliyor</div>
+
+      <nav class="toc" aria-label="İçindekiler">
+        <a href="#kapsam"><span class="nav-index">01</span><span>Kapsam ve roller</span></a>
+        <a href="#ilk-giris"><span class="nav-index">02</span><span>İlk giriş</span></a>
+        <a href="#arayuz"><span class="nav-index">03</span><span>Arayüz ve menüler</span></a>
+        <a href="#gunluk"><span class="nav-index">04</span><span>Günlük kontrol akışı</span></a>
+        <a href="#dashboard"><span class="nav-index">05</span><span>Dashboard kullanımı</span></a>
+        <a href="#alarmlar"><span class="nav-index">06</span><span>Alarm yönetimi</span></a>
+        <a href="#envanter"><span class="nav-index">07</span><span>Lokasyon, rack ve cihaz envanteri</span></a>
+        <a href="#network"><span class="nav-index">08</span><span>Network ve NMS kullanımı</span></a>
+        <a href="#virtualization"><span class="nav-index">09</span><span>VMware sanallaştırma</span></a>
+        <a href="#security"><span class="nav-index">10</span><span>Firewall ve güvenlik ekranları</span></a>
+        <a href="#services"><span class="nav-index">11</span><span>Servis ve bağımlılık haritası</span></a>
+        <a href="#integrations"><span class="nav-index">12</span><span>Entegrasyonları yönetme</span></a>
+        <a href="#settings"><span class="nav-index">13</span><span>Ayarlar, kullanıcılar ve lisans</span></a>
+        <a href="#operasyon"><span class="nav-index">14</span><span>Önerilen operasyon rutini</span></a>
+        <a href="#troubleshooting"><span class="nav-index">15</span><span>Sorun giderme</span></a>
+        <a href="#demo"><span class="nav-index">16</span><span>Hızlı demo senaryosu</span></a>
+      </nav>
+
+      <div class="sidebar-footer">
+        Arama, başlık ve bölüm içeriklerinde çalışır. Menü aktif bölümü otomatik takip eder.
+      </div>
+    </aside>
+
+    <div class="page">
+    <header>
+      <div class="eyebrow">InfraScope Cookbook</div>
+      <h1>Son Kullanıcı Uygulama Kullanım Rehberi</h1>
+      <p class="hero-copy">
+        Bu doküman, InfraScope kurulduktan ve ilk admin hesabı oluşturulduktan sonra müşteri IT ekibinin
+        uygulamayı günlük operasyonda nasıl kullanacağını anlatır. Kurulum adımları için ayrı
+        <code>infrascope_customer_cookbook.html</code> dosyasını kullanın.
+      </p>
+      <div class="hero-actions">
+        <a class="quick-link primary" href="#gunluk">Günlük akışa git</a>
+        <a class="quick-link" href="#troubleshooting">Sorun giderme</a>
+        <a class="quick-link" href="#settings">Lisans ve kullanıcılar</a>
+      </div>
+      <div class="meta">
+        <div><strong>Hedef kitle</strong>Müşteri IT, Network, Sistem ve SecOps ekipleri</div>
+        <div><strong>Uygulama modu</strong>Müşteri on-prem / tek tenant InfraScope instance</div>
+        <div><strong>Önerilen adres</strong><code>http://SUNUCU_IP:8170</code></div>
+        <div><strong>Lisans merkezi</strong><code>https://lisans.webmahsul.com.tr</code></div>
+      </div>
+    </header>
+
+    <div class="search-empty" id="search-empty" hidden>
+      Aramanızla eşleşen bölüm bulunamadı. Daha genel bir kelime deneyin.
+    </div>
+
+    <main id="content">
+      <section id="kapsam">
+        <h2>1. Kapsam ve Roller</h2>
+        <p>
+          InfraScope, müşteri ortamındaki fiziksel altyapı, network cihazları, firewall görünümü,
+          VMware envanteri, alarm üretimi ve temel güvenlik gözlemi için kullanılan operasyon panelidir.
+          Müşteri verisi kendi kurulumundaki PostgreSQL veritabanında kalır. Lisans doğrulaması merkezi
+          lisans sunucusuna yapılır.
+        </p>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Rol</th>
+              <th>Tipik kullanım</th>
+              <th>Dikkat edilmesi gerekenler</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Admin</td>
+              <td>Kullanıcı, lisans, entegrasyon, alarm ve sistem ayarlarını yönetir.</td>
+              <td>Entegrasyon şifreleri ve API key bilgileri sadece yetkili kişilerle paylaşılmalıdır.</td>
+            </tr>
+            <tr>
+              <td>Network ekibi</td>
+              <td>Switch, firewall, VPN, topology ve config backup ekranlarını kullanır.</td>
+              <td>Silme ve değiştirme işlemlerinde audit log oluşur.</td>
+            </tr>
+            <tr>
+              <td>Sistem ekibi</td>
+              <td>VMware cluster, host, VM, datastore ve snapshot ekranlarını izler.</td>
+              <td>vCenter erişimi kesilirse ilgili veriler güncellenmez.</td>
+            </tr>
+            <tr>
+              <td>SecOps</td>
+              <td>Riskli firewall kuralları, VIP, SSL-VPN, quarantine ve güvenlik alarmlarını inceler.</td>
+              <td>InfraScope tespit ve görünürlük sağlar; cihaz üzerindeki değişiklikler kontrollü yapılmalıdır.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="warning">
+          <strong>Önemli:</strong> Merkezi lisans yönetim paneli müşteriye kurulmaz. Müşteri ortamında
+          <code>/license-admin</code> menüsü görünmemelidir. Müşteri tarafında lisans durumu
+          <code>Settings &gt; License</code> ekranından izlenir.
+        </div>
+      </section>
+
+      <section id="ilk-giris">
+        <h2>2. İlk Giriş</h2>
+        <ol>
+          <li>Tarayıcıdan uygulama adresini açın: <code>http://SUNUCU_IP:8170</code>.</li>
+          <li>İlk kurulum tamamlandıysa sistem sizi <code>/login</code> ekranına yönlendirir.</li>
+          <li>İlk admin hesabı kurulum sırasında müşteri tarafından oluşturulur.</li>
+          <li>Email ve şifre ile giriş yapın.</li>
+          <li>Giriş sonrası normal müşteri modunda varsayılan ekran <code>Dashboard</code> olur.</li>
+        </ol>
+
+        <div class="success">
+          <strong>Güvenlik notu:</strong> Varsayılan <code>admin/admin</code> hesabı yoktur.
+          İlk admin şifresi kurulum sırasında müşteri tarafından belirlenir.
+        </div>
+
+        <h3>Giriş yapılamazsa</h3>
+        <ul>
+          <li>Sunucu adresi ve port doğru mu kontrol edin.</li>
+          <li>Tarayıcıda <code>/api/health/ready</code> adresini açın.</li>
+          <li>Şifre unutulduysa Admin yetkili kullanıcıdan yeni kullanıcı daveti veya şifre reset akışı istenmelidir.</li>
+          <li>Hiç admin yoksa bu normal kullanıcı ekranından çözülemez; kurulum sorumlusu ile iletişime geçin.</li>
+        </ul>
+      </section>
+
+      <section id="arayuz">
+        <h2>3. Arayüz ve Menüler</h2>
+        <p>
+          Sol menü, modülleri kategori bazında gösterir. Üst bölümde aktif kullanıcı, tema seçimi,
+          menüyü daraltma ve çıkış kontrolleri bulunur.
+        </p>
+
+        <div class="section-grid">
+          <div class="tile">
+            <h3>Dashboard</h3>
+            <p>Genel sağlık, kritik alarmlar, VMware, NMS, firewall ve VPN özetleri.</p>
+          </div>
+          <div class="tile">
+            <h3>Infrastructure</h3>
+            <p>Locations, Racks ve Devices ile fiziksel envanter yönetimi.</p>
+          </div>
+          <div class="tile">
+            <h3>Virtualization</h3>
+            <p>VMware cluster, ESXi host, VM, datastore ve snapshot görünümü.</p>
+          </div>
+          <div class="tile">
+            <h3>Network</h3>
+            <p>Topology, switch/NMS cihazları, cihaz ekleme ve config backup ekranları.</p>
+          </div>
+          <div class="tile">
+            <h3>Security</h3>
+            <p>Firewall görünümü, config revisions, VIP, VPN, risky rules ve quarantine.</p>
+          </div>
+          <div class="tile">
+            <h3>Settings</h3>
+            <p>Kullanıcılar, audit log, alarm kuralları, API keys ve lisans durumu.</p>
+          </div>
+        </div>
+
+        <div class="note">
+          Menüde bazı ekranlar entegrasyon yapılmadan boş veya sınırlı veri gösterebilir. Bu normaldir.
+          Örneğin VMware ekranları için önce vCenter entegrasyonu kaydedilip senkronizasyon çalıştırılmalıdır.
+        </div>
+      </section>
+
+      <section id="gunluk">
+        <h2>4. Günlük Kontrol Akışı</h2>
+        <p>Operasyon ekibi her gün aşağıdaki kısa kontrol akışını izleyebilir.</p>
+
+        <ol>
+          <li><code>Dashboard &gt; Genel Sağlık</code> ekranını açın.</li>
+          <li>Kritik alarm, offline cihaz, datastore doluluk ve VPN durum özetlerini kontrol edin.</li>
+          <li><code>Dashboard &gt; Kritik Alarmlar</code> ekranında yeni alarmları kaynak bazında filtreleyin.</li>
+          <li><code>Integrations &gt; Sync Status</code> ekranında entegrasyonların bağlı olduğunu doğrulayın.</li>
+          <li><code>Settings &gt; License</code> ekranında lisans süresi ve limit kullanımına haftalık bakın.</li>
+          <li>Olay varsa ilgili detay ekranına gidip alarm kaynağını doğrulayın.</li>
+        </ol>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Kontrol</th>
+              <th>Beklenen durum</th>
+              <th>Aksiyon</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Ready health</td>
+              <td><code>app=ready</code>, <code>database=ready</code></td>
+              <td>Ready değilse uygulama ve Postgres container loglarını kontrol edin.</td>
+            </tr>
+            <tr>
+              <td>Alarm sayısı</td>
+              <td>Kritik alarm beklenenden fazla artmamalı</td>
+              <td>Kaynak filtreleriyle firewall, switch ve VMware ayrımı yapın.</td>
+            </tr>
+            <tr>
+              <td>Entegrasyon durumu</td>
+              <td>Bağlı veya sağlıklı görünmeli</td>
+              <td>Credential, ağ erişimi ve TLS sertifika ayarlarını kontrol edin.</td>
+            </tr>
+            <tr>
+              <td>Lisans</td>
+              <td>Active, grace mode kapalı</td>
+              <td>Lisans sunucusu erişimini ve lisans süresini kontrol edin.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="dashboard">
+        <h2>5. Dashboard Kullanımı</h2>
+        <p>
+          Dashboard, ortamın hızlı sağlık ekranıdır. Amaç, ekibin her modüle tek tek girmeden
+          kritik durumu görmesidir.
+        </p>
+
+        <h3>Genel Sağlık</h3>
+        <ul>
+          <li>VMware host, VM, datastore ve snapshot özetlerini gösterir.</li>
+          <li>NMS/switch cihazlarının online/offline durumunu özetler.</li>
+          <li>Firewall, IPsec ve SSL-VPN bilgilerini hızlı kartlar halinde gösterir.</li>
+          <li>Kritik alarm ve bağlantı sorunlarını öncelikli görünür yapar.</li>
+        </ul>
+
+        <h3>Kritik Alarmlar</h3>
+        <ul>
+          <li>Alarm kaynağına göre filtreleyin: <code>Tümü</code>, <code>Firewall</code>, <code>Switch</code>, <code>VMware</code>.</li>
+          <li>Arama kutusu ile alarm kodu, başlık, IP veya cihaz adına göre arayın.</li>
+          <li>Config değişikliği alarmlarında eski/yeni değer detaylarını inceleyin.</li>
+          <li>Alarm detayındaki ham veri, kök neden analizi için kullanılabilir.</li>
+        </ul>
+
+        <div class="warning">
+          Dashboard bir özet ekranıdır. Kök neden analizi için alarmın ilgili modül detayına gidin:
+          VMware alarmı için Virtualization ekranları, switch alarmı için NMS, firewall alarmı için Security/Firewall ekranları.
+        </div>
+      </section>
+
+      <section id="alarmlar">
+        <h2>6. Alarm Yönetimi</h2>
+        <p>
+          Alarm sistemi entegrasyonlardan gelen gerçek veriye göre çalışır. Mock veya tahmini veri üretmemesi
+          beklenir. Bu nedenle veri kaynağına erişilemiyorsa ilgili alarm oluşmayabilir.
+        </p>
+
+        <h3>Alarm inceleme adımları</h3>
+        <ol>
+          <li><code>Dashboard &gt; Kritik Alarmlar</code> ekranına girin.</li>
+          <li>Önce severity değerine bakın: Kritik, Yüksek, Orta, Düşük.</li>
+          <li>Kaynak tipini belirleyin: firewall, switch/NMS veya VMware.</li>
+          <li>Alarm mesajındaki cihaz, IP, port, policy veya VM bilgisini not alın.</li>
+          <li>İlgili detay ekranında durumu doğrulayın.</li>
+          <li>Gerçek olay ise operasyon prosedürünü çalıştırın; yanlış pozitif ise alarm kuralı/cooldown ayarını gözden geçirin.</li>
+        </ol>
+
+        <h3>Alarm kuralları</h3>
+        <p><code>Settings &gt; Alert Rules</code> ekranından alarm tanımları ve bildirim ayarları yönetilir.</p>
+        <ul>
+          <li>Alarm tanımlarını etkin/pasif yapabilirsiniz.</li>
+          <li>Email bildirimini alarm bazında açıp kapatabilirsiniz.</li>
+          <li>SMTP host, port, kullanıcı, şifre ve alıcı listesi kaydedilebilir.</li>
+          <li><code>Send Test Email</code> ile bildirim ayarı test edilir.</li>
+          <li>Yeni kurulumda alarm katalog verisi eksikse seed işlemiyle tanımlar oluşturulabilir.</li>
+        </ul>
+
+        <div class="danger">
+          Alarmı kapatmak olayı çözmez. Alarm kapatma işlemi sadece tespit kuralını susturur.
+          Kalıcı çözüm cihaz, firewall, vCenter veya network tarafındaki kök nedenin giderilmesidir.
+        </div>
+      </section>
+
+      <section id="envanter">
+        <h2>7. Lokasyon, Rack ve Cihaz Envanteri</h2>
+        <p>
+          InfraScope fiziksel envanteri hiyerarşik modelle tutar:
+          <code>Organization &gt; Building &gt; Floor &gt; Room &gt; Rack &gt; Device</code>.
+        </p>
+
+        <h3>Lokasyon yönetimi</h3>
+        <ol>
+          <li><code>Infrastructure &gt; Locations</code> ekranına girin.</li>
+          <li>Önce organizasyon/firma kaydını oluşturun.</li>
+          <li>Organizasyon altında bina ekleyin.</li>
+          <li>Bina altında kat, kat altında oda, oda altında rack ekleyin.</li>
+          <li>Yanlış kayıtları düzenlemek için edit ikonunu, kaldırmak için delete ikonunu kullanın.</li>
+        </ol>
+
+        <h3>Rack yönetimi</h3>
+        <ul>
+          <li><code>Infrastructure &gt; Racks</code> ekranından rack listesini izleyin.</li>
+          <li>Rack adı, lokasyon ilişkisi, kapasite ve operasyonel durum bilgilerini düzenleyin.</li>
+          <li>Rack silmeden önce bağlı cihaz ve lokasyon ilişkilerini kontrol edin.</li>
+        </ul>
+
+        <h3>Cihaz yönetimi</h3>
+        <ol>
+          <li><code>Infrastructure &gt; Devices</code> ekranına girin.</li>
+          <li><code>Add Device</code> ile cihaz adı, IP, tip, durum, lokasyon/rack bilgilerini girin.</li>
+          <li>Arama ve filtreleri kullanarak cihazı bulun.</li>
+          <li>Edit ile bilgileri güncelleyin.</li>
+          <li>Silme işlemleri geri alınamaz; üretim ortamında silmeden önce doğrulama yapın.</li>
+        </ol>
+
+        <div class="note">
+          En iyi sonuç için önce lokasyon ağacını oluşturun, sonra cihazları bu lokasyonlara bağlayın.
+          Böylece topology ve dashboard ekranları daha anlamlı veri gösterir.
+        </div>
+      </section>
+
+      <section id="network">
+        <h2>8. Network ve NMS Kullanımı</h2>
+        <h3>Topology</h3>
+        <p>
+          <code>Network &gt; Topology</code> ekranı altyapının görsel haritasıdır. Bina, mantıksal, fiziksel
+          ve hiyerarşi görünümleriyle farklı seviyelerde inceleme yapılabilir.
+        </p>
+        <ul>
+          <li>Yakınlaştırma yaptıkça bina, kat, oda ve cihaz detayları kademeli görünür.</li>
+          <li>Breadcrumb ile üst seviyeye geri dönün.</li>
+          <li>Bağlantı yönetimi ile binalar veya cihazlar arası linkleri modelleyin.</li>
+          <li>Gerekirse mevcut görünümü PNG olarak dışa aktarın.</li>
+        </ul>
+
+        <h3>Switch/NMS cihazları</h3>
+        <ol>
+          <li><code>Network &gt; Add Device</code> ekranından switch veya network cihazı ekleyin.</li>
+          <li>IP adresi, vendor, SNMP ve gerekiyorsa SSH bilgilerini girin.</li>
+          <li>SNMP ile arayüz, VLAN, port durumu gibi bilgiler izlenir.</li>
+          <li>SSH ile config backup alınabilir.</li>
+          <li><code>Network &gt; Switches</code> ekranından bağlantı durumlarını takip edin.</li>
+        </ol>
+
+        <h3>Config Backups</h3>
+        <ul>
+          <li><code>Network &gt; Config Backups</code> cihaz konfigürasyon yedeklerini gösterir.</li>
+          <li>FortiOS, Cisco IOS/NX-OS ve HP Comware gibi cihazlarda vendor komutları farklı olabilir.</li>
+          <li>Config değişikliği alarmı geldiğinde bu ekranı kullanarak önceki ve yeni sürüm karşılaştırılabilir.</li>
+        </ul>
+
+        <div class="warning">
+          SNMP timeout veya SSH bağlantı hatası varsa cihaz tamamen bozuk anlamına gelmez.
+          Önce network erişimi, firewall ACL, SNMP community/v3 credential ve SSH kullanıcı yetkisini kontrol edin.
+        </div>
+      </section>
+
+      <section id="virtualization">
+        <h2>9. VMware Sanallaştırma</h2>
+        <p>
+          VMware ekranları vCenter entegrasyonu ile dolar. Entegrasyon yapılmadan cluster, host, VM,
+          datastore ve snapshot ekranları boş görünebilir.
+        </p>
+
+        <h3>vCenter bağlama</h3>
+        <ol>
+          <li><code>Integrations &gt; VMware</code> ekranına girin.</li>
+          <li>vCenter URL, kullanıcı adı ve şifre bilgilerini girin.</li>
+          <li>Self-signed sertifika kullanılıyorsa kurulumda CA sertifikası yolu tanımlanmış olmalıdır.</li>
+          <li><code>Test Connection</code> ile bağlantıyı doğrulayın.</li>
+          <li><code>Save Configuration</code> ile kaydedin.</li>
+          <li><code>Start Synchronization</code> ile manuel senkronizasyon başlatın.</li>
+        </ol>
+
+        <h3>VMware modül ekranları</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Ekran</th>
+              <th>Ne için kullanılır?</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>Virtualization &gt; Clusters</code></td>
+              <td>Cluster envanteri ve genel kapasite görünümü.</td>
+            </tr>
+            <tr>
+              <td><code>Virtualization &gt; ESXi Hosts</code></td>
+              <td>Host bağlantı durumu, CPU, bellek ve host envanteri.</td>
+            </tr>
+            <tr>
+              <td><code>Virtualization &gt; Virtual Machines</code></td>
+              <td>VM listesi, power state, kaynak bilgileri ve guest IP bilgileri.</td>
+            </tr>
+            <tr>
+              <td><code>Virtualization &gt; Datastores</code></td>
+              <td>Datastore kapasitesi, kullanım oranı ve kritik doluluk takibi.</td>
+            </tr>
+            <tr>
+              <td><code>Virtualization &gt; Snapshots</code></td>
+              <td>Eski veya çoklu snapshot risklerini izleme.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="note">
+          VMware olayları alarm motoruna da veri sağlar. VM reconfigure, clone, datastore doluluk
+          ve snapshot riskleri bu entegrasyon üzerinden izlenir.
+        </div>
+      </section>
+
+      <section id="security">
+        <h2>10. Firewall ve Güvenlik Ekranları</h2>
+        <p>
+          Security menüsü FortiGate/FortiAnalyzer ve firewall politika görünürlüğü için kullanılır.
+          Cihaz üzerinde değişiklik yapmadan önce kurum değişiklik yönetimi sürecini izleyin.
+        </p>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Ekran</th>
+              <th>Kullanım amacı</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>Security &gt; Firewall View</code></td>
+              <td>Firewall politika, kural ve ağ güvenliği görünümü.</td>
+            </tr>
+            <tr>
+              <td><code>Security &gt; Config Revisions</code></td>
+              <td>Config snapshot ve değişiklik farklarını inceleme.</td>
+            </tr>
+            <tr>
+              <td><code>Security &gt; Virtual IPs</code></td>
+              <td>DNAT/VIP ile dışa açılan servisleri izleme.</td>
+            </tr>
+            <tr>
+              <td><code>Security &gt; Web Analytics</code></td>
+              <td>Web erişim analitiği ve FortiAnalyzer kaynaklı görünürlük.</td>
+            </tr>
+            <tr>
+              <td><code>Security &gt; Quarantine</code></td>
+              <td>Şüpheli IP veya varlıklar için karantina görünümü.</td>
+            </tr>
+            <tr>
+              <td><code>Security &gt; Firewall Policies</code></td>
+              <td>Kural listesi, kaynak/hedef/servis ve aksiyon inceleme.</td>
+            </tr>
+            <tr>
+              <td><code>Security &gt; IPsec Tunnels</code></td>
+              <td>Site-to-site VPN tünel durumlarını izleme.</td>
+            </tr>
+            <tr>
+              <td><code>Security &gt; SSL-VPN</code></td>
+              <td>SSL-VPN oturum ve erişim durumlarını izleme.</td>
+            </tr>
+            <tr>
+              <td><code>Security &gt; Risky Rules</code></td>
+              <td>Geniş kaynak/hedef, any-any, riskli servis gibi kural risklerini bulma.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>Riskli kural inceleme</h3>
+        <ol>
+          <li><code>Risky Rules</code> ekranında kritik ve yüksek severity kayıtları inceleyin.</li>
+          <li>Kuralın kaynak, hedef, servis ve aksiyon alanlarını kontrol edin.</li>
+          <li>İş ihtiyacı yoksa kuralın daraltılması için firewall değişiklik talebi açın.</li>
+          <li>Değişiklik sonrası sync çalıştırıp riskin kapanıp kapanmadığını doğrulayın.</li>
+        </ol>
+      </section>
+
+      <section id="services">
+        <h2>11. Servis ve Bağımlılık Haritası</h2>
+        <p>
+          Services menüsü uygulama, servis ve bağımlılık envanteri için kullanılır. Bu modül,
+          teknik envanter ile iş servisleri arasında ilişki kurmak için tasarlanmıştır.
+        </p>
+
+        <ul>
+          <li><code>Services &gt; Applications</code>: Uygulama veya servis bileşenlerinin çalışma durumunu gösterir.</li>
+          <li><code>Services &gt; Services</code>: Servis kayıtlarını ve temel bilgileri listeler.</li>
+          <li><code>Services &gt; Dependencies</code>: Servisler, cihazlar ve altyapı bileşenleri arasındaki bağımlılıkları gösterir.</li>
+        </ul>
+
+        <div class="note">
+          Bu ekranlar demo ve operasyonel modelleme için kullanılabilir. Gerçek servis haritası değeri,
+          müşteri envanteri düzenli girildiğinde artar.
+        </div>
+      </section>
+
+      <section id="integrations">
+        <h2>12. Entegrasyonları Yönetme</h2>
+        <p>
+          Entegrasyonlar uygulamanın canlı veri kaynaklarıdır. Yanlış credential veya ağ erişimi sorunu,
+          dashboard ve alarmların eksik görünmesine neden olabilir.
+        </p>
+
+        <h3>VMware</h3>
+        <ul>
+          <li>vCenter URL, kullanıcı adı ve şifre gerekir.</li>
+          <li>Bağlantıyı test edin, sonra kaydedin.</li>
+          <li>Senkronizasyon sonrası cluster, host, VM, datastore ve snapshot ekranlarını kontrol edin.</li>
+        </ul>
+
+        <h3>Firewall / FortiGate</h3>
+        <ul>
+          <li>REST API için yönetim IP/URL ve kullanıcı veya token bilgisi gerekir.</li>
+          <li>SNMP ile interface ve port durumu izlenebilir.</li>
+          <li>SSH ile config backup alınabilir.</li>
+          <li>Policy, VIP, SSL-VPN, IPsec ve config revision ekranları FortiGate verisine bağlıdır.</li>
+        </ul>
+
+        <h3>FortiAnalyzer</h3>
+        <ul>
+          <li>FortiAnalyzer log ve güvenlik olayları için kullanılır.</li>
+          <li>Session tabanlı erişim ve API key modeli desteklenir.</li>
+          <li>Hesap kilitlenirse FortiAnalyzer tarafında kullanıcı durumu kontrol edilmelidir.</li>
+        </ul>
+
+        <h3>Sync Status</h3>
+        <p>
+          <code>Integrations &gt; Sync Status</code> ekranı tüm entegrasyonların sağlık özetidir.
+          Bağlı, hata, bağlantı kesildi veya senkronize durumlarını buradan izleyin.
+        </p>
+
+        <div class="warning">
+          Self-signed sertifikalı FortiAnalyzer, FortiGate veya vCenter için global TLS bypass kullanılmaz.
+          Sertifika CA dosyası kurulumda <code>./certs</code> altına eklenmeli ve ilgili env değişkeniyle tanımlanmalıdır.
+        </div>
+      </section>
+
+      <section id="settings">
+        <h2>13. Ayarlar, Kullanıcılar ve Lisans</h2>
+
+        <h3>Organizations</h3>
+        <p>
+          Firma/organizasyon kayıtlarını yönetin. Lokasyon hiyerarşisi ile birlikte kullanılınca envanter
+          raporları ve topology daha anlamlı hale gelir.
+        </p>
+
+        <h3>Users & Roles</h3>
+        <ul>
+          <li>Kullanıcı listesini görüntüleyin.</li>
+          <li>Admin, editor, viewer gibi rol ayrımlarını kurum politikasına göre uygulayın.</li>
+          <li>Aktif olmayan veya ayrılan personelin erişimini kapatın.</li>
+        </ul>
+
+        <h3>Invitations</h3>
+        <ul>
+          <li>Yeni kullanıcıları davet edin.</li>
+          <li>Davet edilen kişinin email adresini doğru girin.</li>
+          <li>Davet akışında kullanıcı kendi şifresini belirlemelidir.</li>
+        </ul>
+
+        <h3>Audit Log</h3>
+        <p>
+          Kullanıcı aksiyonları, kritik değişiklikler ve yönetim işlemleri audit log ekranından izlenir.
+          Olay inceleme sırasında kim, ne zaman, hangi işlemi yaptı sorusunun ilk kontrol noktasıdır.
+        </p>
+
+        <h3>API Keys</h3>
+        <ul>
+          <li>Harici sistemlerin InfraScope API kullanması gerekiyorsa API key oluşturun.</li>
+          <li>Key değerini sadece oluşturma anında güvenli şekilde paylaşın.</li>
+          <li>Kullanılmayan keyleri kapatın veya silin.</li>
+        </ul>
+
+        <h3>License</h3>
+        <p><code>Settings &gt; License</code> müşteri lisans durum ekranıdır.</p>
+        <ul>
+          <li>Tier: Trial, Standard veya Enterprise.</li>
+          <li>Device ve user kullanım limitleri.</li>
+          <li>Lisans bitiş tarihi ve kalan gün.</li>
+          <li>Grace mode durumu.</li>
+          <li>Machine ID ve masked license key.</li>
+        </ul>
+
+        <div class="danger">
+          Lisans anahtarı ve API key bilgileri ekran görüntüsüyle veya e-posta zincirlerinde paylaşılmamalıdır.
+          Yetkisiz kişilere verilen keyler müşteri ortamını riske atabilir.
+        </div>
+      </section>
+
+      <section id="operasyon">
+        <h2>14. Önerilen Operasyon Rutini</h2>
+
+        <h3>Günlük</h3>
+        <ul>
+          <li>Dashboard genel sağlık kontrolü.</li>
+          <li>Kritik alarm kontrolü.</li>
+          <li>Offline switch, ESXi host, VPN tüneli veya kritik datastore var mı kontrolü.</li>
+          <li>Integration Status ekranında bağlantı sorunları kontrolü.</li>
+        </ul>
+
+        <h3>Haftalık</h3>
+        <ul>
+          <li>Risky Rules ekranında yeni yüksek riskli firewall kuralı var mı bakın.</li>
+          <li>Config Revisions ekranında beklenmeyen değişiklikleri inceleyin.</li>
+          <li>Datastore ve snapshot ekranlarında kapasite/operasyon riski kontrol edin.</li>
+          <li>Lisans kullanım limitlerini kontrol edin.</li>
+        </ul>
+
+        <h3>Aylık</h3>
+        <ul>
+          <li>Kullanıcı listesini gözden geçirin.</li>
+          <li>API keys ve davetleri temizleyin.</li>
+          <li>Alarm email alıcı listesini güncelleyin.</li>
+          <li>Envanterde silinmiş veya taşınmış cihazları düzeltin.</li>
+          <li>Config backup kapsamasını örnek cihazlarla doğrulayın.</li>
+        </ul>
+      </section>
+
+      <section id="troubleshooting">
+        <h2>15. Sorun Giderme</h2>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Belirti</th>
+              <th>Olası neden</th>
+              <th>Kontrol / çözüm</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Login ekranı açılmıyor</td>
+              <td>Uygulama veya port kapalı</td>
+              <td><code>/api/health/ready</code> kontrol edin, sunucuda container durumuna bakın.</td>
+            </tr>
+            <tr>
+              <td>Dashboard boş</td>
+              <td>Entegrasyon veya envanter yok</td>
+              <td>VMware, NMS ve firewall entegrasyonlarını yapılandırıp sync çalıştırın.</td>
+            </tr>
+            <tr>
+              <td>VMware verisi gelmiyor</td>
+              <td>vCenter credential, URL veya sertifika sorunu</td>
+              <td>VMware entegrasyon ekranında Test Connection çalıştırın.</td>
+            </tr>
+            <tr>
+              <td>Switch offline görünüyor</td>
+              <td>SNMP erişimi yok veya cihaz unreachable</td>
+              <td>IP, SNMP community/v3, ACL ve network routing kontrol edin.</td>
+            </tr>
+            <tr>
+              <td>Firewall policy görünmüyor</td>
+              <td>FortiGate REST erişimi veya yetki eksik</td>
+              <td>Firewall entegrasyon credential ve cihaz yönetim erişimini kontrol edin.</td>
+            </tr>
+            <tr>
+              <td>Email alarm gitmiyor</td>
+              <td>SMTP ayarı veya alıcı listesi eksik</td>
+              <td><code>Settings &gt; Alert Rules</code> altında SMTP ayarını kaydedip test email gönderin.</td>
+            </tr>
+            <tr>
+              <td>Lisans grace mode</td>
+              <td>Merkezi lisans sunucusuna erişilemiyor</td>
+              <td>Sunucudan <code>https://lisans.webmahsul.com.tr</code> erişimini ve DNS/TLS durumunu kontrol edin.</td>
+            </tr>
+            <tr>
+              <td>Lisans invalid</td>
+              <td>Süre bitmiş, suspend/revoke edilmiş veya activation limit dolmuş</td>
+              <td>Webmahsul destek ekibiyle lisans durumunu kontrol edin.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>Destek isterken paylaşılacak bilgiler</h3>
+        <ul>
+          <li>Uygulama URL ve port bilgisi.</li>
+          <li>Hatanın görüldüğü ekran adı.</li>
+          <li>Yaklaşık hata zamanı.</li>
+          <li>İlgili cihaz IP/hostname veya VM adı.</li>
+          <li>Lisans ekranındaki masked license key ve machine ID.</li>
+          <li>Gerekirse container loglarından ilgili zaman aralığı.</li>
+        </ul>
+
+        <pre><code># Sunucu tarafında hızlı sağlık kontrolü
+docker compose ps
+curl -sf http://localhost:8170/api/health/ready
+docker compose logs --tail=200 app</code></pre>
+      </section>
+
+      <section id="demo">
+        <h2>Hızlı Demo Senaryosu</h2>
+        <ol>
+          <li><code>/login</code> ile giriş yapın.</li>
+          <li><code>Settings &gt; License</code> ekranında lisansın aktif olduğunu gösterin.</li>
+          <li><code>Dashboard</code> ekranında genel sağlık özetini anlatın.</li>
+          <li><code>Locations</code> altında fiziksel hiyerarşi modelini gösterin.</li>
+          <li><code>Network &gt; Topology</code> ile görsel altyapı haritasını gösterin.</li>
+          <li><code>Virtualization</code> ekranlarında VMware envanterini gösterin.</li>
+          <li><code>Security &gt; Risky Rules</code> ve <code>Config Revisions</code> ile güvenlik değerini anlatın.</li>
+          <li><code>Dashboard &gt; Kritik Alarmlar</code> ile olay inceleme akışını gösterin.</li>
+          <li><code>Settings &gt; Audit Log</code> ile izlenebilirlik ve yönetim tarafını kapatın.</li>
+        </ol>
+      </section>
+    </main>
+    </div>
+  </div>
+  <script>
+    (function () {
+      var searchInput = document.getElementById('cookbook-search');
+      var status = document.getElementById('search-status');
+      var emptyState = document.getElementById('search-empty');
+      var sections = Array.prototype.slice.call(document.querySelectorAll('main > section[id]'));
+      var navLinks = Array.prototype.slice.call(document.querySelectorAll('.sidebar .toc a'));
+
+      function normalize(value) {
+        return value
+          .toLocaleLowerCase('tr-TR')
+          .replace(/[ıİ]/g, 'i')
+          .replace(/[ğĞ]/g, 'g')
+          .replace(/[üÜ]/g, 'u')
+          .replace(/[şŞ]/g, 's')
+          .replace(/[öÖ]/g, 'o')
+          .replace(/[çÇ]/g, 'c')
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '');
+      }
+
+      var sectionText = sections.reduce(function (acc, section) {
+        acc[section.id] = normalize(section.textContent || '');
+        return acc;
+      }, {});
+
+      function setActive(id) {
+        navLinks.forEach(function (link) {
+          link.classList.toggle('is-active', link.getAttribute('href') === '#' + id);
+        });
+      }
+
+      function filterSections() {
+        var query = normalize(searchInput.value.trim());
+        var visibleCount = 0;
+
+        sections.forEach(function (section) {
+          var matches = !query || sectionText[section.id].indexOf(query) !== -1;
+          section.classList.toggle('is-hidden', !matches);
+          if (matches) visibleCount += 1;
+        });
+
+        navLinks.forEach(function (link) {
+          var id = link.getAttribute('href').slice(1);
+          var isVisible = !query || sectionText[id].indexOf(query) !== -1;
+          link.classList.toggle('is-hidden', !isVisible);
+        });
+
+        emptyState.hidden = visibleCount !== 0;
+        status.textContent = query
+          ? visibleCount + ' bölüm eşleşti'
+          : sections.length + ' bölüm gösteriliyor';
+
+        var firstVisible = sections.find(function (section) {
+          return !section.classList.contains('is-hidden');
+        });
+        if (firstVisible) setActive(firstVisible.id);
+      }
+
+      searchInput.addEventListener('input', filterSections);
+
+      if ('IntersectionObserver' in window) {
+        var observer = new IntersectionObserver(function (entries) {
+          entries.forEach(function (entry) {
+            if (entry.isIntersecting && !entry.target.classList.contains('is-hidden')) {
+              setActive(entry.target.id);
+            }
+          });
+        }, { rootMargin: '-18% 0px -68% 0px', threshold: 0.01 });
+
+        sections.forEach(function (section) {
+          observer.observe(section);
+        });
+      } else if (sections[0]) {
+        setActive(sections[0].id);
+      }
+    })();
+  </script>
+</body>
+</html>

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { apiGet, apiDelete, apiPost, apiPut } from '../../lib/api';
-import { Device, ApiResponse } from '../../types';
+import { Device, ApiResponse, DeviceType } from '../../types';
 import { getVendorLogo } from '../../lib/formatting';
 import { useToast } from '@/components/ui/use-toast';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
@@ -27,6 +27,50 @@ import {
 } from "@/components/ui/select";
 import { Search, Plus, Edit, Trash2, RefreshCcw, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import {
+  DEVICE_INVENTORY_CHANGED_EVENT,
+  DEVICE_INVENTORY_CHANGED_STORAGE_KEY,
+  notifyDeviceInventoryChanged,
+} from '@/lib/device-inventory-events';
+
+const MANUAL_DEVICE_TYPES: DeviceType[] = [
+  'PHYSICAL_SERVER', 'VIRTUAL_HOST', 'VIRTUAL_MACHINE', 'FIREWALL',
+  'SWITCH', 'ROUTER', 'COMPUTER', 'LAPTOP', 'STORAGE', 'PDU',
+  'PATCH_PANEL', 'PRINTER', 'CAMERA', 'OTHER',
+];
+
+const DEVICE_TYPE_OPTIONS: Array<{ value: DeviceType; label: string }> = [
+  { value: 'PHYSICAL_SERVER', label: 'Fiziksel Sunucu' },
+  { value: 'VIRTUAL_HOST', label: 'Sanal Host' },
+  { value: 'VIRTUAL_MACHINE', label: 'Sanal Makine' },
+  { value: 'SWITCH', label: 'Switch' },
+  { value: 'ROUTER', label: 'Router' },
+  { value: 'FIREWALL', label: 'Güvenlik Duvarı' },
+  { value: 'COMPUTER', label: 'Bilgisayar' },
+  { value: 'LAPTOP', label: 'Dizüstü' },
+  { value: 'STORAGE', label: 'Depolama' },
+  { value: 'PDU', label: 'PDU' },
+  { value: 'PATCH_PANEL', label: 'Patch Panel' },
+  { value: 'PRINTER', label: 'Yazıcı' },
+  { value: 'CAMERA', label: 'Kamera' },
+  { value: 'OTHER', label: 'Diğer' },
+];
+
+function deviceMatchesView(device: Device, filterType: string, search: string) {
+  const matchesType =
+    filterType === 'all' ||
+    (filterType === 'manual' && MANUAL_DEVICE_TYPES.includes(device.type)) ||
+    device.type === filterType;
+
+  if (!matchesType) return false;
+
+  const normalizedSearch = search.trim().toLowerCase();
+  if (!normalizedSearch) return true;
+
+  return [device.name, device.serialNumber, device.vendor, device.model]
+    .filter(Boolean)
+    .some((value) => value!.toLowerCase().includes(normalizedSearch));
+}
 
 export default function DevicesPage() {
   const { toast } = useToast();
@@ -59,12 +103,7 @@ export default function DevicesPage() {
     return () => clearTimeout(t);
   }, [searchQuery]);
 
-  useEffect(() => {
-    loadDevices();
-    loadRacks();
-  }, [currentPage, pageSize, filterType, debouncedSearch]);
-
-  const loadDevices = async () => {
+  const loadDevices = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -87,9 +126,9 @@ export default function DevicesPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentPage, pageSize, filterType, debouncedSearch]);
 
-  const loadRacks = async () => {
+  const loadRacks = useCallback(async () => {
     try {
       const response: ApiResponse<any[]> = await apiGet('/api/racks');
       if (response.success) {
@@ -98,18 +137,68 @@ export default function DevicesPage() {
     } catch (err) {
       console.error('Error loading racks:', err);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadDevices();
+    loadRacks();
+  }, [loadDevices, loadRacks]);
+
+  useEffect(() => {
+    const handleInventoryChanged = () => {
+      loadDevices();
+    };
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === DEVICE_INVENTORY_CHANGED_STORAGE_KEY) {
+        loadDevices();
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        loadDevices();
+      }
+    };
+
+    window.addEventListener(DEVICE_INVENTORY_CHANGED_EVENT, handleInventoryChanged);
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener('focus', handleInventoryChanged);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener(DEVICE_INVENTORY_CHANGED_EVENT, handleInventoryChanged);
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('focus', handleInventoryChanged);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [loadDevices]);
 
   const handleAdd = async (formData: any) => {
     try {
       const response: any = await apiPost('/api/devices', formData);
       if (response.success) {
+        const createdDevice = response.data as Device | undefined;
         toast({
           title: "Başarılı",
           description: "Cihaz başarıyla eklendi.",
         });
         setShowAddModal(false);
-        loadDevices();
+        notifyDeviceInventoryChanged({ action: 'create', deviceId: createdDevice?.id, source: 'devices-page' });
+        if (createdDevice && deviceMatchesView(createdDevice, filterType, debouncedSearch)) {
+          if (currentPage !== 1) setCurrentPage(1);
+          setDevices((current) => [
+            createdDevice,
+            ...current.filter((device) => device.id !== createdDevice.id),
+          ].slice(0, pageSize));
+          setTotal((currentTotal) => {
+            const nextTotal = currentTotal + 1;
+            setTotalPages(Math.ceil(nextTotal / pageSize));
+            return nextTotal;
+          });
+        } else {
+          await loadDevices();
+        }
       } else {
         toast({
           title: "Hata",
@@ -137,6 +226,7 @@ export default function DevicesPage() {
         });
         setShowEditModal(false);
         setEditingDevice(null);
+        notifyDeviceInventoryChanged({ action: 'update', deviceId: editingDevice.id, source: 'devices-page' });
         loadDevices();
       } else {
         toast({
@@ -169,6 +259,7 @@ export default function DevicesPage() {
           title: "Başarılı",
           description: `${deviceToDelete.name} cihazı silindi.`,
         });
+        notifyDeviceInventoryChanged({ action: 'delete', deviceId: deviceToDelete.id, source: 'devices-page' });
         loadDevices();
       } else {
         toast({
@@ -295,7 +386,7 @@ export default function DevicesPage() {
               <TableBody>
                 {filteredDevices.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                    <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
                       Kriterlere uygun cihaz bulunamadı.
                     </TableCell>
                   </TableRow>
@@ -303,8 +394,20 @@ export default function DevicesPage() {
                   filteredDevices.map((device) => (
                     <TableRow key={device.id}>
                       <TableCell className="font-medium">
-                        <div className="font-bold">{device.name}</div>
-                        <div className="text-xs text-muted-foreground font-mono">{device.serialNumber || 'Seri No Yok'}</div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-bold">{device.name}</span>
+                          {device.nmsDeviceId != null && (
+                            <Badge
+                              variant={device.pollingEnabled ? 'success' : 'secondary'}
+                              className="text-[10px] uppercase"
+                            >
+                              {device.pollingEnabled ? 'NMS aktif' : 'NMS pasif'}
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="text-xs text-muted-foreground font-mono">
+                          {device.managementIp || device.serialNumber || 'Seri No Yok'}
+                        </div>
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline" className="uppercase text-[10px]">
@@ -518,12 +621,9 @@ function DeviceModal({ device, racks, onClose, onSubmit }: {
                 onChange={e => setFormData({ ...formData, type: e.target.value })} 
                 required
               >
-                <option value="PHYSICAL_SERVER">Fiziksel Sunucu</option>
-                <option value="VIRTUAL_MACHINE">Sanal Makine</option>
-                <option value="SWITCH">Switch</option>
-                <option value="ROUTER">Router</option>
-                <option value="FIREWALL">Güvenlik Duvarı</option>
-                <option value="STORAGE">Depolama</option>
+                {DEVICE_TYPE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
               </select>
             </div>
             <div className="space-y-1">

@@ -23,9 +23,11 @@ Do not copy `deploy/license-server/` to customer servers. That directory is only
 ```bash
 mkdir infrascope
 cd infrascope
-cp .env.example .env
+cp env.example .env
 ./install.sh
 ```
+
+If your package only contains `.env.example`, use `cp .env.example .env` instead. Files starting with a dot may be hidden in Windows/macOS file explorers.
 
 For a live customer demo, use the shorter operator checklist in:
 

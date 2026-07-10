@@ -8,6 +8,9 @@ interface Device3D {
   name: string;
   type: string;
   rackUnitPosition: number | null;
+  status?: string;
+  vendor?: string | null;
+  model?: string | null;
   metadata?: any;
 }
 
@@ -44,11 +47,69 @@ export function Rack3D({
   const innerWidth = rackWidth * 0.85;
   const innerDepth = rackDepth * 0.9;
 
-  // Process devices and their heights
-  const processedDevices = devices.map(d => ({
-    ...d,
-    uHeight: (d.metadata as any)?.unitHeight || 1
-  }));
+  const getDeviceColor = (type: string) => {
+    if (type.includes('SWITCH') || type.includes('ROUTER')) return '#0ea5e9';
+    if (type.includes('FIREWALL')) return '#ef4444';
+    if (type.includes('STORAGE')) return '#8b5cf6';
+    if (type.includes('PDU') || type.includes('PATCH_PANEL')) return '#f59e0b';
+    if (type.includes('VIRTUAL')) return '#22c55e';
+    return '#334155';
+  };
+
+  const getStatusColor = (status?: string) => {
+    switch (status) {
+      case 'ACTIVE':
+        return '#10b981';
+      case 'MAINTENANCE':
+        return '#f59e0b';
+      case 'INACTIVE':
+      case 'DECOMMISSIONED':
+        return '#64748b';
+      case 'ERROR':
+      case 'DOWN':
+        return '#ef4444';
+      default:
+        return '#94a3b8';
+    }
+  };
+
+  const shortenLabel = (value: string, max = 18) => {
+    return value.length > max ? `${value.slice(0, max - 1)}…` : value;
+  };
+
+  const occupiedUnits = new Set<number>();
+  const findNextFreeUnit = (height: number) => {
+    for (let unit = 1; unit <= validMaxUnits; unit++) {
+      let fits = true;
+      for (let offset = 0; offset < height; offset++) {
+        if (unit + offset > validMaxUnits || occupiedUnits.has(unit + offset)) {
+          fits = false;
+          break;
+        }
+      }
+      if (fits) return unit;
+    }
+    return null;
+  };
+
+  const processedDevices = devices.map((device) => {
+    const uHeight = Math.max(1, Math.min(validMaxUnits, (device.metadata as any)?.unitHeight || 1));
+    const requestedUnit = Number.isInteger(device.rackUnitPosition) && device.rackUnitPosition
+      ? Math.max(1, Math.min(validMaxUnits, device.rackUnitPosition))
+      : null;
+    const resolvedUnit = requestedUnit || findNextFreeUnit(uHeight) || 1;
+
+    for (let offset = 0; offset < uHeight; offset++) {
+      occupiedUnits.add(resolvedUnit + offset);
+    }
+
+    return {
+      ...device,
+      uHeight,
+      resolvedUnit,
+      isAutoPositioned: !requestedUnit,
+    };
+  });
 
   return (
     <group position={position} rotation={rotation}>
@@ -96,20 +157,18 @@ export function Rack3D({
       {/* Internal Devices Rendering */}
       <group position={[0, -rackHeight / 2, 0]}>
         {processedDevices.map((device) => {
-          if (!device.rackUnitPosition) return null;
-          
-          const pos = device.rackUnitPosition;
+          const pos = device.resolvedUnit;
           const h = device.uHeight * unitHeight;
           const yPos = (pos - 1) * unitHeight + h / 2;
-          
-          const isNetwork = device.type.includes('SWITCH') || device.type.includes('FIREWALL');
+          const deviceColor = getDeviceColor(device.type);
+          const statusColor = getStatusColor(device.status);
           
           return (
             <group key={device.id} position={[0, yPos, 0]}>
               <mesh castShadow receiveShadow>
                 <boxGeometry args={[innerWidth, h * 0.95, innerDepth]} />
                 <meshStandardMaterial 
-                  color={isNetwork ? '#0ea5e9' : '#334155'} 
+                  color={deviceColor} 
                   metalness={0.5}
                   roughness={0.5}
                 />
@@ -122,13 +181,24 @@ export function Rack3D({
                 color="white"
                 anchorX="center"
               >
-                {device.name}
+                {shortenLabel(device.name)}
               </Text>
+
+              {device.isAutoPositioned && (
+                <Text
+                  position={[0, -h * 0.22, innerDepth / 2 + 0.012]}
+                  fontSize={0.035}
+                  color="#fde68a"
+                  anchorX="center"
+                >
+                  U atanmamış
+                </Text>
+              )}
 
               {/* Status LED on device */}
               <mesh position={[innerWidth / 2 - 0.03, 0, innerDepth / 2 + 0.01]}>
                 <sphereGeometry args={[0.01, 8, 8]} />
-                <meshStandardMaterial color="#10b981" emissive="#10b981" emissiveIntensity={1} />
+                <meshStandardMaterial color={statusColor} emissive={statusColor} emissiveIntensity={1} />
               </mesh>
             </group>
           );

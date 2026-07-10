@@ -47,7 +47,22 @@ export async function GET(
         },
         racks: {
           include: {
-            devices: true,
+            devices: {
+              select: {
+                id: true,
+                name: true,
+                type: true,
+                status: true,
+                vendor: true,
+                model: true,
+                rackUnitPosition: true,
+                metadata: true,
+              },
+              orderBy: [
+                { rackUnitPosition: { sort: 'asc', nulls: 'last' } },
+                { name: 'asc' },
+              ],
+            },
           },
           orderBy: {
             name: 'asc',

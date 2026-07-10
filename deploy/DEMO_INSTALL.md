@@ -43,10 +43,12 @@ LICENSE_KEY=IS-2026-XXXX-XXXX-XXXX
 ```bash
 mkdir infrascope
 cd infrascope
-cp .env.example .env
+cp env.example .env
 chmod +x install.sh update.sh
 ./install.sh
 ```
+
+Not: Paket içinde sadece `.env.example` varsa `cp .env.example .env` komutunu kullan. Başında nokta olan dosyalar Windows/macOS tarafında gizli görünebilir.
 
 Script sorularında:
 

@@ -14,6 +14,8 @@ interface Device {
   type: string;
   status: string;
   rackUnitPosition: number | null;
+  vendor?: string | null;
+  model?: string | null;
   metadata?: any;
 }
 
@@ -77,12 +79,27 @@ export function Room3D({ room, onRackClick }: Room3DProps) {
   const width = room.width || 10;
   const depth = room.depth || 10;
   const height = room.height || 3;
+  const racks = Array.isArray(room.racks) ? room.racks : [];
+  const selectedRack = racks.find((rack) => rack.id === selectedRackId) || null;
+  const totalDevices = racks.reduce((sum, rack) => sum + (rack.devices?.length || 0), 0);
+  const unpositionedDevices = racks.reduce((sum, rack) => {
+    return sum + (rack.devices?.filter((device) => !device.rackUnitPosition).length || 0);
+  }, 0);
 
   return (
     <div className="w-full h-full bg-background rounded-xl overflow-hidden relative border border-border shadow-inner">
       <div className="absolute top-4 left-4 z-10 bg-card/80 backdrop-blur-md p-3 rounded-lg border border-border shadow-lg">
         <h3 className="text-foreground font-bold text-lg">{room.name} 3D Görünüm</h3>
         <p className="text-muted-foreground text-sm">{room.width || '?' }m x {room.depth || '?'}m x {room.height || '?'}m</p>
+        <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-semibold">
+          <span className="rounded-md border border-border bg-background/80 px-2 py-1">{racks.length} kabinet</span>
+          <span className="rounded-md border border-border bg-background/80 px-2 py-1">{totalDevices} cihaz</span>
+          {unpositionedDevices > 0 && (
+            <span className="rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-amber-700">
+              {unpositionedDevices} U atanmamış
+            </span>
+          )}
+        </div>
       </div>
 
       <Canvas shadows>
@@ -131,17 +148,17 @@ export function Room3D({ room, onRackClick }: Room3DProps) {
           <gridHelper args={[Math.max(width, depth) * 3, 20, "#9ca3af", "#d1d5db"]} position={[0, 0, 0]} />
 
           {/* Racks */}
-          {room.racks && Array.isArray(room.racks) && room.racks.length > 0 ? (
+          {racks.length > 0 && (
             (() => {
               // Auto-layout: centered grid, 2 columns, no overlapping
               const COLS = 2;
               const SPACING_X = 1.5; // spacing between column centers (rack width=0.6m + gap)
               const SPACING_Z = 2.0; // spacing between row centers (rack depth=1.0m + gap)
-              const totalRows = Math.ceil(room.racks!.length / COLS);
+              const totalRows = Math.ceil(racks.length / COLS);
               const gridStartX = -((COLS - 1) * SPACING_X) / 2;
               const gridStartZ = -((totalRows - 1) * SPACING_Z) / 2;
 
-              return room.racks!.map((rack, index) => {
+              return racks.map((rack, index) => {
               const col = index % COLS;
               const row = Math.floor(index / COLS);
               const x = rack.coordX ?? (gridStartX + col * SPACING_X);
@@ -170,40 +187,58 @@ export function Room3D({ room, onRackClick }: Room3DProps) {
               );
             });
             })()
-          ) : (
-            // Placeholder racks when none exist
-            <>
-              <Rack3D
-                position={[-2, 0.9, 0]}
-                rotation={[0, 0, 0]}
-                name="Demo-1"
-                type="RACK_42U"
-                maxUnits={42}
-                isSelected={false}
-                onClick={() => {}}
-              />
-              <Rack3D
-                position={[2, 0.9, 0]}
-                rotation={[0, 0, 0]}
-                name="Demo-2"
-                type="RACK_42U"
-                maxUnits={42}
-                isSelected={false}
-                onClick={() => {}}
-              />
-              <Rack3D
-                position={[-2, 0.9, 2.5]}
-                rotation={[0, 0, 0]}
-                name="Demo-3"
-                type="RACK_45U"
-                maxUnits={45}
-                isSelected={false}
-                onClick={() => {}}
-              />
-            </>
           )}
         </Suspense>
       </Canvas>
+
+      {racks.length === 0 && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
+          <div className="rounded-xl border border-dashed border-border bg-card/85 px-6 py-5 text-center shadow-xl backdrop-blur">
+            <p className="font-bold text-foreground">Bu odada kabinet yok</p>
+            <p className="mt-1 text-sm text-muted-foreground">Locations ağacından bu odaya kabinet ekleyin.</p>
+          </div>
+        </div>
+      )}
+
+      {selectedRack && (
+        <div className="absolute bottom-4 left-4 z-10 w-80 rounded-xl border border-border bg-card/90 p-4 text-card-foreground shadow-xl backdrop-blur">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-bold">{selectedRack.name}</p>
+              <p className="text-xs text-muted-foreground">{selectedRack.maxUnits}U kabinet</p>
+            </div>
+            <span className="rounded-md bg-primary/10 px-2 py-1 text-xs font-bold text-primary">
+              {selectedRack.devices?.length || 0} cihaz
+            </span>
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+            <div className="rounded-lg bg-muted/60 p-2">
+              <p className="text-muted-foreground">Pozisyonlu</p>
+              <p className="text-lg font-bold">{selectedRack.devices?.filter((device) => device.rackUnitPosition).length || 0}</p>
+            </div>
+            <div className="rounded-lg bg-amber-50 p-2 text-amber-700">
+              <p>U atanmamış</p>
+              <p className="text-lg font-bold">{selectedRack.devices?.filter((device) => !device.rackUnitPosition).length || 0}</p>
+            </div>
+          </div>
+          {(selectedRack.devices?.length || 0) > 0 ? (
+            <div className="mt-3 max-h-36 space-y-1 overflow-y-auto pr-1">
+              {selectedRack.devices!.map((device) => (
+                <div key={device.id} className="flex items-center justify-between gap-2 rounded-lg bg-background/70 px-2 py-1.5 text-xs">
+                  <span className="truncate font-medium">{device.name}</span>
+                  <span className="shrink-0 text-muted-foreground">
+                    {device.rackUnitPosition ? `${device.rackUnitPosition}U` : 'U atanmamış'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-3 rounded-lg border border-dashed border-border p-3 text-center text-xs text-muted-foreground">
+              Bu kabinete cihaz eklenmemiş.
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="absolute bottom-4 right-4 z-10 flex flex-col gap-2">
         <div className="bg-card/90 backdrop-blur text-card-foreground p-4 rounded-xl border border-border shadow-xl text-xs">

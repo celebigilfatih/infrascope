@@ -4,8 +4,9 @@ import { checkDeviceLimit } from '@/lib/license/middleware';
 
 // Manually-managed device types (not auto-discovered from integrations)
 const MANUAL_DEVICE_TYPES = [
-  'PHYSICAL_SERVER', 'FIREWALL', 'SWITCH', 'ROUTER', 'STORAGE',
-  'PDU', 'PATCH_PANEL', 'PRINTER', 'CAMERA', 'OTHER',
+  'PHYSICAL_SERVER', 'VIRTUAL_HOST', 'VIRTUAL_MACHINE', 'FIREWALL',
+  'SWITCH', 'ROUTER', 'COMPUTER', 'LAPTOP', 'STORAGE', 'PDU',
+  'PATCH_PANEL', 'PRINTER', 'CAMERA', 'OTHER',
 ];
 
 export async function GET(request: NextRequest) {
@@ -47,7 +48,8 @@ export async function GET(request: NextRequest) {
       id: true, name: true, type: true, vendor: true, model: true,
       serialNumber: true, assetTag: true, status: true, criticality: true,
       supportDate: true, rackUnitPosition: true, createdAt: true, updatedAt: true,
-      rackId: true,
+      rackId: true, nmsDeviceId: true, managementIp: true, pollingEnabled: true,
+      pollingInterval: true, lastPolledAt: true,
     };
 
     const includeFull = {
@@ -114,6 +116,44 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
+    const parsedRackUnitPosition =
+      rackUnitPosition !== undefined && rackUnitPosition !== null && rackUnitPosition !== ''
+        ? parseInt(rackUnitPosition, 10)
+        : null;
+
+    if (parsedRackUnitPosition !== null) {
+      if (!Number.isInteger(parsedRackUnitPosition) || parsedRackUnitPosition < 1 || parsedRackUnitPosition > 100) {
+        return NextResponse.json({
+          success: false,
+          error: 'rackUnitPosition must be an integer between 1 and 100',
+          timestamp: new Date()
+        }, { status: 400 });
+      }
+    }
+
+    if (rackId) {
+      const rack = await prisma.rack.findUnique({
+        where: { id: rackId },
+        select: { id: true, maxUnits: true },
+      });
+
+      if (!rack) {
+        return NextResponse.json({
+          success: false,
+          error: `Rack with ID ${rackId} not found`,
+          timestamp: new Date()
+        }, { status: 404 });
+      }
+
+      if (parsedRackUnitPosition !== null && parsedRackUnitPosition > rack.maxUnits) {
+        return NextResponse.json({
+          success: false,
+          error: `rackUnitPosition (${parsedRackUnitPosition}) exceeds rack maxUnits (${rack.maxUnits})`,
+          timestamp: new Date()
+        }, { status: 400 });
+      }
+    }
+
     const device = await prisma.device.create({
       data: {
         name,
@@ -125,7 +165,7 @@ export async function POST(request: NextRequest) {
         criticality: criticality || 'MEDIUM',
         status: status || 'UNKNOWN',
         rackId,
-        rackUnitPosition: rackUnitPosition ? parseInt(rackUnitPosition) : null,
+        rackUnitPosition: parsedRackUnitPosition,
         supportDate: supportDate ? new Date(supportDate) : null
       }
     });

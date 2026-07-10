@@ -21,6 +21,7 @@ import {
   Pencil,
 } from 'lucide-react';
 import Link from 'next/link';
+import { notifyDeviceInventoryChanged } from '@/lib/device-inventory-events';
 
 interface NmsDevice {
   id: string;          // InfraScope CUID
@@ -74,13 +75,20 @@ export default function NmsDevicesPage() {
   }, [loadDevices]);
 
   const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`Remove "${name}" from NMS monitoring?`)) return;
+    if (!confirm(`"${name}" cihazı NMS izlemeden çıkarılsın mı? Cihaz ana envanterde kalacak.`)) return;
     setDeleting(id);
+    setError(null);
     try {
       const res = await fetch(`/api/integrations/nms/devices/${id}`, { method: 'DELETE' });
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
         setDevices(prev => prev.filter(d => d.id !== id));
+        notifyDeviceInventoryChanged({ action: 'update', deviceId: id, source: 'nms-devices' });
+      } else {
+        setError(data.error || 'NMS izleme kaldırılamadı');
       }
+    } catch (e: any) {
+      setError('NMS izleme kaldırılamadı: ' + e.message);
     } finally {
       setDeleting(null);
     }
@@ -135,9 +143,9 @@ export default function NmsDevicesPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Switches</h1>
+          <h1 className="text-2xl font-bold">NMS İzlenen Cihazlar</h1>
           <p className="text-muted-foreground text-sm">
-            {devices.length} devices &bull;{' '}
+            {devices.length} cihaz &bull;{' '}
             <span className="text-green-500">{online} online</span>{' '}&bull;{' '}
             <span className="text-red-500">{offline} offline</span>
           </p>
@@ -149,7 +157,7 @@ export default function NmsDevicesPage() {
           <Button size="sm" asChild className="gap-2 bg-orange-500 hover:bg-orange-600 text-white">
             <Link href="/integrations/nms/add-device">
               <Plus className="h-4 w-4" />
-              Add Device
+              İzlemeye Al
             </Link>
           </Button>
         </div>
@@ -195,9 +203,9 @@ export default function NmsDevicesPage() {
           ) : filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
               <Server className="h-14 w-14 opacity-25 mb-4" />
-              <p className="font-medium">No devices found</p>
+              <p className="font-medium">NMS ile izlenen cihaz bulunamadı</p>
               <Button variant="outline" size="sm" className="mt-3" asChild>
-                <Link href="/integrations/nms/add-device">Add first device</Link>
+                <Link href="/integrations/nms/add-device">İlk cihazı izlemeye al</Link>
               </Button>
             </div>
           ) : (
@@ -283,7 +291,7 @@ export default function NmsDevicesPage() {
                             className="h-7 w-7 text-muted-foreground hover:text-destructive"
                             onClick={() => handleDelete(device.id, device.name)}
                             disabled={deleting === device.id}
-                            title="Delete device"
+                            title="NMS izlemeyi kaldır"
                           >
                             {deleting === device.id
                               ? <Loader2 className="h-3.5 w-3.5 animate-spin" />

@@ -6,10 +6,11 @@ export const acknowledgeAlarmsSchema = z.object({
 });
 
 export const notificationConfigSchema = z.object({
+  enabled: z.boolean().optional(),
   smtpHost: z.string().min(1, 'SMTP host is required'),
   smtpPort: z.number().int().min(1).max(65535, 'Invalid port number'),
   smtpUser: z.string().min(1, 'SMTP user is required'),
   smtpPass: z.string().optional(),
   smtpSecure: z.boolean().optional(),
-  recipients: z.array(z.string().email()).min(1, 'At least one recipient is required').optional(),
+  recipients: z.array(z.string().email()).min(1, 'At least one recipient is required'),
 });

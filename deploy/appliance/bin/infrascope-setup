@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+APP_DIR="${INFRASCOPE_HOME:-/opt/infrascope}"
+
+if [ "$(id -u)" -ne 0 ]; then
+  echo "Please run with sudo: sudo infrascope-setup" >&2
+  exit 1
+fi
+
+if [ ! -d "${APP_DIR}" ]; then
+  echo "InfraScope appliance directory not found: ${APP_DIR}" >&2
+  exit 1
+fi
+
+cd "${APP_DIR}"
+
+if [ ! -x ./install.sh ]; then
+  chmod +x ./install.sh
+fi
+
+./install.sh
+

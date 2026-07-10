@@ -9,6 +9,7 @@ export const getZoomConfig = (zoom: number) => {
 
 export const filterNodesByZoom = (nodes: any[], config: any) => {
   return nodes.filter(node => {
+    if (node.data?.alwaysVisible) return true;
     if (node.data.hierarchyLevel === 'floor') return config.showFloors;
     if (node.data.hierarchyLevel === 'room') return config.showRooms;
     if (node.data.hierarchyLevel === 'rack') return config.showRacks;

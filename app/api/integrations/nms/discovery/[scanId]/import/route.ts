@@ -9,9 +9,7 @@ interface Params { params: { scanId: string } }
  *
  * Body:
  *   discoveredDeviceId  - ID from nms_discovered_devices
- *   deviceId?           - Existing InfraScope device ID to link (optional)
- *   name?               - Override device name (defaults to hostname or IP)
- *   deviceType?         - InfraScope device type (defaults to "SWITCH")
+ *   deviceId            - Existing InfraScope device ID to link
  *   snmpCommunity?      - Override SNMP community (defaults to discovered value)
  *   snmpVersion?        - SNMP version string (defaults to "2c")
  *   snmpPort?           - SNMP port (defaults to 161)
@@ -22,18 +20,23 @@ export async function POST(req: NextRequest, { params }: Params) {
     const body = await req.json();
     const {
       discoveredDeviceId,
-      deviceId,             // If provided, link to existing device instead of creating
-      name,
-      deviceType = 'SWITCH',
+      deviceId,
       snmpCommunity,
       snmpVersion = '2c',
       snmpPort = 161,
-      pollingInterval = 30,
+      pollingInterval = 300,
     } = body;
 
     if (!discoveredDeviceId) {
       return NextResponse.json(
         { error: 'discoveredDeviceId is required' },
+        { status: 400 }
+      );
+    }
+
+    if (!deviceId) {
+      return NextResponse.json(
+        { error: 'deviceId is required. Create the device in inventory first, then link the discovered device.' },
         { status: 400 }
       );
     }
@@ -83,122 +86,64 @@ export async function POST(req: NextRequest, { params }: Params) {
     ` as Array<{ next_id: number }>;
     const nextNmsId = Number(maxResult[0]?.next_id ?? 1);
 
-    let infraDevice: any;
+    const existing = await (prisma as any).device.findUnique({
+      where: { id: deviceId },
+      select: { id: true, name: true, nmsDeviceId: true },
+    });
 
-    if (deviceId) {
-      // 4a. Link to an existing InfraScope device
-      const existing = await (prisma as any).device.findUnique({
-        where: { id: deviceId },
-        select: { id: true, nmsDeviceId: true },
-      });
-
-      if (!existing) {
-        return NextResponse.json(
-          { error: `Device ${deviceId} not found in InfraScope` },
-          { status: 404 }
-        );
-      }
-
-      if (existing.nmsDeviceId !== null) {
-        return NextResponse.json(
-          { error: `Device ${deviceId} already has NMS polling configured (nmsDeviceId: ${existing.nmsDeviceId})` },
-          { status: 409 }
-        );
-      }
-
-      infraDevice = await (prisma as any).device.update({
-        where: { id: deviceId },
-        data: {
-          nmsDeviceId: nextNmsId,
-          managementIp: discovered.ipAddress,
-          snmpCommunity: effectiveCommunity,
-          snmpVersion,
-          snmpPort,
-          pollingEnabled: true,
-          pollingInterval,
-        },
-        select: {
-          id: true,
-          name: true,
-          type: true,
-          nmsDeviceId: true,
-          managementIp: true,
-          snmpCommunity: true,
-          snmpVersion: true,
-          snmpPort: true,
-          pollingEnabled: true,
-          pollingInterval: true,
-        },
-      });
-    } else {
-      // 4b. Check if a device already exists with this management IP
-      const byIp = await (prisma as any).device.findFirst({
-        where: { managementIp: discovered.ipAddress },
-        select: { id: true, nmsDeviceId: true, name: true },
-      });
-
-      if (byIp) {
-        if (byIp.nmsDeviceId !== null) {
-          return NextResponse.json(
-            { error: `A device with IP ${discovered.ipAddress} already has NMS polling enabled (nmsDeviceId: ${byIp.nmsDeviceId}). Use deviceId to force-link.` },
-            { status: 409 }
-          );
-        }
-        // Link the existing device found by IP
-        infraDevice = await (prisma as any).device.update({
-          where: { id: byIp.id },
-          data: {
-            nmsDeviceId: nextNmsId,
-            snmpCommunity: effectiveCommunity,
-            snmpVersion,
-            snmpPort,
-            pollingEnabled: true,
-            pollingInterval,
-          },
-          select: {
-            id: true,
-            name: true,
-            type: true,
-            nmsDeviceId: true,
-            managementIp: true,
-            snmpCommunity: true,
-            snmpVersion: true,
-            snmpPort: true,
-            pollingEnabled: true,
-            pollingInterval: true,
-          },
-        });
-      } else {
-        // Create a brand-new InfraScope device from the discovered info
-        const deviceName = name || discovered.hostname || discovered.ipAddress;
-        infraDevice = await (prisma as any).device.create({
-          data: {
-            name: deviceName,
-            type: deviceType,
-            vendor: discovered.vendor || 'Unknown',
-            managementIp: discovered.ipAddress,
-            nmsDeviceId: nextNmsId,
-            snmpCommunity: effectiveCommunity,
-            snmpVersion,
-            snmpPort,
-            pollingEnabled: true,
-            pollingInterval,
-          },
-          select: {
-            id: true,
-            name: true,
-            type: true,
-            nmsDeviceId: true,
-            managementIp: true,
-            snmpCommunity: true,
-            snmpVersion: true,
-            snmpPort: true,
-            pollingEnabled: true,
-            pollingInterval: true,
-          },
-        });
-      }
+    if (!existing) {
+      return NextResponse.json(
+        { error: `Device ${deviceId} not found in InfraScope` },
+        { status: 404 }
+      );
     }
+
+    if (existing.nmsDeviceId !== null) {
+      return NextResponse.json(
+        { error: `Device "${existing.name}" already has NMS polling configured (nmsDeviceId: ${existing.nmsDeviceId})` },
+        { status: 409 }
+      );
+    }
+
+    const duplicateIp = await (prisma as any).device.findFirst({
+      where: {
+        managementIp: discovered.ipAddress,
+        nmsDeviceId: { not: null },
+        NOT: { id: deviceId },
+      },
+      select: { id: true, name: true, nmsDeviceId: true },
+    });
+
+    if (duplicateIp) {
+      return NextResponse.json(
+        { error: `A monitored device already uses IP ${discovered.ipAddress} ("${duplicateIp.name}", nmsDeviceId: ${duplicateIp.nmsDeviceId})` },
+        { status: 409 }
+      );
+    }
+
+    const infraDevice = await (prisma as any).device.update({
+      where: { id: deviceId },
+      data: {
+        nmsDeviceId: nextNmsId,
+        managementIp: discovered.ipAddress,
+        snmpCommunity: effectiveCommunity,
+        snmpVersion,
+        snmpPort,
+        pollingEnabled: true,
+        pollingInterval,
+      },
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        nmsDeviceId: true,
+        managementIp: true,
+        snmpVersion: true,
+        snmpPort: true,
+        pollingEnabled: true,
+        pollingInterval: true,
+      },
+    });
 
     // 5. Mark the discovered device as imported
     await (prisma as any).nmsDiscoveredDevice.update({

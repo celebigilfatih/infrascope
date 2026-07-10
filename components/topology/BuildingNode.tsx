@@ -2,7 +2,7 @@
 
 import React, { memo } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
-import { Info, Building2 } from 'lucide-react';
+import { AlertTriangle, Info, Building2 } from 'lucide-react';
 
 interface BuildingNodeData {
   buildingId: string;
@@ -14,6 +14,7 @@ interface BuildingNodeData {
   coreDevices: number;
   distributionDevices: number;
   accessDevices: number;
+  portDownCount?: number;
   isExpanded: boolean;
   zoom?: number;
   onExpand?: () => void;
@@ -39,30 +40,35 @@ export const BuildingNode = memo(({ data, selected }: NodeProps<BuildingNodeData
 
   const iconSize = 48 * scale;
   const fontSize = 14 * scale;
+  const handleClassName = '!w-2 !h-2 !border-0 !bg-transparent opacity-0';
 
   return (
     <div
       className="relative group"
       style={{
+        width: `${iconSize}px`,
         transform: `scale(${1 / zoom < 1 ? 1 : 1 / zoom})`,
         transformOrigin: 'center',
       }}
     >
-      {/* Connection handles positioned at icon edges - invisible until hover */}
-      <div className="absolute inset-0 pointer-events-none">
+      {/* Connection handles are anchored to the icon box, not the text label. */}
+      <div
+        className="absolute pointer-events-none"
+        style={{ width: `${iconSize}px`, height: `${iconSize}px`, left: 0, top: 0 }}
+      >
         {/* Top handle */}
         <Handle
           type="source"
           position={Position.Top}
           id="top-source"
-          className="!w-0 !h-0 !border-0 opacity-0 group-hover:opacity-100 transition-opacity"
+          className={handleClassName}
           style={{ left: '50%', top: 0 }}
         />
         <Handle
           type="target"
           position={Position.Top}
           id="top-target"
-          className="!w-0 !h-0 !border-0 opacity-0 group-hover:opacity-100 transition-opacity"
+          className={handleClassName}
           style={{ left: '50%', top: 0 }}
         />
         
@@ -71,14 +77,14 @@ export const BuildingNode = memo(({ data, selected }: NodeProps<BuildingNodeData
           type="source"
           position={Position.Right}
           id="right-source"
-          className="!w-0 !h-0 !border-0 opacity-0 group-hover:opacity-100 transition-opacity"
+          className={handleClassName}
           style={{ right: 0, top: '50%' }}
         />
         <Handle
           type="target"
           position={Position.Right}
           id="right-target"
-          className="!w-0 !h-0 !border-0 opacity-0 group-hover:opacity-100 transition-opacity"
+          className={handleClassName}
           style={{ right: 0, top: '50%' }}
         />
         
@@ -87,14 +93,14 @@ export const BuildingNode = memo(({ data, selected }: NodeProps<BuildingNodeData
           type="source"
           position={Position.Bottom}
           id="bottom-source"
-          className="!w-0 !h-0 !border-0 opacity-0 group-hover:opacity-100 transition-opacity"
+          className={handleClassName}
           style={{ left: '50%', bottom: 0 }}
         />
         <Handle
           type="target"
           position={Position.Bottom}
           id="bottom-target"
-          className="!w-0 !h-0 !border-0 opacity-0 group-hover:opacity-100 transition-opacity"
+          className={handleClassName}
           style={{ left: '50%', bottom: 0 }}
         />
         
@@ -103,14 +109,14 @@ export const BuildingNode = memo(({ data, selected }: NodeProps<BuildingNodeData
           type="source"
           position={Position.Left}
           id="left-source"
-          className="!w-0 !h-0 !border-0 opacity-0 group-hover:opacity-100 transition-opacity"
+          className={handleClassName}
           style={{ left: 0, top: '50%' }}
         />
         <Handle
           type="target"
           position={Position.Left}
           id="left-target"
-          className="!w-0 !h-0 !border-0 opacity-0 group-hover:opacity-100 transition-opacity"
+          className={handleClassName}
           style={{ left: 0, top: '50%' }}
         />
       </div>
@@ -139,6 +145,15 @@ export const BuildingNode = memo(({ data, selected }: NodeProps<BuildingNodeData
           }}
         >
           <Building2 className="text-white" style={{ width: `${iconSize * 0.6}px`, height: `${iconSize * 0.6}px` }} />
+          {(data.portDownCount || 0) > 0 && (
+            <div
+              className="absolute -right-2 -top-2 flex items-center gap-1 rounded-full border border-red-200 bg-red-600 px-2 py-1 text-[10px] font-bold text-white shadow-lg shadow-red-500/30"
+              title={`${data.portDownCount} izlenen port down`}
+            >
+              <AlertTriangle className="h-3 w-3" />
+              {data.portDownCount}
+            </div>
+          )}
         </div>
 
         {/* Building name */}

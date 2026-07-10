@@ -10,7 +10,7 @@
  * - Per-alarm cooldown tracking (prevents duplicate alerts)
  * - SMTP connection pooling via nodemailer
  * - Rich HTML templates with severity-based styling
- * - Fallback to default config if DB unavailable
+ * - UI-managed SMTP configuration
  */
 
 import nodemailer from 'nodemailer';
@@ -24,6 +24,7 @@ const log = createLogger('email');
 // ============================================================================
 
 interface EmailConfig {
+  enabled: boolean;
   smtpHost: string;
   smtpPort: number;
   smtpUser: string;
@@ -51,13 +52,14 @@ export interface AlarmEmailData {
 // CONFIGURATION
 // ============================================================================
 
-const DEFAULT_EMAIL_CONFIG: EmailConfig = {
-  smtpHost: process.env.SMTP_HOST || '',
-  smtpPort: parseInt(process.env.SMTP_PORT || '587'),
-  smtpUser: process.env.SMTP_USER || '',
-  smtpPass: process.env.SMTP_PASS || '',
+const EMPTY_EMAIL_CONFIG: EmailConfig = {
+  enabled: false,
+  smtpHost: '',
+  smtpPort: 587,
+  smtpUser: '',
+  smtpPass: '',
   smtpSecure: false,
-  recipients: process.env.SMTP_RECIPIENTS ? process.env.SMTP_RECIPIENTS.split(',') : [],
+  recipients: [],
 };
 
 // Rate limiting constants
@@ -80,9 +82,12 @@ let cachedTransporter: any = null;
 let transporterConfig: string | null = null;
 
 function getSmtpTlsOptions() {
+  if (process.env.NODE_ENV === 'production' && process.env.SMTP_TLS_INSECURE === 'true') {
+    throw new Error('SMTP_TLS_INSECURE=true is not allowed in production');
+  }
+
   return {
-    rejectUnauthorized:
-      process.env.NODE_ENV === 'production' || process.env.SMTP_TLS_INSECURE !== 'true',
+    rejectUnauthorized: process.env.SMTP_TLS_INSECURE !== 'true',
   };
 }
 
@@ -91,20 +96,33 @@ function getSmtpTlsOptions() {
 // ============================================================================
 
 /**
- * Get email configuration from database or fallback to defaults
+ * Get email configuration from the Admin UI managed database record.
  */
 export async function getEmailConfig(): Promise<EmailConfig> {
   try {
     const config = await prisma.notificationConfig.findUnique({
       where: { channel: 'email' },
     });
-    if (config?.enabled && config.config) {
-      return config.config as unknown as EmailConfig;
+    if (config?.config) {
+      return {
+        enabled: config.enabled,
+        ...(config.config as unknown as Omit<EmailConfig, 'enabled'>),
+      };
     }
   } catch (error) {
-    log.error({ err: error }, 'Failed to load config from DB, using defaults');
+    log.error({ err: error }, 'Failed to load email config from DB');
   }
-  return DEFAULT_EMAIL_CONFIG;
+  return EMPTY_EMAIL_CONFIG;
+}
+
+function getEmailConfigError(config: EmailConfig, options?: { requireEnabled?: boolean }): string | null {
+  if (options?.requireEnabled && !config.enabled) return 'Email notifications are disabled';
+  if (!config.smtpHost) return 'SMTP host is not configured';
+  if (!config.smtpPort || config.smtpPort < 1 || config.smtpPort > 65535) return 'SMTP port is invalid';
+  if (!config.smtpUser) return 'SMTP user is not configured';
+  if (!config.smtpPass) return 'SMTP password is not configured';
+  if (!Array.isArray(config.recipients) || config.recipients.length === 0) return 'At least one email recipient is required';
+  return null;
 }
 
 /**
@@ -112,7 +130,10 @@ export async function getEmailConfig(): Promise<EmailConfig> {
  */
 async function getTransporter(): Promise<any> {
   const config = await getEmailConfig();
-  const configKey = `${config.smtpHost}:${config.smtpPort}:${config.smtpUser}`;
+  const configError = getEmailConfigError(config, { requireEnabled: true });
+  if (configError) throw new Error(configError);
+
+  const configKey = `${config.smtpHost}:${config.smtpPort}:${config.smtpUser}:${config.smtpPass}:${config.smtpSecure ? 'secure' : 'plain'}`;
   
   // Reuse existing transporter if config hasn't changed
   if (cachedTransporter && transporterConfig === configKey) {
@@ -414,6 +435,12 @@ export async function sendAlarmEmail(data: AlarmEmailData, options?: { bypassCoo
   const startTime = Date.now();
   const bypassCooldown = options?.bypassCooldown ?? false;
   const skipDLQ = options?.skipDLQ ?? false;
+  const config = await getEmailConfig();
+  const configError = getEmailConfigError(config, { requireEnabled: true });
+  if (configError) {
+    log.info({ alarmCode: data.alarmCode, reason: configError }, 'Email notification skipped');
+    return false;
+  }
   
   // Check hourly rate limit (never bypassed for safety)
   if (isHourlyLimitExceeded()) {
@@ -430,7 +457,6 @@ export async function sendAlarmEmail(data: AlarmEmailData, options?: { bypassCoo
   try {
     log.info({ alarmCode: data.alarmCode }, 'Sending email');
     
-    const config = await getEmailConfig();
     const transporter = await getTransporter();
     
     const subject = `[${getSeverityLabel(data.severity)}] ${data.alarmName}`;
@@ -499,6 +525,8 @@ export async function sendTestEmail(configOverride?: Partial<EmailConfig>): Prom
   try {
     const baseConfig = await getEmailConfig();
     const config = { ...baseConfig, ...configOverride };
+    const configError = getEmailConfigError(config, { requireEnabled: true });
+    if (configError) return { success: false, error: configError };
 
     const transporter = nodemailer.createTransport({
       host: config.smtpHost,

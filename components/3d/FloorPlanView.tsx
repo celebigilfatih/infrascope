@@ -437,7 +437,7 @@ export function FloorPlanView({ room, onUpdate }: FloorPlanViewProps) {
     setSaving(true);
     try {
       const response = await fetch(`/api/racks/${rack.id}`, {
-        method: 'PATCH',
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           coordX: rack.coordX,

@@ -3,7 +3,7 @@
 #
 # Usage:
 #   1. Run ./install.sh
-#   2. Access ${APP_URL:-http://localhost:3000}/setup
+#   2. Access ${APP_URL:-http://localhost:8170}/setup
 #
 # For support: support@infrascope.com
 
@@ -46,7 +46,7 @@ services:
       MACHINE_ID_PATH: /app/.machine-id
       
       # Authentication
-      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:8170}
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?NEXTAUTH_SECRET is required}
       
       # Application
@@ -64,7 +64,7 @@ services:
       VMWARE_TLS_CA_CERT_PATH: ${VMWARE_TLS_CA_CERT_PATH:-}
       
     ports:
-      - "${APP_PORT:-3000}:3000"
+      - "${APP_PORT:-8170}:3000"
     volumes:
       # Persist machine ID for license activation
       - ./data/machine-id:/app/.machine-id

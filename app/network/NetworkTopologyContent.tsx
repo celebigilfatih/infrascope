@@ -8,10 +8,10 @@ import ReactFlow, {
   Edge,
   Background,
   Controls,
-  MiniMap,
   Panel,
   ReactFlowProvider,
   ConnectionLineType,
+  NodeChange,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { toPng } from 'html-to-image';
@@ -22,8 +22,12 @@ import { CustomEdge, BuildingConnectionEdge } from '../../components/topology/Cu
 import { SemanticZoomController } from '../../components/topology/SemanticZoomController';
 import { ConnectionWizard } from '../../components/topology/ConnectionWizard';
 import { getZoomConfig, filterNodesByZoom, filterEdgesByZoom } from '../../lib/semanticZoom';
-import { getDeviceRole, getDevicePositionWeight } from '../../lib/deviceRoleMapper';
+import { getDeviceRole } from '../../lib/deviceRoleMapper';
 import { getVendorLogo } from '../../lib/formatting';
+import {
+  DEVICE_INVENTORY_CHANGED_EVENT,
+  DEVICE_INVENTORY_CHANGED_STORAGE_KEY,
+} from '@/lib/device-inventory-events';
 import { Label } from '@/components/ui/label';
 import { 
   Dialog, 
@@ -72,7 +76,9 @@ import {
   Network,
   Terminal,
   Eye,
-  RotateCcw
+  RotateCcw,
+  AlertTriangle,
+  EthernetPort
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -172,6 +178,39 @@ interface Rack {
   devices?: Device[];
 }
 
+interface DownPortSummary {
+  id: string;
+  interfaceIndex: number;
+  interfaceName: string;
+  description?: string | null;
+  adminStatus: string;
+  operStatus: string;
+  downSince?: string | null;
+  lastPolledAt?: string | null;
+  updatedAt?: string | null;
+  monitored: boolean;
+}
+
+interface DeviceTopologyStatus {
+  deviceId: string;
+  deviceName: string;
+  nmsDeviceId?: number | null;
+  managementIp?: string | null;
+  portDownCount: number;
+  downPorts: DownPortSummary[];
+}
+
+const UNASSIGNED_BUILDING_ID = '__unassigned-devices__';
+const UNASSIGNED_BUILDING_NAME = 'Konumsuz Cihazlar';
+
+function getDeviceBuildingId(device: Device) {
+  return device.rack?.room?.floor?.building?.id;
+}
+
+function isUnassignedDevice(device: Device) {
+  return !getDeviceBuildingId(device);
+}
+
 // Connection type styling for all views
 const connectionStyles: Record<string, { color: string; dash: string; width: number; label: string; icon: string }> = {
   'FIBER_SINGLE_MODE': { color: '#DC2626', dash: '0', width: 5, label: 'Fiber Single-Mode (Tekli)', icon: '🔴' },
@@ -196,6 +235,7 @@ const connectionStyles: Record<string, { color: string; dash: string; width: num
 const NetworkTopologyPage = () => {
   const router = useRouter();
   const [devices, setDevices] = useState<Device[]>([]);
+  const [topologyStatusByDeviceId, setTopologyStatusByDeviceId] = useState<Record<string, DeviceTopologyStatus>>({});
   const [services, setServices] = useState<Service[]>([]);
   const [connections, setConnections] = useState<NetworkConnection[]>([]);
   const [organizations, setOrganizations] = useState<Organization[]>([]);
@@ -213,6 +253,7 @@ const NetworkTopologyPage = () => {
 
   // Topology is fully controlled by useMemo — no separate state needed
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+  const [nodePositionOverrides, setNodePositionOverrides] = useState<Record<string, { x: number; y: number }>>({});
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [viewMode, setViewMode] = useState<'physical' | 'services' | 'hierarchy' | 'zoom' | 'building'>('building');
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
@@ -262,8 +303,9 @@ const NetworkTopologyPage = () => {
     const element = document.querySelector('.react-flow') as HTMLElement;
     if (element) {
       toPng(element, {
-        backgroundColor: '#0f172a',
+        backgroundColor: '#ffffff',
         style: {
+          background: '#ffffff',
           transform: 'none',
           width: element.scrollWidth + 'px',
           height: element.scrollHeight + 'px',
@@ -281,34 +323,58 @@ const NetworkTopologyPage = () => {
 
   // Auto-layout is disabled when using controlled topology (positions computed by useMemo)
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  const getNodePositionKey = useCallback((nodeId: string) => `${viewMode}:${nodeId}`, [viewMode]);
 
-  // Close context menu when clicking outside
-  useEffect(() => {
-    const handleClickOutside = () => {
-      setContextMenuVisible(false);
-    };
-    
-    // Add event listener
-    document.addEventListener('click', handleClickOutside);
-    
-    return () => {
-      document.removeEventListener('click', handleClickOutside);
-    };
-  }, [contextMenuVisible]);
+  const handleNodesChange = useCallback((changes: NodeChange[]) => {
+    setNodePositionOverrides((prev) => {
+      let next = prev;
 
-  const loadData = async () => {
+      changes.forEach((change) => {
+        if (change.type !== 'position' || !change.position) return;
+
+        if (next === prev) {
+          next = { ...prev };
+        }
+
+        next[`${viewMode}:${change.id}`] = change.position;
+      });
+
+      return next;
+    });
+  }, [viewMode]);
+
+  const getEffectiveNodePosition = useCallback((node: Node) => {
+    return nodePositionOverrides[getNodePositionKey(node.id)] || node.position;
+  }, [getNodePositionKey, nodePositionOverrides]);
+
+  const getBuildingConnectionHandles = useCallback((sourceNode: Node, targetNode: Node) => {
+    const sourcePosition = getEffectiveNodePosition(sourceNode);
+    const targetPosition = getEffectiveNodePosition(targetNode);
+    const dx = targetPosition.x - sourcePosition.x;
+    const dy = targetPosition.y - sourcePosition.y;
+
+    if (Math.abs(dx) >= Math.abs(dy)) {
+      return dx >= 0
+        ? { sourceHandle: 'right-source', targetHandle: 'left-target' }
+        : { sourceHandle: 'left-source', targetHandle: 'right-target' };
+    }
+
+    return dy >= 0
+      ? { sourceHandle: 'bottom-source', targetHandle: 'top-target' }
+      : { sourceHandle: 'top-source', targetHandle: 'bottom-target' };
+  }, [getEffectiveNodePosition]);
+
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      const [devicesRes, servicesRes, _connectionsRes, orgsRes, buildingConnsRes]: any = await Promise.all([
-        apiGet('/api/devices'),
+      const [devicesRes, servicesRes, _connectionsRes, orgsRes, buildingConnsRes, topologyStatusRes]: any = await Promise.all([
+        apiGet('/api/devices?filterType=all&mode=full&limit=200'),
         apiGet('/api/services'),
         apiGet('/api/network-connections'),
         apiGet('/api/organizations'),
         apiGet('/api/building-connections'),
+        apiGet('/api/network/topology-status'),
       ]);
 
       if (devicesRes.success) setDevices(devicesRes.data);
@@ -326,6 +392,18 @@ const NetworkTopologyPage = () => {
       }
       if (buildingConnsRes.success && buildingConnsRes.data?.items) {
         setBuildingConnections(buildingConnsRes.data.items);
+      }
+      if (topologyStatusRes.success) {
+        const statusMap = (topologyStatusRes.data?.devices || []).reduce(
+          (acc: Record<string, DeviceTopologyStatus>, item: DeviceTopologyStatus) => {
+            acc[item.deviceId] = item;
+            return acc;
+          },
+          {}
+        );
+        setTopologyStatusByDeviceId(statusMap);
+      } else {
+        setTopologyStatusByDeviceId({});
       }
 
       const mockConnections: NetworkConnection[] = [];
@@ -348,7 +426,45 @@ const NetworkTopologyPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  useEffect(() => {
+    const handleInventoryChanged = () => {
+      loadData();
+    };
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === DEVICE_INVENTORY_CHANGED_STORAGE_KEY) {
+        loadData();
+      }
+    };
+
+    window.addEventListener(DEVICE_INVENTORY_CHANGED_EVENT, handleInventoryChanged);
+    window.addEventListener('storage', handleStorage);
+
+    return () => {
+      window.removeEventListener(DEVICE_INVENTORY_CHANGED_EVENT, handleInventoryChanged);
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, [loadData]);
+
+  // Close context menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setContextMenuVisible(false);
+    };
+    
+    // Add event listener
+    document.addEventListener('click', handleClickOutside);
+    
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, [contextMenuVisible]);
 
   const toggleExpand = (id: string) => {
     const newSet = new Set(expandedItems);
@@ -625,9 +741,7 @@ const NetworkTopologyPage = () => {
     return true;
   };
 
-  const { topologyNodes, topologyEdges } = useMemo(() => {
-    if (devices.length === 0) return { topologyNodes: [], topologyEdges: [] };
-
+  const { topologyNodes: generatedTopologyNodes, topologyEdges } = useMemo(() => {
     const newNodes: Node[] = [];
     const newEdges: Edge[] = [];
     
@@ -911,6 +1025,7 @@ const NetworkTopologyPage = () => {
 
                   const deviceServices = services.filter(s => s.deviceId === device.id);
                   const interfaceCount = device.networkInterfaces?.length || 0;
+                  const portStatus = topologyStatusByDeviceId[device.id];
 
                   const node: Node = {
                     id: device.id,
@@ -926,6 +1041,8 @@ const NetworkTopologyPage = () => {
                       serviceCount: deviceServices.length,
                       interfaceCount,
                       interfaces: device.networkInterfaces || [],
+                      portDownCount: portStatus?.portDownCount || 0,
+                      downPorts: portStatus?.downPorts || [],
                       building: buildingName,
                       floor: floorName,
                       room: roomName,
@@ -934,11 +1051,15 @@ const NetworkTopologyPage = () => {
                   };
 
                   node.style = {
-                    border: `3px solid ${buildingColor}`,
+                    border: `3px solid ${portStatus?.portDownCount ? '#DC2626' : buildingColor}`,
                     borderRadius: '10px',
                     padding: '10px',
-                    backgroundColor: device.status === 'ACTIVE' ? '#FFFFFF' : '#F3F4F6',
-                    boxShadow: device.status === 'ACTIVE' ? '0 2px 12px 0 rgba(0, 0, 0, 0.2)' : '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
+                    backgroundColor: portStatus?.portDownCount ? '#FEF2F2' : device.status === 'ACTIVE' ? '#FFFFFF' : '#F3F4F6',
+                    boxShadow: portStatus?.portDownCount
+                      ? '0 4px 18px 0 rgba(220, 38, 38, 0.28)'
+                      : device.status === 'ACTIVE'
+                        ? '0 2px 12px 0 rgba(0, 0, 0, 0.2)'
+                        : '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
                     width: '180px',
                     textAlign: 'center',
                     fontWeight: '600',
@@ -1019,13 +1140,30 @@ const NetworkTopologyPage = () => {
         });
       });
       
-      // Add devices to their buildings
+      const unassignedDevices: Device[] = [];
+
+      // Add devices to their buildings. Devices without a rack/building are still
+      // inventory devices, so keep them visible in a dedicated topology group.
       devicesToRender.forEach(device => {
-        const buildingId = device.rack?.room?.floor?.building?.id;
+        const buildingId = getDeviceBuildingId(device);
         if (buildingId && buildingMap.has(buildingId)) {
           buildingMap.get(buildingId)!.devices.push(device);
+        } else {
+          unassignedDevices.push(device);
         }
       });
+
+      if (unassignedDevices.length > 0) {
+        buildingMap.set(UNASSIGNED_BUILDING_ID, {
+          building: {
+            id: UNASSIGNED_BUILDING_ID,
+            name: UNASSIGNED_BUILDING_NAME,
+            city: 'Rack veya bina atanmamış',
+            organizationId: '',
+          } as Building,
+          devices: unassignedDevices,
+        });
+      }
       
       // Calculate building positions — radial/concentric layout
       // Scales from 3 to 40+ buildings without crossings
@@ -1061,6 +1199,9 @@ const NetworkTopologyPage = () => {
         const coreCount = deviceRoles.filter(r => r === 'core').length;
         const distCount = deviceRoles.filter(r => r === 'distribution').length;
         const accessCount = deviceRoles.filter(r => r === 'access').length;
+        const portDownCount = devices.reduce((total, device) => {
+          return total + (topologyStatusByDeviceId[device.id]?.portDownCount || 0);
+        }, 0);
         
         // Determine building health status
         const activeDevices = devices.filter(d => d.status === 'ACTIVE').length;
@@ -1093,6 +1234,7 @@ const NetworkTopologyPage = () => {
             coreDevices: coreCount,
             distributionDevices: distCount,
             accessDevices: accessCount,
+            portDownCount,
             isExpanded: expandedBuildings.has(building.id) || semanticZoom > 0.8,
             zoom: semanticZoom,
             onExpand: () => {
@@ -1115,84 +1257,8 @@ const NetworkTopologyPage = () => {
         
         newNodes.push(buildingNode);
         
-        // If building is expanded or zoomed in enough, show devices
-        if (expandedBuildings.has(building.id) || semanticZoom > 0.8) {
-          // Calculate device positions based on role
-          const buildingX = pos.x;
-          const buildingY = pos.y;
-          const buildingWidth = 500;
-          const buildingHeight = 400;
-          
-          devices.forEach((device, _deviceIndex) => {
-            const role = getDeviceRole(device.type, device.name);
-            const weight = getDevicePositionWeight(role);
-            
-            // Add some randomness to avoid overlapping
-            const randomOffsetX = (Math.random() - 0.5) * 80;
-            const randomOffsetY = (Math.random() - 0.5) * 60;
-            
-            const deviceX = buildingX + buildingWidth * weight.x + randomOffsetX;
-            const deviceY = buildingY + buildingHeight * weight.y + randomOffsetY + 100; // Offset below building card
-            
-            const deviceNode: Node = {
-              id: device.id,
-              type: 'device',
-              position: { x: deviceX, y: deviceY },
-              data: {
-                deviceId: device.id,
-                name: device.name,
-                type: device.type,
-                vendor: device.vendor,
-                role: role,
-                status: device.status.toLowerCase() as 'active' | 'inactive' | 'maintenance' | 'error',
-                ipAddress: device.networkInterfaces?.[0]?.ipv4,
-                ports: device.networkInterfaces?.length,
-                activeConnections: connections.filter(
-                  c => c.sourceDeviceId === device.id || c.targetDeviceId === device.id
-                ).length,
-                buildingName: building.name,
-                location: `${device.rack?.room?.name || ''} - ${device.rack?.name || ''}`.trim().replace(/^- /, ''),
-                zoom: semanticZoom,
-              },
-            };
-            
-            newNodes.push(deviceNode);
-          });
-        }
       });
-      
-      // Create edges for device connections (only for expanded buildings)
-      connections.forEach(conn => {
-        const sourceDevice = devices.find(d => d.id === conn.sourceDeviceId);
-        const targetDevice = devices.find(d => d.id === conn.targetDeviceId);
-        
-        if (sourceDevice && targetDevice) {
-          const sourceBuildingId = sourceDevice.rack?.room?.floor?.building?.id;
-          const targetBuildingId = targetDevice.rack?.room?.floor?.building?.id;
-          
-          // Only show edge if both devices' buildings are expanded
-          if (
-            sourceBuildingId && 
-            targetBuildingId && 
-            expandedBuildings.has(sourceBuildingId) && 
-            expandedBuildings.has(targetBuildingId)
-          ) {
-            newEdges.push({
-              id: conn.id,
-              source: sourceDevice.id,
-              target: targetDevice.id,
-              type: 'custom',
-              data: {
-                connectionType: 'copper',
-                bandwidth: '1Gbps',
-                status: conn.status === 'UP' ? 'up' : 'down',
-                label: conn.status,
-              },
-            });
-          }
-        }
-      });
-      
+
       // Add building connection edges
       if (buildingConnections.length > 0) {
         buildingConnections.forEach((buildingConn: any) => {
@@ -1209,13 +1275,16 @@ const NetworkTopologyPage = () => {
             
             if (sourceExists && destExists) {
               const style = connectionStyles[buildingConn.connectionType] || connectionStyles['OTHER'];
+              const sourceNode = newNodes.find(n => n.id === sourceBuildingNodeId)!;
+              const destNode = newNodes.find(n => n.id === destBuildingNodeId)!;
+              const handles = getBuildingConnectionHandles(sourceNode, destNode);
               
               newEdges.push({
                 id: `building-conn-${buildingConn.id}`,
                 source: sourceBuildingNodeId,
                 target: destBuildingNodeId,
-                sourceHandle: 'right-source',
-                targetHandle: 'left-target',
+                sourceHandle: handles.sourceHandle,
+                targetHandle: handles.targetHandle,
                 type: 'building',
                 animated: buildingConn.status === 'ACTIVE',
                 data: {
@@ -1248,6 +1317,7 @@ const NetworkTopologyPage = () => {
       // ====================================================================
       devicesToRender.forEach((device, index) => {
         const role = getDeviceRole(device.type, device.name);
+        const portStatus = topologyStatusByDeviceId[device.id];
         
         const node: Node = {
           id: device.id,
@@ -1262,6 +1332,8 @@ const NetworkTopologyPage = () => {
             status: device.status.toLowerCase() as 'active' | 'inactive' | 'maintenance' | 'error',
             ipAddress: device.networkInterfaces?.[0]?.ipv4,
             ports: device.networkInterfaces?.length,
+            portDownCount: portStatus?.portDownCount || 0,
+            downPorts: portStatus?.downPorts || [],
             activeConnections: connections.filter(
               c => c.sourceDeviceId === device.id || c.targetDeviceId === device.id
             ).length,
@@ -1299,6 +1371,7 @@ const NetworkTopologyPage = () => {
       devicesToRender.forEach((device, index) => {
         const role = getDeviceRole(device.type, device.name);
         const deviceServices = services.filter(s => s.deviceId === device.id);
+        const portStatus = topologyStatusByDeviceId[device.id];
         
         const node: Node = {
           id: device.id,
@@ -1313,6 +1386,8 @@ const NetworkTopologyPage = () => {
             status: device.status.toLowerCase() as 'active' | 'inactive' | 'maintenance' | 'error',
             ipAddress: device.networkInterfaces?.[0]?.ipv4,
             ports: deviceServices.length, // Show service count as ports in this view
+            portDownCount: portStatus?.portDownCount || 0,
+            downPorts: portStatus?.downPorts || [],
             activeConnections: connections.filter(
               c => c.sourceDeviceId === device.id || c.targetDeviceId === device.id
             ).length,
@@ -1347,16 +1422,27 @@ const NetworkTopologyPage = () => {
 
     return { topologyNodes: newNodes, topologyEdges: newEdges };
   }, [
-    devices.length,
+    devices,
     filteredDevices,
     services,
     connections,
     viewMode,
     buildingConnections,
     organizations,
+    topologyStatusByDeviceId,
     semanticZoom,
-    expandedBuildings
+    expandedBuildings,
+    getBuildingConnectionHandles
   ]);
+
+  const topologyNodes = useMemo(() => {
+    return generatedTopologyNodes.map((node) => {
+      const override = nodePositionOverrides[getNodePositionKey(node.id)];
+      return override ? { ...node, position: override } : node;
+    });
+  }, [generatedTopologyNodes, getNodePositionKey, nodePositionOverrides]);
+
+  const showTopologyEmptyState = topologyNodes.length === 0 && devices.length === 0;
 
   // Sync removed — topologyNodes/topologyEdges passed directly to ReactFlow
 
@@ -2214,10 +2300,11 @@ const NetworkTopologyPage = () => {
                     edges={topologyEdges}
                     nodeTypes={nodeTypes}
                     edgeTypes={edgeTypes}
+                    onNodesChange={handleNodesChange}
                     onNodeClick={(_, node) => handleNodeClick(node)}
                     onNodeContextMenu={handleNodeContextMenu}
                     onEdgeClick={handleEdgeClick}
-                    nodesDraggable={false}
+                    nodesDraggable
                     nodesConnectable={false}
                     onMove={(_, viewport) => {
                       if (viewMode === 'building') {
@@ -2242,7 +2329,18 @@ const NetworkTopologyPage = () => {
                   >
                     <Background color="#3b82f6" gap={20} />
                     <Controls className="bg-card border-border fill-foreground shadow-xl" />
-                    <MiniMap className="bg-background border-border shadow-2xl rounded-xl" maskColor="rgba(0, 0, 0, 0.1)" nodeColor="#3b82f6" />
+
+                    {showTopologyEmptyState && (
+                      <Panel position="top-center">
+                        <div className="mt-10 flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-card/95 px-8 py-7 text-center shadow-xl">
+                          <Server className="mb-3 h-10 w-10 text-muted-foreground" />
+                          <h3 className="text-base font-bold text-foreground">Topolojide gösterilecek cihaz yok</h3>
+                          <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+                            Devices veya NMS Add Device üzerinden cihaz ekleyin.
+                          </p>
+                        </div>
+                      </Panel>
+                    )}
                     
                     {/* Semantic Zoom Controller for Building View */}
                     {viewMode === 'building' && (
@@ -2295,38 +2393,6 @@ const NetworkTopologyPage = () => {
                                 width: `${devices.length > 0 ? (devices.filter(d => d.status === 'ACTIVE').length / devices.length) * 100 : 0}%` 
                               }}
                             />
-                          </div>
-                        </div>
-                      </div>
-                    </Panel>
-                    
-                    <Panel position="top-right" className="bg-card/90 backdrop-blur-md text-foreground rounded-xl shadow-2xl p-5 border border-border max-h-80 overflow-y-auto custom-scrollbar">
-                      <div className="space-y-4" role="region" aria-label="Harita Göstergesi">
-                        <h3 className="font-black text-xs uppercase tracking-widest border-b border-border pb-3">Gösterge</h3>
-                        <div className="grid grid-cols-1 gap-2.5">
-                          {[
-                            { label: 'Fiziksel Sunucu', color: 'bg-blue-500' },
-                            { label: 'Sanal Host', color: 'bg-green-500' },
-                            { label: 'VM / Router', color: 'bg-purple-500' },
-                            { label: 'Güvenlik Duvarı', color: 'bg-red-500' },
-                            { label: 'Switch', color: 'bg-amber-500' },
-                            { label: 'Depolama', color: 'bg-slate-500' },
-                            { label: 'Yazıcı / Kamera', color: 'bg-cyan-500' },
-                          ].map(item => (
-                            <div key={item.label} className="flex items-center gap-3">
-                              <div className={cn("w-3.5 h-3.5 rounded-sm shadow-sm", item.color)}></div>
-                              <span className="text-[11px] font-bold text-muted-foreground">{item.label}</span>
-                            </div>
-                          ))}
-                          <div className="my-2 border-t border-border pt-2 space-y-2">
-                            <div className="flex items-center gap-3">
-                              <div className="w-6 h-0.5 bg-emerald-500 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
-                              <span className="text-[11px] font-black text-emerald-600 dark:text-emerald-400">AKTİF</span>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <div className="w-6 h-0.5 bg-destructive rounded-full"></div>
-                              <span className="text-[11px] font-black text-destructive">PASİF / HATA</span>
-                            </div>
                           </div>
                         </div>
                       </div>
@@ -2545,6 +2611,15 @@ const NetworkTopologyPage = () => {
                                 <span className="text-sm font-medium">Cihaz Sayısı</span>
                                 <Badge>{selectedNode.data.deviceCount || 0}</Badge>
                               </div>
+                              {(selectedNode.data.portDownCount || 0) > 0 && (
+                                <div className="mt-3 flex items-center justify-between rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-red-700">
+                                  <span className="flex items-center gap-2 text-sm font-semibold">
+                                    <AlertTriangle className="h-4 w-4" />
+                                    Port Down
+                                  </span>
+                                  <Badge variant="destructive">{selectedNode.data.portDownCount}</Badge>
+                                </div>
+                              )}
                             </Card>
                             {selectedNode.data.isEmpty && (
                               <Card className="p-4 border-dashed border-primary/20 bg-primary/5">
@@ -2569,7 +2644,7 @@ const NetworkTopologyPage = () => {
                                       className="h-7 w-7 object-contain"
                                     />
                                   )}
-                                  <h2 className="text-xl font-bold tracking-tight truncate max-w-[200px]">{selectedNode.data.label}</h2>
+                                  <h2 className="text-xl font-bold tracking-tight truncate max-w-[200px]">{selectedNode.data.label || selectedNode.data.name}</h2>
                                 </div>
                                 <Badge variant="secondary" className="mt-1">{selectedNode.data.type?.replace(/_/g, ' ')}</Badge>
                               </div>
@@ -2582,9 +2657,9 @@ const NetworkTopologyPage = () => {
                                 <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Durum</p>
                                 <div className="flex items-center gap-2">
                                   <div className={cn("h-2 w-2 rounded-full animate-pulse", 
-                                    selectedNode.data.status === 'ACTIVE' ? "bg-emerald-500" : "bg-red-500"
+                                    selectedNode.data.status === 'ACTIVE' || selectedNode.data.status === 'active' ? "bg-emerald-500" : "bg-red-500"
                                   )} />
-                                  <span className="text-xs font-bold">{selectedNode.data.status === 'ACTIVE' ? 'AKTİF' : 'PASİF'}</span>
+                                  <span className="text-xs font-bold">{selectedNode.data.status === 'ACTIVE' || selectedNode.data.status === 'active' ? 'AKTİF' : 'PASİF'}</span>
                                 </div>
                               </Card>
                               <Card className="p-3 bg-muted/30">
@@ -2612,6 +2687,44 @@ const NetworkTopologyPage = () => {
                                 <p className="text-lg font-bold">{selectedNode.data.interfaceCount || 0}</p>
                               </Card>
                             </div>
+
+                            {(selectedNode.data.portDownCount || 0) > 0 && (
+                              <Card className="border-red-200 bg-red-50 p-4 text-red-800">
+                                <div className="mb-3 flex items-center justify-between gap-3">
+                                  <div className="flex min-w-0 items-center gap-2">
+                                    <AlertTriangle className="h-5 w-5 shrink-0" />
+                                    <div className="min-w-0">
+                                      <p className="text-sm font-bold">İzlenen Port Down</p>
+                                      <p className="text-[11px] text-red-700/80">NMS tarafından takip edilen portlarda kesinti var.</p>
+                                    </div>
+                                  </div>
+                                  <Badge variant="destructive" className="shrink-0">
+                                    {selectedNode.data.portDownCount} port
+                                  </Badge>
+                                </div>
+                                <div className="space-y-2">
+                                  {(selectedNode.data.downPorts || []).map((port: any) => (
+                                    <div key={port.id} className="rounded-lg border border-red-200 bg-white/70 p-3">
+                                      <div className="flex items-center justify-between gap-2">
+                                        <span className="flex min-w-0 items-center gap-2 text-xs font-bold">
+                                          <EthernetPort className="h-3.5 w-3.5 shrink-0" />
+                                          <span className="truncate">{port.interfaceName}</span>
+                                        </span>
+                                        <Badge variant="destructive" className="h-5 shrink-0 text-[10px]">DOWN</Badge>
+                                      </div>
+                                      {port.description && (
+                                        <p className="mt-1 truncate text-[11px] text-red-700/80">{port.description}</p>
+                                      )}
+                                      <p className="mt-1 text-[10px] text-red-700/70">
+                                        {port.downSince
+                                          ? `Down since: ${new Date(port.downSince).toLocaleString('tr-TR')}`
+                                          : 'Down başlangıç zamanı bilinmiyor'}
+                                      </p>
+                                    </div>
+                                  ))}
+                                </div>
+                              </Card>
+                            )}
 
                             {/* Location Details */}
                             <Card className="p-4 bg-muted/30 border-border/50">
@@ -2731,7 +2844,9 @@ const NetworkTopologyPage = () => {
         {selectedBuildingForPopup && (
           <BuildingDetailPopup
             building={selectedBuildingForPopup}
-            devices={devices.filter(d => d.rack?.room?.floor?.building?.id === selectedBuildingForPopup.id)}
+            devices={selectedBuildingForPopup.id === UNASSIGNED_BUILDING_ID
+              ? devices.filter(isUnassignedDevice)
+              : devices.filter(d => getDeviceBuildingId(d) === selectedBuildingForPopup.id)}
             onClose={() => setSelectedBuildingForPopup(null)}
           />
         )}

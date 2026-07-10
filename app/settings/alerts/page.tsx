@@ -41,7 +41,7 @@ interface NotifConfig {
     smtpSecure: boolean;
     recipients: string[];
   };
-  isDefault?: boolean;
+  isConfigured?: boolean;
 }
 
 const SEVERITY_MAP: Record<string, { label: string; color: string }> = {
@@ -75,6 +75,9 @@ export default function AlertSettingsPage() {
   const [smtpPort, setSmtpPort] = useState('587');
   const [smtpUser, setSmtpUser] = useState('');
   const [smtpPass, setSmtpPass] = useState('');
+  const [smtpSecure, setSmtpSecure] = useState(false);
+  const [emailEnabled, setEmailEnabled] = useState(false);
+  const [emailConfigured, setEmailConfigured] = useState(false);
   const [recipientList, setRecipientList] = useState<string[]>([]);
   const [newRecipient, setNewRecipient] = useState('');
 
@@ -96,6 +99,9 @@ export default function AlertSettingsPage() {
         setSmtpPort(String(cfg.smtpPort || 587));
         setSmtpUser(cfg.smtpUser || '');
         setSmtpPass(cfg.smtpPass || '');
+        setSmtpSecure(Boolean(cfg.smtpSecure));
+        setEmailEnabled(Boolean(notifData.data.enabled));
+        setEmailConfigured(Boolean(notifData.data.isConfigured));
         setRecipientList(cfg.recipients || []);
       }
     } catch (err) {
@@ -162,16 +168,19 @@ export default function AlertSettingsPage() {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          enabled: emailEnabled,
           smtpHost,
           smtpPort: parseInt(smtpPort, 10),
           smtpUser,
           smtpPass,
+          smtpSecure,
           recipients: recipientList,
         }),
       });
       const data = await res.json();
       if (data.success) {
         setMessage({ text: 'Email yapilandirmasi kaydedildi', type: 'success' });
+        fetchData();
       } else {
         setMessage({ text: data.error || 'Kaydetme hatasi', type: 'error' });
       }
@@ -183,6 +192,10 @@ export default function AlertSettingsPage() {
   };
 
   const sendTestEmail = async () => {
+    if (!emailEnabled) {
+      setMessage({ text: 'Email bildirimleri pasif. Test emaili icin once bildirimleri aktif edin.', type: 'error' });
+      return;
+    }
     setTestingEmail(true);
     try {
       const res = await fetch('/api/alarms/notification', { method: 'POST' });
@@ -346,13 +359,28 @@ export default function AlertSettingsPage() {
         <TabsContent value="email" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Settings className="h-5 w-5" />
-                SMTP Yapilandirmasi
-              </CardTitle>
+              <div className="flex items-center justify-between gap-3">
+                <CardTitle className="flex items-center gap-2">
+                  <Settings className="h-5 w-5" />
+                  SMTP Yapilandirmasi
+                </CardTitle>
+                <Badge variant={emailEnabled && emailConfigured ? 'success' : emailEnabled ? 'warning' : 'secondary'}>
+                  {emailEnabled ? (emailConfigured ? 'Aktif' : 'Eksik ayar') : 'Pasif'}
+                </Badge>
+              </div>
               <CardDescription>Email bildirim sunucu ayarlari</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-4 py-3">
+                <div>
+                  <Label className="font-semibold">Email bildirimleri</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Aktif oldugunda notifyEmail acik alarm tanimlari SMTP ile email gonderir.
+                  </p>
+                </div>
+                <Switch checked={emailEnabled} onCheckedChange={setEmailEnabled} />
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>SMTP Sunucu</Label>
@@ -370,6 +398,15 @@ export default function AlertSettingsPage() {
                   <Label>Sifre</Label>
                   <Input type="password" value={smtpPass} onChange={(e) => setSmtpPass(e.target.value)} placeholder="********" />
                 </div>
+              </div>
+              <div className="flex items-center justify-between rounded-lg border border-border px-4 py-3">
+                <div>
+                  <Label className="font-semibold">TLS / SSL</Label>
+                  <p className="text-xs text-muted-foreground">
+                    465 gibi implicit TLS portlari icin acin; 587 STARTTLS icin genelde kapali kalir.
+                  </p>
+                </div>
+                <Switch checked={smtpSecure} onCheckedChange={setSmtpSecure} />
               </div>
               <div className="space-y-3">
                 <Label className="flex items-center gap-2">
@@ -431,11 +468,16 @@ export default function AlertSettingsPage() {
                   {savingConfig ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Mail className="h-4 w-4 mr-2" />}
                   Kaydet
                 </Button>
-                <Button variant="outline" onClick={sendTestEmail} disabled={testingEmail}>
+                <Button variant="outline" onClick={sendTestEmail} disabled={testingEmail || !emailEnabled || !emailConfigured}>
                   {testingEmail ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
                   Test Email Gonder
                 </Button>
               </div>
+              {(!emailEnabled || !emailConfigured) && (
+                <p className="text-xs text-muted-foreground">
+                  Test email icin ayarlari kaydedin ve email bildirimlerini aktif hale getirin.
+                </p>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

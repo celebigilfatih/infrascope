@@ -1,85 +1,118 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
+import { AlertCircle, CheckCircle, Loader2, PlusCircle } from 'lucide-react';
+import { notifyDeviceInventoryChanged } from '@/lib/device-inventory-events';
 
 type ConnectionType = 'ssh' | 'api' | 'snmp';
 type SnmpVersion = 'v2c' | 'v3';
 
-const VENDORS = [
-  'Cisco', 'Fortinet', 'MikroTik', 'Arista', 'Juniper', 'HP',
-  'Dell', 'Huawei', 'Ubiquiti', 'Netgear', 'TP-Link', 'Generic',
-];
-
-const DEVICE_TYPES = [
-  'Router', 'Switch', 'Firewall', 'Access Point', 'Server',
-  'Load Balancer', 'Storage', 'UPS', 'Other',
-];
+interface InventoryDevice {
+  id: string;
+  name: string;
+  type: string;
+  vendor?: string | null;
+  model?: string | null;
+  managementIp?: string | null;
+  nmsDeviceId?: number | null;
+  pollingEnabled?: boolean;
+}
 
 export default function AddNmsDevicePage() {
   const router = useRouter();
 
+  const [inventoryDevices, setInventoryDevices] = useState<InventoryDevice[]>([]);
+  const [loadingDevices, setLoadingDevices] = useState(true);
   const [form, setForm] = useState({
-    name: '',
-    ip_address: '',
-    snmp_port: 161,
-    connection_type: 'snmp' as ConnectionType,
-    snmp_version: 'v2c' as SnmpVersion,
-    snmp_community: '',
-    snmp_username: '',
-    snmp_auth_protocol: '',
-    snmp_auth_password: '',
-    ssh_username: '',
-    ssh_password: '',
-    vendor: '',
-    device_type: '',
-    notes: '',
+    deviceId: '',
+    managementIp: '',
+    snmpPort: 161,
+    connectionType: 'snmp' as ConnectionType,
+    snmpVersion: 'v2c' as SnmpVersion,
+    snmpCommunity: '',
+    snmpUsername: '',
+    snmpAuthProtocol: '',
+    snmpAuthPassword: '',
+    sshUsername: '',
+    sshPassword: '',
+    pollingInterval: 300,
   });
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
+  const availableDevices = useMemo(
+    () => inventoryDevices.filter((device) => device.nmsDeviceId == null),
+    [inventoryDevices]
+  );
+
+  const selectedDevice = useMemo(
+    () => inventoryDevices.find((device) => device.id === form.deviceId) || null,
+    [form.deviceId, inventoryDevices]
+  );
+
   const set = (key: string, value: any) => setForm(prev => ({ ...prev, [key]: value }));
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadInventoryDevices() {
+      setLoadingDevices(true);
+      setError(null);
+      try {
+        const res = await fetch('/api/devices?filterType=all&mode=minimal&limit=200');
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || 'Envanter cihazları yüklenemedi');
+        }
+        if (!cancelled) setInventoryDevices(data.data || []);
+      } catch (err: any) {
+        if (!cancelled) setError(err.message || 'Envanter cihazları yüklenemedi');
+      } finally {
+        if (!cancelled) setLoadingDevices(false);
+      }
+    }
+
+    loadInventoryDevices();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const handleSubmit = async () => {
-    if (!form.name.trim()) { setError('Device Name is required'); return; }
-    if (!form.ip_address.trim()) { setError('IP Address is required'); return; }
+    if (!form.deviceId) { setError('Önce envanterden bir cihaz seçin'); return; }
+    if (!form.managementIp.trim()) { setError('Management IP zorunludur'); return; }
+
     setError(null);
     setSaving(true);
 
     try {
-      const payload: any = {
-        name: form.name,
-        ip_address: form.ip_address,
-        snmp_port: form.snmp_port,
-        vendor: form.vendor || null,
-        device_type: form.device_type || null,
-        notes: form.notes || null,
-        polling_enabled: true,
+      const payload: Record<string, unknown> = {
+        deviceId: form.deviceId,
+        managementIp: form.managementIp.trim(),
+        snmpPort: form.snmpPort,
+        pollingInterval: form.pollingInterval,
+        pollingEnabled: true,
       };
 
-      if (form.connection_type === 'snmp' || form.connection_type === 'api') {
-        payload.snmp_version = form.snmp_version;
-        payload.snmp_community = form.snmp_community || 'public';
-        if (form.snmp_version === 'v3') {
-          payload.snmp_username = form.snmp_username;
-          payload.snmp_auth_protocol = form.snmp_auth_protocol;
-          payload.snmp_auth_password = form.snmp_auth_password;
-        }
+      if (form.connectionType === 'snmp' || form.connectionType === 'api') {
+        payload.snmpVersion = form.snmpVersion;
+        payload.snmpCommunity = form.snmpCommunity || 'public';
       }
 
-      if (form.connection_type === 'ssh') {
-        payload.ssh_username = form.ssh_username;
-        payload.ssh_password = form.ssh_password;
+      if (form.connectionType === 'ssh') {
+        payload.sshUsername = form.sshUsername || null;
+        payload.sshPassword = form.sshPassword || null;
       }
 
-      const res = await fetch('/api/integrations/nms/network-devices', {
+      const res = await fetch('/api/integrations/nms/devices', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -87,14 +120,15 @@ export default function AddNmsDevicePage() {
 
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || 'Failed to add device');
+        setError(data.error || 'Cihaz NMS izlemeye alınamadı');
         return;
       }
 
       setSuccess(true);
-      setTimeout(() => router.push('/integrations/nms/devices'), 1200);
+      notifyDeviceInventoryChanged({ action: 'update', deviceId: form.deviceId, source: 'nms-add-device' });
+      setTimeout(() => router.push('/integrations/nms/devices'), 900);
     } catch (err: any) {
-      setError(err.message || 'Unexpected error');
+      setError(err.message || 'Beklenmeyen hata oluştu');
     } finally {
       setSaving(false);
     }
@@ -103,72 +137,133 @@ export default function AddNmsDevicePage() {
   return (
     <div className="p-6 max-w-2xl mx-auto space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Add Device</h1>
-        <p className="text-muted-foreground text-sm">Configure a new network device for monitoring</p>
+        <h1 className="text-2xl font-bold">Cihazı NMS İzlemeye Al</h1>
+        <p className="text-muted-foreground text-sm">
+          Cihaz kaydı ana envanterde kalır; burada sadece SNMP/SSH izleme ayarları bağlanır.
+        </p>
       </div>
 
       <Card>
         <CardContent className="p-6 space-y-6">
-          {/* Basic Information */}
           <div className="space-y-4">
             <h2 className="text-sm font-semibold flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-orange-500" />
-              Basic Information
+              Envanter Cihazı
             </h2>
-            <div className="space-y-2">
-              <Label htmlFor="name">Device Name *</Label>
-              <Input
-                id="name"
-                placeholder="e.g., Core Router 1"
-                value={form.name}
-                onChange={e => set('name', e.target.value)}
-              />
-            </div>
+
+            {loadingDevices ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Envanter cihazları yükleniyor...
+              </div>
+            ) : availableDevices.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
+                <p className="font-medium text-foreground">İzlemeye alınabilecek envanter cihazı yok.</p>
+                <p className="mt-1">Önce ana cihaz envanterinden cihaz oluşturun; sonra bu ekrandan NMS izlemeye alın.</p>
+                <Button variant="outline" size="sm" className="mt-3 gap-2" asChild>
+                  <Link href="/devices">
+                    <PlusCircle className="h-4 w-4" />
+                    Envantere Cihaz Ekle
+                  </Link>
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Label htmlFor="device">Cihaz *</Label>
+                <select
+                  id="device"
+                  className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+                  value={form.deviceId}
+                  onChange={e => set('deviceId', e.target.value)}
+                >
+                  <option value="">Envanterden cihaz seçin</option>
+                  {availableDevices.map(device => (
+                    <option key={device.id} value={device.id}>
+                      {device.name} · {device.type.replace(/_/g, ' ')}
+                      {device.vendor ? ` · ${device.vendor}` : ''}
+                      {device.model ? ` ${device.model}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {selectedDevice && (
+              <div className="rounded-lg bg-muted/40 border border-border p-3 text-sm">
+                <div className="font-medium">{selectedDevice.name}</div>
+                <div className="text-muted-foreground">
+                  {selectedDevice.type.replace(/_/g, ' ')}
+                  {selectedDevice.vendor ? ` · ${selectedDevice.vendor}` : ''}
+                  {selectedDevice.model ? ` ${selectedDevice.model}` : ''}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <hr className="border-border" />
+
+          <div className="space-y-4">
+            <h2 className="text-sm font-semibold flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-blue-500" />
+              İzleme Bağlantısı
+            </h2>
+
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label htmlFor="ip">IP Address *</Label>
+                <Label htmlFor="ip">Management IP *</Label>
                 <Input
                   id="ip"
                   placeholder="192.168.1.1"
-                  value={form.ip_address}
-                  onChange={e => set('ip_address', e.target.value)}
+                  value={form.managementIp}
+                  onChange={e => set('managementIp', e.target.value)}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="port">Port</Label>
+                <Label htmlFor="port">SNMP Port</Label>
                 <Input
                   id="port"
                   type="number"
-                  value={form.snmp_port}
-                  onChange={e => set('snmp_port', Number(e.target.value))}
+                  value={form.snmpPort}
+                  onChange={e => set('snmpPort', Number(e.target.value))}
                 />
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="pollingInterval">Polling Interval (saniye)</Label>
+              <Input
+                id="pollingInterval"
+                type="number"
+                min={30}
+                value={form.pollingInterval}
+                onChange={e => set('pollingInterval', Number(e.target.value))}
+              />
             </div>
           </div>
 
           <hr className="border-border" />
 
-          {/* Connection Type */}
           <div className="space-y-4">
             <h2 className="text-sm font-semibold flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-orange-400" />
-              Connection Type
+              Protokol
             </h2>
             <div>
-              <Label className="text-xs text-muted-foreground mb-2 block">Select Connection Protocol</Label>
+              <Label className="text-xs text-muted-foreground mb-2 block">Bağlantı protokolü</Label>
               <div className="grid grid-cols-3 gap-3">
-                {(['ssh', 'api', 'snmp'] as ConnectionType[]).map(type => (
+                {(['snmp', 'ssh', 'api'] as ConnectionType[]).map(type => (
                   <button
                     key={type}
-                    onClick={() => set('connection_type', type)}
+                    type="button"
+                    onClick={() => set('connectionType', type)}
                     className={`flex items-center gap-2 px-4 py-3 rounded-lg border text-sm font-medium transition-colors
-                      ${form.connection_type === type
+                      ${form.connectionType === type
                         ? 'border-primary bg-primary/10 text-primary'
                         : 'border-border bg-card hover:bg-muted/50'
                       }`}
                   >
                     <span className={`w-3 h-3 rounded-full border-2 flex-shrink-0 ${
-                      form.connection_type === type ? 'border-primary bg-primary' : 'border-muted-foreground'
+                      form.connectionType === type ? 'border-primary bg-primary' : 'border-muted-foreground'
                     }`} />
                     {type.toUpperCase()}
                   </button>
@@ -176,50 +271,49 @@ export default function AddNmsDevicePage() {
               </div>
             </div>
 
-            {/* SNMP fields */}
-            {(form.connection_type === 'snmp' || form.connection_type === 'api') && (
+            {(form.connectionType === 'snmp' || form.connectionType === 'api') && (
               <div className="space-y-4 p-4 bg-muted/30 rounded-lg border border-border">
                 <h3 className="text-xs font-semibold flex items-center gap-2 text-muted-foreground">
                   <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
-                  SNMP Configuration
+                  SNMP Ayarları
                 </h3>
                 <div className="space-y-2">
-                  <Label htmlFor="snmp_version">SNMP Version</Label>
+                  <Label htmlFor="snmpVersion">SNMP Version</Label>
                   <select
-                    id="snmp_version"
+                    id="snmpVersion"
                     className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm"
-                    value={form.snmp_version}
-                    onChange={e => set('snmp_version', e.target.value as SnmpVersion)}
+                    value={form.snmpVersion}
+                    onChange={e => set('snmpVersion', e.target.value as SnmpVersion)}
                   >
                     <option value="v2c">SNMPv2c</option>
                     <option value="v3">SNMPv3</option>
                   </select>
                 </div>
-                {form.snmp_version === 'v2c' && (
+                {form.snmpVersion === 'v2c' && (
                   <div className="space-y-2">
                     <Label htmlFor="community">Community String</Label>
                     <Input
                       id="community"
                       type="password"
                       placeholder="public"
-                      value={form.snmp_community}
-                      onChange={e => set('snmp_community', e.target.value)}
+                      value={form.snmpCommunity}
+                      onChange={e => set('snmpCommunity', e.target.value)}
                     />
                   </div>
                 )}
-                {form.snmp_version === 'v3' && (
+                {form.snmpVersion === 'v3' && (
                   <div className="space-y-3">
                     <div className="space-y-2">
                       <Label>SNMPv3 Username</Label>
-                      <Input value={form.snmp_username} onChange={e => set('snmp_username', e.target.value)} />
+                      <Input value={form.snmpUsername} onChange={e => set('snmpUsername', e.target.value)} />
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-2">
                         <Label>Auth Protocol</Label>
                         <select
                           className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm"
-                          value={form.snmp_auth_protocol}
-                          onChange={e => set('snmp_auth_protocol', e.target.value)}
+                          value={form.snmpAuthProtocol}
+                          onChange={e => set('snmpAuthProtocol', e.target.value)}
                         >
                           <option value="">None</option>
                           <option value="MD5">MD5</option>
@@ -230,8 +324,8 @@ export default function AddNmsDevicePage() {
                         <Label>Auth Password</Label>
                         <Input
                           type="password"
-                          value={form.snmp_auth_password}
-                          onChange={e => set('snmp_auth_password', e.target.value)}
+                          value={form.snmpAuthPassword}
+                          onChange={e => set('snmpAuthPassword', e.target.value)}
                         />
                       </div>
                     </div>
@@ -240,68 +334,23 @@ export default function AddNmsDevicePage() {
               </div>
             )}
 
-            {/* SSH fields */}
-            {form.connection_type === 'ssh' && (
+            {form.connectionType === 'ssh' && (
               <div className="space-y-4 p-4 bg-muted/30 rounded-lg border border-border">
                 <h3 className="text-xs font-semibold text-muted-foreground">SSH Credentials</h3>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-2">
                     <Label>SSH Username</Label>
-                    <Input value={form.ssh_username} onChange={e => set('ssh_username', e.target.value)} />
+                    <Input value={form.sshUsername} onChange={e => set('sshUsername', e.target.value)} />
                   </div>
                   <div className="space-y-2">
                     <Label>SSH Password</Label>
-                    <Input type="password" value={form.ssh_password} onChange={e => set('ssh_password', e.target.value)} />
+                    <Input type="password" value={form.sshPassword} onChange={e => set('sshPassword', e.target.value)} />
                   </div>
                 </div>
               </div>
             )}
           </div>
 
-          <hr className="border-border" />
-
-          {/* Device Details */}
-          <div className="space-y-4">
-            <h2 className="text-sm font-semibold flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-green-500" />
-              Device Details
-            </h2>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Vendor</Label>
-                <select
-                  className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm"
-                  value={form.vendor}
-                  onChange={e => set('vendor', e.target.value)}
-                >
-                  <option value="">Select Vendor</option>
-                  {VENDORS.map(v => <option key={v} value={v}>{v}</option>)}
-                </select>
-              </div>
-              <div className="space-y-2">
-                <Label>Device Type</Label>
-                <select
-                  className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm"
-                  value={form.device_type}
-                  onChange={e => set('device_type', e.target.value)}
-                >
-                  <option value="">Select Type</option>
-                  {DEVICE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Notes</Label>
-              <textarea
-                className="w-full min-h-[60px] px-3 py-2 rounded-md border border-input bg-background text-sm resize-none"
-                placeholder="Optional notes..."
-                value={form.notes}
-                onChange={e => set('notes', e.target.value)}
-              />
-            </div>
-          </div>
-
-          {/* Error / Success */}
           {error && (
             <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive text-sm">
               <AlertCircle className="h-4 w-4 shrink-0" />
@@ -311,27 +360,26 @@ export default function AddNmsDevicePage() {
           {success && (
             <div className="flex items-center gap-2 p-3 rounded-lg bg-green-500/10 border border-green-500/30 text-green-600 dark:text-green-400 text-sm">
               <CheckCircle className="h-4 w-4 shrink-0" />
-              Device added successfully! Redirecting...
+              Cihaz NMS izlemeye alındı. Yönlendiriliyor...
             </div>
           )}
 
-          {/* Actions */}
           <div className="flex gap-3 pt-2">
             <Button
               variant="outline"
               className="flex-1"
-              onClick={() => router.push('/integrations/nms')}
+              onClick={() => router.push('/integrations/nms/devices')}
               disabled={saving}
             >
-              Cancel
+              İptal
             </Button>
             <Button
               className="flex-1 bg-orange-500 hover:bg-orange-600 text-white"
               onClick={handleSubmit}
-              disabled={saving || success}
+              disabled={saving || success || loadingDevices || availableDevices.length === 0}
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              {saving ? 'Adding...' : 'Add Device'}
+              {saving ? 'Kaydediliyor...' : 'İzlemeye Al'}
             </Button>
           </div>
         </CardContent>

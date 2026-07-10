@@ -10,6 +10,19 @@ import { sendTestEmail } from '@/lib/notifications/email';
 import { validateBody } from '@/lib/validators';
 import { notificationConfigSchema } from '@/lib/validators/alarms';
 
+const MASKED_PASSWORD = '********';
+
+function maskEmailConfig(config: Record<string, unknown>) {
+  return {
+    smtpHost: typeof config.smtpHost === 'string' ? config.smtpHost : '',
+    smtpPort: typeof config.smtpPort === 'number' ? config.smtpPort : 587,
+    smtpUser: typeof config.smtpUser === 'string' ? config.smtpUser : '',
+    smtpPass: config.smtpPass ? MASKED_PASSWORD : '',
+    smtpSecure: Boolean(config.smtpSecure),
+    recipients: Array.isArray(config.recipients) ? config.recipients : [],
+  };
+}
+
 export async function GET() {
   try {
     const config = await prisma.notificationConfig.findUnique({
@@ -17,32 +30,35 @@ export async function GET() {
     });
 
     if (!config) {
-      // Return defaults (without password)
       return NextResponse.json({
         success: true,
         data: {
           channel: 'email',
-          enabled: true,
+          enabled: false,
           config: {
-            smtpHost: 'mail.webmahsul.com.tr',
+            smtpHost: '',
             smtpPort: 587,
-            smtpUser: 'alert@webmahsul.com.tr',
-            smtpPass: '********',
+            smtpUser: '',
+            smtpPass: '',
             smtpSecure: false,
-            recipients: ['alert@webmahsul.com.tr'],
+            recipients: [],
           },
-          isDefault: true,
+          isConfigured: false,
         },
       });
     }
 
-    // Mask password in response
     const cfgData = config.config as Record<string, unknown>;
-    const masked = { ...cfgData, smtpPass: '********' };
 
     return NextResponse.json({
       success: true,
-      data: { ...config, config: masked, isDefault: false },
+      data: {
+        id: config.id,
+        channel: config.channel,
+        enabled: config.enabled,
+        config: maskEmailConfig(cfgData),
+        isConfigured: Boolean(cfgData.smtpHost && cfgData.smtpUser && cfgData.smtpPass && Array.isArray(cfgData.recipients) && cfgData.recipients.length > 0),
+      },
     });
   } catch (error) {
     console.error('[NotifConfig] GET error:', error);
@@ -57,20 +73,23 @@ export async function PUT(request: NextRequest) {
     if (!parsed.success) {
       return NextResponse.json({ success: false, error: parsed.error }, { status: 400 });
     }
-    const { smtpHost, smtpPort, smtpUser, smtpPass, smtpSecure, recipients } = parsed.data;
-    const enabled = (rawBody as Record<string, unknown>).enabled as boolean | undefined;
+    const { enabled, smtpHost, smtpPort, smtpUser, smtpPass, smtpSecure, recipients } = parsed.data;
 
-    // Build config object, preserving existing password if not provided
     const existing = await prisma.notificationConfig.findUnique({ where: { channel: 'email' } });
     const existingConfig = (existing?.config as Record<string, unknown>) || {};
+    const resolvedPassword = (smtpPass && smtpPass !== MASKED_PASSWORD) ? smtpPass : String(existingConfig.smtpPass || '');
+
+    if (!resolvedPassword) {
+      return NextResponse.json({ success: false, error: 'SMTP password is required' }, { status: 400 });
+    }
 
     const newConfig = {
-      smtpHost: smtpHost || existingConfig.smtpHost || '',
-      smtpPort: smtpPort || existingConfig.smtpPort || 587,
-      smtpUser: smtpUser || existingConfig.smtpUser || '',
-      smtpPass: (smtpPass && smtpPass !== '********') ? smtpPass : existingConfig.smtpPass || '',
-      smtpSecure: smtpSecure !== undefined ? smtpSecure : existingConfig.smtpSecure || false,
-      recipients: recipients || existingConfig.recipients || [],
+      smtpHost,
+      smtpPort,
+      smtpUser,
+      smtpPass: resolvedPassword,
+      smtpSecure: smtpSecure ?? false,
+      recipients,
     };
 
     const result = await prisma.notificationConfig.upsert({
@@ -81,7 +100,7 @@ export async function PUT(request: NextRequest) {
         config: newConfig,
       },
       update: {
-        enabled: enabled !== undefined ? enabled : undefined,
+        enabled: enabled !== undefined ? enabled : existing?.enabled ?? true,
         config: newConfig,
       },
     });
@@ -95,8 +114,19 @@ export async function PUT(request: NextRequest) {
 
 export async function POST() {
   try {
+    const config = await prisma.notificationConfig.findUnique({ where: { channel: 'email' } });
+    if (!config) {
+      return NextResponse.json({ success: false, error: 'Email notification config is not saved yet' }, { status: 400 });
+    }
+    if (!config.enabled) {
+      return NextResponse.json({ success: false, error: 'Email notifications are disabled' }, { status: 400 });
+    }
+
     const result = await sendTestEmail();
-    return NextResponse.json({ success: result.success, error: result.error });
+    return NextResponse.json(
+      { success: result.success, error: result.error },
+      { status: result.success ? 200 : 400 }
+    );
   } catch (error) {
     console.error('[NotifConfig] POST test error:', error);
     return NextResponse.json({ success: false, error: (error as Error).message }, { status: 500 });

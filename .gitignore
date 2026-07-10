@@ -9,6 +9,7 @@
 
 # production build
 /build
+/dist/
 
 # dotenv environment files
 .env

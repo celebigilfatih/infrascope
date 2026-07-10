@@ -242,14 +242,7 @@ export const Sidebar: React.FC = () => {
       title: 'License Control',
       items: [
         { name: 'License Admin', href: '/license-admin', icon: Key },
-      ],
-    },
-    {
-      title: 'Administration',
-      items: [
         { name: 'Users & Roles', href: '/settings/users', icon: Users },
-        { name: 'Invitations', href: '/settings/users/invitations', icon: Mail },
-        { name: 'Audit Log', href: '/settings/audit', icon: FileText },
       ],
     },
   ];

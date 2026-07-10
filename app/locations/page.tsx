@@ -23,35 +23,6 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Building2, ChevronRight, ChevronDown, Circle, Edit, Trash2, Plus, Eye, X } from 'lucide-react';
 
-// Simple Error Boundary Component
-class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean, error: Error | null}> {
-  constructor(props: any) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
-  static getDerivedStateFromError(error: Error) { 
-    return { hasError: true, error }; 
-  }
-  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error("3D Room Error:", error, errorInfo);
-  }
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="p-8 text-center bg-red-900/20 border border-red-800 rounded-xl">
-          <h2 className="text-xl font-bold text-red-400 mb-2">Bileşen Yüklenemedi</h2>
-          <p className="text-blue-200 mb-4">3D görünüm yüklenirken bir hata oluştu. Lütfen sayfayı yenileyin.</p>
-          <div className="bg-black/40 p-3 rounded mb-4 text-xs text-red-300 font-mono overflow-auto max-h-32 text-left">
-            {this.state.error?.message || 'Bilinmeyen hata'}
-          </div>
-          <button onClick={() => window.location.reload()} className="mt-4 px-4 py-2 bg-red-800 text-white rounded-lg">Yenile</button>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
-
 
 interface Organization {
   id: string;
@@ -110,6 +81,9 @@ interface Rack {
   coordZ?: number | null;
   rotation?: number | null;
   devices?: Device[];
+  _count?: {
+    devices?: number;
+  };
 }
 
 // Device interface removed because it was unused
@@ -186,21 +160,53 @@ export default function LocationsPage() {
     setShowDeviceModal(true);
   };
 
-  const handleView3DRoom = async (room: Room) => {
+  const findRackById = (rackId: string | null) => {
+    if (!rackId) return null;
+
+    for (const org of organizations) {
+      for (const building of org.buildings || []) {
+        for (const floor of building.floors || []) {
+          for (const room of floor.rooms || []) {
+            const rack = room.racks?.find((item) => item.id === rackId);
+            if (rack) return rack;
+          }
+        }
+      }
+    }
+
+    return null;
+  };
+
+  const fetchRoomDetails = async (roomId: string) => {
     try {
-      // Fetch the full room with racks
-      const response: any = await apiGet(`/api/rooms/${room.id}`);
+      const response: any = await apiGet(`/api/rooms/${roomId}`);
       if (response.success && response.data) {
-        setViewing3DRoom(response.data);
-      } else {
-        // Fallback to the room as-is if fetch fails
-        setViewing3DRoom(room);
+        return response.data as Room;
       }
     } catch (err) {
       console.error('Error fetching room:', err);
-      // Fallback to the room as-is if fetch fails
-      setViewing3DRoom(room);
     }
+
+    return null;
+  };
+
+  const refreshViewingRoom = async (roomId: string) => {
+    const freshRoom = await fetchRoomDetails(roomId);
+    if (freshRoom) {
+      setViewing3DRoom(freshRoom);
+    }
+  };
+
+  const refreshLocationsAndOpenRoom = async () => {
+    await loadData();
+    if (viewing3DRoom?.id) {
+      await refreshViewingRoom(viewing3DRoom.id);
+    }
+  };
+
+  const handleView3DRoom = async (room: Room) => {
+    const freshRoom = await fetchRoomDetails(room.id);
+    setViewing3DRoom(freshRoom || room);
   };
 
   const handleAdd = async (formData: any) => {
@@ -238,7 +244,7 @@ export default function LocationsPage() {
       if (response.success) {
         setShowAddModal(false);
         setShowDeviceModal(false);
-        loadData();
+        await refreshLocationsAndOpenRoom();
         toast({
           title: "Başarılı",
           description: `${modalType.charAt(0).toUpperCase() + modalType.slice(1)} başarıyla eklendi!`,
@@ -288,7 +294,7 @@ export default function LocationsPage() {
       const response: any = await apiPut(endpoint, payload);
       if (response.success) {
         setShowEditModal(false);
-        loadData();
+        await refreshLocationsAndOpenRoom();
         toast({
           title: "Başarılı",
           description: `${modalType.charAt(0).toUpperCase() + modalType.slice(1)} başarıyla güncellendi!`,
@@ -332,7 +338,7 @@ export default function LocationsPage() {
 
       const response: any = await apiDelete(endpoint);
       if (response.success) {
-        loadData();
+        await refreshLocationsAndOpenRoom();
         toast({
           title: "Başarılı",
           description: `${name} başarıyla silindi.`,
@@ -792,6 +798,7 @@ export default function LocationsPage() {
         {/* Device Modal */}
         {showDeviceModal && (
           <DeviceModal
+            rack={findRackById(selectedRackId)}
             onClose={() => setShowDeviceModal(false)}
             onSubmit={handleAdd}
           />
@@ -829,13 +836,11 @@ export default function LocationsPage() {
                 </div>
               </div>
               <div className="flex-1 overflow-hidden relative">
-                <ErrorBoundary>
-                  {viewMode === '2d' ? (
-                    <FloorPlanView room={viewing3DRoom} onUpdate={loadData} />
-                  ) : (
-                    <Room3D room={viewing3DRoom} onRackClick={(rackId) => console.log('Rack clicked:', rackId)} />
-                  )}
-                </ErrorBoundary>
+                {viewMode === '2d' ? (
+                  <FloorPlanView room={viewing3DRoom} onUpdate={refreshLocationsAndOpenRoom} />
+                ) : (
+                  <Room3D room={viewing3DRoom} onRackClick={(rackId) => console.log('Rack clicked:', rackId)} />
+                )}
               </div>
             </div>
           </div>
@@ -845,7 +850,7 @@ export default function LocationsPage() {
           open={deleteDialogOpen}
           onOpenChange={setDeleteDialogOpen}
           title="Silme İşlemini Onayla"
-          description={`${itemToDelete?.name} ögesini silmek istediğinizden emin misiniz? Bu işlem bağlı tüm alt ögeleri de silebilir.`}
+          description={`${itemToDelete?.name} ögesini silmek istediğinizden emin misiniz? Bağlı alt ögeler varsa işlem engellenir.`}
           onConfirm={confirmDelete}
           variant="destructive"
           confirmText="Sil"
@@ -1143,7 +1148,8 @@ function UniversalEditModal({ type, item, onClose, onSubmit }: {
 }
 
 // Device Modal Component
-function DeviceModal({ onClose, onSubmit }: {
+function DeviceModal({ rack, onClose, onSubmit }: {
+  rack: Rack | null;
   onClose: () => void;
   onSubmit: (data: any) => void;
 }) {
@@ -1193,6 +1199,23 @@ function DeviceModal({ onClose, onSubmit }: {
               <option value="DECOMMISSIONED">Devre Dışı</option>
               <option value="UNKNOWN">Bilinmiyor</option>
             </select>
+          </div>
+          <div className="space-y-1">
+            <label className={labelClass}>U Pozisyonu</label>
+            <input
+              type="number"
+              min={1}
+              max={rack?.maxUnits || 100}
+              placeholder={rack ? `1-${rack.maxUnits} arası, boş bırakılabilir` : 'Opsiyonel'}
+              className={inputClass}
+              onChange={e => setFormData({
+                ...formData,
+                rackUnitPosition: e.target.value === '' ? undefined : parseInt(e.target.value, 10),
+              })}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Boş bırakılırsa cihaz 3D görünümde otomatik bir slota yerleştirilir.
+            </p>
           </div>
           <div className="space-y-1">
             <label className={labelClass}>Support Tarihi</label>

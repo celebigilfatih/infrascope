@@ -61,6 +61,7 @@ create_directories() {
     mkdir -p data/license-cache
     mkdir -p certs
     mkdir -p logs
+    mkdir -p images
     
     echo -e "${GREEN}✓ Directories created${NC}"
 }
@@ -88,11 +89,14 @@ setup_env() {
     echo -e "${YELLOW}Setting up environment...${NC}"
     
     if [ ! -f .env ]; then
-        if [ -f .env.example ]; then
+        if [ -f env.example ]; then
+            cp env.example .env
+            echo -e "${GREEN}✓ Created .env from env.example${NC}"
+        elif [ -f .env.example ]; then
             cp .env.example .env
             echo -e "${GREEN}✓ Created .env from .env.example${NC}"
         else
-            echo -e "${RED}Error: .env.example not found${NC}"
+            echo -e "${RED}Error: env.example or .env.example not found${NC}"
             exit 1
         fi
     else
@@ -113,15 +117,15 @@ setup_env() {
 
     echo ""
     echo -e "${BLUE}Application URL${NC}"
-    echo "Enter the public URL for this installation [http://localhost:3000]:"
+    echo "Enter the public URL for this installation [http://localhost:8170]:"
     read -r APP_URL
-    APP_URL=${APP_URL:-http://localhost:3000}
+    APP_URL=${APP_URL:-http://localhost:8170}
     set_env_value "APP_URL" "$APP_URL"
     set_env_value "NEXTAUTH_URL" "$APP_URL"
 
-    echo "Enter the host port to expose InfraScope [3000]:"
+    echo "Enter the host port to expose InfraScope [8170]:"
     read -r APP_PORT
-    APP_PORT=${APP_PORT:-3000}
+    APP_PORT=${APP_PORT:-8170}
     set_env_value "APP_PORT" "$APP_PORT"
 
     CURRENT_NEXTAUTH_SECRET=$(grep "^NEXTAUTH_SECRET=" .env | cut -d= -f2-)
@@ -142,9 +146,9 @@ setup_env() {
     fi
 }
 
-# Pull Docker images
-pull_images() {
-    echo -e "${YELLOW}Pulling Docker images...${NC}"
+# Load or pull Docker image
+prepare_images() {
+    echo -e "${YELLOW}Preparing Docker images...${NC}"
     
     # Source .env for registry/version
     set -a
@@ -152,15 +156,38 @@ pull_images() {
     set +a
     
     REGISTRY=${REGISTRY:-ghcr.io/celebigilfatih}
-    VERSION=${VERSION:-latest}
+    VERSION=${VERSION:-1.0.0}
+    IMAGE_REF="${REGISTRY}/infrascope:${VERSION}"
+    LOCAL_IMAGE_TAR="./images/infrascope-${VERSION}.tar"
+
+    if docker image inspect "${IMAGE_REF}" > /dev/null 2>&1; then
+        echo -e "${GREEN}✓ Image already available: ${IMAGE_REF}${NC}"
+        return 0
+    fi
+
+    if [ -f "${LOCAL_IMAGE_TAR}" ]; then
+        echo "Loading local appliance image ${LOCAL_IMAGE_TAR}..."
+        docker load -i "${LOCAL_IMAGE_TAR}"
+
+        if docker image inspect "${IMAGE_REF}" > /dev/null 2>&1; then
+            echo -e "${GREEN}✓ Local image loaded: ${IMAGE_REF}${NC}"
+            return 0
+        fi
+
+        echo -e "${RED}Error: ${LOCAL_IMAGE_TAR} did not provide expected image ${IMAGE_REF}.${NC}"
+        echo "Rebuild the appliance image tar with the expected tag."
+        exit 1
+    fi
     
-    echo "Pulling ${REGISTRY}/infrascope:${VERSION}..."
-    docker pull ${REGISTRY}/infrascope:${VERSION} || {
-        echo -e "${YELLOW}! Could not pull from registry. Make sure you have access.${NC}"
-        echo -e "${YELLOW}  For trial/evaluation, build locally with: docker compose build${NC}"
+    echo "Local image not found. Pulling ${IMAGE_REF}..."
+    docker pull "${IMAGE_REF}" || {
+        echo -e "${RED}Error: Could not prepare image ${IMAGE_REF}.${NC}"
+        echo "For offline OVA installs, place the image at ${LOCAL_IMAGE_TAR}."
+        echo "For online installs, make sure this VM can access the registry."
+        exit 1
     }
     
-    echo -e "${GREEN}✓ Images ready${NC}"
+    echo -e "${GREEN}✓ Image ready: ${IMAGE_REF}${NC}"
 }
 
 # Start services
@@ -198,7 +225,7 @@ main() {
     check_prerequisites
     create_directories
     setup_env
-    pull_images
+    prepare_images
     start_services
 }
 

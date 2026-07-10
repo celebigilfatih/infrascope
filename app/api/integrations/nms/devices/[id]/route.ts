@@ -19,7 +19,7 @@ function serializeBigInt(obj: unknown): unknown {
  * Update SNMP configuration or toggle polling.
  * 
  * DELETE /api/integrations/nms/devices/[id]
- * Disable NMS polling and clear SNMP config.
+ * Remove NMS monitoring from the device while keeping the inventory record.
  */
 
 export async function GET(_req: NextRequest, { params }: Params) {
@@ -114,8 +114,44 @@ export async function PUT(req: NextRequest, { params }: Params) {
       pollingInterval,
     } = body;
 
+    const existing = await (prisma as any).device.findUnique({
+      where: { id: params.id },
+      select: { id: true, name: true, nmsDeviceId: true },
+    });
+
+    if (!existing) {
+      return NextResponse.json({ error: 'Device not found' }, { status: 404 });
+    }
+
+    if (!existing.nmsDeviceId) {
+      return NextResponse.json({ error: 'Device has no NMS configuration' }, { status: 404 });
+    }
+
+    if (managementIp !== undefined) {
+      const normalizedIp = typeof managementIp === 'string' ? managementIp.trim() : '';
+      if (!normalizedIp) {
+        return NextResponse.json({ error: 'Management IP is required' }, { status: 400 });
+      }
+
+      const duplicateIp = await (prisma as any).device.findFirst({
+        where: {
+          managementIp: normalizedIp,
+          nmsDeviceId: { not: null },
+          NOT: { id: params.id },
+        },
+        select: { id: true, name: true, nmsDeviceId: true },
+      });
+
+      if (duplicateIp) {
+        return NextResponse.json(
+          { error: `Management IP ${normalizedIp} is already used by "${duplicateIp.name}"`, deviceId: duplicateIp.id, nmsDeviceId: duplicateIp.nmsDeviceId },
+          { status: 409 }
+        );
+      }
+    }
+
     const updateData: Record<string, unknown> = {};
-    if (managementIp !== undefined) updateData.managementIp = managementIp;
+    if (managementIp !== undefined) updateData.managementIp = managementIp.trim();
     if (snmpCommunity !== undefined) updateData.snmpCommunity = snmpCommunity;
     if (snmpVersion !== undefined) updateData.snmpVersion = snmpVersion;
     if (snmpPort !== undefined) updateData.snmpPort = snmpPort;
@@ -147,21 +183,63 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
 export async function DELETE(_req: NextRequest, { params }: Params) {
   try {
-    const updated = await (prisma as any).device.update({
+    const existing = await prisma.device.findUnique({
       where: { id: params.id },
-      data: {
-        nmsDeviceId: null,
-        managementIp: null,
-        snmpCommunity: null,
-        pollingEnabled: false,
-        lastPolledAt: null,
+      select: {
+        id: true,
+        name: true,
+        nmsDeviceId: true,
       },
-      select: { id: true, name: true },
     });
 
-    return NextResponse.json({ success: true, device: updated });
+    if (!existing) {
+      return NextResponse.json({ error: 'Device not found' }, { status: 404 });
+    }
+
+    if (!existing.nmsDeviceId) {
+      return NextResponse.json({ error: 'Device has no NMS configuration' }, { status: 404 });
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      await (tx as any).nmsInterface.deleteMany({ where: { nmsDeviceId: existing.nmsDeviceId } });
+      await (tx as any).nmsHealthMetric.deleteMany({ where: { nmsDeviceId: existing.nmsDeviceId } });
+      await (tx as any).nmsTopologyLink.deleteMany({ where: { nmsDeviceId: existing.nmsDeviceId } });
+      await (tx as any).nmsDeviceMetric.deleteMany({ where: { nmsDeviceId: existing.nmsDeviceId } });
+      await (tx as any).nmsInterfaceMetric.deleteMany({ where: { nmsDeviceId: existing.nmsDeviceId } });
+      await (tx as any).nmsBackup.deleteMany({ where: { nmsDeviceId: existing.nmsDeviceId } });
+
+      return tx.device.update({
+        where: { id: params.id },
+        data: {
+          nmsDeviceId: null,
+          managementIp: null,
+          snmpCommunity: null,
+          snmpVersion: null,
+          snmpPort: null,
+          pollingEnabled: false,
+          pollingInterval: null,
+          sshUsername: null,
+          sshPassword: null,
+          sshPort: null,
+          lastPolledAt: null,
+        },
+        select: {
+          id: true,
+          name: true,
+          nmsDeviceId: true,
+          managementIp: true,
+          pollingEnabled: true,
+        },
+      });
+    });
+
+    return NextResponse.json({
+      success: true,
+      device: updated,
+      message: 'NMS monitoring removed; inventory device retained',
+    });
   } catch (error) {
     console.error('[NMS Device] DELETE error:', error);
-    return NextResponse.json({ error: 'Failed to remove NMS config' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to remove NMS monitoring' }, { status: 500 });
   }
 }

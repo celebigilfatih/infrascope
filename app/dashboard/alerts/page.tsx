@@ -368,6 +368,14 @@ export default function AlertsDashboardPage() {
 
   const PAGE_SIZE = 25;
 
+  useEffect(() => {
+    const requestedFilter = new URLSearchParams(window.location.search).get('filter');
+    const allowedFilters = new Set(['all', 'unacknowledged', 'ALARM_CRITICAL', 'ALARM_HIGH', 'ALARM_MEDIUM', 'ALARM_LOW']);
+    if (requestedFilter && allowedFilters.has(requestedFilter)) {
+      setFilter(requestedFilter);
+    }
+  }, []);
+
   const fetchEvents = useCallback(async (silent = false, appendOffset = 0) => {
     const isAppend = appendOffset > 0;
     if (isAppend) setLoadingMore(true);

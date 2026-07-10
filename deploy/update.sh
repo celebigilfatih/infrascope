@@ -33,7 +33,7 @@ source .env
 set +a
 
 CURRENT_VERSION=${VERSION:-latest}
-TARGET_VERSION=${1:-latest}
+TARGET_VERSION=${1:-$CURRENT_VERSION}
 
 echo -e "${YELLOW}Current version: ${CURRENT_VERSION}${NC}"
 echo -e "${YELLOW}Target version:  ${TARGET_VERSION}${NC}"
@@ -58,18 +58,39 @@ backup_database() {
     echo -e "${GREEN}✓ Database backed up to ${BACKUP_FILE}${NC}"
 }
 
-# Pull new image
-pull_update() {
-    echo -e "${YELLOW}Pulling new version...${NC}"
+# Load or pull new image
+prepare_update_image() {
+    echo -e "${YELLOW}Preparing new version...${NC}"
     
     REGISTRY=${REGISTRY:-ghcr.io/celebigilfatih}
+    IMAGE_REF="${REGISTRY}/infrascope:${TARGET_VERSION}"
+    LOCAL_IMAGE_TAR="./images/infrascope-${TARGET_VERSION}.tar"
+
+    if docker image inspect "${IMAGE_REF}" > /dev/null 2>&1; then
+        echo -e "${GREEN}✓ Image already available: ${IMAGE_REF}${NC}"
+        return 0
+    fi
+
+    if [ -f "${LOCAL_IMAGE_TAR}" ]; then
+        echo "Loading local appliance image ${LOCAL_IMAGE_TAR}..."
+        docker load -i "${LOCAL_IMAGE_TAR}"
+
+        if docker image inspect "${IMAGE_REF}" > /dev/null 2>&1; then
+            echo -e "${GREEN}✓ Local image loaded: ${IMAGE_REF}${NC}"
+            return 0
+        fi
+
+        echo -e "${RED}Error: ${LOCAL_IMAGE_TAR} did not provide expected image ${IMAGE_REF}.${NC}"
+        exit 1
+    fi
     
-    docker pull ${REGISTRY}/infrascope:${TARGET_VERSION} || {
-        echo -e "${RED}Failed to pull image ${REGISTRY}/infrascope:${TARGET_VERSION}${NC}"
+    docker pull "${IMAGE_REF}" || {
+        echo -e "${RED}Failed to prepare image ${IMAGE_REF}${NC}"
+        echo "For offline appliance updates, place the image at ${LOCAL_IMAGE_TAR}."
         exit 1
     }
     
-    echo -e "${GREEN}✓ New image pulled${NC}"
+    echo -e "${GREEN}✓ New image ready${NC}"
 }
 
 # Stop current services
@@ -145,7 +166,7 @@ cleanup_images() {
 # Main update flow
 main() {
     backup_database
-    pull_update
+    prepare_update_image
     stop_services
     run_migrations
     start_services

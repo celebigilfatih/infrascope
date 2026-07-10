@@ -130,6 +130,13 @@ export interface Device {
   switchPorts?: SwitchPort[];
   services?: Service[];
   dependencies?: Dependency[];
+  nmsDeviceId?: number | null;
+  managementIp?: string | null;
+  snmpVersion?: string | null;
+  snmpPort?: number | null;
+  pollingEnabled?: boolean;
+  pollingInterval?: number | null;
+  lastPolledAt?: string | Date | null;
   metadata?: any;
   createdAt?: string | Date;
   updatedAt?: string | Date;

@@ -18,6 +18,7 @@ export function UserProfile({ collapsed = false, compact = false }: UserProfileP
   const router = useRouter();
   const [user, setUser] = useState<{ name: string; email: string; role: string } | null>(null);
   const [open, setOpen] = useState(false);
+  const [licenseServerMode, setLicenseServerMode] = useState<boolean | null>(null);
 
   useEffect(() => {
     const stored = localStorage.getItem('user');
@@ -36,6 +37,23 @@ export function UserProfile({ collapsed = false, compact = false }: UserProfileP
 
     window.addEventListener('storage', handleStorage);
     return () => window.removeEventListener('storage', handleStorage);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    fetch('/api/setup/status', { cache: 'no-store' })
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => {
+        if (active) setLicenseServerMode(Boolean(data?.licenseServerMode));
+      })
+      .catch(() => {
+        if (active) setLicenseServerMode(false);
+      });
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   const handleLogout = async () => {
@@ -73,6 +91,7 @@ export function UserProfile({ collapsed = false, compact = false }: UserProfileP
     editor: 'Editör',
     viewer: 'İzleyici',
   };
+  const showCustomerAccountLinks = licenseServerMode === false;
 
   // Compact mode for TopBar
   if (compact) {
@@ -115,18 +134,22 @@ export function UserProfile({ collapsed = false, compact = false }: UserProfileP
                   Kullanıcı Ayarları
                 </Button>
               </Link>
-              <Link href="/settings/keys">
-                <Button variant="ghost" size="sm" className="w-full justify-start">
-                  <Key className="h-4 w-4 mr-2" />
-                  API Keys
-                </Button>
-              </Link>
-              <Link href="/settings/users/invitations">
-                <Button variant="ghost" size="sm" className="w-full justify-start">
-                  <Mail className="h-4 w-4 mr-2" />
-                  Davetler
-                </Button>
-              </Link>
+              {showCustomerAccountLinks && (
+                <>
+                  <Link href="/settings/keys">
+                    <Button variant="ghost" size="sm" className="w-full justify-start">
+                      <Key className="h-4 w-4 mr-2" />
+                      API Keys
+                    </Button>
+                  </Link>
+                  <Link href="/settings/users/invitations">
+                    <Button variant="ghost" size="sm" className="w-full justify-start">
+                      <Mail className="h-4 w-4 mr-2" />
+                      Davetler
+                    </Button>
+                  </Link>
+                </>
+              )}
               <Separator />
               <Button
                 variant="ghost"
@@ -177,12 +200,14 @@ export function UserProfile({ collapsed = false, compact = false }: UserProfileP
                   Profil Ayarları
                 </Button>
               </Link>
-              <Link href="/settings/keys">
-                <Button variant="ghost" size="sm" className="w-full justify-start">
-                  <Key className="h-4 w-4 mr-2" />
-                  API Keys
-                </Button>
-              </Link>
+              {showCustomerAccountLinks && (
+                <Link href="/settings/keys">
+                  <Button variant="ghost" size="sm" className="w-full justify-start">
+                    <Key className="h-4 w-4 mr-2" />
+                    API Keys
+                  </Button>
+                </Link>
+              )}
               <Separator />
               <Button
                 variant="ghost"
@@ -237,18 +262,22 @@ export function UserProfile({ collapsed = false, compact = false }: UserProfileP
                   Kullanıcı Ayarları
                 </Button>
               </Link>
-              <Link href="/settings/keys">
-                <Button variant="ghost" size="sm" className="w-full justify-start">
-                  <Key className="h-4 w-4 mr-2" />
-                  API Keys
-                </Button>
-              </Link>
-              <Link href="/settings/users/invitations">
-                <Button variant="ghost" size="sm" className="w-full justify-start">
-                  <Mail className="h-4 w-4 mr-2" />
-                  Davetler
-                </Button>
-              </Link>
+              {showCustomerAccountLinks && (
+                <>
+                  <Link href="/settings/keys">
+                    <Button variant="ghost" size="sm" className="w-full justify-start">
+                      <Key className="h-4 w-4 mr-2" />
+                      API Keys
+                    </Button>
+                  </Link>
+                  <Link href="/settings/users/invitations">
+                    <Button variant="ghost" size="sm" className="w-full justify-start">
+                      <Mail className="h-4 w-4 mr-2" />
+                      Davetler
+                    </Button>
+                  </Link>
+                </>
+              )}
               <Separator />
               <Button
                 variant="ghost"

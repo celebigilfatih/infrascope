@@ -10,7 +10,6 @@ const LICENSE_SERVER_HOME = '/license-admin';
 const LICENSE_SERVER_ALLOWED_PAGE_ROUTES = [
   '/license-admin',
   '/settings/users',
-  '/settings/audit',
 ];
 
 // P0-8: Runtime TLS safety check
@@ -47,7 +46,10 @@ function isSafeInternalPath(path: string | null): path is string {
 }
 
 function isLicenseServerAllowedPage(pathname: string): boolean {
-  return LICENSE_SERVER_ALLOWED_PAGE_ROUTES.some((route) => isRouteMatch(pathname, route));
+  const normalizedPathname = pathname !== '/' && pathname.endsWith('/')
+    ? pathname.slice(0, -1)
+    : pathname;
+  return LICENSE_SERVER_ALLOWED_PAGE_ROUTES.includes(normalizedPathname);
 }
 
 function normalizeLicenseServerNext(path: string, requestUrl: string): string {
