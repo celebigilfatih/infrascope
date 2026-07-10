@@ -54,6 +54,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Fresh-install NMS device details** — Added the missing NMS interface monitoring migration so device detail pages work on clean Docker databases.
 - **Docker healthcheck false negatives before integrations are configured** — Customer and license-server compose health checks now use `/api/health/ready` so unconfigured FortiAnalyzer/VMware/NMS alarm health does not mark a fresh demo install unhealthy.
 - **Port conflict: package.json hardcoded PORT=8170 vs Docker PORT=3000** — `npm run dev` and `npm run start` scripts now use `${PORT:-3000}` instead of hardcoded `8170`. Next.js now respects the `PORT` env var from `docker-compose.yml`, aligning container health checks (port 3000) with actual Next.js binding. Prevents `unhealthy` container status and 500 errors when running via Docker
 
