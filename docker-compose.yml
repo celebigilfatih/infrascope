@@ -70,7 +70,7 @@ services:
       retries: 3
       start_period: 60s
     restart: unless-stopped
-    entrypoint: /app/scripts/entrypoint.sh
+    entrypoint: ["/bin/sh", "/app/scripts/entrypoint.sh"]
     command: npm run dev
 
   # NMS Service — SNMP polling + network discovery sidecar

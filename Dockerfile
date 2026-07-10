@@ -109,7 +109,7 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=5 \
     CMD node -e "const http=require('http'); const req=http.get('http://127.0.0.1:3000/api/health', r=>process.exit(r.statusCode===200?0:1)); req.on('error',()=>process.exit(1)); req.setTimeout(4000,()=>{req.destroy();process.exit(1);});"
 
 # Entrypoint script for database migrations and startup
-ENTRYPOINT ["./scripts/entrypoint.sh"]
+ENTRYPOINT ["sh", "./scripts/entrypoint.sh"]
 
 # Default command - Start Next.js server
 CMD ["node", "server.js"]
