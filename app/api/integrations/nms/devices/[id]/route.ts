@@ -43,6 +43,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
         managementIp: true,
         snmpVersion: true,
         snmpPort: true,
+        snmpCommunity: true,
         pollingEnabled: true,
         pollingInterval: true,
         lastPolledAt: true,
@@ -106,11 +107,12 @@ export async function GET(_req: NextRequest, { params }: Params) {
       },
     });
 
-    const { sshPassword, ...safeDevice } = device;
+    const { snmpCommunity, sshPassword, ...safeDevice } = device;
 
     return NextResponse.json(serializeBigInt({
       device: {
         ...safeDevice,
+        hasSnmpCommunity: Boolean(snmpCommunity),
         hasSshPassword: Boolean(sshPassword),
       },
       healthMetrics,

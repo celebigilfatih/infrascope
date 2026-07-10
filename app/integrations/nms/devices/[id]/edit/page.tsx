@@ -1,26 +1,38 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { Card, CardContent } from '@/components/ui/card';
+import {
+  Activity,
+  AlertCircle,
+  ArrowLeft,
+  CheckCircle2,
+  Eye,
+  EyeOff,
+  Loader2,
+  Network,
+  Radio,
+  Save,
+  Server,
+  ShieldCheck,
+  Terminal,
+} from 'lucide-react';
+
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { AlertCircle, CheckCircle, Loader2, ArrowLeft } from 'lucide-react';
-import Link from 'next/link';
+import { Switch } from '@/components/ui/switch';
 
-type ConnectionType = 'ssh' | 'api' | 'snmp';
 type SnmpVersion = 'v2c' | 'v3';
-
-const VENDORS = [
-  'Cisco', 'Fortinet', 'MikroTik', 'Arista', 'Juniper', 'HP',
-  'Dell', 'Huawei', 'Ubiquiti', 'Netgear', 'TP-Link', 'Generic',
-];
-
-const DEVICE_TYPES = [
-  'Router', 'Switch', 'Firewall', 'Access Point', 'Server',
-  'Load Balancer', 'Storage', 'UPS', 'Other',
-];
 
 interface DbDevice {
   id: string;
@@ -34,6 +46,7 @@ interface DbDevice {
   pollingInterval: number | null;
   sshUsername: string | null;
   sshPort: number | null;
+  hasSnmpCommunity: boolean;
   hasSshPassword: boolean;
 }
 
@@ -51,6 +64,8 @@ export default function EditNmsDevicePage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [showCommunity, setShowCommunity] = useState(false);
+  const [showSshPassword, setShowSshPassword] = useState(false);
 
   const [form, setForm] = useState({
     managementIp: '',
@@ -65,47 +80,73 @@ export default function EditNmsDevicePage() {
   });
 
   useEffect(() => {
-    const loadDevice = async () => {
+    let cancelled = false;
+
+    async function loadDevice() {
       setLoading(true);
+      setError(null);
       try {
-        const res = await fetch(`/api/integrations/nms/devices/${deviceId}`);
-        const data = await res.json();
-        if (!res.ok) {
-          setError(data.error || 'Failed to load device');
-          return;
-        }
-        const d = data.device;
-        setInitialDevice(d);
+        const response = await fetch(`/api/integrations/nms/devices/${deviceId}`);
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Cihaz bilgileri yüklenemedi');
+        if (cancelled) return;
+
+        const device = data.device as DbDevice;
+        setInitialDevice(device);
         setForm({
-          managementIp: d.managementIp || '',
-          snmpPort: d.snmpPort ?? 161,
-          snmpVersion: toFormSnmpVersion(d.snmpVersion),
+          managementIp: device.managementIp || '',
+          snmpPort: device.snmpPort ?? 161,
+          snmpVersion: toFormSnmpVersion(device.snmpVersion),
           snmpCommunity: '',
-          pollingEnabled: d.pollingEnabled ?? true,
-          pollingInterval: d.pollingInterval ?? 30,
-          sshUsername: d.sshUsername || '',
+          pollingEnabled: device.pollingEnabled ?? true,
+          pollingInterval: device.pollingInterval ?? 30,
+          sshUsername: device.sshUsername || '',
           sshPassword: '',
-          sshPort: d.sshPort ?? 22,
+          sshPort: device.sshPort ?? 22,
         });
-      } catch (e: any) {
-        setError(e.message);
+      } catch (loadError) {
+        if (!cancelled) {
+          setError(loadError instanceof Error ? loadError.message : 'Cihaz bilgileri yüklenemedi');
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
-    };
+    }
+
     if (deviceId) loadDevice();
+    return () => {
+      cancelled = true;
+    };
   }, [deviceId]);
 
-  const set = (key: string, value: any) => setForm(prev => ({ ...prev, [key]: value }));
+  const set = (key: string, value: unknown) => {
+    setForm((previous) => ({ ...previous, [key]: value }));
+  };
 
   const handleSubmit = async () => {
-    if (!form.managementIp.trim()) { setError('Management IP is required'); return; }
+    if (!form.managementIp.trim()) {
+      setError('Management IP zorunludur');
+      return;
+    }
+    if (!Number.isInteger(form.snmpPort) || form.snmpPort < 1 || form.snmpPort > 65535) {
+      setError('SNMP portu 1 ile 65535 arasında olmalıdır');
+      return;
+    }
+    if (!Number.isInteger(form.sshPort) || form.sshPort < 1 || form.sshPort > 65535) {
+      setError('SSH portu 1 ile 65535 arasında olmalıdır');
+      return;
+    }
+    if (!Number.isInteger(form.pollingInterval) || form.pollingInterval < 30) {
+      setError('Polling aralığı en az 30 saniye olmalıdır');
+      return;
+    }
+
     setError(null);
     setSaving(true);
 
     try {
       const payload: Record<string, unknown> = {
-        managementIp: form.managementIp,
+        managementIp: form.managementIp.trim(),
         snmpPort: form.snmpPort,
         snmpVersion: form.snmpVersion,
         pollingEnabled: form.pollingEnabled,
@@ -116,22 +157,18 @@ export default function EditNmsDevicePage() {
       if (form.snmpCommunity) payload.snmpCommunity = form.snmpCommunity;
       if (form.sshPassword) payload.sshPassword = form.sshPassword;
 
-      const res = await fetch(`/api/integrations/nms/devices/${deviceId}`, {
+      const response = await fetch(`/api/integrations/nms/devices/${deviceId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || 'Failed to update device');
-        return;
-      }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'İzleme ayarları güncellenemedi');
 
       setSuccess(true);
-      setTimeout(() => router.push(`/integrations/nms/devices/${deviceId}`), 1200);
-    } catch (err: any) {
-      setError(err.message || 'Unexpected error');
+      setTimeout(() => router.push(`/integrations/nms/devices/${deviceId}`), 900);
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Beklenmeyen bir hata oluştu');
     } finally {
       setSaving(false);
     }
@@ -139,235 +176,330 @@ export default function EditNmsDevicePage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-16">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="flex min-h-[420px] items-center justify-center">
+        <div className="flex flex-col items-center gap-3 text-muted-foreground">
+          <Loader2 className="h-7 w-7 animate-spin text-primary" />
+          <p className="text-sm">İzleme ayarları yükleniyor...</p>
+        </div>
       </div>
     );
   }
 
-  if (error && !initialDevice) {
+  if (!initialDevice) {
     return (
-      <div className="p-6 space-y-4">
-        <div className="flex items-center gap-3 text-destructive">
-          <AlertCircle className="h-5 w-5" />
-          <span>{error}</span>
+      <div className="p-4 sm:p-6">
+        <div className="mx-auto max-w-xl space-y-4 rounded-lg border border-destructive/30 bg-destructive/5 p-5">
+          <div className="flex items-start gap-3 text-destructive">
+            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
+            <div>
+              <p className="font-medium">Cihaz ayarları açılamadı</p>
+              <p className="mt-1 text-sm">{error || 'Cihaz bulunamadı'}</p>
+            </div>
+          </div>
+          <Button variant="outline" asChild>
+            <Link href="/integrations/nms/devices">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              NMS cihazlarına dön
+            </Link>
+          </Button>
         </div>
-        <Button variant="outline" asChild>
-          <Link href="/integrations/nms/devices">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Devices
-          </Link>
-        </Button>
       </div>
     );
   }
 
   return (
-    <div className="p-6 max-w-2xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" asChild>
-          <Link href="/integrations/nms/devices">
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
-        </Button>
-        <div>
-          <h1 className="text-2xl font-bold">Edit Device</h1>
-          <p className="text-muted-foreground text-sm">
-            {initialDevice?.name || 'Device'} &bull; {initialDevice?.managementIp}
-          </p>
-        </div>
-      </div>
-
-      <Card>
-        <CardContent className="p-6 space-y-6">
-          {/* Device Info (read-only) */}
-          {initialDevice && (
-            <div className="p-3 rounded-lg bg-muted/40 border border-border space-y-1">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Device</p>
-              <p className="text-sm font-bold">{initialDevice.name}</p>
-              <p className="text-xs text-muted-foreground">{initialDevice.type || 'Unknown'} &bull; {initialDevice.vendor || 'Unknown vendor'}</p>
-            </div>
-          )}
-
-          {/* Connection Settings */}
-          <div className="space-y-4">
-            <h2 className="text-sm font-semibold flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-orange-500" />
-              Connection
-            </h2>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label htmlFor="ip">Management IP *</Label>
-                <Input
-                  id="ip"
-                  placeholder="192.168.1.1"
-                  value={form.managementIp}
-                  onChange={e => set('managementIp', e.target.value)}
-                />
+    <div className="p-4 sm:p-6 lg:p-8">
+      <div className="mx-auto max-w-6xl space-y-6">
+        <header className="flex flex-col gap-4 border-b border-border pb-5 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex min-w-0 items-start gap-3">
+            <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" asChild>
+              <Link href={`/integrations/nms/devices/${deviceId}`} aria-label="Cihaz detayına dön">
+                <ArrowLeft className="h-4 w-4" />
+              </Link>
+            </Button>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-xl font-semibold sm:text-2xl">NMS İzleme Ayarları</h1>
+                <Badge variant={form.pollingEnabled ? 'success' : 'secondary'} className="h-6">
+                  {form.pollingEnabled ? 'Polling aktif' : 'Polling kapalı'}
+                </Badge>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="port">SNMP Port</Label>
-                <Input
-                  id="port"
-                  type="number"
-                  value={form.snmpPort}
-                  onChange={e => set('snmpPort', Number(e.target.value))}
-                />
+              <p className="mt-1 text-sm text-muted-foreground">
+                {initialDevice.name} için SNMP, SSH ve polling bağlantısını yönetin.
+              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <span className="inline-flex h-7 items-center gap-1.5 rounded-md border border-border bg-muted/30 px-2.5">
+                  <Server className="h-3.5 w-3.5" />
+                  {initialDevice.vendor || 'Bilinmeyen üretici'}
+                </span>
+                <span className="inline-flex h-7 items-center rounded-md border border-border bg-muted/30 px-2.5">
+                  {initialDevice.type?.replace(/_/g, ' ') || 'Bilinmeyen tip'}
+                </span>
+                <span className="inline-flex h-7 items-center font-mono rounded-md border border-border bg-muted/30 px-2.5">
+                  {initialDevice.managementIp || 'IP tanımsız'}
+                </span>
               </div>
             </div>
           </div>
+        </header>
 
-          <hr className="border-border" />
-
-          {/* SNMP Configuration */}
-          <div className="space-y-4">
-            <h2 className="text-sm font-semibold flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-blue-500" />
-              SNMP Configuration
-            </h2>
-            <div className="grid grid-cols-2 gap-3">
+        <div className="grid items-start gap-4 lg:grid-cols-2">
+          <Card>
+            <CardHeader className="pb-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-md bg-blue-500/10 text-blue-500">
+                  <Network className="h-4 w-4" />
+                </div>
+                <div>
+                  <CardTitle className="text-base">Bağlantı</CardTitle>
+                  <CardDescription>Switch’in yönetim adresi ve SNMP portu.</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_140px]">
               <div className="space-y-2">
-                <Label htmlFor="snmp_version">SNMP Version</Label>
+                <Label htmlFor="management-ip">Management IP</Label>
+                <Input
+                  id="management-ip"
+                  className="font-mono"
+                  placeholder="192.168.1.1"
+                  value={form.managementIp}
+                  onChange={(event) => set('managementIp', event.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="snmp-port">SNMP Portu</Label>
+                <Input
+                  id="snmp-port"
+                  type="number"
+                  min={1}
+                  max={65535}
+                  value={form.snmpPort}
+                  onChange={(event) => set('snmpPort', Number(event.target.value))}
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-500">
+                  <Activity className="h-4 w-4" />
+                </div>
+                <div>
+                  <CardTitle className="text-base">Polling</CardTitle>
+                  <CardDescription>Periyodik veri toplama davranışı.</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex min-h-10 items-center justify-between gap-4 rounded-md border border-border px-3 py-2">
+                <div>
+                  <Label htmlFor="polling-enabled" className="cursor-pointer">Polling durumu</Label>
+                  <p className="text-xs text-muted-foreground">Port ve sağlık verilerini düzenli olarak toplar.</p>
+                </div>
+                <Switch
+                  id="polling-enabled"
+                  checked={form.pollingEnabled}
+                  onCheckedChange={(checked) => set('pollingEnabled', checked)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="polling-interval">Polling aralığı</Label>
+                <div className="relative">
+                  <Input
+                    id="polling-interval"
+                    type="number"
+                    min={30}
+                    className="pr-16"
+                    value={form.pollingInterval}
+                    onChange={(event) => set('pollingInterval', Number(event.target.value))}
+                  />
+                  <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-muted-foreground">
+                    saniye
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-md bg-violet-500/10 text-violet-500">
+                    <Radio className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base">SNMP</CardTitle>
+                    <CardDescription>Port, trafik ve cihaz sağlık metrikleri.</CardDescription>
+                  </div>
+                </div>
+                <Badge variant="outline" className="shrink-0">
+                  {initialDevice.hasSnmpCommunity ? 'Credential kayıtlı' : 'Credential eksik'}
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="snmp-version">SNMP sürümü</Label>
                 <select
-                  id="snmp_version"
-                  className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm"
+                  id="snmp-version"
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   value={form.snmpVersion}
-                  onChange={e => set('snmpVersion', e.target.value as SnmpVersion)}
+                  onChange={(event) => set('snmpVersion', event.target.value as SnmpVersion)}
                 >
                   <option value="v2c">SNMPv2c</option>
                   <option value="v3">SNMPv3</option>
                 </select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="community">Community String <span className="text-muted-foreground font-normal">(leave blank to keep)</span></Label>
-                <Input
-                  id="community"
-                  type="password"
-                  placeholder="New community string..."
-                  value={form.snmpCommunity}
-                  onChange={e => set('snmpCommunity', e.target.value)}
-                />
+                <Label htmlFor="snmp-community">Community string</Label>
+                <div className="relative">
+                  <Input
+                    id="snmp-community"
+                    type={showCommunity ? 'text' : 'password'}
+                    autoComplete="new-password"
+                    className="pr-10"
+                    placeholder={initialDevice.hasSnmpCommunity ? 'Değiştirmek için yeni değer girin' : 'Community string girin'}
+                    value={form.snmpCommunity}
+                    onChange={(event) => set('snmpCommunity', event.target.value)}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-0 top-0 h-10 w-10"
+                    onClick={() => setShowCommunity((visible) => !visible)}
+                    title={showCommunity ? 'Community değerini gizle' : 'Community değerini göster'}
+                    aria-label={showCommunity ? 'Community değerini gizle' : 'Community değerini göster'}
+                  >
+                    {showCommunity ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Boş bırakırsanız kayıtlı community değeri korunur.
+                </p>
               </div>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
 
-          <hr className="border-border" />
-
-          {/* SSH Configuration */}
-          <div className="space-y-4">
-            <h2 className="text-sm font-semibold flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-orange-500" />
-              SSH Ayarları
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label htmlFor="ssh_username">SSH Kullanıcı Adı</Label>
-                <Input
-                  id="ssh_username"
-                  autoComplete="off"
-                  placeholder="admin"
-                  value={form.sshUsername}
-                  onChange={e => set('sshUsername', e.target.value)}
-                />
+          <Card>
+            <CardHeader className="pb-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-md bg-orange-500/10 text-orange-500">
+                    <Terminal className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base">SSH</CardTitle>
+                    <CardDescription>CLI erişimi ve konfigürasyon yedeği.</CardDescription>
+                  </div>
+                </div>
+                <Badge variant="outline" className="shrink-0">
+                  {initialDevice.hasSshPassword ? 'Credential kayıtlı' : 'Credential eksik'}
+                </Badge>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="ssh_port">SSH Portu</Label>
-                <Input
-                  id="ssh_port"
-                  type="number"
-                  min={1}
-                  max={65535}
-                  value={form.sshPort}
-                  onChange={e => set('sshPort', Number(e.target.value))}
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="ssh_password">
-                SSH Parolası{' '}
-                <span className="text-muted-foreground font-normal">
-                  ({initialDevice?.hasSshPassword ? 'boş bırakırsanız mevcut parola korunur' : 'henüz parola kayıtlı değil'})
-                </span>
-              </Label>
-              <Input
-                id="ssh_password"
-                type="password"
-                autoComplete="new-password"
-                placeholder={initialDevice?.hasSshPassword ? 'Yeni parola girin...' : 'SSH parolasını girin...'}
-                value={form.sshPassword}
-                onChange={e => set('sshPassword', e.target.value)}
-              />
-            </div>
-          </div>
-
-          <hr className="border-border" />
-
-          {/* Polling Settings */}
-          <div className="space-y-4">
-            <h2 className="text-sm font-semibold flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-green-500" />
-              Polling Settings
-            </h2>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label htmlFor="interval">Polling Interval (seconds)</Label>
-                <Input
-                  id="interval"
-                  type="number"
-                  value={form.pollingInterval}
-                  onChange={e => set('pollingInterval', Number(e.target.value))}
-                />
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_140px]">
+                <div className="space-y-2">
+                  <Label htmlFor="ssh-username">Kullanıcı adı</Label>
+                  <Input
+                    id="ssh-username"
+                    autoComplete="off"
+                    placeholder="admin"
+                    value={form.sshUsername}
+                    onChange={(event) => set('sshUsername', event.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="ssh-port">SSH Portu</Label>
+                  <Input
+                    id="ssh-port"
+                    type="number"
+                    min={1}
+                    max={65535}
+                    value={form.sshPort}
+                    onChange={(event) => set('sshPort', Number(event.target.value))}
+                  />
+                </div>
               </div>
               <div className="space-y-2">
-                <Label>Polling Enabled</Label>
-                <select
-                  className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm"
-                  value={String(form.pollingEnabled)}
-                  onChange={e => set('pollingEnabled', e.target.value === 'true')}
-                >
-                  <option value="true">Enabled</option>
-                  <option value="false">Disabled</option>
-                </select>
+                <Label htmlFor="ssh-password">Parola</Label>
+                <div className="relative">
+                  <Input
+                    id="ssh-password"
+                    type={showSshPassword ? 'text' : 'password'}
+                    autoComplete="new-password"
+                    className="pr-10"
+                    placeholder={initialDevice.hasSshPassword ? 'Değiştirmek için yeni parola girin' : 'SSH parolasını girin'}
+                    value={form.sshPassword}
+                    onChange={(event) => set('sshPassword', event.target.value)}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-0 top-0 h-10 w-10"
+                    onClick={() => setShowSshPassword((visible) => !visible)}
+                    title={showSshPassword ? 'Parolayı gizle' : 'Parolayı göster'}
+                    aria-label={showSshPassword ? 'Parolayı gizle' : 'Parolayı göster'}
+                  >
+                    {showSshPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Boş bırakırsanız kayıtlı SSH parolası korunur.
+                </p>
               </div>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
+        </div>
 
-          {/* Error / Success */}
-          {error && (
-            <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive text-sm">
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              {error}
-            </div>
-          )}
-          {success && (
-            <div className="flex items-center gap-2 p-3 rounded-lg bg-green-500/10 border border-green-500/30 text-green-600 dark:text-green-400 text-sm">
-              <CheckCircle className="h-4 w-4 shrink-0" />
-              Device updated successfully! Redirecting...
-            </div>
-          )}
-
-          {/* Actions */}
-          <div className="flex gap-3 pt-2">
-            <Button
-              variant="outline"
-              className="flex-1"
-              onClick={() => router.push(`/integrations/nms/devices/${deviceId}`)}
-              disabled={saving}
-            >
-              Cancel
-            </Button>
-            <Button
-              className="flex-1 bg-orange-500 hover:bg-orange-600 text-white"
-              onClick={handleSubmit}
-              disabled={saving || success}
-            >
-              {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              {saving ? 'Saving...' : 'Save Changes'}
-            </Button>
+        <div className="flex items-start gap-3 rounded-lg border border-primary/20 bg-primary/5 p-4 text-sm">
+          <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+          <div>
+            <p className="font-medium">Credential güvenliği</p>
+            <p className="mt-1 text-muted-foreground">
+              Kayıtlı community ve parola değerleri ekrana geri gönderilmez. Yalnızca yeni bir değer girdiğinizde güncellenir.
+            </p>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+
+        {error && (
+          <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
+        {success && (
+          <div className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-600 dark:text-emerald-400">
+            <CheckCircle2 className="h-4 w-4 shrink-0" />
+            Ayarlar kaydedildi. Cihaz detayına dönülüyor...
+          </div>
+        )}
+
+        <div className="flex flex-col-reverse gap-3 border-t border-border pt-5 sm:flex-row sm:justify-end">
+          <Button
+            variant="outline"
+            className="sm:min-w-28"
+            onClick={() => router.push(`/integrations/nms/devices/${deviceId}`)}
+            disabled={saving}
+          >
+            İptal
+          </Button>
+          <Button
+            className="gap-2 sm:min-w-40"
+            onClick={handleSubmit}
+            disabled={saving || success}
+          >
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            {saving ? 'Kaydediliyor...' : 'Ayarları Kaydet'}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

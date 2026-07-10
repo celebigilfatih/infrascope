@@ -48,6 +48,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **NMS device edit UI** — Reorganized connection, SNMP, SSH, and polling settings into a responsive Turkish operations form with secure credential-state indicators and password visibility controls.
 - **Header (TopBar) redesign** — Removed InfraScope logo and navigation menu from top bar. Now shows only notifications bell (left) and user profile (right). Navigation fully moved to sidebar
 - **Sidebar user profile** — Replaced hardcoded "Yönetici / admin@infrascope.io" with dynamic UserProfile component. Shows logged-in user's name, email, avatar. Name/email clickable → opens settings dropdown
 - **Layout structure** — `app/layout.tsx` now wraps content with `<Header />` (TopBar) + scrollable content area. Sidebar remains static left panel
