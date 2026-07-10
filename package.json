@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "NEXT_TURBOPACK=1 next dev --turbo -p ${PORT:-3000} & ./scripts/dev-startup.sh",
+    "dev": "NEXT_TURBOPACK=1 next dev --turbo -p ${PORT:-3000}",
+    "dev:with-startup": "NEXT_TURBOPACK=1 next dev --turbo -p ${PORT:-3000} & ./scripts/dev-startup.sh",
     "build": "next build",
     "start": "next start -p ${PORT:-3000}",
     "lint": "next lint",

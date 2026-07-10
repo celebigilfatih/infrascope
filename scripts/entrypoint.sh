@@ -72,5 +72,5 @@ fi
 echo "✅ Database ready!"
 echo "🌐 Starting Next.js application on port $PORT..."
 
-# Alarm services + pre-warming handled by dev-startup.sh
+# Run the command supplied by docker-compose/Dockerfile.
 exec "$@"
