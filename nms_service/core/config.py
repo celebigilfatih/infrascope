@@ -116,8 +116,8 @@ class Config:
         )
 
         # SSH
-        self.ssh_username = os.getenv("SSH_USERNAME", "buski")
-        self.ssh_password = os.getenv("SSH_PASSWORD", "bbs*2018")
+        self.ssh_username = os.getenv("SSH_USERNAME", "")
+        self.ssh_password = os.getenv("SSH_PASSWORD", "")
         self.ssh_timeout = int(os.getenv("SSH_TIMEOUT", "10"))
         self.ssh_port = int(os.getenv("SSH_PORT", "22"))
         # Cap concurrent SSH TCP connections across the orchestrator

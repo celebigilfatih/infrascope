@@ -7,6 +7,7 @@ Supports multiple vendors and configurable polling intervals.
 from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta
 from dataclasses import dataclass
+import re
 import time
 
 from nms_service.core.logger import logger
@@ -59,6 +60,53 @@ def safe_float(val, default=0.0):
         return float(val_str)
     except (ValueError, TypeError):
         return default
+
+
+def parse_uptime_seconds(value: Any) -> Optional[int]:
+    """Convert SNMP TimeTicks values to seconds.
+
+    Net-SNMP can return raw centiseconds or formatted values such as
+    ``0:10:10:46.16`` (days:hours:minutes:seconds.centiseconds).
+    """
+    if value is None:
+        return None
+
+    if isinstance(value, (int, float)):
+        return max(0, int(float(value) / 100))
+
+    raw = str(value).strip()
+    if not raw:
+        return None
+
+    raw_ticks = re.fullmatch(r"\(?([0-9]+)\)?", raw)
+    if raw_ticks:
+        return int(raw_ticks.group(1)) // 100
+
+    prefixed_ticks = re.match(r"^\(([0-9]+)\)\s+", raw)
+    if prefixed_ticks:
+        return int(prefixed_ticks.group(1)) // 100
+
+    # Accept both Net-SNMP's d:hh:mm:ss.cc and textual "d days, hh:mm:ss.cc".
+    textual_days = 0
+    day_match = re.match(r"^(\d+)\s+days?,\s*(.+)$", raw, re.IGNORECASE)
+    if day_match:
+        textual_days = int(day_match.group(1))
+        raw = day_match.group(2)
+
+    time_value = raw.split(".", 1)[0]
+    try:
+        parts = [int(part) for part in time_value.split(":")]
+    except ValueError:
+        return None
+
+    if len(parts) == 4:
+        days, hours, minutes, seconds = parts
+    elif len(parts) == 3:
+        days, (hours, minutes, seconds) = textual_days, parts
+    else:
+        return None
+
+    return max(0, days * 86400 + hours * 3600 + minutes * 60 + seconds)
 
 class SNMPPoller:
     """Synchronous SNMP poller for collecting metrics
@@ -251,7 +299,12 @@ class SNMPPoller:
                 logger.warning(f"Could not get uptime for device {device_id}")
                 return None
             
-            uptime_seconds = int(int(uptime_ticks) * 0.01)  # Convert ticks to seconds
+            uptime_seconds = parse_uptime_seconds(uptime_ticks)
+            if uptime_seconds is None:
+                logger.warning(
+                    f"Could not parse uptime value for device {device_id}: {uptime_ticks!r}"
+                )
+                return None
             
             # Get vendor-specific metrics
             cpu_usage = None

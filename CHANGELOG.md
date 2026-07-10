@@ -54,6 +54,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Aruba SNMP health polling** — Added support for formatted Net-SNMP TimeTicks values and inventory-based Aruba vendor detection while preserving generic IF-MIB port polling; removed hard-coded NMS SSH credential fallbacks.
 - **Local middleware startup** — Removed Prisma from the Edge middleware dependency graph so local startup no longer fails before routing when database environment loading is unavailable to the Edge bundle.
 - **NMS SSH credential editing** — NMS-monitored devices can now update SSH username, port, and password without exposing or overwriting the stored password when the password field is left blank.
 - **Fresh-install NMS device details** — Added the missing NMS interface monitoring migration so device detail pages work on clean Docker databases.

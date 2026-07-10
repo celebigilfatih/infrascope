@@ -138,7 +138,7 @@ def trigger_poll(nms_device_id: int):
     try:
         metrics_repo = MetricsRepository(session)
         device = orchestrator.device_map.get(nms_device_id)
-        vendor = orchestrator._detect_vendor(device.name) if device else "generic"
+        vendor = orchestrator._detect_vendor(device.name, device.vendor) if device else "generic"
 
         ifaces = orchestrator.poller.poll_interfaces(nms_device_id)
         for iface in ifaces:

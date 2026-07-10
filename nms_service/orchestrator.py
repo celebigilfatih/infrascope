@@ -39,8 +39,8 @@ class NMSOrchestrator:
         self.poller = SNMPPoller()
         self.ssh_poller = SSHPoller()
         # Set default SSH credentials from environment
-        ssh_username = getattr(config, 'ssh_username', 'admin')
-        ssh_password = getattr(config, 'ssh_password', 'admin')
+        ssh_username = getattr(config, 'ssh_username', '')
+        ssh_password = getattr(config, 'ssh_password', '')
         if ssh_username and ssh_password:
             self.ssh_poller.set_default_credentials(ssh_username, ssh_password)
         # nms_device_id (int) -> Device record
@@ -116,8 +116,7 @@ class NMSOrchestrator:
                 if not device.nms_device_id:
                     continue
 
-                # Detect vendor from device name for OID selection
-                vendor = self._detect_vendor(device.name)
+                vendor = self._detect_vendor(device.name, device.vendor)
 
                 # Register for SNMP polling
                 device_cfg = DeviceConfig(
@@ -133,7 +132,7 @@ class NMSOrchestrator:
                 self.poller.register_device(device_cfg)
                 
                 # Register for SSH polling (fallback)
-                ssh_username = device.ssh_username or "admin"
+                ssh_username = device.ssh_username or ""
                 ssh_password = device.ssh_password or ""
                 # Store per-device credentials so they take priority over global defaults
                 if ssh_username and ssh_password:
@@ -144,7 +143,7 @@ class NMSOrchestrator:
                     device_id=device.nms_device_id,
                     device_name=device.name,
                     ip_address=device.management_ip,
-                    username=device.ssh_username or "admin",
+                    username=device.ssh_username or "",
                     password=device.ssh_password or "",
                     port=device.ssh_port or 22,
                     vendor=vendor,
@@ -163,22 +162,24 @@ class NMSOrchestrator:
             logger.error(f"Failed to register devices from DB: {e}")
             return 0
 
-    def _detect_vendor(self, device_name: str) -> str:
-        """Infer SNMP vendor from device name for OID selection"""
-        name_lower = (device_name or "").lower()
-        if "cisco" in name_lower:
+    def _detect_vendor(self, device_name: str, configured_vendor: Optional[str] = None) -> str:
+        """Infer vendor from inventory metadata first, then the device name."""
+        identity = f"{configured_vendor or ''} {device_name or ''}".lower()
+        if "cisco" in identity:
             return "cisco"
-        if "fortinet" in name_lower or "fortigate" in name_lower:
+        if "fortinet" in identity or "fortigate" in identity:
             return "fortinet"
-        if "mikrotik" in name_lower:
+        if "mikrotik" in identity:
             return "mikrotik"
-        if "huawei" in name_lower:
+        if "huawei" in identity:
             return "huawei"
-        if any(k in name_lower for k in ("h3c", "comware", "hpe", "procurve", "_hp_", "hp-", "hp_")):
+        if "aruba" in identity:
+            return "aruba"
+        if any(k in identity for k in ("h3c", "comware", "hpe", "procurve", "_hp_", "hp-", "hp_")):
             return "hp"
-        if "juniper" in name_lower or "junos" in name_lower:
+        if "juniper" in identity or "junos" in identity:
             return "juniper"
-        if "arista" in name_lower:
+        if "arista" in identity:
             return "arista"
         return "generic"
 
@@ -298,7 +299,7 @@ class NMSOrchestrator:
             
             if snmp_session:
                 try:
-                    vendor = self._detect_vendor(device.name) if device else "generic"
+                    vendor = self._detect_vendor(device.name, device.vendor) if device else "generic"
                     health = self.poller.poll_device_health(nms_device_id, vendor)
                     if health:
                         logger.info(f"SNMP: Polled health for {device_name}")
@@ -309,7 +310,7 @@ class NMSOrchestrator:
             # SSH fallback if SNMP failed or not available
             if (snmp_health_failed or not snmp_session or not health) and ssh_session:
                 try:
-                    vendor = self._detect_vendor(device.name) if device else "generic"
+                    vendor = self._detect_vendor(device.name, device.vendor) if device else "generic"
                     health = self.ssh_poller.poll_device_health(nms_device_id, vendor)
                     if health:
                         logger.info(f"SSH: Polled health for {device_name}")
