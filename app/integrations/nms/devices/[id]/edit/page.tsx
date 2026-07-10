@@ -32,6 +32,13 @@ interface DbDevice {
   snmpPort: number | null;
   pollingEnabled: boolean;
   pollingInterval: number | null;
+  sshUsername: string | null;
+  sshPort: number | null;
+  hasSshPassword: boolean;
+}
+
+function toFormSnmpVersion(value: string | null): SnmpVersion {
+  return value === '3' || value === 'v3' ? 'v3' : 'v2c';
 }
 
 export default function EditNmsDevicePage() {
@@ -52,6 +59,9 @@ export default function EditNmsDevicePage() {
     snmpCommunity: '',
     pollingEnabled: true,
     pollingInterval: 30,
+    sshUsername: '',
+    sshPassword: '',
+    sshPort: 22,
   });
 
   useEffect(() => {
@@ -69,10 +79,13 @@ export default function EditNmsDevicePage() {
         setForm({
           managementIp: d.managementIp || '',
           snmpPort: d.snmpPort ?? 161,
-          snmpVersion: (d.snmpVersion || 'v2c') as SnmpVersion,
+          snmpVersion: toFormSnmpVersion(d.snmpVersion),
           snmpCommunity: '',
           pollingEnabled: d.pollingEnabled ?? true,
           pollingInterval: d.pollingInterval ?? 30,
+          sshUsername: d.sshUsername || '',
+          sshPassword: '',
+          sshPort: d.sshPort ?? 22,
         });
       } catch (e: any) {
         setError(e.message);
@@ -97,8 +110,11 @@ export default function EditNmsDevicePage() {
         snmpVersion: form.snmpVersion,
         pollingEnabled: form.pollingEnabled,
         pollingInterval: form.pollingInterval,
+        sshUsername: form.sshUsername,
+        sshPort: form.sshPort,
       };
       if (form.snmpCommunity) payload.snmpCommunity = form.snmpCommunity;
+      if (form.sshPassword) payload.sshPassword = form.sshPassword;
 
       const res = await fetch(`/api/integrations/nms/devices/${deviceId}`, {
         method: 'PUT',
@@ -233,6 +249,55 @@ export default function EditNmsDevicePage() {
                   onChange={e => set('snmpCommunity', e.target.value)}
                 />
               </div>
+            </div>
+          </div>
+
+          <hr className="border-border" />
+
+          {/* SSH Configuration */}
+          <div className="space-y-4">
+            <h2 className="text-sm font-semibold flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-orange-500" />
+              SSH Ayarları
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="ssh_username">SSH Kullanıcı Adı</Label>
+                <Input
+                  id="ssh_username"
+                  autoComplete="off"
+                  placeholder="admin"
+                  value={form.sshUsername}
+                  onChange={e => set('sshUsername', e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="ssh_port">SSH Portu</Label>
+                <Input
+                  id="ssh_port"
+                  type="number"
+                  min={1}
+                  max={65535}
+                  value={form.sshPort}
+                  onChange={e => set('sshPort', Number(e.target.value))}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="ssh_password">
+                SSH Parolası{' '}
+                <span className="text-muted-foreground font-normal">
+                  ({initialDevice?.hasSshPassword ? 'boş bırakırsanız mevcut parola korunur' : 'henüz parola kayıtlı değil'})
+                </span>
+              </Label>
+              <Input
+                id="ssh_password"
+                type="password"
+                autoComplete="new-password"
+                placeholder={initialDevice?.hasSshPassword ? 'Yeni parola girin...' : 'SSH parolasını girin...'}
+                value={form.sshPassword}
+                onChange={e => set('sshPassword', e.target.value)}
+              />
             </div>
           </div>
 

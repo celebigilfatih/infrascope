@@ -10,6 +10,14 @@ function serializeBigInt(obj: unknown): unknown {
   ));
 }
 
+function normalizeSnmpVersion(value: unknown): string {
+  if (typeof value !== 'string' || !value.trim()) return '2c';
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'v2c') return '2c';
+  if (normalized === 'v3') return '3';
+  return normalized;
+}
+
 /**
  * GET /api/integrations/nms/devices/[id]
  * Get SNMP config and latest metrics for a device.
@@ -38,6 +46,9 @@ export async function GET(_req: NextRequest, { params }: Params) {
         pollingEnabled: true,
         pollingInterval: true,
         lastPolledAt: true,
+        sshUsername: true,
+        sshPassword: true,
+        sshPort: true,
         // Don't return snmpCommunity — sensitive
       },
     });
@@ -95,7 +106,17 @@ export async function GET(_req: NextRequest, { params }: Params) {
       },
     });
 
-    return NextResponse.json(serializeBigInt({ device, healthMetrics, interfaces, topologyLinks }));
+    const { sshPassword, ...safeDevice } = device;
+
+    return NextResponse.json(serializeBigInt({
+      device: {
+        ...safeDevice,
+        hasSshPassword: Boolean(sshPassword),
+      },
+      healthMetrics,
+      interfaces,
+      topologyLinks,
+    }));
   } catch (error) {
     console.error('[NMS Device] GET error:', error);
     return NextResponse.json({ error: 'Failed to get device NMS data' }, { status: 500 });
@@ -112,6 +133,9 @@ export async function PUT(req: NextRequest, { params }: Params) {
       snmpPort,
       pollingEnabled,
       pollingInterval,
+      sshUsername,
+      sshPassword,
+      sshPort,
     } = body;
 
     const existing = await (prisma as any).device.findUnique({
@@ -150,13 +174,29 @@ export async function PUT(req: NextRequest, { params }: Params) {
       }
     }
 
+    if (sshPort !== undefined) {
+      const normalizedSshPort = Number(sshPort);
+      if (!Number.isInteger(normalizedSshPort) || normalizedSshPort < 1 || normalizedSshPort > 65535) {
+        return NextResponse.json({ error: 'SSH port must be between 1 and 65535' }, { status: 400 });
+      }
+    }
+
     const updateData: Record<string, unknown> = {};
     if (managementIp !== undefined) updateData.managementIp = managementIp.trim();
     if (snmpCommunity !== undefined) updateData.snmpCommunity = snmpCommunity;
-    if (snmpVersion !== undefined) updateData.snmpVersion = snmpVersion;
+    if (snmpVersion !== undefined) updateData.snmpVersion = normalizeSnmpVersion(snmpVersion);
     if (snmpPort !== undefined) updateData.snmpPort = snmpPort;
     if (pollingEnabled !== undefined) updateData.pollingEnabled = pollingEnabled;
     if (pollingInterval !== undefined) updateData.pollingInterval = pollingInterval;
+    if (sshUsername !== undefined) {
+      updateData.sshUsername = typeof sshUsername === 'string' && sshUsername.trim()
+        ? sshUsername.trim()
+        : null;
+    }
+    if (typeof sshPassword === 'string' && sshPassword.length > 0) {
+      updateData.sshPassword = sshPassword;
+    }
+    if (sshPort !== undefined) updateData.sshPort = Number(sshPort);
 
     const updated = await (prisma as any).device.update({
       where: { id: params.id },
@@ -171,6 +211,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
         pollingEnabled: true,
         pollingInterval: true,
         lastPolledAt: true,
+        sshUsername: true,
+        sshPort: true,
       },
     });
 
