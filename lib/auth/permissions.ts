@@ -1,40 +1,12 @@
 import { prisma } from '@/lib/prisma';
+import {
+  DEFAULT_PERMISSIONS,
+  type Action,
+  type Resource,
+} from '@/lib/auth/permission-policy';
 
-export type Resource = 'users' | 'alarms' | 'devices' | 'organizations' | 'settings' | 'audit';
-export type Action = 'read' | 'write' | 'delete';
-
-export interface PermissionCheck {
-  resource: Resource;
-  action: Action;
-}
-
-// Default permission matrix seeded on first run
-const DEFAULT_PERMISSIONS: { resource: Resource; action: Action; roles: string[] }[] = [
-  // Users
-  { resource: 'users', action: 'read', roles: ['ADMIN', 'EDITOR', 'VIEWER'] },
-  { resource: 'users', action: 'write', roles: ['ADMIN', 'EDITOR'] },
-  { resource: 'users', action: 'delete', roles: ['ADMIN'] },
-  // Alarms
-  { resource: 'alarms', action: 'read', roles: ['ADMIN', 'EDITOR', 'VIEWER'] },
-  { resource: 'alarms', action: 'write', roles: ['ADMIN', 'EDITOR'] },
-  { resource: 'alarms', action: 'delete', roles: ['ADMIN'] },
-  // Devices
-  { resource: 'devices', action: 'read', roles: ['ADMIN', 'EDITOR', 'VIEWER'] },
-  { resource: 'devices', action: 'write', roles: ['ADMIN', 'EDITOR'] },
-  { resource: 'devices', action: 'delete', roles: ['ADMIN'] },
-  // Organizations
-  { resource: 'organizations', action: 'read', roles: ['ADMIN', 'EDITOR', 'VIEWER'] },
-  { resource: 'organizations', action: 'write', roles: ['ADMIN'] },
-  { resource: 'organizations', action: 'delete', roles: ['ADMIN'] },
-  // Settings
-  { resource: 'settings', action: 'read', roles: ['ADMIN', 'EDITOR', 'VIEWER'] },
-  { resource: 'settings', action: 'write', roles: ['ADMIN'] },
-  { resource: 'settings', action: 'delete', roles: ['ADMIN'] },
-  // Audit
-  { resource: 'audit', action: 'read', roles: ['ADMIN'] },
-  { resource: 'audit', action: 'write', roles: ['ADMIN'] },
-  { resource: 'audit', action: 'delete', roles: ['ADMIN'] },
-];
+export { canAccessSync } from '@/lib/auth/permission-policy';
+export type { Action, PermissionCheck, Resource } from '@/lib/auth/permission-policy';
 
 /**
  * Check if a user role has access to a specific resource/action combination.
@@ -53,24 +25,6 @@ export async function canAccess(
   if (!permission) return false;
 
   return permission.roles.some((rp) => rp.roleId === userRole.toUpperCase());
-}
-
-/**
- * Synchronous permission check using the default permission matrix.
- * Use this for middleware where DB access may not be available.
- */
-export function canAccessSync(
-  userRole: string,
-  resource: Resource,
-  action: Action
-): boolean {
-  const permission = DEFAULT_PERMISSIONS.find(
-    (p) => p.resource === resource && p.action === action
-  );
-
-  if (!permission) return false;
-
-  return permission.roles.includes(userRole.toUpperCase());
 }
 
 /**

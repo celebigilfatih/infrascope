@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { canAccessSync, type Resource, type Action } from '@/lib/auth/permissions';
+import { canAccessSync, type Resource, type Action } from '@/lib/auth/permission-policy';
 import { verifySessionToken, SESSION_COOKIE_NAME } from '@/lib/auth/session';
 import { isRateLimited, getClientIp, getRateLimitConfig } from '@/lib/rate-limit';
 import { isLicenseServerMode } from '@/lib/license/server-mode';
