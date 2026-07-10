@@ -243,8 +243,8 @@ export default function EditNmsDevicePage() {
           </div>
         </header>
 
-        <div className="grid items-start gap-4 lg:grid-cols-2">
-          <Card>
+        <div className="grid items-stretch gap-4 lg:grid-cols-2">
+          <Card className="h-full">
             <CardHeader className="pb-4">
               <div className="flex items-center gap-3">
                 <div className="flex h-9 w-9 items-center justify-center rounded-md bg-blue-500/10 text-blue-500">
@@ -281,7 +281,7 @@ export default function EditNmsDevicePage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="h-full">
             <CardHeader className="pb-4">
               <div className="flex items-center gap-3">
                 <div className="flex h-9 w-9 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-500">
@@ -324,7 +324,7 @@ export default function EditNmsDevicePage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="h-full">
             <CardHeader className="pb-4">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
@@ -385,7 +385,7 @@ export default function EditNmsDevicePage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="h-full">
             <CardHeader className="pb-4">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
