@@ -95,8 +95,8 @@ COPY --chown=nextjs:nodejs .env.example ./
 COPY --chown=nextjs:nodejs scripts/wait-for-db.sh ./scripts/
 COPY --chown=nextjs:nodejs scripts/entrypoint.sh ./scripts/
 
-# Make scripts executable
-RUN chmod +x ./scripts/*.sh
+# Normalize shell scripts for images built from Windows checkouts.
+RUN sed -i 's/\r$//' ./scripts/*.sh && chmod +x ./scripts/*.sh
 
 # Switch to non-root user
 USER nextjs
