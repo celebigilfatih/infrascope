@@ -46,17 +46,11 @@ export const CustomEdge = ({
       {data?.label && (
         <EdgeLabelRenderer>
           <div
+            className="rounded border border-border bg-card px-2 py-1 text-xs font-medium text-foreground shadow-sm"
             style={{
               position: 'absolute',
               transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
               pointerEvents: 'none',
-              backgroundColor: 'white',
-              padding: '4px 8px',
-              borderRadius: '4px',
-              fontSize: '10px',
-              fontWeight: 'bold',
-              color: '#374151',
-              border: '1px solid #e5e7eb',
               whiteSpace: 'nowrap',
             }}
           >
@@ -86,7 +80,6 @@ export const BuildingConnectionEdge = ({
 
   const strokeColor = data?.strokeColor || '#6B7280';
   const textColor = data?.textColor || '#4B5563';
-  const bgColor = data?.bgColor || 'white';
 
   return (
     <>
@@ -115,37 +108,12 @@ export const BuildingConnectionEdge = ({
             }}
           >
             <div
+              className="flex items-center rounded-md border bg-card px-2.5 py-1 text-xs font-semibold shadow-sm"
               style={{
-                backgroundColor: bgColor,
-                border: `1.5px solid ${strokeColor}`,
-                borderRadius: '6px',
-                padding: '4px 10px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '5px',
-                boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
+                borderColor: strokeColor,
               }}
             >
-              {(() => {
-                const chars = [...data.label];
-                const icon = chars[0];
-                const rest = chars.slice(1).join('').trim();
-                return (
-                  <>
-                    <span style={{ fontSize: '14px', lineHeight: '1' }}>{icon}</span>
-                    <span
-                      style={{
-                        fontSize: '12px',
-                        fontWeight: 700,
-                        color: textColor,
-                        letterSpacing: '-0.2px',
-                      }}
-                    >
-                      {rest}
-                    </span>
-                  </>
-                );
-              })()}
+              <span style={{ color: textColor }}>{data.label}</span>
             </div>
           </div>
         </EdgeLabelRenderer>

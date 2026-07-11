@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Separator } from '@/components/ui/separator';
 import { UserProfile } from './UserProfile';
+import { TopbarBreadcrumb } from './TopbarBreadcrumb';
 
 interface AlarmNotification {
   id: string;
@@ -130,10 +131,10 @@ export const Header: React.FC = () => {
   return (
     <header className="bg-card/80 backdrop-blur-md border-b border-border sticky top-0 z-[1000]">
       <div className="px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16">
-          <div className="flex-1" />
+        <div className="flex h-16 items-center justify-between">
+          <TopbarBreadcrumb />
 
-          <div className="flex items-center gap-3">
+          <div className="flex shrink-0 items-center gap-3">
             {licenseServerMode === false && (
               <Popover onOpenChange={(open) => { if (open) loadNotifications(); }}>
                 <PopoverTrigger asChild>

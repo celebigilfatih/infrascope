@@ -1,1246 +1,313 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import dynamic from 'next/dynamic';
-import { apiGet, apiPost, apiPut, apiDelete } from '../../lib/api';
-import { useToast } from '@/components/ui/use-toast';
-import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
-
-// Dynamically import 3D components with SSR disabled to prevent build errors
-const FloorPlanView = dynamic(() => import('@/components/3d/FloorPlanView').then(mod => mod.FloorPlanView), { 
-  ssr: false,
-  loading: () => <div className="flex-1 flex items-center justify-center bg-muted/20 text-muted-foreground italic">Görünüm yükleniyor...</div>
-});
-
-const Room3D = dynamic(() => import('@/components/3d/Room3D').then(mod => mod.Room3D), { 
-  ssr: false,
-  loading: () => <div className="flex-1 flex items-center justify-center bg-muted/20 text-muted-foreground italic">3D Modül yükleniyor...</div>
-});
-
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import {
+  AlertTriangle,
+  Building2,
+  ChevronDown,
+  ChevronRight,
+  CircleCheck,
+  Cuboid,
+  Database,
+  Edit3,
+  Eye,
+  Layers3,
+  MapPin,
+  MoreHorizontal,
+  Plus,
+  RefreshCw,
+  Search,
+  Server,
+  Trash2,
+  Warehouse,
+} from 'lucide-react';
+import { apiDelete, apiGet, apiPost, apiPut } from '@/lib/api';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Building2, ChevronRight, ChevronDown, Circle, Edit, Trash2, Plus, Eye, X } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
+import { useToast } from '@/components/ui/use-toast';
+import type {
+  LocationBuilding,
+  LocationFloor,
+  LocationOrganization,
+  LocationRack,
+  LocationRoom,
+  LocationsSummary,
+  RoomPortfolioSummary,
+} from '@/components/locations/types';
+import { cn } from '@/lib/utils';
 
+type EntityType = 'org' | 'building' | 'floor' | 'room' | 'rack' | 'device';
+type Scope = { type: 'all' | 'org' | 'building' | 'floor' | 'room'; id?: string; label: string };
+type EditorState = { mode: 'add' | 'edit'; type: EntityType; parentId?: string; item?: any } | null;
 
-interface Organization {
-  id: string;
-  name: string;
-  code: string;
-  description?: string;
-  buildings?: Building[];
-}
+const EMPTY_SUMMARY: LocationsSummary = {
+  totals: { organizations: 0, buildings: 0, rooms: 0, racks: 0, devices: 0, problemDevices: 0, unpositionedDevices: 0, totalUnits: 0, usedUnits: 0, utilization: 0 },
+  rooms: [],
+};
 
-interface Building {
-  id: string;
-  name: string;
-  city?: string;
-  country?: string;
-  organizationId: string;
-  floors?: Floor[];
-}
-
-interface Floor {
-  id: string;
-  name: string;
-  floorNumber: number;
-  buildingId: string;
-  rooms?: Room[];
-}
-
-interface Room {
-  id: string;
-  name: string;
-  floorId: string;
-  description?: string;
-  capacity?: number;
-  width?: number | null;
-  depth?: number | null;
-  height?: number | null;
-  racks?: Rack[];
-}
-
-interface Device {
-  id: string;
-  name: string;
-  type: string;
-  status: string;
-  rackUnitPosition: number | null;
-  metadata?: any;
-}
-
-interface Rack {
-  id: string;
-  name: string;
-  type: string;
-  maxUnits: number;
-  roomId: string;
-  coordX?: number | null;
-  coordY?: number | null;
-  coordZ?: number | null;
-  rotation?: number | null;
-  devices?: Device[];
-  _count?: {
-    devices?: number;
-  };
-}
-
-// Device interface removed because it was unused
-type ModalType = 'org' | 'building' | 'floor' | 'room' | 'rack' | 'device';
+const STATUS_LABELS = {
+  HEALTHY: 'Sağlıklı',
+  PLANNING: 'Yerleşim gerekli',
+  ATTENTION: 'Dikkat gerekiyor',
+};
 
 export default function LocationsPage() {
+  const router = useRouter();
   const { toast } = useToast();
-  const [organizations, setOrganizations] = useState<Organization[]>([]);
+  const [organizations, setOrganizations] = useState<LocationOrganization[]>([]);
+  const [summary, setSummary] = useState<LocationsSummary>(EMPTY_SUMMARY);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [showDeviceModal, setShowDeviceModal] = useState(false);
-  const [modalType, setModalType] = useState<ModalType>('org');
-  const [selectedParentId, setSelectedParentId] = useState<string | null>(null);
-  const [selectedRackId, setSelectedRackId] = useState<string | null>(null);
-  const [editingItem, setEditingItem] = useState<any>(null);
-  const [viewing3DRoom, setViewing3DRoom] = useState<Room | null>(null);
-  const [viewMode, setViewMode] = useState<'2d' | '3d'>('2d');
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [scope, setScope] = useState<Scope>({ type: 'all', label: 'Tüm odalar' });
+  const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [editor, setEditor] = useState<EditorState>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ type: EntityType; id: string; name: string } | null>(null);
 
-  // Delete dialog state
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [itemToDelete, setItemToDelete] = useState<{type: string, id: string, name: string} | null>(null);
-
-  // Load data
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
+  const loadData = useCallback(async (silent = false) => {
     try {
-      setLoading(true);
+      if (silent) setRefreshing(true);
+      else setLoading(true);
       setError(null);
-      const response: any = await apiGet('/api/organizations?fresh=1');
-      if (response.success) {
-        setOrganizations(response.data);
-      } else {
-        setError('Veriler yüklenemedi');
-      }
-    } catch (err: any) {
-      setError(err.message || 'Veriler yüklenirken bir hata oluştu');
-      console.error('Error loading data:', err);
+      const [organizationsResponse, summaryResponse]: any = await Promise.all([
+        apiGet('/api/organizations?fresh=1'),
+        apiGet('/api/locations/summary'),
+      ]);
+      if (!organizationsResponse.success || !summaryResponse.success) throw new Error('Konum portföyü yüklenemedi');
+      setOrganizations(organizationsResponse.data);
+      setSummary(summaryResponse.data);
+      setExpanded((current) => {
+        if (current.size > 0 || organizationsResponse.data.length === 0) return current;
+        const firstOrg = organizationsResponse.data[0];
+        const firstBuilding = firstOrg.buildings?.[0];
+        const firstFloor = firstBuilding?.floors?.[0];
+        return new Set([firstOrg.id, firstBuilding?.id, firstFloor?.id].filter(Boolean));
+      });
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : 'Konum portföyü yüklenemedi');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  };
+  }, []);
 
-  const toggleExpand = (id: string) => {
-    const newSet = new Set(expandedItems);
-    if (newSet.has(id)) {
-      newSet.delete(id);
-    } else {
-      newSet.add(id);
+  useEffect(() => { loadData(); }, [loadData]);
+
+  const filteredRooms = useMemo(() => summary.rooms.filter((room) => {
+    const matchesScope = scope.type === 'all'
+      || (scope.type === 'org' && room.floor.building.organization.id === scope.id)
+      || (scope.type === 'building' && room.floor.building.id === scope.id)
+      || (scope.type === 'floor' && room.floor.id === scope.id)
+      || (scope.type === 'room' && room.id === scope.id);
+    const haystack = `${room.name} ${room.floor.name} ${room.floor.building.name} ${room.floor.building.organization.name} ${room.racks.map((rack) => rack.name).join(' ')}`.toLocaleLowerCase('tr-TR');
+    const matchesSearch = !search || haystack.includes(search.toLocaleLowerCase('tr-TR'));
+    const matchesStatus = statusFilter === 'all' || room.status === statusFilter;
+    return matchesScope && matchesSearch && matchesStatus;
+  }), [scope, search, statusFilter, summary.rooms]);
+
+  const selectedRoom = summary.rooms.find((room) => room.id === selectedRoomId) || null;
+  const toggle = (id: string) => setExpanded((current) => {
+    const next = new Set(current);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+
+  const mutateEntity = async (values: Record<string, unknown>) => {
+    if (!editor) return;
+    const endpointByType = { org: 'organizations', building: 'buildings', floor: 'floors', room: 'rooms', rack: 'racks', device: 'devices' };
+    const payload = { ...values } as Record<string, unknown>;
+    if (editor.mode === 'add') {
+      const parentKey = ({ building: 'organizationId', floor: 'buildingId', room: 'floorId', rack: 'roomId', device: 'rackId' } as Partial<Record<EntityType, string>>)[editor.type];
+      if (parentKey) payload[parentKey] = editor.parentId;
     }
-    setExpandedItems(newSet);
-  };
-
-  const openAddModal = (type: ModalType, parentId?: string) => {
-    setModalType(type);
-    setSelectedParentId(parentId || null);
-    setShowAddModal(true);
-  };
-
-  const openEditModal = (type: ModalType, item: any) => {
-    setModalType(type);
-    setEditingItem(item);
-    setShowEditModal(true);
-  };
-
-  const openDeviceModal = (rackId: string) => {
-    setSelectedRackId(rackId);
-    setModalType('device');
-    setShowDeviceModal(true);
-  };
-
-  const findRackById = (rackId: string | null) => {
-    if (!rackId) return null;
-
-    for (const org of organizations) {
-      for (const building of org.buildings || []) {
-        for (const floor of building.floors || []) {
-          for (const room of floor.rooms || []) {
-            const rack = room.racks?.find((item) => item.id === rackId);
-            if (rack) return rack;
-          }
-        }
-      }
-    }
-
-    return null;
-  };
-
-  const fetchRoomDetails = async (roomId: string) => {
-    try {
-      const response: any = await apiGet(`/api/rooms/${roomId}`);
-      if (response.success && response.data) {
-        return response.data as Room;
-      }
-    } catch (err) {
-      console.error('Error fetching room:', err);
-    }
-
-    return null;
-  };
-
-  const refreshViewingRoom = async (roomId: string) => {
-    const freshRoom = await fetchRoomDetails(roomId);
-    if (freshRoom) {
-      setViewing3DRoom(freshRoom);
-    }
-  };
-
-  const refreshLocationsAndOpenRoom = async () => {
-    await loadData();
-    if (viewing3DRoom?.id) {
-      await refreshViewingRoom(viewing3DRoom.id);
-    }
-  };
-
-  const handleView3DRoom = async (room: Room) => {
-    const freshRoom = await fetchRoomDetails(room.id);
-    setViewing3DRoom(freshRoom || room);
-  };
-
-  const handleAdd = async (formData: any) => {
-    try {
-      let endpoint = '';
-      let payload: any = formData;
-
-      switch (modalType) {
-        case 'org':
-          endpoint = '/api/organizations';
-          break;
-        case 'building':
-          endpoint = '/api/buildings';
-          payload.organizationId = selectedParentId;
-          break;
-        case 'floor':
-          endpoint = '/api/floors';
-          payload.buildingId = selectedParentId;
-          break;
-        case 'room':
-          endpoint = '/api/rooms';
-          payload.floorId = selectedParentId;
-          break;
-        case 'rack':
-          endpoint = '/api/racks';
-          payload.roomId = selectedParentId;
-          break;
-        case 'device':
-          endpoint = '/api/devices';
-          payload.rackId = selectedRackId;
-          break;
-      }
-
-      const response: any = await apiPost(endpoint, payload);
-      if (response.success) {
-        setShowAddModal(false);
-        setShowDeviceModal(false);
-        await refreshLocationsAndOpenRoom();
-        toast({
-          title: "Başarılı",
-          description: `${modalType.charAt(0).toUpperCase() + modalType.slice(1)} başarıyla eklendi!`,
-        });
-      } else {
-        toast({
-          title: "Hata",
-          description: response.error || 'İşlem başarısız',
-          variant: "destructive",
-        });
-      }
-    } catch (err: any) {
-      toast({
-        title: "Hata",
-        description: err.message || 'Bir hata oluştu',
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleEdit = async (formData: any) => {
-    try {
-      let endpoint = '';
-      let payload: any = formData;
-
-      switch (modalType) {
-        case 'org':
-          endpoint = `/api/organizations/${editingItem.id}`;
-          break;
-        case 'building':
-          endpoint = `/api/buildings/${editingItem.id}`;
-          break;
-        case 'floor':
-          endpoint = `/api/floors/${editingItem.id}`;
-          break;
-        case 'room':
-          endpoint = `/api/rooms/${editingItem.id}`;
-          break;
-        case 'rack':
-          endpoint = `/api/racks/${editingItem.id}`;
-          break;
-        case 'device':
-          endpoint = `/api/devices/${editingItem.id}`;
-          break;
-      }
-
-      const response: any = await apiPut(endpoint, payload);
-      if (response.success) {
-        setShowEditModal(false);
-        await refreshLocationsAndOpenRoom();
-        toast({
-          title: "Başarılı",
-          description: `${modalType.charAt(0).toUpperCase() + modalType.slice(1)} başarıyla güncellendi!`,
-        });
-      } else {
-        toast({
-          title: "Hata",
-          description: response.error || 'Güncelleme başarısız',
-          variant: "destructive",
-        });
-      }
-    } catch (err: any) {
-      toast({
-        title: "Hata",
-        description: err.message || 'Bir hata oluştu',
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleDelete = (type: string, id: string, name: string) => {
-    setItemToDelete({ type, id, name });
-    setDeleteDialogOpen(true);
+    const endpoint = `/api/${endpointByType[editor.type]}${editor.mode === 'edit' ? `/${editor.item.id}` : ''}`;
+    const response: any = editor.mode === 'edit' ? await apiPut(endpoint, payload) : await apiPost(endpoint, payload);
+    if (!response.success) throw new Error(response.error || 'İşlem tamamlanamadı');
+    setEditor(null);
+    await loadData(true);
+    toast({ title: 'Kaydedildi', description: 'Fiziksel altyapı kaydı güncellendi.' });
   };
 
   const confirmDelete = async () => {
-    if (!itemToDelete) return;
-
+    if (!deleteTarget) return;
+    const endpointByType = { org: 'organizations', building: 'buildings', floor: 'floors', room: 'rooms', rack: 'racks', device: 'devices' };
     try {
-      let endpoint = '';
-      const { type, id, name } = itemToDelete;
-
-      switch (type) {
-        case 'org': endpoint = `/api/organizations/${id}`; break;
-        case 'building': endpoint = `/api/buildings/${id}`; break;
-        case 'floor': endpoint = `/api/floors/${id}`; break;
-        case 'room': endpoint = `/api/rooms/${id}`; break;
-        case 'rack': endpoint = `/api/racks/${id}`; break;
-        case 'device': endpoint = `/api/devices/${id}`; break;
-      }
-
-      const response: any = await apiDelete(endpoint);
-      if (response.success) {
-        await refreshLocationsAndOpenRoom();
-        toast({
-          title: "Başarılı",
-          description: `${name} başarıyla silindi.`,
-        });
-      } else {
-        toast({
-          title: "Hata",
-          description: response.error || 'Silme işlemi başarısız',
-          variant: "destructive",
-        });
-      }
-    } catch (err: any) {
-      toast({
-        title: "Hata",
-        description: err.message || 'Silme işlemi sırasında hata oluştu',
-        variant: "destructive",
-      });
+      const response: any = await apiDelete(`/api/${endpointByType[deleteTarget.type]}/${deleteTarget.id}`);
+      if (!response.success) throw new Error(response.error || 'Silme işlemi tamamlanamadı');
+      if (selectedRoomId === deleteTarget.id) setSelectedRoomId(null);
+      await loadData(true);
+      toast({ title: 'Silindi', description: `${deleteTarget.name} kaldırıldı.` });
+    } catch (deleteError) {
+      toast({ title: 'Silinemedi', description: deleteError instanceof Error ? deleteError.message : 'Silme işlemi başarısız', variant: 'destructive' });
     } finally {
-      setDeleteDialogOpen(false);
-      setItemToDelete(null);
+      setDeleteTarget(null);
     }
   };
 
-  const renderOrganization = (org: Organization) => {
-    const isExpanded = expandedItems.has(org.id);
-    const hasChildren = org.buildings && org.buildings.length > 0;
-
-    return (
-      <Card key={org.id} className="mb-4">
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3 flex-1">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => hasChildren && toggleExpand(org.id)}
-                className="h-8 w-8"
-              >
-                {hasChildren ? (
-                  isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />
-                ) : (
-                  <Circle className="h-3 w-3" />
-                )}
-              </Button>
-              <div className="flex-1">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Building2 className="h-5 w-5 text-primary" />
-                  {org.name}
-                </CardTitle>
-                <CardDescription className="mt-1">
-                  Organizasyon • {org.code}
-                </CardDescription>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => openEditModal('org', org)}
-              >
-                <Edit className="h-4 w-4 mr-1" />
-                Düzenle
-              </Button>
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => handleDelete('org', org.id, org.name)}
-              >
-                <Trash2 className="h-4 w-4 mr-1" />
-                Sil
-              </Button>
-              <Button
-                variant="default"
-                size="sm"
-                onClick={() => openAddModal('building', org.id)}
-              >
-                <Plus className="h-4 w-4 mr-1" />
-                Bina
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        {isExpanded && org.buildings && org.buildings.length > 0 && (
-          <CardContent className="pt-0">
-            <div className="space-y-2">
-              {org.buildings.map(building => renderBuilding(building))}
-            </div>
-          </CardContent>
-        )}
-      </Card>
-    );
-  };
-
-  const renderBuilding = (building: Building) => {
-    const isExpanded = expandedItems.has(building.id);
-    const hasChildren = building.floors && building.floors.length > 0;
-
-    return (
-      <Card key={building.id} className="ml-4">
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 flex-1">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => hasChildren && toggleExpand(building.id)}
-                className="h-7 w-7"
-              >
-                {hasChildren ? (
-                  isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />
-                ) : (
-                  <Circle className="h-2 w-2" />
-                )}
-              </Button>
-              <div className="flex-1">
-                <p className="font-semibold text-sm">{building.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  Bina{building.city && ` • ${building.city}`}
-                </p>
-              </div>
-            </div>
-            <div className="flex gap-1.5">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => openEditModal('building', building)}
-                className="h-8 text-xs"
-              >
-                <Edit className="h-3 w-3 mr-1" />
-                Düzenle
-              </Button>
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => handleDelete('building', building.id, building.name)}
-                className="h-8 text-xs"
-              >
-                <Trash2 className="h-3 w-3 mr-1" />
-                Sil
-              </Button>
-              <Button
-                variant="default"
-                size="sm"
-                onClick={() => openAddModal('floor', building.id)}
-                className="h-8 text-xs"
-              >
-                <Plus className="h-3 w-3 mr-1" />
-                Kat
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        {isExpanded && building.floors && building.floors.length > 0 && (
-          <CardContent className="pt-0 pb-3">
-            <div className="space-y-2">
-              {building.floors.map(floor => renderFloor(floor))}
-            </div>
-          </CardContent>
-        )}
-      </Card>
-    );
-  };
-
-  const renderFloor = (floor: Floor) => {
-    const isExpanded = expandedItems.has(floor.id);
-    const hasChildren = floor.rooms && floor.rooms.length > 0;
-
-    return (
-      <Card key={floor.id} className="ml-4">
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 flex-1">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => hasChildren && toggleExpand(floor.id)}
-                className="h-6 w-6"
-              >
-                {hasChildren ? (
-                  isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />
-                ) : (
-                  <Circle className="h-2 w-2" />
-                )}
-              </Button>
-              <div className="flex-1">
-                <p className="font-medium text-sm">{floor.name}</p>
-                <p className="text-xs text-muted-foreground">Kat {floor.floorNumber}</p>
-              </div>
-            </div>
-            <div className="flex gap-1.5">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => openEditModal('floor', floor)}
-                className="h-7 text-xs"
-              >
-                <Edit className="h-3 w-3 mr-1" />
-                Düzenle
-              </Button>
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => handleDelete('floor', floor.id, floor.name)}
-                className="h-7 text-xs"
-              >
-                <Trash2 className="h-3 w-3 mr-1" />
-                Sil
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => openAddModal('room', floor.id)}
-                className="h-7 text-xs"
-              >
-                <Plus className="h-3 w-3 mr-1" />
-                Oda
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        {isExpanded && floor.rooms && floor.rooms.length > 0 && (
-          <CardContent className="pt-0 pb-2">
-            <div className="space-y-2">
-              {floor.rooms.map(room => renderRoom(room))}
-            </div>
-          </CardContent>
-        )}
-      </Card>
-    );
-  };
-
-  const renderRoom = (room: Room) => {
-    const isExpanded = expandedItems.has(room.id);
-    const hasChildren = room.racks && room.racks.length > 0;
-
-    return (
-      <Card key={room.id} className="ml-4">
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 flex-1">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => hasChildren && toggleExpand(room.id)}
-                className="h-6 w-6"
-              >
-                {hasChildren ? (
-                  isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />
-                ) : (
-                  <Circle className="h-2 w-2" />
-                )}
-              </Button>
-              <div className="flex-1">
-                <p className="font-medium text-sm">{room.name}</p>
-                <p className="text-xs text-muted-foreground">Oda</p>
-              </div>
-            </div>
-            <div className="flex gap-1.5">
-              <Button
-                variant="default"
-                size="sm"
-                onClick={() => handleView3DRoom(room)}
-                className="h-7 text-xs"
-              >
-                <Eye className="h-3 w-3 mr-1" />
-                3D Görünüm
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => openEditModal('room', room)}
-                className="h-7 text-xs"
-              >
-                <Edit className="h-3 w-3 mr-1" />
-                Düzenle
-              </Button>
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => handleDelete('room', room.id, room.name)}
-                className="h-7 text-xs"
-              >
-                <Trash2 className="h-3 w-3 mr-1" />
-                Sil
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => openAddModal('rack', room.id)}
-                className="h-7 text-xs"
-              >
-                <Plus className="h-3 w-3 mr-1" />
-                Kabinet
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        {isExpanded && room.racks && room.racks.length > 0 && (
-          <CardContent className="pt-0 pb-2">
-            <div className="space-y-2">
-              {room.racks.map(rack => renderRack(rack))}
-            </div>
-          </CardContent>
-        )}
-      </Card>
-    );
-  };
-
-  const renderRack = (rack: Rack) => {
-    return (
-      <Card key={rack.id} className="ml-4">
-        <CardHeader className="py-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 flex-1">
-              <span className="text-lg">📦</span>
-              <div className="flex-1">
-                <p className="font-medium text-sm">{rack.name}</p>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <Badge variant="outline" className="text-xs">{rack.type}</Badge>
-                  <Badge variant="secondary" className="text-xs">{rack.maxUnits}U</Badge>
-                </div>
-              </div>
-            </div>
-            <div className="flex gap-1.5">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => openEditModal('rack', rack)}
-                className="h-7 text-xs"
-              >
-                <Edit className="h-3 w-3 mr-1" />
-                Düzenle
-              </Button>
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => handleDelete('rack', rack.id, rack.name)}
-                className="h-7 text-xs"
-              >
-                <Trash2 className="h-3 w-3 mr-1" />
-                Sil
-              </Button>
-              <Button
-                variant="default"
-                size="sm"
-                onClick={() => openDeviceModal(rack.id)}
-                className="h-7 text-xs"
-              >
-                <Plus className="h-3 w-3 mr-1" />
-                Cihaz
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-      </Card>
-    );
-  };
+  const metrics = [
+    ['Organizasyon', summary.totals.organizations, Building2],
+    ['Bina', summary.totals.buildings, Warehouse],
+    ['Oda', summary.totals.rooms, Cuboid],
+    ['Kabinet', summary.totals.racks, Database],
+    ['Cihaz', summary.totals.devices, Server],
+    ['Sorunlu', summary.totals.problemDevices, AlertTriangle],
+    ['U atanmamış', summary.totals.unpositionedDevices, Layers3],
+  ] as const;
 
   return (
-    <>
-      <main className="w-full px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-8 flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold">Altyapı Konumları</h1>
-            <p className="mt-2 text-muted-foreground">Fiziksel altyapı hiyerarşinizi yönetin</p>
+    <main className="min-h-full bg-background">
+      <section className="border-b border-border px-4 py-6 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-[1680px]">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="mb-1 flex items-center gap-2 text-sm font-medium text-muted-foreground"><MapPin className="h-4 w-4" /> Fiziksel altyapı portföyü</p>
+              <h1 className="text-2xl font-semibold tracking-normal">Konumlar ve Sistem Odaları</h1>
+              <p className="mt-1 text-sm text-muted-foreground">Holding genelindeki oda, kabinet ve cihaz yerleşimini tek merkezden yönetin.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="icon" onClick={() => loadData(true)} disabled={refreshing} aria-label="Konum verilerini yenile" title="Yenile">
+                <RefreshCw className={cn('h-4 w-4', refreshing && 'animate-spin')} />
+              </Button>
+              <Button onClick={() => setEditor({ mode: 'add', type: 'org' })}><Plus className="mr-2 h-4 w-4" />Organizasyon</Button>
+            </div>
           </div>
-          <Button
-            onClick={() => openAddModal('org')}
-            size="default"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Organizasyon Ekle
-          </Button>
+          <div className="mt-6 grid grid-cols-2 border-y border-border sm:grid-cols-4 xl:grid-cols-7">
+            {metrics.map(([label, value, Icon], index) => (
+              <div key={label} className={cn('px-3 py-3 sm:px-4', index < metrics.length - 1 && 'border-r border-border', index < 5 && 'border-b border-border xl:border-b-0')}>
+                <p className="flex items-center gap-2 text-xs text-muted-foreground"><Icon className={cn('h-3.5 w-3.5', label === 'Sorunlu' && value > 0 && 'text-destructive')} />{label}</p>
+                <p className={cn('mt-1 text-xl font-semibold', label === 'Sorunlu' && value > 0 && 'text-destructive')}>{value}</p>
+              </div>
+            ))}
+          </div>
         </div>
+      </section>
 
-        {loading && (
-          <div className="text-center py-12">
-            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
-            <p className="mt-4 text-blue-200">Altyapı yükleniyor...</p>
-          </div>
-        )}
-
-        {error && (
-          <Card className="mb-6 border-destructive">
-            <CardContent className="pt-6">
-              <p className="text-destructive">{error}</p>
-              <Button 
-                variant="outline" 
-                onClick={loadData} 
-                className="mt-3"
-                size="sm"
-              >
-                Tekrar Dene
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-
-        {!loading && !error && (
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-            <div className="lg:col-span-3 space-y-4">
-              {organizations.length === 0 ? (
-                <Card>
-                  <CardContent className="py-12 text-center">
-                    <p className="text-lg font-medium text-muted-foreground">Henüz organizasyon yok</p>
-                    <p className="mt-2 text-sm text-muted-foreground">Başlamak için "Organizasyon Ekle"ye tıklayın</p>
-                  </CardContent>
-                </Card>
-              ) : (
-                organizations.map(org => renderOrganization(org))
-              )}
+      {loading ? (
+        <div className="flex min-h-[520px] items-center justify-center"><RefreshCw className="h-6 w-6 animate-spin text-primary" /><span className="ml-3 text-sm text-muted-foreground">Portföy hazırlanıyor...</span></div>
+      ) : error ? (
+        <div className="mx-auto mt-16 max-w-md rounded-md border border-destructive/30 bg-destructive/5 p-6 text-center"><AlertTriangle className="mx-auto h-6 w-6 text-destructive" /><p className="mt-3 font-medium">{error}</p><Button className="mt-4" onClick={() => loadData()}>Tekrar dene</Button></div>
+      ) : (
+        <section className="mx-auto grid max-w-[1680px] lg:grid-cols-[300px_minmax(0,1fr)]">
+          <aside className="border-b border-border p-4 lg:min-h-[calc(100vh-280px)] lg:border-b-0 lg:border-r sm:p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <div><h2 className="text-sm font-semibold">Portföy gezgini</h2><p className="text-xs text-muted-foreground">Organizasyon ve fiziksel konumlar</p></div>
+              <Button variant={scope.type === 'all' ? 'secondary' : 'ghost'} size="sm" onClick={() => { setScope({ type: 'all', label: 'Tüm odalar' }); setSelectedRoomId(null); }}>Tümü</Button>
             </div>
+            <div className="max-h-[58vh] space-y-1 overflow-y-auto pr-1 lg:max-h-[calc(100vh-360px)]">
+              {organizations.map((org) => (
+                <TreeOrganization key={org.id} org={org} expanded={expanded} toggle={toggle} scope={scope} setScope={setScope} setSelectedRoomId={setSelectedRoomId} setEditor={setEditor} setDeleteTarget={setDeleteTarget} />
+              ))}
+            </div>
+          </aside>
 
-            <Card className="h-fit">
-              <CardHeader>
-                <CardTitle>Özet</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <Card>
-                  <CardContent className="pt-4">
-                    <p className="text-sm text-muted-foreground">Organizasyonlar</p>
-                    <p className="text-2xl font-bold">{organizations.length}</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="pt-4">
-                    <p className="text-sm text-muted-foreground">Binalar</p>
-                    <p className="text-2xl font-bold">
-                      {organizations.reduce((sum, org) => sum + (org.buildings?.length || 0), 0)}
-                    </p>
-                  </CardContent>
-                </Card>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
-        {/* Add Modal */}
-        {showAddModal && (
-          <UniversalAddModal
-            type={modalType}
-            onClose={() => setShowAddModal(false)}
-            onSubmit={handleAdd}
-          />
-        )}
-
-        {/* Edit Modal */}
-        {showEditModal && (
-          <UniversalEditModal
-            type={modalType}
-            item={editingItem}
-            onClose={() => setShowEditModal(false)}
-            onSubmit={handleEdit}
-          />
-        )}
-
-        {/* Device Modal */}
-        {showDeviceModal && (
-          <DeviceModal
-            rack={findRackById(selectedRackId)}
-            onClose={() => setShowDeviceModal(false)}
-            onSubmit={handleAdd}
-          />
-        )}
-
-        {/* 3D Room View Modal */}
-        {viewing3DRoom && (
-          <div className="fixed inset-0 bg-gray-200 flex items-center justify-center z-[5000] backdrop-blur-sm">
-            <div className="bg-gray-100 w-full h-full flex flex-col">
-              <div className="p-4 border-b border-border flex justify-between items-center bg-muted/30">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-                    <Building2 className="h-6 w-6 text-primary" />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-bold">{viewing3DRoom.name}</h2>
-                    <p className="text-sm text-muted-foreground">Veri Merkezi Görselleştirme</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-4">
-                  <Tabs defaultValue="2d" className="w-[200px]" onValueChange={(v: string) => setViewMode(v as '2d' | '3d')}>
-                    <TabsList className="grid w-full grid-cols-2">
-                      <TabsTrigger value="2d">Plan</TabsTrigger>
-                      <TabsTrigger value="3d">3D</TabsTrigger>
-                    </TabsList>
-                  </Tabs>
-                  <Button 
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setViewing3DRoom(null)}
-                    className="rounded-full"
-                  >
-                    <X className="h-6 w-6" />
-                  </Button>
-                </div>
-              </div>
-              <div className="flex-1 overflow-hidden relative">
-                {viewMode === '2d' ? (
-                  <FloorPlanView room={viewing3DRoom} onUpdate={refreshLocationsAndOpenRoom} />
-                ) : (
-                  <Room3D room={viewing3DRoom} onRackClick={(rackId) => console.log('Rack clicked:', rackId)} />
-                )}
+          <div className="min-w-0 p-4 sm:p-6 lg:p-8">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+              <div><h2 className="text-lg font-semibold">{scope.label}</h2><p className="text-sm text-muted-foreground">{filteredRooms.length} oda gösteriliyor</p></div>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative min-w-[220px] flex-1 xl:w-72"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Oda, bina veya kabinet ara" className="pl-9" /></div>
+                <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="h-10 rounded-md border border-input bg-background px-3 text-sm">
+                  <option value="all">Tüm durumlar</option><option value="HEALTHY">Sağlıklı</option><option value="PLANNING">Yerleşim gerekli</option><option value="ATTENTION">Dikkat gerekiyor</option>
+                </select>
               </div>
             </div>
-          </div>
-        )}
 
-        <ConfirmDialog
-          open={deleteDialogOpen}
-          onOpenChange={setDeleteDialogOpen}
-          title="Silme İşlemini Onayla"
-          description={`${itemToDelete?.name} ögesini silmek istediğinizden emin misiniz? Bağlı alt ögeler varsa işlem engellenir.`}
-          onConfirm={confirmDelete}
-          variant="destructive"
-          confirmText="Sil"
-        />
-      </main>
-    </>
+            <div className="mt-6 border-t border-border">
+              {filteredRooms.length === 0 ? (
+                <div className="py-16 text-center"><Cuboid className="mx-auto h-8 w-8 text-muted-foreground" /><p className="mt-3 font-medium">Eşleşen sistem odası bulunamadı</p><p className="mt-1 text-sm text-muted-foreground">Filtreleri değiştirin veya bu konuma oda ekleyin.</p></div>
+              ) : filteredRooms.map((room) => (
+                <RoomRow key={room.id} room={room} selected={selectedRoomId === room.id} onSelect={() => setSelectedRoomId(selectedRoomId === room.id ? null : room.id)} onOpen={() => router.push(`/locations/rooms/${room.id}`)} setEditor={setEditor} setDeleteTarget={setDeleteTarget} />
+              ))}
+            </div>
+
+            {selectedRoom && (
+              <RoomRackSection room={selectedRoom} setEditor={setEditor} setDeleteTarget={setDeleteTarget} />
+            )}
+          </div>
+        </section>
+      )}
+
+      <EntityDialog state={editor} onClose={() => setEditor(null)} onSubmit={mutateEntity} />
+      <ConfirmDialog open={Boolean(deleteTarget)} onOpenChange={(open) => !open && setDeleteTarget(null)} title="Kaydı sil" description={`${deleteTarget?.name || 'Bu kayıt'} silinsin mi? Bağlı kayıtlar varsa işlem engellenebilir.`} onConfirm={confirmDelete} variant="destructive" confirmText="Sil" />
+    </main>
   );
 }
 
-// Universal Add Modal Component
-function UniversalAddModal({ type, onClose, onSubmit }: {
-  type: ModalType;
-  onClose: () => void;
-  onSubmit: (data: any) => void;
-}) {
-  const [formData, setFormData] = useState<any>({});
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSubmit(formData);
-  };
-
-  const inputClass = "w-full px-4 py-2 bg-muted border border-border rounded-lg text-foreground placeholder-muted-foreground focus:ring-2 focus:ring-primary outline-none transition-all";
-
-  const renderFields = () => {
-    switch (type) {
-      case 'org':
-        return (
-          <>
-            <input type="text" placeholder="Organizasyon Adı" className={inputClass} onChange={e => setFormData({ ...formData, name: e.target.value })} required />
-            <input type="text" placeholder="Kod (örn: TECHCORP)" className={inputClass} onChange={e => setFormData({ ...formData, code: e.target.value })} required />
-            <textarea placeholder="Açıklama (isteğe bağlı)" className={inputClass} onChange={e => setFormData({ ...formData, description: e.target.value })} />
-          </>
-        );
-      case 'building':
-        return (
-          <>
-            <input type="text" placeholder="Bina Adı" className={inputClass} onChange={e => setFormData({ ...formData, name: e.target.value })} required />
-            <input type="text" placeholder="Adres" className={inputClass} onChange={e => setFormData({ ...formData, address: e.target.value })} />
-            <input type="text" placeholder="Şehir" className={inputClass} onChange={e => setFormData({ ...formData, city: e.target.value })} />
-            <input type="text" placeholder="Ülke" className={inputClass} onChange={e => setFormData({ ...formData, country: e.target.value })} />
-          </>
-        );
-      case 'floor':
-        return (
-          <>
-            <input type="text" placeholder="Kat Adı" className={inputClass} onChange={e => setFormData({ ...formData, name: e.target.value })} required />
-            <input type="number" placeholder="Kat Numarası" className={inputClass} onChange={e => setFormData({ ...formData, floorNumber: parseInt(e.target.value) })} required />
-          </>
-        );
-      case 'room':
-        return (
-          <>
-            <input type="text" placeholder="Oda Adı" className={inputClass} onChange={e => setFormData({ ...formData, name: e.target.value })} required />
-            <input type="text" placeholder="Açıklama (isteğe bağlı)" className={inputClass} onChange={e => setFormData({ ...formData, description: e.target.value })} />
-            <div className="grid grid-cols-3 gap-2">
-              <input type="number" step="0.1" placeholder="Genişlik (m)" className={inputClass} onChange={e => setFormData({ ...formData, width: parseFloat(e.target.value) })} />
-              <input type="number" step="0.1" placeholder="Derinlik (m)" className={inputClass} onChange={e => setFormData({ ...formData, depth: parseFloat(e.target.value) })} />
-              <input type="number" step="0.1" placeholder="Yükseklik (m)" className={inputClass} onChange={e => setFormData({ ...formData, height: parseFloat(e.target.value) })} />
-            </div>
-          </>
-        );
-      case 'rack':
-        return (
-          <>
-            <input type="text" placeholder="Kabinet Adı" className={inputClass} onChange={e => setFormData({ ...formData, name: e.target.value })} required />
-            <select className={inputClass} onChange={e => setFormData({ ...formData, type: e.target.value })} required>
-              <option value="">Tip Seçin</option>
-              <option value="RACK_42U">42U Kabinet</option>
-              <option value="RACK_45U">45U Kabinet</option>
-              <option value="CUSTOM">Özel</option>
-            </select>
-            <input type="number" placeholder="Maks Birim (U)" className={inputClass} onChange={e => setFormData({ ...formData, maxUnits: parseInt(e.target.value) })} defaultValue={42} required />
-            <div className="grid grid-cols-4 gap-2">
-              <input type="number" step="0.1" placeholder="X" title="X Koordinatı" className={inputClass} onChange={e => setFormData({ ...formData, coordX: parseFloat(e.target.value) })} />
-              <input type="number" step="0.1" placeholder="Y" title="Y Koordinatı" className={inputClass} onChange={e => setFormData({ ...formData, coordY: parseFloat(e.target.value) })} />
-              <input type="number" step="0.1" placeholder="Z" title="Z Koordinatı" className={inputClass} onChange={e => setFormData({ ...formData, coordZ: parseFloat(e.target.value) })} />
-              <input type="number" step="1" placeholder="Dönüş°" title="Derece Cinsinden Dönüş" className={inputClass} onChange={e => setFormData({ ...formData, rotation: parseFloat(e.target.value) })} />
-            </div>
-          </>
-        );
-      default:
-        return null;
-    }
-  };
-
-  const titles: Record<ModalType, string> = {
-    org: 'Organizasyon Ekle',
-    building: 'Bina Ekle',
-    floor: 'Kat Ekle',
-    room: 'Oda Ekle',
-    rack: 'Kabinet Ekle',
-    device: 'Cihaz Ekle',
-  };
-
+function EntityMenu({ onEdit, onDelete, onAdd, addLabel }: { onEdit: () => void; onDelete: () => void; onAdd?: () => void; addLabel?: string }) {
   return (
-    <div className="fixed inset-0 bg-background/80 flex items-center justify-center z-[6000] p-4 backdrop-blur-sm">
-      <div className="bg-card rounded-xl p-6 max-w-md w-full border border-border shadow-2xl">
-        <h2 className="text-2xl font-bold mb-6">{titles[type]}</h2>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {renderFields()}
-          <div className="flex space-x-3 pt-6">
-            <Button type="button" variant="outline" onClick={onClose} className="flex-1">İptal</Button>
-            <Button type="submit" className="flex-1 font-bold shadow-lg">Oluştur</Button>
-          </div>
-        </form>
-      </div>
-    </div>
+    <Popover>
+      <PopoverTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7 opacity-70" aria-label="Kayıt işlemleri"><MoreHorizontal className="h-4 w-4" /></Button></PopoverTrigger>
+      <PopoverContent align="end" className="w-48 p-1">
+        {onAdd && <Button variant="ghost" size="sm" className="w-full justify-start" onClick={onAdd}><Plus className="mr-2 h-4 w-4" />{addLabel}</Button>}
+        <Button variant="ghost" size="sm" className="w-full justify-start" onClick={onEdit}><Edit3 className="mr-2 h-4 w-4" />Düzenle</Button>
+        <Button variant="ghost" size="sm" className="w-full justify-start text-destructive hover:text-destructive" onClick={onDelete}><Trash2 className="mr-2 h-4 w-4" />Sil</Button>
+      </PopoverContent>
+    </Popover>
   );
 }
 
-// Universal Edit Modal Component
-function UniversalEditModal({ type, item, onClose, onSubmit }: {
-  type: ModalType;
-  item: any;
-  onClose: () => void;
-  onSubmit: (data: any) => void;
-}) {
-  const [formData, setFormData] = useState<any>(item || {});
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSubmit(formData);
-  };
-
-  const inputClass = "w-full px-4 py-2 bg-muted border border-border rounded-lg text-foreground placeholder-muted-foreground focus:ring-2 focus:ring-primary outline-none transition-all";
-  const labelClass = "text-[10px] text-muted-foreground ml-1 font-bold uppercase tracking-wider";
-
-  const renderFields = () => {
-    switch (type) {
-      case 'org':
-        return (
-          <>
-            <div className="space-y-1">
-              <label className={labelClass}>Organizasyon Adı</label>
-              <input type="text" className={inputClass} value={formData.name || ''} onChange={e => setFormData({ ...formData, name: e.target.value })} required />
-            </div>
-            <div className="space-y-1">
-              <label className={labelClass}>Kod</label>
-              <input type="text" className={inputClass} value={formData.code || ''} onChange={e => setFormData({ ...formData, code: e.target.value })} required />
-            </div>
-            <div className="space-y-1">
-              <label className={labelClass}>Açıklama</label>
-              <textarea className={inputClass} value={formData.description || ''} onChange={e => setFormData({ ...formData, description: e.target.value })} />
-            </div>
-          </>
-        );
-      case 'building':
-        return (
-          <>
-            <div className="space-y-1">
-              <label className={labelClass}>Bina Adı</label>
-              <input type="text" className={inputClass} value={formData.name || ''} onChange={e => setFormData({ ...formData, name: e.target.value })} required />
-            </div>
-            <div className="space-y-1">
-              <label className={labelClass}>Adres</label>
-              <input type="text" className={inputClass} value={formData.address || ''} onChange={e => setFormData({ ...formData, address: e.target.value })} />
-            </div>
-            <div className="space-y-1">
-              <label className={labelClass}>Şehir</label>
-              <input type="text" className={inputClass} value={formData.city || ''} onChange={e => setFormData({ ...formData, city: e.target.value })} />
-            </div>
-            <div className="space-y-1">
-              <label className={labelClass}>Ülke</label>
-              <input type="text" className={inputClass} value={formData.country || ''} onChange={e => setFormData({ ...formData, country: e.target.value })} />
-            </div>
-          </>
-        );
-      case 'floor':
-        return (
-          <>
-            <div className="space-y-1">
-              <label className={labelClass}>Kat Adı</label>
-              <input type="text" className={inputClass} value={formData.name || ''} onChange={e => setFormData({ ...formData, name: e.target.value })} required />
-            </div>
-            <div className="space-y-1">
-              <label className={labelClass}>Kat Numarası</label>
-              <input type="number" className={inputClass} value={formData.floorNumber || ''} onChange={e => setFormData({ ...formData, floorNumber: parseInt(e.target.value) })} required />
-            </div>
-          </>
-        );
-      case 'room':
-        return (
-          <>
-            <div className="space-y-1">
-              <label className={labelClass}>Oda Adı</label>
-              <input type="text" className={inputClass} value={formData.name || ''} onChange={e => setFormData({ ...formData, name: e.target.value })} required />
-            </div>
-            <div className="space-y-1">
-              <label className={labelClass}>Açıklama</label>
-              <input type="text" className={inputClass} value={formData.description || ''} onChange={e => setFormData({ ...formData, description: e.target.value })} />
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              <div className="flex flex-col">
-                <label className={labelClass}>Genişlik (m)</label>
-                <input type="number" step="0.1" className={inputClass} value={formData.width ?? ''} onChange={e => setFormData({ ...formData, width: parseFloat(e.target.value) })} />
-              </div>
-              <div className="flex flex-col">
-                <label className={labelClass}>Derinlik (m)</label>
-                <input type="number" step="0.1" className={inputClass} value={formData.depth ?? ''} onChange={e => setFormData({ ...formData, depth: parseFloat(e.target.value) })} />
-              </div>
-              <div className="flex flex-col">
-                <label className={labelClass}>Yükseklik (m)</label>
-                <input type="number" step="0.1" className={inputClass} value={formData.height ?? ''} onChange={e => setFormData({ ...formData, height: parseFloat(e.target.value) })} />
-              </div>
-            </div>
-          </>
-        );
-      case 'rack':
-        return (
-          <>
-            <div className="space-y-1">
-              <label className={labelClass}>Kabinet Adı</label>
-              <input type="text" className={inputClass} value={formData.name || ''} onChange={e => setFormData({ ...formData, name: e.target.value })} required />
-            </div>
-            <div className="space-y-1">
-              <label className={labelClass}>Tip</label>
-              <select className={inputClass} value={formData.type || ''} onChange={e => setFormData({ ...formData, type: e.target.value })} required>
-                <option value="">Tip Seçin</option>
-                <option value="RACK_42U">42U Kabinet</option>
-                <option value="RACK_45U">45U Kabinet</option>
-                <option value="CUSTOM">Özel</option>
-              </select>
-            </div>
-            <div className="flex flex-col">
-              <label className={labelClass}>Maks Birim (U)</label>
-              <input type="number" className={inputClass} value={formData.maxUnits ?? 42} onChange={e => setFormData({ ...formData, maxUnits: parseInt(e.target.value) })} required />
-            </div>
-            <div className="grid grid-cols-4 gap-2">
-              <div className="flex flex-col">
-                <label className={labelClass}>X</label>
-                <input type="number" step="0.1" className={inputClass} value={formData.coordX ?? ''} onChange={e => setFormData({ ...formData, coordX: parseFloat(e.target.value) })} />
-              </div>
-              <div className="flex flex-col">
-                <label className={labelClass}>Y</label>
-                <input type="number" step="0.1" className={inputClass} value={formData.coordY ?? ''} onChange={e => setFormData({ ...formData, coordY: parseFloat(e.target.value) })} />
-              </div>
-              <div className="flex flex-col">
-                <label className={labelClass}>Z</label>
-                <input type="number" step="0.1" className={inputClass} value={formData.coordZ ?? ''} onChange={e => setFormData({ ...formData, coordZ: parseFloat(e.target.value) })} />
-              </div>
-              <div className="flex flex-col">
-                <label className={labelClass}>Dönüş°</label>
-                <input type="number" step="1" className={inputClass} value={formData.rotation ?? ''} onChange={e => setFormData({ ...formData, rotation: parseFloat(e.target.value) })} />
-              </div>
-            </div>
-          </>
-        );
-      case 'device':
-        return (
-          <>
-            <div className="space-y-1">
-              <label className={labelClass}>Cihaz Adı</label>
-              <input type="text" className={inputClass} value={formData.name || ''} onChange={e => setFormData({ ...formData, name: e.target.value })} required />
-            </div>
-            <div className="space-y-1">
-              <label className={labelClass}>Support Tarihi</label>
-              <input 
-                type="date" 
-                className={inputClass} 
-                value={formData.supportDate ? new Date(formData.supportDate).toISOString().split('T')[0] : ''} 
-                onChange={e => setFormData({ ...formData, supportDate: e.target.value })} 
-              />
-            </div>
-          </>
-        );
-      default:
-        return null;
-    }
-  };
-
-  const titles: Record<ModalType, string> = {
-    org: 'Organizasyonu Düzenle',
-    building: 'Binayı Düzenle',
-    floor: 'Katı Düzenle',
-    room: 'Odayı Düzenle',
-    rack: 'Kabineti Düzenle',
-    device: 'Cihazı Düzenle',
-  };
-
-  return (
-    <div className="fixed inset-0 bg-background/80 flex items-center justify-center z-[6000] p-4 backdrop-blur-sm">
-      <div className="bg-card rounded-xl p-6 max-w-md w-full border border-border shadow-2xl overflow-y-auto max-h-[90vh]">
-        <h2 className="text-2xl font-bold mb-6">{titles[type]}</h2>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {renderFields()}
-          <div className="flex space-x-3 pt-6">
-            <Button type="button" variant="outline" onClick={onClose} className="flex-1">İptal</Button>
-            <Button type="submit" className="flex-1 font-bold shadow-lg">Güncelle</Button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
+function TreeOrganization({ org, expanded, toggle, scope, setScope, setSelectedRoomId, setEditor, setDeleteTarget }: any) {
+  const open = expanded.has(org.id);
+  return <div><TreeLine depth={0} label={org.name} meta={org.code} open={open} selected={scope.type === 'org' && scope.id === org.id} onToggle={() => toggle(org.id)} onSelect={() => { setScope({ type: 'org', id: org.id, label: org.name }); setSelectedRoomId(null); }} menu={<EntityMenu onAdd={() => setEditor({ mode: 'add', type: 'building', parentId: org.id })} addLabel="Bina ekle" onEdit={() => setEditor({ mode: 'edit', type: 'org', item: org })} onDelete={() => setDeleteTarget({ type: 'org', id: org.id, name: org.name })} />} />{open && org.buildings?.map((building: LocationBuilding) => <TreeBuilding key={building.id} building={building} {...{ expanded, toggle, scope, setScope, setSelectedRoomId, setEditor, setDeleteTarget }} />)}</div>;
 }
 
-// Device Modal Component
-function DeviceModal({ rack, onClose, onSubmit }: {
-  rack: Rack | null;
-  onClose: () => void;
-  onSubmit: (data: any) => void;
-}) {
-  const [formData, setFormData] = useState<any>({});
+function TreeBuilding({ building, expanded, toggle, scope, setScope, setSelectedRoomId, setEditor, setDeleteTarget }: any) {
+  const open = expanded.has(building.id);
+  return <div><TreeLine depth={1} label={building.name} meta={building.city} open={open} selected={scope.type === 'building' && scope.id === building.id} onToggle={() => toggle(building.id)} onSelect={() => { setScope({ type: 'building', id: building.id, label: building.name }); setSelectedRoomId(null); }} menu={<EntityMenu onAdd={() => setEditor({ mode: 'add', type: 'floor', parentId: building.id })} addLabel="Kat ekle" onEdit={() => setEditor({ mode: 'edit', type: 'building', item: building })} onDelete={() => setDeleteTarget({ type: 'building', id: building.id, name: building.name })} />} />{open && building.floors?.map((floor: LocationFloor) => <TreeFloor key={floor.id} floor={floor} {...{ expanded, toggle, scope, setScope, setSelectedRoomId, setEditor, setDeleteTarget }} />)}</div>;
+}
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSubmit(formData);
-  };
+function TreeFloor({ floor, expanded, toggle, scope, setScope, setSelectedRoomId, setEditor, setDeleteTarget }: any) {
+  const open = expanded.has(floor.id);
+  return <div><TreeLine depth={2} label={floor.name} meta={`Kat ${floor.floorNumber}`} open={open} selected={scope.type === 'floor' && scope.id === floor.id} onToggle={() => toggle(floor.id)} onSelect={() => { setScope({ type: 'floor', id: floor.id, label: floor.name }); setSelectedRoomId(null); }} menu={<EntityMenu onAdd={() => setEditor({ mode: 'add', type: 'room', parentId: floor.id })} addLabel="Oda ekle" onEdit={() => setEditor({ mode: 'edit', type: 'floor', item: floor })} onDelete={() => setDeleteTarget({ type: 'floor', id: floor.id, name: floor.name })} />} />{open && floor.rooms?.map((room: LocationRoom) => <TreeLine key={room.id} depth={3} label={room.name} meta="Sistem odası" selected={scope.type === 'room' && scope.id === room.id} onSelect={() => { setScope({ type: 'room', id: room.id, label: room.name }); setSelectedRoomId(room.id); }} menu={<EntityMenu onAdd={() => setEditor({ mode: 'add', type: 'rack', parentId: room.id })} addLabel="Kabinet ekle" onEdit={() => setEditor({ mode: 'edit', type: 'room', item: room })} onDelete={() => setDeleteTarget({ type: 'room', id: room.id, name: room.name })} />} />)}</div>;
+}
 
-  const inputClass = "w-full px-4 py-2 bg-muted border border-border rounded-lg text-foreground placeholder-muted-foreground focus:ring-2 focus:ring-primary outline-none transition-all";
-  const labelClass = "text-[10px] text-muted-foreground ml-1 font-bold uppercase tracking-wider";
+function TreeLine({ depth, label, meta, open, selected, onToggle, onSelect, menu }: any) {
+  return <div className={cn('group flex min-w-0 items-center rounded-md pr-1', selected && 'bg-primary/10 text-primary')} style={{ paddingLeft: `${depth * 14}px` }}><button type="button" onClick={onToggle || onSelect} className="flex h-8 w-7 shrink-0 items-center justify-center text-muted-foreground" aria-label={open ? `${label} daralt` : `${label} genişlet`}>{onToggle ? (open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />) : <span className="h-1.5 w-1.5 rounded-full bg-current" />}</button><button type="button" onClick={onSelect} className="min-w-0 flex-1 py-1.5 text-left"><span className="block truncate text-sm font-medium">{label}</span>{meta && <span className="block truncate text-xs text-muted-foreground">{meta}</span>}</button>{menu}</div>;
+}
 
-  return (
-    <div className="fixed inset-0 bg-background/80 flex items-center justify-center z-[6000] p-4 backdrop-blur-sm">
-      <div className="bg-card rounded-xl p-6 max-w-md w-full border border-border shadow-2xl">
-        <h2 className="text-2xl font-bold mb-6">Cihaz Ekle</h2>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-1">
-            <label className={labelClass}>Cihaz Adı</label>
-            <input type="text" placeholder="Cihaz Adı" className={inputClass} onChange={e => setFormData({ ...formData, name: e.target.value })} required />
-          </div>
-          <div className="space-y-1">
-            <label className={labelClass}>Cihaz Tipi</label>
-            <select className={inputClass} onChange={e => setFormData({ ...formData, type: e.target.value })} required>
-              <option value="">Cihaz Tipi Seçin</option>
-              <option value="PHYSICAL_SERVER">Fiziksel Sunucu</option>
-              <option value="VIRTUAL_HOST">Sanal Host</option>
-              <option value="VIRTUAL_MACHINE">Sanal Makine</option>
-              <option value="FIREWALL">Güvenlik Duvarı</option>
-              <option value="SWITCH">Switch</option>
-              <option value="ROUTER">Router</option>
-              <option value="STORAGE">Depolama</option>
-              <option value="PDU">PDU</option>
-              <option value="PATCH_PANEL">Patch Panel</option>
-              <option value="COMPUTER">Bilgisayar</option>
-              <option value="LAPTOP">Dizüstü</option>
-              <option value="OTHER">Diğer</option>
-            </select>
-          </div>
-          <div className="space-y-1">
-            <label className={labelClass}>Durum</label>
-            <select className={inputClass} onChange={e => setFormData({ ...formData, status: e.target.value })} defaultValue="ACTIVE">
-              <option value="ACTIVE">Aktif</option>
-              <option value="INACTIVE">Pasif</option>
-              <option value="MAINTENANCE">Bakımda</option>
-              <option value="DECOMMISSIONED">Devre Dışı</option>
-              <option value="UNKNOWN">Bilinmiyor</option>
-            </select>
-          </div>
-          <div className="space-y-1">
-            <label className={labelClass}>U Pozisyonu</label>
-            <input
-              type="number"
-              min={1}
-              max={rack?.maxUnits || 100}
-              placeholder={rack ? `1-${rack.maxUnits} arası, boş bırakılabilir` : 'Opsiyonel'}
-              className={inputClass}
-              onChange={e => setFormData({
-                ...formData,
-                rackUnitPosition: e.target.value === '' ? undefined : parseInt(e.target.value, 10),
-              })}
-            />
-            <p className="text-[11px] text-muted-foreground">
-              Boş bırakılırsa cihaz 3D görünümde otomatik bir slota yerleştirilir.
-            </p>
-          </div>
-          <div className="space-y-1">
-            <label className={labelClass}>Support Tarihi</label>
-            <input 
-              type="date" 
-              className={inputClass} 
-              onChange={e => setFormData({ ...formData, supportDate: e.target.value })} 
-            />
-          </div>
-          <div className="space-y-1">
-            <label className={labelClass}>Kritiklik</label>
-            <select className={inputClass} onChange={e => setFormData({ ...formData, criticality: e.target.value })} defaultValue="MEDIUM">
-              <option value="CRITICAL">Kritik</option>
-              <option value="HIGH">Yüksek</option>
-              <option value="MEDIUM">Orta</option>
-              <option value="LOW">Düşük</option>
-              <option value="INFORMATIONAL">Bilgi</option>
-            </select>
-          </div>
-          <div className="flex space-x-3 pt-6">
-            <Button type="button" variant="outline" onClick={onClose} className="flex-1">İptal</Button>
-            <Button type="submit" className="flex-1 font-bold shadow-lg">Cihaz Oluştur</Button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
+function RoomRow({ room, selected, onSelect, onOpen, setEditor, setDeleteTarget }: any) {
+  const statusTone = room.status === 'HEALTHY' ? 'success' : room.status === 'ATTENTION' ? 'destructive' : 'warning';
+  return <div className={cn('border-b border-border py-4 transition-colors', selected && 'bg-muted/25')}><div className="flex flex-col gap-4 xl:flex-row xl:items-center"><button type="button" onClick={onSelect} className="flex min-w-0 flex-1 items-start gap-3 text-left"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border bg-muted/40"><Cuboid className="h-5 w-5 text-primary" /></div><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h3 className="truncate font-semibold">{room.name}</h3><Badge variant={statusTone}>{STATUS_LABELS[room.status as keyof typeof STATUS_LABELS]}</Badge></div><p className="mt-1 truncate text-sm text-muted-foreground">{room.floor.building.organization.name} · {room.floor.building.name} · {room.floor.name}</p><p className="mt-1 text-xs text-muted-foreground">{room.width || '?'} × {room.depth || '?'} × {room.height || '?'} m</p></div></button><div className="grid grid-cols-4 gap-5 text-sm xl:w-[430px]"><Metric label="Kabinet" value={room.rackCount} /><Metric label="Cihaz" value={room.deviceCount} /><Metric label="Doluluk" value={`${room.utilization}%`} /><Metric label="Sorun" value={room.problemDeviceCount} alert={room.problemDeviceCount > 0} /></div><div className="flex shrink-0 items-center gap-2"><Button variant="outline" size="sm" onClick={onOpen}><Eye className="mr-2 h-4 w-4" />Dijital ikizi aç</Button><EntityMenu onAdd={() => setEditor({ mode: 'add', type: 'rack', parentId: room.id })} addLabel="Kabinet ekle" onEdit={() => setEditor({ mode: 'edit', type: 'room', item: room })} onDelete={() => setDeleteTarget({ type: 'room', id: room.id, name: room.name })} /></div></div></div>;
+}
+
+function Metric({ label, value, alert }: { label: string; value: string | number; alert?: boolean }) { return <div><p className="text-xs text-muted-foreground">{label}</p><p className={cn('mt-1 font-semibold', alert && 'text-destructive')}>{value}</p></div>; }
+
+function RoomRackSection({ room, setEditor, setDeleteTarget }: any) {
+  return <section className="mt-8 border-t border-border pt-6"><div className="flex items-center justify-between"><div><h2 className="font-semibold">{room.name} kabinetleri</h2><p className="text-sm text-muted-foreground">Kapasite ve cihaz yerleşimi</p></div><Button size="sm" onClick={() => setEditor({ mode: 'add', type: 'rack', parentId: room.id })}><Plus className="mr-2 h-4 w-4" />Kabinet</Button></div><div className="mt-4 divide-y divide-border border-y border-border">{room.racks.map((rack: LocationRack) => <div key={rack.id} className="flex flex-col gap-3 py-3 sm:flex-row sm:items-center"><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><Database className="h-4 w-4 text-muted-foreground" /><p className="truncate text-sm font-medium">{rack.name}</p><Badge variant={rack.operationalStatus === 'OPERATIONAL' ? 'success' : 'warning'}>{rack.operationalStatus === 'OPERATIONAL' ? 'Operasyonel' : 'Bakım'}</Badge></div><p className="mt-1 text-xs text-muted-foreground">{rack.type.replace(/_/g, ' ')} · {rack.usedUnits}/{rack.totalUnits}U kullanılıyor</p></div><div className="grid grid-cols-3 gap-6 text-sm"><Metric label="Doluluk" value={`${rack.utilization}%`} /><Metric label="Cihaz" value={rack.deviceCount || 0} /><Metric label="U atanmamış" value={rack.unpositionedDevices || 0} alert={(rack.unpositionedDevices || 0) > 0} /></div><div className="flex items-center"><Button variant="ghost" size="sm" onClick={() => setEditor({ mode: 'add', type: 'device', parentId: rack.id, item: rack })}><Plus className="mr-2 h-4 w-4" />Cihaz</Button><EntityMenu onEdit={() => setEditor({ mode: 'edit', type: 'rack', item: rack })} onDelete={() => setDeleteTarget({ type: 'rack', id: rack.id, name: rack.name })} /></div></div>)}</div></section>;
+}
+
+function EntityDialog({ state, onClose, onSubmit }: { state: EditorState; onClose: () => void; onSubmit: (values: Record<string, unknown>) => Promise<void> }) {
+  const [form, setForm] = useState<Record<string, any>>({});
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    const defaults = state?.type === 'rack'
+      ? { type: 'RACK_42U', maxUnits: 42, operationalStatus: 'OPERATIONAL' }
+      : state?.type === 'device'
+        ? { type: 'PHYSICAL_SERVER', status: 'ACTIVE', criticality: 'MEDIUM' }
+        : {};
+    setForm({ ...defaults, ...(state?.item || {}) });
+    setError(null);
+  }, [state]);
+  if (!state) return null;
+  const set = (key: string, value: unknown) => setForm((current) => ({ ...current, [key]: value }));
+  const submit = async (event: React.FormEvent) => { event.preventDefault(); setSaving(true); setError(null); try { await onSubmit(form); } catch (submitError) { setError(submitError instanceof Error ? submitError.message : 'İşlem tamamlanamadı'); } finally { setSaving(false); } };
+  return <Dialog open onOpenChange={(open) => !open && onClose()}><DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto"><DialogHeader><DialogTitle>{state.mode === 'add' ? 'Yeni kayıt' : 'Kaydı düzenle'}</DialogTitle><DialogDescription>Fiziksel altyapı bilgilerini eksiksiz girin.</DialogDescription></DialogHeader><form onSubmit={submit} className="space-y-4"><EntityFields type={state.type} form={form} set={set} rack={state.item} />{error && <p className="text-sm text-destructive">{error}</p>}<DialogFooter><Button type="button" variant="outline" onClick={onClose}>İptal</Button><Button type="submit" disabled={saving}>{saving ? 'Kaydediliyor...' : 'Kaydet'}</Button></DialogFooter></form></DialogContent></Dialog>;
+}
+
+function EntityFields({ type, form, set, rack }: { type: EntityType; form: Record<string, any>; set: (key: string, value: unknown) => void; rack?: LocationRack }) {
+  const field = (label: string, key: string, inputType = 'text', props: Record<string, unknown> = {}) => <label className="block space-y-1.5"><span className="text-sm font-medium">{label}</span><Input type={inputType} value={form[key] ?? ''} onChange={(event) => set(key, inputType === 'number' ? (event.target.value === '' ? undefined : Number(event.target.value)) : event.target.value)} {...props} /></label>;
+  if (type === 'org') return <>{field('Organizasyon adı', 'name', 'text', { required: true })}{field('Kod', 'code', 'text', { required: true })}{field('Açıklama', 'description')}</>;
+  if (type === 'building') return <>{field('Bina adı', 'name', 'text', { required: true })}{field('Şehir', 'city')}{field('Ülke', 'country')}</>;
+  if (type === 'floor') return <>{field('Kat adı', 'name', 'text', { required: true })}{field('Kat numarası', 'floorNumber', 'number', { required: true })}</>;
+  if (type === 'room') return <>{field('Oda adı', 'name', 'text', { required: true })}{field('Açıklama', 'description')}<div className="grid grid-cols-3 gap-3">{field('Genişlik (m)', 'width', 'number', { step: 0.1 })}{field('Derinlik (m)', 'depth', 'number', { step: 0.1 })}{field('Yükseklik (m)', 'height', 'number', { step: 0.1 })}</div></>;
+  if (type === 'rack') return <>{field('Kabinet adı', 'name', 'text', { required: true })}<label className="block space-y-1.5"><span className="text-sm font-medium">Tip</span><select className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={form.type || 'RACK_42U'} onChange={(event) => set('type', event.target.value)}><option value="RACK_42U">42U Kabinet</option><option value="RACK_45U">45U Kabinet</option><option value="CUSTOM">Özel</option></select></label>{field('Maksimum U', 'maxUnits', 'number', { required: true, min: 1, max: 100 })}</>;
+  return <>{field('Cihaz adı', 'name', 'text', { required: true })}<label className="block space-y-1.5"><span className="text-sm font-medium">Cihaz tipi</span><select className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={form.type || 'PHYSICAL_SERVER'} onChange={(event) => set('type', event.target.value)}>{['PHYSICAL_SERVER','VIRTUAL_HOST','FIREWALL','SWITCH','ROUTER','STORAGE','PDU','PATCH_PANEL','OTHER'].map((value) => <option key={value} value={value}>{value.replace(/_/g, ' ')}</option>)}</select></label><div className="grid grid-cols-2 gap-3">{field('U Pozisyonu', 'rackUnitPosition', 'number', { min: 1, max: rack?.maxUnits || 100 })}<label className="block space-y-1.5"><span className="text-sm font-medium">Durum</span><select className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={form.status || 'ACTIVE'} onChange={(event) => set('status', event.target.value)}><option value="ACTIVE">Aktif</option><option value="INACTIVE">Pasif</option><option value="MAINTENANCE">Bakımda</option><option value="UNKNOWN">Bilinmiyor</option></select></label></div><label className="block space-y-1.5"><span className="text-sm font-medium">Kritiklik</span><select className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={form.criticality || 'MEDIUM'} onChange={(event) => set('criticality', event.target.value)}><option value="CRITICAL">Kritik</option><option value="HIGH">Yüksek</option><option value="MEDIUM">Orta</option><option value="LOW">Düşük</option><option value="INFORMATIONAL">Bilgi</option></select></label></>;
 }

@@ -1,767 +1,241 @@
 'use client';
 
-import React, { useRef, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Minus, Plus, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { RotateCcw, RotateCw, FlipVertical2, Loader2, X, Plus } from 'lucide-react';
-import { getVendorLogo } from '@/lib/formatting';
-
-interface Rack {
-  id: string;
-  name: string;
-  type: string;
-  maxUnits: number;
-  coordX?: number | null;
-  coordY?: number | null;
-  coordZ?: number | null;
-  rotation?: number | null;
-}
-
-interface Device {
-  id: string;
-  name: string;
-  type: string;
-  status: string;
-  vendor?: string;
-  ipAddress?: string | null;
-  rackUnit?: number | null;
-}
-
-interface Room {
-  id: string;
-  name: string;
-  width?: number | null;
-  depth?: number | null;
-  height?: number | null;
-  racks?: Rack[];
-}
+import { useToast } from '@/components/ui/use-toast';
+import { calculateRackCapacity } from '@/lib/rack-capacity';
+import { computeRoomRackPositions, RACK_DEPTH_METERS, RACK_WIDTH_METERS } from '@/lib/room-layout';
+import type { LocationRack, LocationRoom } from '@/components/locations/types';
 
 interface FloorPlanViewProps {
-  room: Room;
-  onUpdate?: () => void;
+  room: LocationRoom;
+  onUpdate?: () => void | Promise<void>;
+  selectedRackId?: string | null;
+  onRackClick?: (rackId: string) => void;
+  editMode?: boolean;
 }
 
-// Compute auto-layout grid positions for racks without coordinates
-function computeRackPositions(racks: Rack[], roomWidth: number, roomDepth: number): Map<string, { x: number; z: number }> {
-  const RACK_W = 1.2;
-  const RACK_D = 2.0;
-  const GAP_X = 0.6;
-  const GAP_Z = 0.8;
+interface Point { x: number; y: number }
 
-  const cols = Math.max(2, Math.floor(roomWidth / (RACK_W + GAP_X)));
-  const totalRows = Math.ceil(racks.length / cols);
-  const gridW = cols * (RACK_W + GAP_X) - GAP_X;
-  const gridD = totalRows * (RACK_D + GAP_Z) - GAP_Z;
-  const startX = Math.max(0.3, (roomWidth - gridW) / 2);
-  const startZ = Math.max(0.3, (roomDepth - gridD) / 2);
+const SNAP_METERS = 0.25;
 
-  const positions = new Map<string, { x: number; z: number }>();
-  racks.forEach((rack, index) => {
-    const col = index % cols;
-    const row = Math.floor(index / cols);
-    positions.set(rack.id, {
-      x: rack.coordX ?? (startX + col * (RACK_W + GAP_X)),
-      z: rack.coordZ ?? (startZ + row * (RACK_D + GAP_Z)),
-    });
-  });
-  return positions;
+function footprint(rack: LocationRack) {
+  const normalized = (((rack.rotation || 0) % 360) + 360) % 360;
+  const rotated = normalized >= 45 && normalized < 135 || normalized >= 225 && normalized < 315;
+  return rotated
+    ? { width: RACK_DEPTH_METERS, depth: RACK_WIDTH_METERS }
+    : { width: RACK_WIDTH_METERS, depth: RACK_DEPTH_METERS };
 }
 
-export function FloorPlanView({ room, onUpdate }: FloorPlanViewProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [selectedRack, setSelectedRack] = useState<Rack | null>(null);
-  const [rackDevices, setRackDevices] = useState<Device[]>([]);
-  const [loadingDevices, setLoadingDevices] = useState(false);
-  const [hoveredRack, setHoveredRack] = useState<string | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [isDraggingRack, setIsDraggingRack] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const [editMode] = useState(true); // Always in edit mode
-  const [saving, setSaving] = useState(false);
+function overlaps(a: { x: number; z: number; width: number; depth: number }, b: { x: number; z: number; width: number; depth: number }) {
+  const gap = 0.08;
+  return !(a.x + a.width + gap <= b.x || b.x + b.width + gap <= a.x || a.z + a.depth + gap <= b.z || b.z + b.depth + gap <= a.z);
+}
+
+export function FloorPlanView({ room, onUpdate, selectedRackId, onRackClick, editMode = false }: FloorPlanViewProps) {
+  const { toast } = useToast();
   const containerRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const dragRef = useRef<{ rackId: string; startPointer: Point; startPosition: { x: number; z: number } } | null>(null);
+  const [racks, setRacks] = useState<LocationRack[]>(() => (room.racks || []).map((rack) => ({ ...rack })));
+  const [canvasSize, setCanvasSize] = useState({ width: 1200, height: 700 });
+  const [scale, setScale] = useState(60);
+  const [offset, setOffset] = useState<Point>({ x: 80, y: 80 });
+  const [panning, setPanning] = useState<{ start: Point; offset: Point } | null>(null);
+  const [savingRackId, setSavingRackId] = useState<string | null>(null);
+  const [isDark, setIsDark] = useState(false);
+  const roomWidth = Math.max(2, room.width || 10);
+  const roomDepth = Math.max(2, room.depth || 8);
 
-  const roomWidth = room.width || 10;
-  const roomDepth = room.depth || 8;
+  useEffect(() => setRacks((room.racks || []).map((rack) => ({ ...rack }))), [room.racks]);
 
-  // Dynamic canvas size based on container
-  const [canvasSize, setCanvasSize] = useState({ width: 1200, height: 600 });
+  const fitView = useCallback(() => {
+    const nextScale = Math.max(18, Math.min(120, Math.min((canvasSize.width - 100) / roomWidth, (canvasSize.height - 100) / roomDepth)));
+    setScale(nextScale);
+    setOffset({ x: (canvasSize.width - roomWidth * nextScale) / 2, y: (canvasSize.height - roomDepth * nextScale) / 2 });
+  }, [canvasSize, roomDepth, roomWidth]);
 
   useEffect(() => {
-    const updateSize = () => {
-      if (containerRef.current) {
-        const { width, height } = containerRef.current.getBoundingClientRect();
-        setCanvasSize({ width, height });
-      }
-    };
-    updateSize();
-    window.addEventListener('resize', updateSize);
-    return () => window.removeEventListener('resize', updateSize);
+    if (!containerRef.current) return;
+    const observer = new ResizeObserver(([entry]) => setCanvasSize({ width: Math.max(1, entry.contentRect.width), height: Math.max(1, entry.contentRect.height) }));
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
   }, []);
-  
-  // Calculate scale to fit room with 10% padding
-  const scaleX = (canvasSize.width * 0.8) / roomWidth;
-  const scaleY = (canvasSize.height * 0.8) / roomDepth;
-  const initialScale = Math.min(scaleX, scaleY);
-  
-  const [scale, setScale] = useState(initialScale);
-  
-  // Center the room on canvas
-  const initialOffsetX = (canvasSize.width - roomWidth * initialScale) / 2;
-  const initialOffsetY = (canvasSize.height - roomDepth * initialScale) / 2;
-  const [offset, setOffset] = useState({ x: initialOffsetX, y: initialOffsetY });
+  useEffect(() => { fitView(); }, [fitView]);
 
-  // Recalculate when canvas size changes
   useEffect(() => {
-    const newScaleX = (canvasSize.width * 0.8) / roomWidth;
-    const newScaleY = (canvasSize.height * 0.8) / roomDepth;
-    const newScale = Math.min(newScaleX, newScaleY);
-    setScale(newScale);
-    const newOffsetX = (canvasSize.width - roomWidth * newScale) / 2;
-    const newOffsetY = (canvasSize.height - roomDepth * newScale) / 2;
-    setOffset({ x: newOffsetX, y: newOffsetY });
-  }, [canvasSize, roomWidth, roomDepth]);
+    const update = () => setIsDark(document.documentElement.classList.contains('dark'));
+    update();
+    const observer = new MutationObserver(update);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
 
-  // Fetch devices when rack is selected
-  useEffect(() => {
-    if (selectedRack) {
-      fetchRackDevices(selectedRack.id);
-    } else {
-      setRackDevices([]);
+  const positions = useMemo(() => computeRoomRackPositions(racks, roomWidth, roomDepth), [racks, roomDepth, roomWidth]);
+
+  const draw = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ratio = Math.min(window.devicePixelRatio || 1, 1.5);
+    canvas.width = Math.round(canvasSize.width * ratio);
+    canvas.height = Math.round(canvasSize.height * ratio);
+    canvas.style.width = `${canvasSize.width}px`;
+    canvas.style.height = `${canvasSize.height}px`;
+    const context = canvas.getContext('2d');
+    if (!context) return;
+    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    context.clearRect(0, 0, canvasSize.width, canvasSize.height);
+    context.fillStyle = isDark ? '#07090d' : '#edf0f3';
+    context.fillRect(0, 0, canvasSize.width, canvasSize.height);
+
+    const grid = scale * SNAP_METERS;
+    context.strokeStyle = isDark ? 'rgba(148,163,184,.12)' : 'rgba(71,85,105,.13)';
+    context.lineWidth = 1;
+    for (let x = offset.x % grid; x < canvasSize.width; x += grid) { context.beginPath(); context.moveTo(x, 0); context.lineTo(x, canvasSize.height); context.stroke(); }
+    for (let y = offset.y % grid; y < canvasSize.height; y += grid) { context.beginPath(); context.moveTo(0, y); context.lineTo(canvasSize.width, y); context.stroke(); }
+
+    context.fillStyle = isDark ? '#11151c' : '#d8dde3';
+    context.strokeStyle = isDark ? '#475569' : '#94a3b8';
+    context.lineWidth = 2;
+    context.fillRect(offset.x, offset.y, roomWidth * scale, roomDepth * scale);
+    context.strokeRect(offset.x, offset.y, roomWidth * scale, roomDepth * scale);
+
+    racks.forEach((rack) => {
+      const position = positions.get(rack.id)!;
+      const size = footprint(rack);
+      const x = offset.x + position.x * scale;
+      const y = offset.y + position.z * scale;
+      const width = size.width * scale;
+      const depth = size.depth * scale;
+      const selected = rack.id === selectedRackId;
+      const capacity = calculateRackCapacity(rack.maxUnits, rack.devices || []);
+      const statusColor = rack.operationalStatus === 'OPERATIONAL' ? '#10b981' : rack.operationalStatus === 'MAINTENANCE' ? '#f59e0b' : '#64748b';
+
+      context.fillStyle = isDark ? '#1f2937' : '#334155';
+      context.strokeStyle = selected ? '#22c55e' : statusColor;
+      context.lineWidth = selected ? 3 : 2;
+      context.fillRect(x, y, width, depth);
+      context.strokeRect(x, y, width, depth);
+      context.fillStyle = statusColor;
+      context.fillRect(x + width - 8, y + 4, 4, 4);
+
+      const barWidth = Math.max(0, (width - 8) * capacity.utilization / 100);
+      context.fillStyle = capacity.utilization >= 85 ? '#dc2626' : capacity.utilization >= 65 ? '#d97706' : '#059669';
+      context.fillRect(x + 4, y + depth - 7, barWidth, 3);
+
+      context.fillStyle = '#ffffff';
+      context.font = '600 11px Inter, sans-serif';
+      context.textAlign = 'center';
+      context.textBaseline = 'middle';
+      context.fillText(rack.name.length > 14 ? `${rack.name.slice(0, 13)}…` : rack.name, x + width / 2, y + depth / 2 - 5, Math.max(20, width - 8));
+      context.font = '10px Inter, sans-serif';
+      context.fillStyle = '#cbd5e1';
+      context.fillText(`${capacity.usedUnits}/${capacity.totalUnits}U`, x + width / 2, y + depth / 2 + 9);
+
+      if (position.isAutoPositioned) {
+        context.fillStyle = '#fbbf24';
+        context.beginPath(); context.arc(x + 6, y + 6, 3, 0, Math.PI * 2); context.fill();
+      }
+    });
+
+    context.fillStyle = isDark ? '#cbd5e1' : '#475569';
+    context.font = '12px Inter, sans-serif';
+    context.textAlign = 'left';
+    context.fillText(`${roomWidth} m`, offset.x, offset.y - 10);
+  }, [canvasSize, isDark, offset, positions, racks, roomDepth, roomWidth, scale, selectedRackId]);
+
+  useEffect(() => { draw(); }, [draw]);
+
+  const pointer = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+  };
+
+  const hitRack = (point: Point) => [...racks].reverse().find((rack) => {
+    const position = positions.get(rack.id)!;
+    const size = footprint(rack);
+    const x = offset.x + position.x * scale;
+    const y = offset.y + position.z * scale;
+    return point.x >= x && point.x <= x + size.width * scale && point.y >= y && point.y <= y + size.depth * scale;
+  });
+
+  const onPointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const point = pointer(event);
+    const rack = hitRack(point);
+    if (rack) {
+      onRackClick?.(rack.id);
+      if (editMode) {
+        const position = positions.get(rack.id)!;
+        dragRef.current = { rackId: rack.id, startPointer: point, startPosition: { x: position.x, z: position.z } };
+        event.currentTarget.setPointerCapture(event.pointerId);
+      }
+      return;
     }
-  }, [selectedRack]);
+    if (!editMode) setPanning({ start: point, offset });
+  };
 
-  const fetchRackDevices = async (rackId: string) => {
-    setLoadingDevices(true);
+  const onPointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const point = pointer(event);
+    if (dragRef.current) {
+      const drag = dragRef.current;
+      const rack = racks.find((item) => item.id === drag.rackId)!;
+      const size = footprint(rack);
+      const rawX = drag.startPosition.x + (point.x - drag.startPointer.x) / scale;
+      const rawZ = drag.startPosition.z + (point.y - drag.startPointer.y) / scale;
+      const x = Math.max(0, Math.min(roomWidth - size.width, Math.round(rawX / SNAP_METERS) * SNAP_METERS));
+      const z = Math.max(0, Math.min(roomDepth - size.depth, Math.round(rawZ / SNAP_METERS) * SNAP_METERS));
+      const candidate = { x, z, width: size.width, depth: size.depth };
+      const collision = racks.some((other) => {
+        if (other.id === rack.id) return false;
+        const otherPosition = positions.get(other.id)!;
+        const otherSize = footprint(other);
+        return overlaps(candidate, { x: otherPosition.x, z: otherPosition.z, width: otherSize.width, depth: otherSize.depth });
+      });
+      if (!collision) setRacks((current) => current.map((item) => item.id === rack.id ? { ...item, coordX: x, coordZ: z } : item));
+    } else if (panning) {
+      setOffset({ x: panning.offset.x + point.x - panning.start.x, y: panning.offset.y + point.y - panning.start.y });
+    }
+  };
+
+  const onPointerUp = async (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const drag = dragRef.current;
+    dragRef.current = null;
+    setPanning(null);
+    if (!drag) return;
+    event.currentTarget.releasePointerCapture(event.pointerId);
+    const rack = racks.find((item) => item.id === drag.rackId);
+    if (!rack || (rack.coordX === drag.startPosition.x && rack.coordZ === drag.startPosition.z)) return;
+    setSavingRackId(rack.id);
     try {
-      const response = await fetch(`/api/racks/${rackId}/devices`);
-      if (response.ok) {
-        const devices = await response.json();
-        setRackDevices(devices);
-      }
-    } catch (error) {
-      console.error('Failed to fetch rack devices:', error);
-    } finally {
-      setLoadingDevices(false);
-    }
-  };
-
-  // Stock cabinet image URLs (we'll use colored rectangles for now, can be replaced with real images)
-  const getCabinetColor = (type: string) => {
-    switch (type) {
-      case 'RACK_42U': return '#3b82f6'; // Theme Primary
-      case 'RACK_45U': return '#60a5fa'; // Theme Primary Lighter
-      case 'CUSTOM': return '#a855f7'; // Theme Purple
-      default: return '#6b7280'; // Muted foreground
-    }
-  };
-
-  const drawFloorPlan = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    // Clear canvas
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Background color - light gray
-    ctx.fillStyle = '#f3f4f6';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Draw grid floor pattern
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.05)';
-    ctx.lineWidth = 1;
-    
-    const gridSize = scale;
-    const startX = offset.x % gridSize;
-    const startY = offset.y % gridSize;
-    
-    // Vertical lines
-    for (let x = startX; x < canvas.width; x += gridSize) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, canvas.height);
-      ctx.stroke();
-    }
-    
-    // Horizontal lines
-    for (let y = startY; y < canvas.height; y += gridSize) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(canvas.width, y);
-      ctx.stroke();
-    }
-
-    // Draw room boundary with glow effect
-    const roomPixelWidth = roomWidth * scale;
-    const roomPixelDepth = roomDepth * scale;
-    
-    // Glow effect
-    ctx.shadowColor = '#3b82f6';
-    ctx.shadowBlur = 15;
-    ctx.strokeStyle = '#3b82f6';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(offset.x, offset.y, roomPixelWidth, roomPixelDepth);
-    ctx.shadowBlur = 0;
-
-    // Draw racks with 3D isometric effect
-    if (room.racks) {
-      const rackPositions = computeRackPositions(room.racks, roomWidth, roomDepth);
-      room.racks.forEach((rack) => {
-        const pos = rackPositions.get(rack.id) || { x: 0, z: 0 };
-        const x = offset.x + pos.x * scale;
-        const y = offset.y + pos.z * scale;
-        const rackWidth = 1.2 * scale;  // Increased from 0.6 to 1.2 (double size)
-        const rackDepth = 2.0 * scale;  // Increased from 1.0 to 2.0 (double size)
-        const rotation = (rack.rotation || 0) * (Math.PI / 180);
-
-        ctx.save();
-        ctx.translate(x + rackWidth / 2, y + rackDepth / 2);
-        ctx.rotate(rotation);
-
-        const isSelected = selectedRack?.id === rack.id;
-        const isHovered = hoveredRack === rack.id;
-
-        // Draw 3D rack perspective
-        // Back face (darker)
-        ctx.fillStyle = 'rgba(10, 10, 30, 0.8)';
-        ctx.fillRect(-rackWidth / 2 + 4, -rackDepth / 2 + 4, rackWidth - 8, rackDepth - 8);
-
-        // Main rack body with gradient
-        const rackGradient = ctx.createLinearGradient(-rackWidth / 2, -rackDepth / 2, -rackWidth / 2, rackDepth / 2);
-        const baseColor = getCabinetColor(rack.type);
-        rackGradient.addColorStop(0, baseColor);
-        rackGradient.addColorStop(1, '#000033');
-        ctx.fillStyle = rackGradient;
-        ctx.fillRect(-rackWidth / 2, -rackDepth / 2, rackWidth, rackDepth);
-
-        // Server rack front panel (multiple server slots)
-        const slotCount = Math.min(rack.maxUnits || 42, 10);
-        const slotHeight = (rackDepth - 10) / slotCount;
-        
-        for (let i = 0; i < slotCount; i++) {
-          const slotY = -rackDepth / 2 + 5 + i * slotHeight;
-          
-          // Slot background
-          ctx.fillStyle = i % 2 === 0 ? 'rgba(30, 64, 175, 0.3)' : 'rgba(20, 50, 150, 0.2)';
-          ctx.fillRect(-rackWidth / 2 + 3, slotY, rackWidth - 6, slotHeight - 1);
-          
-          // LED indicators
-          ctx.fillStyle = Math.random() > 0.3 ? '#10b981' : '#ef4444';
-          ctx.fillRect(-rackWidth / 2 + 6, slotY + 2, 3, 3);
-          ctx.fillRect(-rackWidth / 2 + 11, slotY + 2, 3, 3);
-        }
-
-        // Rack border with glow on hover/select
-        if (isSelected || isHovered) {
-          ctx.shadowColor = isSelected ? '#fbbf24' : '#60a5fa';
-          ctx.shadowBlur = 15;
-        }
-        ctx.strokeStyle = isSelected ? '#fbbf24' : isHovered ? '#60a5fa' : '#1e40af';
-        ctx.lineWidth = isSelected ? 4 : isHovered ? 3 : 2;
-        ctx.strokeRect(-rackWidth / 2, -rackDepth / 2, rackWidth, rackDepth);
-        ctx.shadowBlur = 0;
-
-        // Text should always be readable (counter-rotate if rack is upside down)
-        // Check if rotation is close to 180 degrees (between 135 and 225 degrees)
-        const rotationDegrees = (rack.rotation || 0);
-        const normalizedRotation = ((rotationDegrees % 360) + 360) % 360;
-        const needsFlip = normalizedRotation > 90 && normalizedRotation < 270;
-        
-        if (needsFlip) {
-          // Counter-rotate text to keep it readable
-          ctx.save();
-          ctx.rotate(Math.PI);
-        }
-
-        // Rack label with background
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
-        ctx.fillRect(-rackWidth / 2, -rackDepth / 2 - 20, rackWidth, 18);
-        
-        ctx.fillStyle = '#ffffff';
-        ctx.font = `bold ${Math.max(12, scale / 8)}px Arial`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(rack.name, 0, -rackDepth / 2 - 11);
-        
-        // Unit count badge
-        ctx.fillStyle = '#3b82f6';
-        ctx.fillRect(-rackWidth / 2, rackDepth / 2, rackWidth, 15);
-        ctx.fillStyle = '#ffffff';
-        ctx.font = `bold ${Math.max(10, scale / 10)}px Arial`;
-        ctx.fillText(`${rack.maxUnits}U`, 0, rackDepth / 2 + 7);
-
-        if (needsFlip) {
-          ctx.restore();
-        }
-
-        ctx.restore();
-      });
-    }
-
-    // Draw data center info overlay
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-    ctx.fillRect(10, 10, 200, 80);
-    ctx.strokeStyle = '#3b82f6';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(10, 10, 200, 80);
-    
-    ctx.fillStyle = '#1f2937';
-    ctx.font = 'bold 14px Arial';
-    ctx.fillText(`${room.name}`, 110, 30);
-    ctx.font = '12px Arial';
-    ctx.fillStyle = '#3b82f6';
-    ctx.fillText(`Boyut: ${roomWidth}m x ${roomDepth}m`, 110, 50);
-    ctx.fillText(`Kabinet: ${room.racks?.length || 0}`, 110, 70);
-
-    // Draw scale indicator with modern style
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-    ctx.fillRect(20, canvas.height - 50, scale + 40, 30);
-    ctx.strokeStyle = '#3b82f6';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(20, canvas.height - 50, scale + 40, 30);
-    
-    ctx.fillStyle = '#3b82f6';
-    ctx.fillRect(30, canvas.height - 35, scale, 4);
-    ctx.fillStyle = '#1f2937';
-    ctx.font = '12px Arial';
-    ctx.textAlign = 'center';
-    ctx.fillText('1 metre', 30 + scale / 2, canvas.height - 23);
+      const response = await fetch(`/api/racks/${rack.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ coordX: rack.coordX, coordZ: rack.coordZ, rotation: rack.rotation || 0 }) });
+      const body = await response.json();
+      if (!response.ok || body.success === false) throw new Error(body.error || 'Kabinet konumu kaydedilemedi');
+      await onUpdate?.();
+    } catch (saveError) {
+      setRacks((current) => current.map((item) => item.id === drag.rackId ? { ...item, coordX: drag.startPosition.x, coordZ: drag.startPosition.z } : item));
+      toast({ title: 'Konum kaydedilemedi', description: saveError instanceof Error ? saveError.message : 'Kabinet eski konumuna alındı.', variant: 'destructive' });
+    } finally { setSavingRackId(null); }
   };
 
   useEffect(() => {
-    drawFloorPlan();
-  }, [room, scale, offset, selectedRack, hoveredRack]);
-
-  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
-
-    // Check if clicked on a rack
-    let clickedRack: Rack | null = null;
-    if (room.racks && editMode) {
-      const rackPositions = computeRackPositions(room.racks, roomWidth, roomDepth);
-      for (const rack of room.racks) {
-        const pos = rackPositions.get(rack.id) || { x: 0, z: 0 };
-        const x = offset.x + pos.x * scale;
-        const y = offset.y + pos.z * scale;
-        const width = 1.2 * scale;  // Updated to match new size
-        const depth = 2.0 * scale;  // Updated to match new size
-
-        if (mouseX >= x && mouseX <= x + width && mouseY >= y && mouseY <= y + depth) {
-          clickedRack = rack;
-          break;
-        }
-      }
-    }
-
-    if (clickedRack && editMode) {
-      setSelectedRack(clickedRack);
-      setIsDraggingRack(true);
-      const clickedPos = computeRackPositions(room.racks || [], roomWidth, roomDepth).get(clickedRack.id) || { x: 0, z: 0 };
-      setDragStart({ 
-        x: mouseX - (offset.x + clickedPos.x * scale), 
-        y: mouseY - (offset.y + clickedPos.z * scale) 
-      });
-    } else {
-      setIsDragging(true);
-      setDragStart({ x: mouseX - offset.x, y: mouseY - offset.y });
-    }
-  };
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
-
-    if (isDraggingRack && selectedRack && editMode) {
-      // Drag rack - update position in real-time
-      const newX = (mouseX - dragStart.x - offset.x) / scale;
-      const newZ = (mouseY - dragStart.y - offset.y) / scale;
-      
-      // Update the rack temporarily for visual feedback
-      if (room.racks) {
-        const rackIndex = room.racks.findIndex(r => r.id === selectedRack.id);
-        if (rackIndex !== -1) {
-          room.racks[rackIndex].coordX = Math.max(0, Math.min(roomWidth - 1.2, newX));  // Updated bounds
-          room.racks[rackIndex].coordZ = Math.max(0, Math.min(roomDepth - 2.0, newZ));  // Updated bounds
-          drawFloorPlan();
-        }
-      }
-    } else if (isDragging) {
-      setOffset({
-        x: mouseX - dragStart.x,
-        y: mouseY - dragStart.y
-      });
-    } else {
-      // Check hover
-      let hovered: string | null = null;
-      if (room.racks) {
-        const rackPositions = computeRackPositions(room.racks, roomWidth, roomDepth);
-        for (const rack of room.racks) {
-          const pos = rackPositions.get(rack.id) || { x: 0, z: 0 };
-          const x = offset.x + pos.x * scale;
-          const y = offset.y + pos.z * scale;
-          const width = 1.2 * scale;  // Updated to match new size
-          const depth = 2.0 * scale;  // Updated to match new size
-
-          if (mouseX >= x && mouseX <= x + width && mouseY >= y && mouseY <= y + depth) {
-            hovered = rack.id;
-            break;
-          }
-        }
-      }
-      setHoveredRack(hovered);
-    }
-  };
-
-  const handleMouseUp = async () => {
-    if (isDraggingRack && selectedRack && editMode) {
-      // Save rack position to database
-      await saveRackPosition(selectedRack);
-    }
-    setIsDragging(false);
-    setIsDraggingRack(false);
-  };
-
-  const saveRackPosition = async (rack: Rack) => {
-    setSaving(true);
-    try {
-      const response = await fetch(`/api/racks/${rack.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          coordX: rack.coordX,
-          coordZ: rack.coordZ,
-          rotation: rack.rotation
-        })
-      });
-      if (response.ok && onUpdate) {
-        onUpdate();
-      }
-    } catch (error) {
-      console.error('Failed to save rack position:', error);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const rotateSelectedRack = async (degrees: number) => {
-    if (!selectedRack) return;
-    const newRotation = ((selectedRack.rotation || 0) + degrees) % 360;
-    selectedRack.rotation = newRotation;
-    drawFloorPlan();
-    await saveRackPosition(selectedRack);
-  };
-
-  // Handle wheel events with non-passive listener to prevent browser warnings
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const handleWheelNative = (e: WheelEvent) => {
-      e.preventDefault();
-      const delta = e.deltaY > 0 ? -5 : 5;
-      setScale(prev => Math.max(20, Math.min(150, prev + delta)));
-    };
-
-    canvas.addEventListener('wheel', handleWheelNative, { passive: false });
-    return () => {
-      canvas.removeEventListener('wheel', handleWheelNative);
-    };
+    const wheel = (event: WheelEvent) => { event.preventDefault(); setScale((current) => Math.max(15, Math.min(160, current + (event.deltaY > 0 ? -5 : 5)))); };
+    canvas.addEventListener('wheel', wheel, { passive: false });
+    return () => canvas.removeEventListener('wheel', wheel);
   }, []);
 
   return (
-    <div ref={containerRef} className="w-full h-full bg-gray-50 relative overflow-hidden">
-      {/* Edit Mode Indicator */}
-      {editMode && (
-        <div className="absolute top-4 left-4 z-20 bg-primary/10 backdrop-blur-md px-4 py-2 rounded-lg border border-primary/20 shadow-xl">
-          <div className="flex items-center gap-2">
-            <span className="text-xl">✏️</span>
-            <span className="text-primary font-bold text-sm">Düzenleme Modu</span>
-          </div>
-        </div>
-      )}
-
-      {/* Saving Indicator */}
-      {saving && (
-        <div className="absolute top-20 left-4 z-20 bg-primary/20 backdrop-blur-md px-4 py-2 rounded-lg border border-primary/30 shadow-xl">
-          <div className="flex items-center gap-2">
-            <Loader2 className="h-4 w-4 animate-spin text-primary" />
-            <span className="text-foreground font-bold text-sm">Kaydediliyor...</span>
-          </div>
-        </div>
-      )}
-
-      {/* Header Info Overlay */}
-      <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 bg-card/80 backdrop-blur-md px-6 py-3 rounded-full border border-border shadow-2xl flex items-center gap-6">
-        <div className="flex items-center gap-2">
-          <span className="text-primary">📐</span>
-          <span className="text-sm font-medium">{roomWidth}m × {roomDepth}m</span>
-        </div>
-        <div className="w-px h-4 bg-border" />
-        <div className="flex items-center gap-2">
-          <span className="text-primary">🖥️</span>
-          <span className="text-sm font-medium">{room.racks?.length || 0} Kabinet</span>
-        </div>
+    <div ref={containerRef} className="relative h-full w-full overflow-hidden bg-background">
+      <div className="absolute right-3 top-3 z-20 flex flex-col gap-1 rounded-md border border-border bg-background/90 p-1 shadow-sm backdrop-blur">
+        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setScale((value) => Math.min(160, value + 10))} aria-label="Planı yakınlaştır"><Plus className="h-4 w-4" /></Button>
+        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setScale((value) => Math.max(15, value - 10))} aria-label="Planı uzaklaştır"><Minus className="h-4 w-4" /></Button>
+        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={fitView} aria-label="Planı ekrana sığdır"><RefreshCw className="h-4 w-4" /></Button>
       </div>
-
-      {/* Controls */}
-      <div className="absolute top-4 right-4 z-10 flex flex-col gap-2">
-        <Button
-          variant="secondary"
-          size="icon"
-          onClick={() => setScale(prev => Math.min(150, prev + 10))}
-          className="rounded-lg shadow-lg"
-        >
-          <Plus className="h-4 w-4" />
-        </Button>
-        <Button
-          variant="secondary"
-          size="icon"
-          onClick={() => setScale(prev => Math.max(20, prev - 10))}
-          className="rounded-lg shadow-lg"
-        >
-          <X className="h-4 w-4 rotate-45" />
-        </Button>
-        <Button
-          variant="secondary"
-          size="icon"
-          onClick={() => {
-            const canvasWidth = containerRef.current?.clientWidth || 1200;
-            const canvasHeight = containerRef.current?.clientHeight || 600;
-            const scaleX = (canvasWidth * 0.8) / roomWidth;
-            const scaleY = (canvasHeight * 0.8) / roomDepth;
-            const newScale = Math.min(scaleX, scaleY);
-            const newOffsetX = (canvasWidth - roomWidth * newScale) / 2;
-            const newOffsetY = (canvasHeight - roomDepth * newScale) / 2;
-            setScale(newScale);
-            setOffset({ x: newOffsetX, y: newOffsetY });
-          }}
-          className="rounded-lg shadow-lg"
-        >
-          <RotateCcw className="h-4 w-4" />
-        </Button>
-      </div>
-
-      {/* Canvas */}
-      <canvas
-        ref={canvasRef}
-        width={canvasSize.width}
-        height={canvasSize.height}
-        className={`w-full h-full ${isDraggingRack && editMode ? 'cursor-grabbing' : isDragging ? 'cursor-move' : hoveredRack && editMode ? 'cursor-grab' : 'cursor-default'}`}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
-      />
-
-      {/* Rack Details Panel with Shadcn UI */}
-      {selectedRack && (
-        <Card className="absolute bottom-4 right-4 w-96 z-20 bg-card/95 backdrop-blur-md border-border shadow-2xl">
-          <CardHeader className="pb-3">
-            <div className="flex items-start justify-between">
-              <div className="space-y-1">
-                <CardTitle className="text-lg">{selectedRack.name}</CardTitle>
-                <CardDescription className="flex items-center gap-2 flex-wrap">
-                  <Badge variant="outline" className="text-xs">
-                    {selectedRack.type}
-                  </Badge>
-                  <Badge variant="secondary" className="text-xs">
-                    {selectedRack.maxUnits}U
-                  </Badge>
-                </CardDescription>
-              </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6 -mt-2 -mr-2"
-                onClick={() => setSelectedRack(null)}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-          </CardHeader>
-
-          <CardContent className="space-y-4">
-            {/* Position Info */}
-            <div className="space-y-2">
-              <div className="flex justify-between items-center py-1.5">
-                <span className="text-sm text-muted-foreground">Pozisyon X:</span>
-                <span className="text-sm font-mono font-medium">
-                  {selectedRack.coordX?.toFixed(1) || '0.0'}m
-                </span>
-              </div>
-              <div className="flex justify-between items-center py-1.5">
-                <span className="text-sm text-muted-foreground">Pozisyon Z:</span>
-                <span className="text-sm font-mono font-medium">
-                  {selectedRack.coordZ?.toFixed(1) || '0.0'}m
-                </span>
-              </div>
-              {selectedRack.rotation !== null && selectedRack.rotation !== 0 && (
-                <div className="flex justify-between items-center py-1.5">
-                  <span className="text-sm text-muted-foreground">Dönüş:</span>
-                  <Badge variant="secondary" className="text-xs">
-                    {selectedRack.rotation}°
-                  </Badge>
-                </div>
-              )}
-            </div>
-
-            {/* Devices List */}
-            <div className="space-y-3 pt-3 border-t">
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm font-semibold flex items-center gap-2">
-                  🖥️ Cihazlar
-                  <Badge variant="outline" className="text-xs">
-                    {rackDevices.length}
-                  </Badge>
-                </h4>
-                {loadingDevices && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
-              </div>
-
-              {rackDevices.length > 0 ? (
-                <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-                  {rackDevices.map((device) => (
-                    <Card key={device.id} className="p-3 hover:border-primary/50 transition-colors">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            {getVendorLogo(device.vendor) && (
-                              <img 
-                                src={getVendorLogo(device.vendor)!} 
-                                alt={device.vendor} 
-                                className="h-5 w-5 object-contain"
-                              />
-                            )}
-                            <p className="text-sm font-medium truncate">{device.name}</p>
-                          </div>
-                          <p className="text-xs text-muted-foreground mt-1">{device.type}</p>
-                        </div>
-                        <div className="flex flex-col items-end gap-1.5">
-                          <Badge
-                            variant={
-                              device.status === 'ACTIVE'
-                                ? 'success'
-                                : device.status === 'INACTIVE'
-                                ? 'outline'
-                                : device.status === 'MAINTENANCE'
-                                ? 'warning'
-                                : 'destructive'
-                            }
-                            className="text-xs"
-                          >
-                            {device.status === 'ACTIVE' ? 'Aktif' :
-                             device.status === 'INACTIVE' ? 'Pasif' :
-                             device.status === 'MAINTENANCE' ? 'Bakım' : 'Hata'}
-                          </Badge>
-                          {device.rackUnit && (
-                            <span className="text-xs text-muted-foreground font-mono">
-                              {device.rackUnit}U
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      {device.ipAddress && (
-                        <p className="text-xs text-muted-foreground font-mono mt-2">
-                          {device.ipAddress}
-                        </p>
-                      )}
-                    </Card>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground italic text-center py-4">
-                  Cihaz bulunamadı
-                </p>
-              )}
-            </div>
-
-            {/* Rotation Controls */}
-            {editMode && (
-              <div className="space-y-3 pt-3 border-t">
-                <h4 className="text-sm font-semibold">Döndürme</h4>
-                <div className="grid grid-cols-4 gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => rotateSelectedRack(-90)}
-                    title="90° sola döndür"
-                    className="h-9"
-                  >
-                    <RotateCcw className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => rotateSelectedRack(-45)}
-                    title="45° sola döndür"
-                    className="h-9 text-xs"
-                  >
-                    ↺ 45°
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => rotateSelectedRack(45)}
-                    title="45° sağa döndür"
-                    className="h-9 text-xs"
-                  >
-                    ↻ 45°
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => rotateSelectedRack(90)}
-                    title="90° sağa döndür"
-                    className="h-9"
-                  >
-                    <RotateCw className="h-4 w-4" />
-                  </Button>
-                </div>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => rotateSelectedRack(180)}
-                  title="180° döndür"
-                  className="w-full"
-                >
-                  <FlipVertical2 className="h-4 w-4 mr-2" />
-                  180° Çevir
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Help Text with Shadcn Card */}
-      <Card className="absolute bottom-4 left-4 z-10 bg-card/80 backdrop-blur-md border-border">
-        <CardContent className="p-3">
-          <p className="text-sm text-muted-foreground">
-            {editMode ? (
-              <>
-                <span className="font-semibold text-primary">✏️ Sürükle:</span> Kabineti taşı | 
-                <span className="font-semibold text-primary ml-2">🔄 Fare Tekerleği:</span> Yakınlaştır/Uzaklaştır
-              </>
-            ) : (
-              <>
-                <span className="font-semibold text-primary">🔄 Fare Tekerleği:</span> Yakınlaştır/Uzaklaştır | 
-                <span className="font-semibold text-primary ml-2">👆 Sürükle:</span> Hareket ettir
-              </>
-            )}
-          </p>
-        </CardContent>
-      </Card>
+      {editMode && <div className="absolute bottom-3 left-3 z-20 rounded-md border border-primary/30 bg-background/90 px-3 py-2 text-xs font-medium text-primary shadow-sm backdrop-blur">Yerleşim düzenleme açık · 25 cm grid</div>}
+      {savingRackId && <div className="absolute left-3 top-3 z-20 flex items-center gap-2 rounded-md border border-border bg-background/90 px-3 py-2 text-xs shadow-sm"><RefreshCw className="h-3.5 w-3.5 animate-spin" />Kaydediliyor</div>}
+      <canvas ref={canvasRef} className={editMode ? 'touch-none cursor-crosshair' : 'touch-none cursor-grab active:cursor-grabbing'} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp} role="img" aria-label={`${room.name} iki boyutlu kabinet yerleşim planı`} />
     </div>
   );
 }

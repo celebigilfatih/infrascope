@@ -36,8 +36,10 @@ export async function GET(request: NextRequest) {
     const to = params.get('to');
 
     const where: Prisma.AlarmIncidentWhereInput = {};
+    const overviewWhere: Prisma.AlarmIncidentWhereInput = {};
     if (archiveState !== 'all' && Object.values(AlarmArchiveState).includes(archiveState as AlarmArchiveState)) {
       where.archiveState = archiveState as AlarmArchiveState;
+      overviewWhere.archiveState = archiveState as AlarmArchiveState;
     }
     if (statuses.length > 0) {
       const valid = statuses.filter((status): status is AlarmIncidentStatus =>
@@ -83,7 +85,7 @@ export async function GET(request: NextRequest) {
       ];
     }
 
-    const [rows, total, statusStats, severityStats, sourceStats] = await Promise.all([
+    const [rows, total, statusStats, severityStats, sourceStats, overviewStatusStats, overviewSeverityStats] = await Promise.all([
       prisma.alarmIncident.findMany({
         where,
         orderBy: [{ lastSeenAt: 'desc' }, { id: 'desc' }],
@@ -98,6 +100,8 @@ export async function GET(request: NextRequest) {
       prisma.alarmIncident.groupBy({ by: ['status'], where: baseWhere, _count: { id: true } }),
       prisma.alarmIncident.groupBy({ by: ['severity'], where: baseWhere, _count: { id: true } }),
       prisma.alarmIncident.groupBy({ by: ['source'], where: baseWhere, _count: { id: true } }),
+      prisma.alarmIncident.groupBy({ by: ['status'], where: overviewWhere, _count: { id: true } }),
+      prisma.alarmIncident.groupBy({ by: ['severity'], where: overviewWhere, _count: { id: true } }),
     ]);
 
     const hasMore = rows.length > limit;
@@ -113,6 +117,10 @@ export async function GET(request: NextRequest) {
         status: Object.fromEntries(statusStats.map((item) => [item.status, item._count.id])),
         severity: Object.fromEntries(severityStats.map((item) => [item.severity, item._count.id])),
         source: Object.fromEntries(sourceStats.map((item) => [item.source, item._count.id])),
+      },
+      overview: {
+        status: Object.fromEntries(overviewStatusStats.map((item) => [item.status, item._count.id])),
+        severity: Object.fromEntries(overviewSeverityStats.map((item) => [item.severity, item._count.id])),
       },
     }, { headers: { 'Cache-Control': 'no-store, max-age=0' } });
   } catch (error) {

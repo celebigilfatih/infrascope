@@ -1,13 +1,9 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table';
 import {
   Dialog,
   DialogContent,
@@ -21,6 +17,16 @@ import {
   Search, Play, Shield, Bell, Trash2, BarChart3, Eye, User, Router, Monitor,
   ChevronDown, ChevronRight, Code2, MapPin, Globe, Archive, CircleCheckBig, Download, LockKeyhole,
 } from 'lucide-react';
+import {
+  IncidentFilters,
+  IncidentList,
+  IncidentOverview,
+  type IncidentArchiveFilter,
+  type IncidentListItem,
+  type IncidentSourceFilter,
+  type IncidentStatusFilter,
+} from '@/components/dashboard/IncidentOperations';
+import { cn } from '@/lib/utils';
 
 interface AlarmEventData {
   id: string;
@@ -83,31 +89,6 @@ const CATEGORY_EMOJI: Record<string, string> = {
   OPERATIONAL: '⚙️',
   SOC_CORRELATION: '🔍',
 };
-
-type SourceType = 'all' | 'firewall' | 'switch' | 'vmware';
-
-const SOURCE_CONFIG: Record<SourceType, { label: string; color: string; bgActive: string; icon: typeof Shield }> = {
-  all:      { label: 'Tümü',    color: 'text-foreground',  bgActive: 'bg-slate-700',    icon: Shield   },
-  firewall: { label: 'Firewall', color: 'text-orange-500', bgActive: 'bg-orange-600',   icon: Shield   },
-  switch:   { label: 'Switch',   color: 'text-blue-500',   bgActive: 'bg-blue-600',     icon: Router   },
-  vmware:   { label: 'VMware',   color: 'text-purple-500', bgActive: 'bg-purple-600',   icon: Monitor  },
-};
-
-function getAlarmSource(alarm?: { code: string; source?: string }): 'firewall' | 'switch' | 'vmware' {
-  // Prefer explicit source from alarm definition
-  if (alarm?.source === 'vmware') return 'vmware';
-  if (alarm?.source === 'fortigate-sslvpn' || alarm?.source === 'fortianalyzer') return 'firewall';
-  // Fall back to code-prefix matching
-  const c = (alarm?.code || '').toUpperCase();
-  if (c.startsWith('VM_') || c.startsWith('SNAPSHOT_') || c === 'MULTIPLE_SNAPSHOTS') return 'vmware';
-  if (
-    c.startsWith('NMS_') ||
-    c.startsWith('SNMP_') ||
-    c.startsWith('PORT_') ||
-    c.startsWith('DEVICE_')
-  ) return 'switch';
-  return 'firewall';
-}
 
 // Config change alarm codes that should show structured change details
 const CONFIG_CHANGE_CODES = new Set([
@@ -331,14 +312,17 @@ export default function AlertsDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
   const [refreshing, setRefreshing] = useState(false); // silent background refresh
-  const [filter, setFilter] = useState('all');
-  const [sourceFilter, setSourceFilter] = useState<SourceType>('all');
+  const [statusFilter, setStatusFilter] = useState<IncidentStatusFilter>('ACTIVE');
+  const [severityFilter, setSeverityFilter] = useState('all');
+  const [sourceFilter, setSourceFilter] = useState<IncidentSourceFilter>('all');
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [archiveFilter, setArchiveFilter] = useState<'HOT' | 'ARCHIVED'>('HOT');
-  const [sourceStats, setSourceStats] = useState<Record<string, number>>({});
+  const [archiveFilter, setArchiveFilter] = useState<IncidentArchiveFilter>('HOT');
+  const [statusStats, setStatusStats] = useState<Record<string, number>>({});
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const [rawLogExpanded, setRawLogExpanded] = useState(false);
 
@@ -384,29 +368,37 @@ export default function AlertsDashboardPage() {
   const PAGE_SIZE = 25;
 
   useEffect(() => {
-    const requestedFilter = new URLSearchParams(window.location.search).get('filter');
-    const allowedFilters = new Set([
-      'all', 'unacknowledged', 'ACKNOWLEDGED', 'RESOLVED', 'CLOSED',
-      'ALARM_CRITICAL', 'ALARM_HIGH', 'ALARM_MEDIUM', 'ALARM_LOW',
-    ]);
-    if (requestedFilter && allowedFilters.has(requestedFilter)) {
-      setFilter(requestedFilter);
-    }
+    const params = new URLSearchParams(window.location.search);
+    const requestedFilter = params.get('filter');
+    const requestedStatus = params.get('status');
+    const requestedSearch = params.get('search');
+    if (requestedStatus === 'OPEN,ACKNOWLEDGED') setStatusFilter('ACTIVE');
+    else if (requestedStatus && ['OPEN', 'ACKNOWLEDGED', 'RESOLVED', 'CLOSED'].includes(requestedStatus)) setStatusFilter(requestedStatus as IncidentStatusFilter);
+    else if (requestedFilter === 'unacknowledged') setStatusFilter('OPEN');
+    else if (requestedFilter && ['ACKNOWLEDGED', 'RESOLVED', 'CLOSED'].includes(requestedFilter)) setStatusFilter(requestedFilter as IncidentStatusFilter);
+    else if (requestedFilter?.startsWith('ALARM_')) setSeverityFilter(requestedFilter);
+    if (requestedSearch) setSearch(requestedSearch);
   }, []);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => window.clearTimeout(timeout);
+  }, [search]);
 
   const fetchEvents = useCallback(async (silent = false, appendCursor: string | null = null) => {
     const isAppend = Boolean(appendCursor);
     if (isAppend) setLoadingMore(true);
     else if (!silent) setLoading(true);
     else setRefreshing(true);
+    setFetchError(null);
     try {
       const params = new URLSearchParams({ limit: PAGE_SIZE.toString(), archiveState: archiveFilter });
       if (appendCursor) params.set('cursor', appendCursor);
-      if (filter === 'unacknowledged') params.set('status', 'OPEN');
-      else if (['ACKNOWLEDGED', 'RESOLVED', 'CLOSED'].includes(filter)) params.set('status', filter);
-      else if (filter !== 'all') params.set('severity', filter);
+      if (statusFilter === 'ACTIVE') params.set('status', 'OPEN,ACKNOWLEDGED');
+      else params.set('status', statusFilter);
+      if (severityFilter !== 'all') params.set('severity', severityFilter);
       if (sourceFilter !== 'all') params.set('source', sourceFilter);
-      if (search) params.set('search', search);
+      if (debouncedSearch) params.set('search', debouncedSearch);
 
       const res = await fetch(`/api/alarm-incidents?${params}`);
       const data = await res.json();
@@ -444,20 +436,23 @@ export default function AlertsDashboardPage() {
         } else {
           setEvents(newEvents);
         }
-        setStats(data.stats?.severity || {});
-        setSourceStats(data.stats?.source || {});
+        setStats(data.overview?.severity || data.stats?.severity || {});
+        setStatusStats(data.overview?.status || data.stats?.status || {});
         setTotal(data.total || 0);
         setNextCursor(data.nextCursor || null);
         setHasMore(Boolean(data.nextCursor));
+      } else {
+        setFetchError(data.error || 'Incident kayıtları alınamadı.');
       }
     } catch (err) {
       console.error('Fetch events error:', err);
+      setFetchError('Incident kayıtları alınamadı. Bağlantınızı kontrol edip tekrar deneyin.');
     } finally {
       if (isAppend) setLoadingMore(false);
       else if (!silent) setLoading(false);
       setRefreshing(false);
     }
-  }, [filter, sourceFilter, search, archiveFilter]);
+  }, [statusFilter, severityFilter, sourceFilter, debouncedSearch, archiveFilter]);
 
   useEffect(() => { fetchEvents(); }, [fetchEvents]);
 
@@ -479,7 +474,7 @@ export default function AlertsDashboardPage() {
   useEffect(() => {
     setNextCursor(null);
     setHasMore(true);
-  }, [filter, sourceFilter, search, archiveFilter]);
+  }, [statusFilter, severityFilter, sourceFilter, debouncedSearch, archiveFilter]);
 
   // Infinite scroll observer
   const loadMoreRef = useRef<HTMLDivElement>(null);
@@ -552,8 +547,17 @@ export default function AlertsDashboardPage() {
 
   // Auto-refresh events silently every 2 minutes (no loading spinner)
   useEffect(() => {
-    const interval = setInterval(() => fetchEvents(true), 120000);
-    return () => clearInterval(interval);
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === 'visible') fetchEvents(true);
+    }, 120000);
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') fetchEvents(true);
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, [fetchEvents]);
 
   // Reset all per-alarm enrichment state whenever the selected alarm changes.
@@ -853,352 +857,99 @@ export default function AlertsDashboardPage() {
 
   // Filtering is now server-side; events array is the filtered result
 
+  const openEventDetail = (event: AlarmEventData) => {
+    setSelectedEvent(event);
+    setRawLogExpanded(false);
+    setPolicyData(null);
+    setPolicyError(null);
+    setPolicySearch('');
+    setPolicyExpanded(false);
+    setDevicePortsData(null);
+    setDevicePortsError(null);
+    setPortData(null);
+    setPortError(null);
+    setAddressData(null);
+    setAddressError(null);
+    setAddressSearch('');
+    setAddressExpanded(false);
+    setDetailOpen(true);
+  };
+
+  const exportIncidents = () => {
+    const params = new URLSearchParams({ archiveState: archiveFilter });
+    if (statusFilter === 'ACTIVE') params.set('status', 'OPEN,ACKNOWLEDGED');
+    else params.set('status', statusFilter);
+    if (severityFilter !== 'all') params.set('severity', severityFilter);
+    if (sourceFilter !== 'all') params.set('source', sourceFilter);
+    window.location.href = `/api/alarm-incidents/export?${params}`;
+  };
+
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Alarm Merkezi</h1>
-          <p className="text-muted-foreground">Sistem uyarilari ve alarm yonetimi</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              fetchCleanupStats();
-              setCleanupStatsOpen(true);
-            }}
-          >
-            <BarChart3 className="h-4 w-4 mr-2" />
-            Retention Durumu
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setCleanupOpen(true)}
-          >
-            <Archive className="h-4 w-4 mr-2" />
-            Arşivle
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              const params = new URLSearchParams({ archiveState: archiveFilter });
-              if (filter === 'unacknowledged') params.set('status', 'OPEN');
-              else if (['ACKNOWLEDGED', 'RESOLVED', 'CLOSED'].includes(filter)) params.set('status', filter);
-              window.location.href = `/api/alarm-incidents/export?${params}`;
-            }}
-          >
-            <Download className="h-4 w-4 mr-2" />
-            CSV
-          </Button>
-          <Button variant="outline" onClick={runAlarmCheck} disabled={checking}>
-            {checking ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Play className="h-4 w-4 mr-2" />}
-            {checking ? 'Taraniyor...' : 'Alarm Tara'}
-          </Button>
-          <Button variant="outline" size="icon" onClick={() => fetchEvents()} disabled={loading || refreshing}>
-            <RefreshCw className={`h-4 w-4 ${loading || refreshing ? 'animate-spin' : ''}`} />
-          </Button>
-        </div>
-      </div>
-
-      {message && (
-        <div className={`p-3 rounded-lg flex items-center gap-2 text-sm ${message.type === 'success' ? 'bg-green-500/10 text-green-600' : 'bg-red-500/10 text-red-600'}`}>
-          {message.type === 'success' ? <CheckCircle className="h-4 w-4" /> : <AlertOctagon className="h-4 w-4" />}
-          {message.text}
-          <Button variant="ghost" size="sm" className="ml-auto h-6" onClick={() => setMessage(null)}>Kapat</Button>
-        </div>
-      )}
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        {(['ALARM_CRITICAL', 'ALARM_HIGH', 'ALARM_MEDIUM', 'ALARM_LOW'] as const).map((sev) => {
-          const cfg = SEVERITY_CONFIG[sev];
-          const Icon = cfg.icon;
-          const count = stats[sev] || 0;
-          return (
-            <Card key={sev}>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded-full ${cfg.bgColor}`}>
-                    <Icon className={`h-5 w-5 ${cfg.color}`} />
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">{cfg.label}</p>
-                    <p className="text-2xl font-bold">{count}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-
-      {/* Filter & Search */}
-      <div className="flex items-center gap-4 flex-wrap">
-        {/* Source category filter */}
-        <div className="flex gap-2">
-          {(['all', 'firewall', 'switch', 'vmware'] as SourceType[]).map((src) => {
-            const cfg = SOURCE_CONFIG[src];
-            const Icon = cfg.icon;
-            const count = src === 'all'
-              ? total
-              : src === 'firewall'
-                ? (sourceStats.fortianalyzer || 0) + (sourceStats['fortigate-sslvpn'] || 0)
-                : src === 'switch'
-                  ? sourceStats.nms || 0
-                  : sourceStats.vmware || 0;
-            return (
-              <Button
-                key={src}
-                size="sm"
-                variant={sourceFilter === src ? 'default' : 'outline'}
-                className={sourceFilter === src ? `${cfg.bgActive} text-white border-0` : ''}
-                onClick={() => { setSourceFilter(src); }}
-              >
-                <Icon className="h-3.5 w-3.5 mr-1.5" />
-                {cfg.label}
-                <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded-full ${
-                  sourceFilter === src ? 'bg-white/20' : 'bg-muted'
-                }`}>{count}</span>
-              </Button>
-            );
-          })}
-        </div>
-
-        {/* Severity filter */}
-        <div className="flex gap-2">
-          {[
-            { key: 'all', label: 'Tumu' },
-            { key: 'unacknowledged', label: 'Bekleyen' },
-            { key: 'ACKNOWLEDGED', label: 'Onaylandı' },
-            { key: 'RESOLVED', label: 'Çözüldü' },
-            { key: 'CLOSED', label: 'Kapatıldı' },
-            { key: 'ALARM_CRITICAL', label: 'Kritik' },
-            { key: 'ALARM_HIGH', label: 'Yuksek' },
-            { key: 'ALARM_MEDIUM', label: 'Orta' },
-            { key: 'ALARM_LOW', label: 'Dusuk' },
-          ].map((f) => (
-            <Button key={f.key} variant={filter === f.key ? 'default' : 'outline'} size="sm" onClick={() => { setFilter(f.key); }}>
-              {f.label}
+    <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto w-full max-w-[1600px] space-y-8">
+        <header className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase text-primary">InfraScope operasyon merkezi</p>
+            <h1 className="mt-1 text-2xl font-semibold tracking-normal sm:text-3xl">Alarm Operasyonları</h1>
+            <p className="mt-2 text-sm text-muted-foreground">Incident yaşam döngüsünü yönetin, öncelikli sorunları takip edin ve olay geçmişini koruyun.</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => { fetchCleanupStats(); setCleanupStatsOpen(true); }}>
+              <BarChart3 className="mr-2 h-4 w-4" aria-hidden="true" />Retention
             </Button>
-          ))}
-        </div>
+            <Button variant="outline" size="sm" onClick={() => setCleanupOpen(true)}>
+              <Archive className="mr-2 h-4 w-4" aria-hidden="true" />Arşivle
+            </Button>
+            <Button variant="outline" size="sm" onClick={exportIncidents}>
+              <Download className="mr-2 h-4 w-4" aria-hidden="true" />CSV
+            </Button>
+            <Button variant="outline" size="sm" onClick={runAlarmCheck} disabled={checking}>
+              {checking ? <RefreshCw className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Play className="mr-2 h-4 w-4" aria-hidden="true" />}
+              {checking ? 'Taranıyor' : 'Alarm tara'}
+            </Button>
+            <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => fetchEvents()} disabled={loading || refreshing} aria-label="Incident listesini yenile" title="Yenile">
+              <RefreshCw className={cn('h-4 w-4 motion-reduce:animate-none', (loading || refreshing) && 'animate-spin')} aria-hidden="true" />
+            </Button>
+          </div>
+        </header>
 
-        <div className="flex gap-2">
-          <Button size="sm" variant={archiveFilter === 'HOT' ? 'default' : 'outline'} onClick={() => setArchiveFilter('HOT')}>
-            Aktif kayıtlar
-          </Button>
-          <Button size="sm" variant={archiveFilter === 'ARCHIVED' ? 'default' : 'outline'} onClick={() => setArchiveFilter('ARCHIVED')}>
-            <Archive className="h-3.5 w-3.5 mr-1.5" /> Arşiv
-          </Button>
-        </div>
-
-        {/* Action buttons */}
-        {events.some((e: AlarmEventData) => !e.acknowledged) && (
-          <Button variant="outline" size="sm" onClick={acknowledgeAll}>
-            <CheckCircle className="h-4 w-4 mr-1" /> Tumunu Onayla
-          </Button>
-        )}
-
-        {/* Search - at the end */}
-        <div className="relative ml-auto max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Alarm ara..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
-        </div>
-      </div>
-
-      {/* Alarm Events Table */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2">
-            <Shield className="h-5 w-5" />
-            Alarm Olaylari
-            <Badge variant="secondary">{total}</Badge>
-          </CardTitle>
-          <CardDescription>{events.length} / {total} alarm gosteriliyor</CardDescription>
-        </CardHeader>
-        <CardContent className="p-0">
-          {loading ? (
-            <div className="flex justify-center py-12">
-              <RefreshCw className="h-8 w-8 animate-spin text-primary" />
-            </div>
-          ) : events.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <CheckCircle className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p className="text-lg font-medium">Alarm bulunamadi</p>
-              <p className="text-sm mt-1">Alarm taramasi baslatmak icin &quot;Alarm Tara&quot; butonuna tiklayin</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="whitespace-nowrap">Zaman</TableHead>
-                    <TableHead className="whitespace-nowrap">Kaynak</TableHead>
-                    <TableHead className="whitespace-nowrap">Alarm</TableHead>
-                    <TableHead className="whitespace-nowrap">Kategori</TableHead>
-                    <TableHead className="whitespace-nowrap">Seviye</TableHead>
-                    <TableHead className="whitespace-nowrap">Kaynak IP</TableHead>
-                    <TableHead className="whitespace-nowrap">Cihaz</TableHead>
-                    <TableHead className="whitespace-nowrap">Durum</TableHead>
-                    <TableHead className="whitespace-nowrap">Onaylayan</TableHead>
-                    <TableHead className="whitespace-nowrap">Bildirim</TableHead>
-                    <TableHead className="whitespace-nowrap"></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {events.map((event: AlarmEventData) => {
-                    const sev = SEVERITY_CONFIG[event.severity] || SEVERITY_CONFIG['ALARM_INFO'];
-                    const Icon = sev.icon;
-                    return (
-                      <TableRow key={event.id} className={event.incident?.status === 'CLOSED' ? 'opacity-60' : ''}>
-                        <TableCell className="text-xs whitespace-nowrap">
-                          <div className="flex items-center gap-1 text-muted-foreground">
-                            <Clock className="h-3 w-3" />
-                            {new Date(event.createdAt).toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' })}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          {(() => {
-                            const src = getAlarmSource(event.alarm);
-                            if (src === 'vmware') return <Badge variant="outline" className="text-xs text-purple-500 border-purple-500/40"><Monitor className="h-3 w-3 mr-1" />VMware</Badge>;
-                            if (src === 'switch') return <Badge variant="outline" className="text-xs text-blue-500 border-blue-500/40"><Router className="h-3 w-3 mr-1" />Switch</Badge>;
-                            return <Badge variant="outline" className="text-xs text-orange-500 border-orange-500/40"><Shield className="h-3 w-3 mr-1" />Firewall</Badge>;
-                          })()}
-                        </TableCell>
-                        <TableCell>
-                          <div className="max-w-md">
-                            <p className="font-medium text-sm truncate">{event.title}</p>
-                            <p className="text-xs text-muted-foreground font-mono">{event.alarm?.code}</p>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="text-xs">{CATEGORY_MAP[event.alarm?.category] || event.alarm?.category}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge className={`${sev.bgColor} ${sev.color} border-0 text-xs`}>
-                            <Icon className="h-3 w-3 mr-1" />
-                            {sev.label}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          {event.sourceIp ? (
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-mono font-medium ${
-                              event.sourceIp.startsWith('10.') || 
-                              event.sourceIp.startsWith('172.16.') || 
-                              event.sourceIp.startsWith('192.168.') ||
-                              event.sourceIp.startsWith('127.')
-                                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
-                                : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'
-                            }`} title={event.sourceIp}>
-                              <Globe className="h-3 w-3 mr-1 opacity-60" />
-                              {event.sourceIp.length > 12 ? event.sourceIp.slice(0, 12) + '...' : event.sourceIp}
-                            </span>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">-</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-xs max-w-[150px] truncate" title={event.deviceName || '-'}>{event.deviceName || '-'}</TableCell>
-                        <TableCell>
-                          {event.incident?.status === 'OPEN' && <Badge variant="destructive" className="text-xs">Bekliyor</Badge>}
-                          {event.incident?.status === 'ACKNOWLEDGED' && <Badge variant="outline" className="text-amber-600 text-xs">Onaylandı</Badge>}
-                          {event.incident?.status === 'RESOLVED' && <Badge variant="outline" className="text-green-600 text-xs"><CircleCheckBig className="h-3 w-3 mr-1" />Çözüldü</Badge>}
-                          {event.incident?.status === 'CLOSED' && <Badge variant="secondary" className="text-xs">Kapatıldı</Badge>}
-                          {!event.incident && <Badge variant="outline" className="text-xs">Eski kayıt</Badge>}
-                        </TableCell>
-                        <TableCell>
-                          {event.acknowledgedBy ? (
-                            <div className="flex items-center gap-1 text-xs">
-                              <User className="h-3 w-3 text-muted-foreground" />
-                              <span>{event.acknowledgedBy}</span>
-                            </div>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">-</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {event.notifiedAt ? (
-                            <Badge variant="outline" className="text-xs">Email</Badge>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">-</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1">
-                            {event.incident?.status === 'OPEN' && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-8 w-8 p-0"
-                                disabled={acknowledgingIds.has(event.incident.id)}
-                                onClick={() => acknowledgeEvent(event)}
-                                title="Onayla"
-                              >
-                                {acknowledgingIds.has(event.incident.id) ? (
-                                  <RefreshCw className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <CheckCircle className="h-4 w-4" />
-                                )}
-                              </Button>
-                            )}
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 w-8 p-0"
-                              onClick={() => {
-                                setSelectedEvent(event);
-                                setRawLogExpanded(false);
-                                setPolicyData(null);
-                                setPolicyError(null);
-                                setPolicySearch('');
-                                setPolicyExpanded(false);
-                                setDevicePortsData(null);
-                                setDevicePortsError(null);
-                                // Reset all per-alarm enrichment state to prevent
-                                // stale data leaking between different alarms.
-                                setPortData(null);
-                                setPortError(null);
-                                setAddressData(null);
-                                setAddressError(null);
-                                setAddressSearch('');
-                                setAddressExpanded(false);
-                                setDetailOpen(true);
-                              }}
-                              title="Detayları Göster"
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-        
-        {/* Infinite scroll sentinel */}
-        {events.length > 0 && (
-          <div className="flex items-center justify-center px-6 py-4 border-t">
-            <div ref={loadMoreRef} className="text-sm text-muted-foreground">
-              {loadingMore ? (
-                <span className="flex items-center gap-2">
-                  <RefreshCw className="h-4 w-4 animate-spin" />
-                  Yükleniyor...
-                </span>
-              ) : hasMore ? (
-                <span>{events.length} / {total} kayit — daha fazla icin kaydir</span>
-              ) : (
-                <span>{events.length} / {total} kayit (tumu yuklendi)</span>
-              )}
-            </div>
+        {message && (
+          <div role="status" className={cn('flex items-center gap-2 border-l-2 px-4 py-3 text-sm', message.type === 'success' ? 'border-emerald-500 bg-emerald-500/5 text-emerald-700 dark:text-emerald-200' : 'border-rose-500 bg-rose-500/5 text-rose-700 dark:text-rose-200')}>
+            {message.type === 'success' ? <CheckCircle className="h-4 w-4 shrink-0" aria-hidden="true" /> : <AlertOctagon className="h-4 w-4 shrink-0" aria-hidden="true" />}
+            <span className="flex-1">{message.text}</span>
+            <Button variant="ghost" size="sm" className="h-8" onClick={() => setMessage(null)}>Kapat</Button>
           </div>
         )}
-      </Card>
+
+        <IncidentOverview status={statusStats} severity={stats} archive={archiveFilter} />
+
+        <IncidentFilters
+          status={statusFilter}
+          severity={severityFilter}
+          source={sourceFilter}
+          archive={archiveFilter}
+          search={search}
+          onStatus={setStatusFilter}
+          onSeverity={setSeverityFilter}
+          onSource={setSourceFilter}
+          onArchive={setArchiveFilter}
+          onSearch={setSearch}
+        />
+
+        <IncidentList
+          events={events as IncidentListItem[]}
+          total={total}
+          loading={loading}
+          loadingMore={loadingMore}
+          hasMore={hasMore}
+          error={fetchError}
+          acknowledgingIds={acknowledgingIds}
+          loadMoreRef={loadMoreRef}
+          onOpen={(event) => openEventDetail(event as AlarmEventData)}
+          onAcknowledge={(event) => acknowledgeEvent(event as AlarmEventData)}
+          onAcknowledgeVisible={acknowledgeAll}
+        />
+      </div>
 
       {/* Retention Statistics Dialog */}
       <Dialog open={cleanupStatsOpen} onOpenChange={setCleanupStatsOpen}>

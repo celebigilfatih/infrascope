@@ -7,7 +7,12 @@ export async function GET(_request: NextRequest) {
       include: {
         sourcePort: {
           include: {
-            switchDevice: true
+            switchDevice: true,
+            networkInterface: {
+              include: {
+                device: true
+              }
+            }
           }
         },
         sourceInterface: {

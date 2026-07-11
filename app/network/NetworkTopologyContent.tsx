@@ -19,7 +19,6 @@ import download from 'downloadjs';
 import { BuildingNode } from '../../components/topology/BuildingNode';
 import { DeviceNode } from '../../components/topology/DeviceNode';
 import { CustomEdge, BuildingConnectionEdge } from '../../components/topology/CustomEdge';
-import { SemanticZoomController } from '../../components/topology/SemanticZoomController';
 import { ConnectionWizard } from '../../components/topology/ConnectionWizard';
 import { getZoomConfig, filterNodesByZoom, filterEdgesByZoom } from '../../lib/semanticZoom';
 import { getDeviceRole } from '../../lib/deviceRoleMapper';
@@ -77,6 +76,10 @@ import {
   Terminal,
   Eye,
   RotateCcw,
+  RefreshCw,
+  CircleCheck,
+  WifiOff,
+  Link2,
   AlertTriangle,
   EthernetPort
 } from 'lucide-react';
@@ -212,20 +215,20 @@ function isUnassignedDevice(device: Device) {
 }
 
 // Connection type styling for all views
-const connectionStyles: Record<string, { color: string; dash: string; width: number; label: string; icon: string }> = {
-  'FIBER_SINGLE_MODE': { color: '#DC2626', dash: '0', width: 5, label: 'Fiber Single-Mode (Tekli)', icon: '🔴' },
-  'FIBER_MULTI_MODE': { color: '#EA580C', dash: '0', width: 5, label: 'Fiber Multi-Mode (Çoklu)', icon: '🟠' },
-  'CAT5E': { color: '#16A34A', dash: '5,5', width: 4, label: 'Cat5e Kablo', icon: '📡' },
-  'CAT6': { color: '#16A34A', dash: '5,5', width: 4, label: 'Cat6 Kablo', icon: '📡' },
-  'CAT6A': { color: '#059669', dash: '5,5', width: 4, label: 'Cat6a Kablo', icon: '📡' },
-  'CAT7': { color: '#047857', dash: '5,5', width: 4, label: 'Cat7 Kablo', icon: '📡' },
-  'CAT8': { color: '#065F46', dash: '5,5', width: 4, label: 'Cat8 Kablo', icon: '📡' },
-  'WIRELESS': { color: '#2563EB', dash: '10,5', width: 3, label: 'Kablosuz Bağlantı', icon: '📶' },
-  'MICROWAVE': { color: '#7C3AED', dash: '10,5', width: 3, label: 'Mikrodalga Link', icon: '📡' },
-  'LEASED_LINE': { color: '#CA8A04', dash: '15,5,5,5', width: 4, label: 'Kiralık Hat', icon: '🔗' },
-  'MPLS': { color: '#0891B2', dash: '15,5,5,5', width: 4, label: 'MPLS Ağ', icon: '🌐' },
-  'VPN': { color: '#9333EA', dash: '20,5', width: 3, label: 'VPN Tünel', icon: '🔒' },
-  'OTHER': { color: '#6B7280', dash: '5,5', width: 3, label: 'Diğer Bağlantı', icon: '❓' },
+const connectionStyles: Record<string, { color: string; dash: string; width: number; label: string }> = {
+  'FIBER_SINGLE_MODE': { color: '#DC2626', dash: '0', width: 4, label: 'Fiber Single-Mode' },
+  'FIBER_MULTI_MODE': { color: '#EA580C', dash: '0', width: 4, label: 'Fiber Multi-Mode' },
+  'CAT5E': { color: '#16A34A', dash: '5,5', width: 3, label: 'Cat5e' },
+  'CAT6': { color: '#16A34A', dash: '5,5', width: 3, label: 'Cat6' },
+  'CAT6A': { color: '#059669', dash: '5,5', width: 3, label: 'Cat6a' },
+  'CAT7': { color: '#047857', dash: '5,5', width: 3, label: 'Cat7' },
+  'CAT8': { color: '#065F46', dash: '5,5', width: 3, label: 'Cat8' },
+  'WIRELESS': { color: '#2563EB', dash: '10,5', width: 3, label: 'Kablosuz bağlantı' },
+  'MICROWAVE': { color: '#7C3AED', dash: '10,5', width: 3, label: 'Mikrodalga link' },
+  'LEASED_LINE': { color: '#CA8A04', dash: '15,5,5,5', width: 3, label: 'Kiralık hat' },
+  'MPLS': { color: '#0891B2', dash: '15,5,5,5', width: 3, label: 'MPLS ağı' },
+  'VPN': { color: '#9333EA', dash: '20,5', width: 3, label: 'VPN tüneli' },
+  'OTHER': { color: '#6B7280', dash: '5,5', width: 3, label: 'Diğer bağlantı' },
 };
 
 
@@ -240,6 +243,8 @@ const NetworkTopologyPage = () => {
   const [connections, setConnections] = useState<NetworkConnection[]>([]);
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Stable nodeTypes/edgeTypes via useMemo — survives Turbopack Fast Refresh module re-evaluation
   const nodeTypes = React.useMemo(() => ({
@@ -364,11 +369,12 @@ const NetworkTopologyPage = () => {
       : { sourceHandle: 'top-source', targetHandle: 'bottom-target' };
   }, [getEffectiveNodePosition]);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (silent = false) => {
     try {
-      setLoading(true);
+      if (silent) setRefreshing(true);
+      else setLoading(true);
       setError(null);
-      const [devicesRes, servicesRes, _connectionsRes, orgsRes, buildingConnsRes, topologyStatusRes]: any = await Promise.all([
+      const [devicesRes, servicesRes, connectionsRes, orgsRes, buildingConnsRes, topologyStatusRes]: any = await Promise.all([
         apiGet('/api/devices?filterType=all&mode=full&limit=200'),
         apiGet('/api/services'),
         apiGet('/api/network-connections'),
@@ -376,6 +382,10 @@ const NetworkTopologyPage = () => {
         apiGet('/api/building-connections'),
         apiGet('/api/network/topology-status'),
       ]);
+
+      if (!devicesRes.success || !orgsRes.success) {
+        throw new Error('Topoloji için gerekli envanter verileri alınamadı');
+      }
 
       if (devicesRes.success) setDevices(devicesRes.data);
       if (servicesRes.success) setServices(servicesRes.data);
@@ -406,25 +416,31 @@ const NetworkTopologyPage = () => {
         setTopologyStatusByDeviceId({});
       }
 
-      const mockConnections: NetworkConnection[] = [];
-      if (devicesRes.success) {
-        const deviceIds = devicesRes.data.map((d: any) => d.id);
-        for (let i = 0; i < Math.min(deviceIds.length - 1, 5); i++) {
-          mockConnections.push({
-            id: `conn-${i}`,
-            sourceDeviceId: deviceIds[i],
-            targetDeviceId: deviceIds[i + 1],
-            sourceInterfaceId: `int-${i}`,
-            targetInterfaceId: `int-${i + 1}`,
-            status: 'UP',
-          });
-        }
-      }
-      setConnections(mockConnections);
+      const normalizedConnections: NetworkConnection[] = connectionsRes.success
+        ? connectionsRes.data.flatMap((connection: any) => {
+            const sourceDeviceId = connection.sourcePort?.switchDevice?.id;
+            const targetDeviceId = connection.sourceInterface?.device?.id
+              || connection.sourcePort?.networkInterface?.device?.id;
+
+            if (!sourceDeviceId || !targetDeviceId || sourceDeviceId === targetDeviceId) return [];
+
+            return [{
+              id: connection.id,
+              sourceDeviceId,
+              targetDeviceId,
+              sourceInterfaceId: connection.sourceInterfaceId || undefined,
+              targetInterfaceId: connection.destInterfaceId || undefined,
+              status: connection.status,
+            }];
+          })
+        : [];
+      setConnections(normalizedConnections);
+      setLastUpdatedAt(new Date());
     } catch (err: any) {
       setError(err.message || 'Veriler yüklenirken bir hata oluştu');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, []);
 
@@ -434,12 +450,12 @@ const NetworkTopologyPage = () => {
 
   useEffect(() => {
     const handleInventoryChanged = () => {
-      loadData();
+      loadData(true);
     };
 
     const handleStorage = (event: StorageEvent) => {
       if (event.key === DEVICE_INVENTORY_CHANGED_STORAGE_KEY) {
-        loadData();
+        loadData(true);
       }
     };
 
@@ -1288,14 +1304,13 @@ const NetworkTopologyPage = () => {
                 type: 'building',
                 animated: buildingConn.status === 'ACTIVE',
                 data: {
-                  label: buildingConn.bandwidth 
-                    ? `${style.icon} ${style.label} (${buildingConn.bandwidth})`
-                    : `${style.icon} ${style.label}`,
+                  label: buildingConn.bandwidth
+                    ? `${style.label} · ${buildingConn.bandwidth}`
+                    : style.label,
                   strokeColor: style.color,
                   textColor: style.color,
                   strokeWidth: style.width,
                   strokeDasharray: style.dash,
-                  bgColor: 'white',
                   buildingConnection: buildingConn,
                   type: 'building-connection',
                 },
@@ -1444,26 +1459,119 @@ const NetworkTopologyPage = () => {
 
   const showTopologyEmptyState = topologyNodes.length === 0 && devices.length === 0;
 
+  const networkSummary = useMemo(() => {
+    const active = devices.filter((device) => device.status === 'ACTIVE').length;
+    const maintenance = devices.filter((device) => device.status === 'MAINTENANCE').length;
+    const unavailable = devices.filter((device) =>
+      ['INACTIVE', 'ERROR', 'DECOMMISSIONED'].includes(device.status)
+    ).length;
+    const portDown = Object.values(topologyStatusByDeviceId).reduce(
+      (total, device) => total + device.portDownCount,
+      0
+    );
+
+    return { active, maintenance, unavailable, portDown };
+  }, [devices, topologyStatusByDeviceId]);
+
+  const currentViewLabel = {
+    building: 'Bina bağlantıları',
+    physical: 'Fiziksel topoloji',
+    services: 'Servis topolojisi',
+    hierarchy: 'Altyapı hiyerarşisi',
+    zoom: 'Detaylı keşif',
+  }[viewMode];
+
+  const networkNeedsAttention = networkSummary.unavailable > 0 || networkSummary.portDown > 0;
+  const visibleConnectionCount = viewMode === 'building' ? buildingConnections.length : connections.length;
+
   // Sync removed — topologyNodes/topologyEdges passed directly to ReactFlow
 
 
 
   return (
     <>
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Top Controls */}
-        <div className="bg-card border-b border-border p-4 shadow-sm" style={{ position: 'relative', zIndex: 1010 }}>
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight">Ağ Topolojisi</h1>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+        <div className="relative z-[1010] border-b border-border bg-background px-4 py-5 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-[1680px]">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+              <div className="min-w-0">
+                <div className="mb-1 flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                  <Network className="h-4 w-4" />
+                  Operasyon görünümü
+                </div>
+                <h1 className="text-2xl font-semibold tracking-normal text-foreground">Ağ Operasyonları</h1>
+                <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+                  Binalar, cihazlar ve servisler arasındaki ilişkileri izleyin ve yönetin.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="mr-1 hidden text-right sm:block">
+                  <p className="text-xs font-medium text-muted-foreground">Son güncelleme</p>
+                  <p className="text-sm text-foreground">
+                    {lastUpdatedAt ? lastUpdatedAt.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) : 'Bekleniyor'}
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => loadData(true)}
+                  disabled={refreshing}
+                  aria-label="Topoloji verilerini yenile"
+                  title="Yenile"
+                >
+                  <RefreshCw className={cn('h-4 w-4', refreshing && 'animate-spin')} />
+                </Button>
+                <Button variant="outline" onClick={() => setShowManagementModal(true)} className="gap-2">
+                  <Settings2 className="h-4 w-4" />
+                  <span className="hidden sm:inline">Bağlantıları yönet</span>
+                </Button>
+                <Button onClick={() => setShowBuildingConnectionModal(true)} className="gap-2">
+                  <Plus className="h-4 w-4" />
+                  Yeni bağlantı
+                </Button>
+                <Button variant="outline" size="icon" onClick={onExport} aria-label="Topolojiyi PNG olarak dışa aktar" title="Dışa aktar">
+                  <Download className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center bg-muted/50 p-1 rounded-lg border border-border">
+
+            <div className="mt-5 grid grid-cols-2 border-y border-border md:grid-cols-4">
+              <div className="border-b border-r border-border px-3 py-3 md:border-b-0 sm:px-4">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <CircleCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" /> Aktif cihaz
+                </div>
+                <p className="mt-1 text-xl font-semibold text-foreground">{networkSummary.active}</p>
+              </div>
+              <div className="border-b border-border px-3 py-3 md:border-b-0 md:border-r sm:px-4">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <WifiOff className={cn('h-4 w-4', networkSummary.unavailable > 0 ? 'text-destructive' : 'text-muted-foreground')} /> Erişilemiyor
+                </div>
+                <p className={cn('mt-1 text-xl font-semibold', networkSummary.unavailable > 0 ? 'text-destructive' : 'text-foreground')}>{networkSummary.unavailable}</p>
+              </div>
+              <div className="border-r border-border px-3 py-3 sm:px-4">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <EthernetPort className={cn('h-4 w-4', networkSummary.portDown > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground')} /> İzlenen port down
+                </div>
+                <p className={cn('mt-1 text-xl font-semibold', networkSummary.portDown > 0 ? 'text-amber-700 dark:text-amber-300' : 'text-foreground')}>{networkSummary.portDown}</p>
+              </div>
+              <div className="px-3 py-3 sm:px-4">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Link2 className="h-4 w-4" /> Görünen bağlantı
+                </div>
+                <p className="mt-1 text-xl font-semibold text-foreground">{visibleConnectionCount}</p>
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+              <div className="flex max-w-full items-center gap-1 overflow-x-auto rounded-md border border-border bg-muted/30 p-1" role="tablist" aria-label="Topoloji görünümü">
                 <Button
                   variant={viewMode === 'building' ? 'default' : 'ghost'}
                   size="sm"
                   onClick={() => setViewMode('building')}
-                  className="gap-2"
+                  className="shrink-0 gap-2"
+                  role="tab"
+                  aria-selected={viewMode === 'building'}
                 >
                   <Box className="h-4 w-4" />
                   Bina
@@ -1472,7 +1580,9 @@ const NetworkTopologyPage = () => {
                   variant={viewMode === 'physical' ? 'default' : 'ghost'}
                   size="sm"
                   onClick={() => setViewMode('physical')}
-                  className="gap-2"
+                  className="shrink-0 gap-2"
+                  role="tab"
+                  aria-selected={viewMode === 'physical'}
                 >
                   <Network className="h-4 w-4" />
                   Fiziksel
@@ -1481,7 +1591,9 @@ const NetworkTopologyPage = () => {
                   variant={viewMode === 'services' ? 'default' : 'ghost'}
                   size="sm"
                   onClick={() => setViewMode('services')}
-                  className="gap-2"
+                  className="shrink-0 gap-2"
+                  role="tab"
+                  aria-selected={viewMode === 'services'}
                 >
                   <Server className="h-4 w-4" />
                   Servisler
@@ -1490,7 +1602,9 @@ const NetworkTopologyPage = () => {
                   variant={viewMode === 'hierarchy' ? 'default' : 'ghost'}
                   size="sm"
                   onClick={() => setViewMode('hierarchy')}
-                  className="gap-2"
+                  className="shrink-0 gap-2"
+                  role="tab"
+                  aria-selected={viewMode === 'hierarchy'}
                 >
                   <Layers className="h-4 w-4" />
                   Hiyerarşi
@@ -1503,67 +1617,25 @@ const NetworkTopologyPage = () => {
                     setZoomLevel('building');
                     setBreadcrumbs([]);
                   }}
-                  className="gap-2"
+                  className="shrink-0 gap-2"
+                  role="tab"
+                  aria-selected={viewMode === 'zoom'}
                 >
                   <Search className="h-4 w-4" />
                   Yakınlaştır
                 </Button>
               </div>
 
-              <div className="flex items-center gap-2">
-                <div className="relative group">
-                  <Button variant="outline" className="gap-2 border-primary/20 bg-primary/5 hover:bg-primary/10">
-                    <Zap className="h-4 w-4 text-primary" />
-                    <span>Bina Bağlantıları</span>
-                    <Settings2 className="h-4 w-4 opacity-50" />
-                  </Button>
-                  <div className="absolute right-0 top-full w-56 pt-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-[1050]">
-                    <Card className="shadow-xl border-primary/20 overflow-hidden">
-                      <button
-                        onClick={() => setShowBuildingConnectionModal(true)}
-                        className="w-full px-4 py-3 text-left hover:bg-muted flex items-center space-x-3 border-b border-border transition"
-                      >
-                        <Plus className="h-5 w-5 text-primary" />
-                        <div>
-                          <p className="font-semibold text-sm">Yeni Ekle</p>
-                          <p className="text-[10px] text-muted-foreground">Binalar arası link</p>
-                        </div>
-                      </button>
-                      <button
-                        onClick={() => setShowManagementModal(true)}
-                        className="w-full px-4 py-3 text-left hover:bg-muted flex items-center space-x-3 transition"
-                      >
-                        <Settings2 className="h-5 w-5 text-primary" />
-                        <div>
-                          <p className="font-semibold text-sm">Tümünü Yönet</p>
-                          <p className="text-[10px] text-muted-foreground">{buildingConnections.length} bağlantı</p>
-                        </div>
-                      </button>
-                    </Card>
-                  </div>
-                </div>
-
-                <Button variant="outline" onClick={onExport} className="gap-2" title="PNG Dışa Aktar">
-                  <Download className="h-4 w-4" />
-                  Dışa Aktar
-                </Button>
-              </div>
-            </div>
-          </div>
-
-          {/* Enhanced Toolbar with Filters and Search */}
-          {viewMode !== 'hierarchy' && (
-            <Card className="bg-card/50 backdrop-blur-sm border-border/50 mb-6">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-4 flex-wrap">
-                  {/* Search Input */}
-                  <div className="flex-1 min-w-[250px] relative">
+              {viewMode !== 'hierarchy' && (
+                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 xl:justify-end">
+                  <div className="relative min-w-[220px] flex-1 xl:max-w-[320px]">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                       placeholder="Cihaz ara..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-10 bg-background/50 border-border/50"
+                      className="pl-10"
+                      aria-label="Topolojide cihaz ara"
                     />
                     {searchQuery && (
                       <Button
@@ -1571,17 +1643,15 @@ const NetworkTopologyPage = () => {
                         size="icon"
                         className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
                         onClick={() => setSearchQuery('')}
+                        aria-label="Aramayı temizle"
                       >
                         <X className="h-4 w-4" />
                       </Button>
                     )}
                   </div>
 
-                  {/* Device Type Filter */}
-                  <div className="flex items-center gap-2">
-                    <Filter className="h-4 w-4 text-muted-foreground" />
-                    <Select value={filterDeviceType} onValueChange={setFilterDeviceType}>
-                      <SelectTrigger className="w-[160px] bg-background/50 border-border/50">
+                  <Select value={filterDeviceType} onValueChange={setFilterDeviceType}>
+                      <SelectTrigger className="w-[150px]">
                         <SelectValue placeholder="Tüm Tipler" />
                       </SelectTrigger>
                       <SelectContent>
@@ -1590,12 +1660,11 @@ const NetworkTopologyPage = () => {
                           <SelectItem key={type} value={type}>{type.replace(/_/g, ' ')}</SelectItem>
                         ))}
                       </SelectContent>
-                    </Select>
-                  </div>
+                  </Select>
 
                   {/* Status Filter */}
                   <Select value={filterStatus} onValueChange={setFilterStatus}>
-                    <SelectTrigger className="w-[160px] bg-background/50 border-border/50">
+                    <SelectTrigger className="w-[145px]">
                       <SelectValue placeholder="Tüm Durumlar" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1609,7 +1678,7 @@ const NetworkTopologyPage = () => {
 
                   {/* Criticality Filter */}
                   <Select value={filterCriticality} onValueChange={setFilterCriticality}>
-                    <SelectTrigger className="w-[160px] bg-background/50 border-border/50">
+                    <SelectTrigger className="w-[150px]">
                       <SelectValue placeholder="Tüm Öncelikler" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1621,53 +1690,54 @@ const NetworkTopologyPage = () => {
                     </SelectContent>
                   </Select>
 
-                  {/* Clear Filters Button */}
                   {(searchQuery || filterDeviceType !== 'all' || filterStatus !== 'all' || filterCriticality !== 'all') && (
-                    <Button variant="ghost" onClick={clearFilters} className="gap-2 text-muted-foreground">
+                    <Button variant="ghost" size="sm" onClick={clearFilters} className="gap-2 text-muted-foreground">
                       <X className="h-4 w-4" />
                       Filtreleri Temizle
                     </Button>
                   )}
                                     
-                  {/* Export PNG Button */}
-                  <Button variant="outline" onClick={onExport} className="gap-2" title="PNG Olarak İndir">
-                    <Download className="h-4 w-4" />
-                    Dışa Aktar
-                  </Button>
-
-                  {/* Results Count */}
-                  <div className="ml-auto">
-                    <Badge variant="outline" className="px-3 py-1 bg-background/50 border-border/50">
+                  <div className="ml-auto xl:ml-0">
+                    <Badge variant="outline" className="h-9 px-3 font-medium">
                       <Activity className="h-3 w-3 mr-2 text-primary" />
                       {filteredDevices.length} / {devices.length} cihaz
                     </Badge>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          )}
+              )}
+            </div>
+
+            <div className="mt-3 flex items-center justify-between gap-3 text-xs text-muted-foreground" aria-live="polite">
+              <span>{currentViewLabel}</span>
+              <span className={cn('flex items-center gap-1.5 font-medium', networkNeedsAttention ? 'text-amber-700 dark:text-amber-300' : 'text-emerald-700 dark:text-emerald-300')}>
+                {networkNeedsAttention ? <AlertTriangle className="h-3.5 w-3.5" /> : <CircleCheck className="h-3.5 w-3.5" />}
+                {networkNeedsAttention ? 'Dikkat gerektiren ağ öğeleri var' : 'İzlenen ağ öğeleri normal'}
+              </span>
+            </div>
+          </div>
         </div>
 
         {/* Loading/Error States */}
         {loading && (
           <div className="flex-1 flex items-center justify-center bg-background">
             <div className="text-center">
-              <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
-              <p className="mt-4 text-blue-200 font-medium">Ağ topolojisi yükleniyor...</p>
+              <RefreshCw className="mx-auto h-6 w-6 animate-spin text-primary" />
+              <p className="mt-3 text-sm font-medium text-foreground">Ağ topolojisi hazırlanıyor</p>
+              <p className="mt-1 text-sm text-muted-foreground">Envanter ve bağlantılar yükleniyor.</p>
             </div>
           </div>
         )}
 
         {error && (
           <div className="flex-1 flex items-center justify-center bg-background">
-            <div className="bg-red-900/50 border border-red-700 rounded-lg p-6 max-w-md w-full mx-4 shadow-2xl">
-              <p className="text-red-200 font-bold">{error}</p>
-              <button
-                onClick={loadData}
-                className="mt-4 w-full px-4 py-2 bg-red-700 text-white rounded-lg hover:bg-red-600 font-bold transition-colors"
-              >
+            <div className="mx-4 w-full max-w-md rounded-md border border-destructive/30 bg-destructive/5 p-6 text-center">
+              <AlertTriangle className="mx-auto h-6 w-6 text-destructive" />
+              <p className="mt-3 text-sm font-semibold text-foreground">Topoloji yüklenemedi</p>
+              <p className="mt-1 text-sm text-muted-foreground">{error}</p>
+              <Button onClick={() => loadData()} className="mt-4 gap-2">
+                <RefreshCw className="h-4 w-4" />
                 Tekrar Dene
-              </button>
+              </Button>
             </div>
           </div>
         )}
@@ -2293,8 +2363,8 @@ const NetworkTopologyPage = () => {
               </div>
             ) : (
               // TOPOLOGY VIEWS
-              <div className="flex-1 flex overflow-hidden">
-                <div className="flex-1 relative min-w-0 w-full" style={{ minHeight: 'calc(100vh - 250px)' }}>
+              <div className="flex min-h-0 flex-1 overflow-hidden border-t border-border">
+                <div className="relative min-h-[520px] min-w-0 flex-1 bg-muted/10">
                   <ReactFlow style={{ width: "100%", height: "100%" }}
                     nodes={topologyNodes}
                     edges={topologyEdges}
@@ -2327,76 +2397,24 @@ const NetworkTopologyPage = () => {
                       strokeDasharray: '5,5',
                     }}
                   >
-                    <Background color="#3b82f6" gap={20} />
-                    <Controls className="bg-card border-border fill-foreground shadow-xl" />
+                    <Background color="hsl(var(--muted-foreground))" gap={24} size={1} className="opacity-20" />
+                    <Controls className="border-border bg-card fill-foreground shadow-sm" />
 
                     {showTopologyEmptyState && (
                       <Panel position="top-center">
-                        <div className="mt-10 flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-card/95 px-8 py-7 text-center shadow-xl">
-                          <Server className="mb-3 h-10 w-10 text-muted-foreground" />
-                          <h3 className="text-base font-bold text-foreground">Topolojide gösterilecek cihaz yok</h3>
+                        <div className="mt-10 flex flex-col items-center justify-center rounded-md border border-dashed border-border bg-background/95 px-8 py-7 text-center shadow-sm">
+                          <Server className="mb-3 h-8 w-8 text-muted-foreground" />
+                          <h3 className="text-base font-semibold text-foreground">Topolojide gösterilecek cihaz yok</h3>
                           <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-                            Devices veya NMS Add Device üzerinden cihaz ekleyin.
+                            Cihazlar sayfasından envantere cihaz ekleyerek başlayın.
                           </p>
+                          <Button variant="outline" size="sm" className="mt-4" onClick={() => router.push('/devices')}>
+                            Cihazlara git
+                          </Button>
                         </div>
                       </Panel>
                     )}
                     
-                    {/* Semantic Zoom Controller for Building View */}
-                    {viewMode === 'building' && (
-                      <Panel position="top-left">
-                        <SemanticZoomController
-                          currentZoom={semanticZoom}
-                          onZoomChange={setSemanticZoom}
-                        />
-                      </Panel>
-                    )}
-                    
-                    {/* Network Health Dashboard Panel - always visible */}
-                    <Panel position="bottom-left">
-                      <div className="bg-card/90 backdrop-blur-md text-foreground rounded-xl shadow-2xl p-4 border border-border min-w-[200px]">
-                        <div className="flex items-center gap-2 mb-3 border-b border-border pb-2">
-                          <Activity className="h-4 w-4 text-emerald-500" />
-                          <h3 className="font-black text-xs uppercase tracking-widest">Ağ Sağlığı</h3>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="text-center p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-                            <p className="text-xl font-bold text-emerald-500">{devices.filter(d => d.status === 'ACTIVE').length}</p>
-                            <p className="text-[10px] text-muted-foreground">Aktif</p>
-                          </div>
-                          <div className="text-center p-2 rounded-lg bg-red-500/10 border border-red-500/20">
-                            <p className="text-xl font-bold text-red-500">{devices.filter(d => d.status === 'INACTIVE' || d.status === 'ERROR').length}</p>
-                            <p className="text-[10px] text-muted-foreground">Hata</p>
-                          </div>
-                          <div className="text-center p-2 rounded-lg bg-amber-500/10 border border-amber-500/20">
-                            <p className="text-xl font-bold text-amber-500">{devices.filter(d => d.status === 'MAINTENANCE').length}</p>
-                            <p className="text-[10px] text-muted-foreground">Bakım</p>
-                          </div>
-                          <div className="text-center p-2 rounded-lg bg-blue-500/10 border border-blue-500/20">
-                            <p className="text-xl font-bold text-blue-500">{connections.length}</p>
-                            <p className="text-[10px] text-muted-foreground">Bağlantı</p>
-                          </div>
-                        </div>
-                        <div className="mt-3 pt-2 border-t border-border">
-                          <div className="flex items-center justify-between text-[10px]">
-                            <span className="text-muted-foreground">Sağlık Skoru</span>
-                            <span className="font-bold text-emerald-500">
-                              {devices.length > 0 
-                                ? Math.round((devices.filter(d => d.status === 'ACTIVE').length / devices.length) * 100) 
-                                : 0}%
-                            </span>
-                          </div>
-                          <div className="w-full h-1.5 bg-muted rounded-full mt-1 overflow-hidden">
-                            <div 
-                              className="h-full bg-emerald-500 rounded-full transition-all duration-500"
-                              style={{ 
-                                width: `${devices.length > 0 ? (devices.filter(d => d.status === 'ACTIVE').length / devices.length) * 100 : 0}%` 
-                              }}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    </Panel>
                   </ReactFlow>
                 </div>
 

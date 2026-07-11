@@ -1,16 +1,32 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Card, CardContent } from '@/components/ui/card';
+import {
+  AlertCircle,
+  ArrowLeft,
+  CheckCircle2,
+  ChevronDown,
+  Eye,
+  EyeOff,
+  Loader2,
+  Network,
+  Plug,
+  Server,
+  ShieldCheck,
+  Terminal,
+} from 'lucide-react';
+
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { AlertCircle, CheckCircle, Loader2, PlusCircle } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { cn } from '@/lib/utils';
 import { notifyDeviceInventoryChanged } from '@/lib/device-inventory-events';
 
-type ConnectionType = 'ssh' | 'api' | 'snmp';
 type SnmpVersion = 'v2c' | 'v3';
 
 interface InventoryDevice {
@@ -21,44 +37,48 @@ interface InventoryDevice {
   model?: string | null;
   managementIp?: string | null;
   nmsDeviceId?: number | null;
-  pollingEnabled?: boolean;
+}
+
+const pollingPresets = [30, 60, 300, 900];
+
+function deviceTypeLabel(type: string) {
+  return type.replace(/_/g, ' ');
 }
 
 export default function AddNmsDevicePage() {
   const router = useRouter();
-
   const [inventoryDevices, setInventoryDevices] = useState<InventoryDevice[]>([]);
   const [loadingDevices, setLoadingDevices] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+  const [showCommunity, setShowCommunity] = useState(false);
+  const [showSshPassword, setShowSshPassword] = useState(false);
+  const [sshEnabled, setSshEnabled] = useState(false);
   const [form, setForm] = useState({
     deviceId: '',
     managementIp: '',
     snmpPort: 161,
-    connectionType: 'snmp' as ConnectionType,
     snmpVersion: 'v2c' as SnmpVersion,
     snmpCommunity: '',
-    snmpUsername: '',
-    snmpAuthProtocol: '',
-    snmpAuthPassword: '',
+    pollingInterval: 300,
     sshUsername: '',
     sshPassword: '',
-    pollingInterval: 300,
+    sshPort: 22,
   });
-
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
 
   const availableDevices = useMemo(
     () => inventoryDevices.filter((device) => device.nmsDeviceId == null),
     [inventoryDevices]
   );
-
   const selectedDevice = useMemo(
-    () => inventoryDevices.find((device) => device.id === form.deviceId) || null,
+    () => inventoryDevices.find((device) => device.id === form.deviceId) ?? null,
     [form.deviceId, inventoryDevices]
   );
 
-  const set = (key: string, value: any) => setForm(prev => ({ ...prev, [key]: value }));
+  const set = <Key extends keyof typeof form>(key: Key, value: (typeof form)[Key]) => {
+    setForm((current) => ({ ...current, [key]: value }));
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -67,323 +87,207 @@ export default function AddNmsDevicePage() {
       setLoadingDevices(true);
       setError(null);
       try {
-        const res = await fetch('/api/devices?filterType=all&mode=minimal&limit=200');
-        const data = await res.json();
-        if (!res.ok || !data.success) {
-          throw new Error(data.error || 'Envanter cihazları yüklenemedi');
-        }
+        const response = await fetch('/api/devices?filterType=all&mode=minimal&limit=200');
+        const data = await response.json();
+        if (!response.ok || !data.success) throw new Error(data.error || 'Envanter cihazları yüklenemedi');
         if (!cancelled) setInventoryDevices(data.data || []);
-      } catch (err: any) {
-        if (!cancelled) setError(err.message || 'Envanter cihazları yüklenemedi');
+      } catch (loadError) {
+        if (!cancelled) setError(loadError instanceof Error ? loadError.message : 'Envanter cihazları yüklenemedi');
       } finally {
         if (!cancelled) setLoadingDevices(false);
       }
     }
 
     loadInventoryDevices();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, []);
 
-  const handleSubmit = async () => {
-    if (!form.deviceId) { setError('Önce envanterden bir cihaz seçin'); return; }
-    if (!form.managementIp.trim()) { setError('Management IP zorunludur'); return; }
+  function selectDevice(deviceId: string) {
+    const device = inventoryDevices.find((item) => item.id === deviceId);
+    setForm((current) => ({
+      ...current,
+      deviceId,
+      managementIp: device?.managementIp || current.managementIp,
+    }));
+    setError(null);
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!form.deviceId) { setError('İzlemeye alınacak cihazı seçin.'); return; }
+    if (!form.managementIp.trim()) { setError('Management IP zorunludur.'); return; }
+    if (form.snmpVersion === 'v3') { setError('SNMPv3 kimlik doğrulaması bu polling sürümünde henüz desteklenmiyor. SNMPv2c kullanın.'); return; }
+    if (!form.snmpCommunity.trim()) { setError('SNMP community değeri zorunludur.'); return; }
+    if (!Number.isInteger(form.snmpPort) || form.snmpPort < 1 || form.snmpPort > 65535) { setError('SNMP portu 1 ile 65535 arasında olmalıdır.'); return; }
+    if (!Number.isInteger(form.pollingInterval) || form.pollingInterval < 30) { setError('Polling aralığı en az 30 saniye olmalıdır.'); return; }
+    if (sshEnabled && !form.sshUsername.trim()) { setError('SSH erişimi etkinse kullanıcı adı zorunludur.'); return; }
 
     setError(null);
     setSaving(true);
-
     try {
-      const payload: Record<string, unknown> = {
-        deviceId: form.deviceId,
-        managementIp: form.managementIp.trim(),
-        snmpPort: form.snmpPort,
-        pollingInterval: form.pollingInterval,
-        pollingEnabled: true,
-      };
-
-      if (form.connectionType === 'snmp' || form.connectionType === 'api') {
-        payload.snmpVersion = form.snmpVersion;
-        payload.snmpCommunity = form.snmpCommunity || 'public';
-      }
-
-      if (form.connectionType === 'ssh') {
-        payload.sshUsername = form.sshUsername || null;
-        payload.sshPassword = form.sshPassword || null;
-      }
-
-      const res = await fetch('/api/integrations/nms/devices', {
+      const response = await fetch('/api/integrations/nms/devices', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          deviceId: form.deviceId,
+          managementIp: form.managementIp.trim(),
+          snmpPort: form.snmpPort,
+          snmpVersion: form.snmpVersion,
+          snmpCommunity: form.snmpCommunity,
+          pollingInterval: form.pollingInterval,
+          pollingEnabled: true,
+          sshUsername: sshEnabled ? form.sshUsername.trim() || null : null,
+          sshPassword: sshEnabled ? form.sshPassword || null : null,
+          sshPort: sshEnabled ? form.sshPort : 22,
+        }),
       });
-
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || 'Cihaz NMS izlemeye alınamadı');
-        return;
-      }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Cihaz NMS izlemeye alınamadı.');
 
       setSuccess(true);
       notifyDeviceInventoryChanged({ action: 'update', deviceId: form.deviceId, source: 'nms-add-device' });
-      setTimeout(() => router.push('/integrations/nms/devices'), 900);
-    } catch (err: any) {
-      setError(err.message || 'Beklenmeyen hata oluştu');
+      window.setTimeout(() => router.push('/integrations/nms/devices'), 900);
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Beklenmeyen hata oluştu.');
     } finally {
       setSaving(false);
     }
-  };
+  }
 
   return (
-    <div className="p-6 max-w-2xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Cihazı NMS İzlemeye Al</h1>
-        <p className="text-muted-foreground text-sm">
-          Cihaz kaydı ana envanterde kalır; burada sadece SNMP/SSH izleme ayarları bağlanır.
-        </p>
-      </div>
-
-      <Card>
-        <CardContent className="p-6 space-y-6">
-          <div className="space-y-4">
-            <h2 className="text-sm font-semibold flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-orange-500" />
-              Envanter Cihazı
-            </h2>
-
-            {loadingDevices ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Envanter cihazları yükleniyor...
-              </div>
-            ) : availableDevices.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
-                <p className="font-medium text-foreground">İzlemeye alınabilecek envanter cihazı yok.</p>
-                <p className="mt-1">Önce ana cihaz envanterinden cihaz oluşturun; sonra bu ekrandan NMS izlemeye alın.</p>
-                <Button variant="outline" size="sm" className="mt-3 gap-2" asChild>
-                  <Link href="/devices">
-                    <PlusCircle className="h-4 w-4" />
-                    Envantere Cihaz Ekle
-                  </Link>
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <Label htmlFor="device">Cihaz *</Label>
-                <select
-                  id="device"
-                  className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
-                  value={form.deviceId}
-                  onChange={e => set('deviceId', e.target.value)}
-                >
-                  <option value="">Envanterden cihaz seçin</option>
-                  {availableDevices.map(device => (
-                    <option key={device.id} value={device.id}>
-                      {device.name} · {device.type.replace(/_/g, ' ')}
-                      {device.vendor ? ` · ${device.vendor}` : ''}
-                      {device.model ? ` ${device.model}` : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {selectedDevice && (
-              <div className="rounded-lg bg-muted/40 border border-border p-3 text-sm">
-                <div className="font-medium">{selectedDevice.name}</div>
-                <div className="text-muted-foreground">
-                  {selectedDevice.type.replace(/_/g, ' ')}
-                  {selectedDevice.vendor ? ` · ${selectedDevice.vendor}` : ''}
-                  {selectedDevice.model ? ` ${selectedDevice.model}` : ''}
-                </div>
-              </div>
-            )}
+    <main className="mx-auto w-full max-w-6xl p-4 sm:p-6 lg:p-8">
+      <header className="mb-7 flex flex-col gap-4 border-b border-border pb-6 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex min-w-0 items-start gap-3">
+          <Button variant="outline" size="icon" asChild className="mt-0.5 shrink-0" aria-label="NMS izlenen cihazlara dön">
+            <Link href="/integrations/nms/devices"><ArrowLeft className="h-4 w-4" /></Link>
+          </Button>
+          <div>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground"><Network className="h-4 w-4" />NMS İzleme</div>
+            <h1 className="mt-1 text-2xl font-semibold tracking-normal">Cihazı izlemeye al</h1>
+            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">Envanterdeki cihaz için SNMP polling ve isteğe bağlı SSH erişimini yapılandırın.</p>
           </div>
+        </div>
+        <Badge variant="outline" className="w-fit gap-1.5 px-2.5 py-1 text-xs"><ShieldCheck className="h-3.5 w-3.5 text-primary" />Envanter korunur</Badge>
+      </header>
 
-          <hr className="border-border" />
-
-          <div className="space-y-4">
-            <h2 className="text-sm font-semibold flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-blue-500" />
-              İzleme Bağlantısı
-            </h2>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label htmlFor="ip">Management IP *</Label>
-                <Input
-                  id="ip"
-                  placeholder="192.168.1.1"
-                  value={form.managementIp}
-                  onChange={e => set('managementIp', e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="port">SNMP Port</Label>
-                <Input
-                  id="port"
-                  type="number"
-                  value={form.snmpPort}
-                  onChange={e => set('snmpPort', Number(e.target.value))}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="pollingInterval">Polling Interval (saniye)</Label>
-              <Input
-                id="pollingInterval"
-                type="number"
-                min={30}
-                value={form.pollingInterval}
-                onChange={e => set('pollingInterval', Number(e.target.value))}
-              />
-            </div>
-          </div>
-
-          <hr className="border-border" />
-
-          <div className="space-y-4">
-            <h2 className="text-sm font-semibold flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-orange-400" />
-              Protokol
-            </h2>
-            <div>
-              <Label className="text-xs text-muted-foreground mb-2 block">Bağlantı protokolü</Label>
-              <div className="grid grid-cols-3 gap-3">
-                {(['snmp', 'ssh', 'api'] as ConnectionType[]).map(type => (
-                  <button
-                    key={type}
-                    type="button"
-                    onClick={() => set('connectionType', type)}
-                    className={`flex items-center gap-2 px-4 py-3 rounded-lg border text-sm font-medium transition-colors
-                      ${form.connectionType === type
-                        ? 'border-primary bg-primary/10 text-primary'
-                        : 'border-border bg-card hover:bg-muted/50'
-                      }`}
-                  >
-                    <span className={`w-3 h-3 rounded-full border-2 flex-shrink-0 ${
-                      form.connectionType === type ? 'border-primary bg-primary' : 'border-muted-foreground'
-                    }`} />
-                    {type.toUpperCase()}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {(form.connectionType === 'snmp' || form.connectionType === 'api') && (
-              <div className="space-y-4 p-4 bg-muted/30 rounded-lg border border-border">
-                <h3 className="text-xs font-semibold flex items-center gap-2 text-muted-foreground">
-                  <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
-                  SNMP Ayarları
-                </h3>
-                <div className="space-y-2">
-                  <Label htmlFor="snmpVersion">SNMP Version</Label>
-                  <select
-                    id="snmpVersion"
-                    className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm"
-                    value={form.snmpVersion}
-                    onChange={e => set('snmpVersion', e.target.value as SnmpVersion)}
-                  >
-                    <option value="v2c">SNMPv2c</option>
-                    <option value="v3">SNMPv3</option>
-                  </select>
+      <form onSubmit={handleSubmit} className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_19rem]" noValidate>
+        <Card className="rounded-lg border-border shadow-sm">
+          <CardContent className="p-0">
+            <section className="p-5 sm:p-6" aria-labelledby="inventory-heading">
+              <SectionHeading id="inventory-heading" icon={Server} title="Envanter cihazı" description="İzleme yalnızca mevcut bir envanter kaydına eklenir." />
+              {loadingDevices ? (
+                <div className="flex min-h-24 items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Envanter cihazları yükleniyor...</div>
+              ) : availableDevices.length === 0 ? (
+                <div className="rounded-md border border-dashed border-border p-4">
+                  <p className="text-sm font-medium">İzlemeye alınabilecek cihaz yok</p>
+                  <Button variant="outline" size="sm" className="mt-3" asChild><Link href="/devices">Envantere cihaz ekle</Link></Button>
                 </div>
-                {form.snmpVersion === 'v2c' && (
+              ) : (
+                <div className="space-y-3">
                   <div className="space-y-2">
-                    <Label htmlFor="community">Community String</Label>
-                    <Input
-                      id="community"
-                      type="password"
-                      placeholder="public"
-                      value={form.snmpCommunity}
-                      onChange={e => set('snmpCommunity', e.target.value)}
-                    />
-                  </div>
-                )}
-                {form.snmpVersion === 'v3' && (
-                  <div className="space-y-3">
-                    <div className="space-y-2">
-                      <Label>SNMPv3 Username</Label>
-                      <Input value={form.snmpUsername} onChange={e => set('snmpUsername', e.target.value)} />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-2">
-                        <Label>Auth Protocol</Label>
-                        <select
-                          className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm"
-                          value={form.snmpAuthProtocol}
-                          onChange={e => set('snmpAuthProtocol', e.target.value)}
-                        >
-                          <option value="">None</option>
-                          <option value="MD5">MD5</option>
-                          <option value="SHA">SHA</option>
-                        </select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Auth Password</Label>
-                        <Input
-                          type="password"
-                          value={form.snmpAuthPassword}
-                          onChange={e => set('snmpAuthPassword', e.target.value)}
-                        />
-                      </div>
+                    <Label htmlFor="device">Cihaz <span className="text-destructive">*</span></Label>
+                    <div className="relative">
+                      <select id="device" required value={form.deviceId} onChange={(event) => selectDevice(event.target.value)} className="h-11 w-full appearance-none rounded-md border border-input bg-background px-3 pr-10 text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                        <option value="">Envanterden cihaz seçin</option>
+                        {availableDevices.map((device) => <option key={device.id} value={device.id}>{device.name} · {deviceTypeLabel(device.type)}{device.vendor ? ` · ${device.vendor}` : ''}</option>)}
+                      </select>
+                      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                     </div>
                   </div>
-                )}
-              </div>
-            )}
-
-            {form.connectionType === 'ssh' && (
-              <div className="space-y-4 p-4 bg-muted/30 rounded-lg border border-border">
-                <h3 className="text-xs font-semibold text-muted-foreground">SSH Credentials</h3>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label>SSH Username</Label>
-                    <Input value={form.sshUsername} onChange={e => set('sshUsername', e.target.value)} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>SSH Password</Label>
-                    <Input type="password" value={form.sshPassword} onChange={e => set('sshPassword', e.target.value)} />
-                  </div>
+                  {selectedDevice && <SelectedDevice device={selectedDevice} />}
                 </div>
+              )}
+            </section>
+
+            <section className="border-t border-border p-5 sm:p-6" aria-labelledby="connection-heading">
+              <SectionHeading id="connection-heading" icon={Plug} title="Polling bağlantısı" description="Cihazın yönetim adresi ve veri toplama sıklığı." />
+              <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_8.5rem]">
+                <Field label="Management IP" htmlFor="managementIp" required>
+                  <Input id="managementIp" inputMode="decimal" autoComplete="off" placeholder="10.10.10.15" value={form.managementIp} onChange={(event) => set('managementIp', event.target.value)} aria-describedby="managementIp-hint" />
+                  <p id="managementIp-hint" className="mt-1.5 text-xs text-muted-foreground">SNMP isteğinin gönderileceği adres.</p>
+                </Field>
+                <Field label="SNMP portu" htmlFor="snmpPort">
+                  <Input id="snmpPort" type="number" min={1} max={65535} value={form.snmpPort} onChange={(event) => set('snmpPort', Number(event.target.value))} />
+                </Field>
               </div>
-            )}
-          </div>
+              <div className="mt-5">
+                <Field label="Polling aralığı" htmlFor="pollingInterval" required>
+                  <div className="flex flex-wrap gap-2" role="group" aria-label="Polling aralığı önayarları">
+                    {pollingPresets.map((seconds) => <Button key={seconds} type="button" size="sm" variant={form.pollingInterval === seconds ? 'secondary' : 'outline'} onClick={() => set('pollingInterval', seconds)}>{seconds < 60 ? `${seconds} sn` : `${seconds / 60} dk`}</Button>)}
+                    <div className="relative w-28"><Input id="pollingInterval" type="number" min={30} step={30} value={form.pollingInterval} onChange={(event) => set('pollingInterval', Number(event.target.value))} className="pr-9" /><span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">sn</span></div>
+                  </div>
+                </Field>
+              </div>
+            </section>
 
-          {error && (
-            <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive text-sm">
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              {error}
-            </div>
-          )}
-          {success && (
-            <div className="flex items-center gap-2 p-3 rounded-lg bg-green-500/10 border border-green-500/30 text-green-600 dark:text-green-400 text-sm">
-              <CheckCircle className="h-4 w-4 shrink-0" />
-              Cihaz NMS izlemeye alındı. Yönlendiriliyor...
-            </div>
-          )}
+            <section className="border-t border-border p-5 sm:p-6" aria-labelledby="snmp-heading">
+              <SectionHeading id="snmp-heading" icon={Network} title="SNMP kimlik bilgileri" description="Polling için zorunlu erişim bilgileri." />
+              <div className="grid gap-4 sm:grid-cols-[11rem_minmax(0,1fr)]">
+                <Field label="SNMP sürümü" htmlFor="snmpVersion">
+                  <div className="relative"><select id="snmpVersion" value={form.snmpVersion} onChange={(event) => set('snmpVersion', event.target.value as SnmpVersion)} className="h-10 w-full appearance-none rounded-md border border-input bg-background px-3 pr-9 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"><option value="v2c">SNMPv2c</option><option value="v3">SNMPv3</option></select><ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /></div>
+                </Field>
+                <Field label="Community" htmlFor="snmpCommunity" required>
+                  <div className="relative"><Input id="snmpCommunity" type={showCommunity ? 'text' : 'password'} autoComplete="new-password" placeholder="Community değerini girin" value={form.snmpCommunity} onChange={(event) => set('snmpCommunity', event.target.value)} className="pr-10" /><PasswordToggle visible={showCommunity} onClick={() => setShowCommunity((visible) => !visible)} label="Gizli community değerini göster veya gizle" /></div>
+                </Field>
+              </div>
+              {form.snmpVersion === 'v3' && <div role="alert" className="mt-4 flex gap-2 rounded-md border border-amber-500/35 bg-amber-500/10 p-3 text-sm text-amber-900 dark:text-amber-200"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />SNMPv3 kimlik doğrulaması mevcut polling servisinde desteklenmiyor. Kaydetmek için SNMPv2c seçin.</div>}
+            </section>
 
-          <div className="flex gap-3 pt-2">
-            <Button
-              variant="outline"
-              className="flex-1"
-              onClick={() => router.push('/integrations/nms/devices')}
-              disabled={saving}
-            >
-              İptal
-            </Button>
-            <Button
-              className="flex-1 bg-orange-500 hover:bg-orange-600 text-white"
-              onClick={handleSubmit}
-              disabled={saving || success || loadingDevices || availableDevices.length === 0}
-            >
-              {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              {saving ? 'Kaydediliyor...' : 'İzlemeye Al'}
-            </Button>
+            <section className="border-t border-border p-5 sm:p-6" aria-labelledby="ssh-heading">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div><SectionHeading id="ssh-heading" icon={Terminal} title="SSH erişimi" description="İsteğe bağlı yapılandırma ve yedek erişimi." compact /></div>
+                <div className="flex items-center gap-3"><Label htmlFor="sshEnabled" className="text-sm">Etkin</Label><Switch id="sshEnabled" checked={sshEnabled} onCheckedChange={setSshEnabled} aria-label="SSH erişimini etkinleştir" /></div>
+              </div>
+              {sshEnabled && <div className="mt-5 grid gap-4 sm:grid-cols-[minmax(0,1fr)_8.5rem]">
+                <Field label="Kullanıcı adı" htmlFor="sshUsername" required><Input id="sshUsername" autoComplete="username" value={form.sshUsername} onChange={(event) => set('sshUsername', event.target.value)} /></Field>
+                <Field label="SSH portu" htmlFor="sshPort"><Input id="sshPort" type="number" min={1} max={65535} value={form.sshPort} onChange={(event) => set('sshPort', Number(event.target.value))} /></Field>
+                <div className="sm:col-span-2"><Field label="Parola" htmlFor="sshPassword"><div className="relative"><Input id="sshPassword" type={showSshPassword ? 'text' : 'password'} autoComplete="new-password" value={form.sshPassword} onChange={(event) => set('sshPassword', event.target.value)} className="pr-10" /><PasswordToggle visible={showSshPassword} onClick={() => setShowSshPassword((visible) => !visible)} label="Gizli SSH değerini göster veya gizle" /></div></Field></div>
+              </div>}
+            </section>
+
+            <footer className="flex flex-col-reverse gap-3 border-t border-border bg-muted/20 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+              <p className="text-xs text-muted-foreground">Parolalar yalnızca kaydetme sırasında gönderilir.</p>
+              <div className="flex gap-3"><Button type="button" variant="outline" onClick={() => router.push('/integrations/nms/devices')} disabled={saving}>İptal</Button><Button type="submit" disabled={saving || success || loadingDevices || availableDevices.length === 0}>{saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plug className="mr-2 h-4 w-4" />}{saving ? 'Kaydediliyor' : 'İzlemeye al'}</Button></div>
+            </footer>
+          </CardContent>
+        </Card>
+
+        <aside className="h-fit lg:sticky lg:top-6" aria-label="İzleme özeti">
+          <div className="rounded-lg border border-border bg-muted/20 p-5">
+            <div className="flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-primary" /><h2 className="font-semibold">İzleme özeti</h2></div>
+            <dl className="mt-5 space-y-4 text-sm">
+              <SummaryRow label="Cihaz" value={selectedDevice?.name || 'Seçilmedi'} />
+              <SummaryRow label="Management IP" value={form.managementIp || 'Girilmedi'} mono />
+              <SummaryRow label="SNMP" value={form.snmpVersion === 'v2c' ? `v2c · ${form.snmpPort}` : 'v3 · desteklenmiyor'} />
+              <SummaryRow label="Polling" value={`${form.pollingInterval} saniye`} />
+              <SummaryRow label="SSH" value={sshEnabled ? 'Etkin' : 'Kapalı'} />
+            </dl>
           </div>
-        </CardContent>
-      </Card>
-    </div>
+        </aside>
+
+        {error && <div role="alert" aria-live="assertive" className="lg:col-span-2 flex items-start gap-2 rounded-md border border-destructive/35 bg-destructive/10 p-3 text-sm text-destructive"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />{error}</div>}
+        {success && <div role="status" aria-live="polite" className="lg:col-span-2 flex items-start gap-2 rounded-md border border-primary/30 bg-primary/10 p-3 text-sm text-primary"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />Cihaz NMS izlemeye alındı. Cihaz listesine yönlendiriliyorsunuz.</div>}
+      </form>
+    </main>
   );
+}
+
+function SectionHeading({ id, icon: Icon, title, description, compact = false }: { id: string; icon: typeof Server; title: string; description: string; compact?: boolean }) {
+  return <div className={cn('flex items-start gap-3', compact ? '' : 'mb-5')}><span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-primary/10 text-primary"><Icon className="h-4 w-4" /></span><div><h2 id={id} className="text-base font-semibold">{title}</h2><p className="mt-0.5 text-sm text-muted-foreground">{description}</p></div></div>;
+}
+
+function Field({ label, htmlFor, required, children }: { label: string; htmlFor: string; required?: boolean; children: React.ReactNode }) {
+  return <div className="space-y-2"><Label htmlFor={htmlFor}>{label}{required && <span className="ml-1 text-destructive">*</span>}</Label>{children}</div>;
+}
+
+function PasswordToggle({ visible, onClick, label }: { visible: boolean; onClick: () => void; label: string }) {
+  return <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2" aria-label={label} title={label} onClick={onClick}>{visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</Button>;
+}
+
+function SelectedDevice({ device }: { device: InventoryDevice }) {
+  return <div className="flex items-start gap-3 rounded-md border border-primary/25 bg-primary/5 p-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-background text-primary"><Server className="h-4 w-4" /></span><div className="min-w-0"><p className="truncate text-sm font-medium">{device.name}</p><p className="mt-0.5 truncate text-xs text-muted-foreground">{deviceTypeLabel(device.type)}{device.vendor ? ` · ${device.vendor}` : ''}{device.model ? ` · ${device.model}` : ''}</p></div></div>;
+}
+
+function SummaryRow({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
+  return <div className="flex items-start justify-between gap-3"><dt className="text-muted-foreground">{label}</dt><dd className={cn('max-w-[62%] text-right font-medium', mono && 'font-mono text-xs')}>{value}</dd></div>;
 }

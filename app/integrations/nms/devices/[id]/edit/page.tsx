@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import {
@@ -31,6 +31,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { usePageBreadcrumb } from '@/components/layout/BreadcrumbProvider';
 
 type SnmpVersion = 'v2c' | 'v3';
 
@@ -78,6 +79,13 @@ export default function EditNmsDevicePage() {
     sshPassword: '',
     sshPort: 22,
   });
+
+  const breadcrumbItems = useMemo(() => initialDevice ? [
+    { label: 'NMS İzlenen Cihazlar', href: '/integrations/nms/devices' },
+    { label: initialDevice.name, href: `/integrations/nms/devices/${deviceId}` },
+    { label: 'İzleme Ayarları' },
+  ] : null, [deviceId, initialDevice?.name]);
+  usePageBreadcrumb(breadcrumbItems);
 
   useEffect(() => {
     let cancelled = false;

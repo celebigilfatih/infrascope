@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -35,6 +35,7 @@ import {
   X,
 } from 'lucide-react';
 import Link from 'next/link';
+import { usePageBreadcrumb } from '@/components/layout/BreadcrumbProvider';
 
 interface DbNmsBackup {
   id: string;
@@ -148,6 +149,12 @@ export default function ViewNmsDevicePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [device, setDevice] = useState<DbDevice | null>(null);
+
+  const breadcrumbItems = useMemo(() => device ? [
+    { label: 'NMS İzlenen Cihazlar', href: '/integrations/nms/devices' },
+    { label: device.name },
+  ] : null, [device?.name]);
+  usePageBreadcrumb(breadcrumbItems);
 
   // Port monitoring state
   const [monitoredIds, setMonitoredIds] = useState<Set<string>>(new Set());
@@ -378,15 +385,6 @@ export default function ViewNmsDevicePage() {
 
   return (
     <div className="p-6 space-y-6">
-      {/* Breadcrumb */}
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Link href="/integrations/nms" className="hover:text-foreground transition-colors">NMS</Link>
-        <span>/</span>
-        <Link href="/integrations/nms/devices" className="hover:text-foreground transition-colors">Devices</Link>
-        <span>/</span>
-        <span className="text-foreground font-medium">{device.name}</span>
-      </div>
-
       {/* Hero Header */}
       <div className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-card to-muted/30">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,var(--primary)/5%,transparent_70%)]" />

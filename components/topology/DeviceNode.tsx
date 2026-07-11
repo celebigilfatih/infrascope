@@ -2,7 +2,7 @@
 
 import React, { memo } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
-import { AlertTriangle, EthernetPort } from 'lucide-react';
+import { AlertTriangle, CircleHelp, EthernetPort, Monitor, Network, Router, Server, Shield } from 'lucide-react';
 import { getVendorLogo } from '../../lib/formatting';
 
 interface DownPortSummary {
@@ -32,20 +32,21 @@ interface DeviceNodeData {
 export const DeviceNode = memo(({ data, selected }: NodeProps<DeviceNodeData>) => {
   const statusColors = {
     active: 'bg-emerald-500',
-    inactive: 'bg-slate-500',
+    inactive: 'bg-muted-foreground',
     maintenance: 'bg-amber-500',
     error: 'bg-red-500',
   };
 
   const roleIcons = {
-    core: '🌐',
-    distribution: '🔌',
-    access: '📶',
-    endpoint: '💻',
-    server: '🖥️',
-    firewall: '🛡️',
-    unknown: '❓',
+    core: Network,
+    distribution: Router,
+    access: Router,
+    endpoint: Monitor,
+    server: Server,
+    firewall: Shield,
+    unknown: CircleHelp,
   };
+  const RoleIcon = roleIcons[data?.role as keyof typeof roleIcons] || roleIcons.unknown;
 
   const zoom = data.zoom || 1;
   const scale = Math.max(0.7, Math.min(2.0, zoom));
@@ -62,15 +63,15 @@ export const DeviceNode = memo(({ data, selected }: NodeProps<DeviceNodeData>) =
   return (
     <div 
       className={`
-        relative rounded-xl border-2 transition-all duration-200
+        relative rounded-md border bg-card text-foreground shadow-sm transition-all duration-200
         ${hasPortDown
           ? selected
-            ? 'border-red-500 ring-4 ring-red-500/30 shadow-xl shadow-red-500/20 scale-105'
-            : 'border-red-500 shadow-lg shadow-red-500/20'
+            ? 'border-red-500 ring-4 ring-red-500/15 scale-[1.02]'
+            : 'border-red-500/70'
           : selected
-            ? 'border-blue-500 ring-4 ring-blue-900/50 shadow-xl scale-105'
-            : 'border-blue-800 shadow-md'}
-        bg-card text-foreground hover:border-primary shadow-sm
+            ? 'border-primary ring-4 ring-primary/15 scale-[1.02]'
+            : 'border-border'}
+        hover:border-primary/70 hover:shadow-md
       `}
       style={{ 
         width: `${width}px`, 
@@ -79,11 +80,11 @@ export const DeviceNode = memo(({ data, selected }: NodeProps<DeviceNodeData>) =
         transformOrigin: 'center'
       }}
     >
-      <Handle type="target" position={Position.Top} className="!w-3 !h-3 !bg-blue-400 !border-2 !border-blue-950" />
-      <Handle type="source" position={Position.Bottom} className="!w-3 !h-3 !bg-blue-600 !border-2 !border-blue-950" />
+      <Handle type="target" position={Position.Top} className="!h-2.5 !w-2.5 !border-2 !border-card !bg-primary" />
+      <Handle type="source" position={Position.Bottom} className="!h-2.5 !w-2.5 !border-2 !border-card !bg-primary" />
       {hasPortDown && (
         <div
-          className="absolute -right-3 -top-3 z-20 flex items-center gap-1 rounded-full border border-red-300 bg-red-600 px-2.5 py-1 text-[11px] font-bold text-white shadow-lg shadow-red-500/30"
+          className="absolute -right-3 -top-3 z-20 flex min-h-6 items-center gap-1 rounded-full border border-red-300 bg-red-600 px-2.5 text-xs font-semibold text-white shadow-sm"
           title={`${data.portDownCount} izlenen port down`}
         >
           <AlertTriangle className="h-3.5 w-3.5" />
@@ -91,10 +92,12 @@ export const DeviceNode = memo(({ data, selected }: NodeProps<DeviceNodeData>) =
         </div>
       )}
       
-      <div className="flex items-center gap-3 mb-3">
-        <div className={`rounded-full ${hasPortDown ? 'bg-red-500 animate-pulse' : statusColors[data?.status] || 'bg-slate-500'}`} style={{ width: `${iconSize}px`, height: `${iconSize}px` }} />
-        <div className="flex items-center gap-2">
-          <div className="text-lg" title={data?.role}>{roleIcons[data?.role as keyof typeof roleIcons] || roleIcons.unknown}</div>
+      <div className="mb-3 flex items-center gap-3">
+        <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+          <RoleIcon className="h-5 w-5" aria-hidden="true" />
+          <span className={`absolute -bottom-0.5 -right-0.5 rounded-full border-2 border-card ${hasPortDown ? 'bg-red-500' : statusColors[data?.status] || 'bg-muted-foreground'}`} style={{ width: `${iconSize}px`, height: `${iconSize}px` }} title={data.status} />
+        </div>
+        <div className="flex min-w-0 flex-1 items-center gap-2">
           {getVendorLogo(data?.vendor) && (
             <img 
               src={getVendorLogo(data?.vendor)!} 
@@ -103,23 +106,23 @@ export const DeviceNode = memo(({ data, selected }: NodeProps<DeviceNodeData>) =
               title={data?.vendor}
             />
           )}
+          <h3 className="min-w-0 flex-1 truncate font-semibold" style={{ fontSize: `${fontSize}px` }}>{data?.name || 'Bilinmeyen Cihaz'}</h3>
         </div>
-        <h3 className="font-bold truncate flex-1" style={{ fontSize: `${fontSize}px` }}>{data?.name || 'Bilinmeyen Cihaz'}</h3>
       </div>
 
       {hasPortDown && (
-        <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-red-700">
+        <div className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
           <div className="flex items-center justify-between gap-2">
             <div className="flex min-w-0 items-center gap-2">
               <EthernetPort className="h-4 w-4 shrink-0" />
-              <span className="truncate text-xs font-bold">{data.portDownCount} Port Down</span>
+              <span className="truncate text-xs font-semibold">{data.portDownCount} port down</span>
             </div>
-            <span className="shrink-0 text-[10px] font-bold uppercase">NMS</span>
+            <span className="shrink-0 text-xs font-semibold">NMS</span>
           </div>
           {visibleDownPorts.length > 0 && (
             <div className="mt-1 space-y-0.5">
               {visibleDownPorts.map((port) => (
-                <div key={port.id} className="truncate text-[10px] font-medium">
+                <div key={port.id} className="truncate text-xs font-medium">
                   {port.interfaceName}{port.description ? ` - ${port.description}` : ''}
                 </div>
               ))}
@@ -129,27 +132,27 @@ export const DeviceNode = memo(({ data, selected }: NodeProps<DeviceNodeData>) =
       )}
 
       <div className="space-y-2" style={{ fontSize: `${subFontSize}px` }}>
-        <div className="flex justify-between text-blue-300">
+        <div className="flex justify-between gap-3 text-muted-foreground">
           <span>Tip</span>
-          <span className="font-medium text-white">{data.type}</span>
+          <span className="truncate font-medium text-foreground">{data.type}</span>
         </div>
-        <div className="flex justify-between text-blue-300">
+        <div className="flex justify-between gap-3 text-muted-foreground">
           <span>IP Adresi</span>
-          <span className="font-medium text-white font-mono">{data.ipAddress || 'Yok'}</span>
+          <span className="font-mono font-medium text-foreground">{data.ipAddress || 'Yok'}</span>
         </div>
-        <div className="flex justify-between text-blue-300">
+        <div className="flex justify-between gap-3 text-muted-foreground">
           <span>Konum</span>
-          <span className="font-medium text-white truncate max-w-[120px]">{data.location || 'Yok'}</span>
+          <span className="max-w-[120px] truncate font-medium text-foreground">{data.location || 'Yok'}</span>
         </div>
       </div>
 
       {data.ports !== undefined && (
         <div 
-          className="mt-3 pt-3 border-t border-blue-800 flex justify-between items-center font-bold uppercase tracking-wider text-blue-400"
-          style={{ fontSize: `${10 * scale}px` }}
+          className="mt-3 flex items-center justify-between border-t border-border pt-3 font-medium text-muted-foreground"
+          style={{ fontSize: `${Math.max(12, 11 * scale)}px` }}
         >
           <span>{data.ports} Port</span>
-          <span className={hasPortDown ? 'text-red-500' : 'text-blue-300'}>
+          <span className={hasPortDown ? 'text-red-600 dark:text-red-400' : 'text-foreground'}>
             {hasPortDown ? `${data.portDownCount} Down` : `${data.activeConnections || 0} Aktif`}
           </span>
         </div>
