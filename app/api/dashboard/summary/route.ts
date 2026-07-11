@@ -1,209 +1,316 @@
-/**
- * Dashboard Summary API — Single endpoint for all dashboard data.
- *
- * Aggregates VMware, FortiGate, NMS, and Security metrics into one response.
- * Reduces dashboard from 10+ parallel fetches to 1 fetch.
- *
- * Usage: GET /api/dashboard/summary
- */
-
+import {
+  AlarmArchiveState,
+  AlarmIncidentStatus,
+  AlarmSeverity2,
+  DeviceStatus,
+  DeviceType,
+  IntegrationType,
+} from '@prisma/client';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
-async function getVmwareSummary() {
-  try {
-    const config = await prisma.integrationConfig.findFirst({
-      where: { type: 'VMWARE_VCENTER' },
-      orderBy: { updatedAt: 'desc' },
-    });
+export const dynamic = 'force-dynamic';
 
-    if (!config?.lastSyncAt) return null;
+const ACTIVE_INCIDENT_STATUSES = [AlarmIncidentStatus.OPEN, AlarmIncidentStatus.ACKNOWLEDGED];
+const PRIORITY_SEVERITIES = [AlarmSeverity2.ALARM_CRITICAL, AlarmSeverity2.ALARM_HIGH];
+const NETWORK_TYPES = [DeviceType.SWITCH, DeviceType.ROUTER, DeviceType.FIREWALL];
+const TEN_MINUTES_MS = 10 * 60 * 1000;
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
-    const [clusters, datastores, allDevices, datastoreStats, vmCount] = await Promise.all([
-      prisma.vMwareCluster.count(),
-      prisma.vMwareDatastore.count(),
-      prisma.device.findMany({
-        select: { id: true, name: true, status: true, type: true, metadata: true },
-        take: 100,
-      }),
-      prisma.vMwareDatastore.aggregate({
-        _sum: { capacity: true, freeSpace: true },
-      }),
-      prisma.device.count({ where: { type: 'VIRTUAL_MACHINE' } }),
-    ]);
+type SourceState = 'healthy' | 'stale' | 'error' | 'unconfigured';
 
-    // ESXi hosts: type=VIRTUAL_HOST
-    const hosts = allDevices.filter(d => d.type === 'VIRTUAL_HOST');
-    const hostsOnline = hosts.filter(h => h.status === 'ACTIVE').length;
-    const vms = allDevices.filter(d => d.type === 'VIRTUAL_MACHINE');
-    const vmRunning = vms.filter(v => v.status === 'ACTIVE').length;
-
-    const totalStorageTB = datastoreStats._sum.capacity
-      ? Number(datastoreStats._sum.capacity) / 1e12
-      : 0;
-    const usedStorageTB = datastoreStats._sum.capacity && datastoreStats._sum.freeSpace
-      ? (Number(datastoreStats._sum.capacity) - Number(datastoreStats._sum.freeSpace)) / 1e12
-      : 0;
-
-    // Top 5 datastores by usage
-    const topDatastores = await prisma.vMwareDatastore.findMany({
-      select: { id: true, name: true, capacity: true, freeSpace: true },
-      orderBy: { freeSpace: 'asc' },
-      take: 5,
-    });
-    const datastoreDetails = topDatastores.map(ds => ({
-      id: ds.id,
-      name: ds.name,
-      capacityGB: Number(ds.capacity) / 1e9,
-      freeGB: Number(ds.freeSpace) / 1e9,
-      usedPercent: ds.capacity ? Math.round(((Number(ds.capacity) - Number(ds.freeSpace)) / Number(ds.capacity)) * 100) : 0,
-    }));
-
-    return {
-      clusters,
-      vms: vmCount,
-      vmRunning,
-      vmStopped: vmCount - vmRunning,
-      hosts: hosts.length,
-      hostsOnline,
-      hostsOffline: hosts.length - hostsOnline,
-      datastores,
-      totalStorageTB,
-      usedStorageTB,
-      lastSyncAt: config.lastSyncAt,
-      lastSyncStatus: config.lastSyncStatus || 'unknown',
-      hostsList: hosts.slice(0, 6).map(h => ({
-        id: h.id,
-        name: h.name,
-        status: h.status,
-        cpuCores: (h.metadata as any)?.cpuCores || (h.metadata as any)?.numCpu,
-        memoryGB: (h.metadata as any)?.memoryGB || (h.metadata as any)?.memoryMB ? Math.round((h.metadata as any).memoryMB / 1024) : undefined,
-      })),
-      topDatastores: datastoreDetails,
-    };
-  } catch (err) {
-    console.warn('[Dashboard] VMware summary failed:', err);
-    return null;
-  }
+function hasConfiguredHost(config: unknown): boolean {
+  if (!config || typeof config !== 'object' || Array.isArray(config)) return false;
+  const host = (config as Record<string, unknown>).host;
+  return typeof host === 'string' && host.trim().length > 0;
 }
 
-async function getFortiGateSummary() {
-  try {
-    const [syncStatus, policyCount] = await Promise.all([
-      prisma.integrationConfig.findFirst({
-        where: { type: 'FORTIGATE' },
-        orderBy: { updatedAt: 'desc' },
-      }),
-      prisma.firewallPolicy.count(),
-    ]);
-
-    return {
-      policiesProcessed: policyCount,
-      addressesProcessed: 0,
-      deviceCount: 0,
-      lastSyncAt: syncStatus?.lastSyncAt,
-      lastSyncStatus: syncStatus?.lastSyncStatus || 'unknown',
-    };
-  } catch (err) {
-    console.warn('[Dashboard] FortiGate summary failed:', err);
-    return null;
-  }
-}
-
-async function getNmsSummary() {
-  try {
-    const allDevices = await prisma.device.findMany({
-      select: { id: true, name: true, status: true, type: true },
-      take: 200,
-    });
-
-    // NMS devices: SWITCH, ROUTER, or vendor in network equipment list
-    const nmsDevices = allDevices.filter(d =>
-      ['SWITCH', 'ROUTER', 'FIREWALL'].includes(d.type as string) ||
-      d.name?.toLowerCase().match(/sw|router|switch|hp|cisco|juniper/)
-    );
-
-    const criticalAlarms = await prisma.alarmEvent.count({
-      where: {
-        severity: 'ALARM_CRITICAL',
-        createdAt: {
-          gte: new Date(Date.now() - 24 * 60 * 60 * 1000),
-        },
-      },
-    });
-
-    let pollingActive = false;
-    let lastPollAt: string | null = null;
-
-    try {
-      const recentMetrics = await prisma.$queryRaw<
-        Array<{ collected_at: Date }>
-      >`SELECT "collected_at" FROM nms_health_metrics ORDER BY "collected_at" DESC LIMIT 1`;
-      if (recentMetrics.length > 0) {
-        lastPollAt = recentMetrics[0].collected_at.toISOString();
-        pollingActive = (Date.now() - new Date(lastPollAt).getTime()) < 600_000;
-      }
-    } catch {
-      // Table may not exist yet
-    }
-
-    return {
-      devices: nmsDevices.length,
-      devicesOnline: nmsDevices.filter(d => d.status === 'ACTIVE').length,
-      devicesOffline: nmsDevices.filter(d => d.status !== 'ACTIVE').length,
-      criticalAlarms,
-      pollingActive,
-      lastPollAt,
-      activeAlarms: [], // Populated from alarm events below
-    };
-  } catch (err) {
-    console.warn('[Dashboard] NMS summary failed:', err);
-    return null;
-  }
-}
-
-async function getSecuritySummary() {
-  try {
-    const criticalAlarms = await prisma.alarmEvent.count({
-      where: {
-        severity: 'ALARM_CRITICAL',
-        createdAt: {
-          gte: new Date(Date.now() - 24 * 60 * 60 * 1000),
-        },
-      },
-    });
-
-    return {
-      quarantineCount: 0,
-      criticalAlarmsLast24h: criticalAlarms,
-    };
-  } catch (err) {
-    console.warn('[Dashboard] Security summary failed:', err);
-    return null;
-  }
+function integrationState(input: {
+  configured: boolean;
+  enabled?: boolean;
+  lastSyncAt: Date | null;
+  lastSyncStatus?: string | null;
+  staleAfterMs: number;
+}): SourceState {
+  if (!input.configured || input.enabled === false) return 'unconfigured';
+  if (input.lastSyncStatus === 'failed') return 'error';
+  if (!input.lastSyncAt || Date.now() - input.lastSyncAt.getTime() > input.staleAfterMs) return 'stale';
+  return 'healthy';
 }
 
 export async function GET() {
   try {
-    const [vmware, fortigate, nms, security] = await Promise.allSettled([
-      getVmwareSummary(),
-      getFortiGateSummary(),
-      getNmsSummary(),
-      getSecuritySummary(),
+    const activeIncidentWhere = {
+      status: { in: ACTIVE_INCIDENT_STATUSES },
+      archiveState: AlarmArchiveState.HOT,
+    };
+    const recentNmsThreshold = new Date(Date.now() - TEN_MINUTES_MS);
+    const oldSnapshotThreshold = new Date(Date.now() - SEVEN_DAYS_MS);
+
+    const [
+      deviceTotal,
+      activeDevices,
+      hostsTotal,
+      hostsOnline,
+      vmsTotal,
+      vmsRunning,
+      nmsTotal,
+      nmsOnline,
+      clusters,
+      datastoreCount,
+      datastoreTotals,
+      topDatastores,
+      problemHosts,
+      offlineDevices,
+      oldSnapshots,
+      incidentStats,
+      incidentCandidates,
+      integrationConfigs,
+      latestNmsDevice,
+      firewallPolicyCount,
+    ] = await Promise.all([
+      prisma.device.count(),
+      prisma.device.count({ where: { status: DeviceStatus.ACTIVE } }),
+      prisma.device.count({ where: { type: DeviceType.VIRTUAL_HOST } }),
+      prisma.device.count({ where: { type: DeviceType.VIRTUAL_HOST, status: DeviceStatus.ACTIVE } }),
+      prisma.device.count({ where: { type: DeviceType.VIRTUAL_MACHINE } }),
+      prisma.device.count({ where: { type: DeviceType.VIRTUAL_MACHINE, status: DeviceStatus.ACTIVE } }),
+      prisma.device.count({ where: { pollingEnabled: true } }),
+      prisma.device.count({
+        where: {
+          pollingEnabled: true,
+          status: DeviceStatus.ACTIVE,
+          lastPolledAt: { gte: recentNmsThreshold },
+        },
+      }),
+      prisma.vMwareCluster.count(),
+      prisma.vMwareDatastore.count(),
+      prisma.vMwareDatastore.aggregate({ _sum: { capacity: true, freeSpace: true } }),
+      prisma.vMwareDatastore.findMany({
+        select: { id: true, name: true, capacity: true, freeSpace: true },
+        orderBy: { freeSpace: 'asc' },
+        take: 6,
+      }),
+      prisma.device.findMany({
+        where: { type: DeviceType.VIRTUAL_HOST, status: { not: DeviceStatus.ACTIVE } },
+        select: { id: true, name: true, status: true, metadata: true },
+        orderBy: { name: 'asc' },
+        take: 5,
+      }),
+      prisma.device.findMany({
+        where: {
+          pollingEnabled: true,
+          OR: [
+            { status: { not: DeviceStatus.ACTIVE } },
+            { lastPolledAt: null },
+            { lastPolledAt: { lt: recentNmsThreshold } },
+          ],
+        },
+        select: { id: true, name: true, status: true, managementIp: true, lastPolledAt: true },
+        orderBy: [{ lastPolledAt: 'asc' }, { name: 'asc' }],
+        take: 5,
+      }),
+      prisma.vmSnapshot.findMany({
+        where: { createdAt: { lt: oldSnapshotThreshold } },
+        select: { id: true, vmId: true, name: true, createdAt: true, size: true },
+        orderBy: { createdAt: 'asc' },
+        take: 5,
+      }),
+      prisma.alarmIncident.groupBy({
+        by: ['severity'],
+        where: activeIncidentWhere,
+        _count: { id: true },
+      }),
+      prisma.alarmIncident.findMany({
+        where: { ...activeIncidentWhere, severity: { in: PRIORITY_SEVERITIES } },
+        include: { alarm: { select: { code: true, name: true } } },
+        orderBy: { lastSeenAt: 'desc' },
+        take: 20,
+      }),
+      prisma.integrationConfig.findMany({
+        where: {
+          type: {
+            in: [
+              IntegrationType.VMWARE_VCENTER,
+              IntegrationType.FORTIGATE,
+              IntegrationType.FORTIANALYZER,
+            ],
+          },
+        },
+        orderBy: { updatedAt: 'desc' },
+      }),
+      prisma.device.findFirst({
+        where: { pollingEnabled: true },
+        select: { lastPolledAt: true },
+        orderBy: { lastPolledAt: 'desc' },
+      }),
+      prisma.firewallPolicy.count(),
     ]);
 
-    return NextResponse.json({
-      timestamp: new Date().toISOString(),
-      vmware: vmware.status === 'fulfilled' ? vmware.value : null,
-      fortigate: fortigate.status === 'fulfilled' ? fortigate.value : null,
-      nms: nms.status === 'fulfilled' ? nms.value : null,
-      security: security.status === 'fulfilled' ? security.value : null,
+    const vmIds = [...new Set(oldSnapshots.map((snapshot) => snapshot.vmId))];
+    const snapshotDevices = vmIds.length > 0
+      ? await prisma.device.findMany({ where: { id: { in: vmIds } }, select: { id: true, name: true } })
+      : [];
+    const vmNames = new Map(snapshotDevices.map((device) => [device.id, device.name]));
+
+    const severityCounts = Object.fromEntries(incidentStats.map((item) => [item.severity, item._count.id]));
+    const severityRank: Record<string, number> = {
+      ALARM_CRITICAL: 0,
+      ALARM_HIGH: 1,
+      ALARM_MEDIUM: 2,
+      ALARM_LOW: 3,
+      ALARM_INFO: 4,
+    };
+    const priorityIncidents = incidentCandidates
+      .sort((a, b) => severityRank[a.severity] - severityRank[b.severity] || b.lastSeenAt.getTime() - a.lastSeenAt.getTime())
+      .slice(0, 5)
+      .map((incident) => ({
+        id: incident.id,
+        code: incident.alarm.code,
+        title: incident.title,
+        severity: incident.severity,
+        status: incident.status,
+        source: incident.source,
+        entityType: incident.entityType,
+        entityId: incident.entityId,
+        lastSeenAt: incident.lastSeenAt,
+        occurrenceCount: incident.occurrenceCount,
+      }));
+
+    const configsByType = new Map<IntegrationType, typeof integrationConfigs[number]>();
+    for (const config of integrationConfigs) {
+      if (!configsByType.has(config.type)) configsByType.set(config.type, config);
+    }
+
+    const integrationDefinitions = [
+      { type: IntegrationType.VMWARE_VCENTER, name: 'VMware vCenter', href: '/integrations/vmware' },
+      { type: IntegrationType.FORTIGATE, name: 'FortiGate', href: '/integrations/firewall' },
+      { type: IntegrationType.FORTIANALYZER, name: 'FortiAnalyzer', href: '/integrations/fortianalyzer' },
+    ] as const;
+    const integrations: Array<{
+      key: string;
+      name: string;
+      href: string;
+      state: SourceState;
+      lastSyncAt: Date | null;
+      message: string | null;
+    }> = integrationDefinitions.map((definition) => {
+      const config = configsByType.get(definition.type);
+      const staleAfterMs = Math.max((config?.syncInterval ?? 5) * 3 * 60 * 1000, 15 * 60 * 1000);
+      return {
+        key: definition.type,
+        name: definition.name,
+        href: definition.href,
+        state: integrationState({
+          configured: Boolean(config && hasConfiguredHost(config.config)),
+          enabled: config?.enabled,
+          lastSyncAt: config?.lastSyncAt ?? null,
+          lastSyncStatus: config?.lastSyncStatus,
+          staleAfterMs,
+        }),
+        lastSyncAt: config?.lastSyncAt ?? null,
+        message: config?.lastSyncStatus === 'failed' ? 'Son senkronizasyon başarısız' : null,
+      };
     });
+    integrations.push({
+      key: 'NMS',
+      name: 'NMS / SNMP',
+      href: '/integrations/nms/devices',
+      state: integrationState({
+        configured: nmsTotal > 0,
+        lastSyncAt: latestNmsDevice?.lastPolledAt ?? null,
+        staleAfterMs: TEN_MINUTES_MS,
+      }),
+      lastSyncAt: latestNmsDevice?.lastPolledAt ?? null,
+      message: nmsTotal > 0 && !latestNmsDevice?.lastPolledAt ? 'Henüz polling verisi alınmadı' : null,
+    });
+
+    const capacityBytes = datastoreTotals._sum.capacity ? Number(datastoreTotals._sum.capacity) : 0;
+    const freeBytes = datastoreTotals._sum.freeSpace ? Number(datastoreTotals._sum.freeSpace) : 0;
+    const usedBytes = Math.max(0, capacityBytes - freeBytes);
+    const staleSources = integrations.filter((item) => item.state === 'stale' || item.state === 'error').length;
+    const criticalCount = severityCounts.ALARM_CRITICAL ?? 0;
+    const highCount = severityCounts.ALARM_HIGH ?? 0;
+    const overallStatus = criticalCount > 0
+      ? 'critical'
+      : highCount > 0 || integrations.some((item) => item.state === 'error')
+        ? 'attention'
+        : staleSources > 0
+          ? 'stale'
+          : 'healthy';
+
+    return NextResponse.json({
+      generatedAt: new Date().toISOString(),
+      posture: {
+        status: overallStatus,
+        critical: criticalCount,
+        high: highCount,
+        staleSources,
+      },
+      incidents: {
+        total: incidentStats.reduce((sum, item) => sum + item._count.id, 0),
+        critical: criticalCount,
+        high: highCount,
+        items: priorityIncidents,
+      },
+      metrics: {
+        devices: { total: deviceTotal, healthy: activeDevices, unavailable: deviceTotal - activeDevices },
+        hosts: { total: hostsTotal, healthy: hostsOnline, unavailable: hostsTotal - hostsOnline },
+        virtualMachines: { total: vmsTotal, healthy: vmsRunning, unavailable: vmsTotal - vmsRunning },
+        storage: {
+          total: datastoreCount,
+          capacityTB: capacityBytes / 1e12,
+          usedTB: usedBytes / 1e12,
+          usedPercent: capacityBytes > 0 ? Math.round((usedBytes / capacityBytes) * 100) : null,
+        },
+        nms: { total: nmsTotal, healthy: nmsOnline, unavailable: nmsTotal - nmsOnline },
+        firewallPolicies: firewallPolicyCount,
+      },
+      inventory: { clusters },
+      integrations,
+      operations: {
+        infrastructure: {
+          problemHosts: problemHosts.map((host) => ({
+            id: host.id,
+            name: host.name,
+            status: host.status,
+            cpuCores: Number((host.metadata as Record<string, unknown> | null)?.cpuCores ?? (host.metadata as Record<string, unknown> | null)?.numCpu ?? 0) || null,
+            memoryGB: Number((host.metadata as Record<string, unknown> | null)?.memoryGB ?? 0) || null,
+          })),
+          criticalDatastores: topDatastores
+            .map((datastore) => {
+              const capacity = Number(datastore.capacity);
+              const free = Number(datastore.freeSpace);
+              return {
+                id: datastore.id,
+                name: datastore.name,
+                usedPercent: capacity > 0 ? Math.round(((capacity - free) / capacity) * 100) : 0,
+              };
+            })
+            .filter((datastore) => datastore.usedPercent >= 80)
+            .sort((a, b) => b.usedPercent - a.usedPercent),
+          oldSnapshots: oldSnapshots.map((snapshot) => ({
+            id: snapshot.id,
+            name: snapshot.name || 'İsimsiz snapshot',
+            vmName: vmNames.get(snapshot.vmId) || 'Bilinmeyen VM',
+            ageInDays: Math.floor((Date.now() - snapshot.createdAt.getTime()) / (24 * 60 * 60 * 1000)),
+            sizeGB: snapshot.size ? Number(snapshot.size) / 1e9 : null,
+          })),
+        },
+        network: {
+          offlineDevices: offlineDevices.map((device) => ({
+            id: device.id,
+            name: device.name,
+            status: device.status,
+            managementIp: device.managementIp,
+            lastPolledAt: device.lastPolledAt,
+          })),
+          networkDeviceTypes: NETWORK_TYPES,
+        },
+      },
+    }, { headers: { 'Cache-Control': 'no-store, max-age=0' } });
   } catch (error) {
     console.error('[Dashboard] Summary endpoint failed:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch dashboard summary' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Dashboard özeti alınamadı' }, { status: 500 });
   }
 }

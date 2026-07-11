@@ -19,7 +19,7 @@ import {
 import {
   AlertTriangle, AlertCircle, AlertOctagon, CheckCircle, Clock, RefreshCw,
   Search, Play, Shield, Bell, Trash2, BarChart3, Eye, User, Router, Monitor,
-  ChevronDown, ChevronRight, Code2, MapPin, Globe,
+  ChevronDown, ChevronRight, Code2, MapPin, Globe, Archive, CircleCheckBig, Download, LockKeyhole,
 } from 'lucide-react';
 
 interface AlarmEventData {
@@ -44,6 +44,19 @@ interface AlarmEventData {
     category: string;
     description: string | null;
     source?: string;
+  };
+  incident?: {
+    id: string;
+    status: 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED' | 'CLOSED';
+    archiveState: 'HOT' | 'ARCHIVED';
+    occurrenceCount: number;
+    firstSeenAt: string;
+    lastSeenAt: string;
+    reopenCount: number;
+    assignedTo: string | null;
+    resolvedAt: string | null;
+    closedAt: string | null;
+    legalHold: boolean;
   };
 }
 
@@ -321,9 +334,11 @@ export default function AlertsDashboardPage() {
   const [filter, setFilter] = useState('all');
   const [sourceFilter, setSourceFilter] = useState<SourceType>('all');
   const [search, setSearch] = useState('');
-  const [offset, setOffset] = useState(0);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [archiveFilter, setArchiveFilter] = useState<'HOT' | 'ARCHIVED'>('HOT');
+  const [sourceStats, setSourceStats] = useState<Record<string, number>>({});
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const [rawLogExpanded, setRawLogExpanded] = useState(false);
 
@@ -332,13 +347,13 @@ export default function AlertsDashboardPage() {
   const [cleanupStats, setCleanupStats] = useState<any>(null);
   const [cleanupOpen, setCleanupOpen] = useState(false);
   const [cleanupHours, setCleanupHours] = useState(168); // 7 days default
-  const [cleanupAcknowledgedOnly, setCleanupAcknowledgedOnly] = useState(true);
   const [cleanupLoading, setCleanupLoading] = useState(false);
   const [cleanupDryRun, setCleanupDryRun] = useState(true);
 
   // Detail view state
   const [selectedEvent, setSelectedEvent] = useState<AlarmEventData | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [incidentDetail, setIncidentDetail] = useState<any>(null);
   // Policy enrichment for FW_POLICY_CHANGED alarms
   const [policyData, setPolicyData] = useState<{ host: string; policies: any[]; total: number } | null>(null);
   const [policyLoading, setPolicyLoading] = useState(false);
@@ -370,36 +385,70 @@ export default function AlertsDashboardPage() {
 
   useEffect(() => {
     const requestedFilter = new URLSearchParams(window.location.search).get('filter');
-    const allowedFilters = new Set(['all', 'unacknowledged', 'ALARM_CRITICAL', 'ALARM_HIGH', 'ALARM_MEDIUM', 'ALARM_LOW']);
+    const allowedFilters = new Set([
+      'all', 'unacknowledged', 'ACKNOWLEDGED', 'RESOLVED', 'CLOSED',
+      'ALARM_CRITICAL', 'ALARM_HIGH', 'ALARM_MEDIUM', 'ALARM_LOW',
+    ]);
     if (requestedFilter && allowedFilters.has(requestedFilter)) {
       setFilter(requestedFilter);
     }
   }, []);
 
-  const fetchEvents = useCallback(async (silent = false, appendOffset = 0) => {
-    const isAppend = appendOffset > 0;
+  const fetchEvents = useCallback(async (silent = false, appendCursor: string | null = null) => {
+    const isAppend = Boolean(appendCursor);
     if (isAppend) setLoadingMore(true);
     else if (!silent) setLoading(true);
     else setRefreshing(true);
     try {
-      const params = new URLSearchParams({ limit: PAGE_SIZE.toString(), offset: appendOffset.toString() });
-      if (filter === 'unacknowledged') params.set('acknowledged', 'false');
+      const params = new URLSearchParams({ limit: PAGE_SIZE.toString(), archiveState: archiveFilter });
+      if (appendCursor) params.set('cursor', appendCursor);
+      if (filter === 'unacknowledged') params.set('status', 'OPEN');
+      else if (['ACKNOWLEDGED', 'RESOLVED', 'CLOSED'].includes(filter)) params.set('status', filter);
       else if (filter !== 'all') params.set('severity', filter);
       if (sourceFilter !== 'all') params.set('source', sourceFilter);
       if (search) params.set('search', search);
 
-      const res = await fetch(`/api/alarms?${params}`);
+      const res = await fetch(`/api/alarm-incidents?${params}`);
       const data = await res.json();
       if (data.success) {
-        const newEvents = data.data || [];
+        const newEvents = (data.data || []).map((incident: any) => {
+          const occurrence = incident.occurrences?.[0] || {};
+          const acknowledged = incident.status !== 'OPEN';
+          return {
+            ...occurrence,
+            id: occurrence.id || incident.id,
+            alarmId: incident.alarmId,
+            severity: incident.severity,
+            title: incident.title,
+            message: incident.message,
+            sourceIp: occurrence.sourceIp || null,
+            destIp: occurrence.destIp || null,
+            deviceName: occurrence.deviceName || incident.entityId || null,
+            acknowledged,
+            acknowledgedBy: incident.acknowledgedBy,
+            acknowledgedAt: incident.acknowledgedAt,
+            notifiedAt: occurrence.notifiedAt || null,
+            notifyChannel: occurrence.notifyChannel || null,
+            createdAt: occurrence.createdAt || incident.firstSeenAt,
+            rawData: occurrence.rawData || null,
+            alarm: {
+              ...incident.alarm,
+              category: incident.category,
+              source: incident.source,
+            },
+            incident,
+          } as AlarmEventData;
+        });
         if (isAppend) {
           setEvents((prev: AlarmEventData[]) => [...prev, ...newEvents]);
         } else {
           setEvents(newEvents);
         }
-        setStats(data.stats || {});
+        setStats(data.stats?.severity || {});
+        setSourceStats(data.stats?.source || {});
         setTotal(data.total || 0);
-        setHasMore(newEvents.length === PAGE_SIZE && (appendOffset + newEvents.length) < data.total);
+        setNextCursor(data.nextCursor || null);
+        setHasMore(Boolean(data.nextCursor));
       }
     } catch (err) {
       console.error('Fetch events error:', err);
@@ -408,24 +457,37 @@ export default function AlertsDashboardPage() {
       else if (!silent) setLoading(false);
       setRefreshing(false);
     }
-  }, [filter, sourceFilter, search]);
+  }, [filter, sourceFilter, search, archiveFilter]);
 
   useEffect(() => { fetchEvents(); }, [fetchEvents]);
 
+  useEffect(() => {
+    const incidentId = selectedEvent?.incident?.id;
+    if (!detailOpen || !incidentId) {
+      setIncidentDetail(null);
+      return;
+    }
+    const controller = new AbortController();
+    fetch(`/api/alarm-incidents/${incidentId}`, { signal: controller.signal })
+      .then((response) => response.json())
+      .then((data) => { if (data.success) setIncidentDetail(data.data); })
+      .catch((error) => { if (error.name !== 'AbortError') console.error('Incident detail error:', error); });
+    return () => controller.abort();
+  }, [detailOpen, selectedEvent?.incident?.id]);
+
   // Reset offset when filters change
   useEffect(() => {
-    setOffset(0);
+    setNextCursor(null);
     setHasMore(true);
-  }, [filter, sourceFilter, search]);
+  }, [filter, sourceFilter, search, archiveFilter]);
 
   // Infinite scroll observer
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const loadMore = useCallback(() => {
     if (loadingMore || !hasMore) return;
-    const newOffset = offset + PAGE_SIZE;
-    setOffset(newOffset);
-    fetchEvents(false, newOffset);
-  }, [loadingMore, hasMore, offset, fetchEvents]);
+    if (!nextCursor) return;
+    fetchEvents(false, nextCursor);
+  }, [loadingMore, hasMore, nextCursor, fetchEvents]);
 
   useEffect(() => {
     const el = loadMoreRef.current;
@@ -457,7 +519,6 @@ export default function AlertsDashboardPage() {
     try {
       const params = new URLSearchParams({
         hoursOld: cleanupHours.toString(),
-        acknowledged: cleanupAcknowledgedOnly.toString(),
         dryRun: cleanupDryRun.toString(),
       });
 
@@ -465,11 +526,11 @@ export default function AlertsDashboardPage() {
       const data = await res.json();
 
       if (data.success) {
-        const deletedCount = cleanupDryRun ? data.wouldDelete : data.deleted;
+        const archivedCount = cleanupDryRun ? data.wouldArchive : data.archived;
         setMessage({
           text: cleanupDryRun
-            ? `Would delete ${deletedCount} alarms (dry run)`
-            : `Deleted ${deletedCount} alarms successfully`,
+            ? `${archivedCount} kapatılmış alarm arşivlenecek`
+            : `${archivedCount} alarm arşivlendi; olay kanıtları korunuyor`,
           type: 'success',
         });
 
@@ -483,7 +544,7 @@ export default function AlertsDashboardPage() {
         setMessage({ text: `Error: ${data.error}`, type: 'error' });
       }
     } catch (err) {
-      setMessage({ text: 'Cleanup failed', type: 'error' });
+      setMessage({ text: 'Arşivleme işlemi başarısız', type: 'error' });
     } finally {
       setCleanupLoading(false);
     }
@@ -544,49 +605,68 @@ export default function AlertsDashboardPage() {
     }
   };
 
-  const acknowledgeEvent = async (id: string) => {
-    setAcknowledgingIds(prev => new Set(prev).add(id));
+  const transitionIncident = async (
+    event: AlarmEventData,
+    action: 'ACKNOWLEDGE' | 'RESOLVE' | 'CLOSE' | 'ARCHIVE' | 'RESTORE' | 'SET_LEGAL_HOLD' | 'RELEASE_LEGAL_HOLD',
+  ) => {
+    const incidentId = event.incident?.id;
+    if (!incidentId) {
+      setMessage({ text: 'Bu eski alarm henüz bir incident ile ilişkilendirilmemiş', type: 'error' });
+      return false;
+    }
+    setAcknowledgingIds(prev => new Set(prev).add(incidentId));
     try {
-      const res = await fetch('/api/alarms', {
+      const res = await fetch('/api/alarm-incidents', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: [id], acknowledged: true, acknowledgedBy: 'admin' }),
+        body: JSON.stringify({ ids: [incidentId], action }),
       });
       const data = await res.json();
       if (data.success) {
-        // Update local state immediately
-        setEvents((prev: AlarmEventData[]) =>
-          prev.map((e: AlarmEventData) =>
-            e.id === id ? { ...e, acknowledged: true, acknowledgedAt: new Date().toISOString(), acknowledgedBy: 'admin' } : e
-          )
-        );
-        setMessage({ text: 'Alarm onaylandi', type: 'success' });
+        const labels = {
+          ACKNOWLEDGE: 'Alarm onaylandı',
+          RESOLVE: 'Alarm çözüldü',
+          CLOSE: 'Alarm kapatıldı',
+          ARCHIVE: 'Alarm arşivlendi',
+          RESTORE: 'Alarm arşivden çıkarıldı',
+          SET_LEGAL_HOLD: 'Alarm için legal hold etkinleştirildi',
+          RELEASE_LEGAL_HOLD: 'Alarm legal hold korumasından çıkarıldı',
+        };
+        setMessage({ text: labels[action], type: 'success' });
         setTimeout(() => setMessage(null), 3000);
-        // Also refresh from server to ensure consistency (silent)
+        setDetailOpen(false);
         fetchEvents(true);
+        return true;
       } else {
-        setMessage({ text: `Onaylama hatasi: ${data.error || 'Bilinmeyen hata'}`, type: 'error' });
+        setMessage({ text: `İşlem hatası: ${data.error || 'Bilinmeyen hata'}`, type: 'error' });
       }
     } catch (err) {
-      console.error('Acknowledge error:', err);
-      setMessage({ text: 'Onaylama baglanti hatasi', type: 'error' });
+      console.error('Incident transition error:', err);
+      setMessage({ text: 'Incident güncellenirken bağlantı hatası oluştu', type: 'error' });
     } finally {
       setAcknowledgingIds(prev => {
         const next = new Set(prev);
-        next.delete(id);
+        next.delete(incidentId);
         return next;
       });
     }
+    return false;
+  };
+
+  const acknowledgeEvent = async (event: AlarmEventData) => {
+    await transitionIncident(event, 'ACKNOWLEDGE');
   };
 
   const acknowledgeAll = async () => {
-    const unackedIds = events.filter((e: AlarmEventData) => !e.acknowledged).map((e: AlarmEventData) => e.id);
+    const unackedIds = events
+      .filter((event: AlarmEventData) => event.incident?.status === 'OPEN')
+      .map((event: AlarmEventData) => event.incident!.id);
     if (unackedIds.length === 0) return;
     try {
-      const res = await fetch('/api/alarms', {
+      const res = await fetch('/api/alarm-incidents', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: unackedIds, acknowledged: true }),
+        body: JSON.stringify({ ids: unackedIds, action: 'ACKNOWLEDGE' }),
       });
       const data = await res.json();
       if (data.success) fetchEvents(true);
@@ -790,15 +870,28 @@ export default function AlertsDashboardPage() {
             }}
           >
             <BarChart3 className="h-4 w-4 mr-2" />
-            Cleanup Stats
+            Retention Durumu
           </Button>
           <Button
             variant="outline"
             size="sm"
             onClick={() => setCleanupOpen(true)}
           >
-            <Trash2 className="h-4 w-4 mr-2" />
-            Cleanup
+            <Archive className="h-4 w-4 mr-2" />
+            Arşivle
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const params = new URLSearchParams({ archiveState: archiveFilter });
+              if (filter === 'unacknowledged') params.set('status', 'OPEN');
+              else if (['ACKNOWLEDGED', 'RESOLVED', 'CLOSED'].includes(filter)) params.set('status', filter);
+              window.location.href = `/api/alarm-incidents/export?${params}`;
+            }}
+          >
+            <Download className="h-4 w-4 mr-2" />
+            CSV
           </Button>
           <Button variant="outline" onClick={runAlarmCheck} disabled={checking}>
             {checking ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Play className="h-4 w-4 mr-2" />}
@@ -850,8 +943,12 @@ export default function AlertsDashboardPage() {
             const cfg = SOURCE_CONFIG[src];
             const Icon = cfg.icon;
             const count = src === 'all'
-              ? events.length
-              : events.filter((e: AlarmEventData) => getAlarmSource(e.alarm) === src).length;
+              ? total
+              : src === 'firewall'
+                ? (sourceStats.fortianalyzer || 0) + (sourceStats['fortigate-sslvpn'] || 0)
+                : src === 'switch'
+                  ? sourceStats.nms || 0
+                  : sourceStats.vmware || 0;
             return (
               <Button
                 key={src}
@@ -875,6 +972,9 @@ export default function AlertsDashboardPage() {
           {[
             { key: 'all', label: 'Tumu' },
             { key: 'unacknowledged', label: 'Bekleyen' },
+            { key: 'ACKNOWLEDGED', label: 'Onaylandı' },
+            { key: 'RESOLVED', label: 'Çözüldü' },
+            { key: 'CLOSED', label: 'Kapatıldı' },
             { key: 'ALARM_CRITICAL', label: 'Kritik' },
             { key: 'ALARM_HIGH', label: 'Yuksek' },
             { key: 'ALARM_MEDIUM', label: 'Orta' },
@@ -884,6 +984,15 @@ export default function AlertsDashboardPage() {
               {f.label}
             </Button>
           ))}
+        </div>
+
+        <div className="flex gap-2">
+          <Button size="sm" variant={archiveFilter === 'HOT' ? 'default' : 'outline'} onClick={() => setArchiveFilter('HOT')}>
+            Aktif kayıtlar
+          </Button>
+          <Button size="sm" variant={archiveFilter === 'ARCHIVED' ? 'default' : 'outline'} onClick={() => setArchiveFilter('ARCHIVED')}>
+            <Archive className="h-3.5 w-3.5 mr-1.5" /> Arşiv
+          </Button>
         </div>
 
         {/* Action buttons */}
@@ -944,7 +1053,7 @@ export default function AlertsDashboardPage() {
                     const sev = SEVERITY_CONFIG[event.severity] || SEVERITY_CONFIG['ALARM_INFO'];
                     const Icon = sev.icon;
                     return (
-                      <TableRow key={event.id} className={event.acknowledged ? 'opacity-60' : ''}>
+                      <TableRow key={event.id} className={event.incident?.status === 'CLOSED' ? 'opacity-60' : ''}>
                         <TableCell className="text-xs whitespace-nowrap">
                           <div className="flex items-center gap-1 text-muted-foreground">
                             <Clock className="h-3 w-3" />
@@ -993,14 +1102,11 @@ export default function AlertsDashboardPage() {
                         </TableCell>
                         <TableCell className="text-xs max-w-[150px] truncate" title={event.deviceName || '-'}>{event.deviceName || '-'}</TableCell>
                         <TableCell>
-                          {event.acknowledged ? (
-                            <Badge variant="outline" className="text-green-500 text-xs">
-                              <CheckCircle className="h-3 w-3 mr-1" />
-                              Onaylandi
-                            </Badge>
-                          ) : (
-                            <Badge variant="destructive" className="text-xs">Bekliyor</Badge>
-                          )}
+                          {event.incident?.status === 'OPEN' && <Badge variant="destructive" className="text-xs">Bekliyor</Badge>}
+                          {event.incident?.status === 'ACKNOWLEDGED' && <Badge variant="outline" className="text-amber-600 text-xs">Onaylandı</Badge>}
+                          {event.incident?.status === 'RESOLVED' && <Badge variant="outline" className="text-green-600 text-xs"><CircleCheckBig className="h-3 w-3 mr-1" />Çözüldü</Badge>}
+                          {event.incident?.status === 'CLOSED' && <Badge variant="secondary" className="text-xs">Kapatıldı</Badge>}
+                          {!event.incident && <Badge variant="outline" className="text-xs">Eski kayıt</Badge>}
                         </TableCell>
                         <TableCell>
                           {event.acknowledgedBy ? (
@@ -1021,16 +1127,16 @@ export default function AlertsDashboardPage() {
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">
-                            {!event.acknowledged && (
+                            {event.incident?.status === 'OPEN' && (
                               <Button
                                 variant="outline"
                                 size="sm"
                                 className="h-8 w-8 p-0"
-                                disabled={acknowledgingIds.has(event.id)}
-                                onClick={() => acknowledgeEvent(event.id)}
+                                disabled={acknowledgingIds.has(event.incident.id)}
+                                onClick={() => acknowledgeEvent(event)}
                                 title="Onayla"
                               >
-                                {acknowledgingIds.has(event.id) ? (
+                                {acknowledgingIds.has(event.incident.id) ? (
                                   <RefreshCw className="h-4 w-4 animate-spin" />
                                 ) : (
                                   <CheckCircle className="h-4 w-4" />
@@ -1094,13 +1200,13 @@ export default function AlertsDashboardPage() {
         )}
       </Card>
 
-      {/* Cleanup Statistics Dialog */}
+      {/* Retention Statistics Dialog */}
       <Dialog open={cleanupStatsOpen} onOpenChange={setCleanupStatsOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Alarm Cleanup Statistics</DialogTitle>
+            <DialogTitle>Alarm Retention Durumu</DialogTitle>
             <DialogDescription>
-              Storage and data retention information
+              Alarm incident yaşam döngüsü ve arşiv politikası
             </DialogDescription>
           </DialogHeader>
 
@@ -1108,41 +1214,35 @@ export default function AlertsDashboardPage() {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-900">
-                  <p className="text-xs text-muted-foreground">Total Alarms</p>
-                  <p className="text-2xl font-bold">{cleanupStats?.total || 0}</p>
+                  <p className="text-xs text-muted-foreground">Aktif</p>
+                  <p className="text-2xl font-bold">{cleanupStats?.counts?.active || 0}</p>
                 </div>
                 <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-900">
-                  <p className="text-xs text-muted-foreground">Old Alarms</p>
-                  <p className="text-2xl font-bold">{cleanupStats?.old || 0}</p>
+                  <p className="text-xs text-muted-foreground">Çözüldü</p>
+                  <p className="text-2xl font-bold">{cleanupStats?.counts?.resolved || 0}</p>
                 </div>
                 <div className="p-3 rounded-lg bg-green-50 dark:bg-green-900/20">
-                  <p className="text-xs text-muted-foreground">Acknowledged</p>
-                  <p className="text-2xl font-bold text-green-600">{cleanupStats?.oldAcknowledged || 0}</p>
+                  <p className="text-xs text-muted-foreground">Kapatıldı</p>
+                  <p className="text-2xl font-bold text-green-600">{cleanupStats?.counts?.closed || 0}</p>
                 </div>
                 <div className="p-3 rounded-lg bg-orange-50 dark:bg-orange-900/20">
-                  <p className="text-xs text-muted-foreground">Unacknowledged</p>
-                  <p className="text-2xl font-bold text-orange-600">{cleanupStats?.oldUnacknowledged || 0}</p>
+                  <p className="text-xs text-muted-foreground">Arşivlendi</p>
+                  <p className="text-2xl font-bold text-orange-600">{cleanupStats?.counts?.archived || 0}</p>
                 </div>
               </div>
 
               <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-900">
-                <p className="text-sm font-medium mb-2">Storage Usage</p>
-                <p className="text-2xl font-bold">{cleanupStats?.estimatedStorageMB || '0'} MB</p>
+                <p className="text-sm font-medium mb-2">Retention Politikası</p>
+                <p className="text-sm font-medium">Ham veri: {cleanupStats?.config?.rawPayloadDays || 90} gün</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {cleanupStats?.percentOld || '0'}% of total alarms are older than {cleanupStats?.hoursOld < 24 ? `${cleanupStats?.hoursOld} saat` : `${(cleanupStats?.hoursOld ?? 168) / 24} gün`}
+                  Kapatılmış incident: {cleanupStats?.config?.incidentArchiveDays || 365} gün hot storage, bildirim denemeleri: {cleanupStats?.config?.notificationAttemptDays || 730} gün.
                 </p>
               </div>
 
               <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-900">
-                <p className="text-sm font-medium mb-2">Breakdown by Severity</p>
-                <div className="space-y-1 text-sm">
-                  {cleanupStats?.severityBreakdown && Object.entries(cleanupStats.severityBreakdown).map(([severity, count]: [string, any]) => (
-                    <div key={severity} className="flex justify-between">
-                      <span>{severity}</span>
-                      <span className="font-mono font-medium">{count}</span>
-                    </div>
-                  ))}
-                </div>
+                <p className="text-sm font-medium mb-2">Korunan kayıtlar</p>
+                <div className="flex justify-between text-sm"><span>Legal hold</span><span className="font-mono font-medium">{cleanupStats?.counts?.legalHold || 0}</span></div>
+                <div className="flex justify-between text-sm"><span>Sıkıştırılmış payload</span><span className="font-mono font-medium">{cleanupStats?.counts?.compressedPayloads || 0}</span></div>
               </div>
             </div>
           ) : (
@@ -1153,26 +1253,26 @@ export default function AlertsDashboardPage() {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setCleanupStatsOpen(false)}>
-              Close
+              Kapat
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Cleanup Dialog */}
+      {/* Manual archive dialog */}
       <Dialog open={cleanupOpen} onOpenChange={setCleanupOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Clean Up Old Alarms</DialogTitle>
+            <DialogTitle>Kapatılmış Alarmları Arşivle</DialogTitle>
             <DialogDescription>
-              Remove alarms older than specified days to reclaim storage and improve performance
+              Yalnızca CLOSED durumundaki incident kayıtları arşivlenir. Olay geçmişi ve audit izi silinmez.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium mb-2">
-                Şu kadar süreden eski alarmları sil
+                Şu kadar süreden eski kapatılmış alarmları arşivle
               </label>
               <div className="flex flex-wrap gap-2">
                 {[
@@ -1206,26 +1306,13 @@ export default function AlertsDashboardPage() {
             <div className="flex items-center gap-2">
               <input
                 type="checkbox"
-                id="ackOnly"
-                checked={cleanupAcknowledgedOnly}
-                onChange={(e) => setCleanupAcknowledgedOnly(e.target.checked)}
-                className="rounded border-gray-300"
-              />
-              <label htmlFor="ackOnly" className="text-sm">
-                Only delete acknowledged alarms
-              </label>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
                 id="dryRun"
                 checked={cleanupDryRun}
                 onChange={(e) => setCleanupDryRun(e.target.checked)}
                 className="rounded border-gray-300"
               />
               <label htmlFor="dryRun" className="text-sm font-medium">
-                Dry run (preview what would be deleted)
+                Önizleme modu
               </label>
             </div>
 
@@ -1233,7 +1320,7 @@ export default function AlertsDashboardPage() {
               <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-sm">
                 <p className="font-medium text-blue-900 dark:text-blue-200 mb-1">Preview</p>
                 <p className="text-blue-700 dark:text-blue-300">
-                  Would delete {cleanupStats.wouldDelete} alarms
+                  {cleanupStats.wouldArchive || 0} kapatılmış alarm arşivlenecek
                 </p>
               </div>
             )}
@@ -1245,19 +1332,19 @@ export default function AlertsDashboardPage() {
               onClick={() => setCleanupOpen(false)}
               disabled={cleanupLoading}
             >
-              Cancel
+              Vazgeç
             </Button>
             {cleanupDryRun ? (
               <Button onClick={runCleanup} disabled={cleanupLoading}>
-                {cleanupLoading ? 'Previewing...' : 'Preview'}
+                {cleanupLoading ? 'Hesaplanıyor...' : 'Önizle'}
               </Button>
             ) : (
               <Button
-                variant="destructive"
+                variant="default"
                 onClick={runCleanup}
                 disabled={cleanupLoading}
               >
-                {cleanupLoading ? 'Deleting...' : 'Confirm Delete'}
+                {cleanupLoading ? 'Arşivleniyor...' : 'Arşivlemeyi Onayla'}
               </Button>
             )}
           </DialogFooter>
@@ -1545,22 +1632,16 @@ export default function AlertsDashboardPage() {
                         <p className="text-muted-foreground text-xs">Bildirim gonderilmedi</p>
                       )}
                     </div>
-                    <div className={`p-3 rounded-lg ${
-                      selectedEvent.acknowledged ? 'bg-green-50 dark:bg-green-900/20' : 'bg-orange-50 dark:bg-orange-900/20'
-                    }`}>
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Onay Durumu</p>
-                      {selectedEvent.acknowledged ? (
-                        <div className="space-y-0.5">
-                          <p className="text-green-700 dark:text-green-300 text-xs font-semibold">✓ Onaylandi</p>
-                          {selectedEvent.acknowledgedBy && (
-                            <p className="text-xs"><span className="text-muted-foreground">Onaylayan:</span> {selectedEvent.acknowledgedBy}</p>
-                          )}
-                          {selectedEvent.acknowledgedAt && (
-                            <p className="text-xs"><span className="text-muted-foreground">Zaman:</span> {new Date(selectedEvent.acknowledgedAt).toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' })}</p>
-                          )}
-                        </div>
-                      ) : (
-                        <p className="text-orange-600 text-xs font-semibold">Henuz onaylanmadi</p>
+                    <div className="p-3 rounded-lg bg-muted/30">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Incident Durumu</p>
+                      <p className="text-sm font-semibold">{selectedEvent.incident?.status || 'LEGACY'}</p>
+                      {selectedEvent.incident && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {selectedEvent.incident.occurrenceCount} oluşum, {selectedEvent.incident.reopenCount} yeniden açılma
+                        </p>
+                      )}
+                      {selectedEvent.acknowledgedBy && (
+                        <p className="text-xs mt-1"><span className="text-muted-foreground">Onaylayan:</span> {selectedEvent.acknowledgedBy}</p>
                       )}
                     </div>
                   </div>
@@ -2140,6 +2221,28 @@ export default function AlertsDashboardPage() {
                     );
                   })()}
 
+                  {incidentDetail?.transitions?.length > 0 && (
+                    <section>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Yaşam Döngüsü</p>
+                      <div className="space-y-2">
+                        {incidentDetail.transitions.slice(0, 8).map((transition: any) => (
+                          <div key={transition.id} className="flex items-start justify-between gap-3 rounded-md border px-3 py-2 text-xs">
+                            <div>
+                              <p className="font-semibold">{transition.type}</p>
+                              <p className="text-muted-foreground">
+                                {transition.fromStatus || '—'} → {transition.toStatus || '—'} · {transition.actorName || transition.actorType}
+                              </p>
+                              {transition.reason && <p className="mt-1">{transition.reason}</p>}
+                            </div>
+                            <span className="text-muted-foreground whitespace-nowrap">
+                              {new Date(transition.createdAt).toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' })}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  )}
+
                   {/* Footer branding */}
                   <div className="text-center text-xs text-muted-foreground pt-3 border-t">
                     <p>InfraScope Alarm Management System</p>
@@ -2149,15 +2252,48 @@ export default function AlertsDashboardPage() {
 
                 {/* Action buttons */}
                 <div className="flex justify-end gap-2 px-6 pb-5">
-                  {!selectedEvent.acknowledged && (
+                  {selectedEvent.incident?.status === 'OPEN' && (
                     <Button
-                      onClick={() => {
-                        acknowledgeEvent(selectedEvent.id);
-                        setSelectedEvent({ ...selectedEvent, acknowledged: true, acknowledgedAt: new Date().toISOString(), acknowledgedBy: 'admin' });
-                      }}
+                      onClick={() => acknowledgeEvent(selectedEvent)}
                     >
                       <CheckCircle className="h-4 w-4 mr-2" />
                       Onayla
+                    </Button>
+                  )}
+                  {selectedEvent.incident && ['OPEN', 'ACKNOWLEDGED'].includes(selectedEvent.incident.status) && (
+                    <Button variant="outline" onClick={() => transitionIncident(selectedEvent, 'RESOLVE')}>
+                      <CircleCheckBig className="h-4 w-4 mr-2" />
+                      Çözüldü
+                    </Button>
+                  )}
+                  {selectedEvent.incident?.status === 'RESOLVED' && (
+                    <Button variant="outline" onClick={() => transitionIncident(selectedEvent, 'CLOSE')}>
+                      <CheckCircle className="h-4 w-4 mr-2" />
+                      Kapat
+                    </Button>
+                  )}
+                  {selectedEvent.incident?.status === 'CLOSED' && selectedEvent.incident.archiveState === 'HOT' && (
+                    <Button variant="outline" onClick={() => transitionIncident(selectedEvent, 'ARCHIVE')}>
+                      <Archive className="h-4 w-4 mr-2" />
+                      Arşivle
+                    </Button>
+                  )}
+                  {selectedEvent.incident?.archiveState === 'ARCHIVED' && (
+                    <Button variant="outline" onClick={() => transitionIncident(selectedEvent, 'RESTORE')}>
+                      Arşivden Çıkar
+                    </Button>
+                  )}
+                  {selectedEvent.incident && (
+                    <Button
+                      variant="outline"
+                      onClick={() => transitionIncident(
+                        selectedEvent,
+                        selectedEvent.incident!.legalHold ? 'RELEASE_LEGAL_HOLD' : 'SET_LEGAL_HOLD',
+                      )}
+                      title="Legal hold retention işlemlerini durdurur"
+                    >
+                      <LockKeyhole className="h-4 w-4 mr-2" />
+                      {selectedEvent.incident.legalHold ? 'Hold Kaldır' : 'Legal Hold'}
                     </Button>
                   )}
                   <Button

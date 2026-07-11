@@ -56,7 +56,7 @@ actionable notifications to on-call operators.
        ▼                  ▼                    ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                        PostgreSQL                                │
-│  AlarmEvent · AlarmDefinition · CachedEvent · NmsInterface ·   │
+│  AlarmIncident · AlarmEvent · LifecycleTransition · CachedEvent│
 │  NmsHealthMetric · Device · IntegrationConfig · NotificationDLQ│
 └──────────────────────────┬──────────────────────────────────────┘
                            │
@@ -78,7 +78,7 @@ actionable notifications to on-call operators.
 infrascope/
 ├── app/                           # Next.js App Router
 │   ├── api/                       #   REST endpoints
-│   │   ├── alarms/                #     Check, definitions, cleanup, whitelist
+│   │   ├── alarms/                #     Check, incidents, retention, whitelist
 │   │   ├── health/                #     System + alarm subsystem health
 │   │   ├── integrations/          #     FA, FG, VMware, Zabbix, NMS
 │   │   ├── firewall-policies/     #     FortiGate policy queries
@@ -144,7 +144,9 @@ Watchdog (15 min)  ──→ AlarmRunner.runAlarmCheck()
                               │   ├─ SuppressionEngine.filter()
                               │   ├─ Cooldown check
                               │   └─ count >= threshold?
-                              │       YES → create AlarmEvent + send email
+                              │       YES → claim AlarmIncident fingerprint
+                              │             + append AlarmEvent occurrence
+                              │             + record NotificationAttempt
                               │       NO  → auto-resolve if previously firing
                               │
                               └─ Write AlarmCheckLog (duration, status, counts)
@@ -195,7 +197,7 @@ are suppressed during this window, preventing indefinite lockout.
 | Alarm Scheduler | 10 min | `lib/alarm-scheduler.ts` | Triggers detection engine |
 | Alarm Monitor (Watchdog) | 15 min | `lib/alarms/alarm-monitor.ts` | Recovers silent scheduler |
 | Event Cache Sync | 5 min (+backoff to 60 min) | `lib/alarms/event-cache.ts` | Syncs FA logs to CachedEvent |
-| Alarm Cleanup | Daily 02:00 | `lib/alarms/cleanup-scheduler.ts` | Deletes old alarm events |
+| Alarm Retention | Daily 02:30 | `lib/alarms/retention-service.ts` | Archives closed incidents and compresses old occurrence payloads; lifecycle evidence is preserved |
 | NMS SNMP Poller | 30 s (configurable) | `nms_service/snmp/poller.py` | Interface + health metrics |
 | NMS SSH Backup | 5 min (configurable) | `nms_service/ssh/poller.py` | Running-config backup |
 | DLQ Worker | On-demand | `lib/notifications/dlq-worker.ts` | Retries failed notifications |

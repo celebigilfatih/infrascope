@@ -10,6 +10,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **AlarmIncident lifecycle architecture** — Alarm detections now create deduplicated incidents with append-only occurrences, immutable lifecycle transitions, authoritative notification attempts, cursor pagination, legal hold, soft archive, compressed payload retention, and audited OPEN/ACKNOWLEDGED/RESOLVED/CLOSED transitions.
+- **Automatic alarm catalog synchronization** — Customer deployments now install and update the 103 built-in alarm definitions, including NMS port, reachability, CPU, memory, and temperature rules, during server startup while preserving operator enable/email/cooldown preferences.
+
 - **Customer demo install runbook** — Added customer-server demo documentation for central license creation, Docker on-prem install, first admin setup, activation verification, and fallback demo flow (`docs/30-runbooks/CUSTOMER_DEMO_INSTALL.md`, `deploy/DEMO_INSTALL.md`, `Kurulum/*.html`).
 - **Readiness health endpoint** — Added `/api/health/ready` as a lightweight app+database readiness endpoint for Docker health checks, separate from integration/alarm health.
 
@@ -47,6 +50,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - `@radix-ui/react-separator` — Visual dividers in dropdowns
 
 ### Changed
+
+- **Alarm settings catalog status** — Removed the stale manual “load 25 alarms” controls and now display the installed catalog count dynamically from the alarm definitions API.
+- **Alarm Center lifecycle UI** — Alarm Center now reads incident aggregates instead of an ever-growing flat event list, supports lifecycle and archive filters, displays occurrence counts, and replaces destructive cleanup with closed-incident archiving.
 
 - **NMS device edit UI** — Reorganized connection, SNMP, SSH, and polling settings into a responsive Turkish operations form with secure credential-state indicators and password visibility controls.
 - **Header (TopBar) redesign** — Removed InfraScope logo and navigation menu from top bar. Now shows only notifications bell (left) and user profile (right). Navigation fully moved to sidebar

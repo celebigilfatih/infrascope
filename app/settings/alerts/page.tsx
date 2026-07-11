@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
-  RefreshCw, Bell, Mail, Shield, AlertTriangle, Settings, Send, Database,
+  RefreshCw, Bell, Mail, Shield, AlertTriangle, Settings, Send,
   CheckCircle, XCircle, Search, Plus, X, Users,
 } from 'lucide-react';
 
@@ -44,6 +44,13 @@ interface NotifConfig {
   isConfigured?: boolean;
 }
 
+interface AlarmCatalogStatus {
+  expected: number;
+  installed: number;
+  missing: string[];
+  synchronized: boolean;
+}
+
 const SEVERITY_MAP: Record<string, { label: string; color: string }> = {
   ALARM_CRITICAL: { label: 'Kritik', color: 'bg-red-600' },
   ALARM_HIGH: { label: 'Yuksek', color: 'bg-orange-500' },
@@ -62,9 +69,9 @@ const CATEGORY_MAP: Record<string, string> = {
 
 export default function AlertSettingsPage() {
   const [definitions, setDefinitions] = useState<AlarmDef[]>([]);
+  const [catalogStatus, setCatalogStatus] = useState<AlarmCatalogStatus | null>(null);
   const [notifConfig, setNotifConfig] = useState<NotifConfig | null>(null);
   const [loading, setLoading] = useState(true);
-  const [seeding, setSeeding] = useState(false);
   const [testingEmail, setTestingEmail] = useState(false);
   const [savingConfig, setSavingConfig] = useState(false);
   const [search, setSearch] = useState('');
@@ -91,7 +98,10 @@ export default function AlertSettingsPage() {
       const defsData = await defsRes.json();
       const notifData = await notifRes.json();
 
-      if (defsData.success) setDefinitions(defsData.data);
+      if (defsData.success) {
+        setDefinitions(defsData.data);
+        setCatalogStatus(defsData.catalog ?? null);
+      }
       if (notifData.success) {
         setNotifConfig(notifData.data);
         const cfg = notifData.data.config;
@@ -112,28 +122,6 @@ export default function AlertSettingsPage() {
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
-
-  const seedAlarms = async () => {
-    setSeeding(true);
-    try {
-      const res = await fetch('/api/alarms/definitions', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'seed' }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setMessage({ text: `${data.created} alarm olusturuldu, ${data.updated} guncellendi. Toplam: ${data.total}`, type: 'success' });
-        fetchData();
-      } else {
-        setMessage({ text: data.error || 'Seed hatasi', type: 'error' });
-      }
-    } catch (err) {
-      setMessage({ text: 'Seed hatasi', type: 'error' });
-    } finally {
-      setSeeding(false);
-    }
-  };
 
   const toggleAlarm = async (id: string, enabled: boolean) => {
     try {
@@ -274,10 +262,11 @@ export default function AlertSettingsPage() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input placeholder="Alarm ara..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
             </div>
-            <Button onClick={seedAlarms} disabled={seeding}>
-              <Database className="h-4 w-4 mr-2" />
-              {seeding ? 'Yukleniyor...' : definitions.length === 0 ? 'Alarmlari Yukle (25)' : 'Alarmlari Guncelle'}
-            </Button>
+            {catalogStatus && (
+              <Badge variant={catalogStatus.synchronized ? 'secondary' : 'destructive'}>
+                Katalog {catalogStatus.installed}/{catalogStatus.expected}
+              </Badge>
+            )}
           </div>
 
           {loading ? (
@@ -289,11 +278,7 @@ export default function AlertSettingsPage() {
               <CardContent className="p-12 text-center">
                 <Bell className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
                 <h3 className="text-lg font-medium mb-2">Alarm Tanimi Bulunamadi</h3>
-                <p className="text-muted-foreground mb-4">25 alarm tanimini yuklemek icin butona tiklayin.</p>
-                <Button onClick={seedAlarms} disabled={seeding}>
-                  <Database className="h-4 w-4 mr-2" />
-                  Alarmlari Yukle
-                </Button>
+                <p className="text-muted-foreground">Alarm katalogu uygulama baslangicinda otomatik hazirlanir. Sunucu loglarini kontrol edin.</p>
               </CardContent>
             </Card>
           ) : (

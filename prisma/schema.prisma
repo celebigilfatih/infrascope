@@ -1027,6 +1027,7 @@ model AlarmDefinition {
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
   alarmEvents     AlarmEvent[]
+  incidents       AlarmIncident[]
 
   @@map("alarm_definitions")
 }
@@ -1047,15 +1048,144 @@ model AlarmEvent {
   acknowledgedAt  DateTime?
   notifiedAt      DateTime?
   notifyChannel   String?           // "email"
+  incidentId      String?
+  fingerprint     String?
+  sourceEventId   String?
+  sourceOccurredAt DateTime?
+  archivedAt      DateTime?
   createdAt       DateTime          @default(now())
   alarm           AlarmDefinition   @relation(fields: [alarmId], references: [id])
+  incident        AlarmIncident?    @relation(fields: [incidentId], references: [id], onDelete: SetNull)
   dlqEntries      NotificationDLQ[]
+  notificationAttempts NotificationAttempt[]
 
   @@index([alarmId])
   @@index([createdAt])
   @@index([severity])
   @@index([createdAt, acknowledged])
+  @@index([incidentId, createdAt])
+  @@index([fingerprint, createdAt])
+  @@index([archivedAt])
+  @@unique([alarmId, sourceEventId])
   @@map("alarm_events")
+}
+
+/// Operational aggregate for one alarm condition on one entity.
+model AlarmIncident {
+  id                String                 @id @default(cuid())
+  alarmId           String
+  fingerprint       String
+  activeFingerprint String?                @unique
+  status            AlarmIncidentStatus    @default(OPEN)
+  archiveState      AlarmArchiveState       @default(HOT)
+  severity          AlarmSeverity2
+  category          AlarmCategory
+  source            String
+  title             String
+  message           String
+  entityType        String?
+  entityId          String?
+  conditionKey      String?
+  firstSeenAt       DateTime               @default(now())
+  lastSeenAt        DateTime               @default(now())
+  occurrenceCount   Int                    @default(1)
+  acknowledgedAt    DateTime?
+  acknowledgedById  String?
+  acknowledgedBy    String?
+  resolvedAt        DateTime?
+  resolvedById      String?
+  resolvedBy        String?
+  resolutionReason  String?
+  closedAt          DateTime?
+  closedById        String?
+  closedBy          String?
+  closeReason       String?
+  assignedToId      String?
+  assignedTo        String?
+  assignedAt        DateTime?
+  reopenCount       Int                    @default(0)
+  archivedAt        DateTime?
+  archiveReason     String?
+  retentionClass    String                 @default("STANDARD")
+  legalHold         Boolean                @default(false)
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+
+  alarm             AlarmDefinition        @relation(fields: [alarmId], references: [id], onDelete: Restrict)
+  occurrences       AlarmEvent[]
+  transitions       AlarmLifecycleTransition[]
+  notificationAttempts NotificationAttempt[]
+  archivePayloads   AlarmArchivePayload[]
+
+  @@index([status, archiveState, lastSeenAt])
+  @@index([alarmId, fingerprint])
+  @@index([severity, status])
+  @@index([source, status])
+  @@index([assignedToId, status])
+  @@index([archivedAt])
+  @@map("alarm_incidents")
+}
+
+/// Immutable history of every incident lifecycle transition.
+model AlarmLifecycleTransition {
+  id          String                  @id @default(cuid())
+  incidentId  String
+  type        AlarmTransitionType
+  fromStatus  AlarmIncidentStatus?
+  toStatus    AlarmIncidentStatus?
+  actorType   String                  @default("SYSTEM")
+  actorId     String?
+  actorName   String?
+  reason      String?
+  metadata    Json?
+  createdAt   DateTime                @default(now())
+
+  incident    AlarmIncident           @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId, createdAt])
+  @@index([type, createdAt])
+  @@map("alarm_lifecycle_transitions")
+}
+
+/// Authoritative delivery history for alarm notifications.
+model NotificationAttempt {
+  id          String                    @id @default(cuid())
+  incidentId  String?
+  alarmEventId String?
+  channel     String
+  status      NotificationAttemptStatus
+  attempt     Int                       @default(1)
+  error       String?
+  providerId  String?
+  metadata    Json?
+  createdAt   DateTime                  @default(now())
+  updatedAt   DateTime                  @updatedAt
+
+  incident    AlarmIncident?            @relation(fields: [incidentId], references: [id], onDelete: SetNull)
+  alarmEvent  AlarmEvent?               @relation(fields: [alarmEventId], references: [id], onDelete: SetNull)
+
+  @@index([incidentId, createdAt])
+  @@index([alarmEventId, createdAt])
+  @@index([status, createdAt])
+  @@map("notification_attempts")
+}
+
+/// Compressed cold payload for archived alarm occurrences.
+model AlarmArchivePayload {
+  id          String        @id @default(cuid())
+  incidentId  String
+  alarmEventId String       @unique
+  encoding    String        @default("gzip-json")
+  checksum    String
+  payload     Bytes
+  occurredAt  DateTime
+  archivedAt  DateTime      @default(now())
+
+  incident    AlarmIncident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId, occurredAt])
+  @@index([archivedAt])
+  @@map("alarm_archive_payloads")
 }
 
 /// Atomic cooldown tracking for alarm deduplication.
@@ -1153,6 +1283,43 @@ enum AlarmSeverity2 {
   ALARM_MEDIUM
   ALARM_LOW
   ALARM_INFO
+}
+
+enum AlarmIncidentStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+  CLOSED
+}
+
+enum AlarmArchiveState {
+  HOT
+  ARCHIVED
+}
+
+enum AlarmTransitionType {
+  CREATED
+  MIGRATED
+  ACKNOWLEDGED
+  UNACKNOWLEDGED
+  RESOLVED
+  REOPENED
+  CLOSED
+  ARCHIVED
+  RESTORED
+  ASSIGNED
+  LEGAL_HOLD_SET
+  LEGAL_HOLD_RELEASED
+}
+
+enum NotificationAttemptStatus {
+  PENDING
+  SENT
+  FAILED_RETRYABLE
+  FAILED_PERMANENT
+  SKIPPED_DISABLED
+  SKIPPED_RATE_LIMITED
+  SKIPPED_COOLDOWN
 }
 
 /// System configuration key-value store for scheduler heartbeat, feature flags, etc.

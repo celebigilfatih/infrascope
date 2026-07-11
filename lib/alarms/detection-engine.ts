@@ -8,6 +8,7 @@ import type { AlarmDetectionLogic, CorrelationRule } from './alarm-definitions';
 import { EventCacheService } from './event-cache';
 import { ALARM_QUERY_REGISTRY, BYPASS_CACHE_ALARMS } from './queries';
 import { createDefaultSuppressionEngine, SuppressionEvent } from './suppression-engine';
+import { recordAlarmOccurrence, resolveIncidentsForEvents } from './incident-service';
 
 const log = createLogger('detection-engine');
 
@@ -22,6 +23,7 @@ interface AlarmDef {
   detectionLogic: AlarmDetectionLogic;
   cooldownMinutes: number;
   notifyEmail: boolean;
+  source?: string | null;
 }
 
 interface EvaluationResult {
@@ -392,13 +394,6 @@ export class AlarmDetectionEngine {
 
       log.info({ count: sortedAlarms.length }, 'Evaluating enabled alarms (sorted by priority)');
 
-      // Login once for all evaluations
-      const loggedIn = await this.service.login();
-      if (!loggedIn) {
-        log.error('Failed to login to FortiAnalyzer');
-        throw new Error('FortiAnalyzer login failed — cannot evaluate alarms');
-      }
-
       // Separate correlation alarms and FortiGate source alarms from regular alarms
       const correlationAlarms: AlarmDef[] = [];
       const fortiGateSslvpnAlarms: AlarmDef[] = [];
@@ -410,6 +405,12 @@ export class AlarmDetectionEngine {
         const logic = alarm.detectionLogic as unknown as AlarmDetectionLogic;
         const logtype = logic.logtype || 'event';
         const alarmDef: AlarmDef = { ...alarm, detectionLogic: logic };
+
+        // NMS rules are evaluated from PostgreSQL metrics by evaluateNmsAlarms().
+        // They must never be sent through the FortiAnalyzer log query pipeline.
+        if (alarm.source === 'nms' || alarm.code.startsWith('NMS_')) {
+          continue;
+        }
 
         if (logic.clientCheck === 'correlation') {
           correlationAlarms.push(alarmDef);
@@ -429,6 +430,24 @@ export class AlarmDetectionEngine {
       }
 
       log.info({ logTypeGroups: [...logTypeGroups.keys()], fortiGateSslvpnAlarmCount: fortiGateSslvpnAlarms.length }, 'LogTypeGroups summary');
+
+      // NMS is an independent data source. Evaluate it before any FortiAnalyzer
+      // login so a missing/unavailable FA integration cannot suppress SNMP alarms.
+      try {
+        const nmsResults = await this.evaluateNmsAlarms();
+        results.push(...nmsResults);
+      } catch (nmsErr) {
+        log.error({ err: nmsErr }, 'NMS alarm evaluation error');
+      }
+
+      const needsFortiAnalyzer = logTypeGroups.size > 0 || correlationAlarms.length > 0;
+      if (needsFortiAnalyzer) {
+        const loggedIn = await this.service.login();
+        if (!loggedIn) {
+          log.error('Failed to login to FortiAnalyzer');
+          throw new Error('FortiAnalyzer login failed — cannot evaluate FortiAnalyzer alarms');
+        }
+      }
 
       // Check overall cache freshness to decide how to run logtype groups:
       //  - Cache FRESH  → full parallel (all groups + all filter batches at once = fast DB reads, zero FA load)
@@ -517,14 +536,6 @@ export class AlarmDetectionEngine {
         }
       }
 
-      // Evaluate NMS (SNMP) alarms from nms_* tables
-      try {
-        const nmsResults = await this.evaluateNmsAlarms();
-        results.push(...nmsResults);
-      } catch (nmsErr) {
-        log.error({ err: nmsErr }, 'NMS alarm evaluation error');
-      }
-
       log.info({ triggered: results.filter(r => r.triggered).length, errors: results.filter(r => r.error && r.error !== 'cooldown-active' && r.error !== 'cache-empty').length, onCooldown: results.filter(r => r.error === 'cooldown-active').length, cacheEmpty: results.filter(r => r.error === 'cache-empty').length }, 'Evaluation complete');
       
       // Retry any failed notifications from previous cycles
@@ -560,6 +571,7 @@ export class AlarmDetectionEngine {
           notifiedAt: null,
           createdAt: { gte: twentyFourHoursAgo },
           alarm: { notifyEmail: true },
+          dlqEntries: { none: {} },
         },
         include: { alarm: true },
         take: 10, // Limit batch size to avoid overwhelming SMTP
@@ -2276,19 +2288,22 @@ export class AlarmDetectionEngine {
       return;  // Don't fire alarm, method returns void
     }
 
-    // Create alarm event in DB
-    const alarmEvent = await prisma.alarmEvent.create({
-      data: {
-        alarmId: alarm.id,
-        severity: alarm.severity as 'ALARM_CRITICAL' | 'ALARM_HIGH' | 'ALARM_MEDIUM' | 'ALARM_LOW' | 'ALARM_INFO',
-        title,
-        message,
-        rawData: matchingLogs.slice(0, 10) as any,
-        sourceIp,
-        destIp,
-        deviceName,
-      },
+    const recorded = await recordAlarmOccurrence({
+      alarm,
+      title,
+      message,
+      rawData: matchingLogs.slice(0, 10) as any,
+      sourceIp,
+      destIp,
+      deviceName,
+      sourceOccurredAt: this.parseLogTime(firstLog),
     });
+    const alarmEvent = recorded.event;
+
+    if (!recorded.created) {
+      log.info({ alarmCode: alarm.code, eventId: alarmEvent.id }, 'Duplicate source occurrence suppressed');
+      return;
+    }
 
     log.info({ alarmCode: alarm.code, title }, 'ALARM FIRED');
 
@@ -2307,6 +2322,7 @@ export class AlarmDetectionEngine {
           deviceName: alarmEvent.deviceName || undefined,
           timestamp: alarmEvent.createdAt,
           alarmEventId: alarmEvent.id, // Enable DLQ retry on failure
+          incidentId: recorded.incident.id,
         });
 
         if (sent) {
@@ -3993,10 +4009,7 @@ export class AlarmDetectionEngine {
             }
           }
           if (toAckIds.length > 0) {
-            await prisma.alarmEvent.updateMany({
-              where: { id: { in: toAckIds } },
-              data: { acknowledged: true, acknowledgedBy: 'system:auto-resolve', acknowledgedAt: new Date() },
-            });
+            await resolveIncidentsForEvents(toAckIds, 'Port has remained up for 5 minutes or monitoring was disabled');
             log.info({ count: toAckIds.length }, 'NMS PORT_DOWN auto-resolved alarms (port UP >= 5min or unmonitored)');
           }
         }
@@ -4092,26 +4105,33 @@ export class AlarmDetectionEngine {
             }
           }
 
-          const event = await prisma.alarmEvent.create({
-            data: {
-              alarmId: portDownAlarm.id,
-              severity: portDownAlarm.severity as any,
-              title,
-              message,
-              deviceName,
-              rawData: {
-                nms_device_id: iface.nmsDeviceId,
-                interface_index: iface.interfaceIndex,
-                interface_name: iface.interfaceName,
-                description: iface.description,
-                admin_status: iface.adminStatus,
-                oper_status: iface.operStatus,
-                down_since: iface.downSince,
-                down_duration_minutes: downMinutes,
-                source: 'nms',
-              } as any,
-            },
+          const recorded = await recordAlarmOccurrence({
+            alarm: { ...portDownAlarm, source: 'nms' },
+            title,
+            message,
+            deviceName,
+            entityType: 'nms-port',
+            entityId: portKey,
+            conditionKey: 'oper-status-down',
+            sourceEventId: `${portKey}:${iface.downSince ? new Date(iface.downSince).toISOString() : 'unknown'}`,
+            sourceOccurredAt: iface.downSince ? new Date(iface.downSince) : null,
+            rawData: {
+              nms_device_id: iface.nmsDeviceId,
+              interface_index: iface.interfaceIndex,
+              interface_name: iface.interfaceName,
+              description: iface.description,
+              admin_status: iface.adminStatus,
+              oper_status: iface.operStatus,
+              down_since: iface.downSince,
+              down_duration_minutes: downMinutes,
+              source: 'nms',
+            } as any,
           });
+          const event = recorded.event;
+          if (!recorded.created) {
+            results.push({ alarmCode: 'NMS_PORT_DOWN', triggered: false, matchCount: 0, events: [], error: 'duplicate-occurrence' });
+            continue;
+          }
           // Mark this port as created to prevent duplicate in same loop
           createdPortsThisEval.add(portKey);
           results.push({ alarmCode: 'NMS_PORT_DOWN', triggered: true, matchCount: 1, events: [{ id: event.id }] });
@@ -4174,24 +4194,29 @@ export class AlarmDetectionEngine {
             continue;
           }
 
-          const event = await prisma.alarmEvent.create({
-            data: {
-              alarmId: alarmDef.id,
-              severity: alarmDef.severity as any,
-              title,
-              message,
-              deviceName,
-              rawData: {
-                nms_device_id: metric.nms_device_id,
-                cpu_usage: metric.cpu_usage,
-                memory_usage: metric.memory_usage,
-                temperature: metric.temperature,
-                uptime_seconds: metric.uptime_seconds,
-                threshold,
-                source: 'nms',
-              } as any,
-            },
+          const metricOccurredAt = metric.collected_at ?? new Date();
+          const recorded = await recordAlarmOccurrence({
+            alarm: { ...alarmDef, source: 'nms' },
+            title,
+            message,
+            deviceName,
+            entityType: 'nms-device',
+            entityId: String(metric.nms_device_id),
+            conditionKey: code,
+            sourceEventId: `${metric.nms_device_id}:${code}:${new Date(metricOccurredAt).toISOString()}`,
+            sourceOccurredAt: new Date(metricOccurredAt),
+            rawData: {
+              nms_device_id: metric.nms_device_id,
+              cpu_usage: metric.cpu_usage,
+              memory_usage: metric.memory_usage,
+              temperature: metric.temperature,
+              uptime_seconds: metric.uptime_seconds,
+              threshold,
+              source: 'nms',
+            } as any,
           });
+          const event = recorded.event;
+          if (!recorded.created) continue;
           results.push({ alarmCode: code, triggered: true, matchCount: 1, events: [{ id: event.id }] });
           log.info({ code, deviceName, value: value.toFixed(1), unit }, 'NMS health alarm triggered');
         }
@@ -4231,10 +4256,7 @@ export class AlarmDetectionEngine {
             if (recentMetric) toAckIds.push(ev.id);
           }
           if (toAckIds.length > 0) {
-            await prisma.alarmEvent.updateMany({
-              where: { id: { in: toAckIds } },
-              data: { acknowledged: true, acknowledgedBy: 'system:auto-resolve', acknowledgedAt: new Date() },
-            });
+            await resolveIncidentsForEvents(toAckIds, 'Device has resumed reporting health metrics');
             log.info({ count: toAckIds.length }, 'NMS DEVICE_UNREACHABLE auto-resolved alarms (device reporting again)');
           }
         }
@@ -4323,25 +4345,32 @@ export class AlarmDetectionEngine {
             `Onerilen Aksiyon: Cihaza SSH/konsol erisimi kontrol edin. SNMP servisinin calistigini dogrulayin. Agdaki erisimi (ping, traceroute) test edin.`,
           ].join('\n');
 
-          const event = await prisma.alarmEvent.create({
-            data: {
-              alarmId: unreachableAlarm.id,
-              severity: unreachableAlarm.severity as any,
-              title,
-              message,
-              deviceName: device.name,
-              sourceIp: device.managementIp,
-              rawData: {
-                nms_device_id: device.nmsDeviceId,
-                management_ip: device.managementIp,
-                last_polled_at: device.lastPolledAt?.toISOString(),
-                last_metric_at: lastMetric?.collectedAt ? new Date(lastMetric.collectedAt).toISOString() : null,
-                silent_minutes: silentMinutes,
-                polling_interval_sec: device.pollingInterval || 300,
-                source: 'nms',
-              } as any,
-            },
+          const outageKey = lastMetric?.collectedAt
+            ? new Date(lastMetric.collectedAt).toISOString()
+            : device.lastPolledAt.toISOString();
+          const recorded = await recordAlarmOccurrence({
+            alarm: { ...unreachableAlarm, source: 'nms' },
+            title,
+            message,
+            deviceName: device.name,
+            sourceIp: device.managementIp,
+            entityType: 'nms-device',
+            entityId: String(device.nmsDeviceId),
+            conditionKey: 'unreachable',
+            sourceEventId: `${device.nmsDeviceId}:unreachable:${outageKey}`,
+            sourceOccurredAt: new Date(outageKey),
+            rawData: {
+              nms_device_id: device.nmsDeviceId,
+              management_ip: device.managementIp,
+              last_polled_at: device.lastPolledAt?.toISOString(),
+              last_metric_at: lastMetric?.collectedAt ? new Date(lastMetric.collectedAt).toISOString() : null,
+              silent_minutes: silentMinutes,
+              polling_interval_sec: device.pollingInterval || 300,
+              source: 'nms',
+            } as any,
           });
+          const event = recorded.event;
+          if (!recorded.created) continue;
           results.push({ alarmCode: 'NMS_DEVICE_UNREACHABLE', triggered: true, matchCount: 1, events: [{ id: event.id }] });
           log.info({ deviceName: device.name, silentMinutes }, 'NMS DEVICE_UNREACHABLE');
         }

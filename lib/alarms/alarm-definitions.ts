@@ -1,5 +1,5 @@
 /**
- * All 55 alarm definitions with detection logic for FortiAnalyzer LogView API and vCenter.
+ * Built-in alarm definitions for FortiAnalyzer LogView API and vCenter.
  * Each alarm specifies: logtype, filter, threshold, timeWindowMinutes, and
  * optional clientCheck for post-fetch evaluation (e.g. off-hours detection).
  */
@@ -21,7 +21,7 @@ export interface AlarmDetectionLogic {
   clientCheck?: string;        // Optional client-side check: 'off-hours', 'brute-force-group', 'anomaly', 'geo-anomaly', 'correlation'
   fortiviewQuery?: string;     // Optional FortiView view name (instead of logview)
   correlationRules?: CorrelationRule; // Optional: correlation rules for SIEM-like detection
-  source?: 'fortianalyzer' | 'fortigate-sslvpn' | 'vmware';  // Data source (default: fortianalyzer)
+  source?: 'fortianalyzer' | 'fortigate-sslvpn' | 'vmware' | 'nms';  // Data source (default: fortianalyzer)
   description: string;         // Why this alarm matters
   recommendedAction: string;   // What operators should do
 }
@@ -34,7 +34,7 @@ export interface AlarmDefinitionSeed {
   severity: 'ALARM_CRITICAL' | 'ALARM_HIGH' | 'ALARM_MEDIUM' | 'ALARM_LOW' | 'ALARM_INFO';
   cooldownMinutes: number;
   notifyEmail?: boolean;
-  source?: 'fortianalyzer' | 'fortigate-sslvpn' | 'vmware';
+  source?: 'fortianalyzer' | 'fortigate-sslvpn' | 'vmware' | 'nms';
   detectionLogic: AlarmDetectionLogic;
 }
 
@@ -1820,6 +1820,82 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
       timeWindowMinutes: 30,
       description: 'Authentication sunucu yapilandirma degisikliklerini tespit eder. Kullanici dogrulama sistemlerini etkiler.',
       recommendedAction: 'Auth server degisikligini dogrulayin. Kullanici girislerini test edin. Failover sunucu yapilandirmasini kontrol edin.',
+    },
+  },
+  // ============================================================================
+  // NMS - SNMP HEALTH AND AVAILABILITY
+  // ============================================================================
+  {
+    code: 'NMS_PORT_DOWN',
+    name: 'Izlenen Switch Portu Down',
+    description: 'Yonetimsel olarak acik ve izlenen bir switch portu operasyonel olarak down durumda.',
+    category: 'OPERATIONAL',
+    severity: 'ALARM_HIGH',
+    cooldownMinutes: 15,
+    notifyEmail: true,
+    source: 'nms',
+    detectionLogic: {
+      source: 'nms', threshold: 1, timeWindowMinutes: 5,
+      description: 'Izlenen portun en az bes dakika boyunca down kalmasini tespit eder.',
+      recommendedAction: 'Kabloyu, uzak ucu, VLAN ve port hata sayaclarini kontrol edin.',
+    },
+  },
+  {
+    code: 'NMS_DEVICE_UNREACHABLE',
+    name: 'Ag Cihazina Erisilemiyor',
+    description: 'NMS polling araliginin uc kati boyunca cihazdan saglik metrigi alinamadi.',
+    category: 'OPERATIONAL',
+    severity: 'ALARM_CRITICAL',
+    cooldownMinutes: 15,
+    notifyEmail: true,
+    source: 'nms',
+    detectionLogic: {
+      source: 'nms', threshold: 1, timeWindowMinutes: 15,
+      description: 'Polling verisi kesilen ag cihazlarini tespit eder.',
+      recommendedAction: 'Cihaz erisimi, enerji, yonetim IP adresi, SNMP ve ag yolunu kontrol edin.',
+    },
+  },
+  {
+    code: 'NMS_CPU_HIGH',
+    name: 'Ag Cihazi CPU Kullanimi Yuksek',
+    description: 'Ag cihazinin CPU kullanimi esik degerini asti.',
+    category: 'OPERATIONAL',
+    severity: 'ALARM_HIGH',
+    cooldownMinutes: 30,
+    source: 'nms',
+    detectionLogic: {
+      source: 'nms', threshold: 85, timeWindowMinutes: 10,
+      description: 'Son NMS saglik metriginde CPU kullanimini denetler.',
+      recommendedAction: 'Process yukunu, broadcast storm durumunu ve cihaz loglarini kontrol edin.',
+    },
+  },
+  {
+    code: 'NMS_MEMORY_HIGH',
+    name: 'Ag Cihazi Bellek Kullanimi Yuksek',
+    description: 'Ag cihazinin bellek kullanimi esik degerini asti.',
+    category: 'OPERATIONAL',
+    severity: 'ALARM_HIGH',
+    cooldownMinutes: 30,
+    source: 'nms',
+    detectionLogic: {
+      source: 'nms', threshold: 85, timeWindowMinutes: 10,
+      description: 'Son NMS saglik metriginde bellek kullanimini denetler.',
+      recommendedAction: 'Bellek kullanan processleri, firmware sorunlarini ve uzun sureli yuk trendini kontrol edin.',
+    },
+  },
+  {
+    code: 'NMS_TEMPERATURE_HIGH',
+    name: 'Ag Cihazi Sicakligi Yuksek',
+    description: 'Ag cihazinin sicaklik degeri guvenli esigi asti.',
+    category: 'OPERATIONAL',
+    severity: 'ALARM_CRITICAL',
+    cooldownMinutes: 30,
+    notifyEmail: true,
+    source: 'nms',
+    detectionLogic: {
+      source: 'nms', threshold: 70, timeWindowMinutes: 10,
+      description: 'Son NMS saglik metriginde cihaz sicakligini denetler.',
+      recommendedAction: 'Fanlari, hava akisini, ortam sicakligini ve donanim sensorlerini kontrol edin.',
     },
   },
 ];

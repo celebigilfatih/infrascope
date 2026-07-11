@@ -21,6 +21,7 @@ if (process.env.NODE_ENV === 'production' && process.env.NODE_TLS_REJECT_UNAUTHO
 const ROUTE_RESOURCE_MAP: Record<string, Resource> = {
   '/api/users': 'users',
   '/api/alarms': 'alarms',
+  '/api/alarm-incidents': 'alarms',
   '/api/devices': 'devices',
   '/api/organizations': 'organizations',
   '/api/settings': 'settings',

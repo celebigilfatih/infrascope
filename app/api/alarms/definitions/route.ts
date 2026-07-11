@@ -5,7 +5,9 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { seedAlarmDefinitions } from '@/lib/alarms/seed-alarms';
+import { getAlarmCatalogStatus } from '@/lib/alarms/alarm-catalog';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
@@ -18,7 +20,11 @@ export async function GET() {
       },
     });
 
-    return NextResponse.json({ success: true, data: definitions });
+    return NextResponse.json({
+      success: true,
+      data: definitions,
+      catalog: getAlarmCatalogStatus(definitions.map((definition) => definition.code)),
+    });
   } catch (error) {
     console.error('[AlarmDefs] GET error:', error);
     return NextResponse.json({ success: false, error: (error as Error).message }, { status: 500 });
@@ -28,20 +34,13 @@ export async function GET() {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
-    const { id, enabled, cooldownMinutes, notifyEmail, detectionLogic, action } = body as {
+    const { id, enabled, cooldownMinutes, notifyEmail, detectionLogic } = body as {
       id?: string;
       enabled?: boolean;
       cooldownMinutes?: number;
       notifyEmail?: boolean;
       detectionLogic?: Record<string, unknown>;
-      action?: string;
     };
-
-    // Seed action
-    if (action === 'seed') {
-      const result = await seedAlarmDefinitions();
-      return NextResponse.json({ success: true, ...result });
-    }
 
     if (!id) {
       return NextResponse.json({ success: false, error: 'id required' }, { status: 400 });

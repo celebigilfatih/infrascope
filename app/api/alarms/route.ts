@@ -7,6 +7,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { validateBody } from '@/lib/validators';
 import { acknowledgeAlarmsSchema } from '@/lib/validators/alarms';
+import { getRequestActor } from '@/lib/auth/request-actor';
+import { transitionAlarmIncident } from '@/lib/alarms/incident-service';
 
 export async function GET(request: NextRequest) {
   try {
@@ -114,6 +116,10 @@ export async function GET(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
+    const auth = await getRequestActor(request);
+    if (!auth) {
+      return NextResponse.json({ success: false, error: 'Authentication required' }, { status: 401 });
+    }
     const rawBody = await request.json();
     const parsed = validateBody(rawBody, acknowledgeAlarmsSchema);
     if (!parsed.success) {
@@ -121,18 +127,34 @@ export async function PATCH(request: NextRequest) {
     }
     const { ids, acknowledged } = parsed.data;
 
-    const updated = await prisma.alarmEvent.updateMany({
+    const events = await prisma.alarmEvent.findMany({
       where: { id: { in: ids } },
-      data: {
-        acknowledged: acknowledged !== false,
-        acknowledgedBy: 'admin',
-        acknowledgedAt: acknowledged !== false ? new Date() : null,
-      },
+      select: { id: true, incidentId: true },
     });
+    const incidentIds = [...new Set(events.map((event) => event.incidentId).filter((id): id is string => Boolean(id)))];
+    for (const incidentId of incidentIds) {
+      await transitionAlarmIncident({
+        incidentId,
+        action: acknowledged === false ? 'UNACKNOWLEDGE' : 'ACKNOWLEDGE',
+        actor: auth.actor,
+      });
+    }
+
+    const legacyIds = events.filter((event) => !event.incidentId).map((event) => event.id);
+    const legacyUpdated = legacyIds.length > 0
+      ? await prisma.alarmEvent.updateMany({
+          where: { id: { in: legacyIds } },
+          data: {
+            acknowledged: acknowledged !== false,
+            acknowledgedBy: acknowledged !== false ? auth.actor.name : null,
+            acknowledgedAt: acknowledged !== false ? new Date() : null,
+          },
+        })
+      : { count: 0 };
 
     return NextResponse.json({
       success: true,
-      updated: updated.count,
+      updated: incidentIds.length + legacyUpdated.count,
     });
   } catch (error) {
     console.error('[Alarms] PATCH error:', error);

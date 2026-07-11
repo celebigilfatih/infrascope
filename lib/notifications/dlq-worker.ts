@@ -50,7 +50,17 @@ export async function addToDLQ(
 ): Promise<void> {
   try {
     const nextRetry = calculateNextRetry(0);
-    
+    const existing = await prisma.notificationDLQ.findFirst({
+      where: { alarmEventId, channel: 'email', status: 'pending' },
+    });
+    if (existing) {
+      await prisma.notificationDLQ.update({
+        where: { id: existing.id },
+        data: { payload: payload as any, lastError: error.substring(0, 1000), nextRetry },
+      });
+      return;
+    }
+
     await prisma.notificationDLQ.create({
       data: {
         alarmEventId,
@@ -121,7 +131,7 @@ export async function processDLQ(): Promise<{
         const sent = await sendAlarmEmail({
           ...payload,
           timestamp: new Date(payload.timestamp), // Ensure Date object
-        }, { bypassCooldown: true });
+        }, { bypassCooldown: true, attempt: entry.attempts + 1 });
 
         if (sent) {
           // Success! Mark as delivered

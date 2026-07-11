@@ -1,7 +1,7 @@
 # Alarm Definitions Catalog
 
-> **Auto-generated** from `lib/alarms/alarm-definitions.ts` on 2026-05-18
-> **Total:** 98 alarm definitions
+> **Auto-generated** from `lib/alarms/alarm-definitions.ts` on 2026-07-10
+> **Total:** 103 alarm definitions
 > **Regenerate:** `npx tsx scripts/generate-alarm-catalog.ts`
 
 ---
@@ -11,7 +11,7 @@
 1. [Config & Access](#config-access) (20 alarms)
 2. [Security](#security) (21 alarms)
 3. [Risk & Anomaly](#risk-anomaly) (13 alarms)
-4. [Operational](#operational) (30 alarms)
+4. [Operational](#operational) (35 alarms)
 5. [SOC Correlation](#soc-correlation) (14 alarms)
 
 ---
@@ -20,12 +20,12 @@
 
 | Severity | Count |
 |---|---|
-| 🔴 CRITICAL | 22 |
-| 🟠 HIGH | 32 |
+| 🔴 CRITICAL | 24 |
+| 🟠 HIGH | 35 |
 | 🟡 MEDIUM | 27 |
 | 🔵 LOW | 8 |
 | ⚪ INFO | 9 |
-| **Total** | **98** |
+| **Total** | **103** |
 
 ---
 
@@ -1107,12 +1107,17 @@
 | `CLUSTER_HA_RISK` | HA Failover Kapasitesi Yetersiz | 🔴 CRITICAL | VMware vCenter | 120m | ✓ | 1 | 60m |
 | `DATASTORE_SPACE_CRITICAL` | Datastore Alan Kritik | 🔴 CRITICAL | VMware vCenter | 60m |  | 1 | 15m |
 | `HOST_DISCONNECTED` | ESXi Host Baglanti Kesildi | 🔴 CRITICAL | VMware vCenter | 5m |  | 1 | 5m |
+| `NMS_DEVICE_UNREACHABLE` | Ag Cihazina Erisilemiyor | 🔴 CRITICAL | nms | 15m | ✓ | 1 | 15m |
+| `NMS_TEMPERATURE_HIGH` | Ag Cihazi Sicakligi Yuksek | 🔴 CRITICAL | nms | 30m | ✓ | 70 | 10m |
 | `SNAPSHOT_DISK_GROWTH` | Snapshot Disk Sismesi | 🔴 CRITICAL | VMware vCenter | 240m | ✓ | 1 | 60m |
 | `DATASTORE_SPACE_LOW` | Datastore Alan Dusuk | 🟠 HIGH | VMware vCenter | 60m |  | 1 | 30m |
 | `HA_CONFIG_SYNC_FAIL` | HA Config Senkronizasyon Hatasi | 🟠 HIGH | FortiAnalyzer | 30m |  | 1 | 15m |
 | `HA_FAILOVER` | HA Failover Tespit Edildi | 🟠 HIGH | FortiAnalyzer | 30m |  | 1 | 15m |
 | `HOST_CPU_CRITICAL` | Host CPU Kritik Kullanim | 🟠 HIGH | VMware vCenter | 30m |  | 1 | 10m |
 | `HOST_MEMORY_CRITICAL` | Host Bellek Kritik Kullanim | 🟠 HIGH | VMware vCenter | 30m |  | 1 | 10m |
+| `NMS_CPU_HIGH` | Ag Cihazi CPU Kullanimi Yuksek | 🟠 HIGH | nms | 30m |  | 85 | 10m |
+| `NMS_MEMORY_HIGH` | Ag Cihazi Bellek Kullanimi Yuksek | 🟠 HIGH | nms | 30m |  | 85 | 10m |
+| `NMS_PORT_DOWN` | Izlenen Switch Portu Down | 🟠 HIGH | nms | 15m | ✓ | 1 | 5m |
 | `VM_POWERED_OFF` | VM Beklenmedik Kapanma | 🟠 HIGH | VMware vCenter | 15m |  | 1 | 15m |
 | `DRS_IMBALANCE` | DRS Dengesizligi | 🟡 MEDIUM | VMware vCenter | 60m |  | 1 | 60m |
 | `MULTIPLE_SNAPSHOTS` | Coklu Snapshot Zinciri | 🟡 MEDIUM | VMware vCenter | 120m |  | 1 | 60m |
@@ -1189,6 +1194,40 @@
 | Filter | `connectionState != connected` |
 
 **Recommended Action:** Host fiziksel durumunu kontrol edin. Network baglantisini dogrulayin. vCenter agent durumunu kontrol edin. HA failover durumunu izleyin.
+
+### `NMS_DEVICE_UNREACHABLE`
+
+**Ag Cihazina Erisilemiyor** — 🔴 CRITICAL
+
+> NMS polling araliginin uc kati boyunca cihazdan saglik metrigi alinamadi.
+
+| Property | Value |
+|---|---|
+| Category | Operational |
+| Source | nms |
+| Cooldown | 15 minutes |
+| Threshold | ≥ 1 events |
+| Time Window | 15 minutes |
+| Email Notify | ✓ |
+
+**Recommended Action:** Cihaz erisimi, enerji, yonetim IP adresi, SNMP ve ag yolunu kontrol edin.
+
+### `NMS_TEMPERATURE_HIGH`
+
+**Ag Cihazi Sicakligi Yuksek** — 🔴 CRITICAL
+
+> Ag cihazinin sicaklik degeri guvenli esigi asti.
+
+| Property | Value |
+|---|---|
+| Category | Operational |
+| Source | nms |
+| Cooldown | 30 minutes |
+| Threshold | ≥ 70 events |
+| Time Window | 10 minutes |
+| Email Notify | ✓ |
+
+**Recommended Action:** Fanlari, hava akisini, ortam sicakligini ve donanim sensorlerini kontrol edin.
 
 ### `SNAPSHOT_DISK_GROWTH`
 
@@ -1298,6 +1337,55 @@
 | Filter | `hostMemoryUsage > 90` |
 
 **Recommended Action:** Ballooning ve swap durumunu kontrol edin. VM leri diger hostlara tasiyin. Bellek reservation ayarlarini gozden gecirin.
+
+### `NMS_CPU_HIGH`
+
+**Ag Cihazi CPU Kullanimi Yuksek** — 🟠 HIGH
+
+> Ag cihazinin CPU kullanimi esik degerini asti.
+
+| Property | Value |
+|---|---|
+| Category | Operational |
+| Source | nms |
+| Cooldown | 30 minutes |
+| Threshold | ≥ 85 events |
+| Time Window | 10 minutes |
+
+**Recommended Action:** Process yukunu, broadcast storm durumunu ve cihaz loglarini kontrol edin.
+
+### `NMS_MEMORY_HIGH`
+
+**Ag Cihazi Bellek Kullanimi Yuksek** — 🟠 HIGH
+
+> Ag cihazinin bellek kullanimi esik degerini asti.
+
+| Property | Value |
+|---|---|
+| Category | Operational |
+| Source | nms |
+| Cooldown | 30 minutes |
+| Threshold | ≥ 85 events |
+| Time Window | 10 minutes |
+
+**Recommended Action:** Bellek kullanan processleri, firmware sorunlarini ve uzun sureli yuk trendini kontrol edin.
+
+### `NMS_PORT_DOWN`
+
+**Izlenen Switch Portu Down** — 🟠 HIGH
+
+> Yonetimsel olarak acik ve izlenen bir switch portu operasyonel olarak down durumda.
+
+| Property | Value |
+|---|---|
+| Category | Operational |
+| Source | nms |
+| Cooldown | 15 minutes |
+| Threshold | ≥ 1 events |
+| Time Window | 5 minutes |
+| Email Notify | ✓ |
+
+**Recommended Action:** Kabloyu, uzak ucu, VLAN ve port hata sayaclarini kontrol edin.
 
 ### `VM_POWERED_OFF`
 
@@ -1981,4 +2069,4 @@
 
 ---
 
-*This document was auto-generated on 2026-05-18. Do not edit manually — regenerate with `npx tsx scripts/generate-alarm-catalog.ts`.*
+*This document was auto-generated on 2026-07-10. Do not edit manually — regenerate with `npx tsx scripts/generate-alarm-catalog.ts`.*

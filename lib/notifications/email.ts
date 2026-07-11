@@ -14,8 +14,10 @@
  */
 
 import nodemailer from 'nodemailer';
+import { NotificationAttemptStatus } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { createLogger } from '@/lib/logger';
+import { recordNotificationAttempt } from './attempts';
 
 const log = createLogger('email');
 
@@ -46,6 +48,7 @@ export interface AlarmEmailData {
   timestamp: Date;
   rawData?: Record<string, unknown>;
   alarmEventId?: string; // Required for DLQ retry
+  incidentId?: string;
 }
 
 // ============================================================================
@@ -183,8 +186,8 @@ function isHourlyLimitExceeded(): boolean {
 /**
  * Check if specific alarm is in cooldown (prevents duplicate emails)
  */
-function isAlarmInCooldown(alarmCode: string): boolean {
-  const lastSent = alarmCooldowns.get(alarmCode);
+function isAlarmInCooldown(cooldownKey: string): boolean {
+  const lastSent = alarmCooldowns.get(cooldownKey);
   if (!lastSent) return false;
   
   const elapsed = Date.now() - lastSent;
@@ -194,8 +197,8 @@ function isAlarmInCooldown(alarmCode: string): boolean {
 /**
  * Record that an alarm email was sent
  */
-function recordAlarmSent(alarmCode: string): void {
-  alarmCooldowns.set(alarmCode, Date.now());
+function recordAlarmSent(cooldownKey: string): void {
+  alarmCooldowns.set(cooldownKey, Date.now());
   emailCountThisHour++;
   
   // Cleanup old cooldowns (memory management)
@@ -431,25 +434,50 @@ function buildAlarmEmailHtml(data: AlarmEmailData): string {
  * - Alarm in cooldown (duplicate prevention)
  * - SMTP error (logged)
  */
-export async function sendAlarmEmail(data: AlarmEmailData, options?: { bypassCooldown?: boolean; skipDLQ?: boolean }): Promise<boolean> {
+export async function sendAlarmEmail(data: AlarmEmailData, options?: { bypassCooldown?: boolean; skipDLQ?: boolean; attempt?: number }): Promise<boolean> {
   const startTime = Date.now();
   const bypassCooldown = options?.bypassCooldown ?? false;
   const skipDLQ = options?.skipDLQ ?? false;
+  const cooldownKey = data.incidentId ?? data.alarmEventId ?? data.alarmCode;
   const config = await getEmailConfig();
   const configError = getEmailConfigError(config, { requireEnabled: true });
   if (configError) {
+    await recordNotificationAttempt({
+      alarmEventId: data.alarmEventId,
+      incidentId: data.incidentId,
+      channel: 'email',
+      status: config.enabled ? NotificationAttemptStatus.FAILED_RETRYABLE : NotificationAttemptStatus.SKIPPED_DISABLED,
+      attempt: options?.attempt,
+      error: configError,
+    });
     log.info({ alarmCode: data.alarmCode, reason: configError }, 'Email notification skipped');
     return false;
   }
   
   // Check hourly rate limit (never bypassed for safety)
   if (isHourlyLimitExceeded()) {
+    await recordNotificationAttempt({
+      alarmEventId: data.alarmEventId,
+      incidentId: data.incidentId,
+      channel: 'email',
+      status: NotificationAttemptStatus.SKIPPED_RATE_LIMITED,
+      attempt: options?.attempt,
+      error: 'Hourly email limit exceeded',
+    });
     log.info({ alarmCode: data.alarmCode, maxPerHour: MAX_EMAILS_PER_HOUR }, 'Hourly limit exceeded, skipping');
     return false;
   }
   
   // Check per-alarm cooldown (can be bypassed for retries of failed notifications)
-  if (!bypassCooldown && isAlarmInCooldown(data.alarmCode)) {
+  if (!bypassCooldown && isAlarmInCooldown(cooldownKey)) {
+    await recordNotificationAttempt({
+      alarmEventId: data.alarmEventId,
+      incidentId: data.incidentId,
+      channel: 'email',
+      status: NotificationAttemptStatus.SKIPPED_COOLDOWN,
+      attempt: options?.attempt,
+      error: 'Email cooldown active',
+    });
     log.info({ alarmCode: data.alarmCode }, 'Alarm in cooldown, skipping');
     return false;
   }
@@ -470,7 +498,16 @@ export async function sendAlarmEmail(data: AlarmEmailData, options?: { bypassCoo
     });
     
     // Record successful send
-    recordAlarmSent(data.alarmCode);
+    recordAlarmSent(cooldownKey);
+
+    await recordNotificationAttempt({
+      alarmEventId: data.alarmEventId,
+      incidentId: data.incidentId,
+      channel: 'email',
+      status: NotificationAttemptStatus.SENT,
+      attempt: options?.attempt,
+      providerId: info.messageId,
+    });
     
     const elapsed = Date.now() - startTime;
     log.info({ elapsed, messageId: info.messageId, alarmCode: data.alarmCode }, 'Email sent');
@@ -480,6 +517,15 @@ export async function sendAlarmEmail(data: AlarmEmailData, options?: { bypassCoo
     const elapsed = Date.now() - startTime;
     const errorMsg = (error as Error).message || 'Unknown error';
     log.error({ err: error, elapsed, alarmCode: data.alarmCode }, 'Failed to send email');
+
+    await recordNotificationAttempt({
+      alarmEventId: data.alarmEventId,
+      incidentId: data.incidentId,
+      channel: 'email',
+      status: NotificationAttemptStatus.FAILED_RETRYABLE,
+      attempt: options?.attempt,
+      error: errorMsg,
+    });
     
     // Only clear the cached transporter for connection/auth errors.
     // Temporary message-delivery failures (recipient unknown, relay issues)

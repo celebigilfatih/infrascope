@@ -71,6 +71,7 @@ const nextConfig = {
     ];
   },
   experimental: {
+    instrumentationHook: true,
     // Optimize package imports to reduce bundle size
     optimizePackageImports: [
       'lucide-react', 
