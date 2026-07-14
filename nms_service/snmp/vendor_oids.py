@@ -203,8 +203,8 @@ class VendorOIDManager:
     # Fortinet (FortiGate) specific OIDs
     FORTINET_OIDS = {
         # CPU usage
-        "1.3.6.1.4.1.12356.101.13.2.1.1.2": OIDMapping(
-            oid="1.3.6.1.4.1.12356.101.13.2.1.1.2",
+        "1.3.6.1.4.1.12356.101.4.1.3": OIDMapping(
+            oid="1.3.6.1.4.1.12356.101.4.1.3",
             name="fgSysCpuUsage",
             description="FortiGate CPU usage",
             metric_type="gauge",
@@ -213,8 +213,8 @@ class VendorOIDManager:
         ),
         
         # Memory usage
-        "1.3.6.1.4.1.12356.101.13.2.1.2.1": OIDMapping(
-            oid="1.3.6.1.4.1.12356.101.13.2.1.2.1",
+        "1.3.6.1.4.1.12356.101.4.1.4": OIDMapping(
+            oid="1.3.6.1.4.1.12356.101.4.1.4",
             name="fgSysMemUsage",
             description="FortiGate memory usage",
             metric_type="gauge",
@@ -222,13 +222,12 @@ class VendorOIDManager:
             vendor="fortinet"
         ),
         
-        # Temperature
-        "1.3.6.1.4.1.12356.101.13.2.1.3.1": OIDMapping(
-            oid="1.3.6.1.4.1.12356.101.13.2.1.3.1",
-            name="fgSysTemperature",
-            description="FortiGate temperature",
-            metric_type="gauge",
-            unit="celsius",
+        # Hardware sensor values are a table and vary by FortiGate model.
+        "1.3.6.1.4.1.12356.101.4.3.2.1.3": OIDMapping(
+            oid="1.3.6.1.4.1.12356.101.4.3.2.1.3",
+            name="fgHwSensorEntValue",
+            description="FortiGate hardware sensor value",
+            metric_type="string",
             vendor="fortinet"
         ),
     }

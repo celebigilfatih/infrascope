@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import FortiAnalyzerService, { initSharedFortiAnalyzerService } from '@/lib/integrations/fortianalyzer';
 import { prisma } from '@/lib/prisma';
+import { unprotectIntegrationConfig } from '@/lib/security/integration-credentials';
 
 export async function GET(request: NextRequest) {
   try {
@@ -31,11 +32,11 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const faConfig = config.config as {
+    const faConfig = unprotectIntegrationConfig<{
       host: string;
       username?: string;
       password?: string;
-    };
+    }>(config.config, 'FORTIANALYZER');
 
     if (!faConfig.password) {
       return NextResponse.json({

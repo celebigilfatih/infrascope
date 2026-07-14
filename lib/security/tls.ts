@@ -1,5 +1,7 @@
 import fs from 'fs';
+import { createHash } from 'crypto';
 import type { RequestOptions } from 'https';
+import { rootCertificates } from 'tls';
 import { Agent } from 'undici';
 
 export type TlsIntegration = 'FORTIANALYZER' | 'FORTIGATE' | 'VMWARE';
@@ -52,7 +54,13 @@ export function assertProductionTlsSafe(): void {
   }
 }
 
-function getTlsMaterial(integration: TlsIntegration): { rejectUnauthorized: boolean; ca?: string } {
+type TlsOverrides = { caPem?: string };
+
+function systemRootsWith(ca: string): string[] {
+  return [...rootCertificates, ca];
+}
+
+function getTlsMaterial(integration: TlsIntegration, overrides: TlsOverrides = {}): { rejectUnauthorized: boolean; ca?: string | string[] } {
   assertProductionTlsSafe();
 
   const config = TLS_CONFIG[integration];
@@ -61,20 +69,27 @@ function getTlsMaterial(integration: TlsIntegration): { rejectUnauthorized: bool
     return { rejectUnauthorized: false };
   }
 
+  if (overrides.caPem?.trim()) {
+    return { rejectUnauthorized: true, ca: systemRootsWith(overrides.caPem) };
+  }
+
   const caCertPath = process.env[config.caCertPathEnv];
   if (caCertPath) {
     return {
       rejectUnauthorized: true,
-      ca: fs.readFileSync(caCertPath, 'utf8'),
+      ca: systemRootsWith(fs.readFileSync(caCertPath, 'utf8')),
     };
   }
 
   return { rejectUnauthorized: true };
 }
 
-function getAgent(integration: TlsIntegration): Agent {
-  const tls = getTlsMaterial(integration);
-  const cacheKey = `${integration}:${tls.rejectUnauthorized}:${tls.ca ? tls.ca.length : 0}`;
+function getAgent(integration: TlsIntegration, overrides: TlsOverrides = {}): Agent {
+  const tls = getTlsMaterial(integration, overrides);
+  const caFingerprint = tls.ca
+    ? createHash('sha256').update(Array.isArray(tls.ca) ? tls.ca.join('\n') : tls.ca).digest('hex')
+    : 'system';
+  const cacheKey = `${integration}:${tls.rejectUnauthorized}:${caFingerprint}`;
   const cached = agentCache.get(cacheKey);
   if (cached) return cached;
 
@@ -85,17 +100,23 @@ function getAgent(integration: TlsIntegration): Agent {
   return agent;
 }
 
-export function getHttpsRequestTlsOptions(integration: TlsIntegration): Pick<RequestOptions, 'ca' | 'rejectUnauthorized'> {
-  return getTlsMaterial(integration);
+export function getHttpsRequestTlsOptions(integration: TlsIntegration, overrides: TlsOverrides = {}): Pick<RequestOptions, 'ca' | 'rejectUnauthorized'> {
+  return getTlsMaterial(integration, overrides);
 }
 
 export function secureFetch(
   integration: TlsIntegration,
   url: string | URL,
-  options: RequestInit = {}
+  options: RequestInit & { timeoutMs?: number; caPem?: string } = {}
 ): Promise<Response> {
+  const { timeoutMs = 30_000, caPem, ...requestOptions } = options;
+  const timeoutSignal = AbortSignal.timeout(timeoutMs);
+  const signal = requestOptions.signal
+    ? AbortSignal.any([requestOptions.signal, timeoutSignal])
+    : timeoutSignal;
   return fetch(url, {
-    ...options,
-    dispatcher: getAgent(integration),
+    ...requestOptions,
+    signal,
+    dispatcher: getAgent(integration, { caPem }),
   } as RequestInit & { dispatcher: Agent });
 }

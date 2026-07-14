@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   Eye,
   EyeOff,
+  Fingerprint,
   Loader2,
   Network,
   Radio,
@@ -34,6 +35,7 @@ import { Switch } from '@/components/ui/switch';
 import { usePageBreadcrumb } from '@/components/layout/BreadcrumbProvider';
 
 type SnmpVersion = 'v2c' | 'v3';
+type SnmpV3SecurityLevel = 'authNoPriv' | 'authPriv';
 
 interface DbDevice {
   id: string;
@@ -43,13 +45,26 @@ interface DbDevice {
   managementIp: string | null;
   snmpVersion: string | null;
   snmpPort: number | null;
+  snmpV3Username: string | null;
+  snmpV3SecurityLevel: string | null;
+  snmpV3AuthProtocol: string | null;
+  snmpV3PrivacyProtocol: string | null;
   pollingEnabled: boolean;
   pollingInterval: number | null;
   sshUsername: string | null;
   sshPort: number | null;
   hasSnmpCommunity: boolean;
+  hasSnmpV3AuthPassword: boolean;
+  hasSnmpV3PrivacyPassword: boolean;
   hasSshPassword: boolean;
+  sshHostKeyAlgorithm: string | null;
+  sshHostKeyFingerprint: string | null;
 }
+
+type HostKeyState = {
+  observed: { algorithm: string; fingerprint: string; observed_at: string };
+  trusted: { algorithm: string | null; fingerprint: string; matches: boolean } | null;
+};
 
 function toFormSnmpVersion(value: string | null): SnmpVersion {
   return value === '3' || value === 'v3' ? 'v3' : 'v2c';
@@ -66,13 +81,24 @@ export default function EditNmsDevicePage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [showCommunity, setShowCommunity] = useState(false);
+  const [showSnmpAuthPassword, setShowSnmpAuthPassword] = useState(false);
+  const [showSnmpPrivacyPassword, setShowSnmpPrivacyPassword] = useState(false);
   const [showSshPassword, setShowSshPassword] = useState(false);
+  const [hostKey, setHostKey] = useState<HostKeyState | null>(null);
+  const [checkingHostKey, setCheckingHostKey] = useState(false);
+  const [trustingHostKey, setTrustingHostKey] = useState(false);
 
   const [form, setForm] = useState({
     managementIp: '',
     snmpPort: 161,
     snmpVersion: 'v2c' as SnmpVersion,
     snmpCommunity: '',
+    snmpV3Username: '',
+    snmpV3SecurityLevel: 'authPriv' as SnmpV3SecurityLevel,
+    snmpV3AuthProtocol: 'SHA',
+    snmpV3AuthPassword: '',
+    snmpV3PrivacyProtocol: 'AES',
+    snmpV3PrivacyPassword: '',
     pollingEnabled: true,
     pollingInterval: 30,
     sshUsername: '',
@@ -86,6 +112,13 @@ export default function EditNmsDevicePage() {
     { label: 'İzleme Ayarları' },
   ] : null, [deviceId, initialDevice?.name]);
   usePageBreadcrumb(breadcrumbItems);
+  const sshTargetDirty = Boolean(
+    initialDevice
+    && (
+      form.managementIp.trim() !== (initialDevice.managementIp || '')
+      || form.sshPort !== (initialDevice.sshPort ?? 22)
+    )
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -106,6 +139,12 @@ export default function EditNmsDevicePage() {
           snmpPort: device.snmpPort ?? 161,
           snmpVersion: toFormSnmpVersion(device.snmpVersion),
           snmpCommunity: '',
+          snmpV3Username: device.snmpV3Username || '',
+          snmpV3SecurityLevel: (device.snmpV3SecurityLevel === 'authNoPriv' ? 'authNoPriv' : 'authPriv') as SnmpV3SecurityLevel,
+          snmpV3AuthProtocol: device.snmpV3AuthProtocol || 'SHA',
+          snmpV3AuthPassword: '',
+          snmpV3PrivacyProtocol: device.snmpV3PrivacyProtocol || 'AES',
+          snmpV3PrivacyPassword: '',
           pollingEnabled: device.pollingEnabled ?? true,
           pollingInterval: device.pollingInterval ?? 30,
           sshUsername: device.sshUsername || '',
@@ -128,10 +167,59 @@ export default function EditNmsDevicePage() {
   }, [deviceId]);
 
   const set = (key: string, value: unknown) => {
+    if (key === 'managementIp' || key === 'sshPort') setHostKey(null);
     setForm((previous) => ({ ...previous, [key]: value }));
   };
 
+  const inspectHostKey = async () => {
+    setCheckingHostKey(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/integrations/nms/devices/${deviceId}/ssh-host-key`);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'SSH anahtarı okunamadı');
+      setHostKey(data.data as HostKeyState);
+    } catch (hostKeyError) {
+      setError(hostKeyError instanceof Error ? hostKeyError.message : 'SSH anahtarı okunamadı');
+    } finally {
+      setCheckingHostKey(false);
+    }
+  };
+
+  const trustHostKey = async () => {
+    if (!hostKey) return;
+    setTrustingHostKey(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/integrations/nms/devices/${deviceId}/ssh-host-key`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fingerprint: hostKey.observed.fingerprint }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'SSH anahtarı onaylanamadı');
+      setHostKey((current) => current ? {
+        ...current,
+        trusted: {
+          algorithm: current.observed.algorithm,
+          fingerprint: current.observed.fingerprint,
+          matches: true,
+        },
+      } : null);
+      setInitialDevice((current) => current ? {
+        ...current,
+        sshHostKeyAlgorithm: hostKey.observed.algorithm,
+        sshHostKeyFingerprint: hostKey.observed.fingerprint,
+      } : null);
+    } catch (hostKeyError) {
+      setError(hostKeyError instanceof Error ? hostKeyError.message : 'SSH anahtarı onaylanamadı');
+    } finally {
+      setTrustingHostKey(false);
+    }
+  };
+
   const handleSubmit = async () => {
+    if (!initialDevice) return;
     if (!form.managementIp.trim()) {
       setError('Management IP zorunludur');
       return;
@@ -148,6 +236,32 @@ export default function EditNmsDevicePage() {
       setError('Polling aralığı en az 30 saniye olmalıdır');
       return;
     }
+    if (form.snmpVersion === 'v2c' && !form.snmpCommunity && !initialDevice.hasSnmpCommunity) {
+      setError('SNMP community değeri zorunludur');
+      return;
+    }
+    if (form.snmpVersion === 'v3' && !form.snmpV3Username.trim()) {
+      setError('SNMPv3 kullanıcı adı zorunludur');
+      return;
+    }
+    if (form.snmpVersion === 'v3' && form.snmpV3AuthPassword.length > 0 && form.snmpV3AuthPassword.length < 8) {
+      setError('SNMPv3 doğrulama parolası en az 8 karakter olmalıdır');
+      return;
+    }
+    if (form.snmpVersion === 'v3' && !form.snmpV3AuthPassword && !initialDevice.hasSnmpV3AuthPassword) {
+      setError('SNMPv3 doğrulama parolası zorunludur');
+      return;
+    }
+    if (form.snmpVersion === 'v3' && form.snmpV3SecurityLevel === 'authPriv') {
+      if (form.snmpV3PrivacyPassword.length > 0 && form.snmpV3PrivacyPassword.length < 8) {
+        setError('SNMPv3 şifreleme parolası en az 8 karakter olmalıdır');
+        return;
+      }
+      if (!form.snmpV3PrivacyPassword && !initialDevice.hasSnmpV3PrivacyPassword) {
+        setError('authPriv için SNMPv3 şifreleme parolası zorunludur');
+        return;
+      }
+    }
 
     setError(null);
     setSaving(true);
@@ -162,7 +276,18 @@ export default function EditNmsDevicePage() {
         sshUsername: form.sshUsername,
         sshPort: form.sshPort,
       };
-      if (form.snmpCommunity) payload.snmpCommunity = form.snmpCommunity;
+      if (form.snmpVersion === 'v2c') {
+        if (form.snmpCommunity) payload.snmpCommunity = form.snmpCommunity;
+      } else {
+        payload.snmpV3Username = form.snmpV3Username.trim();
+        payload.snmpV3SecurityLevel = form.snmpV3SecurityLevel;
+        payload.snmpV3AuthProtocol = form.snmpV3AuthProtocol;
+        if (form.snmpV3AuthPassword) payload.snmpV3AuthPassword = form.snmpV3AuthPassword;
+        if (form.snmpV3SecurityLevel === 'authPriv') {
+          payload.snmpV3PrivacyProtocol = form.snmpV3PrivacyProtocol;
+          if (form.snmpV3PrivacyPassword) payload.snmpV3PrivacyPassword = form.snmpV3PrivacyPassword;
+        }
+      }
       if (form.sshPassword) payload.sshPassword = form.sshPassword;
 
       const response = await fetch(`/api/integrations/nms/devices/${deviceId}`, {
@@ -345,7 +470,14 @@ export default function EditNmsDevicePage() {
                   </div>
                 </div>
                 <Badge variant="outline" className="shrink-0">
-                  {initialDevice.hasSnmpCommunity ? 'Credential kayıtlı' : 'Credential eksik'}
+                  {form.snmpVersion === 'v3'
+                    ? initialDevice.hasSnmpV3AuthPassword
+                      && (form.snmpV3SecurityLevel === 'authNoPriv' || initialDevice.hasSnmpV3PrivacyPassword)
+                      ? 'Credential kayıtlı'
+                      : 'Credential eksik'
+                    : initialDevice.hasSnmpCommunity
+                      ? 'Credential kayıtlı'
+                      : 'Credential eksik'}
                 </Badge>
               </div>
             </CardHeader>
@@ -362,34 +494,47 @@ export default function EditNmsDevicePage() {
                   <option value="v3">SNMPv3</option>
                 </select>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="snmp-community">Community string</Label>
-                <div className="relative">
-                  <Input
-                    id="snmp-community"
-                    type={showCommunity ? 'text' : 'password'}
-                    autoComplete="new-password"
-                    className="pr-10"
-                    placeholder={initialDevice.hasSnmpCommunity ? 'Değiştirmek için yeni değer girin' : 'Community string girin'}
-                    value={form.snmpCommunity}
-                    onChange={(event) => set('snmpCommunity', event.target.value)}
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="absolute right-0 top-0 h-10 w-10"
-                    onClick={() => setShowCommunity((visible) => !visible)}
-                    title={showCommunity ? 'Community değerini gizle' : 'Community değerini göster'}
-                    aria-label={showCommunity ? 'Community değerini gizle' : 'Community değerini göster'}
-                  >
-                    {showCommunity ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </Button>
+              {form.snmpVersion === 'v2c' ? (
+                <div className="space-y-2">
+                  <Label htmlFor="snmp-community">Community string</Label>
+                  <SecretInput id="snmp-community" visible={showCommunity} onToggle={() => setShowCommunity((visible) => !visible)} value={form.snmpCommunity} onChange={(value) => set('snmpCommunity', value)} placeholder={initialDevice.hasSnmpCommunity ? 'Değiştirmek için yeni değer girin' : 'Community string girin'} label="Community" />
+                  <p className="text-xs text-muted-foreground">Boş bırakırsanız kayıtlı community değeri korunur.</p>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Boş bırakırsanız kayıtlı community değeri korunur.
-                </p>
-              </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="snmp-v3-username">Kullanıcı adı</Label>
+                      <Input id="snmp-v3-username" autoComplete="off" value={form.snmpV3Username} onChange={(event) => set('snmpV3Username', event.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="snmp-v3-security">Güvenlik seviyesi</Label>
+                      <select id="snmp-v3-security" className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" value={form.snmpV3SecurityLevel} onChange={(event) => set('snmpV3SecurityLevel', event.target.value as SnmpV3SecurityLevel)}><option value="authPriv">Doğrulama + şifreleme</option><option value="authNoPriv">Yalnızca doğrulama</option></select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="snmp-v3-auth-protocol">Doğrulama protokolü</Label>
+                      <select id="snmp-v3-auth-protocol" className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" value={form.snmpV3AuthProtocol} onChange={(event) => set('snmpV3AuthProtocol', event.target.value)}><option value="SHA">SHA</option><option value="SHA-256">SHA-256</option></select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="snmp-v3-auth-password">Doğrulama parolası</Label>
+                      <SecretInput id="snmp-v3-auth-password" visible={showSnmpAuthPassword} onToggle={() => setShowSnmpAuthPassword((visible) => !visible)} value={form.snmpV3AuthPassword} onChange={(value) => set('snmpV3AuthPassword', value)} placeholder={initialDevice.hasSnmpV3AuthPassword ? 'Değiştirmek için yeni parola girin' : 'En az 8 karakter'} label="SNMPv3 doğrulama parolası" />
+                    </div>
+                    {form.snmpV3SecurityLevel === 'authPriv' && (
+                      <>
+                        <div className="space-y-2">
+                          <Label htmlFor="snmp-v3-privacy-protocol">Şifreleme protokolü</Label>
+                          <select id="snmp-v3-privacy-protocol" className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" value={form.snmpV3PrivacyProtocol} onChange={(event) => set('snmpV3PrivacyProtocol', event.target.value)}><option value="AES">AES-128</option></select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="snmp-v3-privacy-password">Şifreleme parolası</Label>
+                          <SecretInput id="snmp-v3-privacy-password" visible={showSnmpPrivacyPassword} onToggle={() => setShowSnmpPrivacyPassword((visible) => !visible)} value={form.snmpV3PrivacyPassword} onChange={(value) => set('snmpV3PrivacyPassword', value)} placeholder={initialDevice.hasSnmpV3PrivacyPassword ? 'Değiştirmek için yeni parola girin' : 'En az 8 karakter'} label="SNMPv3 şifreleme parolası" />
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">Boş bırakılan kayıtlı SNMPv3 parolaları korunur.</p>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -462,6 +607,83 @@ export default function EditNmsDevicePage() {
                   Boş bırakırsanız kayıtlı SSH parolası korunur.
                 </p>
               </div>
+              <div className="space-y-3 border-t border-border pt-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium">Sunucu kimliği</p>
+                    <p className="text-xs text-muted-foreground">
+                      İlk SSH bağlantısından önce cihazın SHA-256 anahtarını doğrulayın.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={inspectHostKey}
+                    disabled={checkingHostKey || trustingHostKey || sshTargetDirty}
+                  >
+                    {checkingHostKey
+                      ? <Loader2 className="h-4 w-4 animate-spin" />
+                      : <Fingerprint className="h-4 w-4" />}
+                    Anahtarı Kontrol Et
+                  </Button>
+                </div>
+                {sshTargetDirty && (
+                  <p className="text-xs text-amber-700 dark:text-amber-300">
+                    Yeni IP veya port için önce ayarları kaydedin, ardından anahtarı kontrol edin.
+                  </p>
+                )}
+                {!hostKey && initialDevice.sshHostKeyFingerprint && (
+                  <div className="rounded-md border border-emerald-500/25 bg-emerald-500/5 p-3">
+                    <div className="flex items-center gap-2 text-sm font-medium text-emerald-700 dark:text-emerald-300">
+                      <ShieldCheck className="h-4 w-4" />
+                      SSH anahtarı onaylı
+                    </div>
+                    <p className="mt-2 break-all font-mono text-xs text-muted-foreground">
+                      {initialDevice.sshHostKeyFingerprint}
+                    </p>
+                  </div>
+                )}
+                {hostKey && (
+                  <div className={`rounded-md border p-3 ${
+                    hostKey.trusted?.matches
+                      ? 'border-emerald-500/25 bg-emerald-500/5'
+                      : hostKey.trusted
+                        ? 'border-destructive/30 bg-destructive/5'
+                        : 'border-amber-500/30 bg-amber-500/5'
+                  }`}>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium">
+                          {hostKey.trusted?.matches
+                            ? 'Anahtar eşleşiyor'
+                            : hostKey.trusted
+                              ? 'Anahtar değişmiş'
+                              : 'Onay bekliyor'}
+                        </p>
+                        <p className="mt-1 break-all font-mono text-xs text-muted-foreground">
+                          {hostKey.observed.fingerprint}
+                        </p>
+                      </div>
+                      {!hostKey.trusted?.matches && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="gap-2"
+                          onClick={trustHostKey}
+                          disabled={trustingHostKey}
+                        >
+                          {trustingHostKey
+                            ? <Loader2 className="h-4 w-4 animate-spin" />
+                            : <ShieldCheck className="h-4 w-4" />}
+                          Bu Anahtara Güven
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -471,7 +693,7 @@ export default function EditNmsDevicePage() {
           <div>
             <p className="font-medium">Credential güvenliği</p>
             <p className="mt-1 text-muted-foreground">
-              Kayıtlı community ve parola değerleri ekrana geri gönderilmez. Yalnızca yeni bir değer girdiğinizde güncellenir.
+              Kayıtlı community, SNMPv3 ve SSH parola değerleri ekrana geri gönderilmez. Yalnızca yeni bir değer girdiğinizde güncellenir.
             </p>
           </div>
         </div>
@@ -508,6 +730,49 @@ export default function EditNmsDevicePage() {
           </Button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function SecretInput({
+  id,
+  visible,
+  onToggle,
+  value,
+  onChange,
+  placeholder,
+  label,
+}: {
+  id: string;
+  visible: boolean;
+  onToggle: () => void;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  label: string;
+}) {
+  return (
+    <div className="relative">
+      <Input
+        id={id}
+        type={visible ? 'text' : 'password'}
+        autoComplete="new-password"
+        className="pr-10"
+        placeholder={placeholder}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="absolute right-0 top-0 h-10 w-10"
+        onClick={onToggle}
+        title={visible ? `${label} değerini gizle` : `${label} değerini göster`}
+        aria-label={visible ? `${label} değerini gizle` : `${label} değerini göster`}
+      >
+        {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+      </Button>
     </div>
   );
 }

@@ -9,6 +9,7 @@ import { EventCacheService } from './event-cache';
 import { ALARM_QUERY_REGISTRY, BYPASS_CACHE_ALARMS } from './queries';
 import { createDefaultSuppressionEngine, SuppressionEvent } from './suppression-engine';
 import { recordAlarmOccurrence, resolveIncidentsForEvents } from './incident-service';
+import { getFortiGateConnector } from '@/lib/firewall/connector-factory';
 
 const log = createLogger('detection-engine');
 
@@ -162,35 +163,9 @@ export class AlarmDetectionEngine {
   private async initializeFortiGate() {
     try {
       log.info('Initializing FortiGate service');
-      const fgConfig = await prisma.integrationConfig.findFirst({
-        where: { type: 'FORTIGATE', enabled: true },
-      });
-      
-      if (!fgConfig) {
-        log.info('No enabled FortiGate integration found in database');
-        return;
-      }
-      
-      log.info({ configName: fgConfig.name }, 'Found FortiGate config');
-      
-      if (fgConfig && fgConfig.config) {
-        const config = fgConfig.config as any;
-        this.fortiGateService = new FortiGateService({
-          host: config.host,
-          accessToken: config.accessToken,
-          pollingInterval: config.pollingInterval || 5,
-          syncMode: 'rest',
-          enabledModules: {
-            interfaces: true,
-            vlans: true,
-            policies: true,
-            addresses: true,
-            vips: true,
-            sdwan: true,
-          },
-        });
-        log.info('FortiGate service initialized');
-      }
+      const connector = await getFortiGateConnector();
+      this.fortiGateService = connector.service;
+      log.info({ targetKey: connector.target.key }, 'FortiGate service initialized');
     } catch (error) {
       log.error({ err: error }, 'Error initializing FortiGate service');
       this.fortiGateService = null;

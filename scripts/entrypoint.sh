@@ -14,6 +14,16 @@ if [ "$NODE_ENV" = "production" ]; then
     exit 1
   fi
 
+  for key_var in INTEGRATION_CREDENTIALS_KEY INTEGRATION_CREDENTIALS_PREVIOUS_KEY; do
+    key_value=$(printenv "$key_var" || true)
+    if [ -n "$key_value" ]; then
+      if ! KEY_TO_VALIDATE="$key_value" node -e "const v=process.env.KEY_TO_VALIDATE.trim();const b=/^[a-f0-9]{64}$/i.test(v)?Buffer.from(v,'hex'):Buffer.from(v,'base64');process.exit(b.length===32?0:1)"; then
+        echo "❌ ${key_var} must contain exactly 32 bytes (base64 or 64-character hex)."
+        exit 1
+      fi
+    fi
+  done
+
   if echo "$DATABASE_URL" | grep -q "infrascope-prod"; then
     echo "❌ DATABASE_URL contains the default production password placeholder."
     exit 1

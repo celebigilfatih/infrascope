@@ -43,17 +43,47 @@ class SNMPSession:
         device_id: int,
         device_name: str,
         ip_address: str,
-        community_string: str,
+        community_string: str = "",
         version: str = "2c",
         port: int = 161,
         timeout: int = None,
         retries: int = None,
+        v3_username: str = "",
+        v3_security_level: str = "authPriv",
+        v3_auth_protocol: str = "SHA",
+        v3_auth_password: str = "",
+        v3_privacy_protocol: str = "AES",
+        v3_privacy_password: str = "",
     ):
         self.device_id = device_id
         self.device_name = device_name
         self.ip_address = ip_address
         self.community_string = community_string
-        self.version = version or "2c"
+        normalized_version = (version or "2c").lower()
+        if normalized_version not in ("1", "v1", "2c", "v2c", "3", "v3"):
+            raise SNMPAuthError("Unsupported SNMP version")
+        self.version = (
+            "1" if normalized_version in ("1", "v1")
+            else "3" if normalized_version in ("3", "v3")
+            else "2c"
+        )
+        self.v3_username = v3_username.strip()
+        self.v3_security_level = v3_security_level
+        self.v3_auth_protocol = self._normalize_auth_protocol(v3_auth_protocol)
+        self.v3_auth_password = v3_auth_password
+        self.v3_privacy_protocol = self._normalize_privacy_protocol(v3_privacy_protocol)
+        self.v3_privacy_password = v3_privacy_password
+        if self.version == "3":
+            if self.v3_security_level not in ("authNoPriv", "authPriv"):
+                raise SNMPAuthError("SNMPv3 security level must be authNoPriv or authPriv")
+            if not self.v3_username:
+                raise SNMPAuthError("SNMPv3 username is required")
+            if len(self.v3_auth_password) < 8:
+                raise SNMPAuthError("SNMPv3 authentication password must contain at least 8 characters")
+            if self.v3_security_level == "authPriv" and len(self.v3_privacy_password) < 8:
+                raise SNMPAuthError("SNMPv3 privacy password must contain at least 8 characters")
+        elif not community_string:
+            raise SNMPAuthError("SNMP community is required for SNMPv1/v2c")
         self.port = port
         self.timeout = timeout if timeout is not None else config.snmp.snmp_timeout
         self.retries = retries if retries is not None else config.snmp.snmp_retries
@@ -64,11 +94,46 @@ class SNMPSession:
         """Max wall-clock seconds to wait for a single snmp* subprocess."""
         return self.timeout * (self.retries + 1) + 5
 
+    @staticmethod
+    def _normalize_auth_protocol(value: str) -> str:
+        protocols = {
+            "sha": "SHA",
+            "sha1": "SHA",
+            "sha-1": "SHA",
+            "sha256": "SHA-256",
+            "sha-256": "SHA-256",
+        }
+        normalized = protocols.get((value or "SHA").strip().lower())
+        if not normalized:
+            raise SNMPAuthError("SNMPv3 authentication protocol is not supported")
+        return normalized
+
+    @staticmethod
+    def _normalize_privacy_protocol(value: str) -> str:
+        protocols = {"aes": "AES", "aes128": "AES", "aes-128": "AES"}
+        normalized = protocols.get((value or "AES").strip().lower())
+        if not normalized:
+            raise SNMPAuthError("SNMPv3 privacy protocol is not supported")
+        return normalized
+
     def _base_args(self) -> List[str]:
         """Common CLI flags shared by snmpget / snmpbulkwalk."""
-        ver = "2c" if self.version in ("2c", "v2c") else self.version
+        if self.version == "3":
+            args = [
+                "-v", "3",
+                "-l", self.v3_security_level,
+                "-u", self.v3_username,
+                "-a", self.v3_auth_protocol,
+                "-A", self.v3_auth_password,
+            ]
+            if self.v3_security_level == "authPriv":
+                args.extend([
+                    "-x", self.v3_privacy_protocol,
+                    "-X", self.v3_privacy_password,
+                ])
+            return [*args, "-t", str(self.timeout), "-r", str(self.retries)]
         return [
-            "-v", ver,
+            "-v", self.version,
             "-c", self.community_string,
             "-t", str(self.timeout),
             "-r", str(self.retries),

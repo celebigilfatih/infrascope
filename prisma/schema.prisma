@@ -244,11 +244,19 @@ model Device {
   snmpCommunity     String?  @map("snmp_community")
   snmpVersion       String?  @default("2c") @map("snmp_version")
   snmpPort          Int?     @default(161) @map("snmp_port")
+  snmpV3Username    String?  @map("snmp_v3_username")
+  snmpV3SecurityLevel String? @map("snmp_v3_security_level")
+  snmpV3AuthProtocol String? @map("snmp_v3_auth_protocol")
+  snmpV3AuthPassword String? @map("snmp_v3_auth_password")
+  snmpV3PrivacyProtocol String? @map("snmp_v3_privacy_protocol")
+  snmpV3PrivacyPassword String? @map("snmp_v3_privacy_password")
   pollingEnabled    Boolean  @default(false) @map("polling_enabled")
   pollingInterval   Int?     @default(30) @map("polling_interval")  // seconds
   sshUsername       String?  @map("ssh_username")
   sshPassword       String?  @map("ssh_password")
   sshPort           Int?     @default(22) @map("ssh_port")
+  sshHostKeyAlgorithm String? @map("ssh_host_key_algorithm")
+  sshHostKeyFingerprint String? @map("ssh_host_key_fingerprint")
   lastPolledAt      DateTime? @map("last_polled_at")
   
   // Relationships
@@ -270,6 +278,7 @@ model Device {
   // Firewall relationships
   firewallPolicies  FirewallPolicy[]   @relation("FirewallDevice")
   firewallAddresses FirewallAddress[] @relation("FirewallDevice")
+  firewallConnector FirewallConnector?
   
   // Topology relationships
   sourceRelationships Relationship[]   @relation("SourceDevice")
@@ -848,9 +857,57 @@ model IntegrationConfig {
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
   syncLogs        IntegrationSyncLog[]
+  firewallConnectors FirewallConnector[]
 
   @@unique([type, name])
   @@map("integration_configs")
+}
+
+enum FirewallMonitoringMode {
+  FULL
+  LIMITED
+  UNAVAILABLE
+}
+
+enum FirewallIdentityStatus {
+  PENDING
+  VERIFIED
+  CONFLICT
+}
+
+/// Persistent FortiGate connection, VDOM, identity, and capability state.
+model FirewallConnector {
+  id                     String                   @id @default(cuid())
+  deviceId               String                   @unique
+  device                 Device                   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  integrationConfigId    String
+  integrationConfig      IntegrationConfig        @relation(fields: [integrationConfigId], references: [id], onDelete: Cascade)
+  managementHost         String
+  serialNumber           String?
+  analyzerDeviceId       String?
+  vdom                   String                   @default("root")
+  identityKey            String?                  @unique
+  identityCandidateKey   String?
+  identityStatus         FirewallIdentityStatus   @default(PENDING)
+  identityConflictWithId String?
+  monitoringMode         FirewallMonitoringMode   @default(UNAVAILABLE)
+  capabilities           Json?
+  writeEnabled           Boolean                  @default(false)
+  lastProbeAt            DateTime?
+  lastSuccessAt          DateTime?
+  nextProbeAt            DateTime?
+  lastErrorCode          String?
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
+
+  @@unique([integrationConfigId, vdom])
+  @@index([serialNumber, vdom])
+  @@unique([analyzerDeviceId, vdom])
+  @@index([identityStatus])
+  @@index([identityCandidateKey])
+  @@index([identityConflictWithId])
+  @@index([nextProbeAt])
+  @@map("firewall_connectors")
 }
 
 /// Integration Sync Log
@@ -1234,6 +1291,7 @@ model CachedEvent {
   action      String?
   level       String?
   subtype     String?
+  devid       String?
   vdom        String?
   devname     String?
   policyid    Int?
@@ -1252,6 +1310,7 @@ model CachedEvent {
   @@index([eventTime])
   @@index([logtype, srcIp, eventTime])
   @@index([logtype, dstIp, eventTime])
+  @@index([devid, vdom, eventTime])
   @@map("cached_events")
 }
 

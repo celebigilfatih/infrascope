@@ -14,12 +14,14 @@ Backwards-compatible with existing orchestrator callers:
   - close_all()
 """
 
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 from contextlib import contextmanager
+import base64
+import hashlib
 import re
+import socket
 import threading
-import time
 
 import paramiko
 
@@ -42,6 +44,88 @@ _ssh_semaphore = threading.BoundedSemaphore(_SSH_MAX_CONCURRENT)
 # ANSI escape sequences commonly emitted by device pagers (cursor moves, color)
 _ANSI_RE = re.compile(r"\x1B\[[0-9;?]*[A-Za-z]")
 
+_READ_ONLY_COMMANDS = {
+    "cisco": {
+        "interfaces": "show interfaces status",
+        "status": "show version",
+        "backup": "show running-config",
+    },
+    "hp": {
+        "interfaces": "display interface brief",
+        "status": "display version",
+        "backup": "display current-configuration",
+    },
+    "huawei": {
+        "interfaces": "display interface brief",
+        "status": "display version",
+        "backup": "display current-configuration",
+    },
+    "juniper": {
+        "interfaces": "show interfaces terse | no-more",
+        "status": "show version | no-more",
+        "backup": "show configuration | display set | no-more",
+    },
+    "fortinet": {
+        "status": "get system status",
+        "backup": "show full-configuration",
+    },
+}
+
+_VENDOR_ALIASES = {
+    "fortigate": "fortinet",
+    "fortios": "fortinet",
+    "hpe": "hp",
+    "comware": "hp",
+    "h3c": "hp",
+    "procurve": "hp",
+    "vrp": "huawei",
+    "junos": "juniper",
+    "ios": "cisco",
+    "iosxe": "cisco",
+    "cisco_ios": "cisco",
+    "cisco_xe": "cisco",
+    "nxos": "cisco",
+    "cisco_nxos": "cisco",
+    "arista": "cisco",
+    "eos": "cisco",
+}
+
+
+def _canonical_vendor(vendor: str) -> str:
+    normalized = (vendor or "").strip().lower()
+    return _VENDOR_ALIASES.get(normalized, normalized)
+
+
+def host_key_fingerprint(key: paramiko.PKey) -> str:
+    digest = hashlib.sha256(key.asbytes()).digest()
+    return f"SHA256:{base64.b64encode(digest).decode('ascii').rstrip('=')}"
+
+
+def inspect_ssh_host_key(host: str, port: int = 22, timeout: int = 10) -> Tuple[str, str]:
+    """Fetch a server host key without authenticating or trusting it."""
+    sock = socket.create_connection((host, port), timeout=timeout)
+    transport = paramiko.Transport(sock)
+    try:
+        transport.start_client(timeout=timeout)
+        key = transport.get_remote_server_key()
+        return key.get_name(), host_key_fingerprint(key)
+    finally:
+        transport.close()
+        sock.close()
+
+
+class PinnedHostKeyPolicy(paramiko.MissingHostKeyPolicy):
+    def __init__(self, expected_fingerprint: str):
+        self.expected_fingerprint = expected_fingerprint.strip()
+
+    def missing_host_key(self, client, hostname, key):
+        observed = host_key_fingerprint(key)
+        if observed != self.expected_fingerprint:
+            raise paramiko.SSHException(
+                f"SSH host key mismatch for {hostname}; expected {self.expected_fingerprint}, observed {observed}"
+            )
+        client.get_host_keys().add(hostname, key.get_name(), key)
+
 @dataclass
 class SSHDeviceConfig:
     """SSH device connection configuration"""
@@ -54,6 +138,8 @@ class SSHDeviceConfig:
     vendor: str = "cisco"
     enabled: bool = True
     timeout: int = 10
+    host_key_fingerprint: str = ""
+    host_key_algorithm: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -71,8 +157,9 @@ class SSHSession:
         self.port = cfg.port
         self.vendor = cfg.vendor
         self.timeout = cfg.timeout
+        self.host_key_fingerprint = cfg.host_key_fingerprint
+        self.host_key_algorithm = cfg.host_key_algorithm
         self.client: Optional[paramiko.SSHClient] = None
-        self.channel = None
         self._lock = threading.Lock()  # prevents double-connect/close
 
     # ---- Config identity check ------------------------------------------------
@@ -83,6 +170,7 @@ class SSHSession:
             and self.username == cfg.username
             and self.password == cfg.password
             and self.port == cfg.port
+            and self.host_key_fingerprint == cfg.host_key_fingerprint
         )
 
     # ---- Connect --------------------------------------------------------------
@@ -101,8 +189,10 @@ class SSHSession:
             # Bound parallel SSH opens across the whole orchestrator
             _ssh_semaphore.acquire()
             try:
+                if not self.host_key_fingerprint:
+                    raise paramiko.SSHException("SSH host key has not been explicitly trusted")
                 client = paramiko.SSHClient()
-                client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                client.set_missing_host_key_policy(PinnedHostKeyPolicy(self.host_key_fingerprint))
                 client.connect(
                     self.ip_address,
                     username=self.username,
@@ -115,15 +205,7 @@ class SSHSession:
                     allow_agent=False,
                 )
 
-                # Interactive shell for vendor-specific CLI prompts
-                channel = client.invoke_shell()
-                time.sleep(1)
-
                 self.client = client
-                self.channel = channel
-
-                # Disable pager — swallow any initial MOTD noise
-                self._send_command("terminal length 0")
 
                 logger.info(
                     f"SSH open: {self.device_name} ({self.ip_address}) "
@@ -138,52 +220,44 @@ class SSHSession:
                     f"SSH connect FAILED {self.device_name} ({self.ip_address}): {e}"
                 )
                 self.client = None
-                self.channel = None
                 return False
 
     # ---- Command execution ----------------------------------------------------
-    def _send_command(self, command: str, wait: float = 2.0) -> str:
-        """Send a command on the interactive channel and collect output."""
-        if self.channel is None:
-            return ""
-        try:
-            self.channel.send(f"{command}\n")
-            time.sleep(wait)
-            output = ""
-            while self.channel.recv_ready():
-                output += self.channel.recv(65535).decode(errors="replace")
-            return output
-        except Exception as e:
-            logger.warning(
-                f"SSH send failed on {self.device_name}: {e}"
-            )
-            return ""
-
-    def execute_command(self, command: str) -> str:
-        """Execute a command — caller must have called connect()."""
+    def execute_operation(self, operation: str) -> str:
+        """Execute one exact read-only command selected from the vendor allowlist."""
         if self.client is None:
             logger.warning(
-                f"execute_command called on closed session: {self.device_name}"
+                f"execute_operation called on closed session: {self.device_name}"
             )
             return ""
-        return self._send_command(command)
+        vendor = _canonical_vendor(self.vendor)
+        command = _READ_ONLY_COMMANDS.get(vendor, {}).get(operation)
+        if not command:
+            raise ValueError(f"SSH operation '{operation}' is not allowed for vendor '{vendor or 'unknown'}'")
+        stdin, stdout, stderr = self.client.exec_command(
+            command,
+            timeout=self.timeout,
+            get_pty=False,
+        )
+        stdin.close()
+        output = stdout.read(10 * 1024 * 1024 + 1)
+        error = stderr.read(64 * 1024)
+        if len(output) > 10 * 1024 * 1024:
+            raise ValueError("SSH command output exceeds the 10 MiB safety limit")
+        text = _ANSI_RE.sub("", output.decode(errors="replace"))
+        error_text = error.decode(errors="replace").strip()
+        if error_text and not text.strip():
+            raise ValueError("SSH device rejected the read-only operation")
+        return text
 
     # ---- Close ----------------------------------------------------------------
     def close(self) -> None:
         """Idempotent, exception-safe close. Always nulls refs and releases slot."""
         with self._lock:
-            if self.client is None and self.channel is None:
+            if self.client is None:
                 return  # already closed
 
             had_slot = self.client is not None
-
-            # Best-effort channel close
-            if self.channel is not None:
-                try:
-                    self.channel.close()
-                except Exception:
-                    pass
-                self.channel = None
 
             # Best-effort client close
             if self.client is not None:
@@ -276,6 +350,8 @@ class SSHPoller:
             vendor=cfg.vendor,
             enabled=True,
             timeout=cfg.timeout,
+            host_key_fingerprint=cfg.host_key_fingerprint,
+            host_key_algorithm=cfg.host_key_algorithm,
         )
 
         with self._registry_lock:
@@ -304,6 +380,14 @@ class SSHPoller:
             self.configs[cfg.device_id] = effective
             self.sessions[cfg.device_id] = SSHSession(effective)
             logger.debug(f"SSH registered: {cfg.device_name} ({cfg.ip_address})")
+
+    def unregister_device(self, device_id: int) -> None:
+        """Remove a device and close any retained session state."""
+        with self._registry_lock:
+            session = self.sessions.pop(device_id, None)
+            self.configs.pop(device_id, None)
+        if session is not None:
+            session.close()
 
     # ---- Stateless session acquisition ---------------------------------------
     @contextmanager
@@ -334,7 +418,7 @@ class SSHPoller:
             if session is None:
                 return []
             try:
-                output = session.execute_command("show interfaces status")
+                output = session.execute_operation("interfaces")
                 interfaces = self._parse_interfaces(output, device_id)
                 logger.info(
                     f"SSH polled {len(interfaces)} interfaces for device {device_id}"
@@ -355,7 +439,7 @@ class SSHPoller:
             if session is None:
                 return None
             try:
-                output = session.execute_command("show version")
+                output = session.execute_operation("status")
                 uptime_seconds = self._parse_uptime(output)
                 health = DeviceHealthMetric(
                     device_id=device_id,
@@ -377,137 +461,58 @@ class SSHPoller:
                 return None
 
     # ---- Backup: running configuration ---------------------------------------
+    def read_status(self, device_id: int) -> Optional[Dict[str, str]]:
+        """Return a small, non-sensitive status summary from an allowlisted command."""
+        with self._stateless_session(device_id) as session:
+            if session is None:
+                return None
+            try:
+                output = session.execute_operation("status")
+                if not output.strip():
+                    return None
+                result: Dict[str, str] = {}
+                for line in output.splitlines():
+                    if ":" not in line:
+                        continue
+                    key, value = line.split(":", 1)
+                    normalized = key.strip().lower()
+                    if normalized in {
+                        "version", "serial-number", "serial number", "hostname",
+                        "current ha mode", "system time", "operation mode",
+                    }:
+                        result[normalized.replace(" ", "_")] = value.strip()[:512]
+                return result or {"status": "reachable"}
+            except Exception as e:
+                logger.error(f"SSH status read failed for device {device_id}: {e}")
+                return None
+
     def backup_running_config(
         self, device_id: int, vendor: str = "cisco"
     ) -> Optional[str]:
-        """Stateless config backup: connect -> show/display config -> close.
-
-        Returns raw config text on success, None on failure.
-        Vendor-aware: tries the primary command for the given vendor, and
-        automatically falls back to other dialects if the device rejects it.
-        """
-        v = (vendor or "cisco").strip().lower()
-
-        # Primary command per vendor dialect. Ordered list of fallbacks if the
-        # device rejects the first one with "Unrecognized command" / etc.
-        CISCO = "show running-config"
-        HP_COMWARE = "display current-configuration"
-        HUAWEI = "display current-configuration"
-        JUNIPER = "show configuration | display set | no-more"
-
-        if v in ("cisco", "cisco_ios", "ios", "cisco_xe", "iosxe", "cisco_nxos", "nxos", "arista", "eos"):
-            candidates = [CISCO, HP_COMWARE]
-        elif v in ("hp", "hpe", "comware", "h3c", "3com", "procurve"):
-            candidates = [HP_COMWARE, CISCO]
-        elif v in ("huawei", "vrp"):
-            candidates = [HUAWEI, CISCO]
-        elif v in ("juniper", "junos"):
-            candidates = [JUNIPER, CISCO, HP_COMWARE]
-        else:
-            # Unknown vendor: try the two most common dialects
-            candidates = [CISCO, HP_COMWARE, JUNIPER]
-
-        # Error markers that mean "this CLI doesn't understand the command"
-        ERROR_MARKERS = (
-            "unrecognized command",
-            "invalid input",
-            "% invalid",
-            "ambiguous command",
-            "syntax error",
-            "unknown command",
-        )
-
-        # Pager prompts that mean "press space to continue"
-        PAGER_MARKERS = (
-            "---- more ----",
-            "--more--",
-            " --more-- ",
-            "<--- more --->",
-            " more ",
-        )
-
-        def _looks_like_error(text: str) -> bool:
-            lower = text.lower()
-            return any(m in lower for m in ERROR_MARKERS)
-
-        def _has_pager(text: str) -> bool:
-            # Check only the tail to avoid false positives on keyword "more" in config
-            tail = text[-200:].lower()
-            return any(m in tail for m in PAGER_MARKERS)
-
+        """Read a configuration using one exact vendor allowlisted command."""
         with self._stateless_session(device_id) as session:
             if session is None:
-                logger.warning(
-                    f"SSH backup: cannot acquire session for device {device_id}"
-                )
+                logger.warning(f"SSH backup unavailable for device {device_id}")
                 return None
             try:
-                # Vendor-specific pre-commands to disable pager / enable full output
-                if v in ("hp", "hpe", "comware", "h3c", "3com"):
-                    session._send_command("screen-length disable", wait=1.0)
-                elif v in ("huawei", "vrp"):
-                    session._send_command("screen-length 0 temporary", wait=1.0)
-                else:
-                    # Cisco / Arista / Juniper generic: already sent 'terminal length 0'
-                    pass
-
-                last_output = ""
-                for cmd in candidates:
-                    output = session._send_command(cmd, wait=3.0)
-                    # Drain remaining buffer; advance the pager by sending space
-                    # until no 'more' prompt is seen or a safety cap is reached.
-                    MAX_PAGER_STEPS = 200  # enough for very large configs
-                    for _ in range(MAX_PAGER_STEPS):
-                        time.sleep(0.6)
-                        if session.channel is None:
-                            break
-                        # Drain any available bytes
-                        while session.channel.recv_ready():
-                            try:
-                                output += session.channel.recv(65535).decode(errors="replace")
-                            except Exception:
-                                break
-                        if _has_pager(output):
-                            # Send space to advance the pager
-                            try:
-                                session.channel.send(" ")
-                            except Exception:
-                                break
-                            continue
-                        # No pager and no more data ready -> give it one more tick
-                        time.sleep(0.8)
-                        if session.channel.recv_ready():
-                            continue
-                        break
-
-                    # Strip pager markers from final output (case-insensitive)
-                    for m in PAGER_MARKERS:
-                        output = re.sub(re.escape(m), "", output, flags=re.IGNORECASE)
-                    # Strip ANSI escape sequences left by the pager (cursor ops)
-                    output = _ANSI_RE.sub("", output)
-                    last_output = output
-                    if _looks_like_error(output):
-                        logger.info(
-                            f"SSH backup: device {device_id} rejected '{cmd}', "
-                            f"trying next dialect"
-                        )
-                        continue
-                    if output and len(output.strip()) >= 50:
-                        logger.info(
-                            f"SSH backup OK for device {device_id} via '{cmd}' "
-                            f"(size={len(output)} bytes)"
-                        )
-                        return output
-
-                logger.warning(
-                    f"SSH backup: all command dialects failed for device {device_id} "
-                    f"(last_len={len(last_output)})"
+                output = session.execute_operation("backup")
+                lower = output.lower()
+                error_markers = (
+                    "unrecognized command", "invalid input", "% invalid",
+                    "ambiguous command", "syntax error", "unknown command",
+                    "command fail", "permission denied",
                 )
-                return None
+                if any(marker in lower for marker in error_markers):
+                    raise ValueError("Device rejected the allowlisted backup operation")
+                if len(output.strip()) < 50:
+                    raise ValueError("Configuration output is unexpectedly short")
+                logger.info(
+                    f"SSH backup read completed for device {device_id} "
+                    f"(vendor={_canonical_vendor(vendor)}, size={len(output)} bytes)"
+                )
+                return output
             except Exception as e:
-                logger.error(
-                    f"SSH backup FAILED for device {device_id}: {e}"
-                )
+                logger.error(f"SSH backup failed for device {device_id}: {e}")
                 return None
 
     # ---- Parsers --------------------------------------------------------------

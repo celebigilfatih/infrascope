@@ -1,5 +1,6 @@
 import { createLogger } from '@/lib/logger';
 import { secureFetch } from '@/lib/security/tls';
+import { createHash } from 'node:crypto';
 
 const log = createLogger('fortianalyzer');
 
@@ -640,7 +641,12 @@ class FortiAnalyzerService {
   /**
    * Start log search and get task ID
    */
-  async startLogSearch(logtype: string = 'event', limit: number = 20, filter?: string): Promise<number | null> {
+  async startLogSearch(
+    logtype: string = 'event',
+    limit: number = 20,
+    filter?: string,
+    options: { deviceId?: string } = {}
+  ): Promise<number | null> {
     if (!this.session) {
       const loggedIn = await this.login();
       if (!loggedIn) return null;
@@ -659,7 +665,7 @@ class FortiAnalyzerService {
 
       // Device filter can be configured via environment variable
       // Use 'All_FortiGate' for all devices or specific device serial like 'FG4H0FT922903115'
-      const deviceFilter = process.env.FA_DEVICE_FILTER || 'All_FortiGate';
+      const deviceFilter = options.deviceId || process.env.FA_DEVICE_FILTER || 'All_FortiGate';
 
       const params: Record<string, unknown> = {
         url: '/logview/adom/root/logsearch',
@@ -1131,6 +1137,8 @@ export default FortiAnalyzerService;
  * All services sharing this instance benefit from session pooling.
  */
 let _sharedInstance: FortiAnalyzerService | null = null;
+let _sharedInstanceHost: string | null = null;
+const _sharedInstances = new Map<string, { fingerprint: string; service: FortiAnalyzerService }>();
 
 export function getSharedFortiAnalyzerService(): FortiAnalyzerService | null {
   // If already initialized, return the cached instance
@@ -1141,12 +1149,25 @@ export function getSharedFortiAnalyzerService(): FortiAnalyzerService | null {
 }
 
 export function initSharedFortiAnalyzerService(config: FortiAnalyzerConfig): FortiAnalyzerService {
-  if (_sharedInstance) {
-    // Already initialized - return existing (session pooling kicks in)
-    return _sharedInstance;
+  const host = config.host.trim().toLowerCase();
+  const fingerprint = createHash('sha256')
+    .update(JSON.stringify({
+      host,
+      username: config.username || '',
+      password: config.password || '',
+      accessToken: config.accessToken || '',
+    }))
+    .digest('hex');
+  const existing = _sharedInstances.get(host);
+  if (existing?.fingerprint === fingerprint) {
+    _sharedInstance = existing.service;
+    _sharedInstanceHost = host;
+    return existing.service;
   }
-  _sharedInstance = new FortiAnalyzerService(config);
-  log.info('Shared singleton instance created');
+  _sharedInstance = new FortiAnalyzerService({ ...config, host });
+  _sharedInstanceHost = host;
+  _sharedInstances.set(host, { fingerprint, service: _sharedInstance });
+  log.info({ host }, existing ? 'Shared instance rotated' : 'Shared instance created');
   return _sharedInstance;
 }
 
@@ -1160,7 +1181,7 @@ export function getFortiAnalyzerLoginHealth(host?: string): {
   backoffRemainingSec: number;
   lastFailureAt: Date | null;
 } {
-  const resolvedHost = host || (_sharedInstance as any)?.config?.host;
+  const resolvedHost = host || _sharedInstanceHost;
   if (!resolvedHost) {
     return { consecutiveFailures: 0, isAccountLocked: false, backoffRemainingSec: 0, lastFailureAt: null };
   }

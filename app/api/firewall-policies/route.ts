@@ -1,11 +1,24 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { FortiGateService } from '@/lib/integrations/fortigate';
+import {
+  FortiGateConnectorError,
+  fortiGateTargetSelectorFromUrl,
+  getFortiGateConnector,
+  resolveFortiGateTarget,
+} from '@/lib/firewall/connector-factory';
+import { firewallErrorPayload, FirewallIntegrationError } from '@/lib/firewall/errors';
 
-export async function GET() {
+export const dynamic = 'force-dynamic';
+
+export async function GET(request: NextRequest) {
   try {
+    const selector = fortiGateTargetSelectorFromUrl(request.url);
+    const resolved = await resolveFortiGateTarget(selector);
     // First try to get from database
     const dbPolicies = await prisma.firewallPolicy.findMany({
+      where: resolved.target.inventoryDeviceId
+        ? { deviceId: resolved.target.inventoryDeviceId }
+        : { id: { in: [] } },
       include: {
         device: {
           select: {
@@ -34,45 +47,7 @@ export async function GET() {
     }
 
     // If database is empty, fetch live from FortiGate API
-    const config = await prisma.integrationConfig.findFirst({
-      where: { type: 'FORTIGATE', enabled: true },
-    });
-
-    if (!config) {
-      return NextResponse.json({
-        success: false,
-        error: 'FortiGate integration not configured',
-        data: [],
-        count: 0,
-      });
-    }
-
-    const fortiConfig = config.config as {
-      host: string;
-      username?: string;
-      password?: string;
-      accessToken: string;
-      pollingInterval: number;
-      syncMode: 'snmp' | 'rest' | 'both';
-      enabledModules: {
-        interfaces: boolean;
-        vlans: boolean;
-        policies: boolean;
-        addresses: boolean;
-        vips: boolean;
-        sdwan: boolean;
-      };
-    };
-
-    const service = new FortiGateService({
-      host: fortiConfig.host,
-      username: fortiConfig.username,
-      password: fortiConfig.password,
-      accessToken: fortiConfig.accessToken,
-      pollingInterval: fortiConfig.pollingInterval,
-      syncMode: fortiConfig.syncMode,
-      enabledModules: { ...fortiConfig.enabledModules, policies: true },
-    });
+    const { service, target } = await getFortiGateConnector(selector);
 
     const livePolicies = await service.fetchFirewallPolicies();
 
@@ -91,7 +66,7 @@ export async function GET() {
       lastHit: policy.last_used || null,
       device: {
         name: 'FortiGate',
-        fortiDeviceId: fortiConfig.host,
+        fortiDeviceId: target.host,
       },
     }));
 
@@ -103,6 +78,26 @@ export async function GET() {
     });
   } catch (error) {
     console.error('Error fetching firewall policies:', error);
+    if (error instanceof FortiGateConnectorError) {
+      return NextResponse.json(
+        { success: false, error: error.message, code: error.code, data: [], count: 0 },
+        { status: error.status }
+      );
+    }
+    if (error instanceof FirewallIntegrationError) {
+      const payload = firewallErrorPayload(error);
+      return NextResponse.json(
+        {
+          success: false,
+          error: payload.error,
+          code: payload.code,
+          retryable: payload.retryable,
+          data: [],
+          count: 0,
+        },
+        { status: payload.status }
+      );
+    }
     return NextResponse.json(
       { success: false, error: (error as Error).message, data: [], count: 0 },
       { status: 500 }

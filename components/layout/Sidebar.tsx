@@ -35,7 +35,8 @@ import {
   Key,
   ExternalLink,
   FileText,
-  Mail
+  Mail,
+  X
 } from 'lucide-react';
 import { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -56,11 +57,17 @@ interface SidebarSection {
   items: SidebarItem[];
 }
 
-export const Sidebar: React.FC = () => {
+interface SidebarProps {
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
+}
+
+export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, onMobileClose }) => {
   const pathname = usePathname();
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [mounted, setMounted] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   const [licenseServerMode, setLicenseServerMode] = useState<boolean | null>(null);
 
@@ -76,6 +83,13 @@ export const Sidebar: React.FC = () => {
     if (savedSections) {
       try { setCollapsedSections(JSON.parse(savedSections)); } catch {}
     }
+
+    const mediaQuery = window.matchMedia('(max-width: 767px)');
+    const updateMobileState = () => setIsMobile(mediaQuery.matches);
+    updateMobileState();
+    mediaQuery.addEventListener('change', updateMobileState);
+
+    return () => mediaQuery.removeEventListener('change', updateMobileState);
   }, []);
 
   useEffect(() => {
@@ -251,18 +265,20 @@ export const Sidebar: React.FC = () => {
     ? []
     : licenseServerMode ? licenseServerSections : customerSections;
   const homeHref = licenseServerMode ? '/license-admin' : '/dashboard';
+  const renderedCollapsed = isCollapsed && !isMobile;
 
   return (
     <aside className={cn(
-      "border-r border-border bg-card flex flex-col h-screen sticky top-0 transition-all duration-300",
-      isCollapsed ? "w-20" : "w-64"
+      "fixed inset-y-0 left-0 z-[1200] flex h-screen w-72 max-w-[calc(100vw-3rem)] flex-col border-r border-border bg-card shadow-xl transition-transform duration-300 md:sticky md:top-0 md:z-auto md:max-w-none md:translate-x-0 md:shadow-none md:transition-all",
+      mobileOpen ? "translate-x-0" : "-translate-x-full",
+      renderedCollapsed ? "md:w-20" : "md:w-64"
     )}>
       <div className={cn(
         "p-6 transition-all duration-300 flex items-center justify-between",
-        isCollapsed ? "px-4" : "px-6"
+        renderedCollapsed ? "px-4" : "px-6"
       )}>
-        {!isCollapsed && (
-          <Link href={homeHref} className="flex items-center gap-2 group overflow-hidden">
+        {!renderedCollapsed && (
+          <Link href={homeHref} onClick={onMobileClose} className="flex items-center gap-2 group overflow-hidden">
             <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-primary-foreground shadow-lg transition-colors duration-300 shrink-0">
               <Activity className="h-5 w-5" />
             </div>
@@ -276,7 +292,7 @@ export const Sidebar: React.FC = () => {
             </div>
           </Link>
         )}
-        {isCollapsed && (
+        {renderedCollapsed && (
           <Link href={homeHref} className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-primary-foreground shadow-lg mx-auto">
             <Activity className="h-5 w-5" />
           </Link>
@@ -286,21 +302,32 @@ export const Sidebar: React.FC = () => {
           size="icon" 
           onClick={toggleSidebar}
           className={cn(
-            "h-8 w-8 rounded-full border border-border shadow-sm transition-all duration-300 bg-card",
-            isCollapsed ? "absolute -right-4 top-10 z-50" : "shrink-0 ml-2"
+            "hidden h-8 w-8 rounded-full border border-border bg-card shadow-sm transition-all duration-300 md:inline-flex",
+            renderedCollapsed ? "absolute -right-4 top-10 z-50" : "shrink-0 ml-2"
           )}
+          aria-label={renderedCollapsed ? 'Kenar çubuğunu genişlet' : 'Kenar çubuğunu daralt'}
         >
-          {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+          {renderedCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-9 w-9 shrink-0 md:hidden"
+          aria-label="Gezinme menüsünü kapat"
+          onClick={onMobileClose}
+        >
+          <X className="h-5 w-5" aria-hidden="true" />
         </Button>
       </div>
 
       <div className={cn(
         "flex-1 overflow-y-auto space-y-6 custom-scrollbar transition-all duration-300",
-        isCollapsed ? "px-2 py-4" : "px-4 py-2"
+        renderedCollapsed ? "px-2 py-4" : "px-4 py-2"
       )}>
         {sections.map((section) => (
           <div key={section.title} className="space-y-1">
-            {!isCollapsed && (
+            {!renderedCollapsed && (
               <button
                 onClick={() => toggleSection(section.title)}
                 className="w-full flex items-center justify-between px-2 mb-1 group cursor-pointer"
@@ -314,7 +341,7 @@ export const Sidebar: React.FC = () => {
                 )} />
               </button>
             )}
-            {(!collapsedSections[section.title] || isCollapsed) && section.items.map((item) => {
+            {(!collapsedSections[section.title] || renderedCollapsed) && section.items.map((item) => {
               const isActive = pathname === item.href;
               const isParentActive = item.children
                 ? pathname.startsWith(item.href)
@@ -326,22 +353,22 @@ export const Sidebar: React.FC = () => {
                     variant="ghost"
                     className={cn(
                       "w-full h-9 hover:bg-accent hover:text-accent-foreground flex items-center transition-all relative group",
-                      isCollapsed ? "justify-center px-0" : "justify-start px-2",
+                      renderedCollapsed ? "justify-center px-0" : "justify-start px-2",
                       (isActive || isParentActive) && "bg-primary/10 text-primary font-semibold border-l-2 border-primary shadow-sm",
                       !isActive && !isParentActive && "border-l-2 border-transparent"
                     )}
                     asChild
-                    title={isCollapsed ? item.name : undefined}
+                    title={renderedCollapsed ? item.name : undefined}
                   >
-                    <Link href={item.href} prefetch={true}>
-                      <div className={cn("flex items-center", isCollapsed ? "justify-center" : "gap-3")}>
+                    <Link href={item.href} prefetch={true} onClick={onMobileClose}>
+                      <div className={cn("flex items-center", renderedCollapsed ? "justify-center" : "gap-3")}>
                         <Icon className={cn(
                           "h-4 w-4 shrink-0 transition-all", 
                           (isActive || isParentActive) ? "text-primary scale-110" : "text-muted-foreground group-hover:text-foreground"
                         )} />
-                        {!isCollapsed && <span className={cn("text-xs truncate", (isActive || isParentActive) && "font-semibold")}>{item.name}</span>}
+                        {!renderedCollapsed && <span className={cn("text-xs truncate", (isActive || isParentActive) && "font-semibold")}>{item.name}</span>}
                       </div>
-                      {!isCollapsed && (item.subItems || item.hasArrow || item.children) && (
+                      {!renderedCollapsed && (item.subItems || item.hasArrow || item.children) && (
                         <ChevronDown className={cn(
                           "h-3 w-3 text-muted-foreground/50 ml-auto transition-transform",
                           isParentActive && "rotate-180"
@@ -350,7 +377,7 @@ export const Sidebar: React.FC = () => {
                     </Link>
                   </Button>
                   
-                  {!isCollapsed && item.subItems && isActive && (
+                  {!renderedCollapsed && item.subItems && isActive && (
                     <div className="ml-9 mt-1 space-y-1">
                       {item.subItems.map((sub) => (
                         <Link 
@@ -367,7 +394,7 @@ export const Sidebar: React.FC = () => {
                     </div>
                   )}
 
-                  {!isCollapsed && item.children && isParentActive && (
+                  {!renderedCollapsed && item.children && isParentActive && (
                     <div className="ml-7 mt-0.5 space-y-0.5 border-l border-border/60 pl-3">
                       {item.children.map((child) => {
                         const isChildActive = pathname === child.href;
@@ -384,7 +411,7 @@ export const Sidebar: React.FC = () => {
                             )}
                             asChild
                           >
-                            <Link href={child.href} prefetch={true}>
+                            <Link href={child.href} prefetch={true} onClick={onMobileClose}>
                               <ChildIcon className="h-3.5 w-3.5 shrink-0 mr-2" />
                               {child.name}
                             </Link>
@@ -402,7 +429,7 @@ export const Sidebar: React.FC = () => {
 
       <div className={cn(
         "p-4 space-y-3 border-t border-border bg-muted/20 transition-all",
-        isCollapsed ? "items-center" : ""
+        renderedCollapsed ? "items-center" : ""
       )}>
         <Button
           variant="ghost"
@@ -410,25 +437,25 @@ export const Sidebar: React.FC = () => {
           onClick={toggleTheme}
           className={cn(
             "w-full h-9 text-xs transition-all",
-            isCollapsed ? "justify-center px-0" : "justify-start px-2"
+            renderedCollapsed ? "justify-center px-0" : "justify-start px-2"
           )}
           disabled={!mounted}
-          title={isCollapsed ? (theme === 'light' ? 'Koyu Mod' : 'Açık Mod') : undefined}
+          title={renderedCollapsed ? (theme === 'light' ? 'Koyu Mod' : 'Açık Mod') : undefined}
         >
           {mounted ? (
             <div className="flex items-center justify-center gap-2">
               {theme === 'light' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
-              {!isCollapsed && (theme === 'light' ? "Koyu Mod" : "Açık Mod")}
+              {!renderedCollapsed && (theme === 'light' ? "Koyu Mod" : "Açık Mod")}
             </div>
           ) : (
             <div className="flex items-center justify-center gap-2">
               <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-              {!isCollapsed && "Tema..."}
+              {!renderedCollapsed && "Tema..."}
             </div>
           )}
         </Button>
         
-        <UserProfile collapsed={isCollapsed} />
+        <UserProfile collapsed={renderedCollapsed} />
       </div>
     </aside>
   );

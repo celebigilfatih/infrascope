@@ -5,61 +5,69 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { FortiGateService } from '@/lib/integrations/fortigate';
-import { prisma } from '@/lib/prisma';
+import { authorizeLegacyFirewallWrite } from '@/lib/firewall/write-policy';
+import {
+  executeFirewallWriteWithAudit,
+  FirewallWriteAuditError,
+} from '@/lib/firewall/write-audit';
+import {
+  FortiGateConnectorError,
+  fortiGateTargetSelectorFromUrl,
+  getFortiGateConnector,
+} from '@/lib/firewall/connector-factory';
+import { firewallErrorPayload, FirewallIntegrationError } from '@/lib/firewall/errors';
 
-async function getFortiGateService() {
-  const config = await prisma.integrationConfig.findFirst({
-    where: { type: 'FORTIGATE', enabled: true },
-  });
-
-  if (!config) return null;
-
-  const c = config.config as {
-    host: string;
-    username?: string;
-    password?: string;
-    accessToken: string;
-    pollingInterval: number;
-    syncMode: 'snmp' | 'rest' | 'both';
-    enabledModules: {
-      interfaces: boolean;
-      vlans: boolean;
-      policies: boolean;
-      addresses: boolean;
-      vips: boolean;
-      sdwan: boolean;
-    };
-  };
-
-  return new FortiGateService({
-    host: c.host,
-    username: c.username,
-    password: c.password,
-    accessToken: c.accessToken,
-    pollingInterval: c.pollingInterval || 60,
-    syncMode: c.syncMode || 'rest',
-    enabledModules: c.enabledModules || {
-      interfaces: false,
-      vlans: false,
-      policies: false,
-      addresses: false,
-      vips: false,
-      sdwan: false,
-    },
-  });
+function connectorErrorResponse(error: unknown, data: unknown[] = []) {
+  if (error instanceof FirewallWriteAuditError) {
+    return NextResponse.json(
+      { success: false, error: error.message, code: error.code, retryable: true, data },
+      { status: error.status }
+    );
+  }
+  if (error instanceof FortiGateConnectorError) {
+    return NextResponse.json(
+      { success: false, error: error.message, code: error.code, data },
+      { status: error.status }
+    );
+  }
+  if (error instanceof FirewallIntegrationError) {
+    const payload = firewallErrorPayload(error);
+    return NextResponse.json(
+      { success: false, error: payload.error, code: payload.code, retryable: payload.retryable, data },
+      { status: payload.status }
+    );
+  }
+  return null;
 }
 
-export async function GET() {
+async function requireLegacyWriteAccess(request: NextRequest) {
+  const decision = await authorizeLegacyFirewallWrite(request);
+  if (decision.allowed) return decision;
+
+  return NextResponse.json(
+    {
+      success: false,
+      error: decision.message,
+      code: decision.code,
+    },
+    { status: decision.status }
+  );
+}
+
+async function getFortiGateContext(request: NextRequest) {
+  return getFortiGateConnector(fortiGateTargetSelectorFromUrl(request.url));
+}
+
+function requestAuditContext(request: NextRequest) {
+  return {
+    ipAddress: request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || undefined,
+    userAgent: request.headers.get('user-agent') || undefined,
+  };
+}
+
+export async function GET(request: NextRequest) {
   try {
-    const service = await getFortiGateService();
-    if (!service) {
-      return NextResponse.json({
-        success: false,
-        error: 'FortiGate integration not configured',
-        data: [],
-      });
-    }
+    const { service } = await getFortiGateContext(request);
 
     const quarantined = await service.fetchQuarantinedIPs();
 
@@ -70,6 +78,8 @@ export async function GET() {
     });
   } catch (error) {
     console.error('Quarantine GET error:', error);
+    const response = connectorErrorResponse(error);
+    if (response) return response;
     return NextResponse.json(
       { success: false, error: (error as Error).message, data: [] },
       { status: 500 }
@@ -79,6 +89,9 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    const access = await requireLegacyWriteAccess(request);
+    if (access instanceof NextResponse) return access;
+
     const body = await request.json();
     const { ip, expiry_hours, comment } = body;
 
@@ -89,16 +102,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const service = await getFortiGateService();
-    if (!service) {
-      return NextResponse.json({
-        success: false,
-        error: 'FortiGate integration not configured',
-      });
-    }
+    const { service, target } = await getFortiGateContext(request);
 
     const expiry_seconds = expiry_hours ? expiry_hours * 3600 : undefined;
-    const ok = await service.addToQuarantine(ip, expiry_seconds, comment);
+    const { result: ok } = await executeFirewallWriteWithAudit(
+      {
+        action: 'firewall.quarantine.add',
+        actorId: access.actor.id!,
+        actorName: access.actor.name,
+        targetKey: target.key,
+        resourceId: ip,
+        details: { expiryHours: expiry_hours ?? null, legacyWrite: true },
+        ...requestAuditContext(request),
+      },
+      () => service.addToQuarantine(ip, expiry_seconds, comment)
+    );
 
     return NextResponse.json({
       success: ok,
@@ -106,6 +124,8 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('Quarantine POST error:', error);
+    const response = connectorErrorResponse(error);
+    if (response) return response;
     return NextResponse.json(
       { success: false, error: (error as Error).message },
       { status: 500 }
@@ -115,6 +135,9 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    const access = await requireLegacyWriteAccess(request);
+    if (access instanceof NextResponse) return access;
+
     const { searchParams } = new URL(request.url);
     const ip = searchParams.get('ip');
 
@@ -125,15 +148,19 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    const service = await getFortiGateService();
-    if (!service) {
-      return NextResponse.json({
-        success: false,
-        error: 'FortiGate integration not configured',
-      });
-    }
-
-    const ok = await service.releaseQuarantinedIP(ip);
+    const { service, target } = await getFortiGateContext(request);
+    const { result: ok } = await executeFirewallWriteWithAudit(
+      {
+        action: 'firewall.quarantine.remove',
+        actorId: access.actor.id!,
+        actorName: access.actor.name,
+        targetKey: target.key,
+        resourceId: ip,
+        details: { legacyWrite: true },
+        ...requestAuditContext(request),
+      },
+      () => service.releaseQuarantinedIP(ip)
+    );
 
     return NextResponse.json({
       success: ok,
@@ -141,6 +168,8 @@ export async function DELETE(request: NextRequest) {
     });
   } catch (error) {
     console.error('Quarantine DELETE error:', error);
+    const response = connectorErrorResponse(error);
+    if (response) return response;
     return NextResponse.json(
       { success: false, error: (error as Error).message },
       { status: 500 }

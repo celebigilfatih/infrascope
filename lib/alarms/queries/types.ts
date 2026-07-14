@@ -88,6 +88,8 @@ export interface CachedEventWhere {
   level?: string;
   srcIp?: string;
   dstIp?: string;
+  devid?: string;
+  vdom?: string;
   devname?: string;
   apprisk?: string;
   AND?: Array<{

@@ -1,14 +1,10 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
 import { getPermissionMatrix, togglePermission, seedPermissions } from '@/lib/auth/permissions';
 
 export async function GET() {
   try {
-    // Auto-seed if no permissions exist yet
-    const count = await prisma.permission.count();
-    if (count === 0) {
-      await seedPermissions();
-    }
+    // Keep newly introduced permissions available in existing installations.
+    await seedPermissions();
 
     const matrix = await getPermissionMatrix();
     return NextResponse.json({ success: true, data: matrix });

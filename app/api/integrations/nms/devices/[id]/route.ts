@@ -1,5 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import {
+  NmsSnmpValidationError,
+  normalizeSnmpV3AuthProtocol,
+  normalizeSnmpV3PrivacyProtocol,
+  normalizeSnmpV3SecurityLevel,
+  normalizeSnmpV3Username,
+  normalizeSnmpVersion,
+  validateSnmpCommunity,
+  validateSnmpV3Secret,
+} from '@/lib/nms/snmp-config';
+import { protectNmsCredential } from '@/lib/security/integration-credentials';
 
 interface Params { params: { id: string } }
 
@@ -8,14 +19,6 @@ function serializeBigInt(obj: unknown): unknown {
   return JSON.parse(JSON.stringify(obj, (_key, val) =>
     typeof val === 'bigint' ? val.toString() : val
   ));
-}
-
-function normalizeSnmpVersion(value: unknown): string {
-  if (typeof value !== 'string' || !value.trim()) return '2c';
-  const normalized = value.trim().toLowerCase();
-  if (normalized === 'v2c') return '2c';
-  if (normalized === 'v3') return '3';
-  return normalized;
 }
 
 /**
@@ -44,13 +47,21 @@ export async function GET(_req: NextRequest, { params }: Params) {
         snmpVersion: true,
         snmpPort: true,
         snmpCommunity: true,
+        snmpV3Username: true,
+        snmpV3SecurityLevel: true,
+        snmpV3AuthProtocol: true,
+        snmpV3AuthPassword: true,
+        snmpV3PrivacyProtocol: true,
+        snmpV3PrivacyPassword: true,
         pollingEnabled: true,
         pollingInterval: true,
         lastPolledAt: true,
         sshUsername: true,
         sshPassword: true,
         sshPort: true,
-        // Don't return snmpCommunity — sensitive
+        sshHostKeyAlgorithm: true,
+        sshHostKeyFingerprint: true,
+        // Secret fields are reduced to booleans below.
       },
     });
 
@@ -107,12 +118,20 @@ export async function GET(_req: NextRequest, { params }: Params) {
       },
     });
 
-    const { snmpCommunity, sshPassword, ...safeDevice } = device;
+    const {
+      snmpCommunity,
+      snmpV3AuthPassword,
+      snmpV3PrivacyPassword,
+      sshPassword,
+      ...safeDevice
+    } = device;
 
     return NextResponse.json(serializeBigInt({
       device: {
         ...safeDevice,
         hasSnmpCommunity: Boolean(snmpCommunity),
+        hasSnmpV3AuthPassword: Boolean(snmpV3AuthPassword),
+        hasSnmpV3PrivacyPassword: Boolean(snmpV3PrivacyPassword),
         hasSshPassword: Boolean(sshPassword),
       },
       healthMetrics,
@@ -133,6 +152,12 @@ export async function PUT(req: NextRequest, { params }: Params) {
       snmpCommunity,
       snmpVersion,
       snmpPort,
+      snmpV3Username,
+      snmpV3SecurityLevel,
+      snmpV3AuthProtocol,
+      snmpV3AuthPassword,
+      snmpV3PrivacyProtocol,
+      snmpV3PrivacyPassword,
       pollingEnabled,
       pollingInterval,
       sshUsername,
@@ -142,7 +167,19 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
     const existing = await (prisma as any).device.findUnique({
       where: { id: params.id },
-      select: { id: true, name: true, nmsDeviceId: true },
+      select: {
+        id: true,
+        name: true,
+        nmsDeviceId: true,
+        snmpVersion: true,
+        snmpCommunity: true,
+        snmpV3Username: true,
+        snmpV3SecurityLevel: true,
+        snmpV3AuthProtocol: true,
+        snmpV3AuthPassword: true,
+        snmpV3PrivacyProtocol: true,
+        snmpV3PrivacyPassword: true,
+      },
     });
 
     if (!existing) {
@@ -183,11 +220,98 @@ export async function PUT(req: NextRequest, { params }: Params) {
       }
     }
 
+    if (snmpPort !== undefined) {
+      const normalizedSnmpPort = Number(snmpPort);
+      if (!Number.isInteger(normalizedSnmpPort) || normalizedSnmpPort < 1 || normalizedSnmpPort > 65535) {
+        throw new NmsSnmpValidationError('SNMP port must be between 1 and 65535');
+      }
+    }
+    if (pollingInterval !== undefined) {
+      const normalizedInterval = Number(pollingInterval);
+      if (!Number.isInteger(normalizedInterval) || normalizedInterval < 10 || normalizedInterval > 86400) {
+        throw new NmsSnmpValidationError('Polling interval must be between 10 and 86400 seconds');
+      }
+    }
+
     const updateData: Record<string, unknown> = {};
     if (managementIp !== undefined) updateData.managementIp = managementIp.trim();
-    if (snmpCommunity !== undefined) updateData.snmpCommunity = snmpCommunity;
-    if (snmpVersion !== undefined) updateData.snmpVersion = normalizeSnmpVersion(snmpVersion);
-    if (snmpPort !== undefined) updateData.snmpPort = snmpPort;
+    const snmpConfigTouched = [
+      snmpCommunity,
+      snmpVersion,
+      snmpV3Username,
+      snmpV3SecurityLevel,
+      snmpV3AuthProtocol,
+      snmpV3AuthPassword,
+      snmpV3PrivacyProtocol,
+      snmpV3PrivacyPassword,
+    ].some((value) => value !== undefined);
+
+    if (snmpConfigTouched) {
+      const version = normalizeSnmpVersion(snmpVersion, normalizeSnmpVersion(existing.snmpVersion));
+      updateData.snmpVersion = version;
+      if (version === '3') {
+        const securityLevel = normalizeSnmpV3SecurityLevel(
+          snmpV3SecurityLevel ?? existing.snmpV3SecurityLevel
+        );
+        const authSecret = typeof snmpV3AuthPassword === 'string' && snmpV3AuthPassword.length > 0
+          ? validateSnmpV3Secret(snmpV3AuthPassword, 'SNMPv3 authentication password')
+          : existing.snmpV3AuthPassword;
+        if (!authSecret) {
+          throw new NmsSnmpValidationError('SNMPv3 authentication password is required');
+        }
+
+        updateData.snmpCommunity = null;
+        updateData.snmpV3Username = normalizeSnmpV3Username(
+          snmpV3Username ?? existing.snmpV3Username
+        );
+        updateData.snmpV3SecurityLevel = securityLevel;
+        updateData.snmpV3AuthProtocol = normalizeSnmpV3AuthProtocol(
+          snmpV3AuthProtocol ?? existing.snmpV3AuthProtocol
+        );
+        if (typeof snmpV3AuthPassword === 'string' && snmpV3AuthPassword.length > 0) {
+          updateData.snmpV3AuthPassword = protectNmsCredential(
+            snmpV3AuthPassword,
+            'snmpV3AuthPassword'
+          );
+        }
+
+        if (securityLevel === 'authPriv') {
+          const privacySecret = typeof snmpV3PrivacyPassword === 'string' && snmpV3PrivacyPassword.length > 0
+            ? validateSnmpV3Secret(snmpV3PrivacyPassword, 'SNMPv3 privacy password')
+            : existing.snmpV3PrivacyPassword;
+          if (!privacySecret) {
+            throw new NmsSnmpValidationError('SNMPv3 privacy password is required for authPriv');
+          }
+          updateData.snmpV3PrivacyProtocol = normalizeSnmpV3PrivacyProtocol(
+            snmpV3PrivacyProtocol ?? existing.snmpV3PrivacyProtocol
+          );
+          if (typeof snmpV3PrivacyPassword === 'string' && snmpV3PrivacyPassword.length > 0) {
+            updateData.snmpV3PrivacyPassword = protectNmsCredential(
+              snmpV3PrivacyPassword,
+              'snmpV3PrivacyPassword'
+            );
+          }
+        } else {
+          updateData.snmpV3PrivacyProtocol = null;
+          updateData.snmpV3PrivacyPassword = null;
+        }
+      } else {
+        const community = typeof snmpCommunity === 'string' && snmpCommunity.length > 0
+          ? validateSnmpCommunity(snmpCommunity)
+          : existing.snmpCommunity;
+        if (!community) throw new NmsSnmpValidationError('SNMP community is required');
+        if (typeof snmpCommunity === 'string' && snmpCommunity.length > 0) {
+          updateData.snmpCommunity = protectNmsCredential(snmpCommunity, 'snmpCommunity');
+        }
+        updateData.snmpV3Username = null;
+        updateData.snmpV3SecurityLevel = null;
+        updateData.snmpV3AuthProtocol = null;
+        updateData.snmpV3AuthPassword = null;
+        updateData.snmpV3PrivacyProtocol = null;
+        updateData.snmpV3PrivacyPassword = null;
+      }
+    }
+    if (snmpPort !== undefined) updateData.snmpPort = Number(snmpPort);
     if (pollingEnabled !== undefined) updateData.pollingEnabled = pollingEnabled;
     if (pollingInterval !== undefined) updateData.pollingInterval = pollingInterval;
     if (sshUsername !== undefined) {
@@ -196,7 +320,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
         : null;
     }
     if (typeof sshPassword === 'string' && sshPassword.length > 0) {
-      updateData.sshPassword = sshPassword;
+      updateData.sshPassword = protectNmsCredential(sshPassword, 'sshPassword');
     }
     if (sshPort !== undefined) updateData.sshPort = Number(sshPort);
 
@@ -209,18 +333,27 @@ export async function PUT(req: NextRequest, { params }: Params) {
         nmsDeviceId: true,
         managementIp: true,
         snmpVersion: true,
+        snmpV3Username: true,
+        snmpV3SecurityLevel: true,
+        snmpV3AuthProtocol: true,
+        snmpV3PrivacyProtocol: true,
         snmpPort: true,
         pollingEnabled: true,
         pollingInterval: true,
         lastPolledAt: true,
         sshUsername: true,
         sshPort: true,
+        sshHostKeyAlgorithm: true,
+        sshHostKeyFingerprint: true,
       },
     });
 
     return NextResponse.json({ device: updated });
   } catch (error) {
     console.error('[NMS Device] PUT error:', error);
+    if (error instanceof NmsSnmpValidationError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     return NextResponse.json({ error: 'Failed to update device NMS config' }, { status: 500 });
   }
 }
@@ -258,6 +391,12 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
           nmsDeviceId: null,
           managementIp: null,
           snmpCommunity: null,
+          snmpV3Username: null,
+          snmpV3SecurityLevel: null,
+          snmpV3AuthProtocol: null,
+          snmpV3AuthPassword: null,
+          snmpV3PrivacyProtocol: null,
+          snmpV3PrivacyPassword: null,
           snmpVersion: null,
           snmpPort: null,
           pollingEnabled: false,
@@ -265,6 +404,8 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
           sshUsername: null,
           sshPassword: null,
           sshPort: null,
+          sshHostKeyAlgorithm: null,
+          sshHostKeyFingerprint: null,
           lastPolledAt: null,
         },
         select: {

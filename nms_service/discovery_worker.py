@@ -43,22 +43,12 @@ def gen_cuid() -> str:
 
 
 def sync_check_ssh(ip: str, username: str, password: str) -> Dict[str, str]:
-    """Blocking SSH check (runs in thread pool)"""
+    """Check TCP reachability only; authentication requires explicit host-key trust."""
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.settimeout(0.5)
             if s.connect_ex((ip, 22)) != 0:
                 return {"status": "closed"}
-        if username and password:
-            try:
-                import paramiko
-                ssh = paramiko.SSHClient()
-                ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-                ssh.connect(ip, username=username, password=password, timeout=2, banner_timeout=2)
-                ssh.close()
-                return {"status": "success"}
-            except Exception:
-                return {"status": "failed"}
         return {"status": "open"}
     except Exception:
         return {"status": "closed"}
@@ -207,7 +197,8 @@ async def run_discovery(
                         "ip": r["ip_address"],
                         "hostname": r.get("hostname"),
                         "vendor": r.get("vendor", "Generic"),
-                        "community": r.get("snmp_community"),
+                        # Discovery credentials are probe-only and are never persisted.
+                        "community": None,
                         "sys_descr": r.get("sys_descr"),
                         "snmp_status": r.get("snmp_status", "none"),
                         "ssh_status": r.get("ssh_status", "none"),

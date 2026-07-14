@@ -37,13 +37,17 @@ services:
       DATABASE_URL: postgresql://${DB_USER:-infrascope}:${DB_PASSWORD:-infrascope-dev}@db:5432/${DB_NAME:-infrascope}
       NEXTAUTH_URL: http://localhost:3170
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-dev-secret-change-in-production}
+      FORTIGATE_REQUEST_TIMEOUT_MS: ${FORTIGATE_REQUEST_TIMEOUT_MS:-15000}
+      INTEGRATION_CREDENTIALS_KEY: ${INTEGRATION_CREDENTIALS_KEY:-}
+      INTEGRATION_CREDENTIALS_PREVIOUS_KEY: ${INTEGRATION_CREDENTIALS_PREVIOUS_KEY:-}
+      NMS_INTERNAL_TOKEN: ${NMS_INTERNAL_TOKEN:-infrascope-dev-internal-token}
       NEXT_PUBLIC_API_URL: http://localhost:3170
       INTERNAL_API_URL: http://localhost:3000
       PORT: 3000
       HOSTNAME: 0.0.0.0
       DB_HOST: db
       DB_PORT: 5432
-      NODE_TLS_REJECT_UNAUTHORIZED: "0"
+      FORTIGATE_LEGACY_WRITES_ENABLED: ${FORTIGATE_LEGACY_WRITES_ENABLED:-false}
       # NMS Python sidecar (FastAPI on port 8500, internal Docker DNS)
       NMS_BACKEND_URL: ${NMS_BACKEND_URL:-http://nms:8500}
     ports:
@@ -100,8 +104,12 @@ services:
       MEMORY_THRESHOLD: "80.0"
       TEMPERATURE_THRESHOLD: "80.0"
       NMS_API_PORT: "8500"
+      NMS_INTERNAL_TOKEN: ${NMS_INTERNAL_TOKEN:-infrascope-dev-internal-token}
+      INTEGRATION_CREDENTIALS_KEY: ${INTEGRATION_CREDENTIALS_KEY:-}
+      INTEGRATION_CREDENTIALS_PREVIOUS_KEY: ${INTEGRATION_CREDENTIALS_PREVIOUS_KEY:-}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-dev-secret-change-in-production}
     ports:
-      - "8500:8500"   # Internal FastAPI — accessible from host for debug
+      - "127.0.0.1:8500:8500"   # Loopback-only debug access
     depends_on:
       db:
         condition: service_healthy

@@ -148,6 +148,7 @@ class Config:
 
         # FastAPI internal port
         self.api_port = int(os.getenv("NMS_API_PORT", "8500"))
+        self.internal_token = os.getenv("NMS_INTERNAL_TOKEN", "")
 
         # Vendor OID mapping path
         self.vendor_oid_config_path = os.getenv(
@@ -159,6 +160,8 @@ class Config:
         """Validate critical configuration"""
         if not self.database.password and self.env == "production":
             raise ValueError("DB_PASSWORD (or DATABASE_URL) must be set in production")
+        if self.env == "production" and not self.internal_token:
+            raise ValueError("NMS_INTERNAL_TOKEN must be set in production")
 
     def __repr__(self) -> str:
         return (

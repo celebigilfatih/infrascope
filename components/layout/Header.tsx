@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Bell, CheckCircle2, Clock, ExternalLink } from 'lucide-react';
+import { Bell, CheckCircle2, Clock, ExternalLink, Menu } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -49,7 +49,11 @@ function formatRelativeTime(value: string) {
   return `${Math.floor(hours / 24)} gun once`;
 }
 
-export const Header: React.FC = () => {
+interface HeaderProps {
+  onMobileMenuOpen?: () => void;
+}
+
+export const Header: React.FC<HeaderProps> = ({ onMobileMenuOpen }) => {
   const [notificationCount, setNotificationCount] = useState(0);
   const [notifications, setNotifications] = useState<AlarmNotification[]>([]);
   const [loading, setLoading] = useState(false);
@@ -132,7 +136,19 @@ export const Header: React.FC = () => {
     <header className="bg-card/80 backdrop-blur-md border-b border-border sticky top-0 z-[1000]">
       <div className="px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between">
-          <TopbarBreadcrumb />
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-10 w-10 shrink-0 md:hidden"
+              aria-label="Gezinme menüsünü aç"
+              onClick={onMobileMenuOpen}
+            >
+              <Menu className="h-5 w-5" aria-hidden="true" />
+            </Button>
+            <TopbarBreadcrumb />
+          </div>
 
           <div className="flex shrink-0 items-center gap-3">
             {licenseServerMode === false && (

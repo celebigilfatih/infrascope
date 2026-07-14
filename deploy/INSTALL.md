@@ -48,6 +48,7 @@ The installer will:
 - ask for the license key, public app URL, and host port
 - configure license validation against `https://lisans.webmahsul.com.tr`
 - generate `NEXTAUTH_SECRET`
+- generate `INTEGRATION_CREDENTIALS_KEY`
 - generate `POSTGRES_PASSWORD`
 - start the Docker services
 
@@ -85,6 +86,45 @@ VMWARE_TLS_CA_CERT_PATH=/app/certs/vmware-ca.pem
 ```
 
 Do not set `NODE_TLS_REJECT_UNAUTHORIZED=0` in production. The container will refuse to start with that setting.
+
+## FortiGate Change Safety
+
+Direct FortiGate quarantine changes are disabled by default:
+
+```env
+FORTIGATE_LEGACY_WRITES_ENABLED=false
+```
+
+FortiGate REST calls use a 15-second timeout by default. Read-only GET calls use a bounded retry policy; write calls are never retried automatically. Override only when a slow WAN path requires it:
+
+```env
+FORTIGATE_REQUEST_TIMEOUT_MS=15000
+```
+
+Keep this value `false` for customer installations. Firewall monitoring and read-only data collection continue to work. Controlled firewall changes will use the preview and approval workflow instead of the legacy direct-write endpoint.
+
+## Integration Credential Encryption
+
+FortiGate/FortiAnalyzer credentials, NMS SNMP/SSH credentials, and configuration backup content are stored with AES-256-GCM. The installer generates the encryption and internal NMS service keys in `.env`:
+
+```env
+INTEGRATION_CREDENTIALS_KEY=<generated-32-byte-key>
+INTEGRATION_CREDENTIALS_PREVIOUS_KEY=
+NMS_INTERNAL_TOKEN=<generated-random-token>
+```
+
+Back up `.env` securely. Losing both the active key and its backup makes encrypted integration credentials unrecoverable; users must enter them again. Do not copy the key into tickets, screenshots, logs, or the customer cookbook.
+
+For controlled key rotation:
+
+1. Generate a new 32-byte key with `openssl rand -base64 32`.
+2. Move the current key to `INTEGRATION_CREDENTIALS_PREVIOUS_KEY` and put the new key in `INTEGRATION_CREDENTIALS_KEY`.
+3. Restart the app and NMS sidecar. Startup automatically re-encrypts integration and NMS credentials with the new key.
+4. Confirm integrations, SNMP polling, and SSH backup access, then clear `INTEGRATION_CREDENTIALS_PREVIOUS_KEY` and restart again.
+
+Never remove the previous key before the first successful restart and integration check.
+
+SSH host keys are not accepted automatically. In **NMS Izlenen Cihazlar > Izleme Ayarlari > SSH**, use **Anahtari Kontrol Et** and have an ADMIN approve the displayed SHA-256 fingerprint after comparing it with the network team's known value. A changed fingerprint blocks SSH until it is explicitly reviewed again. No terminal, CA file, or global TLS bypass is required for this SSH trust flow.
 
 ## Operations
 

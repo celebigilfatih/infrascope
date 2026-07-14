@@ -28,6 +28,7 @@ import { cn } from '@/lib/utils';
 import { notifyDeviceInventoryChanged } from '@/lib/device-inventory-events';
 
 type SnmpVersion = 'v2c' | 'v3';
+type SnmpV3SecurityLevel = 'authNoPriv' | 'authPriv';
 
 interface InventoryDevice {
   id: string;
@@ -53,6 +54,8 @@ export default function AddNmsDevicePage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [showCommunity, setShowCommunity] = useState(false);
+  const [showSnmpAuthPassword, setShowSnmpAuthPassword] = useState(false);
+  const [showSnmpPrivacyPassword, setShowSnmpPrivacyPassword] = useState(false);
   const [showSshPassword, setShowSshPassword] = useState(false);
   const [sshEnabled, setSshEnabled] = useState(false);
   const [form, setForm] = useState({
@@ -61,6 +64,12 @@ export default function AddNmsDevicePage() {
     snmpPort: 161,
     snmpVersion: 'v2c' as SnmpVersion,
     snmpCommunity: '',
+    snmpV3Username: '',
+    snmpV3SecurityLevel: 'authPriv' as SnmpV3SecurityLevel,
+    snmpV3AuthProtocol: 'SHA',
+    snmpV3AuthPassword: '',
+    snmpV3PrivacyProtocol: 'AES',
+    snmpV3PrivacyPassword: '',
     pollingInterval: 300,
     sshUsername: '',
     sshPassword: '',
@@ -116,8 +125,10 @@ export default function AddNmsDevicePage() {
     event.preventDefault();
     if (!form.deviceId) { setError('İzlemeye alınacak cihazı seçin.'); return; }
     if (!form.managementIp.trim()) { setError('Management IP zorunludur.'); return; }
-    if (form.snmpVersion === 'v3') { setError('SNMPv3 kimlik doğrulaması bu polling sürümünde henüz desteklenmiyor. SNMPv2c kullanın.'); return; }
-    if (!form.snmpCommunity.trim()) { setError('SNMP community değeri zorunludur.'); return; }
+    if (form.snmpVersion === 'v2c' && !form.snmpCommunity) { setError('SNMP community değeri zorunludur.'); return; }
+    if (form.snmpVersion === 'v3' && !form.snmpV3Username.trim()) { setError('SNMPv3 kullanıcı adı zorunludur.'); return; }
+    if (form.snmpVersion === 'v3' && form.snmpV3AuthPassword.length < 8) { setError('SNMPv3 doğrulama parolası en az 8 karakter olmalıdır.'); return; }
+    if (form.snmpVersion === 'v3' && form.snmpV3SecurityLevel === 'authPriv' && form.snmpV3PrivacyPassword.length < 8) { setError('SNMPv3 şifreleme parolası en az 8 karakter olmalıdır.'); return; }
     if (!Number.isInteger(form.snmpPort) || form.snmpPort < 1 || form.snmpPort > 65535) { setError('SNMP portu 1 ile 65535 arasında olmalıdır.'); return; }
     if (!Number.isInteger(form.pollingInterval) || form.pollingInterval < 30) { setError('Polling aralığı en az 30 saniye olmalıdır.'); return; }
     if (sshEnabled && !form.sshUsername.trim()) { setError('SSH erişimi etkinse kullanıcı adı zorunludur.'); return; }
@@ -133,7 +144,20 @@ export default function AddNmsDevicePage() {
           managementIp: form.managementIp.trim(),
           snmpPort: form.snmpPort,
           snmpVersion: form.snmpVersion,
-          snmpCommunity: form.snmpCommunity,
+          ...(form.snmpVersion === 'v2c'
+            ? { snmpCommunity: form.snmpCommunity }
+            : {
+              snmpV3Username: form.snmpV3Username.trim(),
+              snmpV3SecurityLevel: form.snmpV3SecurityLevel,
+              snmpV3AuthProtocol: form.snmpV3AuthProtocol,
+              snmpV3AuthPassword: form.snmpV3AuthPassword,
+              ...(form.snmpV3SecurityLevel === 'authPriv'
+                ? {
+                  snmpV3PrivacyProtocol: form.snmpV3PrivacyProtocol,
+                  snmpV3PrivacyPassword: form.snmpV3PrivacyPassword,
+                }
+                : {}),
+            }),
           pollingInterval: form.pollingInterval,
           pollingEnabled: true,
           sshUsername: sshEnabled ? form.sshUsername.trim() || null : null,
@@ -226,11 +250,39 @@ export default function AddNmsDevicePage() {
                 <Field label="SNMP sürümü" htmlFor="snmpVersion">
                   <div className="relative"><select id="snmpVersion" value={form.snmpVersion} onChange={(event) => set('snmpVersion', event.target.value as SnmpVersion)} className="h-10 w-full appearance-none rounded-md border border-input bg-background px-3 pr-9 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"><option value="v2c">SNMPv2c</option><option value="v3">SNMPv3</option></select><ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /></div>
                 </Field>
-                <Field label="Community" htmlFor="snmpCommunity" required>
-                  <div className="relative"><Input id="snmpCommunity" type={showCommunity ? 'text' : 'password'} autoComplete="new-password" placeholder="Community değerini girin" value={form.snmpCommunity} onChange={(event) => set('snmpCommunity', event.target.value)} className="pr-10" /><PasswordToggle visible={showCommunity} onClick={() => setShowCommunity((visible) => !visible)} label="Gizli community değerini göster veya gizle" /></div>
-                </Field>
+                {form.snmpVersion === 'v2c' && (
+                  <Field label="Community" htmlFor="snmpCommunity" required>
+                    <div className="relative"><Input id="snmpCommunity" type={showCommunity ? 'text' : 'password'} autoComplete="new-password" placeholder="Community değerini girin" value={form.snmpCommunity} onChange={(event) => set('snmpCommunity', event.target.value)} className="pr-10" /><PasswordToggle visible={showCommunity} onClick={() => setShowCommunity((visible) => !visible)} label="Gizli community değerini göster veya gizle" /></div>
+                  </Field>
+                )}
               </div>
-              {form.snmpVersion === 'v3' && <div role="alert" className="mt-4 flex gap-2 rounded-md border border-amber-500/35 bg-amber-500/10 p-3 text-sm text-amber-900 dark:text-amber-200"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />SNMPv3 kimlik doğrulaması mevcut polling servisinde desteklenmiyor. Kaydetmek için SNMPv2c seçin.</div>}
+              {form.snmpVersion === 'v3' && (
+                <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                  <Field label="Kullanıcı adı" htmlFor="snmpV3Username" required>
+                    <Input id="snmpV3Username" autoComplete="off" placeholder="infrascope-monitor" value={form.snmpV3Username} onChange={(event) => set('snmpV3Username', event.target.value)} />
+                  </Field>
+                  <Field label="Güvenlik seviyesi" htmlFor="snmpV3SecurityLevel" required>
+                    <select id="snmpV3SecurityLevel" value={form.snmpV3SecurityLevel} onChange={(event) => set('snmpV3SecurityLevel', event.target.value as SnmpV3SecurityLevel)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"><option value="authPriv">Doğrulama + şifreleme</option><option value="authNoPriv">Yalnızca doğrulama</option></select>
+                  </Field>
+                  <Field label="Doğrulama protokolü" htmlFor="snmpV3AuthProtocol">
+                    <select id="snmpV3AuthProtocol" value={form.snmpV3AuthProtocol} onChange={(event) => set('snmpV3AuthProtocol', event.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"><option value="SHA">SHA</option><option value="SHA-256">SHA-256</option></select>
+                  </Field>
+                  <Field label="Doğrulama parolası" htmlFor="snmpV3AuthPassword" required>
+                    <div className="relative"><Input id="snmpV3AuthPassword" type={showSnmpAuthPassword ? 'text' : 'password'} autoComplete="new-password" minLength={8} value={form.snmpV3AuthPassword} onChange={(event) => set('snmpV3AuthPassword', event.target.value)} className="pr-10" /><PasswordToggle visible={showSnmpAuthPassword} onClick={() => setShowSnmpAuthPassword((visible) => !visible)} label="SNMPv3 doğrulama parolasını göster veya gizle" /></div>
+                  </Field>
+                  {form.snmpV3SecurityLevel === 'authPriv' && (
+                    <>
+                      <Field label="Şifreleme protokolü" htmlFor="snmpV3PrivacyProtocol">
+                        <select id="snmpV3PrivacyProtocol" value={form.snmpV3PrivacyProtocol} onChange={(event) => set('snmpV3PrivacyProtocol', event.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"><option value="AES">AES-128</option></select>
+                      </Field>
+                      <Field label="Şifreleme parolası" htmlFor="snmpV3PrivacyPassword" required>
+                        <div className="relative"><Input id="snmpV3PrivacyPassword" type={showSnmpPrivacyPassword ? 'text' : 'password'} autoComplete="new-password" minLength={8} value={form.snmpV3PrivacyPassword} onChange={(event) => set('snmpV3PrivacyPassword', event.target.value)} className="pr-10" /><PasswordToggle visible={showSnmpPrivacyPassword} onClick={() => setShowSnmpPrivacyPassword((visible) => !visible)} label="SNMPv3 şifreleme parolasını göster veya gizle" /></div>
+                      </Field>
+                    </>
+                  )}
+                  <p className="sm:col-span-2 text-xs text-muted-foreground">SNMPv3 parolaları şifreli saklanır ve bu ekrana geri gönderilmez.</p>
+                </div>
+              )}
             </section>
 
             <section className="border-t border-border p-5 sm:p-6" aria-labelledby="ssh-heading">
@@ -258,7 +310,7 @@ export default function AddNmsDevicePage() {
             <dl className="mt-5 space-y-4 text-sm">
               <SummaryRow label="Cihaz" value={selectedDevice?.name || 'Seçilmedi'} />
               <SummaryRow label="Management IP" value={form.managementIp || 'Girilmedi'} mono />
-              <SummaryRow label="SNMP" value={form.snmpVersion === 'v2c' ? `v2c · ${form.snmpPort}` : 'v3 · desteklenmiyor'} />
+              <SummaryRow label="SNMP" value={form.snmpVersion === 'v2c' ? `v2c · ${form.snmpPort}` : `v3 · ${form.snmpV3SecurityLevel} · ${form.snmpPort}`} />
               <SummaryRow label="Polling" value={`${form.pollingInterval} saniye`} />
               <SummaryRow label="SSH" value={sshEnabled ? 'Etkin' : 'Kapalı'} />
             </dl>

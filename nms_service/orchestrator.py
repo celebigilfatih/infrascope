@@ -24,6 +24,7 @@ from nms_service.core.logger import logger
 from nms_service.core.config import config
 from nms_service.snmp.poller import SNMPPoller, DeviceConfig
 from nms_service.ssh.poller import SSHPoller, SSHDeviceConfig
+from nms_service.security.credentials import CredentialEnvelopeError, decrypt_nms_credential
 from nms_service.database.models import db_manager, Device
 from nms_service.database.repository import (
     DeviceRepository,
@@ -38,11 +39,6 @@ class NMSOrchestrator:
     def __init__(self):
         self.poller = SNMPPoller()
         self.ssh_poller = SSHPoller()
-        # Set default SSH credentials from environment
-        ssh_username = getattr(config, 'ssh_username', '')
-        ssh_password = getattr(config, 'ssh_password', '')
-        if ssh_username and ssh_password:
-            self.ssh_poller.set_default_credentials(ssh_username, ssh_password)
         # nms_device_id (int) -> Device record
         self.device_map: Dict[int, Device] = {}
         self.last_topology_poll: Dict[int, datetime] = {}
@@ -58,6 +54,8 @@ class NMSOrchestrator:
         # Device IDs whose previous poll was cancelled — skip one cycle to let
         # the thread finish winding down before re-submitting
         self._pending_cancellations: Set[int] = set()
+        self._snmp_config_warnings: Set[int] = set()
+        self._ssh_config_warnings: Set[int] = set()
         self._topo_lock = threading.Lock()       # protects last_topology_poll
         self._last_poll_lock = threading.Lock()  # protects last_device_poll
         # Persistent thread pool — avoids ThreadPoolExecutor.__exit__ blocking
@@ -118,44 +116,118 @@ class NMSOrchestrator:
 
                 vendor = self._detect_vendor(device.name, device.vendor)
 
-                # Register for SNMP polling
-                device_cfg = DeviceConfig(
-                    device_id=device.nms_device_id,
-                    device_name=device.name,
-                    ip_address=device.management_ip,
-                    community_string=device.snmp_community or "public",
-                    vendor=vendor,
-                    snmp_port=device.snmp_port or 161,
-                    snmp_version=device.snmp_version or "2c",
-                    enabled=device.polling_enabled,
+                # SNMPv1/v2c uses an explicit community; SNMPv3 uses encrypted USM secrets.
+                snmp_version = (device.snmp_version or "2c").lower()
+                snmp_community = ""
+                if device.snmp_community:
+                    try:
+                        snmp_community = decrypt_nms_credential(
+                            device.snmp_community, "snmpCommunity"
+                        )
+                    except CredentialEnvelopeError:
+                        snmp_community = ""
+                v3_auth_password = ""
+                if device.snmp_v3_auth_password:
+                    try:
+                        v3_auth_password = decrypt_nms_credential(
+                            device.snmp_v3_auth_password, "snmpV3AuthPassword"
+                        )
+                    except CredentialEnvelopeError:
+                        v3_auth_password = ""
+                v3_privacy_password = ""
+                if device.snmp_v3_privacy_password:
+                    try:
+                        v3_privacy_password = decrypt_nms_credential(
+                            device.snmp_v3_privacy_password, "snmpV3PrivacyPassword"
+                        )
+                    except CredentialEnvelopeError:
+                        v3_privacy_password = ""
+                v3_security_level = device.snmp_v3_security_level or "authPriv"
+                v3_ready = (
+                    snmp_version in ("3", "v3")
+                    and bool(device.snmp_v3_username)
+                    and len(v3_auth_password) >= 8
+                    and v3_security_level in ("authNoPriv", "authPriv")
+                    and (
+                        v3_security_level == "authNoPriv"
+                        or len(v3_privacy_password) >= 8
+                    )
                 )
-                self.poller.register_device(device_cfg)
+                v12_ready = (
+                    bool(snmp_community)
+                    and snmp_version in ("1", "v1", "2c", "v2c")
+                )
+                if v12_ready or v3_ready:
+                    self._snmp_config_warnings.discard(device.nms_device_id)
+                    device_cfg = DeviceConfig(
+                        device_id=device.nms_device_id,
+                        device_name=device.name,
+                        ip_address=device.management_ip,
+                        community_string=snmp_community,
+                        vendor=vendor,
+                        snmp_port=device.snmp_port or 161,
+                        snmp_version=snmp_version,
+                        enabled=device.polling_enabled,
+                        v3_username=device.snmp_v3_username or "",
+                        v3_security_level=v3_security_level,
+                        v3_auth_protocol=device.snmp_v3_auth_protocol or "SHA",
+                        v3_auth_password=v3_auth_password,
+                        v3_privacy_protocol=device.snmp_v3_privacy_protocol or "AES",
+                        v3_privacy_password=v3_privacy_password,
+                    )
+                    self.poller.register_device(device_cfg)
+                else:
+                    self.poller.unregister_device(device.nms_device_id)
+                    if device.nms_device_id not in self._snmp_config_warnings:
+                        logger.warning(
+                            f"SNMP not registered for {device.name}: complete encrypted credentials required"
+                        )
+                        self._snmp_config_warnings.add(device.nms_device_id)
                 
                 # Register for SSH polling (fallback)
                 ssh_username = device.ssh_username or ""
-                ssh_password = device.ssh_password or ""
-                # Store per-device credentials so they take priority over global defaults
-                if ssh_username and ssh_password:
-                    self.ssh_poller.set_device_credentials(
-                        device.management_ip, ssh_username, ssh_password
-                    )
-                ssh_cfg = SSHDeviceConfig(
-                    device_id=device.nms_device_id,
-                    device_name=device.name,
-                    ip_address=device.management_ip,
-                    username=device.ssh_username or "",
-                    password=device.ssh_password or "",
-                    port=device.ssh_port or 22,
-                    vendor=vendor,
-                    enabled=device.polling_enabled,
-                )
-                self.ssh_poller.register_device(ssh_cfg)
+                ssh_password = ""
+                if device.ssh_password:
+                    try:
+                        ssh_password = decrypt_nms_credential(
+                            device.ssh_password, "sshPassword"
+                        )
+                    except CredentialEnvelopeError:
+                        ssh_password = ""
+                if (
+                    ssh_username
+                    and ssh_password
+                    and device.ssh_host_key_fingerprint
+                ):
+                    self._ssh_config_warnings.discard(device.nms_device_id)
+                    self.ssh_poller.register_device(SSHDeviceConfig(
+                        device_id=device.nms_device_id,
+                        device_name=device.name,
+                        ip_address=device.management_ip,
+                        username=ssh_username,
+                        password=ssh_password,
+                        port=device.ssh_port or 22,
+                        vendor=vendor,
+                        enabled=device.polling_enabled,
+                        host_key_fingerprint=device.ssh_host_key_fingerprint,
+                        host_key_algorithm=device.ssh_host_key_algorithm or "",
+                    ))
+                else:
+                    self.ssh_poller.unregister_device(device.nms_device_id)
+                    if device.nms_device_id not in self._ssh_config_warnings:
+                        logger.warning(
+                            f"SSH not registered for {device.name}: encrypted credentials and an approved host key are required"
+                        )
+                        self._ssh_config_warnings.add(device.nms_device_id)
                 
                 self.device_map[device.nms_device_id] = device
                 count += 1
 
             session.close()
-            logger.info(f"Registered {count} polling-enabled devices from InfraScope DB (SNMP + SSH)")
+            logger.info(
+                f"Loaded {count} polling-enabled device candidates from InfraScope DB "
+                f"(SNMP registered={len(self.poller.sessions)}, SSH registered={len(self.ssh_poller.sessions)})"
+            )
             return count
 
         except Exception as e:

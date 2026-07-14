@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import {
+  NmsSnmpValidationError,
+  normalizeSnmpVersion,
+  validateSnmpCommunity,
+} from '@/lib/nms/snmp-config';
+import { protectNmsCredential } from '@/lib/security/integration-credentials';
 
 interface Params { params: { scanId: string } }
 
@@ -77,8 +83,18 @@ export async function POST(req: NextRequest, { params }: Params) {
       );
     }
 
-    // 2. Resolve effective SNMP community
-    const effectiveCommunity = snmpCommunity || discovered.snmpCommunity || 'public';
+    // Discovery currently probes community-based SNMP only. SNMPv3 is configured
+    // through the NMS monitoring form so USM secrets never transit discovery records.
+    const normalizedVersion = normalizeSnmpVersion(snmpVersion);
+    if (normalizedVersion === '3') {
+      return NextResponse.json(
+        { error: 'SNMPv3 devices must be configured from the NMS monitoring form.' },
+        { status: 400 }
+      );
+    }
+    const effectiveCommunity = validateSnmpCommunity(
+      snmpCommunity || discovered.snmpCommunity || null
+    );
 
     // 3. Auto-assign next available nmsDeviceId
     const maxResult = await (prisma as any).$queryRaw`
@@ -126,8 +142,8 @@ export async function POST(req: NextRequest, { params }: Params) {
       data: {
         nmsDeviceId: nextNmsId,
         managementIp: discovered.ipAddress,
-        snmpCommunity: effectiveCommunity,
-        snmpVersion,
+        snmpCommunity: protectNmsCredential(effectiveCommunity, 'snmpCommunity'),
+        snmpVersion: normalizedVersion,
         snmpPort,
         pollingEnabled: true,
         pollingInterval,
@@ -167,6 +183,9 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   } catch (error) {
     console.error('[NMS Import] POST error:', error);
+    if (error instanceof NmsSnmpValidationError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     return NextResponse.json({ error: 'Failed to import device' }, { status: 500 });
   }
 }

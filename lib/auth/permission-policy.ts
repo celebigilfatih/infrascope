@@ -1,4 +1,11 @@
-export type Resource = 'users' | 'alarms' | 'devices' | 'organizations' | 'settings' | 'audit';
+export type Resource =
+  | 'users'
+  | 'alarms'
+  | 'devices'
+  | 'organizations'
+  | 'settings'
+  | 'audit'
+  | 'firewall';
 export type Action = 'read' | 'write' | 'delete';
 
 export interface PermissionCheck {
@@ -26,6 +33,9 @@ export const DEFAULT_PERMISSIONS: { resource: Resource; action: Action; roles: s
   { resource: 'audit', action: 'read', roles: ['ADMIN'] },
   { resource: 'audit', action: 'write', roles: ['ADMIN'] },
   { resource: 'audit', action: 'delete', roles: ['ADMIN'] },
+  { resource: 'firewall', action: 'read', roles: ['ADMIN', 'EDITOR', 'VIEWER'] },
+  { resource: 'firewall', action: 'write', roles: ['ADMIN'] },
+  { resource: 'firewall', action: 'delete', roles: ['ADMIN'] },
 ];
 
 export function canAccessSync(

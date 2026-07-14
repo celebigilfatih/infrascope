@@ -36,44 +36,14 @@ import { processDLQ, cleanupDLQ, getDLQStats } from '@/lib/notifications/dlq-wor
 import { sendAlarmEmail } from '@/lib/notifications/email';
 import { createLogger } from '@/lib/logger';
 import { initLicense, isLicenseValid } from '@/lib/license/client';
+import { unprotectIntegrationConfig } from '@/lib/security/integration-credentials';
+import { getFortiGateConnector } from '@/lib/firewall/connector-factory';
 
 const log = createLogger('alarm-runner');
 
-// ── FortiGate singleton ───────────────────────────────────────────────────────
-// Must persist between alarm check runs so CMDB snapshot store survives.
-// Re-created only when the integration config changes in the database.
-let _sharedFortiGateService: FortiGateService | null = null;
-let _sharedFortiGateConfigHash: string | null = null;
-
 async function getOrInitFortiGateService(): Promise<FortiGateService | null> {
   try {
-    const fgConfig = await prisma.integrationConfig.findFirst({
-      where: { type: 'FORTIGATE', enabled: true },
-    });
-    if (!fgConfig) return null;
-
-    // Re-create if config changed
-    const configHash = JSON.stringify(fgConfig.config);
-    if (_sharedFortiGateService && _sharedFortiGateConfigHash === configHash) {
-      return _sharedFortiGateService;
-    }
-
-    const cfg = fgConfig.config as any;
-    _sharedFortiGateService = new FortiGateService({
-      host: cfg.host,
-      username: cfg.username,
-      password: cfg.password,
-      accessToken: cfg.accessToken,
-      pollingInterval: cfg.pollingInterval || 5,
-      syncMode: 'rest',
-      enabledModules: {
-        interfaces: true, vlans: true, policies: true,
-        addresses: true, vips: true, sdwan: true,
-      },
-    });
-    _sharedFortiGateConfigHash = configHash;
-    log.info('FortiGate singleton (re)initialized');
-    return _sharedFortiGateService;
+    return (await getFortiGateConnector()).service;
   } catch (err) {
     log.error({ err }, 'FortiGate init error');
     return null;
@@ -298,11 +268,11 @@ export async function runAlarmCheck(): Promise<AlarmCheckResult> {
       };
     }
 
-    const faConfig = config.config as {
+    const faConfig = unprotectIntegrationConfig<{
       host: string;
       username?: string;
       password?: string;
-    };
+    }>(config.config, 'FORTIANALYZER');
 
     if (!faConfig.password) {
       log.error('FortiAnalyzer password not configured — skipping alarm evaluation');

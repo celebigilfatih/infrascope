@@ -134,6 +134,18 @@ setup_env() {
     fi
     echo -e "${GREEN}✓ Generated secure session secret${NC}"
 
+    CURRENT_INTEGRATION_KEY=$(grep "^INTEGRATION_CREDENTIALS_KEY=" .env | cut -d= -f2-)
+    if [ -z "$CURRENT_INTEGRATION_KEY" ]; then
+        set_env_value "INTEGRATION_CREDENTIALS_KEY" "$(generate_secret)"
+    fi
+    echo -e "${GREEN}✓ Generated integration credential encryption key${NC}"
+
+    CURRENT_NMS_INTERNAL_TOKEN=$(grep "^NMS_INTERNAL_TOKEN=" .env | cut -d= -f2-)
+    if [ -z "$CURRENT_NMS_INTERNAL_TOKEN" ]; then
+        set_env_value "NMS_INTERNAL_TOKEN" "$(generate_secret)"
+    fi
+    echo -e "${GREEN}✓ Generated internal NMS service token${NC}"
+
     CURRENT_POSTGRES_PASSWORD=$(grep "^POSTGRES_PASSWORD=" .env | cut -d= -f2-)
     if [ -z "$CURRENT_POSTGRES_PASSWORD" ] || [ "$CURRENT_POSTGRES_PASSWORD" = "infrascope-prod" ]; then
         set_env_value "POSTGRES_PASSWORD" "$(generate_secret)"

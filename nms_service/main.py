@@ -11,13 +11,14 @@ The main SNMP polling loop runs as a background thread.
 """
 
 import asyncio
+import hmac
 import hashlib
 import threading
 import uuid
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy import text
@@ -32,6 +33,8 @@ from nms_service.database.repository import (
 )
 from nms_service.orchestrator import NMSOrchestrator
 from nms_service.discovery_worker import run_discovery
+from nms_service.security.credentials import encrypt_nms_backup
+from nms_service.ssh.poller import inspect_ssh_host_key
 
 
 # ── App setup ─────────────────────────────────────────────────────────────────
@@ -62,6 +65,7 @@ poller_thread: Optional[threading.Thread] = None
 @app.on_event("startup")
 def startup_event():
     global poller_thread
+    config.validate()
     poller_thread = threading.Thread(target=orchestrator.run, daemon=True, name="nms-poller")
     poller_thread.start()
     logger.info("NMS background polling thread started")
@@ -76,14 +80,24 @@ def shutdown_event():
 
 class DiscoveryRequest(BaseModel):
     cidr: str
-    communities: List[str] = ["public"]
-    ssh_user: str = ""
-    ssh_pass: str = ""
+    communities: List[str]
 
 
 class BackupRequest(BaseModel):
     backup_type: str = "Running Config"
     description: Optional[str] = None
+
+
+def require_internal_token(
+    x_infrascope_internal_token: Optional[str] = Header(default=None),
+) -> None:
+    expected = config.internal_token
+    if not expected:
+        raise HTTPException(status_code=503, detail="Internal NMS authentication is not configured")
+    if not x_infrascope_internal_token or not hmac.compare_digest(
+        x_infrascope_internal_token, expected
+    ):
+        raise HTTPException(status_code=401, detail="Internal NMS authentication failed")
 
 
 # ── Health ────────────────────────────────────────────────────────────────────
@@ -183,8 +197,53 @@ def trigger_poll(nms_device_id: int):
 
 # ── Backups ───────────────────────────────────────────────────────────────────
 
+@app.get("/devices/{nms_device_id}/ssh-host-key")
+def read_ssh_host_key(
+    nms_device_id: int,
+    _authenticated: None = Depends(require_internal_token),
+):
+    session = db_manager.get_session()
+    try:
+        device = DeviceRepository(session).get_by_nms_id(nms_device_id)
+        if not device or not device.management_ip:
+            raise HTTPException(status_code=404, detail="NMS device not found")
+        algorithm, fingerprint = inspect_ssh_host_key(
+            device.management_ip,
+            device.ssh_port or 22,
+            config.ssh_timeout,
+        )
+        return {
+            "algorithm": algorithm,
+            "fingerprint": fingerprint,
+            "observed_at": datetime.utcnow().isoformat(),
+        }
+    except HTTPException:
+        raise
+    except Exception:
+        logger.warning(f"SSH host-key inspection failed for nms_device_id={nms_device_id}")
+        raise HTTPException(status_code=502, detail="SSH host key could not be inspected")
+    finally:
+        session.close()
+
+
+@app.get("/devices/{nms_device_id}/ssh-status")
+def read_ssh_status(
+    nms_device_id: int,
+    _authenticated: None = Depends(require_internal_token),
+):
+    orchestrator.register_devices_from_db()
+    status = orchestrator.ssh_poller.read_status(nms_device_id)
+    if status is None:
+        raise HTTPException(status_code=502, detail="Trusted SSH status read failed")
+    return {"status": status, "collected_at": datetime.utcnow().isoformat()}
+
+
 @app.post("/devices/{nms_device_id}/backup")
-def trigger_backup(nms_device_id: int, req: BackupRequest):
+def trigger_backup(
+    nms_device_id: int,
+    req: BackupRequest,
+    _authenticated: None = Depends(require_internal_token),
+):
     """Trigger SSH-based config backup for a device.
 
     Connects via SSH (stateless), executes vendor-specific running-config command,
@@ -236,7 +295,7 @@ def trigger_backup(nms_device_id: int, req: BackupRequest):
                 "desc": req.description,
                 "size": size_bytes,
                 "csum": checksum,
-                "cfg": config_text,
+                "cfg": encrypt_nms_backup(config_text),
                 "ts": now,
             },
         )
@@ -263,8 +322,8 @@ def trigger_backup(nms_device_id: int, req: BackupRequest):
         raise
     except Exception as e:
         session.rollback()
-        logger.error(f"Backup failed for nms_device_id={nms_device_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Backup failed for nms_device_id={nms_device_id}: {type(e).__name__}")
+        raise HTTPException(status_code=500, detail="Configuration backup failed")
     finally:
         session.close()
 
@@ -326,7 +385,11 @@ def get_interface_state(nms_device_id: int):
 # ── Discovery ─────────────────────────────────────────────────────────────────
 
 @app.post("/discovery/start")
-async def start_discovery(req: DiscoveryRequest, background_tasks: BackgroundTasks):
+async def start_discovery(
+    req: DiscoveryRequest,
+    background_tasks: BackgroundTasks,
+    _authenticated: None = Depends(require_internal_token),
+):
     """Start a network discovery scan and return scan_id for polling"""
     scan_id = cuid()
 
@@ -350,7 +413,7 @@ async def start_discovery(req: DiscoveryRequest, background_tasks: BackgroundTas
 
     async def run_async():
         try:
-            await run_discovery(req.cidr, req.communities, scan_id, req.ssh_user, req.ssh_pass)
+            await run_discovery(req.cidr, req.communities, scan_id)
         except Exception as e:
             logger.error(f"Discovery scan {scan_id} failed: {e}")
             s = db_manager.get_session()

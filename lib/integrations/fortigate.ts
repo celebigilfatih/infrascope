@@ -7,14 +7,20 @@
  * - Logs: Traffic and security events (optional)
  */
 
-import { PrismaClient, DeviceType, DeviceStatus, DeviceCriticality } from '@prisma/client';
+import { DeviceType, DeviceStatus, DeviceCriticality } from '@prisma/client';
 import * as https from 'https';
 import * as querystring from 'querystring';
 import { createLogger } from '@/lib/logger';
 import { getHttpsRequestTlsOptions, secureFetch } from '@/lib/security/tls';
+import { prisma } from '@/lib/prisma';
+import {
+  classifyFortiGateError,
+  createFortiGateHttpError,
+  FirewallIntegrationError,
+  type FirewallErrorCode,
+} from '@/lib/firewall/errors';
 
 const log = createLogger('fortigate');
-const prisma = new PrismaClient();
 
 // Configuration Types
 export interface FortiGateConfig {
@@ -43,6 +49,13 @@ export interface FortiGateConfig {
     vips: boolean;
     sdwan: boolean;
   };
+  integrationConfigId?: string;
+  deviceId?: string;
+  vdom?: string;
+  targetKey?: string;
+  /** Per-FortiGate trusted CA chain. Stored encrypted in its integration config. */
+  tlsCaPem?: string;
+  tlsCaUpdatedAt?: string;
 }
 
 export interface FortiGateInterface {
@@ -191,6 +204,20 @@ export class FortiGateService {
     }
   }
 
+  getTargetKey(): string {
+    return this.config.targetKey || `${this.config.host}:${this.config.vdom || 'root'}`;
+  }
+
+  async dispose(): Promise<void> {
+    await this.logout();
+  }
+
+  private getRequestTimeoutMs(): number {
+    const configured = Number(process.env.FORTIGATE_REQUEST_TIMEOUT_MS || 15_000);
+    if (!Number.isFinite(configured)) return 15_000;
+    return Math.min(Math.max(configured, 1_000), 120_000);
+  }
+
   /**
    * Logout from FortiGate and invalidate the current session on the server side.
    * Called automatically before re-authentication to prevent session pile-up.
@@ -208,13 +235,14 @@ export class FortiGateService {
         path: '/logout',
         method: 'GET',
         headers: { 'Cookie': cookieHeader },
-        ...getHttpsRequestTlsOptions('FORTIGATE'),
+        ...getHttpsRequestTlsOptions('FORTIGATE', { caPem: this.config.tlsCaPem }),
       };
       const req = https.request(options, (res) => {
         res.resume();
         resolve();
       });
       req.on('error', () => resolve()); // best-effort, ignore failures
+      req.setTimeout(Math.min(this.getRequestTimeoutMs(), 5_000), () => req.destroy());
       req.end();
     }).finally(() => {
       // Always clear local state regardless of logout success
@@ -251,7 +279,7 @@ export class FortiGateService {
           'Content-Type': 'application/x-www-form-urlencoded',
           'Content-Length': Buffer.byteLength(postData),
         },
-        ...getHttpsRequestTlsOptions('FORTIGATE'),
+        ...getHttpsRequestTlsOptions('FORTIGATE', { caPem: this.config.tlsCaPem }),
       };
 
       const req = https.request(options, (res) => {
@@ -283,6 +311,9 @@ export class FortiGateService {
       });
 
       req.on('error', reject);
+      req.setTimeout(this.getRequestTimeoutMs(), () => {
+        req.destroy(new Error('FortiGate login timed out'));
+      });
       req.write(postData);
       req.end();
     });
@@ -317,22 +348,62 @@ export class FortiGateService {
     method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET',
     body?: Record<string, unknown>
   ): Promise<T> {
-    const authHeaders = await this.getAuthHeaders();
-    const response = await secureFetch('FORTIGATE', `${this.baseUrl}${endpoint}`, {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        ...authHeaders,
-      },
-      body: body ? JSON.stringify(body) : undefined,
-    });
+    const requestUrl = new URL(`${this.baseUrl}${endpoint}`);
+    if (this.config.vdom && !requestUrl.searchParams.has('vdom')) {
+      requestUrl.searchParams.set('vdom', this.config.vdom);
+    }
+    const maxAttempts = method === 'GET' ? 3 : 1;
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        const authHeaders = await this.getAuthHeaders();
+        const response = await secureFetch('FORTIGATE', requestUrl.toString(), {
+          method,
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            ...authHeaders,
+          },
+          body: body ? JSON.stringify(body) : undefined,
+          timeoutMs: this.getRequestTimeoutMs(),
+          caPem: this.config.tlsCaPem,
+        });
 
-    if (!response.ok) {
-      throw new Error(`FortiGate API error: ${response.statusText} - ${await response.text()}`);
+        if (!response.ok) {
+          throw createFortiGateHttpError(response.status, await response.text());
+        }
+
+        try {
+          return await response.json() as T;
+        } catch (error) {
+          throw new FirewallIntegrationError(
+            'INVALID_RESPONSE',
+            'FortiGate returned an invalid response',
+            false,
+            502,
+            { cause: error }
+          );
+        }
+      } catch (error) {
+        const classified = classifyFortiGateError(error);
+        if (!classified.retryable || attempt === maxAttempts) throw classified;
+        await new Promise((resolve) => setTimeout(resolve, 500 * (2 ** (attempt - 1))));
+      }
     }
 
-    return response.json() as Promise<T>;
+    throw new FirewallIntegrationError('UNKNOWN', 'FortiGate request failed', false, 502);
+  }
+
+  private async optionalApiRequest<T>(endpoint: string, label: string): Promise<T | null> {
+    try {
+      return await this.apiRequest<T>(endpoint);
+    } catch (error) {
+      const classified = classifyFortiGateError(error);
+      log.warn(
+        { code: classified.code, endpoint, target: this.config.targetKey },
+        `Optional FortiGate ${label} request failed`
+      );
+      return null;
+    }
   }
 
   /**
@@ -379,7 +450,7 @@ export class FortiGateService {
       }));
     } catch (error) {
       log.error({ err: error }, 'Failed to fetch interfaces');
-      return [];
+      throw classifyFortiGateError(error);
     }
   }
 
@@ -418,7 +489,7 @@ export class FortiGateService {
       }));
     } catch (error) {
       log.error({ err: error }, 'Failed to fetch VLANs');
-      return [];
+      throw classifyFortiGateError(error);
     }
   }
 
@@ -460,7 +531,7 @@ export class FortiGateService {
       }));
     } catch (error) {
       log.error({ err: error }, 'Failed to fetch firewall policies');
-      return [];
+      throw classifyFortiGateError(error);
     }
   }
 
@@ -490,7 +561,7 @@ export class FortiGateService {
       }));
     } catch (error) {
       log.error({ err: error }, 'Failed to fetch addresses');
-      return [];
+      throw classifyFortiGateError(error);
     }
   }
 
@@ -505,7 +576,7 @@ export class FortiGateService {
       return data.results || [];
     } catch (error) {
       log.error({ err: error }, 'Failed to fetch VIPs');
-      return [];
+      throw classifyFortiGateError(error);
     }
   }
 
@@ -538,7 +609,7 @@ export class FortiGateService {
       return null;
     } catch (error) {
       log.error({ err: error }, 'Failed to fetch SD-WAN');
-      return null;
+      throw classifyFortiGateError(error);
     }
   }
 
@@ -570,7 +641,7 @@ export class FortiGateService {
       return null;
     } catch (error) {
       log.error({ err: error }, 'Failed to fetch HA status');
-      return null;
+      throw classifyFortiGateError(error);
     }
   }
 
@@ -578,8 +649,23 @@ export class FortiGateService {
    * Get or create the FortiGate device record
    */
   private async getOrCreateDevice(_organizationId: string): Promise<string> {
+    if (this.config.deviceId) {
+      const configuredDevice = await prisma.device.findUnique({
+        where: { id: this.config.deviceId },
+        select: { id: true },
+      });
+      if (configuredDevice) return configuredDevice.id;
+    }
+
+    const targetKey = this.getTargetKey();
+    const vdom = this.config.vdom || 'root';
     const existing = await prisma.device.findFirst({
-      where: { fortiDeviceId: this.config.host },
+      where: {
+        OR: [
+          { fortiDeviceId: targetKey },
+          ...(vdom === 'root' ? [{ fortiDeviceId: this.config.host }] : []),
+        ],
+      },
     });
 
     if (existing) {
@@ -588,13 +674,17 @@ export class FortiGateService {
 
     const device = await prisma.device.create({
       data: {
-        name: `FortiGate-${this.config.host}`,
+        name: `FortiGate-${this.config.host}${vdom === 'root' ? '' : `-${vdom}`}`,
         type: DeviceType.FIREWALL,
         vendor: 'Fortinet',
         model: 'FortiGate',
         status: DeviceStatus.ACTIVE,
         criticality: DeviceCriticality.CRITICAL,
-        fortiDeviceId: this.config.host,
+        fortiDeviceId: targetKey,
+        metadata: {
+          integrationConfigId: this.config.integrationConfigId || null,
+          vdom,
+        },
         // organizationId,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -796,49 +886,31 @@ export class FortiGateService {
     sdwan?: { interfaces: Array<{ name: string; link: string; session: number; tx_bandwidth: number; rx_bandwidth: number }> };
     license?: { status: string; support: string; expires: string };
     error?: string;
+    errorCode?: FirewallErrorCode;
+    retryable?: boolean;
   }> {
     try {
-      const authHeaders = await this.getAuthHeaders();
-      // Get system status
-      const statusRes = await secureFetch('FORTIGATE', `${this.baseUrl}/monitor/system/status`, {
-        headers: authHeaders,
-      });
-      if (!statusRes.ok) {
-        return { connected: false, error: `HTTP ${statusRes.status}` };
-      }
-      const statusData = await statusRes.json() as { version: string; hostname: string; model: string; serial: string };
+      const statusData = await this.apiRequest<{
+        version: string;
+        hostname: string;
+        model: string;
+        serial: string;
+      }>('/monitor/system/status');
 
-      // Get resource usage
-      const resourceRes = await secureFetch('FORTIGATE', `${this.baseUrl}/monitor/system/vdom-resource`, {
-        headers: authHeaders,
-      });
-      const resourceData = resourceRes.ok ? await resourceRes.json() as {
+      const [resourceData, haData, sdwanData, licenseData] = await Promise.all([
+        this.optionalApiRequest<{
         results: { cpu: number; memory: number; session: { current_usage: number; usage_percent: number } };
-      } : null;
-
-      // Get HA status
-      const haRes = await secureFetch('FORTIGATE', `${this.baseUrl}/monitor/system/ha-checksums`, {
-        headers: authHeaders,
-      });
-      const haData = haRes.ok ? await haRes.json() as {
-        results: Array<{ is_root_primary: boolean; serial_no: string }>;
-      } : null;
-
-      // Get SD-WAN status
-      const sdwanRes = await secureFetch('FORTIGATE', `${this.baseUrl}/monitor/virtual-wan/members`, {
-        headers: authHeaders,
-      });
-      const sdwanData = sdwanRes.ok ? await sdwanRes.json() as {
-        results: Record<string, { link: string; session: number; tx_bandwidth: number; rx_bandwidth: number }>;
-      } : null;
-
-      // Get license status
-      const licenseRes = await secureFetch('FORTIGATE', `${this.baseUrl}/monitor/license/status`, {
-        headers: authHeaders,
-      });
-      const licenseData = licenseRes.ok ? await licenseRes.json() as {
-        results: { forticare: { registration_status: string; support: { enhanced: { support_level: string; expires: number } } } };
-      } : null;
+        }>('/monitor/system/vdom-resource', 'resource'),
+        this.optionalApiRequest<{
+          results: Array<{ is_root_primary: boolean; serial_no: string }>;
+        }>('/monitor/system/ha-checksums', 'HA'),
+        this.optionalApiRequest<{
+          results: Record<string, { link: string; session: number; tx_bandwidth: number; rx_bandwidth: number }>;
+        }>('/monitor/virtual-wan/members', 'SD-WAN'),
+        this.optionalApiRequest<{
+          results: { forticare: { registration_status: string; support: { enhanced: { support_level: string; expires: number } } } };
+        }>('/monitor/license/status', 'license'),
+      ]);
 
       // Parse SD-WAN interfaces
       const sdwanInterfaces = sdwanData?.results ? Object.entries(sdwanData.results).map(([name, data]) => ({
@@ -879,7 +951,13 @@ export class FortiGateService {
         } : undefined,
       };
     } catch (error) {
-      return { connected: false, error: (error as Error).message };
+      const classified = classifyFortiGateError(error);
+      return {
+        connected: false,
+        error: classified.message,
+        errorCode: classified.code,
+        retryable: classified.retryable,
+      };
     }
   }
 
@@ -898,15 +976,7 @@ export class FortiGateService {
     out_bytes: number;
   }>> {
     try {
-      const response = await secureFetch('FORTIGATE', `${this.baseUrl}/monitor/vpn/ssl`, {
-        headers: await this.getAuthHeaders(),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      const data = await response.json() as {
+      const data = await this.apiRequest<{
         results: Array<{
           user_name: string;
           remote_host: string;
@@ -920,7 +990,7 @@ export class FortiGateService {
             out_bytes: number;
           }>;
         }>;
-      };
+      }>('/monitor/vpn/ssl');
 
       return data.results.map(user => ({
         user_name: user.user_name,
@@ -935,7 +1005,7 @@ export class FortiGateService {
       }));
     } catch (error) {
       log.error({ err: error }, 'Failed to get SSL-VPN users');
-      return [];
+      throw classifyFortiGateError(error);
     }
   }
 
@@ -990,16 +1060,7 @@ export class FortiGateService {
     }
 
     try {
-      const authH = await this.getAuthHeaders();
-      const url = `${this.baseUrl}${endpoint}`;
-      const res = await secureFetch('FORTIGATE', url, { headers: authH });
-
-      if (!res.ok) {
-        log.warn({ endpoint, status: res.status }, 'getCmdbChanges HTTP error');
-        return { changed: false, isFirstRun: false, current: null };
-      }
-
-      const data = await res.json() as { results?: any; [k: string]: any };
+      const data = await this.apiRequest<{ results?: any; [k: string]: any }>(endpoint);
       const current: any = data.results ?? data;
 
       // Preserve previous data BEFORE updating cache — needed for computeArrayDiff
@@ -1026,7 +1087,7 @@ export class FortiGateService {
       return { changed, isFirstRun, current };
     } catch (error) {
       log.error({ err: error, endpoint }, 'getCmdbChanges error');
-      return { changed: false, isFirstRun: false, current: null };
+      throw classifyFortiGateError(error);
     }
   }
 
@@ -1114,7 +1175,7 @@ export class FortiGateService {
     }
 
     // 3. Queue a new request
-    const promise = new Promise<Array<Record<string, any>>>((resolve) => {
+    const promise = new Promise<Array<Record<string, any>>>((resolve, reject) => {
       this._requestQueue = this._requestQueue.then(async () => {
         // Double-check cache (might have been populated by a previous queued request)
         const cached2 = this._eventLogCache.get(cacheKey);
@@ -1127,25 +1188,15 @@ export class FortiGateService {
           const params = new URLSearchParams({ rows: String(rows) });
           if (filter) params.set('filter', filter);
 
-          const url = `${this.baseUrl}/monitor/log/event?${params}`;
-          const authH = await this.getAuthHeaders();
-          const response = await secureFetch('FORTIGATE', url, {
-            headers: authH,
-          });
-
-          if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-          }
-
-          const data = await response.json() as { results?: Array<Record<string, any>> };
+          const data = await this.apiRequest<{ results?: Array<Record<string, any>> }>(
+            `/monitor/log/event?${params}`
+          );
           const logs = data.results || [];
           this._eventLogCache.set(cacheKey, { ts: Date.now(), data: logs });
           resolve(logs);
         } catch (error) {
           log.error({ err: error, filter }, 'getEventLogs failed');
-          // Cache empty result briefly to avoid hammering a failing endpoint
-          this._eventLogCache.set(cacheKey, { ts: Date.now(), data: [] });
-          resolve([]);
+          reject(classifyFortiGateError(error));
         }
         // Delay before next request
         await new Promise(r => setTimeout(r, this._requestDelay));
@@ -1154,7 +1205,10 @@ export class FortiGateService {
 
     this._inflight.set(cacheKey, promise);
     // Clean up inflight entry after resolution
-    promise.then(() => this._inflight.delete(cacheKey));
+    void promise.then(
+      () => this._inflight.delete(cacheKey),
+      () => this._inflight.delete(cacheKey)
+    );
 
     return promise;
   }
@@ -1196,15 +1250,7 @@ export class FortiGateService {
     connection_count: number;
   }>> {
     try {
-      const response = await secureFetch('FORTIGATE', `${this.baseUrl}/monitor/vpn/ipsec`, {
-        headers: await this.getAuthHeaders(),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      const data = await response.json() as {
+      const data = await this.apiRequest<{
         results: Array<{
           name: string;
           comments: string;
@@ -1215,7 +1261,7 @@ export class FortiGateService {
           outgoing_bytes: number;
           connection_count: number;
         }>;
-      };
+      }>('/monitor/vpn/ipsec');
 
       return data.results.map(tunnel => ({
         name: tunnel.name,
@@ -1229,7 +1275,7 @@ export class FortiGateService {
       }));
     } catch (error) {
       log.error({ err: error }, 'Failed to get IPsec tunnels');
-      return [];
+      throw classifyFortiGateError(error);
     }
   }
 
@@ -1247,15 +1293,7 @@ export class FortiGateService {
     }>;
   }> {
     try {
-      const response = await secureFetch('FORTIGATE', `${this.baseUrl}/monitor/system/config-revision`, {
-        headers: await this.getAuthHeaders(),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      const data = await response.json() as {
+      const data = await this.apiRequest<{
         results: {
           revisions: Array<{
             id: number;
@@ -1266,7 +1304,7 @@ export class FortiGateService {
           }>;
           current_config_unsaved: boolean;
         };
-      };
+      }>('/monitor/system/config-revision');
 
       return {
         hasUnsavedChanges: data.results.current_config_unsaved,
@@ -1280,7 +1318,7 @@ export class FortiGateService {
       };
     } catch (error) {
       log.error({ err: error }, 'Failed to get config revisions');
-      return { hasUnsavedChanges: false, revisions: [] };
+      throw classifyFortiGateError(error);
     }
   }
 
@@ -1303,15 +1341,7 @@ export class FortiGateService {
     rx_errors: number;
   }>> {
     try {
-      const response = await secureFetch('FORTIGATE', `${this.baseUrl}/monitor/system/interface`, {
-        headers: await this.getAuthHeaders(),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      const data = await response.json() as {
+      const data = await this.apiRequest<{
         results: Record<string, {
           id: string;
           name: string;
@@ -1327,14 +1357,14 @@ export class FortiGateService {
           tx_errors: number;
           rx_errors: number;
         }>;
-      };
+      }>('/monitor/system/interface');
 
       return Object.values(data.results).filter(iface => 
         iface.name && iface.name !== 'lo'
       );
     } catch (error) {
       log.error({ err: error }, 'Failed to get interface stats');
-      return [];
+      throw classifyFortiGateError(error);
     }
   }
 
@@ -1384,7 +1414,7 @@ export class FortiGateService {
       }));
     } catch (error) {
       log.error({ err: error }, 'Failed to fetch quarantined IPs');
-      return [];
+      throw classifyFortiGateError(error);
     }
   }
 
@@ -1400,7 +1430,7 @@ export class FortiGateService {
       return true;
     } catch (error) {
       log.error({ err: error, ip }, 'Failed to release quarantine');
-      return false;
+      throw classifyFortiGateError(error);
     }
   }
 
@@ -1417,7 +1447,7 @@ export class FortiGateService {
       return true;
     } catch (error) {
       log.error({ err: error, ip }, 'Failed to add to quarantine');
-      return false;
+      throw classifyFortiGateError(error);
     }
   }
 }

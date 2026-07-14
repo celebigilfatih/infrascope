@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getRequestActor } from '@/lib/auth/request-actor';
+import { nmsInternalFetch } from '@/lib/nms/internal-client';
 
 interface Params { params: { id: string } }
-
-const NMS_BACKEND_URL = process.env.NMS_BACKEND_URL || 'http://nms:8500';
 
 function serializeBigInt(obj: unknown): unknown {
   return JSON.parse(JSON.stringify(obj, (_k, v) => typeof v === 'bigint' ? v.toString() : v));
@@ -54,9 +54,13 @@ export async function GET(_req: NextRequest, { params }: Params) {
  */
 export async function POST(req: NextRequest, { params }: Params) {
   try {
+    const auth = await getRequestActor(req);
+    if (!auth) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
     const device = await (prisma as any).device.findUnique({
       where: { id: params.id },
-      select: { nmsDeviceId: true, name: true, managementIp: true },
+      select: { id: true, nmsDeviceId: true, name: true },
     });
 
     if (!device?.nmsDeviceId) {
@@ -67,13 +71,26 @@ export async function POST(req: NextRequest, { params }: Params) {
     const backupType = body.backupType || 'Running Config';
     const description = body.description || null;
 
-    // Try NMS backend first (agent handles SSH)
+    await prisma.auditLog.create({
+      data: {
+        entity: 'Device',
+        entityId: device.id,
+        resource: 'device',
+        resourceId: device.id,
+        action: 'SSH_CONFIG_BACKUP_REQUESTED',
+        userId: auth.actor.id || null,
+        details: { backupType, description },
+        ipAddress: req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null,
+        userAgent: req.headers.get('user-agent'),
+      },
+    });
+
     try {
-      const nmsRes = await fetch(
-        `${NMS_BACKEND_URL}/devices/${device.nmsDeviceId}/backup`,
+      const nmsRes = await nmsInternalFetch(
+        `/devices/${device.nmsDeviceId}/backup`,
         {
           method: 'POST',
-          signal: AbortSignal.timeout(120000),
+          timeoutMs: 120000,
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             backup_type: backupType,
@@ -84,21 +101,32 @@ export async function POST(req: NextRequest, { params }: Params) {
 
       if (nmsRes.ok) {
         const nmsData = await nmsRes.json();
+        await prisma.auditLog.create({
+          data: {
+            entity: 'Device',
+            entityId: device.id,
+            resource: 'device',
+            resourceId: device.id,
+            action: 'SSH_CONFIG_BACKUP_COMPLETED',
+            userId: auth.actor.id || null,
+            details: {
+              backupId: nmsData.backup?.id || null,
+              checksum: nmsData.backup?.checksum || null,
+              sizeBytes: nmsData.backup?.size_bytes || null,
+            },
+          },
+        });
         return NextResponse.json(
           { success: true, source: 'nms-agent', backup: nmsData.backup ?? nmsData },
           { status: 201 }
         );
       }
 
-      // Surface backend error details rather than swallowing them
-      const errText = await nmsRes.text().catch(() => '');
       return NextResponse.json(
         {
           error: 'NMS backup failed',
           status: nmsRes.status,
-          detail: errText || nmsRes.statusText,
           device: device.name,
-          managementIp: device.managementIp,
         },
         { status: nmsRes.status === 404 ? 404 : 502 }
       );
@@ -108,10 +136,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         {
           error: 'NMS agent unreachable',
           hint: 'Backup requires the NMS agent service to be running for SSH access to the device.',
-          detail: e?.message || String(e),
           device: device.name,
-          managementIp: device.managementIp,
-          nmsBackendUrl: NMS_BACKEND_URL,
         },
         { status: 503 }
       );

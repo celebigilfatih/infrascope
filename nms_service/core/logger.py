@@ -2,6 +2,7 @@
 
 import logging
 import logging.handlers
+import os
 import sys
 from pathlib import Path
 from nms_service.core.config import config
@@ -10,7 +11,7 @@ from nms_service.core.config import config
 def setup_logging():
     """Configure logging with file and console handlers"""
 
-    log_dir = Path("/app/logs")
+    log_dir = Path(os.getenv("NMS_LOG_DIR", "/app/logs"))
     log_dir.mkdir(parents=True, exist_ok=True)
 
     logger = logging.getLogger("nms")

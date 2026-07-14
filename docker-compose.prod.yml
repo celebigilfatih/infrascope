@@ -47,12 +47,17 @@ services:
       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}
       NEXTAUTH_URL: ${NEXTAUTH_URL}
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+      FORTIGATE_REQUEST_TIMEOUT_MS: ${FORTIGATE_REQUEST_TIMEOUT_MS:-15000}
+      INTEGRATION_CREDENTIALS_KEY: ${INTEGRATION_CREDENTIALS_KEY:-}
+      INTEGRATION_CREDENTIALS_PREVIOUS_KEY: ${INTEGRATION_CREDENTIALS_PREVIOUS_KEY:-}
+      NMS_INTERNAL_TOKEN: ${NMS_INTERNAL_TOKEN:?NMS_INTERNAL_TOKEN is required}
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
       PORT: 3000
       DB_HOST: db
       DB_PORT: 5432
       # Production security headers
       STRICT_MODE: "true"
+      FORTIGATE_LEGACY_WRITES_ENABLED: ${FORTIGATE_LEGACY_WRITES_ENABLED:-false}
     ports:
       - "${EXPOSE_PORT:-3000}:3000"
     depends_on:
@@ -68,7 +73,7 @@ services:
       start_period: 40s
     security_opt:
       - no-new-privileges:true
-    read_only_root_filesystem: true
+    read_only: true
     tmpfs:
       - /app/.next/cache
       - /tmp

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { nmsInternalFetch } from '@/lib/nms/internal-client';
 
 /**
  * GET /api/integrations/nms/discovery
@@ -37,22 +38,23 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { cidr, communities = ['public'], sshUser = '', sshPass = '' } = body;
+    const { cidr, communities = [] } = body;
 
     if (!cidr) {
       return NextResponse.json({ error: 'cidr is required (e.g. 192.168.1.0/24)' }, { status: 400 });
     }
+    if (!Array.isArray(communities) || communities.length === 0) {
+      return NextResponse.json({ error: 'At least one explicit SNMP community is required' }, { status: 400 });
+    }
 
     // Forward to NMS FastAPI service which runs the actual async scan
-    const nmsUrl = process.env.NMS_INTERNAL_URL || 'http://nms:8500';
-    
     let scan_id: string | undefined;
     try {
-      const res = await fetch(`${nmsUrl}/discovery/start`, {
+      const res = await nmsInternalFetch('/discovery/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cidr, communities, ssh_user: sshUser, ssh_pass: sshPass }),
-        signal: AbortSignal.timeout(5000),
+        body: JSON.stringify({ cidr, communities }),
+        timeoutMs: 5000,
       });
 
       if (!res.ok) {

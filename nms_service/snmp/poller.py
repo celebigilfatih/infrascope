@@ -32,6 +32,12 @@ class DeviceConfig:
     vendor: str  # "generic", "cisco", "fortinet", "mikrotik"
     snmp_port: int = 161
     snmp_version: str = "2c"
+    v3_username: str = ""
+    v3_security_level: str = "authPriv"
+    v3_auth_protocol: str = "SHA"
+    v3_auth_password: str = ""
+    v3_privacy_protocol: str = "AES"
+    v3_privacy_password: str = ""
     enabled: bool = True
     
     # Poll intervals (override global defaults)
@@ -60,6 +66,37 @@ def safe_float(val, default=0.0):
         return float(val_str)
     except (ValueError, TypeError):
         return default
+
+
+def parse_sensor_temperature(value: Any) -> Optional[float]:
+    """Parse a FortiGate sensor's model-specific string representation."""
+    if value is None:
+        return None
+    match = re.search(r"-?[0-9]+(?:\.[0-9]+)?", str(value))
+    if not match:
+        return None
+    parsed = float(match.group(0))
+    return parsed if -50 <= parsed <= 200 else None
+
+
+def select_fortinet_temperature(
+    sensor_names: Dict[str, Any],
+    sensor_values: Dict[str, Any],
+) -> Optional[float]:
+    """Return the highest valid temperature from the FortiGate sensor table."""
+    temperatures: List[float] = []
+    for oid, name in sensor_names.items():
+        normalized_name = str(name or "").lower()
+        if "temp" not in normalized_name and "thermal" not in normalized_name:
+            continue
+        index = oid.rsplit(".", 1)[-1]
+        value = sensor_values.get(
+            f"1.3.6.1.4.1.12356.101.4.3.2.1.3.{index}"
+        )
+        temperature = parse_sensor_temperature(value)
+        if temperature is not None:
+            temperatures.append(temperature)
+    return max(temperatures) if temperatures else None
 
 
 def parse_uptime_seconds(value: Any) -> Optional[int]:
@@ -140,6 +177,12 @@ class SNMPPoller:
             and existing.community_string == config.community_string
             and existing.port == config.snmp_port
             and existing.version == (config.snmp_version or "2c")
+            and existing.v3_username == config.v3_username
+            and existing.v3_security_level == config.v3_security_level
+            and existing.v3_auth_protocol == config.v3_auth_protocol
+            and existing.v3_auth_password == config.v3_auth_password
+            and existing.v3_privacy_protocol == config.v3_privacy_protocol
+            and existing.v3_privacy_password == config.v3_privacy_password
         ):
             return  # nothing changed — keep existing session silently
 
@@ -151,6 +194,12 @@ class SNMPPoller:
                 community_string=config.community_string,
                 version=config.snmp_version,
                 port=config.snmp_port,
+                v3_username=config.v3_username,
+                v3_security_level=config.v3_security_level,
+                v3_auth_protocol=config.v3_auth_protocol,
+                v3_auth_password=config.v3_auth_password,
+                v3_privacy_protocol=config.v3_privacy_protocol,
+                v3_privacy_password=config.v3_privacy_password,
             )
             
             self.sessions[config.device_id] = session
@@ -379,9 +428,8 @@ class SNMPPoller:
                                 break
             
             elif vendor.lower() == "fortinet":
-                cpu_oid = "1.3.6.1.4.1.12356.101.13.2.1.1.2"
-                mem_oid = "1.3.6.1.4.1.12356.101.13.2.1.2.1"
-                temp_oid = "1.3.6.1.4.1.12356.101.13.2.1.3.1"
+                cpu_oid = "1.3.6.1.4.1.12356.101.4.1.3.0"
+                mem_oid = "1.3.6.1.4.1.12356.101.4.1.4.0"
                 
                 cpu_value = session.get(cpu_oid)
                 cpu_usage = safe_float(cpu_value, None)
@@ -389,8 +437,9 @@ class SNMPPoller:
                 mem_value = session.get(mem_oid)
                 memory_usage = safe_float(mem_value, None)
                 
-                temp_value = session.get(temp_oid)
-                temperature = safe_float(temp_value, None)
+                sensor_names = session.walk("1.3.6.1.4.1.12356.101.4.3.2.1.2")
+                sensor_values = session.walk("1.3.6.1.4.1.12356.101.4.3.2.1.3")
+                temperature = select_fortinet_temperature(sensor_names, sensor_values)
             
             elif vendor.lower() == "mikrotik":
                 cpu_oid = "1.3.6.1.4.1.14988.1.1.3.2"

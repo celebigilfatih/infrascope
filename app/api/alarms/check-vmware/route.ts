@@ -7,6 +7,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import FortiAnalyzerService, { initSharedFortiAnalyzerService } from '@/lib/integrations/fortianalyzer';
 import { AlarmDetectionEngine } from '@/lib/alarms/detection-engine';
+import { unprotectIntegrationConfig } from '@/lib/security/integration-credentials';
 
 async function runVMwareAlarmCheck() {
   try {
@@ -19,7 +20,11 @@ async function runVMwareAlarmCheck() {
       return { success: false, error: 'FortiAnalyzer not configured' };
     }
 
-    const config = faConfig.config as { host: string; username?: string; password?: string };
+    const config = unprotectIntegrationConfig<{
+      host: string;
+      username?: string;
+      password?: string;
+    }>(faConfig.config, 'FORTIANALYZER');
 
     if (!config.password) {
       return { success: false, error: 'FortiAnalyzer password not configured' };

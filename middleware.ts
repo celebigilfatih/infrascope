@@ -27,6 +27,10 @@ const ROUTE_RESOURCE_MAP: Record<string, Resource> = {
   '/api/settings': 'settings',
   '/api/audit': 'audit',
   '/api/permissions': 'settings',
+  '/api/integrations/fortigate': 'firewall',
+  '/api/security/quarantine': 'firewall',
+  '/api/firewall-policies': 'firewall',
+  '/api/firewalls': 'firewall',
 };
 
 // Map HTTP methods to action types

@@ -143,8 +143,8 @@
     "vendor": "cisco",
     "conversion_factor": 1.0
   },
-  "1.3.6.1.4.1.12356.101.13.2.1.1.2": {
-    "oid": "1.3.6.1.4.1.12356.101.13.2.1.1.2",
+  "1.3.6.1.4.1.12356.101.4.1.3": {
+    "oid": "1.3.6.1.4.1.12356.101.4.1.3",
     "name": "fgSysCpuUsage",
     "description": "FortiGate CPU usage",
     "metric_type": "gauge",
@@ -152,8 +152,8 @@
     "vendor": "fortinet",
     "conversion_factor": 1.0
   },
-  "1.3.6.1.4.1.12356.101.13.2.1.2.1": {
-    "oid": "1.3.6.1.4.1.12356.101.13.2.1.2.1",
+  "1.3.6.1.4.1.12356.101.4.1.4": {
+    "oid": "1.3.6.1.4.1.12356.101.4.1.4",
     "name": "fgSysMemUsage",
     "description": "FortiGate memory usage",
     "metric_type": "gauge",
@@ -161,12 +161,12 @@
     "vendor": "fortinet",
     "conversion_factor": 1.0
   },
-  "1.3.6.1.4.1.12356.101.13.2.1.3.1": {
-    "oid": "1.3.6.1.4.1.12356.101.13.2.1.3.1",
-    "name": "fgSysTemperature",
-    "description": "FortiGate temperature",
-    "metric_type": "gauge",
-    "unit": "celsius",
+  "1.3.6.1.4.1.12356.101.4.3.2.1.3": {
+    "oid": "1.3.6.1.4.1.12356.101.4.3.2.1.3",
+    "name": "fgHwSensorEntValue",
+    "description": "FortiGate hardware sensor value",
+    "metric_type": "string",
+    "unit": null,
     "vendor": "fortinet",
     "conversion_factor": 1.0
   },

@@ -7,10 +7,25 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import FortiAnalyzerService, { initSharedFortiAnalyzerService } from '@/lib/integrations/fortianalyzer';
-import { FortiGateService } from '@/lib/integrations/fortigate';
 import { prisma } from '@/lib/prisma';
 import { validateBody } from '@/lib/validators';
 import { fortianalyzerConfigSchema } from '@/lib/validators/integrations';
+import {
+  hasIntegrationCredential,
+  protectIntegrationConfig,
+  unprotectIntegrationConfig,
+} from '@/lib/security/integration-credentials';
+
+type StoredFortiAnalyzerConfig = {
+  host: string;
+  username?: string;
+  password?: string;
+  apiKey?: string;
+};
+
+function readFortiAnalyzerConfig(config: unknown): StoredFortiAnalyzerConfig {
+  return unprotectIntegrationConfig<StoredFortiAnalyzerConfig>(config, 'FORTIANALYZER');
+}
 
 // ─── In-memory cache for heavy FA queries ───────────────────────────────────
 const FAZ_CACHE_TTL = 5 * 60 * 1000; // 5 minutes default
@@ -68,7 +83,9 @@ export async function POST(request: NextRequest) {
       let password = rawPassword;
       if (!password) {
         const existing = await prisma.integrationConfig.findFirst({ where: { type: 'FORTIANALYZER' } });
-        password = (existing?.config as any)?.password || '';
+        password = existing
+          ? readFortiAnalyzerConfig(existing.config).password || ''
+          : '';
       }
 
       if (!password) {
@@ -99,7 +116,9 @@ export async function POST(request: NextRequest) {
       const existing = await prisma.integrationConfig.findFirst({
         where: { type: 'FORTIANALYZER' },
       });
-      const existingConfig = (existing?.config as any) || {};
+      const existingConfig: Partial<StoredFortiAnalyzerConfig> = existing
+        ? readFortiAnalyzerConfig(existing.config)
+        : {};
 
       const newConfig = {
         ...existingConfig,
@@ -107,11 +126,15 @@ export async function POST(request: NextRequest) {
         username,
         password: password && password.length > 0 ? password : existingConfig.password,
       };
+      const protectedConfig = protectIntegrationConfig<Record<string, unknown>>(
+        newConfig,
+        'FORTIANALYZER'
+      );
 
       await prisma.integrationConfig.upsert({
         where: { type_name: { type: 'FORTIANALYZER', name: 'FortiAnalyzer' } },
-        create: { type: 'FORTIANALYZER', name: 'FortiAnalyzer', enabled: true, config: newConfig },
-        update: { enabled: true, config: newConfig },
+        create: { type: 'FORTIANALYZER', name: 'FortiAnalyzer', enabled: true, config: protectedConfig as any },
+        update: { enabled: true, config: protectedConfig as any },
       });
 
       // Reset global login backoff so the new creds are tried immediately
@@ -163,6 +186,9 @@ export async function GET(request: NextRequest) {
         config: {
           host: cfg.host || '',
           username: cfg.username || '',
+          passwordSet:
+            hasIntegrationCredential(config.config, 'FORTIANALYZER', 'password') ||
+            hasIntegrationCredential(config.config, 'FORTIANALYZER', 'apiKey'),
         }
       });
     }
@@ -174,11 +200,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const faConfig = config.config as {
-      host: string;
-      username?: string;
-      password?: string;
-    };
+    const faConfig = readFortiAnalyzerConfig(config.config);
 
     if (!faConfig.password) {
       return NextResponse.json({
