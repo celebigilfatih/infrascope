@@ -197,15 +197,17 @@ export class AlarmMonitor {
 }
 
 // ── Singleton ────────────────────────────────────────────────────────────────
-let monitorInstance: AlarmMonitor | null = null;
+const globalMonitor = globalThis as typeof globalThis & {
+  __infrascopeAlarmMonitor?: AlarmMonitor;
+};
 
 export function getAlarmMonitor(
   checkIntervalMinutes = WATCHDOG_INTERVAL_MINUTES
 ): AlarmMonitor {
-  if (!monitorInstance) {
-    monitorInstance = new AlarmMonitor(checkIntervalMinutes);
+  if (!globalMonitor.__infrascopeAlarmMonitor) {
+    globalMonitor.__infrascopeAlarmMonitor = new AlarmMonitor(checkIntervalMinutes);
   }
-  return monitorInstance;
+  return globalMonitor.__infrascopeAlarmMonitor;
 }
 
 export function startAlarmMonitor(
@@ -217,7 +219,7 @@ export function startAlarmMonitor(
 }
 
 export function stopAlarmMonitor(): void {
-  if (monitorInstance) {
-    monitorInstance.stop();
+  if (globalMonitor.__infrascopeAlarmMonitor) {
+    globalMonitor.__infrascopeAlarmMonitor.stop();
   }
 }

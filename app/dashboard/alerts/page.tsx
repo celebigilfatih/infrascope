@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -64,6 +65,18 @@ interface AlarmEventData {
     closedAt: string | null;
     legalHold: boolean;
   };
+}
+
+interface NmsPipelineHealth {
+  state: 'healthy' | 'degraded' | 'not_configured';
+  pollingDevices: number;
+  registeredDevices: number;
+  monitoredPorts: number;
+  freshInterfaces: number;
+  freshHealthMetrics: number;
+  lastSuccessfulPollAt: string | null;
+  lastAlarmCheckAt: string | null;
+  blockingReasons: string[];
 }
 
 const SEVERITY_CONFIG: Record<string, { label: string; color: string; bgColor: string; headerBg: string; icon: typeof AlertOctagon }> = {
@@ -325,6 +338,7 @@ export default function AlertsDashboardPage() {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const [rawLogExpanded, setRawLogExpanded] = useState(false);
+  const [nmsPipeline, setNmsPipeline] = useState<NmsPipelineHealth | null>(null);
 
   // Cleanup states
   const [cleanupStatsOpen, setCleanupStatsOpen] = useState(false);
@@ -366,6 +380,24 @@ export default function AlertsDashboardPage() {
   const [acknowledgingIds, setAcknowledgingIds] = useState<Set<string>>(new Set());
 
   const PAGE_SIZE = 25;
+
+  const fetchAlarmHealth = useCallback(async () => {
+    try {
+      const response = await fetch('/api/health/alarms', { cache: 'no-store' });
+      const data = await response.json();
+      setNmsPipeline(data.components?.nmsPipeline ?? null);
+    } catch {
+      setNmsPipeline(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    void fetchAlarmHealth();
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void fetchAlarmHealth();
+    }, 60_000);
+    return () => window.clearInterval(interval);
+  }, [fetchAlarmHealth]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -919,6 +951,43 @@ export default function AlertsDashboardPage() {
             <span className="flex-1">{message.text}</span>
             <Button variant="ghost" size="sm" className="h-8" onClick={() => setMessage(null)}>Kapat</Button>
           </div>
+        )}
+
+        {nmsPipeline && nmsPipeline.state !== 'healthy' && (
+          <section
+            aria-labelledby="nms-pipeline-title"
+            className="border-l-2 border-amber-500 bg-amber-500/5 px-4 py-4"
+          >
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex min-w-0 items-start gap-3">
+                <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-300">
+                  <Router className="h-4 w-4" aria-hidden="true" />
+                </span>
+                <div className="min-w-0">
+                  <h2 id="nms-pipeline-title" className="text-sm font-semibold">
+                    {nmsPipeline.state === 'not_configured'
+                      ? 'Switch alarm izleme henüz yapılandırılmamış'
+                      : 'Switch alarm zinciri dikkat gerektiriyor'}
+                  </h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {nmsPipeline.blockingReasons.join(' ')}
+                  </p>
+                  <dl className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground">
+                    <div><dt className="inline">Cihaz: </dt><dd className="inline font-medium text-foreground">{nmsPipeline.registeredDevices}/{nmsPipeline.pollingDevices}</dd></div>
+                    <div><dt className="inline">İzlenen port: </dt><dd className="inline font-medium text-foreground">{nmsPipeline.monitoredPorts}</dd></div>
+                    <div><dt className="inline">Taze arayüz: </dt><dd className="inline font-medium text-foreground">{nmsPipeline.freshInterfaces}</dd></div>
+                    <div><dt className="inline">Taze metrik: </dt><dd className="inline font-medium text-foreground">{nmsPipeline.freshHealthMetrics}</dd></div>
+                  </dl>
+                </div>
+              </div>
+              <Button asChild variant="outline" size="sm" className="shrink-0">
+                <Link href={nmsPipeline.pollingDevices === 0 ? '/integrations/nms/add-device' : '/integrations/nms/devices'}>
+                  NMS ayarlarını aç
+                  <ChevronRight className="ml-2 h-4 w-4" aria-hidden="true" />
+                </Link>
+              </Button>
+            </div>
+          </section>
         )}
 
         <IncidentOverview status={statusStats} severity={stats} archive={archiveFilter} />

@@ -15,121 +15,134 @@
  */
 
 import { prisma } from '@/lib/prisma';
-import { runAlarmCheck, initializeAlarmRunner } from '@/lib/alarms/alarm-runner';
+import { runAlarmCheck } from '@/lib/alarms/alarm-runner';
 import { createLogger } from '@/lib/logger';
 
 const log = createLogger('alarm-scheduler');
+const SCHEDULER_INTERVAL_MS = 10 * 60 * 1000;
 
-let schedulerInterval: NodeJS.Timeout | null = null;
-let tickInProgress = false;
+interface AlarmSchedulerState {
+  interval: NodeJS.Timeout | null;
+  tickInProgress: boolean;
+  startedAt: Date | null;
+}
+
+const globalScheduler = globalThis as typeof globalThis & {
+  __infrascopeAlarmScheduler?: AlarmSchedulerState;
+};
+
+function getState(): AlarmSchedulerState {
+  if (!globalScheduler.__infrascopeAlarmScheduler) {
+    globalScheduler.__infrascopeAlarmScheduler = {
+      interval: null,
+      tickInProgress: false,
+      startedAt: null,
+    };
+  }
+  return globalScheduler.__infrascopeAlarmScheduler;
+}
+
+async function writeHeartbeat(ok: boolean, durationMs: number): Promise<void> {
+  try {
+    await prisma.systemConfig.upsert({
+      where: { key: 'scheduler_last_tick' },
+      update: {
+        value: JSON.stringify({ ts: new Date().toISOString(), ok, durationMs }),
+      },
+      create: {
+        key: 'scheduler_last_tick',
+        value: JSON.stringify({ ts: new Date().toISOString(), ok, durationMs }),
+      },
+    });
+  } catch (error) {
+    log.warn({ err: error }, 'Scheduler heartbeat write failed');
+  }
+}
+
+async function runScheduledTick(): Promise<void> {
+  const state = getState();
+  if (state.tickInProgress) {
+    log.warn('Previous tick still running, skipping this interval');
+    return;
+  }
+
+  state.tickInProgress = true;
+  const tickStart = Date.now();
+  let ok = false;
+
+  try {
+    const stale = await prisma.alarmCheckLog.updateMany({
+      where: {
+        status: 'RUNNING',
+        checkTime: { lte: new Date(Date.now() - 15 * 60 * 1000) },
+      },
+      data: { status: 'ORPHANED' },
+    });
+    if (stale.count > 0) {
+      log.warn({ staleCount: stale.count }, 'Marked stale alarm checks as orphaned');
+    }
+
+    log.info('Starting scheduled alarm check');
+    const result = await runAlarmCheck();
+    ok = result.success;
+
+    if (result.success) {
+      log.info(
+        {
+          triggered: result.summary.triggered,
+          errors: result.summary.errors,
+          duration: Date.now() - tickStart,
+        },
+        'Check completed'
+      );
+    } else {
+      log.error(
+        { error: result.error, duration: Date.now() - tickStart },
+        'Check failed'
+      );
+    }
+  } catch (error) {
+    log.error({ err: error, duration: Date.now() - tickStart }, 'Unexpected scheduler error');
+  } finally {
+    await writeHeartbeat(ok, Date.now() - tickStart);
+    state.tickInProgress = false;
+  }
+}
 
 /**
  * Start the alarm scheduler.
  * Runs alarm check every 10 minutes.
  */
-export function startAlarmScheduler() {
-  if (schedulerInterval) {
+export function startAlarmScheduler(options: { runImmediately?: boolean } = {}) {
+  const state = getState();
+  if (state.interval) {
     log.info('Already running, skipping initialization');
     return;
   }
 
-  // Clean up any RUNNING locks left by a previous process before starting
-  initializeAlarmRunner().catch((err) =>
-    log.warn({ err }, 'initializeAlarmRunner failed (non-fatal)')
-  );
-
-  schedulerInterval = setInterval(async () => {
-    // Prevent overlapping ticks if previous check is still running
-    if (tickInProgress) {
-      log.warn('Previous tick still running, skipping this interval');
-      return;
-    }
-    tickInProgress = true;
-    const tickStart = Date.now();
-    try {
-      // ── Proactive stale lock cleanup ──────────────────────────────────────
-      // Clean up any RUNNING sentinel that is older than 15 minutes.
-      // This covers cases where the Node.js process got stuck and never
-      // released the in-process mutex (e.g. 23-hour hung evaluation).
-      // Running here (before runAlarmCheck) ensures every tick starts clean.
-      const STALE_LOCK_THRESHOLD_MS = 15 * 60 * 1000;
-      try {
-        const stale = await prisma.alarmCheckLog.updateMany({
-          where: {
-            status: 'RUNNING',
-            checkTime: { lte: new Date(Date.now() - STALE_LOCK_THRESHOLD_MS) },
-          },
-          data: {
-            status: 'FAILED',
-          },
-        });
-        if (stale.count > 0) {
-          log.warn({ staleCount: stale.count }, 'Cleaned up stale RUNNING locks before tick');
-        }
-      } catch (cleanupErr) {
-        log.warn({ err: cleanupErr }, 'Stale lock cleanup failed (non-fatal)');
-      }
-
-      log.info('Starting scheduled alarm check');
-
-      const result = await runAlarmCheck();
-      const duration = Date.now() - tickStart;
-
-      if (result.success) {
-        log.info(
-          { triggered: result.summary.triggered, errors: result.summary.errors, duration },
-          'Check completed'
-        );
-      } else {
-        log.error(
-          { error: result.error, duration },
-          'Check failed'
-        );
-      }
-
-      // Write heartbeat so the health endpoint can detect scheduler death
-      const ok = result.success;
-      try {
-        await (prisma as any).systemConfig?.upsert?.({
-          where: { key: 'scheduler_last_tick' },
-          update: {
-            value: JSON.stringify({
-              ts: new Date().toISOString(),
-              ok,
-              durationMs: duration,
-            }),
-          },
-          create: {
-            key: 'scheduler_last_tick',
-            value: JSON.stringify({
-              ts: new Date().toISOString(),
-              ok,
-              durationMs: duration,
-            }),
-          },
-        }).catch(() => {/* silently ignore if table doesn't exist */});
-      } catch { /* never crash the scheduler over a heartbeat write */ }
-    } catch (error) {
-      const duration = Date.now() - tickStart;
-      log.error(
-        { err: error, duration },
-        'Unexpected error'
-      );
-    } finally {
-      tickInProgress = false;
-    }
-  }, 600_000); // 10 minutes
+  state.startedAt = new Date();
+  state.interval = setInterval(() => {
+    void runScheduledTick();
+  }, SCHEDULER_INTERVAL_MS);
 
   log.info('Started — checks will run every 10 minutes');
+
+  if (options.runImmediately !== false) {
+    queueMicrotask(() => {
+      void runScheduledTick();
+    });
+  }
 }
 
 /**
  * Stop the alarm scheduler.
  */
 export function stopAlarmScheduler() {
-  if (schedulerInterval) {
-    clearInterval(schedulerInterval);
-    schedulerInterval = null;
+  const state = getState();
+  if (state.interval) {
+    clearInterval(state.interval);
+    state.interval = null;
+    state.startedAt = null;
     log.info('Stopped');
   }
 }
@@ -138,9 +151,12 @@ export function stopAlarmScheduler() {
  * Get current scheduler status.
  */
 export function getSchedulerStatus() {
+  const state = getState();
   return {
-    running: schedulerInterval !== null,
-    intervalMs: 600_000,
+    running: state.interval !== null,
+    tickInProgress: state.tickInProgress,
+    startedAt: state.startedAt,
+    intervalMs: SCHEDULER_INTERVAL_MS,
     intervalMinutes: 10,
   };
 }

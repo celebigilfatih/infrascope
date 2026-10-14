@@ -10,6 +10,7 @@ import { ALARM_QUERY_REGISTRY, BYPASS_CACHE_ALARMS } from './queries';
 import { createDefaultSuppressionEngine, SuppressionEvent } from './suppression-engine';
 import { recordAlarmOccurrence, resolveIncidentsForEvents } from './incident-service';
 import { getFortiGateConnector } from '@/lib/firewall/connector-factory';
+import { isNmsPortDownCandidate, isNmsPortRecovered } from './nms-port-state';
 
 const log = createLogger('detection-engine');
 
@@ -27,7 +28,7 @@ interface AlarmDef {
   source?: string | null;
 }
 
-interface EvaluationResult {
+export interface EvaluationResult {
   alarmCode: string;
   triggered: boolean;
   matchCount: number;
@@ -57,7 +58,7 @@ export function getEventCacheStatus() {
  * Evaluates alarm rules against FortiAnalyzer logs and triggers notifications.
  */
 export class AlarmDetectionEngine {
-  private service: FortiAnalyzerService;
+  private service: FortiAnalyzerService | null;
   private vmwareService: VMwareService | null = null;
   private vmwareInitialized: boolean = false;
   private fortiGateService: FortiGateService | null = null;
@@ -87,8 +88,15 @@ export class AlarmDetectionEngine {
   // Suppression engine for filtering noisy events
   private suppressionEngine = createDefaultSuppressionEngine();
 
-  constructor(service: FortiAnalyzerService) {
+  constructor(service: FortiAnalyzerService | null) {
     this.service = service;
+  }
+
+  private requireFortiAnalyzer(): FortiAnalyzerService {
+    if (!this.service) {
+      throw new Error('FortiAnalyzer service is not available for this alarm source');
+    }
+    return this.service;
   }
 
   /**
@@ -228,7 +236,7 @@ export class AlarmDetectionEngine {
     
     try {
       log.info('Initializing shared Event Cache service');
-      _sharedEventCache = new EventCacheService(this.service);
+      _sharedEventCache = new EventCacheService(this.requireFortiAnalyzer());
       this.eventCache = _sharedEventCache;
       
       // startBackgroundSync() is async — it awaits the initial sync then schedules
@@ -262,8 +270,11 @@ export class AlarmDetectionEngine {
    * Main evaluation loop: check all enabled alarms
    * OPTIMIZED: Parallel logtype group evaluation with batched searches
    */
-  async evaluateAllAlarms(): Promise<EvaluationResult[]> {
+  async evaluateAllAlarms(options: { includeNms?: boolean } = {}): Promise<EvaluationResult[]> {
     const results: EvaluationResult[] = [];
+    const includeNms = options.includeNms !== false;
+
+    this.requireFortiAnalyzer();
 
     try {
       // Prune expired alarm cooldowns to keep the table small
@@ -408,16 +419,18 @@ export class AlarmDetectionEngine {
 
       // NMS is an independent data source. Evaluate it before any FortiAnalyzer
       // login so a missing/unavailable FA integration cannot suppress SNMP alarms.
-      try {
-        const nmsResults = await this.evaluateNmsAlarms();
-        results.push(...nmsResults);
-      } catch (nmsErr) {
-        log.error({ err: nmsErr }, 'NMS alarm evaluation error');
+      if (includeNms) {
+        try {
+          const nmsResults = await this.evaluateNmsAlarms();
+          results.push(...nmsResults);
+        } catch (nmsErr) {
+          log.error({ err: nmsErr }, 'NMS alarm evaluation error');
+        }
       }
 
       const needsFortiAnalyzer = logTypeGroups.size > 0 || correlationAlarms.length > 0;
       if (needsFortiAnalyzer) {
-        const loggedIn = await this.service.login();
+        const loggedIn = await this.requireFortiAnalyzer().login();
         if (!loggedIn) {
           log.error('Failed to login to FortiAnalyzer');
           throw new Error('FortiAnalyzer login failed — cannot evaluate FortiAnalyzer alarms');
@@ -677,7 +690,8 @@ export class AlarmDetectionEngine {
     if (rules.secondaryLogtype && rules.secondaryFilter) {
       log.info({ alarmCode: alarm.code, secondaryLogtype: rules.secondaryLogtype, secondaryFilter: rules.secondaryFilter }, 'Correlation secondary search');
       const limit = 50;
-      const tid = await this.service.startLogSearch(rules.secondaryLogtype, limit, rules.secondaryFilter);
+      const service = this.requireFortiAnalyzer();
+      const tid = await service.startLogSearch(rules.secondaryLogtype, limit, rules.secondaryFilter);
       if (!tid) {
         return { alarmCode: alarm.code, triggered: false, matchCount: 0, events: [], error: 'secondary-search-failed' };
       }
@@ -685,7 +699,7 @@ export class AlarmDetectionEngine {
       let logs: Array<Record<string, unknown>> | null = null;
       for (let i = 0; i < 3; i++) {
         await new Promise((resolve) => setTimeout(resolve, 5000));
-        logs = await this.service.fetchLogResults(tid, 0, limit);
+        logs = await service.fetchLogResults(tid, 0, limit);
         if (logs && logs.length > 0) break;
       }
 
@@ -1330,7 +1344,7 @@ export class AlarmDetectionEngine {
           timeWindowMinutes: logic.timeWindowMinutes,
           eventCache: this.eventCache,
           cacheIsFresh: cacheStatus?.isFresh ?? false,
-          faService: this.service,
+          faService: this.requireFortiAnalyzer(),
           bypassCache: BYPASS_CACHE_ALARMS.has(alarm.code),
         });
         // Use sentinel TIDs that the caller understands
@@ -1379,7 +1393,8 @@ export class AlarmDetectionEngine {
     log.info({ alarmCode: alarm.code, logtype }, 'Live FA search');
     
     try {
-      const tid = await this.service.startLogSearch(logtype, limit, filter || undefined);
+      const service = this.requireFortiAnalyzer();
+      const tid = await service.startLogSearch(logtype, limit, filter || undefined);
       
       if (!tid) {
         log.warn({ logtype }, 'FortiAnalyzer search returned no TID');
@@ -1390,7 +1405,7 @@ export class AlarmDetectionEngine {
       let logs: Array<Record<string, unknown>> | null = null;
       for (let i = 0; i < 6; i++) {
         await new Promise((resolve) => setTimeout(resolve, 5000));
-        logs = await this.service.fetchLogResults(tid, 0, limit);
+        logs = await service.fetchLogResults(tid, 0, limit);
         if (logs && logs.length > 0) break;
       }
 
@@ -1992,7 +2007,7 @@ export class AlarmDetectionEngine {
    * Evaluate a FortiView-based alarm
    */
   private async evaluateFortiViewAlarm(alarm: AlarmDef, logic: AlarmDetectionLogic): Promise<EvaluationResult> {
-    const result = await this.service.getFortiView(
+    const result = await this.requireFortiAnalyzer().getFortiView(
       logic.fortiviewQuery!,
       50,
       { field: 'threatweight', order: 'desc' },
@@ -3935,7 +3950,7 @@ export class AlarmDetectionEngine {
    *   NMS_TEMPERATURE_HIGH — temperature >= threshold
    *   NMS_DEVICE_UNREACHABLE — no health metric in last 3× poll intervals
    */
-  private async evaluateNmsAlarms(): Promise<EvaluationResult[]> {
+  async evaluateNmsAlarms(): Promise<EvaluationResult[]> {
     const results: EvaluationResult[] = [];
 
     // Load enabled NMS alarm definitions
@@ -3970,17 +3985,8 @@ export class AlarmDetectionEngine {
               select: { operStatus: true, monitored: true, operUpSince: true },
             });
             if (!cur) continue;
-            // Resolve if port is no longer monitored (always)
-            if (cur.monitored === false) {
+            if (isNmsPortRecovered(cur)) {
               toAckIds.push(ev.id);
-            } else if (cur.operStatus === 'up') {
-              // Only resolve if port has been UP for at least 5 minutes
-              // (prevents false resolves during flapping: DOWN→UP→DOWN)
-              const AUTO_RESOLVE_MIN_UP_MS = 5 * 60 * 1000;
-              const upSince = cur.operUpSince ? new Date(cur.operUpSince).getTime() : null;
-              if (upSince && (Date.now() - upSince >= AUTO_RESOLVE_MIN_UP_MS)) {
-                toAckIds.push(ev.id);
-              }
             }
           }
           if (toAckIds.length > 0) {
@@ -3994,8 +4000,6 @@ export class AlarmDetectionEngine {
 
       try {
         const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000);
-        const downThresholdMs = 5 * 60 * 1000; // 5 minutes
-
         const downInterfaces = await (prisma as any).nmsInterface.findMany({
           where: {
             monitored: true,
@@ -4012,6 +4016,8 @@ export class AlarmDetectionEngine {
         const createdPortsThisEval = new Set<string>();
 
         for (const iface of downInterfaces) {
+          if (!isNmsPortDownCandidate(iface)) continue;
+
           const deviceName = iface.device?.name ?? `NMS Device ${iface.nmsDeviceId}`;
           const portKey = `${iface.nmsDeviceId}:${iface.interfaceIndex}`;
 
@@ -4024,14 +4030,8 @@ export class AlarmDetectionEngine {
           const desc = iface.description;
           const ifaceLabel = (desc && desc !== 'None' && desc.trim() !== '') ? desc : iface.interfaceName;
 
-          // Check how long the port has been down
-          const downSince = iface.downSince ? new Date(iface.downSince).getTime() : Date.now();
+          const downSince = new Date(iface.downSince).getTime();
           const downDurationMs = Date.now() - downSince;
-
-          // Skip if port has been down for less than 5 minutes (brief flap)
-          if (downDurationMs < downThresholdMs) {
-            continue;
-          }
 
           const downMinutes = Math.round(downDurationMs / 60000);
           const title = `Port Down: ${ifaceLabel} on ${deviceName}`;

@@ -104,10 +104,13 @@ def require_internal_token(
 
 @app.get("/health")
 def health():
+    registered_ids = set(orchestrator.poller.sessions) | set(orchestrator.ssh_poller.sessions)
     return {
         "status": "ok",
         "poller_alive": poller_thread is not None and poller_thread.is_alive(),
-        "registered_devices": len(orchestrator.poller.sessions),
+        "registered_devices": len(registered_ids),
+        "snmp_registered_devices": len(orchestrator.poller.sessions),
+        "ssh_registered_devices": len(orchestrator.ssh_poller.sessions),
         "timestamp": datetime.utcnow().isoformat(),
     }
 
@@ -132,7 +135,10 @@ def list_polling_devices():
                     "snmp_port": d.snmp_port,
                     "polling_interval": d.polling_interval,
                     "last_polled_at": d.last_polled_at.isoformat() if d.last_polled_at else None,
-                    "is_registered": d.nms_device_id in orchestrator.poller.sessions,
+                    "is_registered": (
+                        d.nms_device_id in orchestrator.poller.sessions
+                        or d.nms_device_id in orchestrator.ssh_poller.sessions
+                    ),
                 }
                 for d in devices
             ],

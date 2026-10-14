@@ -22,6 +22,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Switch alarm pipeline health** — Alarm health now reports NMS polling devices, registered collectors, monitored ports, fresh interface/health data, last successful poll, last alarm check, and actionable blocking reasons. Alarm Operations displays this status only when switch monitoring needs attention.
+
 - **Firewall capability state foundation** — Added typed `FULL/LIMITED/UNAVAILABLE` monitoring evaluation and consistent `available/stale/unavailable` data envelopes for FortiGate REST, FortiAnalyzer, event-cache, SNMP, SSH and database sources.
 - **Non-blocking firewall onboarding** — Added authenticated `/api/firewalls` inventory onboarding that stores encrypted credentials and preserves the `Device + IntegrationConfig` transaction when the initial trusted REST probe fails, including expired-certificate diagnostics.
 - **Persistent FortiGate identity** — Added the `FirewallConnector` model and ADR-006 so management addresses can change without creating a second inventory device. Trusted probes identify devices by serial + VDOM, surface duplicate/drift conflicts for explicit ADMIN review, and preserve verified serials when a conflicting candidate is observed. Legacy FortiGate integrations are exposed as unlinked and can be attached to an explicit firewall inventory record through an audited API without host-based guessing.
@@ -83,6 +85,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Layout structure** — `app/layout.tsx` now wraps content with `<Header />` (TopBar) + scrollable content area. Sidebar remains static left panel
 
 ### Fixed
+
+- **Independent switch alarm evaluation** — NMS alarms now run even when FortiAnalyzer is missing or unavailable. Alarm scheduling starts once during application boot, performs an immediate first check, records every terminal check state, and no longer relies on a health endpoint side effect.
+- **NMS reachability and port recovery timing** — Failed SNMP/SSH attempts no longer advance the last successful poll time, SSH-only devices participate in polling, and port up/down transition timestamps remain stable so five-minute debounce and auto-resolution work correctly.
 
 - **FortiGate REST-only onboarding** — The optional SNMP fallback is now disabled by default, so an empty SNMP community no longer blocks a firewall created with REST credentials. Enabling SNMP still requires valid SNMP credentials.
 - **Mobile application navigation** — Replaced the fixed-width mobile sidebar with an accessible header-triggered drawer so detail forms retain the full viewport width while desktop collapse behavior remains unchanged.

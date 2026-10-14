@@ -123,7 +123,9 @@ class MetricsRepository:
                             ELSE nms_interfaces.down_since
                         END,
                         oper_up_since = CASE
-                            WHEN EXCLUDED.oper_status = 'up'
+                            WHEN nms_interfaces.oper_status = 'down' AND EXCLUDED.oper_status = 'up'
+                                THEN EXCLUDED.last_polled_at
+                            WHEN nms_interfaces.oper_up_since IS NULL AND EXCLUDED.oper_status = 'up'
                                 THEN EXCLUDED.last_polled_at
                             ELSE nms_interfaces.oper_up_since
                         END,

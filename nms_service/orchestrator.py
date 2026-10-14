@@ -426,12 +426,21 @@ class NMSOrchestrator:
                 except Exception as e:
                     logger.error(f"Topology poll failed for {device_name}: {e}")
 
-            # -- Update last_polled_at -----------------------------------------------
-            device_repo.update_last_polled(nms_device_id)
+            # last_polled_at represents the latest successful data collection,
+            # not merely an attempted poll. Alarm detection relies on this
+            # distinction to identify devices that have become unreachable.
+            poll_succeeded = bool(interfaces) or health is not None
+            if poll_succeeded:
+                device_repo.update_last_polled(nms_device_id)
+            else:
+                logger.warning(
+                    f"Poll produced no interface or health data for {device_name}; "
+                    "last_polled_at was not advanced"
+                )
             with self._last_poll_lock:
                 self.last_device_poll[nms_device_id] = now
 
-            return True
+            return poll_succeeded
 
         except Exception as e:
             logger.error(f"Error polling device {device_name} (nms_id={nms_device_id}): {e}")
@@ -448,7 +457,7 @@ class NMSOrchestrator:
         each thread's I/O runs in a child process that honours its own timeout.
         """
         cycle_start = time.time()
-        device_ids = list(self.poller.sessions.keys())
+        device_ids = list(set(self.poller.sessions) | set(self.ssh_poller.sessions))
 
         if not device_ids:
             return
@@ -505,7 +514,7 @@ class NMSOrchestrator:
                     # Re-read devices on every cycle to pick up newly added devices
                     self.register_devices_from_db()
 
-                    if self.poller.sessions:
+                    if self.poller.sessions or self.ssh_poller.sessions:
                         self.poll_cycle()
                     else:
                         logger.info("No polling-enabled devices registered yet, sleeping...")

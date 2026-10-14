@@ -30,7 +30,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { initSharedFortiAnalyzerService, getFortiAnalyzerLoginHealth } from '@/lib/integrations/fortianalyzer';
-import { AlarmDetectionEngine } from '@/lib/alarms/detection-engine';
+import { AlarmDetectionEngine, type EvaluationResult } from '@/lib/alarms/detection-engine';
 import { FortiGateService } from '@/lib/integrations/fortigate';
 import { processDLQ, cleanupDLQ, getDLQStats } from '@/lib/notifications/dlq-worker';
 import { sendAlarmEmail } from '@/lib/notifications/email';
@@ -128,6 +128,23 @@ export function getLastAlarmCheckResult(): AlarmCheckResult | null {
   return lastResult;
 }
 
+async function recordPreflightFailure(error: string, startedAt: number): Promise<void> {
+  try {
+    await prisma.alarmCheckLog.create({
+      data: {
+        checkTime: new Date(startedAt),
+        totalAlarms: 0,
+        triggeredCount: 0,
+        errorCount: 1,
+        durationMs: Date.now() - startedAt,
+        status: 'FAILED',
+      },
+    });
+  } catch (logError) {
+    log.error({ err: logError, preflightError: error }, 'Failed to record alarm preflight failure');
+  }
+}
+
 // ── Startup Initialization ────────────────────────────────────────────────────
 // Called once when the alarm system starts. Cleans up RUNNING records left
 // behind by a previous process (container restart, crash, forced stop).
@@ -154,10 +171,12 @@ export async function initializeAlarmRunner(): Promise<void> {
 
 // ── Core runner ──────────────────────────────────────────────────────────────
 export async function runAlarmCheck(): Promise<AlarmCheckResult> {
+  const preflightStartedAt = Date.now();
   try {
     await initLicense();
     if (!isLicenseValid()) {
       log.warn('License invalid or grace period expired; skipping alarm evaluation');
+      await recordPreflightFailure('License validation failed', preflightStartedAt);
       return {
         success: false,
         error: 'License validation failed',
@@ -168,6 +187,7 @@ export async function runAlarmCheck(): Promise<AlarmCheckResult> {
     }
   } catch (licenseErr) {
     log.error({ err: licenseErr }, 'License validation failed before alarm evaluation');
+    await recordPreflightFailure('License validation failed', preflightStartedAt);
     return {
       success: false,
       error: 'License validation failed',
@@ -253,55 +273,67 @@ export async function runAlarmCheck(): Promise<AlarmCheckResult> {
   }
 
   try {
-    // ── Load FortiAnalyzer config ──────────────────────────────────────────
-    const config = await prisma.integrationConfig.findFirst({
-      where: { type: 'FORTIANALYZER', enabled: true },
-    });
-
-    if (!config) {
-      return {
-        success: false,
-        error: 'FortiAnalyzer not configured',
-        summary: { total: 0, triggered: 0, skippedCooldown: 0, errors: 0 },
-        triggered: [],
-        errors: [],
-      };
-    }
-
-    const faConfig = unprotectIntegrationConfig<{
-      host: string;
-      username?: string;
-      password?: string;
-    }>(config.config, 'FORTIANALYZER');
-
-    if (!faConfig.password) {
-      log.error('FortiAnalyzer password not configured — skipping alarm evaluation');
-      return { success: false, error: 'FortiAnalyzer password not configured', triggered: [], errors: [{ code: 'ALL', error: 'FA password missing' }], summary: { total: 0, triggered: 0, skippedCooldown: 0, errors: 1 } };
-    }
-
-    const service = initSharedFortiAnalyzerService({
-      host: faConfig.host,
-      username: faConfig.username,
-      password: faConfig.password,
-    });
-
-    const engine = new AlarmDetectionEngine(service);
-
-    // Inject FortiGate singleton so CMDB snapshot store persists between runs
-    const fgService = await getOrInitFortiGateService();
-    if (fgService) {
-      engine.injectFortiGateService(fgService);
-      // Clear CMDB response cache for fresh data this cycle
-      fgService.clearCmdbResponseCache();
-    }
-
-    // ── Run evaluation with 10-minute timeout ──────────────────────────────
-    // Normal runs complete in 85-120 s. 10 min = generous hard limit.
+    // Run independent sources first. NMS must not depend on FortiAnalyzer.
     const GLOBAL_TIMEOUT_MS = 10 * 60 * 1000;
     log.info({ timeoutSec: GLOBAL_TIMEOUT_MS / 1000 }, 'Starting evaluation');
+    const sourceErrors: Array<{ code: string; error: string }> = [];
 
-    const results = await Promise.race([
-      engine.evaluateAllAlarms(),
+    const results = await Promise.race<EvaluationResult[]>([
+      (async () => {
+        const combined: EvaluationResult[] = [];
+
+        try {
+          const nmsEngine = new AlarmDetectionEngine(null);
+          combined.push(...await nmsEngine.evaluateNmsAlarms());
+        } catch (error) {
+          const message = (error as Error).message;
+          sourceErrors.push({ code: 'NMS_SOURCE', error: message });
+          log.error({ err: error }, 'NMS alarm source failed');
+        }
+
+        const config = await prisma.integrationConfig.findFirst({
+          where: { type: 'FORTIANALYZER', enabled: true },
+        });
+
+        if (!config) {
+          sourceErrors.push({ code: 'FORTIANALYZER_SOURCE', error: 'FortiAnalyzer not configured' });
+          log.info('FortiAnalyzer is not configured; independent alarm sources completed');
+          return combined;
+        }
+
+        const faConfig = unprotectIntegrationConfig<{
+          host: string;
+          username?: string;
+          password?: string;
+        }>(config.config, 'FORTIANALYZER');
+
+        if (!faConfig.password) {
+          sourceErrors.push({ code: 'FORTIANALYZER_SOURCE', error: 'FortiAnalyzer password not configured' });
+          log.error('FortiAnalyzer password not configured; independent alarm sources completed');
+          return combined;
+        }
+
+        try {
+          const service = initSharedFortiAnalyzerService({
+            host: faConfig.host,
+            username: faConfig.username,
+            password: faConfig.password,
+          });
+          const engine = new AlarmDetectionEngine(service);
+          const fgService = await getOrInitFortiGateService();
+          if (fgService) {
+            engine.injectFortiGateService(fgService);
+            fgService.clearCmdbResponseCache();
+          }
+          combined.push(...await engine.evaluateAllAlarms({ includeNms: false }));
+        } catch (error) {
+          const message = (error as Error).message;
+          sourceErrors.push({ code: 'FORTIANALYZER_SOURCE', error: message });
+          log.error({ err: error }, 'FortiAnalyzer alarm source failed; preserving independent results');
+        }
+
+        return combined;
+      })(),
       new Promise<never>((_, reject) =>
         setTimeout(
           () => reject(new Error('Alarm evaluation timeout (10 minutes)')),
@@ -315,7 +347,11 @@ export async function runAlarmCheck(): Promise<AlarmCheckResult> {
     });
 
     const triggered = results.filter((r) => r.triggered);
-    const errors = results.filter((r) => r.error && r.error !== 'cooldown-active');
+    const resultErrors = results.filter((r) => r.error && r.error !== 'cooldown-active');
+    const errors = [
+      ...resultErrors.map((result) => ({ code: result.alarmCode, error: result.error })),
+      ...sourceErrors,
+    ];
     const cooldowns = results.filter((r) => r.error === 'cooldown-active');
     const durationMs = Date.now() - startTime;
 
@@ -383,9 +419,11 @@ export async function runAlarmCheck(): Promise<AlarmCheckResult> {
 
     // ── FA health alert ─────────────────────────────────────────
     // After every check, if FA has been failing, notify ops team once per hour.
-    maybeSendFAHealthAlert().catch((err) =>
-      log.error({ err }, 'maybeSendFAHealthAlert failed (non-fatal)')
-    );
+    if (!sourceErrors.some((item) => item.code === 'FORTIANALYZER_SOURCE' && item.error === 'FortiAnalyzer not configured')) {
+      maybeSendFAHealthAlert().catch((err) =>
+        log.error({ err }, 'maybeSendFAHealthAlert failed (non-fatal)')
+      );
+    }
 
     lastResult = {
       success: true,
@@ -406,7 +444,7 @@ export async function runAlarmCheck(): Promise<AlarmCheckResult> {
         matchCount: r.matchCount,
         sampleEvents: r.events.slice(0, 2),
       })),
-      errors: errors.map((r) => ({ code: r.alarmCode, error: r.error })),
+      errors,
     };
 
     return lastResult;

@@ -33,7 +33,8 @@
     "security:fortinet-snmp-check": "NMS_LOG_DIR=/tmp/infrascope-nms-check PYTHONPYCACHEPREFIX=/tmp/infrascope-pycache python3 scripts/check-fortinet-snmp.py",
     "security:fortinet-ssh-check": "NMS_LOG_DIR=/tmp/infrascope-nms-check PYTHONPYCACHEPREFIX=/tmp/infrascope-pycache python3 scripts/check-fortinet-ssh.py",
     "security:credentials-check": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/check-integration-credentials.ts",
-    "security:credentials-rotate": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/security/rotate-integration-credentials.ts"
+    "security:credentials-rotate": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/security/rotate-integration-credentials.ts",
+    "test:switch-alarms": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/check-switch-alarm-logic.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.0.0",

@@ -1,12 +1,12 @@
 /**
  * GET /api/health
  * Advanced Health check endpoint with per-datasource monitoring
- * Auto-restarts services if they've stopped
+ * Reports datasource and background-service health without mutating runtime state.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { startAlarmScheduler, getSchedulerStatus } from '@/lib/alarm-scheduler';
-import { startAlarmMonitor, getAlarmMonitor } from '@/lib/alarms/alarm-monitor';
+import { getSchedulerStatus } from '@/lib/alarm-scheduler';
+import { getAlarmMonitor } from '@/lib/alarms/alarm-monitor';
 import { prisma } from '@/lib/prisma';
 import { getSharedFortiAnalyzerService, getFortiAnalyzerLoginHealth } from '@/lib/integrations/fortianalyzer';
 import { getEventCacheStatus } from '@/lib/alarms/detection-engine';
@@ -319,28 +319,15 @@ async function getAlarmStats(): Promise<{ totalDefinitions: number; enabledDefin
 }
 
 /**
- * Ensure alarm services are running - starts them if stopped.
- * Also checks scheduler heartbeat to detect frozen schedulers.
+ * Read alarm service state and scheduler heartbeat without starting services.
  */
-async function ensureAlarmServicesRunning() {
+async function getAlarmServicesHealth() {
   const schedulerStatus = getSchedulerStatus();
   const monitorStatus = getAlarmMonitor().getStatus();
 
   let schedulerOk = schedulerStatus.running;
   let monitorOk = monitorStatus.running;
   let schedulerHeartbeatStale = false;
-
-  // Start scheduler if not running
-  if (!schedulerOk) {
-    console.log('[Health] Scheduler not running, starting...');
-    try {
-      startAlarmScheduler();
-      schedulerOk = true;
-      console.log('[Health] Alarm scheduler (re)started');
-    } catch (err) {
-      console.error('[Health] Failed to start scheduler:', err);
-    }
-  }
 
   // Check heartbeat staleness — detect frozen scheduler even if interval is set
   if (schedulerOk) {
@@ -371,24 +358,11 @@ async function ensureAlarmServicesRunning() {
     }
   }
 
-  // Start monitor if not running
-  if (!monitorOk) {
-    console.log('[Health] Monitor not running, starting...');
-    try {
-      startAlarmMonitor(5);
-      monitorOk = true;
-      console.log('[Health] Alarm monitor (re)started');
-    } catch (err) {
-      console.error('[Health] Failed to start monitor:', err);
-    }
-  }
-
   return { schedulerOk, monitorOk, schedulerHeartbeatStale };
 }
 
 export async function GET(_request: NextRequest) {
-  // Ensure alarm services are running (auto-restart if stopped)
-  const { schedulerOk, monitorOk, schedulerHeartbeatStale } = await ensureAlarmServicesRunning();
+  const { schedulerOk, monitorOk, schedulerHeartbeatStale } = await getAlarmServicesHealth();
   
   // Check all datasources + DLQ stats in parallel
   const [dbHealth, fazHealth, vmwareHealth, nmsHealth, alarmStats, dlqStats] = await Promise.all([

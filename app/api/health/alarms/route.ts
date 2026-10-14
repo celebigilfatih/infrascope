@@ -42,6 +42,83 @@ export const runtime = 'nodejs';
 const SCHEDULER_STALE_THRESHOLD = 30;  // If no tick in 30 min → degraded
 const CACHE_STALE_THRESHOLD = 10;       // If no sync in 10 min → degraded
 const DETECTION_STALE_THRESHOLD = 40;   // If no check in 40 min → degraded (allows 20-min interval + slack)
+const RUNNING_STALE_THRESHOLD = 12;
+const NMS_FRESHNESS_MINUTES = 10;
+
+type NmsPipelineState = 'healthy' | 'degraded' | 'not_configured';
+
+interface NmsPipelineHealth {
+  state: NmsPipelineState;
+  pollingDevices: number;
+  registeredDevices: number;
+  monitoredPorts: number;
+  freshInterfaces: number;
+  freshHealthMetrics: number;
+  lastSuccessfulPollAt: string | null;
+  lastAlarmCheckAt: string | null;
+  blockingReasons: string[];
+}
+
+async function getNmsPipelineHealth(lastAlarmCheckAt: Date | null): Promise<NmsPipelineHealth> {
+  const freshSince = new Date(Date.now() - NMS_FRESHNESS_MINUTES * 60 * 1000);
+  const [pollingDevices, monitoredPorts, freshInterfaces, freshHealthMetrics, latestPoll] = await Promise.all([
+    prisma.device.count({ where: { pollingEnabled: true, nmsDeviceId: { not: null } } }),
+    prisma.nmsInterface.count({ where: { monitored: true } }),
+    prisma.nmsInterface.count({ where: { lastPolledAt: { gte: freshSince } } }),
+    prisma.nmsHealthMetric.count({ where: { collectedAt: { gte: freshSince } } }),
+    prisma.device.findFirst({
+      where: { pollingEnabled: true, nmsDeviceId: { not: null }, lastPolledAt: { not: null } },
+      orderBy: { lastPolledAt: 'desc' },
+      select: { lastPolledAt: true },
+    }),
+  ]);
+
+  let pollerAlive = false;
+  let registeredDevices = 0;
+  try {
+    const nmsUrl = (process.env.NMS_BACKEND_URL || process.env.NMS_INTERNAL_URL || 'http://nms:8500').replace(/\/$/, '');
+    const response = await fetch(`${nmsUrl}/health`, { signal: AbortSignal.timeout(3000) });
+    if (response.ok) {
+      const data = await response.json() as { poller_alive?: boolean; registered_devices?: number };
+      pollerAlive = data.poller_alive === true;
+      registeredDevices = typeof data.registered_devices === 'number' ? data.registered_devices : 0;
+    }
+  } catch {
+    // The blocking reason below carries the safe operational state.
+  }
+
+  const blockingReasons: string[] = [];
+  let state: NmsPipelineState = 'healthy';
+
+  if (pollingDevices === 0) {
+    state = 'not_configured';
+    blockingReasons.push('İzlemeye alınmış NMS cihazı yok.');
+  } else {
+    if (!pollerAlive) blockingReasons.push('NMS poller servisine erişilemiyor.');
+    if (registeredDevices < pollingDevices) {
+      blockingReasons.push(`${pollingDevices - registeredDevices} cihaz poller tarafından kaydedilmemiş.`);
+    }
+    if (freshInterfaces === 0 && freshHealthMetrics === 0) {
+      blockingReasons.push('Son 10 dakikada switch verisi alınmadı.');
+    }
+    if (monitoredPorts === 0) {
+      blockingReasons.push('Port down alarmı için izlemeye alınmış port yok.');
+    }
+    if (blockingReasons.length > 0) state = 'degraded';
+  }
+
+  return {
+    state,
+    pollingDevices,
+    registeredDevices,
+    monitoredPorts,
+    freshInterfaces,
+    freshHealthMetrics,
+    lastSuccessfulPollAt: latestPoll?.lastPolledAt?.toISOString() ?? null,
+    lastAlarmCheckAt: lastAlarmCheckAt?.toISOString() ?? null,
+    blockingReasons,
+  };
+}
 
 function minutesAgo(date: Date | null | undefined): number | null {
   if (!date) return null;
@@ -92,20 +169,37 @@ export async function GET() {
     // A check that ran (even if FAILED) is NOT stale — it means the engine is
     // alive but having evaluation errors. STALE means no check ran at all.
     let lastCheck: { checkTime: Date; status: string } | null = null;
+    let lastCompletedCheck: { checkTime: Date; status: string } | null = null;
     try {
-      lastCheck = await prisma.alarmCheckLog.findFirst({
-        orderBy: { checkTime: 'desc' },
-        select: { checkTime: true, status: true },
-      });
+      [lastCheck, lastCompletedCheck] = await Promise.all([
+        prisma.alarmCheckLog.findFirst({
+          orderBy: { checkTime: 'desc' },
+          select: { checkTime: true, status: true },
+        }),
+        prisma.alarmCheckLog.findFirst({
+          where: { status: { in: ['SUCCESS', 'PARTIAL', 'FAILED', 'ORPHANED'] } },
+          orderBy: { checkTime: 'desc' },
+          select: { checkTime: true, status: true },
+        }),
+      ]);
     } catch { /* ignore */ }
 
-    const detectionAgoMins = minutesAgo(lastCheck?.checkTime);
-    // Healthy = ran recently regardless of status (FAILED means errors, not stale)
-    const detectionHealthy = detectionAgoMins !== null && detectionAgoMins < DETECTION_STALE_THRESHOLD;
+    const latestCheckAgoMins = minutesAgo(lastCheck?.checkTime);
+    const detectionAgoMins = minutesAgo(lastCompletedCheck?.checkTime);
+    const staleRunning = lastCheck?.status === 'RUNNING'
+      && latestCheckAgoMins !== null
+      && latestCheckAgoMins >= RUNNING_STALE_THRESHOLD;
+    const detectionHealthy = !staleRunning
+      && detectionAgoMins !== null
+      && detectionAgoMins < DETECTION_STALE_THRESHOLD
+      && ['SUCCESS', 'PARTIAL'].includes(lastCompletedCheck?.status ?? '');
 
     // 4. Check email service
     const emailStats = getEmailStats();
-    const emailHealthy = emailStats.emailsThisHour < emailStats.maxPerHour && emailStats.transporterActive;
+    const emailConfig = await prisma.notificationConfig.findUnique({ where: { channel: 'email' } }).catch(() => null);
+    const emailConfigured = emailConfig?.enabled === true;
+    const emailHealthy = !emailConfigured
+      || (emailStats.emailsThisHour < emailStats.maxPerHour && emailStats.transporterActive);
 
     // 5. Check FortiAnalyzer circuit breaker
     const cbStatus = getCircuitBreakerStatus();
@@ -119,7 +213,15 @@ export async function GET() {
     const dlqHealthy = dlqStats.failedPermanent < 10; // Alert if too many permanent failures
 
     // 7. Aggregate health status
-    const allHealthy = schedulerHealthy && cacheHealthy && detectionHealthy && emailHealthy && circuitBreakerHealthy;
+    const fortiAnalyzerConfigured = await prisma.integrationConfig.count({
+      where: { type: 'FORTIANALYZER', enabled: true },
+    }).then((count) => count > 0).catch(() => false);
+    const nmsPipeline = await getNmsPipelineHealth(lastCompletedCheck?.checkTime ?? null);
+    const allHealthy = schedulerHealthy
+      && detectionHealthy
+      && emailHealthy
+      && (!fortiAnalyzerConfigured || (cacheHealthy && circuitBreakerHealthy))
+      && nmsPipeline.state !== 'degraded';
 
     const response = {
       status: allHealthy ? 'healthy' : 'degraded',
@@ -148,20 +250,21 @@ export async function GET() {
           healthy: detectionHealthy,
           lastCheckAgo: formatMinutes(detectionAgoMins),
           lastStatus: lastCheck?.status ?? 'UNKNOWN',
-          // STALE = no check has run in too long
-          // ERROR = check is running but consistently failing (engine is alive)
+          lastCompletedStatus: lastCompletedCheck?.status ?? 'UNKNOWN',
           ...(detectionAgoMins !== null && detectionAgoMins >= DETECTION_STALE_THRESHOLD ? { alert: 'STALE' } : {}),
-          ...(detectionAgoMins !== null && detectionAgoMins < DETECTION_STALE_THRESHOLD && lastCheck?.status === 'FAILED' ? { alert: 'ERROR' } : {}),
+          ...(staleRunning ? { alert: 'STALE_RUNNING' } : {}),
+          ...(lastCompletedCheck?.status === 'FAILED' ? { alert: 'ERROR' } : {}),
         },
         email: {
           healthy: emailHealthy,
+          configured: emailConfigured,
           sentThisHour: emailStats.emailsThisHour,
           limitRemaining: emailStats.maxPerHour - emailStats.emailsThisHour,
           hourlyResetInMinutes: emailStats.hourlyResetIn,
           transporterActive: emailStats.transporterActive,
           cooldownCount: emailStats.activeCooldowns,
           ...(emailStats.emailsThisHour >= emailStats.maxPerHour ? { alert: 'RATE_LIMITED' } : {}),
-          ...(!emailStats.transporterActive ? { alert: 'TRANSPORTER_DOWN' } : {}),
+          ...(emailConfigured && !emailStats.transporterActive ? { alert: 'TRANSPORTER_DOWN' } : {}),
         },
         fortiAnalyzer: {
           healthy: circuitBreakerHealthy,
@@ -182,6 +285,7 @@ export async function GET() {
           ...(dlqStats.failedPermanent >= 10 ? { alert: 'TOO_MANY_FAILURES' } : {}),
           ...(dlqStats.pending > 20 ? { alert: 'QUEUE_BACKLOG' } : {}),
         },
+        nmsPipeline,
       },
     };
 
