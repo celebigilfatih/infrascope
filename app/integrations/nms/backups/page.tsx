@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { apiGet, apiPost, apiDelete } from '@/lib/api';
 import {
   Database,
   Plus,
@@ -22,7 +23,7 @@ import {
 } from 'lucide-react';
 
 interface Backup {
-  id: number;
+  id: string;
   device_id: number;
   device_name: string;
   backup_type: string;
@@ -40,7 +41,6 @@ interface NmsDevice {
 }
 
 const BACKUP_TYPES = ['Running Config', 'Startup Config', 'Full Backup'];
-const SCHEDULE_TYPES = ['Run Now', 'Scheduled'];
 
 function formatSize(bytes: number): string {
   if (!bytes || bytes === 0) return '0.00 MB';
@@ -57,17 +57,16 @@ export default function NmsBackupsPage() {
   const [filterDevice, setFilterDevice] = useState('');
   const [filterType, setFilterType] = useState('');
   const [showCreate, setShowCreate] = useState(false);
-  const [selected, setSelected] = useState<Set<number>>(new Set());
-  const [deleting, setDeleting] = useState<number | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [deleting, setDeleting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [listUnavailable, setListUnavailable] = useState(false);
 
   // Create form state
   const [form, setForm] = useState({
     device_id: '',
     backup_type: 'Running Config',
-    backup_name: '',
     description: '',
-    schedule: 'Run Now',
   });
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -80,12 +79,14 @@ export default function NmsBackupsPage() {
       if (filterDevice) params.set('device_id', filterDevice);
       if (filterType) params.set('backup_type', filterType);
 
-      const res = await fetch(`/api/integrations/nms/backups${params.toString() ? '?' + params.toString() : ''}`);
-      const data = await res.json();
+      const data = await apiGet(`/api/integrations/nms/backups${params.toString() ? '?' + params.toString() : ''}`);
+      if (data.success === false || data.error) throw new Error('Yedek listesi yüklenemedi. Lütfen tekrar deneyin.');
       setBackups(data.data || data.backups || []);
+      setListUnavailable(false);
       setError(null);
-    } catch (e: any) {
-      setError('Failed to load backups: ' + e.message);
+    } catch (e) {
+      setListUnavailable(true);
+      setError(e instanceof Error ? e.message : 'Yedek listesi yüklenemedi.');
     } finally {
       setLoading(false);
     }
@@ -93,8 +94,7 @@ export default function NmsBackupsPage() {
 
   const loadDevices = useCallback(async () => {
     try {
-      const res = await fetch('/api/integrations/nms/network-devices');
-      const data = await res.json();
+      const data = await apiGet('/api/integrations/nms/network-devices');
       setDevices(data.data || []);
     } catch { /* NMS offline */ }
   }, []);
@@ -104,50 +104,41 @@ export default function NmsBackupsPage() {
     loadDevices();
   }, [loadBackups, loadDevices]);
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (id: string) => {
     if (!confirm('Delete this backup?')) return;
     setDeleting(id);
     try {
-      const res = await fetch(`/api/integrations/nms/backups/${id}`, { method: 'DELETE' });
-      if (res.ok) {
+      const data = await apiDelete(`/api/integrations/nms/backups/${id}`);
+      if (data.success) {
         setBackups(prev => prev.filter(b => b.id !== id));
+        setError(null);
+      } else {
+        setError('Yedek silinemedi. Yönetici yetkinizi kontrol edip tekrar deneyin.');
       }
     } finally {
       setDeleting(null);
     }
   };
 
-  const handleDownload = async (backup: Backup) => {
-    window.open(`/api/integrations/nms/backups/${backup.id}?action=download`, '_blank');
-  };
-
   const handleCreate = async () => {
     if (!form.device_id) { setCreateError('Please select a device'); return; }
-    if (!form.backup_name.trim()) { setCreateError('Backup Name is required'); return; }
     setCreateError(null);
     setCreating(true);
     try {
-      const res = await fetch('/api/integrations/nms/backups', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const data = await apiPost('/api/integrations/nms/backups', {
           device_id: Number(form.device_id),
           backup_type: form.backup_type,
-          backup_name: form.backup_name,
           description: form.description || null,
-          schedule: form.schedule,
-        }),
       });
-      const data = await res.json();
-      if (!res.ok) {
-        setCreateError(data.error || 'Backup creation failed');
+      if (!data.success) {
+        setCreateError('Yedek alınamadı. SSH bağlantısını ve cihaz anahtarı onayını kontrol edin.');
         return;
       }
       setCreateSuccess(true);
       setTimeout(() => {
         setShowCreate(false);
         setCreateSuccess(false);
-        setForm({ device_id: '', backup_type: 'Running Config', backup_name: '', description: '', schedule: 'Run Now' });
+        setForm({ device_id: '', backup_type: 'Running Config', description: '' });
         loadBackups();
       }, 1500);
     } catch (e: any) {
@@ -167,7 +158,7 @@ export default function NmsBackupsPage() {
   const uniqueDevices = new Set(backups.map(b => b.device_id)).size;
   const uniqueTypes = new Set(backups.map(b => b.backup_type)).size;
 
-  const toggleSelect = (id: number) => {
+  const toggleSelect = (id: string) => {
     setSelected(prev => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
@@ -195,7 +186,7 @@ export default function NmsBackupsPage() {
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wide">Total Backups</p>
-              <p className="text-3xl font-bold mt-1">{backups.length}</p>
+              <p className="text-3xl font-bold mt-1">{listUnavailable ? '—' : backups.length}</p>
             </div>
             <Database className="h-8 w-8 text-blue-500 opacity-70" />
           </CardContent>
@@ -204,7 +195,7 @@ export default function NmsBackupsPage() {
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wide">Total Size</p>
-              <p className="text-2xl font-bold mt-1 text-green-500">{formatSize(totalSize)}</p>
+              <p className="text-2xl font-bold mt-1 text-green-500">{listUnavailable ? '—' : formatSize(totalSize)}</p>
             </div>
             <HardDrive className="h-8 w-8 text-green-500 opacity-70" />
           </CardContent>
@@ -213,7 +204,7 @@ export default function NmsBackupsPage() {
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wide">Devices</p>
-              <p className="text-3xl font-bold mt-1 text-orange-500">{uniqueDevices}</p>
+              <p className="text-3xl font-bold mt-1 text-orange-500">{listUnavailable ? '—' : uniqueDevices}</p>
             </div>
             <Database className="h-8 w-8 text-orange-500 opacity-70" />
           </CardContent>
@@ -222,7 +213,7 @@ export default function NmsBackupsPage() {
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wide">Backup Types</p>
-              <p className="text-3xl font-bold mt-1 text-yellow-500">{uniqueTypes}</p>
+              <p className="text-3xl font-bold mt-1 text-yellow-500">{listUnavailable ? '—' : uniqueTypes}</p>
             </div>
             <Tag className="h-8 w-8 text-yellow-500 opacity-70" />
           </CardContent>
@@ -276,6 +267,8 @@ export default function NmsBackupsPage() {
             <div className="flex items-center justify-center py-16">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
+          ) : listUnavailable ? (
+            <div className="py-16 text-center text-muted-foreground">Yedek listesi şu anda kullanılamıyor.</div>
           ) : filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
               <Database className="h-14 w-14 opacity-25 mb-4" />
@@ -328,13 +321,15 @@ export default function NmsBackupsPage() {
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1">
                           <Button
+                            asChild
                             variant="ghost"
                             size="icon"
                             className="h-7 w-7 text-muted-foreground hover:text-foreground"
                             title="Download"
-                            onClick={() => handleDownload(backup)}
                           >
-                            <Download className="h-3.5 w-3.5" />
+                            <a href={`/api/integrations/nms/backups/${backup.id}?action=download`} download={backup.file_name} aria-label="Download">
+                              <Download className="h-3.5 w-3.5" />
+                            </a>
                           </Button>
                           <Button
                             variant="ghost"
@@ -406,16 +401,8 @@ export default function NmsBackupsPage() {
                     value={form.backup_type}
                     onChange={e => setForm(prev => ({ ...prev, backup_type: e.target.value }))}
                   >
-                    {BACKUP_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                    <option value="Running Config">Running Config</option>
                   </select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Backup Name *</Label>
-                  <Input
-                    placeholder="e.g., Router-01-20251226-backup"
-                    value={form.backup_name}
-                    onChange={e => setForm(prev => ({ ...prev, backup_name: e.target.value }))}
-                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Description</Label>
@@ -428,24 +415,8 @@ export default function NmsBackupsPage() {
                 </div>
               </div>
 
-              {/* Schedule */}
-              <div className="space-y-2">
-                <h3 className="text-xs font-semibold flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-yellow-400" />
-                  Schedule
-                </h3>
-                <Label>Schedule Type</Label>
-                <select
-                  className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm"
-                  value={form.schedule}
-                  onChange={e => setForm(prev => ({ ...prev, schedule: e.target.value }))}
-                >
-                  {SCHEDULE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
-              </div>
-
               <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 text-xs">
-                Backup will be encrypted and stored securely. You can restore it later or download it for archival.
+                Çalışan yapılandırma SSH üzerinden alınır ve şifreli saklanır. Yedeği arşivlemek için indirebilirsiniz.
               </div>
 
               {createError && (

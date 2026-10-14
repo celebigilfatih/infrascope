@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **General configuration backups** — The general backup page now lists the same persisted records as device details, supports device/type/search filters, downloads decrypted configurations with checksum verification, and uses the existing audited device workflow for creation and ADMIN-only deletion. API failures are displayed instead of appearing as an empty list.
+
 - **Login rate-limit isolation** — Dashboard and other API traffic no longer consumes the login request budget. Session checks use the general API limit, authentication attempts retain their stricter limit, and the login page displays the retry delay when the limit is reached.
 
 ### Security

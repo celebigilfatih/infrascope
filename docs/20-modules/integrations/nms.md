@@ -112,6 +112,16 @@ NMS agent performs periodic config backups via SSH:
 4. Store config text in backup table
 5. Expose via `/api/integrations/nms/backups`
 
+The general backup list reads metadata from the shared `nms_backups` table through
+Prisma, including device names and numeric file sizes. Configuration text and
+credentials are excluded from list responses. Both general and device-specific
+detail/download routes decrypt stored configurations and verify SHA-256 checksums.
+Creation delegates to the device SSH backup workflow; deletion requires ADMIN
+authorization and an audit record. The supported creation operation is an immediate
+Running Config backup. Scheduled, Startup Config, and Full Backup creation are not
+implemented. A list API failure must be shown as unavailable rather than as zero
+backups.
+
 ## Network Device Discovery
 
 `/api/integrations/nms/discovery` endpoint:
