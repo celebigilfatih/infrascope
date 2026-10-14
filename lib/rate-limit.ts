@@ -56,8 +56,10 @@ export function isRateLimited(
 
   const now = Date.now();
   const windowStart = now - config.windowMs;
+  // Different policies must not consume each other's request budget.
+  const storeKey = `${config.windowMs}:${config.maxRequests}:${ip}`;
 
-  let timestamps = store.get(ip);
+  let timestamps = store.get(storeKey);
 
   if (timestamps) {
     // Filter out timestamps outside the window
@@ -71,13 +73,13 @@ export function isRateLimited(
     // Retry-After: time until the oldest request in the window expires
     const oldestInWindow = timestamps[0];
     const retryAfterMs = oldestInWindow + config.windowMs - now;
-    store.set(ip, timestamps);
+    store.set(storeKey, timestamps);
     return { limited: true, retryAfterMs: Math.max(retryAfterMs, 1000) };
   }
 
   // Record this request
   timestamps.push(now);
-  store.set(ip, timestamps);
+  store.set(storeKey, timestamps);
 
   // Periodic cleanup to prevent memory leaks
   callCount++;
@@ -139,7 +141,8 @@ export function getClientIp(request: { headers: { get: (name: string) => string 
  * Determine which rate limit config applies based on the request path.
  */
 export function getRateLimitConfig(pathname: string): RateLimitConfig {
-  if (pathname.startsWith('/api/auth/')) {
+  // Session reads are ordinary API traffic, not credential attempts.
+  if (pathname.startsWith('/api/auth/') && pathname !== '/api/auth/me') {
     return AUTH_RATE_LIMIT;
   }
   return GENERAL_RATE_LIMIT;

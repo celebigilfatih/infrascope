@@ -67,6 +67,14 @@ export default function LoginPage() {
 
       const data = await res.json();
 
+      if (res.status === 429) {
+        const retryAfter = Number(res.headers.get('Retry-After'));
+        setError(Number.isFinite(retryAfter) && retryAfter > 0
+          ? `Çok fazla giriş denemesi yapıldı. ${Math.ceil(retryAfter)} saniye sonra tekrar deneyin.`
+          : 'Çok fazla giriş denemesi yapıldı. Biraz sonra tekrar deneyin.');
+        return;
+      }
+
       if (data.success) {
         // Session is now managed via httpOnly cookie (set by server).
         // localStorage is only for UI display, not for auth decisions.

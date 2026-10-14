@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Login rate-limit isolation** — Dashboard and other API traffic no longer consumes the login request budget. Session checks use the general API limit, authentication attempts retain their stricter limit, and the login page displays the retry delay when the limit is reached.
+
 ### Security
 
 - **FortiGate write guard** — Direct quarantine changes are now disabled by default, require an active ADMIN session when explicitly enabled, use a dedicated firewall RBAC resource, and emit audit records for successful legacy changes.
