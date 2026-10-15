@@ -16,7 +16,10 @@ env:
   IMAGE_NAME: ${{ github.repository_owner }}/infrascope
 
 jobs:
+  backup-checks:
+    uses: ./.github/workflows/backup-checks.yml
   publish:
+    needs: backup-checks
     name: Build and push Docker image
     runs-on: ubuntu-latest
     permissions:
@@ -53,3 +56,19 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+      - name: Extract NMS image metadata
+        id: nms-meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-nms
+          tags: |
+            type=semver,pattern={{version}}
+            type=raw,value=${{ inputs.version }},enable=${{ github.event_name == 'workflow_dispatch' }}
+      - name: Build and push NMS service
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: nms_service/Dockerfile
+          push: true
+          tags: ${{ steps.nms-meta.outputs.tags }}
+          labels: ${{ steps.nms-meta.outputs.labels }}

@@ -71,6 +71,9 @@ class Device(Base):
     polling_interval = Column(Integer, default=30)
     last_polled_at = Column(DateTime, nullable=True)
     vendor = Column(String(50), nullable=True)
+    model = Column(String, nullable=True)
+    operating_system = Column("operatingSystem", String, nullable=True)
+    backup_platform = Column(String, nullable=True)
 
 
 class NmsInterface(Base):
@@ -210,6 +213,10 @@ class DatabaseManager:
             pool_size=config.database.pool_size,
             max_overflow=config.database.max_overflow,
             echo=config.debug,
+            connect_args={
+                'options': (str(config.database.options.get('options', '')) + ' -c timezone=UTC').strip(),
+                'connect_timeout': int(config.database.options.get('connect_timeout', 10)),
+            },
         )
         self.SessionLocal = sessionmaker(bind=self.engine)
 

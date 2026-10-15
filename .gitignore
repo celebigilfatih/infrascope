@@ -65,3 +65,9 @@ logs/
 
 # Large database backups
 nms_service/*.sql
+/backups/
+/deploy/backups/
+*.isbackup
+__pycache__/
+*.pyc
+*.pyo

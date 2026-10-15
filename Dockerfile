@@ -37,7 +37,7 @@ ARG NEXT_PUBLIC_API_URL=http://localhost:8170
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
 # Build Next.js application
-RUN npm run build
+RUN INFRASCOPE_BUILD=1 npm run build
 
 # ============================================================================
 # STAGE 2: DEPENDENCIES
@@ -97,6 +97,11 @@ COPY --chown=nextjs:nodejs scripts/entrypoint.sh ./scripts/
 
 # Normalize shell scripts for images built from Windows checkouts.
 RUN sed -i 's/\r$//' ./scripts/*.sh && chmod +x ./scripts/*.sh
+
+# License/machine state is installation-owned, never inherited from a build host.
+RUN rm -f /app/.license-cache /app/.machine-id \
+    && mkdir -p /app/.license-cache /app/.machine-id \
+    && chown nextjs:nodejs /app/.license-cache /app/.machine-id
 
 # Switch to non-root user
 USER nextjs

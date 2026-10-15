@@ -35,6 +35,7 @@ from nms_service.orchestrator import NMSOrchestrator
 from nms_service.discovery_worker import run_discovery
 from nms_service.security.credentials import encrypt_nms_backup
 from nms_service.ssh.poller import inspect_ssh_host_key
+from nms_service.backup_worker import backup_worker
 
 
 # ── App setup ─────────────────────────────────────────────────────────────────
@@ -66,6 +67,7 @@ poller_thread: Optional[threading.Thread] = None
 def startup_event():
     global poller_thread
     config.validate()
+    backup_worker.start()
     poller_thread = threading.Thread(target=orchestrator.run, daemon=True, name="nms-poller")
     poller_thread.start()
     logger.info("NMS background polling thread started")
@@ -73,6 +75,7 @@ def startup_event():
 
 @app.on_event("shutdown")
 def shutdown_event():
+    backup_worker.shutdown()
     orchestrator.shutdown()
 
 
@@ -245,94 +248,23 @@ def read_ssh_status(
 
 
 @app.post("/devices/{nms_device_id}/backup")
-def trigger_backup(
-    nms_device_id: int,
-    req: BackupRequest,
-    _authenticated: None = Depends(require_internal_token),
-):
-    """Trigger SSH-based config backup for a device.
+def trigger_backup(nms_device_id: int, req: BackupRequest, _authenticated: None = Depends(require_internal_token)):
+    """Retired synchronous path: requests must enter the application durable queue."""
+    raise HTTPException(status_code=410, detail="Use the application's durable backup job endpoint")
 
-    Connects via SSH (stateless), executes vendor-specific running-config command,
-    saves the result to nms_backups, and returns the new backup record.
-    """
-    if nms_device_id not in orchestrator.ssh_poller.sessions:
-        raise HTTPException(
-            status_code=404,
-            detail=f"nms_device_id={nms_device_id} not registered for SSH polling",
-        )
 
-    session = db_manager.get_session()
+@app.get("/health/ready")
+def backup_readiness():
     try:
-        device = orchestrator.device_map.get(nms_device_id)
-        device_name = device.name if device else f"NMS Device {nms_device_id}"
-        # Prefer DB-stored vendor (set by discovery/user); fall back to name heuristic
-        db_vendor = (getattr(device, "vendor", None) or "").strip() if device else ""
-        vendor = db_vendor or (orchestrator._detect_vendor(device.name) if device else "cisco")
-
-        config_text = orchestrator.ssh_poller.backup_running_config(nms_device_id, vendor)
-        if not config_text:
-            raise HTTPException(
-                status_code=502,
-                detail=f"SSH backup failed for {device_name} (no output / connection error)",
-            )
-
-        size_bytes = len(config_text.encode("utf-8"))
-        checksum = hashlib.sha256(config_text.encode("utf-8")).hexdigest()
-        backup_id = cuid()
-        now = datetime.utcnow()
-        backup_file = f"backup_{nms_device_id}_{now.strftime('%Y%m%d_%H%M%S')}.cfg"
-
-        session.execute(
-            text(
-                """
-                INSERT INTO nms_backups
-                  (id, nms_device_id, backup_type, backup_file, description,
-                   size_bytes, checksum, configuration, created_at, updated_at)
-                VALUES
-                  (:id, :dev, :btype, :bfile, :desc,
-                   :size, :csum, :cfg, :ts, :ts)
-                """
-            ),
-            {
-                "id": backup_id,
-                "dev": nms_device_id,
-                "btype": req.backup_type or "Running Config",
-                "bfile": backup_file,
-                "desc": req.description,
-                "size": size_bytes,
-                "csum": checksum,
-                "cfg": encrypt_nms_backup(config_text),
-                "ts": now,
-            },
-        )
-        session.commit()
-
-        logger.info(
-            f"Backup created: id={backup_id} device={device_name} "
-            f"size={size_bytes}B vendor={vendor}"
-        )
-        return {
-            "success": True,
-            "backup": {
-                "id": backup_id,
-                "nms_device_id": nms_device_id,
-                "device_name": device_name,
-                "backup_type": req.backup_type or "Running Config",
-                "backup_file": backup_file,
-                "size_bytes": size_bytes,
-                "checksum": checksum,
-                "created_at": now.isoformat(),
-            },
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        session.rollback()
-        logger.error(f"Backup failed for nms_device_id={nms_device_id}: {type(e).__name__}")
-        raise HTTPException(status_code=500, detail="Configuration backup failed")
-    finally:
-        session.close()
-
+        with db_manager.get_session() as session:
+            session.execute(text("SELECT id FROM nms_backup_jobs LIMIT 1"))
+        alive = bool(backup_worker.threads) and all(thread.is_alive() for thread in backup_worker.threads)
+        recent = backup_worker.last_tick is not None and (datetime.utcnow() - backup_worker.last_tick).total_seconds() < 180
+        if not alive or not recent or backup_worker.last_error:
+            raise ValueError("Backup worker is not ready")
+        return {"status": "ok", "backups": "ready"}
+    except Exception:
+        raise HTTPException(status_code=503, detail="Backup worker or database unavailable")
 
 # ── Metrics ───────────────────────────────────────────────────────────────────
 

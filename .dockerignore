@@ -56,3 +56,17 @@ NEXT_STEPS.md
 # Logs
 logs
 *.log
+
+# Installation secrets and operational backup artifacts must never enter images.
+output/
+backups/
+deploy/backups/
+*.isbackup
+.machine-id
+.license-cache
+data/license-cache/
+data/machine-id/
+.env.production
+__pycache__/
+*.pyc
+*.pyo

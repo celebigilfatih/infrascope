@@ -5,8 +5,9 @@ No separate API config — NMS writes directly to shared PostgreSQL.
 """
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+from sqlalchemy.engine import URL, make_url
 
 
 @dataclass
@@ -19,14 +20,14 @@ class DatabaseConfig:
     database: str
     pool_size: int = 10
     max_overflow: int = 20
+    options: dict = field(default_factory=dict)
 
     @property
     def connection_string(self) -> str:
         """Generate SQLAlchemy connection string"""
-        return (
-            f"postgresql://{self.username}:{self.password}@"
-            f"{self.host}:{self.port}/{self.database}"
-        )
+        return URL.create('postgresql', username=self.username, password=self.password,
+                          host=self.host, port=self.port, database=self.database,
+                          query=self.options).render_as_string(hide_password=False)
 
 
 @dataclass
@@ -79,23 +80,13 @@ class Config:
         # Parse DATABASE_URL if set (format: postgresql://user:pass@host:port/db)
         database_url = os.getenv("DATABASE_URL", "")
         if database_url and database_url.startswith("postgresql://"):
-            # Parse: postgresql://user:pass@host:port/dbname
-            url = database_url.replace("postgresql://", "")
-            userinfo, hostinfo = url.split("@", 1)
-            db_user, db_pass = userinfo.split(":", 1)
-            host_port, db_name = hostinfo.rsplit("/", 1)
-            if ":" in host_port:
-                db_host, db_port_str = host_port.rsplit(":", 1)
-                db_port = int(db_port_str)
-            else:
-                db_host = host_port
-                db_port = 5432
+            url = make_url(database_url)
             self.database = DatabaseConfig(
-                host=db_host,
-                port=db_port,
-                username=db_user,
-                password=db_pass,
-                database=db_name,
+                host=url.host or 'localhost', port=url.port or 5432,
+                username=url.username or '', password=url.password or '', database=url.database or '',
+                options={name: value for name, value in url.query.items() if name in (
+                    'sslmode', 'sslrootcert', 'sslcert', 'sslkey', 'connect_timeout', 'application_name', 'target_session_attrs', 'options'
+                )},
             )
         else:
             # Fallback to individual env vars
@@ -162,6 +153,9 @@ class Config:
             raise ValueError("DB_PASSWORD (or DATABASE_URL) must be set in production")
         if self.env == "production" and not self.internal_token:
             raise ValueError("NMS_INTERNAL_TOKEN must be set in production")
+        if self.env == "production":
+            from nms_service.security.credentials import _dedicated_key
+            _dedicated_key(os.getenv("INTEGRATION_CREDENTIALS_KEY", ""))
 
     def __repr__(self) -> str:
         return (

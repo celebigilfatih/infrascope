@@ -290,7 +290,7 @@ export const ALARM_QUERY_REGISTRY = new Map<string, AlarmQueryFn>([
   // NOT FortiAnalyzer logs. FA fallback returns [] (NMS data is never in FA).
   ['NMS_PORT_DOWN',             getNmsPortDownEvents],
   ['NMS_DEVICE_UNREACHABLE',    getNmsDeviceUnreachableEvents],
-  ['NMS_BACKUP_FAILED',         getNmsBackupFailedEvents],     // Stub — not yet implemented
+  ['NMS_BACKUP_FAILED',         getNmsBackupFailedEvents],
 
   // ── VMware / vCenter (cached_events source=vmware — no FA fallback) ──────────
   // VMware alarms use cached_events with rawLog.source='vmware' JSONB filter.

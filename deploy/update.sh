@@ -7,6 +7,7 @@
 # =============================================================================
 
 set -e
+umask 077
 
 # Colors
 RED='\033[0;31m'
@@ -53,50 +54,26 @@ backup_database() {
     DB_USER=${POSTGRES_USER:-infrascope}
     DB_NAME=${POSTGRES_DB:-infrascope}
     
-    docker exec infrascope-postgres pg_dump -U "$DB_USER" "$DB_NAME" > "$BACKUP_FILE"
+    docker compose exec -T postgres pg_dump -U "$DB_USER" "$DB_NAME" > "$BACKUP_FILE"
     
     echo -e "${GREEN}✓ Database backed up to ${BACKUP_FILE}${NC}"
 }
 
 # Load or pull new image
 prepare_update_image() {
-    echo -e "${YELLOW}Preparing new version...${NC}"
-    
     REGISTRY=${REGISTRY:-ghcr.io/celebigilfatih}
-    IMAGE_REF="${REGISTRY}/infrascope:${TARGET_VERSION}"
-    LOCAL_IMAGE_TAR="./images/infrascope-${TARGET_VERSION}.tar"
-
-    if docker image inspect "${IMAGE_REF}" > /dev/null 2>&1; then
-        echo -e "${GREEN}✓ Image already available: ${IMAGE_REF}${NC}"
-        return 0
-    fi
-
-    if [ -f "${LOCAL_IMAGE_TAR}" ]; then
-        echo "Loading local appliance image ${LOCAL_IMAGE_TAR}..."
-        docker load -i "${LOCAL_IMAGE_TAR}"
-
-        if docker image inspect "${IMAGE_REF}" > /dev/null 2>&1; then
-            echo -e "${GREEN}✓ Local image loaded: ${IMAGE_REF}${NC}"
-            return 0
-        fi
-
-        echo -e "${RED}Error: ${LOCAL_IMAGE_TAR} did not provide expected image ${IMAGE_REF}.${NC}"
-        exit 1
-    fi
-    
-    docker pull "${IMAGE_REF}" || {
-        echo -e "${RED}Failed to prepare image ${IMAGE_REF}${NC}"
-        echo "For offline appliance updates, place the image at ${LOCAL_IMAGE_TAR}."
-        exit 1
-    }
-    
-    echo -e "${GREEN}✓ New image ready${NC}"
+    for component in infrascope infrascope-nms; do
+        image_ref="${REGISTRY}/${component}:${TARGET_VERSION}"
+        image_tar="./images/${component}-${TARGET_VERSION}.tar"
+        if docker image inspect "$image_ref" > /dev/null 2>&1; then continue; fi
+        if [ -f "$image_tar" ]; then docker load -i "$image_tar"; else docker pull "$image_ref"; fi
+        docker image inspect "$image_ref" > /dev/null
+    done
 }
-
 # Stop current services
 stop_services() {
     echo -e "${YELLOW}Stopping services...${NC}"
-    docker compose stop app
+    docker compose stop nms app
     echo -e "${GREEN}✓ Services stopped${NC}"
 }
 
@@ -111,8 +88,9 @@ run_migrations() {
     sleep 5
     
     # Run migrations via temporary container
-    docker compose run --rm app npx prisma migrate deploy || {
-        echo -e "${YELLOW}! No migrations to run or migration failed${NC}"
+    VERSION="$TARGET_VERSION" docker compose run --rm app npx prisma migrate deploy || {
+        echo "Migration failed; services remain stopped. Restore the pre-update backup before retrying." >&2
+        exit 1
     }
     
     echo -e "${GREEN}✓ Migrations complete${NC}"
@@ -131,7 +109,7 @@ start_services() {
         fi
     fi
     
-    docker compose up -d
+    VERSION="$TARGET_VERSION" docker compose up -d --wait --wait-timeout 300
     
     echo -e "${GREEN}✓ Services started${NC}"
 }
@@ -159,7 +137,7 @@ health_check() {
 # Cleanup old images
 cleanup_images() {
     echo -e "${YELLOW}Cleaning up old images...${NC}"
-    docker image prune -f
+    echo "Keep previous release images until recovery verification is complete."
     echo -e "${GREEN}✓ Cleanup complete${NC}"
 }
 
@@ -182,7 +160,7 @@ main() {
     echo ""
     echo -e "${BLUE}Rollback:${NC}"
     echo "  If there are issues, restore from backup:"
-    echo "  docker exec -i infrascope-postgres psql -U ${POSTGRES_USER:-infrascope} ${POSTGRES_DB:-infrascope} < ./backups/infrascope_XXXXXXXX_XXXXXX.sql"
+    echo "  docker compose exec -T postgres psql -U ${POSTGRES_USER:-infrascope} ${POSTGRES_DB:-infrascope} < ./backups/infrascope_XXXXXXXX_XXXXXX.sql"
     echo ""
 }
 

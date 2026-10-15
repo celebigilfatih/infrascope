@@ -108,6 +108,12 @@ class NMSOrchestrator:
             session = db_manager.get_session()
             device_repo = DeviceRepository(session)
             devices = device_repo.get_all_polling_enabled()
+            current_ids = {device.nms_device_id for device in devices}
+            stale_ids = (set(self.device_map) | set(self.poller.sessions) | set(self.ssh_poller.sessions)) - current_ids
+            for stale_id in stale_ids:
+                self.poller.unregister_device(stale_id)
+                self.ssh_poller.unregister_device(stale_id)
+                self.device_map.pop(stale_id, None)
             count = 0
 
             for device in devices:
@@ -223,7 +229,6 @@ class NMSOrchestrator:
                 self.device_map[device.nms_device_id] = device
                 count += 1
 
-            session.close()
             logger.info(
                 f"Loaded {count} polling-enabled device candidates from InfraScope DB "
                 f"(SNMP registered={len(self.poller.sessions)}, SSH registered={len(self.ssh_poller.sessions)})"
@@ -233,6 +238,9 @@ class NMSOrchestrator:
         except Exception as e:
             logger.error(f"Failed to register devices from DB: {e}")
             return 0
+        finally:
+            if 'session' in locals():
+                session.close()
 
     def _detect_vendor(self, device_name: str, configured_vendor: Optional[str] = None) -> str:
         """Infer vendor from inventory metadata first, then the device name."""

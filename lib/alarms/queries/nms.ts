@@ -14,7 +14,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
-import { runAlarmQuery, timeWindow } from './base';
+import { runAlarmQuery } from './base';
 import type { AlarmQueryContext, QueryResult } from './types';
 
 // ─── NMS_PORT_DOWN ────────────────────────────────────────────────────────────
@@ -38,7 +38,7 @@ export async function getNmsPortDownEvents(ctx: AlarmQueryContext): Promise<Quer
       const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000);
       const downThresholdMs = 5 * 60 * 1000; // 5 minutes
 
-      const interfaces = await (prisma as any).nmsInterface.findMany({
+      const interfaces = await prisma.nmsInterface.findMany({
         where: {
           monitored: true,
           adminStatus: 'up',
@@ -48,15 +48,15 @@ export async function getNmsPortDownEvents(ctx: AlarmQueryContext): Promise<Quer
         },
         include: { device: { select: { id: true, name: true, managementIp: true } } },
         take: 20,
-      }) as Array<any>;
+      });
 
       // Filter: only alarm if port has been down for ≥ 5 minutes
       return interfaces
-        .filter((iface: any) => {
+        .filter(iface => {
           const downSince = iface.downSince ? new Date(iface.downSince).getTime() : Date.now();
           return Date.now() - downSince >= downThresholdMs;
         })
-        .map((iface: any) => ({
+        .map(iface => ({
           nms_device_id: iface.nmsDeviceId,
           interface_index: iface.interfaceIndex,
           interface_name: iface.interfaceName,
@@ -91,7 +91,7 @@ export async function getNmsDeviceUnreachableEvents(ctx: AlarmQueryContext): Pro
     async () => {
       const silenceThresholdMs = 30 * 60 * 1000; // 30 minutes minimum
 
-      const pollingDevices = await (prisma as any).device.findMany({
+      const pollingDevices = await prisma.device.findMany({
         where: {
           pollingEnabled: true,
           nmsDeviceId: { not: null },
@@ -124,7 +124,7 @@ export async function getNmsDeviceUnreachableEvents(ctx: AlarmQueryContext): Pro
         const effectiveCutoff = new Date(Date.now() - effectiveThreshold);
 
         // Check for any health metric within the threshold window
-        const recentMetric = await (prisma as any).nmsHealthMetric.findFirst({
+        const recentMetric = await prisma.nmsHealthMetric.findFirst({
           where: { nmsDeviceId: device.nmsDeviceId, collectedAt: { gte: effectiveCutoff } },
         });
 
@@ -136,7 +136,7 @@ export async function getNmsDeviceUnreachableEvents(ctx: AlarmQueryContext): Pro
         }
 
         // Device is unreachable — find how long it's been silent
-        const lastMetric = await (prisma as any).nmsHealthMetric.findFirst({
+        const lastMetric = await prisma.nmsHealthMetric.findFirst({
           where: { nmsDeviceId: device.nmsDeviceId },
           orderBy: { collectedAt: 'desc' },
           select: { collectedAt: true },
@@ -171,17 +171,34 @@ export async function getNmsDeviceUnreachableEvents(ctx: AlarmQueryContext): Pro
 /**
  * NMS_BACKUP_FAILED — NMS device config backup failed.
  *
- * STUB: Detection logic not yet implemented in the detection engine.
- * Returns empty events until backup failure tracking is implemented.
- *
- * Future: Query nms_backup_jobs or similar table for failed backup records.
+ * Latest terminal failures remain actionable until a later successful job.
+ * Enabled policies also report overdue successful artifacts. No FA dependency.
  */
 export async function getNmsBackupFailedEvents(ctx: AlarmQueryContext): Promise<QueryResult> {
   return runAlarmQuery(
     ctx,
-    'nms_backup_jobs status=failed (stub)',
-    async () => [], // TODO: Implement when backup failure tracking is added
+    'latest backup failure or enabled policy overdue',
+    async () => {
+      const failed = await prisma.$queryRaw<Array<Record<string, unknown>>>`
+        SELECT j.id AS source_event_id, j.inventory_device_id, j.nms_device_id,
+          d.name AS device_name, j.error_code, j.error_message, 'backup-failed' AS condition_key
+        FROM (SELECT DISTINCT ON (inventory_device_id) * FROM nms_backup_jobs
+          WHERE status IN ('failed','succeeded') ORDER BY inventory_device_id, created_at DESC, id DESC) j
+        JOIN devices d ON d.id=j.inventory_device_id AND d.nms_device_id=j.nms_device_id
+        WHERE j.status='failed'`;
+      const overdue = await prisma.$queryRaw<Array<Record<string, unknown>>>`
+        SELECT p.id AS source_event_id, p.inventory_device_id, p.nms_device_id, d.name AS device_name,
+          'BACKUP_OVERDUE' AS error_code, 'Son başarılı yedek zaman sınırını aştı.' AS error_message,
+          'backup-overdue' AS condition_key
+        FROM nms_backup_policies p JOIN devices d ON d.id=p.inventory_device_id AND d.nms_device_id=p.nms_device_id
+        LEFT JOIN LATERAL (SELECT MAX(created_at) AS last_success FROM nms_backups
+          WHERE nms_device_id=p.nms_device_id AND backup_type=p.backup_type) b ON true
+        WHERE p.enabled=true AND COALESCE(b.last_success,p.created_at)
+          < CURRENT_TIMESTAMP - p.stale_after_hours * INTERVAL '1 hour'`;
+      const failedDevices = new Set(failed.map(event => event.inventory_device_id));
+      return [...failed, ...overdue.filter(event => !failedDevices.has(event.inventory_device_id))];
+    },
     async () => [],
-    { softFallback: false }
+    { softFallback: false, databaseOnly: true }
   );
 }

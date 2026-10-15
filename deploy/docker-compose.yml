@@ -11,7 +11,6 @@ services:
   # ── PostgreSQL Database ──────────────────────────────────────────
   postgres:
     image: postgres:16-alpine
-    container_name: infrascope-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-infrascope}
@@ -30,7 +29,6 @@ services:
   # ── InfraScope Application ───────────────────────────────────────
   app:
     image: ${REGISTRY:-ghcr.io/celebigilfatih}/infrascope:${VERSION:-1.0.0}
-    container_name: infrascope-app
     restart: unless-stopped
     depends_on:
       postgres:
@@ -48,9 +46,10 @@ services:
       # Authentication
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:8170}
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?NEXTAUTH_SECRET is required}
-      INTEGRATION_CREDENTIALS_KEY: ${INTEGRATION_CREDENTIALS_KEY:-}
+      INTEGRATION_CREDENTIALS_KEY: ${INTEGRATION_CREDENTIALS_KEY:?INTEGRATION_CREDENTIALS_KEY is required}
       INTEGRATION_CREDENTIALS_PREVIOUS_KEY: ${INTEGRATION_CREDENTIALS_PREVIOUS_KEY:-}
       NMS_INTERNAL_TOKEN: ${NMS_INTERNAL_TOKEN:?NMS_INTERNAL_TOKEN is required}
+      NMS_BACKEND_URL: http://nms:8500
       
       # Application
       NODE_ENV: production
@@ -88,27 +87,60 @@ services:
     networks:
       - infrascope-net
 
-  # ── SNMP Poller (Optional - for network monitoring) ─────────────
-  # Note: On macOS, run SNMP poller on host due to Docker UDP limitations
-  # Uncomment below for Linux deployments
-  # snmp-poller:
-  #   image: ${REGISTRY:-ghcr.io/celebigilfatih}/infrascope-poller:${VERSION:-latest}
-  #   container_name: infrascope-poller
-  #   restart: unless-stopped
-  #   depends_on:
-  #     - app
-  #   environment:
-  #     DATABASE_URL: postgresql://${POSTGRES_USER:-infrascope}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-infrascope}
-  #     SNMP_COMMUNITY: ${SNMP_COMMUNITY:-public}
-  #     POLL_INTERVAL: ${POLL_INTERVAL:-60}
-  #     NMS_INTERNAL_TOKEN: ${NMS_INTERNAL_TOKEN:?NMS_INTERNAL_TOKEN is required}
-  #     INTEGRATION_CREDENTIALS_KEY: ${INTEGRATION_CREDENTIALS_KEY:?INTEGRATION_CREDENTIALS_KEY is required}
-  #     NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?NEXTAUTH_SECRET is required}
-  #   network_mode: host  # Required for SNMP UDP
-  #   networks:
-  #     - infrascope-net
+  nms:
+    image: ${REGISTRY:-ghcr.io/celebigilfatih}/infrascope-nms:${VERSION:-1.0.0}
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-infrascope}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-infrascope}
+      NMS_ENV: production
+      NMS_BACKUP_WORKERS: ${NMS_BACKUP_WORKERS:-2}
+      NMS_INTERNAL_TOKEN: ${NMS_INTERNAL_TOKEN:?NMS_INTERNAL_TOKEN is required}
+      INTEGRATION_CREDENTIALS_KEY: ${INTEGRATION_CREDENTIALS_KEY:?INTEGRATION_CREDENTIALS_KEY is required}
+      INTEGRATION_CREDENTIALS_PREVIOUS_KEY: ${INTEGRATION_CREDENTIALS_PREVIOUS_KEY:-}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?NEXTAUTH_SECRET is required}
+    depends_on:
+      app:
+        condition: service_healthy
+    volumes:
+      - nms_logs:/app/logs
+      - ./backups:/recovery
+      - ./certs:/app/certs:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8500/health/ready', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - infrascope-net
+
+  database-backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      PGHOST: postgres
+      POSTGRES_USER: ${POSTGRES_USER:-infrascope}
+      POSTGRES_DB: ${POSTGRES_DB:-infrascope}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      DB_BACKUP_INTERVAL_SECONDS: ${DB_BACKUP_INTERVAL_SECONDS:-86400}
+      DB_BACKUP_RETENTION_DAYS: ${DB_BACKUP_RETENTION_DAYS:-14}
+    volumes:
+      - ./backups/database:/var/lib/postgresql/backups
+      - ./postgres-backup.sh:/backup-script.sh:ro
+    entrypoint: ["/bin/sh", "-c", "sed 's/\\r$//' /backup-script.sh > /tmp/backup.sh; exec sh /tmp/backup.sh --loop"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "sh", "/tmp/backup.sh", "--health"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+    networks:
+      - infrascope-net
 
 volumes:
+  nms_logs:
   postgres_data:
     driver: local
 

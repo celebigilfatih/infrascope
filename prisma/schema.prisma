@@ -257,6 +257,7 @@ model Device {
   sshPort           Int?     @default(22) @map("ssh_port")
   sshHostKeyAlgorithm String? @map("ssh_host_key_algorithm")
   sshHostKeyFingerprint String? @map("ssh_host_key_fingerprint")
+  backupPlatform    String?  @map("backup_platform")
   lastPolledAt      DateTime? @map("last_polled_at")
   
   // Relationships
@@ -1585,8 +1586,12 @@ model NmsInterfaceMetric {
 /// Configuration backup stored from a device via SSH
 model NmsBackup {
   id            String   @id @default(cuid())
-  nmsDeviceId   Int      @map("nms_device_id")
-  device        Device   @relation(fields: [nmsDeviceId], references: [nmsDeviceId], onDelete: Cascade)
+  nmsDeviceId   Int?     @map("nms_device_id")
+  device        Device?  @relation(fields: [nmsDeviceId], references: [nmsDeviceId], onDelete: SetNull)
+  deviceName    String   @default("Archived device") @map("device_name")
+  managementIp  String?  @map("management_ip")
+  platform      String?
+  jobId         String?  @unique @map("job_id")
   backupType    String   @default("config") @map("backup_type") // "Running Config" | "Startup Config"
   backupFile    String?  @map("backup_file")
   description   String?
@@ -1599,6 +1604,56 @@ model NmsBackup {
   @@index([nmsDeviceId])
   @@index([createdAt])
   @@map("nms_backups")
+}
+
+/// Durable work queue. Snapshot IDs deliberately survive inventory deletion.
+model NmsBackupJob {
+  id              String   @id @default(cuid())
+  inventoryDeviceId String @map("inventory_device_id")
+  nmsDeviceId     Int      @map("nms_device_id")
+  deviceName      String   @map("device_name")
+  backupType      String   @map("backup_type")
+  description     String?
+  requestedBy     String?  @map("requested_by")
+  idempotencyKey  String   @unique @map("idempotency_key")
+  activeDeviceKey Int?     @unique @map("active_device_key")
+  status          String   @default("queued")
+  attempts        Int      @default(0)
+  maxAttempts     Int      @default(3) @map("max_attempts")
+  runAfter        DateTime @default(now()) @map("run_after")
+  leaseToken      String?  @map("lease_token")
+  leaseExpiresAt  DateTime? @map("lease_expires_at")
+  startedAt       DateTime? @map("started_at")
+  finishedAt      DateTime? @map("finished_at")
+  backupId        String?  @map("backup_id")
+  errorCode       String?  @map("error_code")
+  errorMessage    String?  @map("error_message")
+  credentialRevision String? @map("credential_revision")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@index([status, runAfter])
+  @@index([nmsDeviceId, createdAt])
+  @@map("nms_backup_jobs")
+}
+
+/// Explicitly enabled interval policy, evaluated by the NMS worker in UTC.
+model NmsBackupPolicy {
+  id               String   @id @default(cuid())
+  inventoryDeviceId String @map("inventory_device_id")
+  nmsDeviceId      Int      @unique @map("nms_device_id")
+  enabled          Boolean  @default(false)
+  backupType       String   @default("Running Config") @map("backup_type")
+  intervalHours    Int      @default(24) @map("interval_hours")
+  retentionDays    Int      @default(90) @map("retention_days")
+  keepLast         Int      @default(10) @map("keep_last")
+  staleAfterHours  Int      @default(48) @map("stale_after_hours")
+  nextRunAt        DateTime @default(now()) @map("next_run_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@index([enabled, nextRunAt])
+  @@map("nms_backup_policies")
 }
 
 // ============================================================================

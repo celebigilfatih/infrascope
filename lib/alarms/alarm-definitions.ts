@@ -1826,6 +1826,21 @@ export const ALARM_DEFINITIONS: AlarmDefinitionSeed[] = [
   // NMS - SNMP HEALTH AND AVAILABILITY
   // ============================================================================
   {
+    code: 'NMS_BACKUP_FAILED',
+    name: 'Cihaz Yedeği Başarısız veya Gecikmiş',
+    description: 'Son yedekleme işi başarısız veya etkin politikadaki son başarılı yedek gecikmiş.',
+    category: 'OPERATIONAL',
+    severity: 'ALARM_HIGH',
+    cooldownMinutes: 60,
+    notifyEmail: false,
+    source: 'nms',
+    detectionLogic: {
+      source: 'nms', threshold: 1, timeWindowMinutes: 60,
+      description: 'Kalıcı iş geçmişini ve etkin cihaz yedekleme politikalarını denetler.',
+      recommendedAction: 'Yedekleme işindeki hata kodunu, SSH erişimini, platformu ve servis sağlığını kontrol edin. Ayrıntılar: docs/30-runbooks/nms-backups.md',
+    },
+  },
+  {
     code: 'NMS_PORT_DOWN',
     name: 'Izlenen Switch Portu Down',
     description: 'Yonetimsel olarak acik ve izlenen bir switch portu operasyonel olarak down durumda.',

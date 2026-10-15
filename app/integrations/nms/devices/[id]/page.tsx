@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import type { LucideIcon } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -36,6 +37,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePageBreadcrumb } from '@/components/layout/BreadcrumbProvider';
+import { apiGet, apiPost } from '@/lib/api';
 
 interface DbNmsBackup {
   id: string;
@@ -107,7 +109,7 @@ function getConnectionStatus(device: DbDevice): 'online' | 'offline' | 'disabled
   return diffMs < intervalMs * 2.5 ? 'online' : 'offline';
 }
 
-function StatCard({ icon: Icon, label, value, color }: { icon: any; label: string; value: string; color: string }) {
+function StatCard({ icon: Icon, label, value, color }: { icon: LucideIcon; label: string; value: string; color: string }) {
   return (
     <div className="flex items-center gap-3 p-4 rounded-xl bg-card border border-border">
       <div className={`p-2.5 rounded-lg ${color}`}>
@@ -139,6 +141,8 @@ export default function ViewNmsDevicePage() {
   const [backupsLoading, setBackupsLoading] = useState(false);
   const [backupError, setBackupError] = useState<string | null>(null);
   const [triggering, setTriggering] = useState(false);
+  const [backupAccess, setBackupAccess] = useState({ create: false, running: false, startup: false });
+  const [activeBackupJob, setActiveBackupJob] = useState<string | null>(null);
   const [triggerResult, setTriggerResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [viewBackup, setViewBackup] = useState<{ id: string; config: string; type: string; createdAt: string } | null>(null);
   const [viewLoading, setViewLoading] = useState(false);
@@ -153,7 +157,7 @@ export default function ViewNmsDevicePage() {
   const breadcrumbItems = useMemo(() => device ? [
     { label: 'NMS İzlenen Cihazlar', href: '/integrations/nms/devices' },
     { label: device.name },
-  ] : null, [device?.name]);
+  ] : null, [device]);
   usePageBreadcrumb(breadcrumbItems);
 
   // Port monitoring state
@@ -161,39 +165,48 @@ export default function ViewNmsDevicePage() {
   const [savingMonitored, setSavingMonitored] = useState(false);
   const [monitoredDirty, setMonitoredDirty] = useState(false);
 
-  const loadBackups = async () => {
+  const loadBackups = useCallback(async () => {
     setBackupsLoading(true);
     setBackupError(null);
     try {
       const res = await fetch(`/api/integrations/nms/devices/${deviceId}/backups`);
       const data = await res.json();
-      if (res.ok) setBackups(data.backups || []);
+      if (res.ok) { setBackups(data.backups || []); setBackupAccess(data.permissions); }
       else setBackupError(data.error || 'Failed to load backups');
-    } catch (e: any) {
-      setBackupError(e.message);
+    } catch (e: unknown) {
+      setBackupError(e instanceof Error ? e.message : 'Yedekleme işlemi başarısız.');
     } finally {
       setBackupsLoading(false);
     }
-  };
+  }, [deviceId]);
+
+  useEffect(() => {
+    if (!activeBackupJob) return;
+    const timer = setInterval(async () => {
+      const result = await apiGet(`/api/integrations/nms/backup-jobs?id=${encodeURIComponent(activeBackupJob)}`);
+      const job = result.jobs?.[0];
+      if (!job) return;
+      if (job.status === 'succeeded' || job.status === 'failed') {
+        setTriggerResult({ ok: job.status === 'succeeded', msg: job.status === 'succeeded' ? 'Yedekleme tamamlandı.' : job.errorMessage || 'Yedekleme başarısız.' });
+        setActiveBackupJob(null); void loadBackups();
+      } else setTriggerResult({ ok: true, msg: job.status === 'retrying' ? 'Bağlantı hatası nedeniyle yeniden denenecek.' : 'Yedekleme işi devam ediyor.' });
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [activeBackupJob, deviceId, loadBackups]);
 
   const triggerBackup = async (backupType: string) => {
     setTriggering(true);
     setTriggerResult(null);
     try {
-      const res = await fetch(`/api/integrations/nms/devices/${deviceId}/backups`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ backupType }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setTriggerResult({ ok: true, msg: 'Backup started successfully.' });
-        setTimeout(loadBackups, 3000);
+      const data = await apiPost(`/api/integrations/nms/devices/${deviceId}/backups`, { backupType }, { headers: { 'Idempotency-Key': crypto.randomUUID() } });
+      if (data.success && data.job) {
+        setTriggerResult({ ok: true, msg: 'Yedekleme işi kuyruğa alındı.' });
+        setActiveBackupJob(data.job.id);
       } else {
         setTriggerResult({ ok: false, msg: data.hint || data.error || 'Failed to trigger backup' });
       }
-    } catch (e: any) {
-      setTriggerResult({ ok: false, msg: e.message });
+    } catch (e: unknown) {
+      setTriggerResult({ ok: false, msg: e instanceof Error ? e.message : 'Yedekleme işlemi başarısız.' });
     } finally {
       setTriggering(false);
     }
@@ -205,6 +218,7 @@ export default function ViewNmsDevicePage() {
       const res = await fetch(`/api/integrations/nms/devices/${deviceId}/backups/${backup.id}`);
       const data = await res.json();
       if (res.ok) setViewBackup({ id: backup.id, config: data.configuration || '', type: backup.backupType, createdAt: backup.createdAt });
+      else setBackupError(data.error || 'Yedek içeriği okunamadı.');
     } finally {
       setViewLoading(false);
     }
@@ -212,8 +226,9 @@ export default function ViewNmsDevicePage() {
 
   const deleteBackup = async (backupId: string) => {
     if (!confirm('Bu backup silinsin mi?')) return;
-    await fetch(`/api/integrations/nms/devices/${deviceId}/backups/${backupId}`, { method: 'DELETE' });
-    setBackups(prev => prev.filter(b => b.id !== backupId));
+    const response = await fetch(`/api/integrations/nms/devices/${deviceId}/backups/${backupId}`, { method: 'DELETE' });
+    if (response.ok) setBackups(prev => prev.filter(b => b.id !== backupId));
+    else setBackupError('Yedek silinemedi. Yönetici yetkinizi kontrol edin.');
   };
 
   const downloadConfig = (config: string, filename: string) => {
@@ -224,7 +239,7 @@ export default function ViewNmsDevicePage() {
     URL.revokeObjectURL(url);
   };
 
-  const loadDevice = async (silent = false) => {
+  const loadDevice = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     setError(null);
     try {
@@ -240,23 +255,23 @@ export default function ViewNmsDevicePage() {
         setHealthMetrics(data.healthMetrics || []);
         setTopologyLinks(data.topologyLinks || []);
       }
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Cihaz bilgileri yüklenemedi.');
     } finally {
       if (!silent) setLoading(false);
     }
-  };
+  }, [deviceId]);
 
   useEffect(() => {
     if (deviceId) { loadDevice(); loadBackups(); }
-  }, [deviceId]);
+  }, [deviceId, loadDevice, loadBackups]);
 
   // Auto-refresh every 30s to match SNMP polling interval
   useEffect(() => {
     if (!deviceId) return;
     const interval = setInterval(() => loadDevice(true), 30000);
     return () => clearInterval(interval);
-  }, [deviceId]);
+  }, [deviceId, loadDevice]);
 
   const formatDate = (ts: string | null) => {
     if (!ts) return '—';
@@ -417,7 +432,7 @@ export default function ViewNmsDevicePage() {
                 <RefreshCw className="h-4 w-4" />
                 Refresh
               </Button>
-              <Button size="sm" variant="outline" className="gap-2" onClick={() => triggerBackup('Running Config')} disabled={triggering}>
+              <Button size="sm" variant="outline" className="gap-2" onClick={() => triggerBackup('Running Config')} disabled={triggering || !backupAccess.create || !backupAccess.running}>
                 {triggering ? <Loader2 className="h-4 w-4 animate-spin" /> : <HardDrive className="h-4 w-4" />}
                 Backup Al
               </Button>
@@ -847,11 +862,11 @@ export default function ViewNmsDevicePage() {
         <TabsContent value="backups" className="space-y-4">
           {/* Trigger buttons */}
           <div className="flex items-center gap-3">
-            <Button size="sm" className="gap-2 bg-orange-500 hover:bg-orange-600 text-white" onClick={() => triggerBackup('Running Config')} disabled={triggering}>
+            <Button size="sm" className="gap-2 bg-orange-500 hover:bg-orange-600 text-white" onClick={() => triggerBackup('Running Config')} disabled={triggering || !backupAccess.create || !backupAccess.running}>
               {triggering ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
               Running Config Backup
             </Button>
-            <Button size="sm" variant="outline" className="gap-2" onClick={() => triggerBackup('Startup Config')} disabled={triggering}>
+            <Button size="sm" variant="outline" className="gap-2" onClick={() => triggerBackup('Startup Config')} disabled={triggering || !backupAccess.create || !backupAccess.startup}>
               {triggering ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
               Startup Config Backup
             </Button>

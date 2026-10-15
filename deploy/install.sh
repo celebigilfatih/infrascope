@@ -37,7 +37,7 @@ check_prerequisites() {
     fi
     
     # Check Docker Compose
-    if ! command -v docker compose &> /dev/null; then
+    if ! docker compose version > /dev/null 2>&1; then
         echo -e "${RED}Error: Docker Compose is not installed.${NC}"
         echo "Please install Docker Compose from https://docs.docker.com/compose/install/"
         exit 1
@@ -61,7 +61,8 @@ create_directories() {
     mkdir -p data/license-cache
     mkdir -p certs
     mkdir -p logs
-    mkdir -p images
+    mkdir -p images backups/database
+    chmod 700 backups backups/database
     
     echo -e "${GREEN}✓ Directories created${NC}"
 }
@@ -148,7 +149,7 @@ setup_env() {
 
     CURRENT_POSTGRES_PASSWORD=$(grep "^POSTGRES_PASSWORD=" .env | cut -d= -f2-)
     if [ -z "$CURRENT_POSTGRES_PASSWORD" ] || [ "$CURRENT_POSTGRES_PASSWORD" = "infrascope-prod" ]; then
-        set_env_value "POSTGRES_PASSWORD" "$(generate_secret)"
+        set_env_value "POSTGRES_PASSWORD" "$(generate_secret | tr '/+' '_-')"
     fi
     echo -e "${GREEN}✓ Generated secure database password${NC}"
 
@@ -160,53 +161,35 @@ setup_env() {
 
 # Load or pull Docker image
 prepare_images() {
-    echo -e "${YELLOW}Preparing Docker images...${NC}"
-    
-    # Source .env for registry/version
     set -a
     source .env
     set +a
-    
     REGISTRY=${REGISTRY:-ghcr.io/celebigilfatih}
     VERSION=${VERSION:-1.0.0}
-    IMAGE_REF="${REGISTRY}/infrascope:${VERSION}"
-    LOCAL_IMAGE_TAR="./images/infrascope-${VERSION}.tar"
-
-    if docker image inspect "${IMAGE_REF}" > /dev/null 2>&1; then
-        echo -e "${GREEN}✓ Image already available: ${IMAGE_REF}${NC}"
-        return 0
-    fi
-
-    if [ -f "${LOCAL_IMAGE_TAR}" ]; then
-        echo "Loading local appliance image ${LOCAL_IMAGE_TAR}..."
-        docker load -i "${LOCAL_IMAGE_TAR}"
-
-        if docker image inspect "${IMAGE_REF}" > /dev/null 2>&1; then
-            echo -e "${GREEN}✓ Local image loaded: ${IMAGE_REF}${NC}"
-            return 0
+    for component in infrascope infrascope-nms; do
+        image_ref="${REGISTRY}/${component}:${VERSION}"
+        image_tar="./images/${component}-${VERSION}.tar"
+        if docker image inspect "$image_ref" > /dev/null 2>&1; then
+            continue
         fi
-
-        echo -e "${RED}Error: ${LOCAL_IMAGE_TAR} did not provide expected image ${IMAGE_REF}.${NC}"
-        echo "Rebuild the appliance image tar with the expected tag."
-        exit 1
-    fi
-    
-    echo "Local image not found. Pulling ${IMAGE_REF}..."
-    docker pull "${IMAGE_REF}" || {
-        echo -e "${RED}Error: Could not prepare image ${IMAGE_REF}.${NC}"
-        echo "For offline OVA installs, place the image at ${LOCAL_IMAGE_TAR}."
-        echo "For online installs, make sure this VM can access the registry."
-        exit 1
-    }
-    
-    echo -e "${GREEN}✓ Image ready: ${IMAGE_REF}${NC}"
+        if [ -f "$image_tar" ]; then
+            docker load -i "$image_tar"
+        else
+            docker pull "$image_ref"
+        fi
+        docker image inspect "$image_ref" > /dev/null
+    done
+}
+# Start services
+prepare_permissions() {
+    docker compose run --rm --no-deps --user 0 --entrypoint sh app -c \
+        'chown 1001:1001 /app/.machine-id /app/.license-cache /app/logs'
 }
 
-# Start services
 start_services() {
     echo -e "${YELLOW}Starting InfraScope...${NC}"
     
-    docker compose up -d
+    docker compose up -d --wait --wait-timeout 300
     
     echo ""
     echo -e "${GREEN}╔════════════════════════════════════════════════════════════════╗${NC}"
@@ -237,7 +220,9 @@ main() {
     check_prerequisites
     create_directories
     setup_env
+    chmod 600 .env
     prepare_images
+    prepare_permissions
     start_services
 }
 

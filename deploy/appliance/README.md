@@ -31,6 +31,8 @@ Build and tag the production image outside the customer VM:
 ```bash
 docker build -t ghcr.io/celebigilfatih/infrascope:1.0.0 .
 docker save ghcr.io/celebigilfatih/infrascope:1.0.0 -o dist/infrascope-1.0.0.tar
+docker build -f nms_service/Dockerfile -t ghcr.io/celebigilfatih/infrascope-nms:1.0.0 .
+docker save ghcr.io/celebigilfatih/infrascope-nms:1.0.0 -o dist/infrascope-nms-1.0.0.tar
 ```
 
 Copy the saved image into the VM at:

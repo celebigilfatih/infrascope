@@ -160,6 +160,7 @@ class SSHSession:
         self.host_key_fingerprint = cfg.host_key_fingerprint
         self.host_key_algorithm = cfg.host_key_algorithm
         self.client: Optional[paramiko.SSHClient] = None
+        self.last_error: Optional[Exception] = None
         self._lock = threading.Lock()  # prevents double-connect/close
 
     # ---- Config identity check ------------------------------------------------
@@ -170,6 +171,7 @@ class SSHSession:
             and self.username == cfg.username
             and self.password == cfg.password
             and self.port == cfg.port
+            and self.vendor == cfg.vendor
             and self.host_key_fingerprint == cfg.host_key_fingerprint
         )
 
@@ -187,7 +189,10 @@ class SSHSession:
                 return True
 
             # Bound parallel SSH opens across the whole orchestrator
-            _ssh_semaphore.acquire()
+            if not _ssh_semaphore.acquire(timeout=self.timeout):
+                self.last_error = TimeoutError("SSH connection capacity exhausted")
+                return False
+            client = None
             try:
                 if not self.host_key_fingerprint:
                     raise paramiko.SSHException("SSH host key has not been explicitly trusted")
@@ -214,6 +219,12 @@ class SSHSession:
                 )
                 return True
             except Exception as e:
+                self.last_error = e
+                if client is not None:
+                    try:
+                        client.close()
+                    except Exception:
+                        pass
                 # Release the slot on failure — otherwise we leak a permit
                 _ssh_semaphore.release()
                 logger.error(
@@ -506,6 +517,12 @@ class SSHPoller:
                     raise ValueError("Device rejected the allowlisted backup operation")
                 if len(output.strip()) < 50:
                     raise ValueError("Configuration output is unexpectedly short")
+                from nms_service.ssh.backups import resolve_platform, validate_configuration
+                from types import SimpleNamespace
+                platform = resolve_platform(SimpleNamespace(vendor=vendor))
+                if not platform:
+                    raise ValueError("Backup platform is ambiguous; use the durable backup workflow")
+                output = validate_configuration(output, platform)
                 logger.info(
                     f"SSH backup read completed for device {device_id} "
                     f"(vendor={_canonical_vendor(vendor)}, size={len(output)} bytes)"

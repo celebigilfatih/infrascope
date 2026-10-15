@@ -8,7 +8,7 @@ services:
   # PostgreSQL Database Service (Production)
   db:
     image: postgres:15-alpine
-    container_name: infrascope-db-prod
+    container_name: ${INFRASCOPE_CONTAINER_PREFIX:-infrascope}-db-prod
     restart: always
     environment:
       POSTGRES_USER: ${DB_USER}
@@ -40,7 +40,7 @@ services:
       dockerfile: Dockerfile
       args:
         NODE_ENV: production
-    container_name: infrascope-web-prod
+    container_name: ${INFRASCOPE_CONTAINER_PREFIX:-infrascope}-web-prod
     restart: always
     environment:
       NODE_ENV: production
@@ -48,9 +48,10 @@ services:
       NEXTAUTH_URL: ${NEXTAUTH_URL}
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
       FORTIGATE_REQUEST_TIMEOUT_MS: ${FORTIGATE_REQUEST_TIMEOUT_MS:-15000}
-      INTEGRATION_CREDENTIALS_KEY: ${INTEGRATION_CREDENTIALS_KEY:-}
+      INTEGRATION_CREDENTIALS_KEY: ${INTEGRATION_CREDENTIALS_KEY:?INTEGRATION_CREDENTIALS_KEY is required}
       INTEGRATION_CREDENTIALS_PREVIOUS_KEY: ${INTEGRATION_CREDENTIALS_PREVIOUS_KEY:-}
       NMS_INTERNAL_TOKEN: ${NMS_INTERNAL_TOKEN:?NMS_INTERNAL_TOKEN is required}
+      NMS_BACKEND_URL: http://nms:8500
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
       PORT: 3000
       DB_HOST: db
@@ -66,7 +67,7 @@ services:
     networks:
       - infrascope-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health/ready"]
       interval: 60s
       timeout: 5s
       retries: 5
@@ -77,6 +78,60 @@ services:
     tmpfs:
       - /app/.next/cache
       - /tmp
+
+  nms:
+    build:
+      context: .
+      dockerfile: nms_service/Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}
+      NMS_ENV: production
+      NMS_BACKUP_WORKERS: ${NMS_BACKUP_WORKERS:-2}
+      NMS_INTERNAL_TOKEN: ${NMS_INTERNAL_TOKEN:?NMS_INTERNAL_TOKEN is required}
+      INTEGRATION_CREDENTIALS_KEY: ${INTEGRATION_CREDENTIALS_KEY:?INTEGRATION_CREDENTIALS_KEY is required}
+      INTEGRATION_CREDENTIALS_PREVIOUS_KEY: ${INTEGRATION_CREDENTIALS_PREVIOUS_KEY:-}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+    depends_on:
+      web:
+        condition: service_healthy
+    volumes:
+      - ./backups:/recovery
+      - ./certs:/app/certs:ro
+      - nms_logs_prod:/app/logs
+    networks:
+      - infrascope-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8500/health/ready', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  database-backup:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      PGHOST: db
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_DB: ${DB_NAME}
+      PGPASSWORD: ${DB_PASSWORD}
+      DB_BACKUP_INTERVAL_SECONDS: ${DB_BACKUP_INTERVAL_SECONDS:-86400}
+      DB_BACKUP_RETENTION_DAYS: ${DB_BACKUP_RETENTION_DAYS:-14}
+    volumes:
+      - ./backups/database:/var/lib/postgresql/backups
+      - ./docker/postgres-backup.sh:/backup-script.sh:ro
+    entrypoint: ["/bin/sh", "-c", "sed 's/\\r$//' /backup-script.sh > /tmp/backup.sh; exec sh /tmp/backup.sh --loop"]
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - infrascope-network
+    healthcheck:
+      test: ["CMD", "sh", "/tmp/backup.sh", "--health"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
 
   # Reverse Proxy (Caddy) - Optional but recommended for production
   # caddy:
@@ -112,12 +167,13 @@ services:
 networks:
   infrascope-network:
     driver: bridge
-    name: infrascope-network
+    name: ${INFRASCOPE_CONTAINER_PREFIX:-infrascope}-network
 
 # Volumes
 volumes:
+  nms_logs_prod:
   postgres_data_prod:
-    name: infrascope-postgres-data-prod
+    name: ${INFRASCOPE_CONTAINER_PREFIX:-infrascope}-postgres-data-prod
     driver: local
   # caddy_data_prod:
   #   name: infrascope-caddy-data-prod

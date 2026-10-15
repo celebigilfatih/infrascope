@@ -9,6 +9,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
+import type { Prisma } from '@prisma/client';
 import type FortiAnalyzerService from '@/lib/integrations/fortianalyzer';
 import type { AlarmQueryContext, QueryResult, QueryStats, CachedEventWhere } from './types';
 import { createLogger } from '@/lib/logger';
@@ -45,10 +46,12 @@ export async function runAlarmQuery(
   options: {
     /** If cache returns 0 events AND this is true, also try FA as a safety net */
     softFallback?: boolean;
+    /** Authoritative integration database; independent of FortiAnalyzer cache health. */
+    databaseOnly?: boolean;
   } = {}
 ): Promise<QueryResult> {
   const start = Date.now();
-  const useCache = !ctx.bypassCache && ctx.cacheIsFresh && ctx.eventCache != null;
+  const useCache = options.databaseOnly || (!ctx.bypassCache && ctx.cacheIsFresh && ctx.eventCache != null);
 
   if (useCache) {
     try {
@@ -71,7 +74,6 @@ export async function runAlarmQuery(
       // do a quick FA verification. Only fires when softFallback=true.
       if (events.length === 0 && options.softFallback) {
         log.info({ alarmCode: ctx.alarmCode }, 'Cache empty — soft fallback to FA');
-        const faStart = Date.now();
         try {
           const faEvents = await faQueryFn(ctx.faService);
           if (faEvents.length > 0) {
@@ -95,12 +97,12 @@ export async function runAlarmQuery(
 
       return { events, stats };
     } catch (cacheErr) {
+      if (options.databaseOnly) throw cacheErr;
       log.warn({ alarmCode: ctx.alarmCode, err: cacheErr }, 'Cache query failed, falling back to FA');
     }
   }
 
   // Live FortiAnalyzer query
-  const faStart = Date.now();
   try {
     const events = await faQueryFn(ctx.faService);
     const durationMs = Date.now() - start;
@@ -152,13 +154,13 @@ export async function queryCache(
   limit = 500
 ): Promise<Array<Record<string, unknown>>> {
   const rows = await prisma.cachedEvent.findMany({
-    where: where as any, // Prisma's JSON filter typing requires `as any` for path conditions
+    where: where as Prisma.CachedEventWhereInput,
     orderBy: { eventTime: 'desc' },
     take: limit,
     select: { rawLog: true },
   });
   // Return rawLog objects — consistent with the rest of the alarm engine
-  return rows.map((r: any) => r.rawLog as Record<string, unknown>);
+  return rows.map(r => r.rawLog as Record<string, unknown>);
 }
 
 // ─── FortiAnalyzer Direct Query ───────────────────────────────────────────────

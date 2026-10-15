@@ -12,6 +12,10 @@ Do not copy `deploy/license-server/` to customer servers. That directory is only
 
 ## Requirements
 
+Each company must have independent application/database/NMS services and unique encryption keys. The package includes `postgres-backup.sh` and `backup.sh`; preserve them beside the Compose file. Both application and NMS images must use the same pinned release. Offline packages require both image tar files.
+
+Configuration backup schedules are opt-in. After installation, open **Konfigürasyon yedekleri**, select ambiguous device OS profiles, verify a manual backup and then enable schedules. Regular local DB dumps are stored under `backups/database`. Use `backup.sh` with a separately protected passphrase file to create a portable encrypted DB-and-key recovery bundle, and copy it to independent storage. See `BACKUP_OPERATIONS.md` bundled with this installation for recovery and release validation.
+
 - Docker Engine
 - Docker Compose v2
 - Access to `ghcr.io/celebigilfatih`

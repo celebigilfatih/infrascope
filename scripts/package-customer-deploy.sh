@@ -20,11 +20,14 @@ cp "${ROOT_DIR}/deploy/.env.example" "${PACKAGE_DIR}/.env.example"
 cp "${ROOT_DIR}/deploy/env.example" "${PACKAGE_DIR}/env.example"
 cp "${ROOT_DIR}/deploy/install.sh" "${PACKAGE_DIR}/install.sh"
 cp "${ROOT_DIR}/deploy/update.sh" "${PACKAGE_DIR}/update.sh"
+cp "${ROOT_DIR}/deploy/backup.sh" "${PACKAGE_DIR}/backup.sh"
+cp "${ROOT_DIR}/docker/postgres-backup.sh" "${PACKAGE_DIR}/postgres-backup.sh"
 cp "${ROOT_DIR}/deploy/INSTALL.md" "${PACKAGE_DIR}/INSTALL.md"
+cp "${ROOT_DIR}/docs/30-runbooks/nms-backups.md" "${PACKAGE_DIR}/BACKUP_OPERATIONS.md"
 cp "${ROOT_DIR}/Kurulum/infrascope_customer_cookbook.html" "${PACKAGE_DIR}/infrascope_customer_cookbook.html"
 cp "${ROOT_DIR}/Kurulum/infrascope_user_cookbook.html" "${PACKAGE_DIR}/infrascope_user_cookbook.html"
 
-chmod +x "${PACKAGE_DIR}/install.sh" "${PACKAGE_DIR}/update.sh"
+chmod +x "${PACKAGE_DIR}/install.sh" "${PACKAGE_DIR}/update.sh" "${PACKAGE_DIR}/backup.sh"
 
 if find "${PACKAGE_DIR}" -path "*/license-server/*" -print -quit | grep -q .; then
   echo "Refusing to package central license server files into customer artifact." >&2

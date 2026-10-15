@@ -8,9 +8,9 @@ const api = axios.create({
   },
 });
 
-export const apiGet = async (url: string, params?: any) => {
+export const apiGet = async (url: string, params?: any, options?: { timeout?: number }) => {
   try {
-    const response = await api.get(url, { params });
+    const response = await api.get(url, { params, timeout: options?.timeout });
     return response.data;
   } catch (error: any) {
     return {
@@ -20,9 +20,9 @@ export const apiGet = async (url: string, params?: any) => {
   }
 };
 
-export const apiPost = async (url: string, data: any) => {
+export const apiPost = async (url: string, data: any, options?: { headers?: Record<string, string>; timeout?: number }) => {
   try {
-    const response = await api.post(url, data);
+    const response = await api.post(url, data, options);
     return response.data;
   } catch (error: any) {
     return {

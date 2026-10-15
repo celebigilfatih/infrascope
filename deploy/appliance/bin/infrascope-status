@@ -25,6 +25,8 @@ echo "URL:  ${APP_URL:-http://localhost:${APP_PORT}}"
 echo ""
 
 docker compose ps
+echo "Backup capability:"
+docker compose exec -T nms python -c "import urllib.request; urllib.request.urlopen('http://localhost:8500/health/ready', timeout=5); print('ready')" || echo "NOT READY: inspect NMS logs"
 
 echo ""
 echo "Readiness:"

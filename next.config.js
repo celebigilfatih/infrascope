@@ -54,7 +54,7 @@ const nextConfig = {
       },
       {
         source: '/api/integrations/nms/:path*',
-        headers: [{ key: 'Cache-Control', value: 'public, s-maxage=30, stale-while-revalidate=120' }],
+        headers: [{ key: 'Cache-Control', value: 'private, no-store' }],
       },
       {
         source: '/api/security/quarantine',

@@ -81,7 +81,7 @@
 |---|---|---|
 | **Timeout** | 3s | Fail-fast — don't block poll cycles |
 | **Retries** | 1 | One retry is enough; unreachable devices should fail quickly |
-| **Community** | `Nat3k20May17` (Cisco/FortiGate standard) | Configurable per device |
+| **Community** | Per-device encrypted value | Configurable per device |
 | **Polling interval** | Configurable + jitter | Prevents thundering herd |
 
 ## NMS_PORT_DOWN Alarm
@@ -105,23 +105,30 @@ the alarm is auto-resolved.
 
 ## Config Backup Integration
 
-NMS agent performs periodic config backups via SSH:
-1. Detect vendor (FortiOS, Cisco, HP Comware)
-2. Use vendor-appropriate CLI command
-3. Handle pagers (`--More--`) via terminal width setting
-4. Store config text in backup table
-5. Expose via `/api/integrations/nms/backups`
+Configuration backups use durable PostgreSQL jobs and an independent NMS worker.
+ADMIN/EDITOR requests commit a job and audit entry, then return HTTP 202. Fixed OS
+profiles select actual Running/Startup commands; unsupported combinations fail.
+SSH capture enforces approved host keys, bounded output/deadlines, clean completion
+and platform-specific structural checks. Successful artifacts are encrypted with
+AES-256-GCM and verified by SHA-256 on content access.
 
-The general backup list reads metadata from the shared `nms_backups` table through
-Prisma, including device names and numeric file sizes. Configuration text and
-credentials are excluded from list responses. Both general and device-specific
-detail/download routes decrypt stored configurations and verify SHA-256 checksums.
-Creation delegates to the device SSH backup workflow; deletion requires ADMIN
-authorization and an audit record. The supported creation operation is an immediate
-Running Config backup. Scheduled, Startup Config, and Full Backup creation are not
-implemented. A list API failure must be shown as unavailable rather than as zero
-backups.
+The worker reloads current device credentials independently of SNMP polling,
+serializes work per device, retries only transient failures and fences stale lease
+owners. Failed authentication blocks unchanged credentials for 15 minutes. The UI
+shows durable job state separately from saved artifacts. Active users can read
+metadata; ADMIN/EDITOR can create/read content; ADMIN controls deletion/policies.
+Content reads, outcomes, policy changes and retention are audited. Deleting an
+inventory device preserves its encrypted artifacts as global archive records.
 
+Per-device interval schedules are explicitly enabled by ADMIN. Retention preserves
+the newest configured count. Failure and overdue signals use `NMS_BACKUP_FAILED`
+in the existing query registry, with cooldown and automatic incident resolution.
+Database-only queries do not depend on FortiAnalyzer cache availability.
+
+Customer packages contain application, PostgreSQL, NMS and persistent database-dump
+services. Dedicated encryption keys are mandatory in production. Local dumps and
+portable authenticated DB-and-key recovery bundles serve different purposes; see
+`docs/30-runbooks/nms-backups.md` and ADR-007 for platform limits, recovery and tests.
 ## Network Device Discovery
 
 `/api/integrations/nms/discovery` endpoint:

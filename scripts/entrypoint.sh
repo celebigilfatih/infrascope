@@ -9,6 +9,10 @@ set -e
 echo "🚀 InfraScope Container Starting..."
 
 if [ "$NODE_ENV" = "production" ]; then
+  if [ -z "$INTEGRATION_CREDENTIALS_KEY" ]; then
+    echo "INTEGRATION_CREDENTIALS_KEY is required in production. Preserve it with recovery material."
+    exit 1
+  fi
   if [ -z "$NEXTAUTH_SECRET" ] || echo "$NEXTAUTH_SECRET" | grep -q "^change-me"; then
     echo "❌ NEXTAUTH_SECRET is missing or uses a placeholder value."
     exit 1

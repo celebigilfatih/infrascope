@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { randomUUID } from 'crypto';
 import { createLogger } from '@/lib/logger';
 import FortiAnalyzerService from '@/lib/integrations/fortianalyzer';
 import { VMwareService } from '@/lib/integrations/vmware';
@@ -3959,6 +3960,49 @@ export class AlarmDetectionEngine {
     });
 
     if (nmsAlarms.length === 0) return results;
+
+    const backupAlarm = nmsAlarms.find(alarm => alarm.code === 'NMS_BACKUP_FAILED');
+    if (backupAlarm) {
+      try {
+        const query = ALARM_QUERY_REGISTRY.get('NMS_BACKUP_FAILED')!;
+        const { events } = await query({ alarmCode: backupAlarm.code, timeWindowMinutes: 60,
+          eventCache: null, cacheIsFresh: false, faService: this.service! });
+        const active = new Set(events.map(event => `${event.inventory_device_id}:${event.condition_key}`));
+        const open = await prisma.alarmEvent.findMany({ where: { alarmId: backupAlarm.id, incident: { status: { in: ['OPEN', 'ACKNOWLEDGED'] } } }, select: { id: true, rawData: true } });
+        const resolved = open.filter(event => {
+          const raw = event.rawData as Record<string, unknown> | null;
+          return raw && !active.has(`${raw.inventory_device_id}:${raw.condition_key}`);
+        }).map(event => event.id);
+        if (resolved.length) await resolveIncidentsForEvents(resolved, 'Backup succeeded or policy/device is no longer actionable');
+        for (const event of events) {
+          const inventoryId = String(event.inventory_device_id);
+          const condition = String(event.condition_key);
+          const cooldownKey = `${inventoryId}:${condition}`;
+          const cooldownUntil = new Date(Date.now() + Math.max(1, backupAlarm.cooldownMinutes) * 60000);
+          const slot = await prisma.$queryRaw<Array<{ cooldownUntil: Date }>>`
+            INSERT INTO alarm_cooldowns (id,"alarmId","deviceName","cooldownUntil")
+            VALUES (${randomUUID()},${backupAlarm.id},${cooldownKey},${cooldownUntil})
+            ON CONFLICT ("alarmId","deviceName") DO UPDATE SET "cooldownUntil"=EXCLUDED."cooldownUntil"
+            WHERE alarm_cooldowns."cooldownUntil"<=CURRENT_TIMESTAMP RETURNING "cooldownUntil"`;
+          if (!slot.length) continue;
+          try {
+            const recorded = await recordAlarmOccurrence({
+              alarm: { ...backupAlarm, source: 'nms' }, entityType: 'nms-backup', entityId: inventoryId,
+              conditionKey: condition, sourceEventId: `${event.source_event_id}:${condition}:${slot[0].cooldownUntil.toISOString()}`,
+              title: `Cihaz yedeği: ${event.device_name}`,
+              message: String(event.error_message || 'Cihaz yedeği kontrol edilmelidir.'),
+              deviceName: String(event.device_name), rawData: { ...event, source: 'nms' },
+            });
+            if (recorded.created) results.push({ alarmCode: backupAlarm.code, triggered: true, matchCount: 1, events: [{ id: recorded.event.id }] });
+          } catch (error) {
+            await prisma.alarmCooldown.deleteMany({ where: { alarmId: backupAlarm.id, deviceName: cooldownKey, cooldownUntil: slot[0].cooldownUntil } });
+            throw error;
+          }
+        }
+      } catch (error) {
+        results.push({ alarmCode: backupAlarm.code, triggered: false, matchCount: 0, events: [], error: (error as Error).message });
+      }
+    }
 
     // ── NMS_PORT_DOWN ─────────────────────────────────────────────────────────
     // False-positive prevention: only alarm if port has been down for at least

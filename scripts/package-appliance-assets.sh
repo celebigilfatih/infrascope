@@ -14,13 +14,16 @@ cp "${ROOT_DIR}/deploy/docker-compose.yml" "${PACKAGE_DIR}/opt/infrascope/docker
 cp "${ROOT_DIR}/deploy/env.example" "${PACKAGE_DIR}/opt/infrascope/env.example"
 cp "${ROOT_DIR}/deploy/install.sh" "${PACKAGE_DIR}/opt/infrascope/install.sh"
 cp "${ROOT_DIR}/deploy/update.sh" "${PACKAGE_DIR}/opt/infrascope/update.sh"
+cp "${ROOT_DIR}/deploy/backup.sh" "${PACKAGE_DIR}/opt/infrascope/backup.sh"
+cp "${ROOT_DIR}/docker/postgres-backup.sh" "${PACKAGE_DIR}/opt/infrascope/postgres-backup.sh"
 cp "${ROOT_DIR}/deploy/INSTALL.md" "${PACKAGE_DIR}/opt/infrascope/INSTALL.md"
+cp "${ROOT_DIR}/docs/30-runbooks/nms-backups.md" "${PACKAGE_DIR}/opt/infrascope/BACKUP_OPERATIONS.md"
 cp "${ROOT_DIR}/deploy/appliance/README.md" "${PACKAGE_DIR}/opt/infrascope/APPLIANCE_README.md"
 cp "${ROOT_DIR}/deploy/appliance/bin/infrascope-setup" "${PACKAGE_DIR}/usr/local/bin/infrascope-setup"
 cp "${ROOT_DIR}/deploy/appliance/bin/infrascope-status" "${PACKAGE_DIR}/usr/local/bin/infrascope-status"
 cp "${ROOT_DIR}/deploy/appliance/bin/infrascope-update" "${PACKAGE_DIR}/usr/local/bin/infrascope-update"
 
-chmod +x "${PACKAGE_DIR}/opt/infrascope/install.sh" "${PACKAGE_DIR}/opt/infrascope/update.sh"
+chmod +x "${PACKAGE_DIR}/opt/infrascope/install.sh" "${PACKAGE_DIR}/opt/infrascope/update.sh" "${PACKAGE_DIR}/opt/infrascope/backup.sh"
 chmod +x "${PACKAGE_DIR}/usr/local/bin/infrascope-setup" "${PACKAGE_DIR}/usr/local/bin/infrascope-status" "${PACKAGE_DIR}/usr/local/bin/infrascope-update"
 
 cat > "${PACKAGE_DIR}/INSTALL_ON_VM.sh" <<'EOF'
@@ -35,11 +38,11 @@ fi
 mkdir -p /opt/infrascope /usr/local/bin
 cp -a opt/infrascope/. /opt/infrascope/
 cp -a usr/local/bin/. /usr/local/bin/
-chmod +x /opt/infrascope/install.sh /opt/infrascope/update.sh
+chmod +x /opt/infrascope/install.sh /opt/infrascope/update.sh /opt/infrascope/backup.sh
 chmod +x /usr/local/bin/infrascope-setup /usr/local/bin/infrascope-status /usr/local/bin/infrascope-update
 
 echo "InfraScope appliance files installed."
-echo "Next step: place /opt/infrascope/images/infrascope-<version>.tar if not already present."
+echo "Next step: place both infrascope-<version>.tar and infrascope-nms-<version>.tar under /opt/infrascope/images."
 echo "Run: sudo infrascope-setup"
 EOF
 

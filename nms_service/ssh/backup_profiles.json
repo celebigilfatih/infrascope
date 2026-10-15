@@ -1,0 +1,12 @@
+{
+  "cisco_ios": {"label": "Cisco IOS / IOS XE", "running": "show running-config", "startup": "show startup-config", "pager": "terminal length 0", "validation": "ios"},
+  "cisco_nxos": {"label": "Cisco NX-OS", "running": "show running-config", "startup": "show startup-config", "pager": "terminal length 0", "validation": "ios"},
+  "arista_eos": {"label": "Arista EOS", "running": "show running-config", "startup": "show startup-config", "pager": "terminal length 0", "validation": "ios"},
+  "comware": {"label": "HPE / H3C Comware", "running": "display current-configuration", "startup": null, "pager": "screen-length disable", "validation": "comware"},
+  "huawei_vrp": {"label": "Huawei VRP", "running": "display current-configuration", "startup": null, "pager": "screen-length 0 temporary", "validation": "comware"},
+  "aruba_switch": {"label": "HP ProCurve / ArubaOS-Switch", "running": "show running-config", "startup": "show config", "pager": "no page", "validation": "procurve"},
+  "aruba_cx": {"label": "Aruba AOS-CX", "running": "show running-config", "startup": "show startup-config", "pager": "no page", "validation": "cx"},
+  "junos": {"label": "Juniper Junos", "running": "show configuration | display set | no-more", "startup": null, "pager": null, "validation": "junos"},
+  "fortios": {"label": "Fortinet FortiOS", "running": "show full-configuration", "startup": null, "pager": null, "validation": "fortios"},
+  "routeros": {"label": "MikroTik RouterOS", "running": "/export terse", "startup": null, "pager": null, "validation": "routeros"}
+}
