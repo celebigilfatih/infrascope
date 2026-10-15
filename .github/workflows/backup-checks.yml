@@ -8,6 +8,8 @@ on:
       - 'lib/nms/**'
       - 'lib/security/**'
       - 'lib/alarms/**'
+      - 'app/api/health/**'
+      - 'scripts/check-alarm-health.cjs'
       - 'lib/prisma.ts'
       - 'app/api/integrations/nms/**'
       - 'app/integrations/nms/**'
@@ -58,6 +60,7 @@ jobs:
       - run: npx prisma generate && npx prisma migrate deploy
       - run: npm run type-check
       - run: npm run test:nms-backups
+      - run: npm run test:alarm-health
       - run: npm run security:credentials-check
       - run: pip install -r nms_service/requirements.txt
       - run: python -m nms_service.tests.run_backups

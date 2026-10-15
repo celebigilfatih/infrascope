@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Alarm health recovery** — An absent or disabled optional FortiAnalyzer integration no longer creates repeated alarm-check errors in NMS-only installations. Configured-source failures still surface. Health preserves the last-hour error history and clears the alarm degradation contribution after a successful check; subsequent failures are counted again.
+
 - **Reliable per-company configuration backups** — Added durable PostgreSQL jobs with fenced leases, per-device locking, bounded retries and authentication backoff; explicit OS profiles and Running/Startup capabilities; structural output validation; role-controlled, audited content access; archived artifacts after inventory deletion; opt-in schedules, retention and failure/overdue alarms. Customer and production packages include NMS and persistent database dumps, with an authenticated recovery bundle for database and installation keys. Fresh-install schema gaps are reconciled by forward migrations.
 
 - **General configuration backups** — The general backup page now lists the same persisted records as device details, supports device/type/search filters, downloads decrypted configurations with checksum verification, and uses the existing audited device workflow for creation and ADMIN-only deletion. API failures are displayed instead of appearing as an empty list.

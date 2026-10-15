@@ -277,6 +277,7 @@ export async function runAlarmCheck(): Promise<AlarmCheckResult> {
     const GLOBAL_TIMEOUT_MS = 10 * 60 * 1000;
     log.info({ timeoutSec: GLOBAL_TIMEOUT_MS / 1000 }, 'Starting evaluation');
     const sourceErrors: Array<{ code: string; error: string }> = [];
+    let fortiAnalyzerConfigured = false;
 
     const results = await Promise.race<EvaluationResult[]>([
       (async () => {
@@ -296,10 +297,10 @@ export async function runAlarmCheck(): Promise<AlarmCheckResult> {
         });
 
         if (!config) {
-          sourceErrors.push({ code: 'FORTIANALYZER_SOURCE', error: 'FortiAnalyzer not configured' });
-          log.info('FortiAnalyzer is not configured; independent alarm sources completed');
+          log.info({ source: 'FORTIANALYZER', reason: 'not-configured' }, 'Skipping optional alarm source; independent sources completed');
           return combined;
         }
+        fortiAnalyzerConfigured = true;
 
         const faConfig = unprotectIntegrationConfig<{
           host: string;
@@ -384,6 +385,9 @@ export async function runAlarmCheck(): Promise<AlarmCheckResult> {
       { durationSec, triggered: triggered.length, errors: errors.length, cooldowns: cooldowns.length },
       'Evaluation complete'
     );
+    if (errors.length > 0) {
+      log.warn({ errors }, 'Alarm evaluation reported errors');
+    }
     log.info({ alarmsPerSec }, 'Performance metric');
 
     // ── Write to DB (update RUNNING → final status) ────────────────────────
@@ -419,7 +423,7 @@ export async function runAlarmCheck(): Promise<AlarmCheckResult> {
 
     // ── FA health alert ─────────────────────────────────────────
     // After every check, if FA has been failing, notify ops team once per hour.
-    if (!sourceErrors.some((item) => item.code === 'FORTIANALYZER_SOURCE' && item.error === 'FortiAnalyzer not configured')) {
+    if (fortiAnalyzerConfigured) {
       maybeSendFAHealthAlert().catch((err) =>
         log.error({ err }, 'maybeSendFAHealthAlert failed (non-fatal)')
       );

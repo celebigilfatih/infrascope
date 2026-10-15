@@ -4,13 +4,14 @@
  * Reports datasource and background-service health without mutating runtime state.
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getSchedulerStatus } from '@/lib/alarm-scheduler';
 import { getAlarmMonitor } from '@/lib/alarms/alarm-monitor';
 import { prisma } from '@/lib/prisma';
 import { getSharedFortiAnalyzerService, getFortiAnalyzerLoginHealth } from '@/lib/integrations/fortianalyzer';
 import { getEventCacheStatus } from '@/lib/alarms/detection-engine';
 import { getDLQStats } from '@/lib/notifications/dlq-worker';
+import { getAlarmHealthStats, type AlarmHealthStats } from '@/lib/alarms/health';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -60,12 +61,7 @@ interface HealthStatus {
     vmware: VMwareHealthResult;
     nms: NmsHealthResult;
   };
-  alarms: {
-    totalDefinitions: number;
-    enabledDefinitions: number;
-    recentEvents: number;
-    recentErrors: number;
-  };
+  alarms: AlarmHealthStats;
   notifications: {
     dlq: {
       pending: number;
@@ -84,7 +80,7 @@ async function checkDatabaseHealth(): Promise<{ status: 'healthy' | 'unhealthy';
   try {
     await prisma.$queryRaw`SELECT 1`;
     return { status: 'healthy', responseTimeMs: Date.now() - startTime };
-  } catch (error) {
+  } catch {
     return { status: 'unhealthy', responseTimeMs: Date.now() - startTime };
   }
 }
@@ -235,10 +231,10 @@ async function checkNmsHealth(): Promise<NmsHealthResult> {
 
   // Query DB metrics in parallel with the FastAPI health check
   const [pollingDevices, recentMetrics] = await Promise.all([
-    (prisma as any).device.count({
+    prisma.device.count({
       where: { pollingEnabled: true, nmsDeviceId: { not: null } },
     }).catch(() => 0),
-    (prisma as any).nmsHealthMetric.count({
+    prisma.nmsHealthMetric.count({
       where: { collectedAt: { gte: tenMinAgo } },
     }).catch(() => 0),
   ]);
@@ -298,27 +294,6 @@ async function checkNmsHealth(): Promise<NmsHealthResult> {
 }
 
 /**
- * Get alarm statistics
- */
-async function getAlarmStats(): Promise<{ totalDefinitions: number; enabledDefinitions: number; recentEvents: number; recentErrors: number }> {
-  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-  
-  const [totalDefs, enabledDefs, recentEvents, recentErrors] = await Promise.all([
-    prisma.alarmDefinition.count(),
-    prisma.alarmDefinition.count({ where: { enabled: true } }),
-    prisma.alarmEvent.count({ where: { createdAt: { gte: oneHourAgo } } }),
-    prisma.alarmCheckLog.count({ where: { checkTime: { gte: oneHourAgo }, errorCount: { gt: 0 } } }),
-  ]);
-  
-  return {
-    totalDefinitions: totalDefs,
-    enabledDefinitions: enabledDefs,
-    recentEvents,
-    recentErrors,
-  };
-}
-
-/**
  * Read alarm service state and scheduler heartbeat without starting services.
  */
 async function getAlarmServicesHealth() {
@@ -326,13 +301,13 @@ async function getAlarmServicesHealth() {
   const monitorStatus = getAlarmMonitor().getStatus();
 
   let schedulerOk = schedulerStatus.running;
-  let monitorOk = monitorStatus.running;
+  const monitorOk = monitorStatus.running;
   let schedulerHeartbeatStale = false;
 
   // Check heartbeat staleness — detect frozen scheduler even if interval is set
   if (schedulerOk) {
     try {
-      const heartbeat = await (prisma as any).systemConfig?.findUnique?.({
+      const heartbeat = await prisma.systemConfig.findUnique({
         where: { key: 'scheduler_last_tick' },
       });
       if (heartbeat?.value) {
@@ -361,7 +336,7 @@ async function getAlarmServicesHealth() {
   return { schedulerOk, monitorOk, schedulerHeartbeatStale };
 }
 
-export async function GET(_request: NextRequest) {
+export async function GET() {
   const { schedulerOk, monitorOk, schedulerHeartbeatStale } = await getAlarmServicesHealth();
   
   // Check all datasources + DLQ stats in parallel
@@ -370,7 +345,7 @@ export async function GET(_request: NextRequest) {
     checkFortiAnalyzerHealth(),
     checkVMwareHealth(),
     checkNmsHealth(),
-    getAlarmStats(),
+    getAlarmHealthStats(),
     getDLQStats(),
   ]);
   
@@ -380,7 +355,7 @@ export async function GET(_request: NextRequest) {
   
   if (unhealthyCount >= 2 || !schedulerOk || !monitorOk) {
     overallStatus = 'unhealthy';
-  } else if (unhealthyCount === 1 || alarmStats.recentErrors > 5 || dlqStats.failedPermanent > 0) {
+  } else if (unhealthyCount === 1 || alarmStats.unresolvedErrorChecks > 5 || dlqStats.failedPermanent > 0) {
     overallStatus = 'degraded';
   }
   

@@ -34,6 +34,7 @@
     "security:fortinet-ssh-check": "NMS_LOG_DIR=/tmp/infrascope-nms-check PYTHONPYCACHEPREFIX=/tmp/infrascope-pycache python3 scripts/check-fortinet-ssh.py",
     "security:credentials-check": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/check-integration-credentials.ts",
     "security:credentials-rotate": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/security/rotate-integration-credentials.ts",
+    "test:alarm-health": "node scripts/check-alarm-health.cjs",
     "test:switch-alarms": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/check-switch-alarm-logic.ts",
     "test:nms-backups": "node scripts/check-nms-backups.cjs",
     "test:nms-backup-worker": "python3 -m nms_service.tests.run_backups"
