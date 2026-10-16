@@ -5,6 +5,34 @@
 > **API:** REST endpoints under `/api/integrations/nms/*`
 > **DB tables:** `nms_health_metrics`, `nmsInterface`, `devices` (shared with InfraScope)
 
+## İzlenen Cihazlar ekranı
+
+`/integrations/nms/devices` erişim kaydını, izleme ayarını ve kaynak ölçümünü ayrı gösterir. “Yanıt kaydı güncel” kayıtlı son veri alımının izleme aralığının 2,5 katından yeni olduğunu belirtir; canlı bağlantı testi değildir. Eşik ve üzeri “Yanıt gecikiyor” olur; bu durum tek başına ağ kesintisini doğrulamaz. İzleme kapalıysa erişim doğrulanmıyor olarak gösterilir ve geçmiş kayıtlar korunur.
+
+Son veri alımı `lastPolledAt`, CPU/bellek ölçüm zamanı ise `latestHealth.collectedAt` alanından gelir. İkisinin güncelliği bağımsızdır. Göreli zamanın yanında mutlak tarih TSİ olarak görünür. Eksik, bozuk ve gelecek tarihli kayıtlar güncel sayılmaz. CPU/bellek için geçerli yüzde 0–100 aralığıdır; gerçek sıfır korunur, eksik veya geçersiz değer “—” olur. Varsayılan izleme aralığı 300 saniyedir.
+
+“Ölçüm özeti” cihazın mevcut liste kaydını açar; izleme durumu, iki zaman damgası, gecikme eşiği ve port kayıtlarını birlikte gösterir. Liste yenilemesi başarısız olursa önceki kayıt korunur ve açıkça belirtilir. Masaüstü tablo ve mobil kartlar aynı göstergeleri kullanır. Arama, durum filtresi, sayfalama, cihaz ayrıntısı ve mevcut izleme işlemleri korunur.
+
+Kapalı port kayıt sayısı API'nin döndürdüğü `portDownCount` değeridir; alarm sayısı, port izleme kapsamı veya portların anlık sağlık özeti olarak yorumlanmaz. API ve cihaz yapılandırma/yazma sözleşmeleri değiştirilmemiştir.
+
+Doğrulama: `npm run test:nms-device-monitoring`. Sentetik kayıtlarla zaman eşikleri, kapalı izleme, bağımsız ölçüm güncelliği ve eksik/geçersiz değerler test edilir; gerçek cihazlara istek gönderilmez.
+
+## Cihazı İzlemeye Al ekranı
+
+`/integrations/nms/add-device` cihaz seçimi, yönetim adresi/portu, SNMP erişim ayarları, isteğe bağlı SSH, veri toplama seçenekleri ve isteğe bağlı bağlantı testini ayrı bölümlerde gösterir. “Alan grubu hazır” yalnızca form doğrulamasını belirtir. SNMPv2c topluluk adı ve SNMPv3 kullanıcı/parolaları cihaz yapılandırmasıyla eşleştirilmelidir. SNMPv3 `authNoPriv` seçiliyken gizli şifreleme alanları isteğe eklenmez. Parolalar özet ve test sonuçlarına yazılmaz.
+
+**SNMP bağlantı testi:** `POST /api/integrations/nms/test-connection`, `devices.write` yetkisini ve seçilen envanter kaydının henüz NMS izlemeye alınmadığını doğrular. Girilen IP, port ve ilgili sürümün kimlik bilgilerini iç token korumalı NMS ajanının `/test-connection` uç noktasına iletir. Ajan yalnızca standart `sysUpTime.0` ve `sysName.0` OID’lerini okur; cihazı kaydetmez, ölçüm/topoloji kaydı oluşturmaz ve düzenli izlemeyi başlatmaz. SSH, bütün portlar ve kaynak ölçümleri test edilmez. Yanıt alınması yalnızca o ayarlarla test anındaki erişimi doğrular.
+
+Ajan testi 2 saniye SNMP zaman aşımı ve sıfır yeniden denemeyle çalışır; aynı anda en fazla dört test kabul edilir. Web isteğinin zaman sınırı 10 saniyedir. Yanıt yok, ajan/hizmet hatası ve bozuk sonuç birbirinden ayrılır. IP, cihaz veya SNMP kimlik bilgisi değişirse eski sonuç geçersizleşir; bekleyen istemci isteği iptal edilir ve geciken sonuç yok sayılır. İstemcide iptal, ajanın başlamış salt okuma işleminin anında durduğunu garanti etmez; ajan işlemi süreyle sınırlıdır.
+
+**Veri toplama:** mevcut kayıt uç noktası korunur. `pollingEnabled=true` seçilirse ajan yapılandırmayı aldıktan sonra veri toplamayı dener; kapalı seçilirse ayarlar `pollingEnabled=false` ile kaydedilir. Form 30–86400 saniyelik aralığı destekler. İlk ölçüm kayıttan ayrı bir işlemdir. Test zorunlu değildir ve kaydetme eylemi otomatik bağlantı testi çalıştırmaz.
+
+Dağıtımda web ile NMS ajanını birlikte güncelleyin: yeni ajan kodu `nms_service/connection_test.py` içindedir ve ana FastAPI uygulamasına kaydedilir. Eski/erişilemeyen ajan testte açık bir hizmet hatası verir; örnek başarı sonucu üretilmez. Mevcut yapılandırma ve yedek iş akışları değiştirilmez.
+
+Doğrulama: `npm run test:nms-add-device`, `npm run test:nms-connection-test`; NMS Python ortamında `python -B scripts/check-nms-connection-test.py`. Bunlar sentetik SNMP/HTTP taşıyıcıları kullanır, gerçek cihazlara istek göndermez. Python regresyonu gerçek router ve CLI sınırında dokuz test içerir; eksik araç/çalıştırma hatası 503, süre dolması veya yanıtsız cihaz ise ayrı `no_response` sonucu üretir. Paylaşılan SNMP oturumunun eski çağrıları mevcut davranışı korur; yeni test yolu `strict_errors=True` kullanır.
+
+`tests/incident-e2e/nms-workspace.spec.ts` içindeki yedi tarayıcı testi ortak izole regresyon paketine dahildir. Liste hata/boş sonuç ayrımı, bağımsız ölçüm güncelliği, gerçek sıfır, iptal/geciken sonuç, değişen kimlik bilgileri, v3 kapsamı, kapalı veri toplama ve yinelenmeyen kayıt isteği doğrulanır. Gerçek API yetki testi eski ADMIN oturumunun güncel VIEWER rolüyle reddedildiğini, diğer testler ise sentetik taşıyıcılarla masaüstü/mobil ve açık/koyu görünümü kontrol eder. Operasyonel cihazlara veya veritabanına erişilmez.
+
 ## Architecture
 
 ```

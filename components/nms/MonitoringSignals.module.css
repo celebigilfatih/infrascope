@@ -1,0 +1,18 @@
+.signal { display: flex; flex-direction: column; align-items: flex-start; gap: .375rem; min-width: 0; }
+.signal small,.signal time,.resources time { font-size: .6875rem; color: oklch(var(--muted-foreground)); line-height: 1.5; }
+.signal time { font-variant-numeric: tabular-nums; }
+.relative { font-size: .75rem; font-weight: 500; }
+.resources { display: flex; flex-direction: column; gap: .5rem; min-width: 7.5rem; }
+.resourceMeter { display: grid; gap: .25rem; }
+.resourceValue { display: flex; justify-content: space-between; align-items: center; gap: .75rem; font-size: .6875rem; }
+.resourceValue > span { display: inline-flex; align-items: center; gap: .3rem; color: oklch(var(--muted-foreground)); }
+.resourceValue strong { font-weight: 500; font-variant-numeric: tabular-nums; }
+.track { height: 4px; overflow: hidden; border-radius: 99px; background: oklch(var(--muted)); }
+.track > span { display: block; height: 100%; border-radius: inherit; background: oklch(var(--primary)); }
+.track > .elevated { background: var(--ui-warning-fg); }
+.track > .high { background: var(--ui-danger-fg); }
+.measurement { display: inline-flex; align-items: center; gap: .25rem; color: oklch(var(--muted-foreground)); font-size: .6875rem; }
+.empty { font-size: .75rem; line-height: 1.6; color: oklch(var(--muted-foreground)); }
+.portLink { display: inline-flex; align-items: center; gap: .375rem; padding: .25rem .5rem; border: 1px solid var(--ui-warning-border); border-radius: .375rem; background: var(--ui-warning-bg); color: var(--ui-warning-fg); font-size: .6875rem; white-space: nowrap; }
+.portLink:hover { text-decoration: underline; text-underline-offset: 3px; }
+.portLink:focus-visible { outline: 2px solid oklch(var(--ring)); outline-offset: 3px; }

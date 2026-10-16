@@ -84,6 +84,16 @@
   color: oklch(var(--primary));
 }
 
+.monitoringToggle { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; padding:1rem; border:1px solid oklch(var(--border)); border-radius:.625rem; background:oklch(var(--muted) / .2); }
+.monitoringToggle > div { min-width:0; }
+.monitoringToggle > button { flex-shrink:0; }
+.monitoringToggle p { margin-top:.375rem; font-size:.75rem; color:oklch(var(--muted-foreground)); line-height:1.7; }
+.summary { height:fit-content; min-width:0; }
+.summaryCard { display:flex; flex-direction:column; max-height:inherit; }
+.summaryScroll { min-height:0; }
+.summaryActions { display:flex; flex-direction:column; gap:.75rem; padding:1.25rem; border-top:1px solid oklch(var(--border)); background:oklch(var(--card)); flex-shrink:0; }
+@media(min-width:1024px) { .summary { position:sticky; top:1rem; max-height:calc(100dvh - 7rem); } .summaryScroll { overflow-y:auto; } }
+
 @media (max-width: 639px) {
   .step {
     flex-direction: column;

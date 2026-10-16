@@ -206,7 +206,7 @@ class SNMPSession:
             logger.error(f"SNMP get operation failed for {self.device_name}: {e}")
             raise SNMPError(f"SNMP operation failed: {e}")
 
-    def get_multiple(self, oids: List[str]) -> Dict[str, Optional[Any]]:
+    def get_multiple(self, oids: List[str], *, strict_errors: bool = False) -> Dict[str, Optional[Any]]:
         """Get multiple OID values in a single snmpget call.
 
         Returns:
@@ -249,6 +249,8 @@ class SNMPSession:
         except subprocess.TimeoutExpired:
             logger.error(f"SNMP get_multiple subprocess timeout for {self.device_name}")
         except Exception as e:
+            if strict_errors:
+                raise SNMPError("SNMP collection service failed") from None
             logger.error(f"SNMP get_multiple failed for {self.device_name}: {e}")
 
         return results

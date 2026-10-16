@@ -1,0 +1,27 @@
+name: NMS connection probe
+
+on:
+  push:
+    paths: ['nms_service/**', 'scripts/check-nms-connection-test.py', '.github/workflows/nms-connection-checks.yml']
+  pull_request:
+    paths: ['nms_service/**', 'scripts/check-nms-connection-test.py', '.github/workflows/nms-connection-checks.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build NMS dependency runtime
+        run: docker build -f nms_service/Dockerfile -t infrascope-nms-probe:ci .
+      - name: Test the real router and CLI boundary without network or database
+        run: >-
+          docker run --rm --network none --read-only --tmpfs /tmp
+          -e NMS_LOG_DIR=/tmp/nms-probe -e PYTHONDONTWRITEBYTECODE=1
+          -e DATABASE_URL=postgresql://fixture:fixture@127.0.0.1:1/fixture
+          -v "$PWD:/workspace:ro" -w /workspace -e PYTHONPATH=/workspace
+          --entrypoint python infrascope-nms-probe:ci -B scripts/check-nms-connection-test.py

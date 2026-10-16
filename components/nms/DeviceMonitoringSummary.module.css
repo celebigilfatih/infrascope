@@ -1,0 +1,19 @@
+.icon { display: grid; place-items: center; width: 2rem; height: 2rem; border-radius: .5rem; background: oklch(var(--primary) / .08); color: oklch(var(--primary)); }
+.identity { display: flex; flex-direction: column; gap: .375rem; padding-bottom: .875rem; border-bottom: 1px solid oklch(var(--border)); }
+.identity h3 { font-size: 1rem; font-weight: 600; overflow-wrap: anywhere; }
+.identity code { font-size: .8125rem; }
+.identity small { font-size: .6875rem; color: oklch(var(--muted-foreground)); }
+.signals { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .625rem; }
+.signals section,.measurements section { display: flex; flex-direction: column; align-items: flex-start; gap: .75rem; padding: .875rem; border: 1px solid oklch(var(--border)); border-radius: .625rem; min-width: 0; }
+.signals h4,.measurements h4 { display: flex; align-items: center; gap: .375rem; font-size: .75rem; font-weight: 600; }
+.signals h4 svg,.measurements h4 svg { color: oklch(var(--primary)); flex-shrink: 0; }
+.note { color: oklch(var(--muted-foreground)); font-size: .75rem; line-height: 1.7; }
+.note > svg { display: inline; vertical-align: text-bottom; margin-right: .25rem; }
+.measurements { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .625rem; }
+.measurements section > div { width: 100%; }
+.facts { display: grid; gap: .625rem; font-size: .75rem; }
+.facts > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .375rem .75rem; }
+.facts dt,.facts small { color: oklch(var(--muted-foreground)); }
+.actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .5rem; padding-top: 1rem; border-top: 1px solid oklch(var(--border)); }
+.notice { padding: .75rem; border: 1px solid var(--ui-warning-border); border-radius: .5rem; background: var(--ui-warning-bg); color: var(--ui-warning-fg); font-size: .75rem; line-height: 1.6; }
+@media(max-width:639px) { .signals { grid-template-columns: 1fr; } .measurements { grid-template-columns: 1fr; } .actions > a { flex: 1 1 12rem; } }

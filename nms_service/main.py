@@ -36,6 +36,7 @@ from nms_service.discovery_worker import run_discovery
 from nms_service.security.credentials import encrypt_nms_backup
 from nms_service.ssh.poller import inspect_ssh_host_key
 from nms_service.backup_worker import backup_worker
+from nms_service.connection_test import connection_test_router
 
 
 # ── App setup ─────────────────────────────────────────────────────────────────
@@ -102,6 +103,8 @@ def require_internal_token(
     ):
         raise HTTPException(status_code=401, detail="Internal NMS authentication failed")
 
+
+app.include_router(connection_test_router(require_internal_token))
 
 # ── Health ────────────────────────────────────────────────────────────────────
 

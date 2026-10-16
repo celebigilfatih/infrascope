@@ -167,6 +167,9 @@ jobs:
       - run: npm run test:fortigate-alarm-targets
       - run: npm run test:fortigate-snmp
       - run: npm run test:nms-backups
+      - run: npm run test:nms-device-monitoring
+      - run: npm run test:nms-add-device
+      - run: npm run test:nms-connection-test
       - run: npm run test:nms-device-ids
       - run: npx prisma migrate deploy
       - run: npm run test:alarm-ownership:db
