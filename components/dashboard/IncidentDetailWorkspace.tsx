@@ -31,7 +31,7 @@ function HistoryList({ entries }: { entries: IncidentHistoryEntry[] }) {
 
 export function IncidentDetailWorkspace({ event, detail, loading, error, busy, notice, description, recommendedAction, onRetry, onAction, onDiscard, children }: {
   event: IncidentDetailEvent; detail: IncidentDetailData | null; loading: boolean; error: string | null; busy: boolean;
-  notice: { text: string; type: 'success' | 'error'; authStatus?: 401 | 403 } | null; description: string; recommendedAction?: string;
+  notice: { text: string; type: 'success' | 'error'; authStatus?: 401 | 403; authAction?: 'ADD_NOTE' | 'ASSIGN' } | null; description: string; recommendedAction?: string;
   onRetry: () => void; onAction: (action: IncidentDetailAction, payload?: IncidentActionPayload) => Promise<boolean>; onDiscard: () => void; children: ReactNode;
 }) {
   const [tab, setTab] = useState('overview');
@@ -128,7 +128,7 @@ export function IncidentDetailWorkspace({ event, detail, loading, error, busy, n
                 <textarea id="incident-operation-note" value={note} onChange={event => setNote(event.target.value)} maxLength={INCIDENT_NOTE_MAX_LENGTH} rows={3} placeholder="İnceleme bulgusu, yapılan müdahale veya bir sonraki adım…" disabled={collaborationBlocked} aria-describedby="incident-note-hint" />
                 <div className={styles.noteFooter}><p id="incident-note-hint">{!peopleLoading && !peopleError && !canManage ? 'Not eklemek için yönetici veya editör yetkisi gerekiyor.' : 'Yazan kişi ve zaman bilgisiyle geçmişe kaydedilir.'}<span>{note.length} / {INCIDENT_NOTE_MAX_LENGTH}</span></p><Button type="submit" size="sm" disabled={collaborationBlocked || !note.trim()}>{saving === 'note' ? <RefreshCw size={14} className="animate-spin motion-reduce:animate-none" /> : <MessageSquareText size={14} />}{saving === 'note' ? 'Kaydediliyor…' : 'Not ekle'}</Button></div>
               </form>
-              {notice?.type === 'error' && notice.authStatus === 401 && !blocked && <Button asChild variant="outline" size="sm"><Link href="/login?next=%2Fdashboard%2Falerts" target="_blank" rel="noopener noreferrer">Yeni sekmede giriş yap</Link></Button>}
+              {notice?.type === 'error' && notice.authStatus === 401 && notice.authAction !== 'ASSIGN' && !blocked && <Button asChild variant="outline" size="sm"><Link href="/login?next=%2Fdashboard%2Falerts" target="_blank" rel="noopener noreferrer">Yeni sekmede giriş yap</Link></Button>}
             </section>}
             <section aria-label="Öne çıkan hareketler"><div className={styles.sectionHeading}><h3><ListChecks size={17} aria-hidden="true" />Öne çıkan hareketler</h3>{history.length > 0 && <button type="button" onClick={() => setTab('history')}>Tüm geçmiş<ArrowRight size={14} aria-hidden="true" /></button>}</div>{historyState || <HistoryList entries={incidentHistoryHighlights(history)} />}</section>
           </TabsContent>
@@ -165,6 +165,7 @@ export function IncidentDetailWorkspace({ event, detail, loading, error, busy, n
             </select>
             <p className={styles.fieldHint}>{peopleLoading ? 'Kullanıcılar yükleniyor…' : !canManage ? 'Yalnızca yönetici ve editörler atama yapabilir.' : 'Aktif yönetici ve editörler atanabilir.'}</p>
             <Button variant="outline" size="sm" disabled={collaborationBlocked || assigneeId === (incident.assignedToId || '')} onClick={() => void saveCollaboration('assignment')}>{saving === 'assignment' && <RefreshCw size={14} className="animate-spin motion-reduce:animate-none" />}{saving === 'assignment' ? 'Kaydediliyor…' : assigneeId || !incident.assignedToId ? 'Atamayı kaydet' : 'Atamayı kaldır'}</Button>
+            {notice?.type === 'error' && notice.authStatus === 401 && notice.authAction === 'ASSIGN' && !blocked && <Button asChild variant="outline" size="sm"><Link href="/login?next=%2Fdashboard%2Falerts" target="_blank" rel="noopener noreferrer">Yeni sekmede giriş yap</Link></Button>}
           </>}
         </section>}
         <dl className={styles.context}>

@@ -93,6 +93,10 @@ async function main() {
   assert(render({ notice: { text: 'İşlem başarısız', type: 'error' } }).includes('role="alert"'));
   const authNoteHtml = render({ notice: { text: 'Not taslağınız korundu', type: 'error', authStatus: 401 } });
   assert(authNoteHtml.includes('Yeni sekmede giriş yap')); assert(authNoteHtml.includes('target="_blank"')); assert(authNoteHtml.includes('rel="noopener noreferrer"'));
+  const authAssignmentHtml = render({ notice: { text: 'Sorumlu seçiminiz korundu', type: 'error', authStatus: 401, authAction: 'ASSIGN' } });
+  assert.equal(authAssignmentHtml.split('Yeni sekmede giriş yap').length - 1, 1, 'Assignment login is offered once, beside assignment controls');
+  assert(authAssignmentHtml.indexOf('Yeni sekmede giriş yap') > authAssignmentHtml.indexOf('aria-label="Sorumlu atama"'));
+  assert(!render({ notice: { text: 'Sorumlu değiştirme yetkiniz yok', type: 'error', authStatus: 403, authAction: 'ASSIGN' } }).includes('Yeni sekmede giriş yap'));
 
   // Run the actual page action closure under a fake transport. Verify success keeps the dialog open,
   // updates current status and reloads history, while failures preserve the prior incident.
@@ -480,6 +484,11 @@ async function main() {
   assert.equal(noted.request.reason, 'Operasyon notu'); assert.equal(noted.notice.text, 'Operasyon notu eklendi');
   assert.equal(noted.revision, 1); assert.equal(noted.selected.incident.status, 'OPEN');
   for (const status of [401, 403]) {
+    const rejectedAssignment = await runAction({ ok: false, status, nonJson: true }, false, 'ASSIGN', { assigneeId: 'chosen-operator' });
+    assert.equal(rejectedAssignment.result, false); assert.equal(rejectedAssignment.notice.authStatus, status); assert.equal(rejectedAssignment.notice.authAction, 'ASSIGN');
+    assert.match(rejectedAssignment.notice.text, status === 401 ? /Oturumunuzun/ : /Sorumlu değiştirme yetkiniz yok/);
+    assert.equal(rejectedAssignment.revision, 0); assert.equal(rejectedAssignment.refreshes, 0); assert.equal(rejectedAssignment.busy.size, 0);
+    assert.deepEqual(rejectedAssignment.selected, event); assert.equal(rejectedAssignment.request.assigneeId, 'chosen-operator');
     const rejectedNote = await runAction({ ok: false, status, nonJson: true }, false, 'ADD_NOTE', { reason: 'Keep this draft', requestId: '00000000-0000-4000-8000-000000000001' });
     assert.equal(rejectedNote.result, false); assert.equal(rejectedNote.notice.authStatus, status);
     assert.match(rejectedNote.notice.text, status === 401 ? /Oturumunuzun/ : /notu ekleme yetkiniz yok/);

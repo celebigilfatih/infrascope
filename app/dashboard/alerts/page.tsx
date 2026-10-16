@@ -367,7 +367,7 @@ export default function AlertsDashboardPage() {
   const [archiveFilter, setArchiveFilter] = useState<IncidentArchiveFilter>('HOT');
   const [statusStats, setStatusStats] = useState<Record<string, number>>({});
   const [fetchError, setFetchError] = useState<string | null>(null);
-  const [message, setMessage] = useState<{ text: string; type: 'success' | 'error'; incidentId?: string; authStatus?: 401 | 403 } | null>(null);
+  const [message, setMessage] = useState<{ text: string; type: 'success' | 'error'; incidentId?: string; authStatus?: 401 | 403; authAction?: 'ADD_NOTE' | 'ASSIGN' } | null>(null);
   const [rawLogExpanded, setRawLogExpanded] = useState(false);
   const [nmsPipeline, setNmsPipeline] = useState<NmsPipelineHealth | null>(null);
 
@@ -717,10 +717,13 @@ export default function AlertsDashboardPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids: [incidentId], action, ...payload }),
       });
-      if (action === 'ADD_NOTE' && (res.status === 401 || res.status === 403)) {
-        setMessage({ text: res.status === 401
+      if ((action === 'ADD_NOTE' || action === 'ASSIGN') && (res.status === 401 || res.status === 403)) {
+        const text = action === 'ASSIGN' ? (res.status === 401
+          ? 'Oturumunuzun süresi doldu veya oturumunuz geçersiz. Tekrar giriş yapın. Sorumlu seçiminiz bu pencerede korunuyor.'
+          : 'Sorumlu değiştirme yetkiniz yok. Sorumlu seçiminiz korundu.') : (res.status === 401
           ? 'Oturumunuzun süresi doldu veya oturumunuz geçersiz. Tekrar giriş yapın. Not taslağınız bu pencerede korunuyor.'
-          : 'Operasyon notu ekleme yetkiniz yok. Not taslağınız korundu.', type: 'error', incidentId, authStatus: res.status });
+          : 'Operasyon notu ekleme yetkiniz yok. Not taslağınız korundu.');
+        setMessage({ text, type: 'error', incidentId, authStatus: res.status, authAction: action });
         return false;
       }
       const data = await res.json();

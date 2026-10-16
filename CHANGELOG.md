@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+- **Snapshot workspace UI** — Replace the legacy snapshot screen with a responsive inventory, VM links, elapsed-age filters, TSİ dates and filtered CSV export. Distinguish unknown/partial associated-file sizes from zero, confirm destructive actions with both VM and snapshot identity, and block writes on stale/failed reads or missing capabilities. Add browser coverage with intercepted VMware I/O, alongside model and Python collector checks in the isolated regression runner.
+
+- **Incident assignment recovery** — Preserve the chosen owner, unsaved operation note and incident selection when assignment receives 401/403, including non-JSON responses. Show a Turkish assignment-specific warning and place the new-tab login link beside the assignment controls. Add real-session browser and rollback-only database regressions for denied writes, recovery, history/audit integrity and duplicate retries.
+
 - **Snapshot collection contracts** — Add a read-only, source-scoped VMware snapshot workspace API and Python collector to the runtime image. Keep snapshot/file identities, UTC dates and unknown/zero associated-file sizes distinct; reject duplicate layout/file identities and invalid or inexact bridge measurements. Compute capabilities per request after shared data-cache reads. Add SDK, bridge, source selection, permission, cache and packaging regressions. The existing snapshot API and mutation routes remain available; see `docs/30-runbooks/VMWARE_SNAPSHOT_COLLECTION.md`.
 
 - **Local Inter / offline release build** — Replace the Google font loader with `next/font/local` and bundle the unmodified Inter 4.1 variable WOFF2 plus its OFL license. Preserve normal style, weights 100–900, swap display and root font application. Add source/output asset regressions and a CI source check. The actual product `npm run build` passes in a fresh, network-isolated source copy with existing dependencies, including 112/112 static pages and verified font emission/preloading; see `docs/30-runbooks/LOCAL_FONTS.md`.

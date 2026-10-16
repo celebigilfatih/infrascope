@@ -90,6 +90,8 @@
     "test:vm-workspace-collector": "python3 -B scripts/check-vm-workspace-collector.py",
     "test:datastore-workspace": "node scripts/check-datastore-workspace.cjs",
     "test:datastore-workspace-collector": "python3 -B scripts/check-datastore-workspace-collector.py",
+    "test:snapshot-workspace": "node scripts/check-snapshot-workspace.cjs",
+    "test:snapshot-workspace-collector": "python3 -B scripts/check-snapshot-workspace-collector.py",
     "test:incident-collaboration": "node scripts/check-incident-collaboration.cjs",
     "test:incidents:e2e": "playwright test --config=playwright.incidents.config.ts",
     "test:incidents:regression": "node scripts/run-incident-regression.cjs",

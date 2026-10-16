@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Activity, AlertTriangle, ArrowRight, ChevronLeft, ChevronRight, CircleHelp, Clock3, Cpu, Download, Eye, Info, MemoryStick, Pause, Play, Power, RefreshCw, RotateCcw, Search, Server, SquareStack, X } from 'lucide-react';
 import { PageHeading } from '@/components/ui/page-heading';
@@ -18,7 +18,7 @@ import vmStyles from './VMWorkspace.module.css';
 
 export interface VMWorkspaceProps {
   vms: VMWorkspaceRecord[]; loading: boolean; refreshing: boolean; error: string | null;
-  collectedAt: string | null; canPower: boolean; stale?: boolean; onRefresh: () => void;
+  collectedAt: string | null; canPower: boolean; stale?: boolean; focusVMId?: string | null; onRefresh: () => void;
   onPower: (vm: VMWorkspaceRecord, operation: VMPowerOperation) => Promise<void>;
 }
 function State({ vm }: { vm: VMWorkspaceRecord }) {
@@ -70,8 +70,9 @@ function VMDetails({ vm, stale, canPower, onPower, onClose }: { vm: VMWorkspaceR
   </DialogContent></Dialog>;
 }
 const defaults: VMFilters = { search: '', state: 'all', host: 'all', health: 'all' };
-export function VMWorkspace({ vms, loading, refreshing, error, collectedAt, canPower, stale = false, onRefresh, onPower }: VMWorkspaceProps) {
+export function VMWorkspace({ vms, loading, refreshing, error, collectedAt, canPower, stale = false, focusVMId, onRefresh, onPower }: VMWorkspaceProps) {
   const [filters, setFilters] = useState(defaults), [page, setPage] = useState(1), [pageSize, setPageSize] = useState(25), [selected, setSelected] = useState<string | null>(null);
+  useEffect(() => { if (focusVMId) setSelected(focusVMId); }, [focusVMId]);
   const hosts = vmHostOptions(vms), filtered = filterVMs(vms, filters);
   const hasFilters = Object.entries(filters).some(([key, value]) => value !== defaults[key as keyof VMFilters]);
   const pages = Math.max(1, Math.ceil(filtered.length / pageSize)), current = Math.min(page, pages), shown = filtered.slice((current - 1) * pageSize, current * pageSize);

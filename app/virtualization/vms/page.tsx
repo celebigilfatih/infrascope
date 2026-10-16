@@ -15,6 +15,7 @@ export default function VMsPage() {
   const [collectedAt, setCollectedAt] = useState<string | null>(null);
   const [canPower, setCanPower] = useState(false);
   const [stale, setStale] = useState(false);
+  const [focusVMId, setFocusVMId] = useState<string | null>(null);
   const followup = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestId = useRef(0);
   const controller = useRef<AbortController | null>(null);
@@ -38,6 +39,7 @@ export default function VMsPage() {
     }
   }, []);
   useEffect(() => {
+    setFocusVMId(new URLSearchParams(window.location.search).get('vmId'));
     fetchVMs();
     const interval = setInterval(() => fetchVMs(), 300_000);
     return () => { controller.current?.abort(); clearInterval(interval); if (followup.current) clearTimeout(followup.current); };
@@ -49,5 +51,5 @@ export default function VMsPage() {
     if (followup.current) clearTimeout(followup.current);
     followup.current = setTimeout(() => fetchVMs(true), 2000);
   };
-  return <VMWorkspace stale={stale} canPower={canPower} onPower={handlePower} vms={vms} loading={loading} refreshing={refreshing} error={error} collectedAt={collectedAt} onRefresh={() => fetchVMs(true)} />;
+  return <VMWorkspace focusVMId={focusVMId} stale={stale} canPower={canPower} onPower={handlePower} vms={vms} loading={loading} refreshing={refreshing} error={error} collectedAt={collectedAt} onRefresh={() => fetchVMs(true)} />;
 }

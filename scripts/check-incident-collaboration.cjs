@@ -134,7 +134,12 @@ async function main() {
       assert.deepEqual(await tx.auditLog.findMany({ where: { entityId: incident.id }, orderBy: { id: 'asc' } }), deniedNoteAudits, 'Denied notes must not create history, audit or reserve keys');
       assert.equal(await tx.alarmLifecycleTransition.count({ where: { requestId: deniedNoteKey } }), 0);
 
-      assert.equal((await patch({ action: 'ASSIGN', assigneeId: users.editor.id })).status, 403);
+      for (const assigneeId of [users.editor.id, null, 'missing-assignee']) {
+        const denied = await patch({ action: 'ASSIGN', assigneeId, assigneeName: 'Untrusted', actorName: 'Untrusted' });
+        assert.equal(denied.status, 403); assert(!Object.hasOwn(await denied.json(), 'data'));
+      }
+      assert.deepEqual(await tx.alarmIncident.findUniqueOrThrow({ where: { id: incident.id }, include: { transitions: { orderBy: { id: 'asc' } } } }), deniedNoteBefore, 'Denied assignment changes and removals cannot change the existing incident or history');
+      assert.deepEqual(await tx.auditLog.findMany({ where: { entityId: incident.id }, orderBy: { id: 'asc' } }), deniedNoteAudits, 'Denied assignments cannot create audit records');
       assert.equal((await (await getPeople()).json()).canManage, false);
       auth = { role: 'EDITOR', actor: { type: 'USER', id: users.editor.id, name: users.editor.name } };
       assert.equal((await patch({ action: 'ADD_NOTE', reason: 'Editör notu' })).status, 200);
