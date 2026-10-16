@@ -982,6 +982,10 @@ export class VMwareService {
     return runVMwarePython('datastoreWorkspace', this.config);
   }
 
+  async fetchSnapshotWorkspace() {
+    return runVMwarePython('snapshotWorkspace', this.config);
+  }
+
   /**
    * Fetch ESXi hosts
    * Note: vSphere 7 REST API provides only basic info (name, connection state).

@@ -7,6 +7,7 @@ import type { ClusterWorkspaceRecord } from '@/lib/virtualization/cluster-worksp
 import type { HostWorkspaceRecord } from '@/lib/virtualization/host-workspace';
 import type { VMWorkspaceRecord } from '@/lib/virtualization/vm-workspace';
 import type { DatastoreWorkspaceRecord } from '@/lib/virtualization/datastore-workspace';
+import type { SnapshotWorkspaceVM } from '@/lib/virtualization/snapshot-workspace';
 
 export interface VMwareSnapshot {
   id: string; vmId: string; vmName: string; name: string; description: string;
@@ -16,9 +17,9 @@ export interface VMwareHostDetails {
   host_moid: string; name: string; vendor: string; model: string; cpu_cores: number;
   memory_size_mb: number; esxi_version: string; esxi_build: string; esxi_full_name: string;
 }
-type Results = { snapshots: VMwareSnapshot[]; hosts: VMwareHostDetails[]; clusters: ClusterWorkspaceRecord[]; hostWorkspace: HostWorkspaceRecord[]; vmWorkspace: VMWorkspaceRecord[]; datastoreWorkspace: DatastoreWorkspaceRecord[]; preflight: { python: string; sdk: string } };
+type Results = { snapshots: VMwareSnapshot[]; hosts: VMwareHostDetails[]; clusters: ClusterWorkspaceRecord[]; hostWorkspace: HostWorkspaceRecord[]; vmWorkspace: VMWorkspaceRecord[]; datastoreWorkspace: DatastoreWorkspaceRecord[]; snapshotWorkspace: SnapshotWorkspaceVM[]; preflight: { python: string; sdk: string } };
 type Operation = keyof Results;
-const scripts: Record<Operation, string> = { snapshots: 'get-snapshots.py', hosts: 'get-host-details.py', clusters: 'get-cluster-details.py', hostWorkspace: 'get-host-workspace.py', vmWorkspace: 'get-vm-workspace.py', datastoreWorkspace: 'get-datastore-workspace.py', preflight: 'vmware_helper.py' };
+const scripts: Record<Operation, string> = { snapshots: 'get-snapshots.py', hosts: 'get-host-details.py', clusters: 'get-cluster-details.py', hostWorkspace: 'get-host-workspace.py', vmWorkspace: 'get-vm-workspace.py', datastoreWorkspace: 'get-datastore-workspace.py', snapshotWorkspace: 'get-snapshot-workspace.py', preflight: 'vmware_helper.py' };
 const failures = new Set(['SDK_MISSING', 'AUTH_FAILED', 'PERMISSION_DENIED', 'TLS_ERROR', 'TLS_POLICY', 'SOURCE_TIMEOUT', 'SOURCE_ERROR', 'INVALID_REQUEST', 'VM_NOT_FOUND']);
 const messages: Record<string, string> = {
   UNAVAILABLE: 'VMware Python çalışma ortamı veya yardımcı dosyası bulunamadı.',
@@ -88,6 +89,25 @@ function validDatastoreWorkspace(value: Record<string, unknown>): boolean {
     ids.add(String(host.id)); return true;
   });
 }
+function validSnapshotWorkspace(value: Record<string, unknown>): boolean {
+  if (!strings(value, ['id', 'name', 'connectionState', 'powerState']) || !value.id || !nullableBooleans(value, ['template']) || !Array.isArray(value.snapshots)) return false;
+  const ids = new Set<string>();
+  const valid = value.snapshots.every(snapshot => {
+    if (!object(snapshot) || !strings(snapshot, ['id', 'name', 'description', 'state']) || !snapshot.id || ids.has(String(snapshot.id))) return false;
+    if (snapshot.createTime !== null && !(typeof snapshot.createTime === 'string' && /(Z|[+-]\d{2}:\d{2})$/.test(snapshot.createTime) && Number.isFinite(Date.parse(snapshot.createTime)))) return false;
+    if (snapshot.fileKeys !== null && !(Array.isArray(snapshot.fileKeys) && snapshot.fileKeys.length > 0 && snapshot.fileKeys.every(key => Number.isSafeInteger(key) && nonnegative(key)) && new Set(snapshot.fileKeys).size === snapshot.fileKeys.length)) return false;
+    ids.add(String(snapshot.id)); return true;
+  });
+  if (!valid) return false;
+  if (value.files === null) return true;
+  if (!Array.isArray(value.files)) return false;
+  const keys = new Set<number>();
+  return value.files.every(file => {
+    if (!object(file) || !Number.isSafeInteger(file.key) || !nonnegative(file.key) || keys.has(file.key as number) ||
+        !(file.sizeBytes === null || Number.isSafeInteger(file.sizeBytes) && nonnegative(file.sizeBytes))) return false;
+    keys.add(file.key as number); return true;
+  });
+}
 function parseResult(operation: Operation, stdout: string, exit: number | null, vmId?: string): unknown {
   if (exit !== 0 && !stdout.trim()) throw failure('PROCESS_EXIT');
   let value: unknown;
@@ -108,6 +128,7 @@ function parseResult(operation: Operation, stdout: string, exit: number | null, 
     if (operation === 'hostWorkspace') return validHostWorkspace(row);
     if (operation === 'vmWorkspace') return validVMWorkspace(row);
     if (operation === 'datastoreWorkspace') return validDatastoreWorkspace(row);
+    if (operation === 'snapshotWorkspace') return validSnapshotWorkspace(row);
     if (operation === 'hosts') return strings(row, ['host_moid', 'name', 'vendor', 'model', 'esxi_version', 'esxi_build', 'esxi_full_name']) &&
       !!row.host_moid && nonnegative(row.cpu_cores) && nonnegative(row.memory_size_mb);
     return strings(row, ['id', 'vmId', 'vmName', 'name', 'description', 'createTime', 'state']) && !!row.id && !!row.vmId &&
@@ -115,7 +136,7 @@ function parseResult(operation: Operation, stdout: string, exit: number | null, 
       typeof row.createTime === 'string' && /(Z|[+-]\d{2}:\d{2})$/.test(row.createTime) && Number.isFinite(Date.parse(row.createTime));
   });
   if (!valid) throw failure('OUTPUT_INVALID');
-  if (['clusters', 'hostWorkspace', 'vmWorkspace', 'datastoreWorkspace'].includes(operation) && new Set(rows.map(row => row.id)).size !== rows.length) throw failure('OUTPUT_INVALID');
+  if (['clusters', 'hostWorkspace', 'vmWorkspace', 'datastoreWorkspace', 'snapshotWorkspace'].includes(operation) && new Set(rows.map(row => row.id)).size !== rows.length) throw failure('OUTPUT_INVALID');
   return rows;
 }
 

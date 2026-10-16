@@ -33,6 +33,11 @@ on:
       - 'app/api/health/route.ts'
       - 'lib/integrations/vmware-cache.ts'
       - 'lib/integrations/vmware-python.ts'
+      - 'lib/virtualization/snapshot-workspace.ts'
+      - 'scripts/get-snapshot-workspace.py'
+      - 'scripts/check-snapshot-contracts.mjs'
+      - 'scripts/check-snapshot-collector-contracts.py'
+      - 'Dockerfile'
       - 'lib/integrations/zabbix.ts'
       - 'lib/integrations/sync-outcome.ts'
       - 'lib/integrations/sync-log.ts'
@@ -149,6 +154,8 @@ jobs:
           TZ: Europe/Istanbul
       - run: npm run test:vmware-cache
       - run: npm run test:vmware-collection
+      - run: npm run test:snapshot-contracts
+      - run: npm run test:snapshot-collector-contracts
       - run: npm run test:vmware-health
       - run: npm run test:vmware-python
       - run: npm run test:zabbix-auth

@@ -63,6 +63,8 @@
     "test:fortianalyzer-time:db": "node scripts/check-fortianalyzer-time-db.cjs",
     "test:vmware-cache": "node scripts/check-vmware-cache.cjs",
     "test:vmware-collection": "node scripts/check-vmware-collection.cjs",
+    "test:snapshot-contracts": "node scripts/check-snapshot-contracts.mjs",
+    "test:snapshot-collector-contracts": "python3 -B scripts/check-snapshot-collector-contracts.py",
     "test:vmware-health": "node scripts/check-vmware-health.cjs",
     "test:vmware-python": "python3 -B scripts/check-vmware-python.py",
     "test:zabbix-auth": "node scripts/check-zabbix-auth.cjs",

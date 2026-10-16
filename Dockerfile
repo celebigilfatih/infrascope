@@ -103,7 +103,7 @@ COPY --chown=nextjs:nodejs .env.example ./
 # Copy startup scripts
 COPY --chown=nextjs:nodejs scripts/wait-for-db.sh ./scripts/
 COPY --chown=nextjs:nodejs scripts/entrypoint.sh ./scripts/
-COPY --chown=nextjs:nodejs scripts/vmware_helper.py scripts/vmware_workspace.py scripts/get-snapshots.py scripts/get-host-details.py scripts/get-cluster-details.py scripts/get-host-workspace.py scripts/get-vm-workspace.py scripts/get-datastore-workspace.py ./scripts/
+COPY --chown=nextjs:nodejs scripts/vmware_helper.py scripts/vmware_workspace.py scripts/get-snapshots.py scripts/get-host-details.py scripts/get-cluster-details.py scripts/get-host-workspace.py scripts/get-vm-workspace.py scripts/get-datastore-workspace.py scripts/get-snapshot-workspace.py ./scripts/
 
 # Normalize shell scripts for images built from Windows checkouts.
 RUN sed -i 's/\r$//' ./scripts/*.sh && chmod +x ./scripts/*.sh

@@ -13,6 +13,7 @@ import type { Prisma } from '@prisma/client';
  * GET  /api/integrations/vmware?type=datastores - Get all datastores
  * GET  /api/integrations/vmware?type=datastore-workspace - Datastore capacity and ESXi mounts
  * GET  /api/integrations/vmware?type=snapshots&vmId=xxx - Get VM snapshots
+ * GET  /api/integrations/vmware?type=snapshot-workspace - Snapshot dates and associated files
  * POST /api/integrations/vmware/sync - Trigger a sync with vCenter
  * POST /api/integrations/vmware/test - Test connection
  * POST /api/integrations/vmware { action: 'vm-power', vmId, operation } - VM power control
@@ -241,16 +242,19 @@ export async function GET(request: NextRequest) {
     if (!source) {
       return NextResponse.json({ connected: false, error: 'VMware vCenter integration not configured' });
     }
-    const cacheable = ['dashboard', 'summary', 'vms', 'vm-workspace', 'hosts', 'host-workspace', 'clusters', 'cluster-workspace', 'datastores', 'datastore-workspace', 'snapshots'].includes(type || '');
+    const cacheable = ['dashboard', 'summary', 'vms', 'vm-workspace', 'hosts', 'host-workspace', 'clusters', 'cluster-workspace', 'datastores', 'datastore-workspace', 'snapshots', 'snapshot-workspace'].includes(type || '');
     if (!cacheable) return await loadVMwareData(request, source.service, source.scope);
 
-    const ttl = type === 'snapshots' ? 120_000 : 300_000;
+    const ttl = type === 'snapshots' || type === 'snapshot-workspace' ? 120_000 : 300_000;
     const result = await loadVMwareCachedValue(
       source.scope, vmwareResourceKey(type, vmId), ttl,
       isCurrent => readVMwareData(request, source.service, source.scope, false, undefined, isCurrent),
       request.headers.get('x-cache-bypass') === '1',
     );
-    const data = type === 'vm-workspace' ? { ...(result.data as Record<string, unknown>), canPower: canAccessSync(access.auth.role, 'devices', 'write') } : result.data;
+    const write = (type === 'snapshot-workspace' || type === 'vm-workspace') && canAccessSync(access.auth.role, 'devices', 'write');
+    const data = type === 'snapshot-workspace' ? { ...(result.data as Record<string, unknown>), capabilities: {
+      create: write, revert: write, delete: write && canAccessSync(access.auth.role, 'devices', 'delete'),
+    } } : type === 'vm-workspace' ? { ...(result.data as Record<string, unknown>), canPower: write } : result.data;
     return NextResponse.json(data, { headers: {
       'X-Cache': result.cache, 'X-Cache-Age': String(Math.round(result.age / 1000)),
     } });
@@ -539,6 +543,11 @@ async function loadVMwareData(request: NextRequest, service: VMwareService, scop
 
 
       return NextResponse.json(datastoresData);
+    }
+
+    if (type === 'snapshot-workspace') {
+      const vms = await service.fetchSnapshotWorkspace();
+      return NextResponse.json({ vms, collectedAt: new Date().toISOString() });
     }
 
     // Get snapshots for a VM or all snapshots
