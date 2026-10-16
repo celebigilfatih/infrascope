@@ -57,7 +57,7 @@ async function main() {
       const getFilterPeople = () => people.GET(new NextRequest('http://localhost/api/alarm-incidents/assignees?scope=filter'));
 
       const candidates = await (await getPeople()).json();
-      assert.equal(candidates.canManage, true);
+      assert.equal(candidates.canManage, true); assert.equal(candidates.canArchive, true); assert.equal(candidates.canManageLegalHold, true);
       for (const key of ['admin', 'editor']) assert(candidates.data.some(row => row.id === users[key].id));
       for (const key of ['viewer', 'inactive', 'suspended']) assert(!candidates.data.some(row => row.id === users[key].id));
       assert(candidates.data.every(row => Object.keys(row).sort().join(',') === 'id,name'));
@@ -200,6 +200,19 @@ async function main() {
       const closed = await tx.alarmIncident.create({ data: { alarmId: rule.id, fingerprint: `${prefix}-closed`, source: 'fixture', severity: 'ALARM_HIGH', category: 'CONFIG_ACCESS', title: prefix, message: 'Closed fixture', status: 'CLOSED' } });
       const lifecycleIds = [...batchIds, resolved.id, closed.id];
       for (const incidentId of lifecycleIds) await tx.alarmEvent.create({ data: { incidentId, alarmId: rule.id, severity: 'ALARM_HIGH', title: prefix, message: 'Lifecycle occurrence fixture' } });
+      const lifecycleAccessBefore = await tx.alarmIncident.findMany({ where: { id: { in: lifecycleIds } }, orderBy: { id: 'asc' }, include: { transitions: { orderBy: { id: 'asc' } }, occurrences: { orderBy: { id: 'asc' } }, notificationAttempts: { orderBy: { id: 'asc' } } } });
+      const lifecycleAccessAudits = await tx.auditLog.findMany({ where: { entityId: { in: lifecycleIds } }, orderBy: { id: 'asc' } });
+      for (const deniedAuth of [{ role: 'VIEWER', actor: { type: 'USER', id: users.viewer.id, name: users.viewer.name } }, null]) {
+        auth = deniedAuth;
+        for (const intent of [{ id: incident.id, action: 'RESOLVE' }, { id: second.id, action: 'RESOLVE' }, { id: resolved.id, action: 'CLOSE' }]) {
+          for (let attempt = 0; attempt < 2; attempt++) {
+            const denied = await patch({ ids: [intent.id], action: intent.action, actorName: 'Untrusted' });
+            assert.equal(denied.status, auth ? 403 : 401); assert(!Object.hasOwn(await denied.json(), 'data'));
+          }
+        }
+        assert.deepEqual(await tx.alarmIncident.findMany({ where: { id: { in: lifecycleIds } }, orderBy: { id: 'asc' }, include: { transitions: { orderBy: { id: 'asc' } }, occurrences: { orderBy: { id: 'asc' } }, notificationAttempts: { orderBy: { id: 'asc' } } } }), lifecycleAccessBefore, 'Denied detail resolve/close attempts cannot change status, timestamps, fingerprint, occurrence acknowledgements or history');
+        assert.deepEqual(await tx.auditLog.findMany({ where: { entityId: { in: lifecycleIds } }, orderBy: { id: 'asc' } }), lifecycleAccessAudits, 'Denied detail lifecycle actions cannot add audits');
+      }
       auth = { role: 'EDITOR', actor: { type: 'USER', id: users.editor.id, name: users.editor.name } };
       const reasonHistoryBefore = await tx.alarmLifecycleTransition.count({ where: { incidentId: { in: lifecycleIds } } });
       const requiredReasonRows = await tx.alarmIncident.findMany({ where: { id: { in: lifecycleIds } }, orderBy: { id: 'asc' } });
@@ -338,10 +351,20 @@ async function main() {
       for (const action of ['ARCHIVE', 'RESTORE']) {
         const beforeArchive = await readArchive();
         const beforeArchiveAudits = await readArchiveAudits();
-        for (const role of ['EDITOR', 'VIEWER']) {
-          const user = users[role.toLowerCase()];
-          auth = { role, actor: { type: 'USER', id: user.id, name: user.name } };
-          assert.equal((await patch({ ids: [single.id], action })).status, 403, 'Archive actions remain admin-only');
+        for (const role of ['EDITOR', 'VIEWER', null]) {
+          const user = role ? users[role.toLowerCase()] : null;
+          auth = role ? { role, actor: { type: 'USER', id: user.id, name: user.name } } : null;
+          if (role) {
+            const capabilities = await (await getPeople()).json();
+            assert.equal(capabilities.canArchive, false); assert.equal(capabilities.canManage, role === 'EDITOR');
+          }
+          for (let attempt = 0; attempt < 2; attempt++) {
+            const denied = await patch({ ids: [single.id], action });
+            assert.equal(denied.status, role ? 403 : 401, 'Archive actions remain admin-only');
+            assert(!Object.hasOwn(await denied.json(), 'data'));
+          }
+          assert.deepEqual(await readArchive(), beforeArchive, 'Denied archive/restore must preserve archive state, reason, timestamps and history');
+          assert.deepEqual(await readArchiveAudits(), beforeArchiveAudits, 'Denied archive/restore cannot add audit');
         }
         auth = { role: 'ADMIN', actor: { type: 'USER', id: users.admin.id, name: users.admin.name } };
         assert.deepEqual(await readArchive(), beforeArchive, 'Denied archive actions must not write');
@@ -364,10 +387,20 @@ async function main() {
       for (const action of ['SET_LEGAL_HOLD', 'RELEASE_LEGAL_HOLD']) {
         const beforeHold = await readHold();
         const beforeHoldAudits = await readHoldAudits();
-        for (const role of ['EDITOR', 'VIEWER']) {
-          const user = users[role.toLowerCase()];
-          auth = { role, actor: { type: 'USER', id: user.id, name: user.name } };
-          assert.equal((await patch({ ids: [single.id], action })).status, 403, 'Legal hold actions remain admin-only');
+        for (const role of ['EDITOR', 'VIEWER', null]) {
+          const user = role ? users[role.toLowerCase()] : null;
+          auth = role ? { role, actor: { type: 'USER', id: user.id, name: user.name } } : null;
+          if (role) {
+            const capabilities = await (await getPeople()).json();
+            assert.equal(capabilities.canManageLegalHold, false); assert.equal(capabilities.canManage, role === 'EDITOR');
+          }
+          for (let attempt = 0; attempt < 2; attempt++) {
+            const denied = await patch({ ids: [single.id], action });
+            assert.equal(denied.status, role ? 403 : 401, 'Legal hold actions remain admin-only');
+            assert(!Object.hasOwn(await denied.json(), 'data'));
+          }
+          assert.deepEqual(await readHold(), beforeHold, 'Denied hold actions preserve protection, timestamps and history');
+          assert.deepEqual(await readHoldAudits(), beforeHoldAudits, 'Denied hold actions cannot add audit');
         }
         auth = { role: 'ADMIN', actor: { type: 'USER', id: users.admin.id, name: users.admin.name } };
         assert.deepEqual(await readHold(), beforeHold, 'Denied legal hold actions must not write');

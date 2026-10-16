@@ -97,6 +97,13 @@ async function main() {
   assert.equal(authAssignmentHtml.split('Yeni sekmede giriş yap').length - 1, 1, 'Assignment login is offered once, beside assignment controls');
   assert(authAssignmentHtml.indexOf('Yeni sekmede giriş yap') > authAssignmentHtml.indexOf('aria-label="Sorumlu atama"'));
   assert(!render({ notice: { text: 'Sorumlu değiştirme yetkiniz yok', type: 'error', authStatus: 403, authAction: 'ASSIGN' } }).includes('Yeni sekmede giriş yap'));
+  for (const authAction of ['RESOLVE', 'CLOSE', 'ARCHIVE', 'RESTORE', 'SET_LEGAL_HOLD', 'RELEASE_LEGAL_HOLD']) {
+    const lifecycleHtml = render({ notice: { text: 'Olay durumu korundu', type: 'error', authStatus: 401, authAction } });
+    assert.equal(lifecycleHtml.split('Yeni sekmede giriş yap').length - 1, 1);
+    assert(lifecycleHtml.indexOf('Yeni sekmede giriş yap') > lifecycleHtml.indexOf('aria-label="Durum işlemleri"'));
+    assert(lifecycleHtml.indexOf('Yeni sekmede giriş yap') < lifecycleHtml.indexOf('aria-label="Sorumlu atama"'));
+    assert(!render({ notice: { text: 'Yetkiniz yok', type: 'error', authStatus: 403, authAction } }).includes('Yeni sekmede giriş yap'));
+  }
 
   // Run the actual page action closure under a fake transport. Verify success keeps the dialog open,
   // updates current status and reloads history, while failures preserve the prior incident.
@@ -484,6 +491,14 @@ async function main() {
   assert.equal(noted.request.reason, 'Operasyon notu'); assert.equal(noted.notice.text, 'Operasyon notu eklendi');
   assert.equal(noted.revision, 1); assert.equal(noted.selected.incident.status, 'OPEN');
   for (const status of [401, 403]) {
+    for (const action of ['RESOLVE', 'CLOSE', 'ARCHIVE', 'RESTORE', 'SET_LEGAL_HOLD', 'RELEASE_LEGAL_HOLD']) {
+      const rejectedLifecycle = await runAction({ ok: false, status, nonJson: true }, false, action);
+      assert.equal(rejectedLifecycle.result, false); assert.equal(rejectedLifecycle.notice.authStatus, status); assert.equal(rejectedLifecycle.notice.authAction, action);
+      const permissionPattern = { RESOLVE: /çözme yetkiniz yok/, CLOSE: /kapatma yetkiniz yok/, ARCHIVE: /arşivleme yetkiniz yok/, RESTORE: /arşivden çıkarma yetkiniz yok/, SET_LEGAL_HOLD: /saklama korumasını etkinleştirme yetkiniz yok/, RELEASE_LEGAL_HOLD: /saklama korumasını kaldırma yetkiniz yok/ };
+      assert.match(rejectedLifecycle.notice.text, status === 401 ? /Oturumunuzun/ : permissionPattern[action]);
+      assert.equal(rejectedLifecycle.revision, 0); assert.equal(rejectedLifecycle.refreshes, 0); assert.equal(rejectedLifecycle.busy.size, 0);
+      assert.deepEqual(rejectedLifecycle.selected, event); assert.equal(rejectedLifecycle.request.action, action);
+    }
     const rejectedAssignment = await runAction({ ok: false, status, nonJson: true }, false, 'ASSIGN', { assigneeId: 'chosen-operator' });
     assert.equal(rejectedAssignment.result, false); assert.equal(rejectedAssignment.notice.authStatus, status); assert.equal(rejectedAssignment.notice.authAction, 'ASSIGN');
     assert.match(rejectedAssignment.notice.text, status === 401 ? /Oturumunuzun/ : /Sorumlu değiştirme yetkiniz yok/);

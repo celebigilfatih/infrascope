@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
       }
     }
     const data = [...candidates.values()].sort((a, b) => a.name.localeCompare(b.name, 'tr') || a.id.localeCompare(b.id));
-    return NextResponse.json({ success: true, data, canManage: auth.role === 'ADMIN' || auth.role === 'EDITOR' },
+    return NextResponse.json({ success: true, data, canManage: auth.role === 'ADMIN' || auth.role === 'EDITOR', canArchive: auth.role === 'ADMIN', canManageLegalHold: auth.role === 'ADMIN' },
       { headers: { 'Cache-Control': 'no-store, max-age=0' } });
   } catch {
     return NextResponse.json({ success: false, error: 'Sorumlu listesi alınamadı.' }, { status: 503 });

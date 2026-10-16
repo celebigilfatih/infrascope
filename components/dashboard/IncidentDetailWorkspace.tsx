@@ -31,7 +31,7 @@ function HistoryList({ entries }: { entries: IncidentHistoryEntry[] }) {
 
 export function IncidentDetailWorkspace({ event, detail, loading, error, busy, notice, description, recommendedAction, onRetry, onAction, onDiscard, children }: {
   event: IncidentDetailEvent; detail: IncidentDetailData | null; loading: boolean; error: string | null; busy: boolean;
-  notice: { text: string; type: 'success' | 'error'; authStatus?: 401 | 403; authAction?: 'ADD_NOTE' | 'ASSIGN' } | null; description: string; recommendedAction?: string;
+  notice: { text: string; type: 'success' | 'error'; authStatus?: 401 | 403; authAction?: 'ADD_NOTE' | 'ASSIGN' | 'RESOLVE' | 'CLOSE' | 'ARCHIVE' | 'RESTORE' | 'SET_LEGAL_HOLD' | 'RELEASE_LEGAL_HOLD' } | null; description: string; recommendedAction?: string;
   onRetry: () => void; onAction: (action: IncidentDetailAction, payload?: IncidentActionPayload) => Promise<boolean>; onDiscard: () => void; children: ReactNode;
 }) {
   const [tab, setTab] = useState('overview');
@@ -42,6 +42,8 @@ export function IncidentDetailWorkspace({ event, detail, loading, error, busy, n
   const incident = detail && detail.id === event.incident?.id ? detail : event.incident;
   const [assignees, setAssignees] = useState<Array<{ id: string; name: string }>>([]);
   const [canManage, setCanManage] = useState(false);
+  const [canArchive, setCanArchive] = useState(false);
+  const [canManageLegalHold, setCanManageLegalHold] = useState(false);
   const [peopleLoading, setPeopleLoading] = useState(Boolean(incident));
   const [peopleError, setPeopleError] = useState<string | null>(null);
   const [peopleRevision, setPeopleRevision] = useState(0);
@@ -55,13 +57,13 @@ export function IncidentDetailWorkspace({ event, detail, loading, error, busy, n
   useEffect(() => {
     if (!incidentId) return;
     const controller = new AbortController();
-    setPeopleLoading(true); setPeopleError(null); setCanManage(false);
+    setPeopleLoading(true); setPeopleError(null); setCanManage(false); setCanArchive(false); setCanManageLegalHold(false);
     void (async () => {
       try {
         const response = await fetch('/api/alarm-incidents/assignees', { signal: controller.signal, cache: 'no-store' });
         const result = await response.json();
         if (!response.ok || !result.success) throw new Error(uiError(result.error || 'Sorumlu listesi alınamadı.'));
-        if (!controller.signal.aborted) { setAssignees(result.data); setCanManage(result.canManage === true); }
+        if (!controller.signal.aborted) { setAssignees(result.data); setCanManage(result.canManage === true); setCanArchive(result.canArchive === true); setCanManageLegalHold(result.canManageLegalHold === true); }
       } catch (cause) {
         if (!controller.signal.aborted) setPeopleError(uiError(cause instanceof Error ? cause.message : 'Sorumlu listesi alınamadı.'));
       } finally { if (!controller.signal.aborted) setPeopleLoading(false); }
@@ -128,7 +130,7 @@ export function IncidentDetailWorkspace({ event, detail, loading, error, busy, n
                 <textarea id="incident-operation-note" value={note} onChange={event => setNote(event.target.value)} maxLength={INCIDENT_NOTE_MAX_LENGTH} rows={3} placeholder="İnceleme bulgusu, yapılan müdahale veya bir sonraki adım…" disabled={collaborationBlocked} aria-describedby="incident-note-hint" />
                 <div className={styles.noteFooter}><p id="incident-note-hint">{!peopleLoading && !peopleError && !canManage ? 'Not eklemek için yönetici veya editör yetkisi gerekiyor.' : 'Yazan kişi ve zaman bilgisiyle geçmişe kaydedilir.'}<span>{note.length} / {INCIDENT_NOTE_MAX_LENGTH}</span></p><Button type="submit" size="sm" disabled={collaborationBlocked || !note.trim()}>{saving === 'note' ? <RefreshCw size={14} className="animate-spin motion-reduce:animate-none" /> : <MessageSquareText size={14} />}{saving === 'note' ? 'Kaydediliyor…' : 'Not ekle'}</Button></div>
               </form>
-              {notice?.type === 'error' && notice.authStatus === 401 && notice.authAction !== 'ASSIGN' && !blocked && <Button asChild variant="outline" size="sm"><Link href="/login?next=%2Fdashboard%2Falerts" target="_blank" rel="noopener noreferrer">Yeni sekmede giriş yap</Link></Button>}
+              {notice?.type === 'error' && notice.authStatus === 401 && (!notice.authAction || notice.authAction === 'ADD_NOTE') && !blocked && <Button asChild variant="outline" size="sm"><Link href="/login?next=%2Fdashboard%2Falerts" target="_blank" rel="noopener noreferrer">Yeni sekmede giriş yap</Link></Button>}
             </section>}
             <section aria-label="Öne çıkan hareketler"><div className={styles.sectionHeading}><h3><ListChecks size={17} aria-hidden="true" />Öne çıkan hareketler</h3>{history.length > 0 && <button type="button" onClick={() => setTab('history')}>Tüm geçmiş<ArrowRight size={14} aria-hidden="true" /></button>}</div>{historyState || <HistoryList entries={incidentHistoryHighlights(history)} />}</section>
           </TabsContent>
@@ -145,13 +147,16 @@ export function IncidentDetailWorkspace({ event, detail, loading, error, busy, n
       </Tabs>
 
       <aside className={styles.aside} aria-label="Olay aksiyonları">
-        <section className={styles.operation}><h3><Settings2 size={16} aria-hidden="true" />Operasyon</h3><p>{operationText}</p>
+        <section className={styles.operation} aria-label="Durum işlemleri"><h3><Settings2 size={16} aria-hidden="true" />Operasyon</h3><p>{operationText}</p>
           <div className={styles.actionStack}>{actions.map(item => {
             const Icon = item.action === 'ARCHIVE' ? Archive : item.action === 'RESTORE' ? ArchiveRestore : item.action === 'CLOSE' ? LockKeyhole : item.action === 'RESOLVE' ? CheckCircle2 : CheckCheck;
-            return <Button key={item.action} variant={item.primary ? 'default' : 'outline'} className={item.primary ? styles.primaryAction : undefined} disabled={blocked || item.disabled} onClick={() => void onAction(item.action)}>{busy ? <RefreshCw size={16} aria-hidden="true" className="animate-spin motion-reduce:animate-none" /> : <Icon size={16} aria-hidden="true" />}{busy ? 'İşlem sürüyor…' : item.label}</Button>;
+            return <Button key={item.action} variant={item.primary ? 'default' : 'outline'} className={item.primary ? styles.primaryAction : undefined} disabled={blocked || item.disabled || ((item.action === 'RESOLVE' || item.action === 'CLOSE') && (peopleLoading || !canManage)) || ((item.action === 'ARCHIVE' || item.action === 'RESTORE') && (peopleLoading || !canArchive))} onClick={() => void onAction(item.action)}>{busy ? <RefreshCw size={16} aria-hidden="true" className="animate-spin motion-reduce:animate-none" /> : <Icon size={16} aria-hidden="true" />}{busy ? 'İşlem sürüyor…' : item.label}</Button>;
           })}</div>
           {incident?.legalHold && <p className={styles.holdNotice}><LockKeyhole size={14} />Saklama koruması etkin.</p>}
           {notice && <p role={notice.type === 'error' ? 'alert' : 'status'} className={cn(styles.actionNotice, notice.type === 'error' && styles.actionError)}>{uiError(notice.text)}</p>}
+          {incident && !peopleLoading && !peopleError && !canManage && <p className={styles.fieldHint}>Çözme ve kapatma için yönetici veya editör yetkisi gerekiyor.</p>}
+          {incident && actions.some(item => item.action === 'ARCHIVE' || item.action === 'RESTORE') && !peopleLoading && !peopleError && !canArchive && <p className={styles.fieldHint}>Arşivleme ve arşivden çıkarma için yönetici yetkisi gerekiyor.</p>}
+          {notice?.type === 'error' && notice.authStatus === 401 && (notice.authAction === 'RESOLVE' || notice.authAction === 'CLOSE' || notice.authAction === 'ARCHIVE' || notice.authAction === 'RESTORE' || notice.authAction === 'SET_LEGAL_HOLD' || notice.authAction === 'RELEASE_LEGAL_HOLD') && !blocked && <Button asChild variant="outline" size="sm"><Link href="/login?next=%2Fdashboard%2Falerts" target="_blank" rel="noopener noreferrer">Yeni sekmede giriş yap</Link></Button>}
         </section>
         {incident && <section className={styles.assignment} aria-label="Sorumlu atama">
           <h3><UserRound size={15} aria-hidden="true" />Sorumlu</h3>
@@ -183,7 +188,7 @@ export function IncidentDetailWorkspace({ event, detail, loading, error, busy, n
             }
           }}>
             {incident?.status === 'ACKNOWLEDGED' && incident.archiveState !== 'ARCHIVED' && <><Button variant="ghost" className="h-auto min-h-10 w-full justify-start gap-2 whitespace-normal text-left text-sm" disabled={blocked} onClick={() => { setMoreOpen(false); void onAction('UNACKNOWLEDGE'); }}><RotateCcw size={16} className="shrink-0" />Onayı geri al</Button><p className="px-3 pb-2 text-xs leading-5 text-muted-foreground">İnceleme onayını geri alır; olay açık duruma geçer.</p><div className="my-1 border-t" /></>}
-            {incident && <><Button variant="ghost" className="h-auto min-h-10 w-full justify-start gap-2 whitespace-normal text-left text-sm" disabled={blocked} onClick={() => { setMoreOpen(false); void onAction(incident.legalHold ? 'RELEASE_LEGAL_HOLD' : 'SET_LEGAL_HOLD'); }}><LockKeyhole size={16} className="shrink-0" />{incident.legalHold ? 'Saklama korumasını kaldır' : 'Saklama korumasını etkinleştir'}</Button><p className="px-3 pb-2 text-xs leading-5 text-muted-foreground">Yönetici işlemi. Kanıtların otomatik arşivlenmesini durdurur.</p><div className="my-1 border-t" /></>}
+            {incident && <><Button variant="ghost" className="h-auto min-h-10 w-full justify-start gap-2 whitespace-normal text-left text-sm" disabled={blocked || peopleLoading || !canManageLegalHold} onClick={() => { setMoreOpen(false); void onAction(incident.legalHold ? 'RELEASE_LEGAL_HOLD' : 'SET_LEGAL_HOLD'); }}><LockKeyhole size={16} className="shrink-0" />{incident.legalHold ? 'Saklama korumasını kaldır' : 'Saklama korumasını etkinleştir'}</Button><p className="px-3 pb-2 text-xs leading-5 text-muted-foreground">{!peopleLoading && !peopleError && !canManageLegalHold ? 'Saklama korumasını değiştirmek için yönetici yetkisi gerekiyor.' : 'Yönetici işlemi. Kanıtların otomatik arşivlenmesini durdurur.'}</p><div className="my-1 border-t" /></>}
             <Button variant="ghost" className="w-full justify-start gap-2" disabled={busy} onClick={() => { pendingDiscard.current = true; setMoreOpen(false); }}><Shield size={16} />Alarmı hariç tut</Button><p className="px-3 pb-2 text-xs leading-5 text-muted-foreground">Alarmı yok sayma listesine ekler.</p>
           </PopoverContent>
         </Popover>

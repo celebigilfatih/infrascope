@@ -367,7 +367,7 @@ export default function AlertsDashboardPage() {
   const [archiveFilter, setArchiveFilter] = useState<IncidentArchiveFilter>('HOT');
   const [statusStats, setStatusStats] = useState<Record<string, number>>({});
   const [fetchError, setFetchError] = useState<string | null>(null);
-  const [message, setMessage] = useState<{ text: string; type: 'success' | 'error'; incidentId?: string; authStatus?: 401 | 403; authAction?: 'ADD_NOTE' | 'ASSIGN' } | null>(null);
+  const [message, setMessage] = useState<{ text: string; type: 'success' | 'error'; incidentId?: string; authStatus?: 401 | 403; authAction?: 'ADD_NOTE' | 'ASSIGN' | 'RESOLVE' | 'CLOSE' | 'ARCHIVE' | 'RESTORE' | 'SET_LEGAL_HOLD' | 'RELEASE_LEGAL_HOLD' } | null>(null);
   const [rawLogExpanded, setRawLogExpanded] = useState(false);
   const [nmsPipeline, setNmsPipeline] = useState<NmsPipelineHealth | null>(null);
 
@@ -717,12 +717,29 @@ export default function AlertsDashboardPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids: [incidentId], action, ...payload }),
       });
-      if ((action === 'ADD_NOTE' || action === 'ASSIGN') && (res.status === 401 || res.status === 403)) {
-        const text = action === 'ASSIGN' ? (res.status === 401
-          ? 'Oturumunuzun süresi doldu veya oturumunuz geçersiz. Tekrar giriş yapın. Sorumlu seçiminiz bu pencerede korunuyor.'
-          : payload.assigneeId === null ? 'Sorumlu atamasını kaldırma yetkiniz yok. Sorumlu seçiminiz korundu.' : 'Sorumlu değiştirme yetkiniz yok. Sorumlu seçiminiz korundu.') : (res.status === 401
-          ? 'Oturumunuzun süresi doldu veya oturumunuz geçersiz. Tekrar giriş yapın. Not taslağınız bu pencerede korunuyor.'
-          : 'Operasyon notu ekleme yetkiniz yok. Not taslağınız korundu.');
+      if ((action === 'ADD_NOTE' || action === 'ASSIGN' || action === 'RESOLVE' || action === 'CLOSE' || action === 'ARCHIVE' || action === 'RESTORE' || action === 'SET_LEGAL_HOLD' || action === 'RELEASE_LEGAL_HOLD') && (res.status === 401 || res.status === 403)) {
+        let text: string;
+        if (action === 'SET_LEGAL_HOLD' || action === 'RELEASE_LEGAL_HOLD') {
+          text = res.status === 401
+            ? 'Oturumunuzun süresi doldu veya oturumunuz geçersiz. Tekrar giriş yapın. Saklama koruması ve taslaklarınız bu pencerede korunuyor.'
+            : action === 'SET_LEGAL_HOLD' ? 'Bu olayda saklama korumasını etkinleştirme yetkiniz yok. Koruma durumu değiştirilmedi.' : 'Bu olayda saklama korumasını kaldırma yetkiniz yok. Koruma durumu değiştirilmedi.';
+        } else if (action === 'ARCHIVE' || action === 'RESTORE') {
+          text = res.status === 401
+            ? 'Oturumunuzun süresi doldu veya oturumunuz geçersiz. Tekrar giriş yapın. Arşiv durumu ve taslaklarınız bu pencerede korunuyor.'
+            : action === 'ARCHIVE' ? 'Bu olayı arşivleme yetkiniz yok. Arşiv durumu değiştirilmedi.' : 'Bu olayı arşivden çıkarma yetkiniz yok. Arşiv durumu değiştirilmedi.';
+        } else if (action === 'RESOLVE' || action === 'CLOSE') {
+          text = res.status === 401
+            ? 'Oturumunuzun süresi doldu veya oturumunuz geçersiz. Tekrar giriş yapın. Olay durumu ve taslaklarınız bu pencerede korunuyor.'
+            : action === 'RESOLVE' ? 'Bu olayı çözme yetkiniz yok. Olay durumu değiştirilmedi.' : 'Bu olayı kapatma yetkiniz yok. Olay durumu değiştirilmedi.';
+        } else if (action === 'ASSIGN') {
+          text = res.status === 401
+            ? 'Oturumunuzun süresi doldu veya oturumunuz geçersiz. Tekrar giriş yapın. Sorumlu seçiminiz bu pencerede korunuyor.'
+            : payload.assigneeId === null ? 'Sorumlu atamasını kaldırma yetkiniz yok. Sorumlu seçiminiz korundu.' : 'Sorumlu değiştirme yetkiniz yok. Sorumlu seçiminiz korundu.';
+        } else {
+          text = res.status === 401
+            ? 'Oturumunuzun süresi doldu veya oturumunuz geçersiz. Tekrar giriş yapın. Not taslağınız bu pencerede korunuyor.'
+            : 'Operasyon notu ekleme yetkiniz yok. Not taslağınız korundu.';
+        }
         setMessage({ text, type: 'error', incidentId, authStatus: res.status, authAction: action });
         return false;
       }
