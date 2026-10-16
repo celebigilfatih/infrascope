@@ -5,7 +5,7 @@ set -euo pipefail
 mkdir -p /app /artifacts
 trap 'result=$?; if [ -d /app/output/incident-regression ]; then cp -R /app/output/incident-regression/. /artifacts/; fi; exit "$result"' EXIT
 tar -C /workspace --exclude='.git' --exclude='node_modules' --exclude='.next' \
-  --exclude='output' --exclude='.env*' --exclude='.venv' --exclude='backups' \
+  --exclude='output' --exclude='.env*' --exclude='.venv' --exclude='./backups' --exclude='./deploy/backups' \
   --exclude='logs' --exclude='data' --exclude='.machine-id' --exclude='.license-cache' \
   --exclude='*.isbackup' --exclude='nms_service/*.sql' -cf - . | tar -C /app -xf -
 cd /app
@@ -18,6 +18,9 @@ npx eslint app/integrations/nms/add-device/page.tsx app/integrations/nms/devices
 npm run test:nms-device-monitoring
 npm run test:nms-add-device
 npm run test:nms-connection-test
+npx eslint app/integrations/nms/backups/page.tsx app/api/integrations/nms/backup-policies/route.ts components/nms/BackupArtifactDialog.tsx components/nms/BackupCoverage.tsx lib/nms/backup-view.ts scripts/check-nms-backup-view.cjs tests/incident-e2e/nms-backup-workspace.spec.ts --max-warnings=0
+npm run test:nms-backup-view
+npm run test:nms-backups
 npx eslint app/network/NetworkTopologyContent.tsx components/topology/TopologyInspector.tsx components/topology/CustomEdge.tsx components/topology/DeviceNode.tsx lib/topology/workspace.ts scripts/check-topology-workspace.cjs scripts/fixtures/topology-workspace.cjs scripts/check-incident-detail.cjs scripts/check-incident-collaboration.cjs tests/incident-e2e/topology-workspace.spec.ts --max-warnings=0
 npm run test:topology-workspace
 npm run test:topology-contracts

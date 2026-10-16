@@ -1,0 +1,21 @@
+.coverage { border: 1px solid oklch(var(--border)); border-radius: .875rem; background: oklch(var(--card)); overflow: hidden; }
+.header,.toolbar,.footer { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:1rem; padding:1.25rem; border-bottom:1px solid oklch(var(--border)); }
+.header h2 { display:flex; align-items:center; gap:.5rem; font-weight:600; font-size:1rem; }
+.header h2 svg { color:oklch(var(--primary)); }
+.header p { color:oklch(var(--muted-foreground)); font-size:.75rem; line-height:1.6; margin-top:.375rem; max-width:42rem; }
+.toolbar > div { min-width:12rem; }
+.toolbar select { height:2.5rem; border:1px solid oklch(var(--input)); border-radius:.375rem; background:oklch(var(--background)); font-size:.8125rem; padding:0 .75rem; max-width:100%; }
+.toolbar select:focus-visible { outline:2px solid oklch(var(--ring)); outline-offset:2px; }
+.grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,26rem),1fr)); gap:1rem; padding:1.25rem; background:oklch(var(--muted)/.12); }
+.device { min-width:0; padding:1rem; border:1px solid oklch(var(--border)); border-radius:.75rem; background:oklch(var(--card)); }
+.title { display:flex; flex-wrap:wrap; align-items:center; gap:.625rem; }
+.title h3 { flex:1; min-width:7rem; font-weight:600; font-size:.875rem; overflow-wrap:anywhere; }
+.icon { display:grid; place-items:center; width:2rem; height:2rem; border-radius:.5rem; background:oklch(var(--primary)/.08); color:oklch(var(--primary)); }
+.device dl { display:grid; gap:1rem; margin:1.25rem 0; font-size:.75rem; }
+.device dt { display:flex; align-items:center; gap:.375rem; color:oklch(var(--muted-foreground)); margin-bottom:.375rem; }
+.device dd { font-weight:500; }
+.device small { display:block; color:oklch(var(--muted-foreground)); font-weight:400; margin-top:.25rem; }
+.actions { display:flex; flex-wrap:wrap; align-items:center; gap:.5rem; border-top:1px solid oklch(var(--border)); padding-top:.875rem; }
+.footer { border-bottom:0; border-top:1px solid oklch(var(--border)); font-size:.75rem; color:oklch(var(--muted-foreground)); }
+.empty { padding:4rem 1rem; text-align:center; color:oklch(var(--muted-foreground)); font-size:.875rem; }
+@media(max-width:639px) { .header,.toolbar,.footer { padding:1rem; } .grid { padding:.875rem; } .toolbar select { width:100%; } }

@@ -124,6 +124,22 @@ async function main() {
   const capabilities = await (await deviceRoute.GET(request(), { params: { id: device.id } })).json();
   assert.equal(capabilities.permissions.startup, true);
 
+  // A fresh backup of a different type cannot hide a stale scheduled type.
+  prisma.nmsBackupPolicy.findMany = async () => [{ ...policy, id: 'policy-current', nmsDeviceId: 75, inventoryDeviceId: device.id, backupType: 'Running Config' }];
+  prisma.nmsBackup.groupBy = async query => {
+    assert.deepEqual(Array.from(query.by), ['nmsDeviceId', 'backupType']);
+    return [
+      { nmsDeviceId: 75, backupType: 'Running Config', _max: { createdAt: new Date('2026-10-12T09:00:00Z') } },
+      { nmsDeviceId: 75, backupType: 'Startup Config', _max: { createdAt: new Date('2026-10-16T09:00:00Z') } },
+    ];
+  };
+  const coverage = await (await policies.GET(request())).json();
+  assert.equal(coverage.devices[0].lastSuccessAt, '2026-10-16T09:00:00.000Z');
+  assert.equal(coverage.devices[0].lastPolicySuccessAt, '2026-10-12T09:00:00.000Z');
+  prisma.nmsBackup.groupBy = async () => [{ nmsDeviceId: 75, backupType: 'Startup Config', _max: { createdAt: new Date('2026-10-16T09:00:00Z') } }];
+  const missingType = await (await policies.GET(request())).json();
+  assert.equal(missingType.devices[0].lastPolicySuccessAt, null);
+
   let faCalled = false;
   const queries = load('lib/alarms/queries/nms.ts');
   const failed = { inventory_device_id: 'fixture-a', source_event_id: 'job', condition_key: 'backup-failed' };

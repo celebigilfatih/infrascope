@@ -1,5 +1,15 @@
 # Device configuration backup operations
 
+## Backup workspace
+
+The configuration-backup screen opens on **Cihaz durumu**. Last-success times come from the device policy endpoint across all persisted backups, independently of file-list filters or pagination. **Yedek güncel** and **Yedek gecikmiş** compare the last successful backup of the scheduled type (`lastPolicySuccessAt`) with the enabled policy's `staleAfterHours`; a fresh backup of another type cannot hide an overdue scheduled type. The most recent backup of any type remains separately available as `lastSuccessAt`. A disabled schedule shows **Yedek var**, without claiming freshness. Missing backups, malformed timestamps and future timestamps require attention. Failed refreshes retain the previous records and explicitly mark their freshness as unknown. Times use Europe/Istanbul (TSİ).
+
+**Yedekleri gör** opens the device's filtered files. **İncele** shows file metadata, download progress/errors and a manual recovery guide. Download uses the existing permission, decryption, checksum and audit workflow; its success message means the file was handed to the browser. It does not indicate a device restore. There is no automatic device-restore endpoint. Operators must follow the manufacturer's supported procedure and verify device/firmware compatibility. Archived files remain inspectable; their removed inventory identity is stated explicitly. Read-only users can inspect metadata and the guide but cannot download content.
+
+Run `npm run test:nms-backup-view` for freshness/time/size/filename presentation checks and `npm run test:nms-backups` for API contracts, including role restrictions and archive integrity. Neither requires a real device backup or restore.
+
+`tests/incident-e2e/nms-backup-workspace.spec.ts` adds nine browser cases to the isolated shared regression suite. Synthetic NMS responses cover independent scheduled-type freshness, retained stale records, filters, archived metadata/recovery instructions, actual browser download handoff, HTTP/network/empty-content errors, cancellation, read-only controls, idempotent queue retries and 390px light/dark layouts. A real signed-session request verifies that the current database role blocks content access. No test contacts a customer device or restores a configuration. The shared runner also runs the presentation/API checks and strict lint for the changed workspace files.
+
 ## Deployment contract
 
 One company owns one application, database, NMS service, encryption key and recovery destination. There is no shared tenant database. Customer Compose includes `postgres`, `app`, `nms` and `database-backup`. NMS starts after the application's migrations and readiness check. Port 8500 is internal in production. The NMS container needs routed TCP access to the devices' SSH ports; SNMP monitoring is not a prerequisite for backup.

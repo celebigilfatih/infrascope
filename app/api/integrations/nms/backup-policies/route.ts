@@ -18,12 +18,19 @@ export async function GET(req: NextRequest) {
   const devices = await prisma.device.findMany({ where: { nmsDeviceId: { not: null }, managementIp: { not: null } },
     select: { id: true, nmsDeviceId: true, name: true, vendor: true, model: true, operatingSystem: true, backupPlatform: true } });
   const policies = await prisma.nmsBackupPolicy.findMany();
-  const latest = await prisma.nmsBackup.groupBy({ by: ['nmsDeviceId'], where: { nmsDeviceId: { not: null } }, _max: { createdAt: true } });
+  const latest = await prisma.nmsBackup.groupBy({ by: ['nmsDeviceId', 'backupType'], where: { nmsDeviceId: { not: null } }, _max: { createdAt: true } });
   return NextResponse.json({ profiles: BACKUP_PROFILES, canEdit: auth.role === 'ADMIN', canCreate: canManageBackups(auth.role),
-    devices: devices.map(device => ({ id: device.nmsDeviceId, name: device.name, platform: resolveBackupPlatform(device),
-      policy: policies.find(policy => policy.nmsDeviceId === device.nmsDeviceId && policy.inventoryDeviceId === device.id) || null,
-      lastSuccessAt: latest.find(backup => backup.nmsDeviceId === device.nmsDeviceId)?._max.createdAt || null,
-    })),
+    devices: devices.map(device => {
+      const policy = policies.find(policy => policy.nmsDeviceId === device.nmsDeviceId && policy.inventoryDeviceId === device.id) || null;
+      const deviceBackups = latest.filter(backup => backup.nmsDeviceId === device.nmsDeviceId);
+      const lastSuccessAt = deviceBackups.reduce<Date | null>((last, backup) => {
+        const candidate = backup._max.createdAt;
+        return candidate && (!last || candidate > last) ? candidate : last;
+      }, null);
+      return { id: device.nmsDeviceId, name: device.name, platform: resolveBackupPlatform(device), policy, lastSuccessAt,
+        lastPolicySuccessAt: policy ? deviceBackups.find(backup => backup.backupType === policy.backupType)?._max.createdAt || null : null,
+      };
+    }),
   }, { headers: { 'Cache-Control': 'private, no-store' } });
 }
 

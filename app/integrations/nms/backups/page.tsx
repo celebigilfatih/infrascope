@@ -5,7 +5,7 @@ import { uiError } from '@/lib/i18n/tr';
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import Link from 'next/link';
 import {
-  Archive, ArrowDownToLine, ArrowLeft, ArrowRight, CalendarClock, CheckCircle2,
+  Archive, ArrowLeft, ArrowRight, CalendarClock, CheckCircle2,
   Clock3, DatabaseBackup, FileCode2, HardDrive, History, Info, Loader2, Plus,
   RefreshCw, Search, Server, Settings2, ShieldCheck, Trash2, TriangleAlert, X,
 } from 'lucide-react';
@@ -22,6 +22,9 @@ import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, A
 import { apiGet, apiPost, apiPut, apiDelete } from '@/lib/api';
 import { BACKUP_PROFILES, type BackupPlatform } from '@/lib/nms/backup-platform';
 import { cn } from '@/lib/utils';
+import { BackupCoverage } from '@/components/nms/BackupCoverage';
+import { BackupArtifactDialog } from '@/components/nms/BackupArtifactDialog';
+import { backupAge, backupCoverage, backupDate as date, backupSize as sizeLabel, backupTypeLabel as typeLabel } from '@/lib/nms/backup-view';
 import styles from './page.module.css';
 
 interface Backup {
@@ -37,7 +40,7 @@ interface Policy {
   enabled: boolean; backupType: string; intervalHours: number; retentionDays: number;
   keepLast: number; staleAfterHours: number; nextRunAt: string;
 }
-interface Device { id: number; name: string; platform: BackupPlatform | null; policy: Policy | null; lastSuccessAt: string | null }
+interface Device { id: number; name: string; platform: BackupPlatform | null; policy: Policy | null; lastSuccessAt: string | null; lastPolicySuccessAt?: string | null }
 const jobStates: Record<string, { label: string; tone: SemanticTone }> = {
   queued: { label: 'Kuyrukta', tone: 'neutral' }, running: { label: 'Çalışıyor', tone: 'info' },
   retrying: { label: 'Yeniden denenecek', tone: 'warning' }, succeeded: { label: 'Başarılı', tone: 'success' },
@@ -58,11 +61,6 @@ function settingsFor(device?: Device) {
     stale_after_hours: policy?.staleAfterHours ?? 48,
   };
 }
-function date(value: string | null) {
-  return value ? new Date(value).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Henüz yok';
-}
-const typeLabel = (type: string) => type === 'Startup Config' ? 'Başlangıç yapılandırması' : 'Çalışan yapılandırma';
-const sizeLabel = (size: number) => size >= 1048576 ? `${(size / 1048576).toFixed(1)} MiB` : `${(size / 1024).toFixed(1)} KiB`;
 
 export default function NmsBackupsPage() {
   const [backups, setBackups] = useState<Backup[]>([]);
@@ -78,7 +76,9 @@ export default function NmsBackupsPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
   const [busy, setBusy] = useState<'create' | 'policy' | 'delete' | null>(null);
-  const [tab, setTab] = useState('backups');
+  const [tab, setTab] = useState('coverage');
+  const [selectedBackup, setSelectedBackup] = useState<Backup | null>(null);
+  const [healthError, setHealthError] = useState(false);
   const [search, setSearch] = useState('');
   const [serverSearch, setServerSearch] = useState('');
   const [filterDevice, setFilterDevice] = useState('');
@@ -147,7 +147,7 @@ export default function NmsBackupsPage() {
     let cancelled = false;
     const check = async () => {
       const result = await apiGet('/api/integrations/nms/backups/health', undefined, { timeout: 5000 });
-      if (!cancelled) setAvailable(result.available === true);
+      if (!cancelled) { setHealthError(!!result.error || typeof result.available !== 'boolean'); setAvailable(typeof result.available === 'boolean' ? result.available : null); }
     };
     void check();
     const timer = setInterval(() => void check(), 30000);
@@ -222,7 +222,7 @@ export default function NmsBackupsPage() {
     finally { setBusy(null); }
   };
   const backupActions = (backup: Backup) => <div className="flex items-center justify-end gap-1">
-    {permissions.content && <Button size="sm" variant="outline" className="gap-1.5" asChild><a href={`/api/integrations/nms/backups/${backup.id}?action=download`} aria-label={`${backup.device_name} yedeğini indir`}><ArrowDownToLine className="h-3.5 w-3.5" />İndir</a></Button>}
+    <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setSelectedBackup(backup)} aria-label={`${backup.device_name} yedek ayrıntıları ve indirme`}><FileCode2 className="h-3.5 w-3.5" />İncele</Button>
     {permissions.delete && <Button size="icon" variant="ghost" className="h-9 w-9 text-muted-foreground hover:text-destructive" disabled={!!busy} onClick={() => { setActionError(uiError('')); setPendingDelete(backup); }} aria-label={`${backup.device_name} yedeğini sil`}><Trash2 className="h-4 w-4" /></Button>}
     {!permissions.content && <span className="text-xs text-muted-foreground">Salt okunur</span>}
   </div>;
@@ -233,7 +233,7 @@ export default function NmsBackupsPage() {
         <div className="min-w-0">
           <p className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-primary"><DatabaseBackup className="h-3.5 w-3.5" />NMS Yedekleme</p>
           <PageHeading section="backups" showIcon={false} className="!text-2xl !font-semibold">Yapılandırma yedekleri</PageHeading>
-          <p className="mt-2 text-sm text-muted-foreground">Cihaz yapılandırmalarını güvenle saklayın, yedekleme işlerini ve zamanlamayı yönetin.</p>
+          <p className="mt-2 text-sm text-muted-foreground">Son başarılı yedekleri takip edin, yapılandırma dosyalarını indirin ve yedeklemeyi zamanlayın.</p>
         </div>
         <div className={styles.headerActions}>
           <Button variant="outline" className="gap-2" onClick={() => void load()} disabled={refreshing}><RefreshCw className={cn('h-4 w-4', refreshing && 'animate-spin')} />{refreshing ? 'Yenileniyor' : 'Yenile'}</Button>
@@ -241,27 +241,29 @@ export default function NmsBackupsPage() {
         </div>
       </header>
       <div className={styles.serviceBar}>
-        <SemanticBadge tone={available === null ? 'neutral' : available ? 'success' : 'warning'} icon={available === null ? Clock3 : undefined}>{available === null ? 'Servis kontrol ediliyor' : available ? 'Yedekleme servisi hazır' : 'Servise ulaşılamıyor'}</SemanticBadge>
-        <span className="flex items-center gap-1.5 text-xs text-muted-foreground"><RefreshCw className="h-3 w-3" />10 saniyede bir güncellenir{updatedAt && <span className="hidden sm:inline"> · Son güncelleme {updatedAt.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>}</span>
+        <SemanticBadge tone={available === null ? 'neutral' : available ? 'success' : 'warning'} icon={available === null ? Clock3 : undefined}>{healthError ? 'Servis durumu doğrulanamadı' : available === null ? 'Servis kontrol ediliyor' : available ? 'Yedekleme servisi hazır' : 'Servise ulaşılamıyor'}</SemanticBadge>
+        <span className="flex items-center gap-1.5 text-xs text-muted-foreground"><RefreshCw className="h-3 w-3" />10 saniyede bir güncellenir{updatedAt && <span className="hidden sm:inline"> · Son güncelleme {updatedAt.toLocaleTimeString('tr-TR', { timeZone: 'Europe/Istanbul', hour: '2-digit', minute: '2-digit', second: '2-digit' })} TSİ</span>}</span>
       </div>
       {available === false && <Message tone="warning">Kayıtlı yedekleri görüntüleyebilirsiniz. Yeni işler, yedekleme servisi yeniden hazır olduğunda çalışır.</Message>}
-      {Object.keys(loadErrors).length > 0 && <Message tone="danger"><span className="font-medium">Bazı bilgiler yenilenemedi.</span> {Object.values(loadErrors).join(' ')} Önceki bilgiler güncel olmayabilir.</Message>}
+      {Object.keys(loadErrors).length > 0 && <Message tone="danger"><span className="font-medium">Bazı bilgiler yenilenemedi.</span> {Object.keys(loadErrors).map(key => key === 'backups' ? 'Yedek dosyaları' : key === 'jobs' ? 'Yedekleme işleri' : 'Cihazların yedek durumu ve zamanlama').join(', ')} yüklenemedi. Önceki bilgiler güncel olmayabilir.</Message>}
       {notice && <div role="status" className={styles.notice}><CheckCircle2 className="h-4 w-4 shrink-0 text-primary" /><p className="flex-1 text-sm">{notice}</p><Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => setNotice('')} aria-label="Bildirimi kapat"><X className="h-4 w-4" /></Button></div>}
       <section className={styles.stats} aria-label="Yedekleme özeti">
         <Stat icon={<HardDrive />} label="Yedekli cihaz" value={(loading || !!loadErrors.policies) && !devices.length ? '—' : String(devices.filter(device => device.lastSuccessAt).length)} hint={`${devices.length} kayıtlı cihaz içinde`} />
-        <Stat icon={<CalendarClock />} label="Zamanlama etkin" value={(loading || !!loadErrors.policies) && !devices.length ? '—' : String(devices.filter(device => device.policy?.enabled).length)} hint="Otomatik yedeklenen cihaz" />
+        <Stat icon={<TriangleAlert />} label="Kontrol gerektiren" value={loadErrors.policies || loading ? '—' : String(devices.filter(device => backupCoverage(device).attention).length)} hint="Yedeği olmayan, gecikmiş veya tarihi belirsiz cihaz" warning={!loadErrors.policies && devices.some(device => backupCoverage(device).attention)} />
         <Stat icon={<Clock3 />} label="Devam eden iş" value={(loading || !!loadErrors.jobs) && !jobs.length ? '—' : String(activeJobs.length)} hint="Kuyrukta, çalışıyor veya yeniden denenecek" />
         <Stat icon={<History />} label="Başarısız iş" value={(loading || !!loadErrors.jobs) && !jobs.length ? '—' : String(failedJobs.length)} hint="Son 100 iş içinde" warning={failedJobs.length > 0} />
       </section>
       <Tabs value={tab} onValueChange={value => { setTab(value); setActionError(uiError('')); }}>
         <TabsList aria-label="Yedekleme bölümleri" className={styles.tabs}>
+          <TabsTrigger value="coverage"><Server className="h-4 w-4" />Cihaz durumu</TabsTrigger>
           <TabsTrigger value="backups"><Archive className="h-4 w-4" />Yedekler</TabsTrigger>
           <TabsTrigger value="jobs"><History className="h-4 w-4" />İşler{activeJobs.length > 0 && <Badge variant="secondary" className="ml-1" icon={null}>{activeJobs.length}</Badge>}</TabsTrigger>
           <TabsTrigger value="policies"><Settings2 className="h-4 w-4" />Zamanlama</TabsTrigger>
         </TabsList>
+        <TabsContent value="coverage" className="mt-4"><BackupCoverage devices={sortedDevices} loading={loading} stale={!!loadErrors.policies} onFiles={id => { clearFilters(); setFilterDevice(String(id)); setTab('backups'); }} onPolicy={id => { choosePolicy(String(id)); setTab('policies'); }} /></TabsContent>
         <TabsContent value="backups" className="mt-4">
           <section className={styles.collection} aria-labelledby="backups-heading" aria-busy={loading}>
-            <div className={styles.collectionHeader}><div><h2 id="backups-heading" className="flex items-center gap-2 text-base font-semibold">Kayıtlı yedekler<Badge variant="outline" icon={null}>{total}</Badge></h2><p className="mt-1 text-xs text-muted-foreground">En yeni yapılandırma yedekleri önce gösterilir.</p></div><span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"><ShieldCheck className="h-3.5 w-3.5 text-primary" />Şifreli saklama</span></div>
+            <div className={styles.collectionHeader}><div><h2 id="backups-heading" className="flex items-center gap-2 text-base font-semibold">Kayıtlı yedekler<Badge variant="outline" icon={null}>{loadErrors.backups && !backups.length ? '—' : total}</Badge></h2><p className="mt-1 text-xs text-muted-foreground">En yeni yapılandırma yedekleri önce gösterilir.</p></div><span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"><ShieldCheck className="h-3.5 w-3.5 text-primary" />Şifreli saklama</span></div>
             <form className={styles.toolbar} onSubmit={event => { event.preventDefault(); setPage(0); setServerSearch(search.trim()); }}>
               <div className={styles.search}><Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input aria-label="Yedek ara" placeholder="Cihaz veya dosya adıyla ara…" className="pl-9 pr-9" value={search} onChange={event => setSearch(event.target.value)} />{search && <Button type="button" variant="ghost" size="icon" className="absolute right-0 top-0 h-10 w-9" aria-label="Aramayı temizle" onClick={() => { setSearch(''); setServerSearch(''); setPage(0); }}><X className="h-3.5 w-3.5" /></Button>}</div>
               <Button type="submit" variant="outline">Ara</Button>
@@ -270,15 +272,15 @@ export default function NmsBackupsPage() {
             </form>
             {filtered && <div className={styles.filterBar}><p className="text-xs text-muted-foreground">{serverSearch && <>“{serverSearch}” · </>}{total} sonuç{filterDevice && ` · ${devices.find(device => String(device.id) === filterDevice)?.name || 'Seçili cihaz'}`}{filterType && ` · ${typeLabel(filterType)}`}</p><Button size="sm" variant="ghost" onClick={clearFilters} className="h-8 gap-1.5 text-xs"><X className="h-3 w-3" />Filtreleri temizle</Button></div>}
             {loading ? <Loading /> : loadErrors.backups && !backups.length ? <Empty icon={<TriangleAlert />} title="Yedekler yüklenemedi" description="Bağlantınızı kontrol edip tekrar deneyin."><Button variant="outline" onClick={() => void load()}>Tekrar dene</Button></Empty> : !backups.length ? <Empty icon={<Archive />} title={filtered ? 'Aramanıza uygun yedek bulunamadı' : 'Henüz yapılandırma yedeği yok'} description={filtered ? 'Arama ifadesini değiştirin veya filtreleri temizleyin.' : 'Bir cihaz seçip ilk yapılandırma yedeğinizi oluşturun.'}>{filtered ? <Button variant="outline" onClick={clearFilters}>Filtreleri temizle</Button> : permissions.create && <Button onClick={openCreate} className="gap-2"><Plus className="h-4 w-4" />Yedek oluştur</Button>}</Empty> : <>
-              <div className={styles.tableWrap}><table className={styles.table}><caption className="sr-only">Kayıtlı yapılandırma yedekleri</caption><thead><tr><th scope="col">Cihaz / dosya</th><th scope="col">Yedek türü</th><th scope="col">Boyut</th><th scope="col">Oluşturulma</th><th scope="col" className="text-right">İşlemler</th></tr></thead><tbody>{backups.map(backup => <tr key={backup.id}><td><BackupIdentity backup={backup} /></td><td><span className="text-xs">{typeLabel(backup.backup_type)}</span></td><td className="whitespace-nowrap font-mono text-xs">{sizeLabel(backup.file_size)}</td><td className="whitespace-nowrap text-xs text-muted-foreground"><time dateTime={backup.created_at}>{date(backup.created_at)}</time></td><td>{backupActions(backup)}</td></tr>)}</tbody></table></div>
-              <div className={styles.mobileList}>{backups.map(backup => <article key={backup.id} className={styles.record}><BackupIdentity backup={backup} /><dl className="mt-4 grid grid-cols-2 gap-3 text-xs"><div><dt className="mb-1 text-muted-foreground">Yedek türü</dt><dd>{typeLabel(backup.backup_type)}</dd></div><div><dt className="mb-1 text-muted-foreground">Boyut</dt><dd>{sizeLabel(backup.file_size)}</dd></div><div className="col-span-2"><dt className="mb-1 text-muted-foreground">Oluşturulma</dt><dd><time dateTime={backup.created_at}>{date(backup.created_at)}</time></dd></div></dl><div className="mt-4 border-t border-border pt-3">{backupActions(backup)}</div></article>)}</div>
+              <div className={styles.tableWrap}><table className={styles.table}><caption className="sr-only">Kayıtlı yapılandırma yedekleri</caption><thead><tr><th scope="col">Cihaz / dosya</th><th scope="col">Tür / durum</th><th scope="col">Boyut</th><th scope="col">Yedekleme zamanı</th><th scope="col" className="text-right">İşlemler</th></tr></thead><tbody>{backups.map(backup => <tr key={backup.id}><td><BackupIdentity backup={backup} /></td><td><span className="text-xs">{typeLabel(backup.backup_type)}</span><div className="mt-2"><SemanticBadge tone="info" icon={FileCode2}>Kayıtlı</SemanticBadge></div></td><td className="whitespace-nowrap font-mono text-xs">{sizeLabel(backup.file_size)}</td><td className="text-xs"><time dateTime={backup.created_at}>{date(backup.created_at)}</time><p className="mt-1 text-xs text-muted-foreground">{backupAge(backup.created_at)}</p></td><td>{backupActions(backup)}</td></tr>)}</tbody></table></div>
+              <div className={styles.mobileList}>{backups.map(backup => <article key={backup.id} className={styles.record}><BackupIdentity backup={backup} /><dl className="mt-4 grid grid-cols-2 gap-3 text-xs"><div><dt className="mb-1 text-muted-foreground">Yedek türü</dt><dd>{typeLabel(backup.backup_type)}</dd></div><div><dt className="mb-1 text-muted-foreground">Boyut</dt><dd>{sizeLabel(backup.file_size)}</dd></div><div className="col-span-2"><dt className="mb-1 text-muted-foreground">Yedekleme zamanı</dt><dd><time dateTime={backup.created_at}>{date(backup.created_at)}</time><p className="mt-1 text-muted-foreground">{backupAge(backup.created_at)}</p></dd></div></dl><div className="mt-4 border-t border-border pt-3">{backupActions(backup)}</div></article>)}</div>
             </>}
-            <div className={styles.pagination}><p className="text-xs text-muted-foreground" role="status">{loading ? 'Yedekler yükleniyor…' : total ? `${page * pageSize + 1}–${Math.min((page + 1) * pageSize, total)} / ${total} yedek` : '0 yedek'}</p><div className="flex flex-wrap items-center gap-2"><select className={cn(styles.select, '!h-8 !w-auto !text-xs')} aria-label="Sayfa başına yedek" value={pageSize} onChange={event => { setPageSize(Number(event.target.value)); setPage(0); }}>{[25, 50, 100].map(size => <option key={size} value={size}>{size} / sayfa</option>)}</select><Button size="icon" variant="outline" className="h-8 w-8" aria-label="Önceki sayfa" disabled={loading || page === 0} onClick={() => setPage(page - 1)}><ArrowLeft className="h-4 w-4" /></Button><span className="px-1 text-xs text-muted-foreground">{page + 1} / {pageCount}</span><Button size="icon" variant="outline" className="h-8 w-8" aria-label="Sonraki sayfa" disabled={loading || (page + 1) * pageSize >= total} onClick={() => setPage(page + 1)}><ArrowRight className="h-4 w-4" /></Button></div></div>
+            <div className={styles.pagination}><p className="text-xs text-muted-foreground" role="status">{loading ? 'Yedekler yükleniyor…' : total ? `${page * pageSize + 1}–${Math.min((page + 1) * pageSize, total)} / ${total} yedek` : loadErrors.backups ? 'Yedek sayısı bilinmiyor' : '0 yedek'}</p><div className="flex flex-wrap items-center gap-2"><select className={cn(styles.select, '!h-8 !w-auto !text-xs')} aria-label="Sayfa başına yedek" value={pageSize} onChange={event => { setPageSize(Number(event.target.value)); setPage(0); }}>{[25, 50, 100].map(size => <option key={size} value={size}>{size} / sayfa</option>)}</select><Button size="icon" variant="outline" className="h-8 w-8" aria-label="Önceki sayfa" disabled={loading || page === 0} onClick={() => setPage(page - 1)}><ArrowLeft className="h-4 w-4" /></Button><span className="px-1 text-xs text-muted-foreground">{page + 1} / {pageCount}</span><Button size="icon" variant="outline" className="h-8 w-8" aria-label="Sonraki sayfa" disabled={loading || (page + 1) * pageSize >= total} onClick={() => setPage(page + 1)}><ArrowRight className="h-4 w-4" /></Button></div></div>
           </section>
         </TabsContent>
         <TabsContent value="jobs" className="mt-4">
           <section className={styles.collection} aria-labelledby="jobs-heading">
-            <div className={styles.collectionHeader}><div><h2 id="jobs-heading" className="text-base font-semibold">Son yedekleme işleri</h2><p className="mt-1 text-xs text-muted-foreground">Son 100 iş · Otomatik güncellenir</p></div><select aria-label="İş durumuna göre filtrele" className={cn(styles.select, '!w-auto')} value={jobFilter} onChange={event => setJobFilter(event.target.value)}><option value="all">Tüm durumlar</option><option value="active">Devam eden işler</option><option value="succeeded">Başarılı</option><option value="failed">Başarısız</option></select></div>
+            <div className={styles.collectionHeader}><div><h2 id="jobs-heading" className="text-base font-semibold">Son yedekleme işleri</h2><p className="mt-1 text-xs text-muted-foreground">Son 100 iş · Kuyruktaki bir iş, henüz tamamlanmış yedek değildir.</p></div><select aria-label="İş durumuna göre filtrele" className={cn(styles.select, '!w-auto')} value={jobFilter} onChange={event => setJobFilter(event.target.value)}><option value="all">Tüm durumlar</option><option value="active">Devam eden işler</option><option value="succeeded">Başarılı</option><option value="failed">Başarısız</option></select></div>
             {loading && !jobs.length ? <Loading /> : !visibleJobs.length ? <Empty icon={<History />} title={loadErrors.jobs && !jobs.length ? 'İşler yüklenemedi' : jobFilter !== 'all' ? 'Bu durumda yedekleme işi yok' : 'Henüz yedekleme işi yok'} description={loadErrors.jobs ? 'İşler yenilenemedi. Tekrar yenilemeyi deneyin.' : 'Oluşturulan yedekleme işlerinin durumu burada gösterilir.'}>{jobFilter !== 'all' && <Button variant="outline" onClick={() => setJobFilter('all')}>Tüm işleri göster</Button>}</Empty> : <>
               <div className={styles.tableWrap}><table className={styles.table}><caption className="sr-only">Son yedekleme işleri</caption><thead><tr><th scope="col">Cihaz</th><th scope="col">Yedek türü</th><th scope="col">Durum</th><th scope="col">Deneme</th><th scope="col">Oluşturulma</th></tr></thead><tbody>{visibleJobs.map(job => <tr key={job.id}><td><span className="text-sm font-medium">{job.deviceName}</span>{job.errorMessage && <p className="mt-1 break-words text-xs text-destructive">{job.errorMessage}</p>}</td><td className="text-xs">{typeLabel(job.backupType)}</td><td><JobStatus status={job.status} /></td><td className="font-mono text-xs">{job.attempts}</td><td className="whitespace-nowrap text-xs text-muted-foreground"><time dateTime={job.createdAt}>{date(job.createdAt)}</time></td></tr>)}</tbody></table></div>
               <div className={styles.mobileList}>{visibleJobs.map(job => <article key={job.id} className={styles.record}><div className="flex flex-wrap items-center justify-between gap-2"><p className="break-all text-sm font-medium">{job.deviceName}</p><JobStatus status={job.status} /></div><p className="mt-3 text-xs text-muted-foreground">{typeLabel(job.backupType)} · {job.attempts} deneme</p><p className="mt-1 text-xs text-muted-foreground">{date(job.createdAt)}</p>{job.errorMessage && <p className="mt-3 break-words text-xs text-destructive">{job.errorMessage}</p>}</article>)}</div>
@@ -300,7 +302,7 @@ export default function NmsBackupsPage() {
                   {actionError && <Message tone="danger">{uiError(actionError)}</Message>}
                   {canEdit && <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4"><Button type="submit" disabled={!!busy || !policyDirty} className="gap-2">{busy === 'policy' ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}{busy === 'policy' ? 'Kaydediliyor…' : 'Ayarları kaydet'}</Button>{policyDirty && <Button type="button" variant="outline" disabled={!!busy} onClick={() => choosePolicy(policyDeviceId)}>Değişiklikleri sıfırla</Button>}</div>}
                 </fieldset>
-                <aside className={styles.policySummary} aria-label="Zamanlama özeti"><p className="flex items-center gap-2 text-sm font-semibold"><Server className="h-4 w-4 text-primary" /><span className="break-all">{policyDevice.name}</span></p><div className="mt-4"><SemanticBadge tone={settings.enabled ? 'success' : 'neutral'} icon={CalendarClock}>{settings.enabled ? 'Zamanlama açık' : 'Zamanlama kapalı'}</SemanticBadge></div><dl className="mt-5 space-y-4 text-xs"><div><dt className="mb-1 text-muted-foreground">Son başarılı yedek</dt><dd>{date(policyDevice.lastSuccessAt)}</dd></div><div><dt className="mb-1 text-muted-foreground">Kayıtlı sonraki çalışma</dt><dd>{policyDevice.policy?.enabled ? date(policyDevice.policy.nextRunAt) : 'Zamanlama kapalı'}</dd></div></dl><p className="mt-5 border-t border-border pt-4 text-xs leading-relaxed text-muted-foreground">{policyDirty ? 'Kaydedilmemiş değişiklikler var. Zamanlama açıksa kaydettikten sonra ilk iş seçtiğiniz aralık sonunda çalışır.' : 'Zamanlama için desteklenen platform, SSH erişim bilgileri ve onaylı cihaz anahtarı gerekir.'}</p><p className="mt-3 text-xs leading-relaxed text-muted-foreground">İzleme kapalıyken de SSH yedekleme çalışır.</p>{!canEdit && <p className="mt-3 text-xs font-medium">Ayarları yalnızca yönetici değiştirebilir.</p>}</aside>
+                <aside className={styles.policySummary} aria-label="Zamanlama özeti"><p className="flex items-center gap-2 text-sm font-semibold"><Server className="h-4 w-4 text-primary" /><span className="break-all">{policyDevice.name}</span></p><div className="mt-4"><SemanticBadge tone={settings.enabled ? 'success' : 'neutral'} icon={CalendarClock}>{settings.enabled ? 'Zamanlama açık' : 'Zamanlama kapalı'}</SemanticBadge></div><dl className="mt-5 space-y-4 text-xs"><div><dt className="mb-1 text-muted-foreground">Son başarılı yedek</dt><dd>{date(policyDevice.lastSuccessAt)}<p className="mt-1 text-muted-foreground">{backupAge(policyDevice.lastSuccessAt)}</p></dd></div><div><dt className="mb-1 text-muted-foreground">Kayıtlı sonraki çalışma</dt><dd>{policyDevice.policy?.enabled ? date(policyDevice.policy.nextRunAt) : 'Zamanlama kapalı'}</dd></div></dl><p className="mt-5 border-t border-border pt-4 text-xs leading-relaxed text-muted-foreground">{policyDirty ? 'Kaydedilmemiş değişiklikler var. Zamanlama açıksa kaydettikten sonra ilk iş seçtiğiniz aralık sonunda çalışır.' : 'Zamanlama için desteklenen platform, SSH erişim bilgileri ve onaylı cihaz anahtarı gerekir.'}</p><p className="mt-3 text-xs leading-relaxed text-muted-foreground">İzleme kapalıyken de SSH yedekleme çalışır.</p>{!canEdit && <p className="mt-3 text-xs font-medium">Ayarları yalnızca yönetici değiştirebilir.</p>}</aside>
               </form>}
             </div>
           </section>
@@ -308,6 +310,7 @@ export default function NmsBackupsPage() {
       </Tabs>
       <footer className="flex flex-wrap items-start justify-between gap-3 text-xs text-muted-foreground"><p className="flex max-w-3xl items-start gap-2 leading-relaxed"><ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" />Cihaz yapılandırma yedekleri şifreli saklanır. Uygulama veritabanının felaket kurtarma yedeğinin yerine geçmez.</p><Link href="/settings/audit" className="inline-flex items-center gap-1.5 underline underline-offset-4 hover:text-foreground"><History className="h-3.5 w-3.5" />Denetim kayıtları</Link></footer>
     </div>
+    <BackupArtifactDialog backup={selectedBackup} canDownload={permissions.content} onClose={() => setSelectedBackup(null)} />
     <Dialog open={createOpen} onOpenChange={open => { if (!busy) { setCreateOpen(open); setActionError(uiError('')); } }}>
       <DialogContent className="max-w-xl"><DialogHeader><DialogTitle className="flex items-center gap-2"><DatabaseBackup className="h-5 w-5 text-primary" />Yeni yedek oluştur</DialogTitle><DialogDescription>Yapılandırma SSH üzerinden okunur. İş kuyruğa alınır ve tamamlandığında yedekler listesine eklenir.</DialogDescription></DialogHeader>
         <form onSubmit={create} className="space-y-5"><fieldset disabled={!!busy} className="min-w-0 space-y-4"><legend className="sr-only">Yeni yedek bilgileri</legend>
@@ -340,7 +343,7 @@ function BackupIdentity({ backup }: { backup: Backup }) {
 }
 function JobStatus({ status }: { status: string }) {
   const state = jobStates[status];
-  return <SemanticBadge tone={state?.tone || 'neutral'} icon={status === 'running' ? Loader2 : status === 'queued' ? Clock3 : undefined}>{state?.label || status}</SemanticBadge>;
+  return <SemanticBadge tone={state?.tone || 'neutral'} icon={status === 'running' ? Loader2 : status === 'queued' ? Clock3 : undefined}>{state?.label || 'Durum bilinmiyor'}</SemanticBadge>;
 }
 function Message({ children, tone }: { children: ReactNode; tone: 'danger' | 'warning' }) {
   return <div role={tone === 'danger' ? 'alert' : 'status'} className={cn(styles.message, tone === 'danger' ? 'border-destructive/25 bg-destructive/5 text-destructive' : 'border-amber-500/25 bg-amber-500/5 text-amber-800 dark:text-amber-200')}><TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" /><p className="min-w-0 break-words text-xs leading-relaxed">{children}</p></div>;

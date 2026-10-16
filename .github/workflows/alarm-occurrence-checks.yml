@@ -167,6 +167,7 @@ jobs:
       - run: npm run test:fortigate-alarm-targets
       - run: npm run test:fortigate-snmp
       - run: npm run test:nms-backups
+      - run: npm run test:nms-backup-view
       - run: npm run test:nms-device-monitoring
       - run: npm run test:nms-add-device
       - run: npm run test:nms-connection-test
