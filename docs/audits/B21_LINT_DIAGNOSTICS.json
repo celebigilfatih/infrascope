@@ -1,0 +1,3209 @@
+{
+  "date": "2026-10-16",
+  "baseCommit": "816e6036fea121be4402fcdc81a68aaadda7331e",
+  "scope": "Uncommitted working tree at B21 start; diagnostic evidence only, never a release waiver or accepted baseline",
+  "errors": 390,
+  "warnings": 9,
+  "filesWithIssues": 90,
+  "rules": {
+    "react-hooks/exhaustive-deps": 3,
+    "@typescript-eslint/no-explicit-any": 313,
+    "@typescript-eslint/no-unused-vars": 74,
+    "react/no-unescaped-entities": 3,
+    "@next/next/no-img-element": 6
+  },
+  "diagnostics": [
+    {
+      "file": "app/analytics/capacity/page.tsx",
+      "line": 61,
+      "column": 6,
+      "severity": 1,
+      "rule": "react-hooks/exhaustive-deps",
+      "message": "React Hook useEffect has a missing dependency: 'fetchTrends'. Either include it or remove the dependency array."
+    },
+    {
+      "file": "app/api/alarms/cmdb-status/route.ts",
+      "line": 13,
+      "column": 35,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/alarms/cmdb-status/route.ts",
+      "line": 48,
+      "column": 42,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/alarms/cmdb-status/route.ts",
+      "line": 67,
+      "column": 70,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/alarms/suppression/route.ts",
+      "line": 9,
+      "column": 35,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/alarms/suppression/route.ts",
+      "line": 44,
+      "column": 35,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/building-connections/[id]/route.ts",
+      "line": 31,
+      "column": 19,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/building-connections/[id]/route.ts",
+      "line": 76,
+      "column": 19,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/building-connections/[id]/route.ts",
+      "line": 101,
+      "column": 19,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/building-connections/route.ts",
+      "line": 4,
+      "column": 27,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'_request' is defined but never used."
+    },
+    {
+      "file": "app/api/building-connections/route.ts",
+      "line": 21,
+      "column": 19,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/building-connections/route.ts",
+      "line": 67,
+      "column": 19,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/buildings/[id]/route.ts",
+      "line": 175,
+      "column": 23,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/buildings/route.ts",
+      "line": 5,
+      "column": 22,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/buildings/route.ts",
+      "line": 9,
+      "column": 27,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'_request' is defined but never used."
+    },
+    {
+      "file": "app/api/buildings/route.ts",
+      "line": 71,
+      "column": 19,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/buildings/route.ts",
+      "line": 113,
+      "column": 19,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/devices/[id]/route.ts",
+      "line": 343,
+      "column": 23,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/devices/route.ts",
+      "line": 56,
+      "column": 19,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/devices/route.ts",
+      "line": 140,
+      "column": 19,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/firewalls/[id]/[resource]/route.ts",
+      "line": 304,
+      "column": 27,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'_password' is assigned a value but never used."
+    },
+    {
+      "file": "app/api/firewalls/[id]/identity/route.ts",
+      "line": 141,
+      "column": 44,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/firewalls/[id]/route.ts",
+      "line": 72,
+      "column": 19,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'_config' is assigned a value but never used."
+    },
+    {
+      "file": "app/api/firewalls/[id]/route.ts",
+      "line": 120,
+      "column": 44,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/firewalls/[id]/tls-ca/route.ts",
+      "line": 129,
+      "column": 23,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'_tlsCaPem' is assigned a value but never used."
+    },
+    {
+      "file": "app/api/firewalls/[id]/tls-ca/route.ts",
+      "line": 129,
+      "column": 50,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'_tlsCaUpdatedAt' is assigned a value but never used."
+    },
+    {
+      "file": "app/api/firewalls/route.ts",
+      "line": 217,
+      "column": 29,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/firewalls/route.ts",
+      "line": 251,
+      "column": 49,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/floors/[id]/route.ts",
+      "line": 198,
+      "column": 23,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/floors/route.ts",
+      "line": 5,
+      "column": 19,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/floors/route.ts",
+      "line": 9,
+      "column": 27,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'_request' is defined but never used."
+    },
+    {
+      "file": "app/api/floors/route.ts",
+      "line": 62,
+      "column": 19,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/floors/route.ts",
+      "line": 98,
+      "column": 19,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/health/alarms/route.ts",
+      "line": 140,
+      "column": 42,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/fortianalyzer/route.ts",
+      "line": 29,
+      "column": 32,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/fortianalyzer/route.ts",
+      "line": 36,
+      "column": 32,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/fortianalyzer/route.ts",
+      "line": 52,
+      "column": 12,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/fortianalyzer/route.ts",
+      "line": 113,
+      "column": 107,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/fortianalyzer/route.ts",
+      "line": 114,
+      "column": 61,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/fortianalyzer/route.ts",
+      "line": 235,
+      "column": 36,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/fortianalyzer/route.ts",
+      "line": 236,
+      "column": 54,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/fortianalyzer/route.ts",
+      "line": 237,
+      "column": 35,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/fortianalyzer/route.ts",
+      "line": 238,
+      "column": 39,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/fortianalyzer/route.ts",
+      "line": 239,
+      "column": 37,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/fortianalyzer/route.ts",
+      "line": 240,
+      "column": 37,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/fortianalyzer/route.ts",
+      "line": 241,
+      "column": 38,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/fortianalyzer/route.ts",
+      "line": 242,
+      "column": 52,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/fortianalyzer/route.ts",
+      "line": 243,
+      "column": 34,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/fortianalyzer/route.ts",
+      "line": 244,
+      "column": 39,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/fortianalyzer/route.ts",
+      "line": 245,
+      "column": 39,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/fortianalyzer/route.ts",
+      "line": 245,
+      "column": 73,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/fortianalyzer/route.ts",
+      "line": 246,
+      "column": 37,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/fortianalyzer/route.ts",
+      "line": 247,
+      "column": 39,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/fortianalyzer/route.ts",
+      "line": 248,
+      "column": 39,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/fortianalyzer/route.ts",
+      "line": 249,
+      "column": 38,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/fortianalyzer/route.ts",
+      "line": 312,
+      "column": 41,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/fortianalyzer/route.ts",
+      "line": 357,
+      "column": 41,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/fortigate/route.ts",
+      "line": 80,
+      "column": 29,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/fortigate/route.ts",
+      "line": 82,
+      "column": 27,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/fortigate/route.ts",
+      "line": 87,
+      "column": 27,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/fortigate/route.ts",
+      "line": 126,
+      "column": 37,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/fortigate/route.ts",
+      "line": 535,
+      "column": 42,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/fortigate/route.ts",
+      "line": 544,
+      "column": 38,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/nms/alarms/route.ts",
+      "line": 22,
+      "column": 37,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/nms/alarms/route.ts",
+      "line": 53,
+      "column": 33,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/nms/alarms/route.ts",
+      "line": 64,
+      "column": 19,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/nms/alarms/route.ts",
+      "line": 82,
+      "column": 38,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/nms/alarms/route.ts",
+      "line": 87,
+      "column": 19,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/nms/devices/[id]/ports/[portName]/route.ts",
+      "line": 21,
+      "column": 37,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/nms/devices/[id]/ports/[portName]/route.ts",
+      "line": 33,
+      "column": 36,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/nms/devices/[id]/ports/[portName]/route.ts",
+      "line": 63,
+      "column": 40,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/nms/devices/[id]/ports/monitored/route.ts",
+      "line": 7,
+      "column": 31,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/nms/devices/[id]/ports/monitored/route.ts",
+      "line": 7,
+      "column": 37,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/nms/devices/[id]/ports/monitored/route.ts",
+      "line": 23,
+      "column": 37,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/nms/devices/[id]/ports/monitored/route.ts",
+      "line": 35,
+      "column": 41,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/nms/devices/[id]/ports/monitored/route.ts",
+      "line": 50,
+      "column": 50,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/nms/devices/[id]/ports/monitored/route.ts",
+      "line": 83,
+      "column": 37,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/nms/devices/[id]/ports/monitored/route.ts",
+      "line": 116,
+      "column": 39,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/nms/devices/[id]/ports/monitored/route.ts",
+      "line": 123,
+      "column": 39,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/nms/devices/[id]/route.ts",
+      "line": 41,
+      "column": 37,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/nms/devices/[id]/route.ts",
+      "line": 80,
+      "column": 44,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/nms/devices/[id]/route.ts",
+      "line": 88,
+      "column": 41,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/nms/devices/[id]/route.ts",
+      "line": 112,
+      "column": 44,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/nms/devices/[id]/route.ts",
+      "line": 173,
+      "column": 39,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/nms/devices/[id]/route.ts",
+      "line": 204,
+      "column": 44,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/nms/devices/[id]/route.ts",
+      "line": 332,
+      "column": 38,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/nms/devices/[id]/route.ts",
+      "line": 388,
+      "column": 20,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/nms/devices/[id]/route.ts",
+      "line": 389,
+      "column": 20,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/nms/devices/[id]/route.ts",
+      "line": 390,
+      "column": 20,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/nms/devices/[id]/route.ts",
+      "line": 391,
+      "column": 20,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/nms/devices/[id]/route.ts",
+      "line": 392,
+      "column": 20,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/nms/devices/[id]/route.ts",
+      "line": 393,
+      "column": 20,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/nms/devices/route.ts",
+      "line": 32,
+      "column": 38,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/nms/devices/route.ts",
+      "line": 54,
+      "column": 29,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/nms/devices/route.ts",
+      "line": 55,
+      "column": 47,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/nms/devices/route.ts",
+      "line": 61,
+      "column": 48,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/nms/discovery/[scanId]/route.ts",
+      "line": 15,
+      "column": 35,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/nms/discovery/[scanId]/route.ts",
+      "line": 48,
+      "column": 56,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/nms/discovery/route.ts",
+      "line": 21,
+      "column": 36,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/nms/discovery/route.ts",
+      "line": 73,
+      "column": 37,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/nms/network-devices/[id]/route.ts",
+      "line": 16,
+      "column": 19,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/nms/network-devices/[id]/route.ts",
+      "line": 35,
+      "column": 19,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/nms/network-devices/[id]/route.ts",
+      "line": 51,
+      "column": 19,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/nms/network-devices/route.ts",
+      "line": 24,
+      "column": 38,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/nms/network-devices/route.ts",
+      "line": 44,
+      "column": 34,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/nms/network-devices/route.ts",
+      "line": 60,
+      "column": 25,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/nms/network-devices/route.ts",
+      "line": 64,
+      "column": 19,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/nms/route.ts",
+      "line": 29,
+      "column": 45,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/nms/route.ts",
+      "line": 35,
+      "column": 44,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/nms/route.ts",
+      "line": 40,
+      "column": 42,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/status/route.ts",
+      "line": 26,
+      "column": 43,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/status/route.ts",
+      "line": 118,
+      "column": 27,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/status/route.ts",
+      "line": 164,
+      "column": 27,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/vmware/route.ts",
+      "line": 206,
+      "column": 44,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/vmware/route.ts",
+      "line": 210,
+      "column": 51,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/vmware/route.ts",
+      "line": 335,
+      "column": 21,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/vmware/route.ts",
+      "line": 340,
+      "column": 19,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/vmware/route.ts",
+      "line": 340,
+      "column": 27,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/vmware/route.ts",
+      "line": 345,
+      "column": 18,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/vmware/route.ts",
+      "line": 535,
+      "column": 44,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/vmware/route.ts",
+      "line": 539,
+      "column": 51,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/vmware/route.ts",
+      "line": 565,
+      "column": 44,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/integrations/vmware/route.ts",
+      "line": 683,
+      "column": 32,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/license/activate/route.ts",
+      "line": 86,
+      "column": 11,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'activation' is assigned a value but never used."
+    },
+    {
+      "file": "app/api/network-connections/route.ts",
+      "line": 4,
+      "column": 27,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'_request' is defined but never used."
+    },
+    {
+      "file": "app/api/network-connections/route.ts",
+      "line": 31,
+      "column": 19,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/network-connections/route.ts",
+      "line": 74,
+      "column": 19,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/network/topology-status/route.ts",
+      "line": 143,
+      "column": 19,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/organizations/[id]/route.ts",
+      "line": 27,
+      "column": 19,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/organizations/[id]/route.ts",
+      "line": 56,
+      "column": 19,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/organizations/route.ts",
+      "line": 5,
+      "column": 26,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/organizations/route.ts",
+      "line": 78,
+      "column": 19,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/organizations/route.ts",
+      "line": 122,
+      "column": 19,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/racks/[id]/route.ts",
+      "line": 277,
+      "column": 18,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/racks/[id]/route.ts",
+      "line": 293,
+      "column": 23,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/racks/route.ts",
+      "line": 5,
+      "column": 18,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/racks/route.ts",
+      "line": 60,
+      "column": 19,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/racks/route.ts",
+      "line": 114,
+      "column": 19,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/reports/route.ts",
+      "line": 11,
+      "column": 15,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/rooms/[id]/route.ts",
+      "line": 254,
+      "column": 23,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/rooms/route.ts",
+      "line": 5,
+      "column": 18,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/rooms/route.ts",
+      "line": 9,
+      "column": 27,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'_request' is defined but never used."
+    },
+    {
+      "file": "app/api/rooms/route.ts",
+      "line": 64,
+      "column": 19,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/rooms/route.ts",
+      "line": 104,
+      "column": 19,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/security/risky-rules/route.ts",
+      "line": 43,
+      "column": 39,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/services/[id]/route.ts",
+      "line": 310,
+      "column": 23,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/services/route.ts",
+      "line": 67,
+      "column": 19,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/api/services/route.ts",
+      "line": 113,
+      "column": 19,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/dashboard/risks/page.tsx",
+      "line": 186,
+      "column": 47,
+      "severity": 2,
+      "rule": "react/no-unescaped-entities",
+      "message": "`'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`."
+    },
+    {
+      "file": "app/locations/page.tsx",
+      "line": 32,
+      "column": 88,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/locations/page.tsx",
+      "line": 67,
+      "column": 55,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/locations/page.tsx",
+      "line": 120,
+      "column": 21,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/locations/page.tsx",
+      "line": 131,
+      "column": 23,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/locations/page.tsx",
+      "line": 234,
+      "column": 118,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/locations/page.tsx",
+      "line": 239,
+      "column": 119,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/locations/page.tsx",
+      "line": 244,
+      "column": 113,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/locations/page.tsx",
+      "line": 249,
+      "column": 85,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/locations/page.tsx",
+      "line": 294,
+      "column": 51,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/locations/page.tsx",
+      "line": 312,
+      "column": 91,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/login/page.tsx",
+      "line": 93,
+      "column": 14,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'err' is defined but never used."
+    },
+    {
+      "file": "app/logout/page.tsx",
+      "line": 6,
+      "column": 18,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'Activity' is defined but never used."
+    },
+    {
+      "file": "app/network/NetworkTopologyContent.tsx",
+      "line": 340,
+      "column": 76,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/network/NetworkTopologyContent.tsx",
+      "line": 341,
+      "column": 66,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/network/NetworkTopologyContent.tsx",
+      "line": 425,
+      "column": 102,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/network/NetworkTopologyContent.tsx",
+      "line": 468,
+      "column": 52,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/network/NetworkTopologyContent.tsx",
+      "line": 487,
+      "column": 19,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/network/NetworkTopologyContent.tsx",
+      "line": 772,
+      "column": 21,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/network/NetworkTopologyContent.tsx",
+      "line": 800,
+      "column": 28,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'_level' is defined but never used."
+    },
+    {
+      "file": "app/network/NetworkTopologyContent.tsx",
+      "line": 805,
+      "column": 33,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'_hierarchyLevel' is defined but never used."
+    },
+    {
+      "file": "app/network/NetworkTopologyContent.tsx",
+      "line": 840,
+      "column": 70,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/network/NetworkTopologyContent.tsx",
+      "line": 875,
+      "column": 68,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/network/NetworkTopologyContent.tsx",
+      "line": 875,
+      "column": 84,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'_floorName' is defined but never used."
+    },
+    {
+      "file": "app/network/NetworkTopologyContent.tsx",
+      "line": 877,
+      "column": 52,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/network/NetworkTopologyContent.tsx",
+      "line": 877,
+      "column": 68,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'_roomName' is defined but never used."
+    },
+    {
+      "file": "app/network/NetworkTopologyContent.tsx",
+      "line": 879,
+      "column": 54,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/network/NetworkTopologyContent.tsx",
+      "line": 879,
+      "column": 70,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'_rackName' is defined but never used."
+    },
+    {
+      "file": "app/network/NetworkTopologyContent.tsx",
+      "line": 954,
+      "column": 68,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/network/NetworkTopologyContent.tsx",
+      "line": 956,
+      "column": 52,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/network/NetworkTopologyContent.tsx",
+      "line": 956,
+      "column": 68,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'_roomName' is defined but never used."
+    },
+    {
+      "file": "app/network/NetworkTopologyContent.tsx",
+      "line": 958,
+      "column": 54,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/network/NetworkTopologyContent.tsx",
+      "line": 958,
+      "column": 70,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'_rackName' is defined but never used."
+    },
+    {
+      "file": "app/network/NetworkTopologyContent.tsx",
+      "line": 1000,
+      "column": 54,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/network/NetworkTopologyContent.tsx",
+      "line": 1002,
+      "column": 54,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/network/NetworkTopologyContent.tsx",
+      "line": 1002,
+      "column": 70,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'_rackName' is defined but never used."
+    },
+    {
+      "file": "app/network/NetworkTopologyContent.tsx",
+      "line": 1042,
+      "column": 54,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/network/NetworkTopologyContent.tsx",
+      "line": 1066,
+      "column": 46,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/network/NetworkTopologyContent.tsx",
+      "line": 1197,
+      "column": 55,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/network/NetworkTopologyContent.tsx",
+      "line": 1334,
+      "column": 52,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/network/NetworkTopologyContent.tsx",
+      "line": 2093,
+      "column": 37,
+      "severity": 1,
+      "rule": "@next/next/no-img-element",
+      "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element"
+    },
+    {
+      "file": "app/network/NetworkTopologyContent.tsx",
+      "line": 2506,
+      "column": 33,
+      "severity": 1,
+      "rule": "@next/next/no-img-element",
+      "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element"
+    },
+    {
+      "file": "app/network/NetworkTopologyContent.tsx",
+      "line": 2549,
+      "column": 37,
+      "severity": 1,
+      "rule": "@next/next/no-img-element",
+      "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element"
+    },
+    {
+      "file": "app/network/NetworkTopologyContent.tsx",
+      "line": 2607,
+      "column": 83,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/network/NetworkTopologyContent.tsx",
+      "line": 2653,
+      "column": 77,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/network/NetworkTopologyContent.tsx",
+      "line": 2697,
+      "column": 31,
+      "severity": 1,
+      "rule": "@next/next/no-img-element",
+      "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element"
+    },
+    {
+      "file": "app/network/NetworkTopologyContent.tsx",
+      "line": 2728,
+      "column": 28,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/network/NetworkTopologyContent.tsx",
+      "line": 2855,
+      "column": 16,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/network/NetworkTopologyContent.tsx",
+      "line": 2858,
+      "column": 24,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/network/NetworkTopologyContent.tsx",
+      "line": 2943,
+      "column": 19,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/network/NetworkTopologyContent.tsx",
+      "line": 3188,
+      "column": 26,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/network/NetworkTopologyContent.tsx",
+      "line": 3207,
+      "column": 16,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/network/NetworkTopologyContent.tsx",
+      "line": 3210,
+      "column": 24,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/network/NetworkTopologyContent.tsx",
+      "line": 3219,
+      "column": 64,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/network/config-revisions/page.tsx",
+      "line": 107,
+      "column": 9,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'configChangeCount' is assigned a value but never used."
+    },
+    {
+      "file": "app/network/firewall/page.tsx",
+      "line": 240,
+      "column": 9,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'formatDate' is assigned a value but never used."
+    },
+    {
+      "file": "app/network/firewall/page.tsx",
+      "line": 568,
+      "column": 73,
+      "severity": 2,
+      "rule": "react/no-unescaped-entities",
+      "message": "`'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`."
+    },
+    {
+      "file": "app/security/web-analytics/page.tsx",
+      "line": 267,
+      "column": 9,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'totalSessions' is assigned a value but never used."
+    },
+    {
+      "file": "app/services/dependencies/page.tsx",
+      "line": 138,
+      "column": 6,
+      "severity": 1,
+      "rule": "react-hooks/exhaustive-deps",
+      "message": "React Hook useEffect has a missing dependency: 'fetchDependencies'. Either include it or remove the dependency array."
+    },
+    {
+      "file": "app/services/dependencies/page.tsx",
+      "line": 164,
+      "column": 14,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'error' is defined but never used."
+    },
+    {
+      "file": "app/services/dependencies/page.tsx",
+      "line": 199,
+      "column": 14,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'error' is defined but never used."
+    },
+    {
+      "file": "app/services/dependencies/page.tsx",
+      "line": 230,
+      "column": 14,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'error' is defined but never used."
+    },
+    {
+      "file": "app/services/page.tsx",
+      "line": 46,
+      "column": 19,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/services/page.tsx",
+      "line": 62,
+      "column": 23,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/services/page.tsx",
+      "line": 76,
+      "column": 14,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'err' is defined but never used."
+    },
+    {
+      "file": "app/services/page.tsx",
+      "line": 76,
+      "column": 19,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/services/page.tsx",
+      "line": 151,
+      "column": 29,
+      "severity": 1,
+      "rule": "@next/next/no-img-element",
+      "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element"
+    },
+    {
+      "file": "app/settings/alerts/page.tsx",
+      "line": 70,
+      "column": 10,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'notifConfig' is assigned a value but never used."
+    },
+    {
+      "file": "app/settings/alerts/page.tsx",
+      "line": 172,
+      "column": 14,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'err' is defined but never used."
+    },
+    {
+      "file": "app/settings/alerts/page.tsx",
+      "line": 193,
+      "column": 14,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'err' is defined but never used."
+    },
+    {
+      "file": "app/settings/license/page.tsx",
+      "line": 166,
+      "column": 14,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'err' is defined but never used."
+    },
+    {
+      "file": "app/settings/organizations/page.tsx",
+      "line": 66,
+      "column": 57,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "app/settings/users/invitations/page.tsx",
+      "line": 8,
+      "column": 29,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'CardHeader' is defined but never used."
+    },
+    {
+      "file": "app/settings/users/invitations/page.tsx",
+      "line": 8,
+      "column": 41,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'CardTitle' is defined but never used."
+    },
+    {
+      "file": "app/setup/page.tsx",
+      "line": 201,
+      "column": 35,
+      "severity": 2,
+      "rule": "react/no-unescaped-entities",
+      "message": "`'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`."
+    },
+    {
+      "file": "app/virtualization/hosts/page.tsx",
+      "line": 11,
+      "column": 10,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'Progress' is defined but never used."
+    },
+    {
+      "file": "app/virtualization/vms/page.tsx",
+      "line": 121,
+      "column": 69,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'_vmName' is defined but never used."
+    },
+    {
+      "file": "components/topology/ConnectionWizard.tsx",
+      "line": 8,
+      "column": 12,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "components/topology/ConnectionWizard.tsx",
+      "line": 9,
+      "column": 30,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "components/topology/CustomEdge.tsx",
+      "line": 24,
+      "column": 46,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "components/topology/DeviceNode.tsx",
+      "line": 104,
+      "column": 13,
+      "severity": 1,
+      "rule": "@next/next/no-img-element",
+      "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element"
+    },
+    {
+      "file": "components/ui/navigation-progress.tsx",
+      "line": 5,
+      "column": 10,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'Loader2' is defined but never used."
+    },
+    {
+      "file": "components/ui/navigation-progress.tsx",
+      "line": 28,
+      "column": 6,
+      "severity": 1,
+      "rule": "react-hooks/exhaustive-deps",
+      "message": "React Hook useEffect has a missing dependency: 'isNavigating'. Either include it or remove the dependency array."
+    },
+    {
+      "file": "components/ui/use-toast.ts",
+      "line": 22,
+      "column": 7,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'actionTypes' is assigned a value but only used as a type."
+    },
+    {
+      "file": "lib/alarms/detection-engine.ts",
+      "line": 85,
+      "column": 16,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/detection-engine.ts",
+      "line": 86,
+      "column": 18,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/detection-engine.ts",
+      "line": 87,
+      "column": 23,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/detection-engine.ts",
+      "line": 88,
+      "column": 22,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/detection-engine.ts",
+      "line": 645,
+      "column": 33,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/detection-engine.ts",
+      "line": 645,
+      "column": 49,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/detection-engine.ts",
+      "line": 650,
+      "column": 40,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/detection-engine.ts",
+      "line": 874,
+      "column": 27,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/detection-engine.ts",
+      "line": 925,
+      "column": 27,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/detection-engine.ts",
+      "line": 2178,
+      "column": 45,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/detection-engine.ts",
+      "line": 2826,
+      "column": 33,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/detection-engine.ts",
+      "line": 3328,
+      "column": 43,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/detection-engine.ts",
+      "line": 3330,
+      "column": 43,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/detection-engine.ts",
+      "line": 3368,
+      "column": 73,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/detection-engine.ts",
+      "line": 3379,
+      "column": 77,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/detection-engine.ts",
+      "line": 3390,
+      "column": 78,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/detection-engine.ts",
+      "line": 3392,
+      "column": 72,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/detection-engine.ts",
+      "line": 3893,
+      "column": 47,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/detection-engine.ts",
+      "line": 3897,
+      "column": 42,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/detection-engine.ts",
+      "line": 3917,
+      "column": 49,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/detection-engine.ts",
+      "line": 3927,
+      "column": 21,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/detection-engine.ts",
+      "line": 3958,
+      "column": 17,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'cooldownKey' is assigned a value but never used."
+    },
+    {
+      "file": "lib/alarms/detection-engine.ts",
+      "line": 3974,
+      "column": 25,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/detection-engine.ts",
+      "line": 4017,
+      "column": 18,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/detection-engine.ts",
+      "line": 4045,
+      "column": 48,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/detection-engine.ts",
+      "line": 4062,
+      "column": 43,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/detection-engine.ts",
+      "line": 4105,
+      "column": 18,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/detection-engine.ts",
+      "line": 4138,
+      "column": 47,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/detection-engine.ts",
+      "line": 4141,
+      "column": 51,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/detection-engine.ts",
+      "line": 4162,
+      "column": 15,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'silenceCutoff' is assigned a value but never used."
+    },
+    {
+      "file": "lib/alarms/detection-engine.ts",
+      "line": 4164,
+      "column": 49,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/detection-engine.ts",
+      "line": 4185,
+      "column": 49,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/detection-engine.ts",
+      "line": 4215,
+      "column": 47,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/detection-engine.ts",
+      "line": 4259,
+      "column": 18,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/event-cache.ts",
+      "line": 394,
+      "column": 93,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/event-cache.ts",
+      "line": 432,
+      "column": 60,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/event-cache.ts",
+      "line": 434,
+      "column": 37,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/event-cache.ts",
+      "line": 515,
+      "column": 29,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/event-cache.ts",
+      "line": 526,
+      "column": 19,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/event-cache.ts",
+      "line": 528,
+      "column": 12,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/event-cache.ts",
+      "line": 583,
+      "column": 16,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/queries/config-change.ts",
+      "line": 366,
+      "column": 68,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/queries/config-change.ts",
+      "line": 373,
+      "column": 27,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/queries/fortigate-cmdb.ts",
+      "line": 84,
+      "column": 33,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/queries/fortigate-cmdb.ts",
+      "line": 152,
+      "column": 20,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/queries/fortigate-cmdb.ts",
+      "line": 222,
+      "column": 13,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/queries/fortigate-cmdb.ts",
+      "line": 223,
+      "column": 12,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/queries/fortigate-cmdb.ts",
+      "line": 224,
+      "column": 13,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/queries/fortigate-cmdb.ts",
+      "line": 224,
+      "column": 29,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/queries/fortigate-cmdb.ts",
+      "line": 224,
+      "column": 46,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/queries/fortigate-cmdb.ts",
+      "line": 226,
+      "column": 25,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/queries/fortigate-cmdb.ts",
+      "line": 230,
+      "column": 35,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/queries/fortigate-cmdb.ts",
+      "line": 231,
+      "column": 35,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/queries/fortigate-cmdb.ts",
+      "line": 240,
+      "column": 16,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/queries/fortigate-cmdb.ts",
+      "line": 241,
+      "column": 18,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/queries/fortigate-cmdb.ts",
+      "line": 242,
+      "column": 19,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/queries/fortigate-cmdb.ts",
+      "line": 285,
+      "column": 36,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/queries/fortigate-cmdb.ts",
+      "line": 285,
+      "column": 49,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/queries/fortigate-cmdb.ts",
+      "line": 285,
+      "column": 88,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/queries/fortigate-cmdb.ts",
+      "line": 285,
+      "column": 103,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/queries/fortigate-cmdb.ts",
+      "line": 286,
+      "column": 51,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/queries/fortigate-cmdb.ts",
+      "line": 286,
+      "column": 66,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/queries/fortigate-config.ts",
+      "line": 25,
+      "column": 33,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/queries/fortigate-config.ts",
+      "line": 52,
+      "column": 20,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/queries/fortigate-config.ts",
+      "line": 70,
+      "column": 21,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/queries/fortigate-config.ts",
+      "line": 74,
+      "column": 18,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/queries/fortigate-config.ts",
+      "line": 115,
+      "column": 28,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/queries/fortigate-config.ts",
+      "line": 118,
+      "column": 7,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'matchLogdesc' is assigned a value but never used."
+    },
+    {
+      "file": "lib/alarms/queries/fortigate-config.ts",
+      "line": 118,
+      "column": 28,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/queries/fortigate-vpn.ts",
+      "line": 26,
+      "column": 33,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/queries/fortigate-vpn.ts",
+      "line": 53,
+      "column": 20,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/queries/fortigate-vpn.ts",
+      "line": 69,
+      "column": 21,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/queries/fortigate-vpn.ts",
+      "line": 73,
+      "column": 18,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/queries/fortigate-vpn.ts",
+      "line": 114,
+      "column": 28,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/alarms/queries/index.ts",
+      "line": 166,
+      "column": 3,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'cmdbFirewallPolicyChanged' is defined but never used."
+    },
+    {
+      "file": "lib/alarms/queries/index.ts",
+      "line": 167,
+      "column": 3,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'cmdbNewVip' is defined but never used."
+    },
+    {
+      "file": "lib/alarms/queries/index.ts",
+      "line": 168,
+      "column": 3,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'cmdbNewAdminUser' is defined but never used."
+    },
+    {
+      "file": "lib/alarms/queries/index.ts",
+      "line": 169,
+      "column": 3,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'cmdbAdminPasswordChanged' is defined but never used."
+    },
+    {
+      "file": "lib/alarms/queries/index.ts",
+      "line": 170,
+      "column": 3,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'cmdbAdminPrivilegeChange' is defined but never used."
+    },
+    {
+      "file": "lib/alarms/queries/index.ts",
+      "line": 171,
+      "column": 3,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'cmdbRouteTableChanged' is defined but never used."
+    },
+    {
+      "file": "lib/alarms/queries/index.ts",
+      "line": 172,
+      "column": 3,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'cmdbIpsecTunnelChanged' is defined but never used."
+    },
+    {
+      "file": "lib/alarms/queries/index.ts",
+      "line": 173,
+      "column": 3,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'cmdbSslVpnSettingsChanged' is defined but never used."
+    },
+    {
+      "file": "lib/alarms/queries/index.ts",
+      "line": 174,
+      "column": 3,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'cmdbAuthServerChanged' is defined but never used."
+    },
+    {
+      "file": "lib/alarms/queries/index.ts",
+      "line": 175,
+      "column": 3,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'cmdbInterfaceConfigChanged' is defined but never used."
+    },
+    {
+      "file": "lib/alarms/queries/index.ts",
+      "line": 176,
+      "column": 3,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'cmdbAddressObjectChanged' is defined but never used."
+    },
+    {
+      "file": "lib/alarms/queries/index.ts",
+      "line": 177,
+      "column": 3,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'cmdbAddressGroupChanged' is defined but never used."
+    },
+    {
+      "file": "lib/alarms/queries/index.ts",
+      "line": 178,
+      "column": 3,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'cmdbCoreConfigChange' is defined but never used."
+    },
+    {
+      "file": "lib/alarms/queries/index.ts",
+      "line": 181,
+      "column": 3,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'getFirewallPolicyChangeEvents' is defined but never used."
+    },
+    {
+      "file": "lib/alarms/queries/index.ts",
+      "line": 182,
+      "column": 3,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'getCoreConfigChangeEvents' is defined but never used."
+    },
+    {
+      "file": "lib/alarms/queries/index.ts",
+      "line": 184,
+      "column": 3,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'getAdminPasswordChangeEvents' is defined but never used."
+    },
+    {
+      "file": "lib/alarms/queries/index.ts",
+      "line": 185,
+      "column": 3,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'getAddressObjectChangeEvents' is defined but never used."
+    },
+    {
+      "file": "lib/alarms/queries/index.ts",
+      "line": 186,
+      "column": 3,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'getAuthServerChangeEvents' is defined but never used."
+    },
+    {
+      "file": "lib/alarms/queries/index.ts",
+      "line": 187,
+      "column": 3,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'getRouteTableChangeEvents' is defined but never used."
+    },
+    {
+      "file": "lib/alarms/queries/index.ts",
+      "line": 203,
+      "column": 3,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'getIpsecTunnelDownEvents' is defined but never used."
+    },
+    {
+      "file": "lib/alarms/queries/security-events.ts",
+      "line": 58,
+      "column": 27,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/api.ts",
+      "line": 11,
+      "column": 52,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/api.ts",
+      "line": 15,
+      "column": 19,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/api.ts",
+      "line": 23,
+      "column": 50,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/api.ts",
+      "line": 27,
+      "column": 19,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/api.ts",
+      "line": 35,
+      "column": 49,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/api.ts",
+      "line": 39,
+      "column": 19,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/api.ts",
+      "line": 51,
+      "column": 19,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/audit/logger.ts",
+      "line": 25,
+      "column": 54,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/auth/permissions.ts",
+      "line": 35,
+      "column": 44,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/auth/permissions.ts",
+      "line": 72,
+      "column": 45,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/auth/permissions.ts",
+      "line": 108,
+      "column": 50,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/auth/permissions.ts",
+      "line": 110,
+      "column": 35,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/firewall/connector-factory.ts",
+      "line": 7,
+      "column": 3,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'fortiGateTargetSelectorFromUrl' is defined but never used."
+    },
+    {
+      "file": "lib/integrations/fortianalyzer.ts",
+      "line": 72,
+      "column": 11,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'EventLog' is defined but never used."
+    },
+    {
+      "file": "lib/integrations/fortianalyzer.ts",
+      "line": 583,
+      "column": 23,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'limit' is assigned a value but never used."
+    },
+    {
+      "file": "lib/integrations/fortianalyzer.ts",
+      "line": 1000,
+      "column": 133,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/integrations/fortianalyzer.ts",
+      "line": 1039,
+      "column": 18,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/integrations/fortianalyzer.ts",
+      "line": 1071,
+      "column": 153,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/integrations/fortianalyzer.ts",
+      "line": 1108,
+      "column": 18,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/integrations/fortigate.ts",
+      "line": 628,
+      "column": 35,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'_organizationId' is defined but never used."
+    },
+    {
+      "file": "lib/integrations/fortigate.ts",
+      "line": 1008,
+      "column": 85,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/integrations/fortigate.ts",
+      "line": 1010,
+      "column": 68,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/integrations/fortigate.ts",
+      "line": 1025,
+      "column": 47,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/integrations/fortigate.ts",
+      "line": 1026,
+      "column": 68,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/integrations/fortigate.ts",
+      "line": 1044,
+      "column": 14,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/integrations/fortigate.ts",
+      "line": 1044,
+      "column": 37,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/integrations/fortigate.ts",
+      "line": 1058,
+      "column": 54,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/integrations/fortigate.ts",
+      "line": 1058,
+      "column": 72,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/integrations/fortigate.ts",
+      "line": 1059,
+      "column": 22,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/integrations/fortigate.ts",
+      "line": 1115,
+      "column": 65,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/integrations/fortigate.ts",
+      "line": 1157,
+      "column": 81,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/integrations/fortigate.ts",
+      "line": 1173,
+      "column": 54,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/integrations/fortigate.ts",
+      "line": 1186,
+      "column": 79,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/integrations/index.ts",
+      "line": 22,
+      "column": 13,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'FortiAnalyzerService' is defined but never used."
+    },
+    {
+      "file": "lib/integrations/vmware.ts",
+      "line": 323,
+      "column": 5,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'eventTypes' is defined but never used."
+    },
+    {
+      "file": "lib/integrations/vmware.ts",
+      "line": 885,
+      "column": 36,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/integrations/vmware.ts",
+      "line": 900,
+      "column": 19,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/integrations/vmware.ts",
+      "line": 904,
+      "column": 16,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/integrations/vmware.ts",
+      "line": 930,
+      "column": 66,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/integrations/vmware.ts",
+      "line": 932,
+      "column": 29,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/integrations/vmware.ts",
+      "line": 977,
+      "column": 29,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/integrations/vmware.ts",
+      "line": 1007,
+      "column": 31,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'hostId' is defined but never used."
+    },
+    {
+      "file": "lib/integrations/vmware.ts",
+      "line": 1007,
+      "column": 56,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/integrations/vmware.ts",
+      "line": 1448,
+      "column": 61,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/integrations/vmware.ts",
+      "line": 1474,
+      "column": 25,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/integrations/vmware.ts",
+      "line": 1483,
+      "column": 56,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/integrations/vmware.ts",
+      "line": 1485,
+      "column": 18,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'err' is defined but never used."
+    },
+    {
+      "file": "lib/integrations/vmware.ts",
+      "line": 1523,
+      "column": 68,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/integrations/vmware.ts",
+      "line": 1525,
+      "column": 31,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/integrations/vmware.ts",
+      "line": 2080,
+      "column": 16,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'restError' is defined but never used."
+    },
+    {
+      "file": "lib/integrations/vmware.ts",
+      "line": 2317,
+      "column": 24,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'hosts' is assigned a value but never used."
+    },
+    {
+      "file": "lib/integrations/zabbix.ts",
+      "line": 325,
+      "column": 25,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'_organizationId' is defined but never used."
+    },
+    {
+      "file": "lib/license/client.ts",
+      "line": 278,
+      "column": 11,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'cachedAt' is assigned a value but never used."
+    },
+    {
+      "file": "lib/license/middleware.ts",
+      "line": 8,
+      "column": 10,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'NextRequest' is defined but never used."
+    },
+    {
+      "file": "lib/notifications/dlq-worker.ts",
+      "line": 61,
+      "column": 37,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/notifications/dlq-worker.ts",
+      "line": 70,
+      "column": 29,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/notifications/email.ts",
+      "line": 88,
+      "column": 24,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/notifications/email.ts",
+      "line": 139,
+      "column": 42,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/reports/reports-service.ts",
+      "line": 75,
+      "column": 28,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'_options' is assigned a value but never used."
+    },
+    {
+      "file": "lib/reports/reports-service.ts",
+      "line": 238,
+      "column": 54,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/reports/reports-service.ts",
+      "line": 244,
+      "column": 79,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/semanticZoom.ts",
+      "line": 10,
+      "column": 42,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/semanticZoom.ts",
+      "line": 10,
+      "column": 57,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/semanticZoom.ts",
+      "line": 21,
+      "column": 42,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/semanticZoom.ts",
+      "line": 21,
+      "column": 63,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/topology/relationship-engine.ts",
+      "line": 234,
+      "column": 31,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/topology/relationship-engine.ts",
+      "line": 292,
+      "column": 61,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/topology/relationship-engine.ts",
+      "line": 342,
+      "column": 53,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/topology/relationship-engine.ts",
+      "line": 408,
+      "column": 21,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/topology/relationship-engine.ts",
+      "line": 413,
+      "column": 22,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/topology/relationship-engine.ts",
+      "line": 418,
+      "column": 22,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    },
+    {
+      "file": "lib/topology/relationship-engine.ts",
+      "line": 494,
+      "column": 35,
+      "severity": 2,
+      "rule": "@typescript-eslint/no-explicit-any",
+      "message": "Unexpected any. Specify a different type."
+    }
+  ]
+}

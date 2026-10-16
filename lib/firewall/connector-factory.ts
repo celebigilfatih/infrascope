@@ -3,11 +3,7 @@ import { createHash } from 'node:crypto';
 import { prisma } from '@/lib/prisma';
 import { FortiGateService, type FortiGateConfig } from '@/lib/integrations/fortigate';
 import { unprotectIntegrationConfig } from '@/lib/security/integration-credentials';
-import {
-  fortiGateTargetSelectorFromUrl,
-  normalizeFortiGateVdom as normalizeTargetVdom,
-  type FortiGateTargetSelector,
-} from './target';
+import { normalizeFortiGateVdom as normalizeTargetVdom, type FortiGateTargetSelector } from './target';
 
 export { fortiGateTargetSelectorFromUrl } from './target';
 export type { FortiGateTargetSelector } from './target';
@@ -157,7 +153,7 @@ export async function resolveFortiGateTarget(
     ...storedConfig,
     host: (persistentConnector?.managementHost || storedConfig.host).trim(),
     accessToken: storedConfig.accessToken || '',
-    pollingInterval: storedConfig.pollingInterval || integration.syncInterval || 5,
+    pollingInterval: integration.syncInterval || 5,
     syncMode: storedConfig.syncMode || 'rest',
     enabledModules: storedConfig.enabledModules || {
       interfaces: true,

@@ -18,6 +18,8 @@ This directory contains historical/technical docs about the alarm subsystem.
 
 ## Related (authoritative)
 
+- [Alarm run ownership](../../30-runbooks/ALARM_RUN_OWNERSHIP.md) — Atomic claims, timeout fencing, source-only checks and startup timers (B19).
+
 - `docs/00-product/CONSTITUTION.md` §3.2 — Alarm discipline principles
 - `docs/30-runbooks/DUPLICATE_PORT_DOWN_EVENTS.md` — NMS_PORT_DOWN race condition
 - `docs/30-runbooks/FA_ACCOUNT_LOCKED.md` — FA lockout (affects all FA-based alarms)

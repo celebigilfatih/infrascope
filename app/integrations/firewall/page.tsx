@@ -1,5 +1,9 @@
 'use client';
 
+import { uiError } from '@/lib/i18n/tr';
+
+import { ActionIcon } from '@/components/ui/action-icon';
+import { PageHeading } from '@/components/ui/page-heading';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -26,7 +30,7 @@ import { cn } from '@/lib/utils';
 
 async function readJson(response: Response) {
   const data = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(data?.error || `HTTP ${response.status}`);
+  if (!response.ok) throw new Error(uiError(data?.error || `HTTP ${response.status}`));
   return data;
 }
 
@@ -52,7 +56,7 @@ export default function FirewallInventoryPage() {
       const result = await fetch('/api/firewalls', { cache: 'no-store' }).then(readJson);
       setItems(result.data || []);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'Firewall listesi yüklenemedi.');
+      setError(uiError(loadError instanceof Error ? loadError.message : 'Firewall listesi yüklenemedi.'));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -79,7 +83,7 @@ export default function FirewallInventoryPage() {
   }), [items]);
 
   function created(connectorId: string) {
-    toast({ title: 'Firewall eklendi', description: 'Kaynak kontrolleri tamamlandı. İzleme durumunu detay sayfasında görebilirsiniz.' });
+    toast({ title: "Güvenlik duvarı eklendi", description: 'Kaynak kontrolleri tamamlandı. İzleme durumunu detay sayfasında görebilirsiniz.' });
     window.location.assign(`/integrations/firewall/${connectorId}`);
   }
 
@@ -89,11 +93,10 @@ export default function FirewallInventoryPage() {
         <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase text-primary">Güvenlik altyapısı</p>
-            <h1 className="mt-1 text-2xl font-semibold tracking-normal sm:text-3xl">Firewall Yönetimi</h1>
-            <p className="mt-2 max-w-2xl text-sm text-muted-foreground">FortiGate cihazlarını, veri kaynaklarını ve salt okunur güvenlik görünümünü tek yerden izleyin.</p>
+            <PageHeading section="firewall" description={<>FortiGate cihazlarını, veri kaynaklarını ve salt okunur güvenlik görünümünü tek yerden izleyin.</>}>Güvenlik Duvarı Yönetimi</PageHeading>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => load(true)} disabled={refreshing} aria-label="Firewall listesini yenile">
+            <Button variant="outline" size="sm" onClick={() => load(true)} disabled={refreshing} aria-label="Güvenlik duvarı listesini yenile">
               <RefreshCcw className={cn('mr-2 h-4 w-4 motion-reduce:animate-none', refreshing && 'animate-spin')} aria-hidden="true" />
               Yenile
             </Button>
@@ -119,7 +122,7 @@ export default function FirewallInventoryPage() {
             </div>
             <div className="relative w-full sm:w-80">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-              <Input value={search} onChange={(event) => setSearch(event.target.value)} className="pl-9" placeholder="Cihaz, IP, seri veya VDOM ara" aria-label="Firewall ara" />
+              <Input value={search} onChange={(event) => setSearch(event.target.value)} className="pl-9" placeholder="Cihaz, IP, seri veya VDOM ara" aria-label="Güvenlik duvarı ara" />
             </div>
           </div>
 
@@ -128,8 +131,8 @@ export default function FirewallInventoryPage() {
           ) : error ? (
             <div className="my-8 border-l-2 border-red-500 bg-red-500/5 p-5">
               <p className="font-semibold">Firewall verileri yüklenemedi</p>
-              <p className="mt-1 text-sm text-muted-foreground">{error}</p>
-              <Button className="mt-4" variant="outline" size="sm" onClick={() => load()}>Tekrar dene</Button>
+              <p className="mt-1 text-sm text-muted-foreground">{uiError(error)}</p>
+              <Button className="mt-4" variant="outline" size="sm" onClick={() => load()}><ActionIcon action="refresh" />Tekrar dene</Button>
             </div>
           ) : filtered.length === 0 ? (
             <div className="flex min-h-72 flex-col items-center justify-center py-10 text-center">
@@ -228,7 +231,7 @@ function LegacyRow({ item, onLinked, onRemoved }: { item: FirewallListItem; onLi
         body: JSON.stringify({ configId: item.configId, deviceId }),
       });
       const data = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(data?.error || 'Envanter bağlantısı kurulamadı.');
+      if (!response.ok) throw new Error(uiError(data?.error || 'Envanter bağlantısı kurulamadı.'));
       toast({ title: 'Bağlantı tamamlandı', description: 'Eski FortiGate kaydı firewall envanterine bağlandı.' });
       onLinked();
     } catch (linkError) {

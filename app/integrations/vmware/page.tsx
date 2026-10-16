@@ -1,6 +1,11 @@
 'use client';
 
+import { uiError } from '@/lib/i18n/tr';
+
+import { PageHeading } from '@/components/ui/page-heading';
 import React, { useState, useEffect } from 'react';
+import type { SyncResult } from '@/lib/integrations/vmware';
+import { inventorySyncLabel } from '@/lib/integrations/sync-outcome';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -37,19 +42,6 @@ interface VMwareConfig {
   };
 }
 
-interface SyncResult {
-  success: boolean;
-  clustersCreated: number;
-  clustersUpdated: number;
-  hostsCreated: number;
-  hostsUpdated: number;
-  vmsCreated: number;
-  vmsUpdated: number;
-  datastoresProcessed: number;
-  errors: string[];
-  duration: number;
-}
-
 export default function VMwareIntegrationPage() {
   const [config, setConfig] = useState<VMwareConfig>({
     host: '',
@@ -68,7 +60,6 @@ export default function VMwareIntegrationPage() {
   
   const [status, setStatus] = useState<{ connected: boolean; version?: string; error?: string } | null>(null);
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
-  const [dashboardData, setDashboardData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -103,7 +94,7 @@ export default function VMwareIntegrationPage() {
         setStatus({
           connected: !!configData.config?.host,
           version: configData.config?.host ? 'Configured' : undefined,
-          error: configData.config?.host ? undefined : 'Not configured — enter vCenter details and save'
+          error: uiError(configData.config?.host ? undefined : "Yapılandırılmadı. vCenter bilgilerini girip kaydedin.")
         });
 
         // Warn if saved config has no password (was accidentally overwritten)
@@ -111,7 +102,7 @@ export default function VMwareIntegrationPage() {
           setStatus(prev => ({
             connected: prev?.connected ?? false,
             version: prev?.version,
-            error: 'Password missing from saved config — please re-enter and save',
+            error: uiError("Kayıtlı yapılandırmada parola yok. Parolayı yeniden girip kaydedin."),
           }));
         }
 
@@ -121,22 +112,9 @@ export default function VMwareIntegrationPage() {
           if (dashRes.ok) {
             const dashData = await dashRes.json();
             if (dashData.summary) {
-              setDashboardData(dashData);
-              setSyncResult({
-                success: true,
-                clustersCreated: 0,
-                clustersUpdated: dashData.summary.clusters || 0,
-                hostsCreated: 0,
-                hostsUpdated: dashData.summary.hostsOnline || 0,
-                vmsCreated: 0,
-                vmsUpdated: dashData.summary.vmRunning || 0,
-                datastoresProcessed: dashData.summary.datastores || 0,
-                errors: [],
-                duration: 0
-              });
               // vCenter is reachable
               if (configData.config?.host) {
-                setStatus({ connected: true, version: 'Connected' });
+                setStatus({ connected: true, version: "Bağlı" });
               }
             }
           }
@@ -165,7 +143,7 @@ export default function VMwareIntegrationPage() {
       const data = await response.json();
       setStatus(data);
     } catch (error) {
-      setStatus({ connected: false, error: (error as Error).message });
+      setStatus({ connected: false, error: uiError((error as Error).message) });
     }
     setLoading(false);
   };
@@ -173,11 +151,15 @@ export default function VMwareIntegrationPage() {
   const saveConfig = async () => {
     setSaving(true);
     try {
-      await fetch('/api/integrations/vmware', {
+      const response = await fetch('/api/integrations/vmware', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'save-config', name: 'VMware vCenter', config }),
       });
+      if (!response.ok) {
+        const result = await response.json();
+        setStatus({ connected: false, error: uiError(result.error || 'Bağlantı ayarları kaydedilemedi.') });
+      }
     } catch (error) {
       console.error('Failed to save config:', error);
     }
@@ -186,23 +168,12 @@ export default function VMwareIntegrationPage() {
 
   const runSync = async () => {
     if (!config.host || !config.username) {
-      setStatus({ connected: false, error: 'Please fill in vCenter Host and Username before syncing.' });
+      setStatus({ connected: false, error: uiError("Eşitlemeden önce vCenter sunucusunu ve kullanıcı adını girin.") });
       return;
     }
     setSyncing(true);
     try {
-      // Auto-save config to DB first so sync can find it
-      const saveRes = await fetch('/api/integrations/vmware', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'save-config', name: 'VMware vCenter', config }),
-      });
-      if (!saveRes.ok) {
-        const saveErr = await saveRes.json();
-        setStatus({ connected: false, error: saveErr.error || 'Failed to save configuration before sync' });
-        setSyncing(false);
-        return;
-      }
+      // Sync uses persisted configuration; settings changes require an explicit save.
 
       const response = await fetch('/api/integrations/vmware', {
         method: 'POST',
@@ -211,7 +182,7 @@ export default function VMwareIntegrationPage() {
       });
       const data = await response.json();
       if (!response.ok) {
-        setStatus({ connected: false, error: data.error || 'Sync failed' });
+        setStatus({ connected: false, error: uiError(data.error || 'Sync failed') });
         setActiveTab('config');
       } else {
         setSyncResult(data);
@@ -219,35 +190,34 @@ export default function VMwareIntegrationPage() {
       }
     } catch (error) {
       console.error('Sync failed:', error);
-      setStatus({ connected: false, error: (error as Error).message });
+      setStatus({ connected: false, error: uiError((error as Error).message) });
     }
     setSyncing(false);
   };
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-4">
         <div className="flex items-center gap-4">
           <div className="p-3 rounded-lg bg-blue-500/20">
             <Server className="h-6 w-6 text-blue-500" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold">VMware vCenter Integration</h1>
-            <p className="text-muted-foreground">
-              VMware vCenter server configuration and virtualization inventory sync
-            </p>
+            <PageHeading section="vmware" description={<>
+              VMware vCenter bağlantısını yapılandırın ve sanallaştırma envanterini eşitleyin
+            </>}>VMware vCenter Entegrasyonu</PageHeading>
           </div>
         </div>
         <div className="flex items-center gap-2">
           {status?.connected ? (
             <Badge variant="success" className="gap-1">
               <CheckCircle className="h-3 w-3" />
-              Connected {status.version && `(${status.version})`}
+              Bağlı {status.version && `(${status.version})`}
             </Badge>
           ) : status ? (
             <Badge variant="destructive" className="gap-1">
               <XCircle className="h-3 w-3" />
-              Disconnected
+              Bağlantı kesildi
             </Badge>
           ) : null}
         </div>
@@ -257,42 +227,42 @@ export default function VMwareIntegrationPage() {
         <TabsList>
           <TabsTrigger value="config" className="gap-2">
             <Settings className="h-4 w-4" />
-            Configuration
+            Yapılandırma
           </TabsTrigger>
           <TabsTrigger value="sync" className="gap-2">
             <RefreshCw className="h-4 w-4" />
-            Sync Status
+            Eşitleme Durumu
           </TabsTrigger>
           <TabsTrigger value="modules" className="gap-2">
             <Database className="h-4 w-4" />
-            Modules
+            Modüller
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="config" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>vCenter Connection Settings</CardTitle>
+              <CardTitle>vCenter Bağlantı Ayarları</CardTitle>
               <CardDescription>
-                Configure the connection to your VMware vCenter server
+                VMware vCenter sunucunuza bağlantıyı yapılandırın
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="host">vCenter Host</Label>
+                  <Label htmlFor="host">vCenter Sunucusu</Label>
                   <Input
                     id="host"
-                    placeholder="10.5.56.10  (no https:// prefix)"
+                    placeholder="10.5.56.10 (https:// öneki olmadan)"
                     value={config.host}
                     onChange={(e) => setConfig({ ...config, host: e.target.value.replace(/^https?:\/\//i, '').replace(/\/+$/, '') })}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="thumbprint">Thumbprint (optional)</Label>
+                  <Label htmlFor="thumbprint">Sertifika Parmak İzi (isteğe bağlı)</Label>
                   <Input
                     id="thumbprint"
-                    placeholder="SHA-1 thumbprint"
+                    placeholder="SHA-1 sertifika parmak izi"
                     value={config.thumbprint}
                     onChange={(e) => setConfig({ ...config, thumbprint: e.target.value })}
                   />
@@ -301,7 +271,7 @@ export default function VMwareIntegrationPage() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="username">Username</Label>
+                  <Label htmlFor="username">Kullanıcı Adı</Label>
                   <Input
                     id="username"
                     placeholder="administrator@vsphere.local"
@@ -310,11 +280,11 @@ export default function VMwareIntegrationPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
+                  <Label htmlFor="password">Parola</Label>
                   <Input
                     id="password"
                     type="password"
-                    placeholder="Enter password"
+                    placeholder="Parolayı girin"
                     value={config.password}
                     onChange={(e) => setConfig({ ...config, password: e.target.value })}
                   />
@@ -322,15 +292,16 @@ export default function VMwareIntegrationPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="polling">Polling Interval (minutes)</Label>
+                <Label htmlFor="polling">Envanter senkronizasyon aralığı (dakika)</Label>
                 <Input
                   id="polling"
                   type="number"
-                  min={5}
-                  max={60}
+                  min={1}
+                  max={1440}
                   value={config.pollingInterval}
                   onChange={(e) => setConfig({ ...config, pollingInterval: parseInt(e.target.value) })}
                 />
+                <p className="text-xs text-muted-foreground">Kaydedilen aralık otomatik envanter senkronizasyonunu belirler. Alarm ve grafik yenileme aralıkları ayrıdır.</p>
               </div>
 
               <div className="flex gap-4 pt-4">
@@ -340,7 +311,7 @@ export default function VMwareIntegrationPage() {
                   ) : (
                     <Server className="h-4 w-4" />
                   )}
-                  <span className="ml-2">Test Connection</span>
+                  <span className="ml-2">Bağlantıyı Test Et</span>
                 </Button>
                 <Button onClick={saveConfig} disabled={saving}>
                   {saving ? (
@@ -348,14 +319,14 @@ export default function VMwareIntegrationPage() {
                   ) : (
                     <Save className="h-4 w-4" />
                   )}
-                  <span className="ml-2">Save Configuration</span>
+                  <span className="ml-2">Yapılandırmayı Kaydet</span>
                 </Button>
               </div>
 
               {status && status.error && (
                 <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 text-destructive">
                   <AlertCircle className="h-4 w-4" />
-                  <span>{status.error}</span>
+                  <span>{uiError(status.error)}</span>
                 </div>
               )}
             </CardContent>
@@ -363,9 +334,9 @@ export default function VMwareIntegrationPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Run Manual Sync</CardTitle>
+              <CardTitle>Manuel senkronizasyon</CardTitle>
               <CardDescription>
-                Save your configuration first, then trigger a synchronization with vCenter
+                Senkronizasyon kayıtlı bağlantı ayarlarını kullanır. Ayar değişikliklerini önce kaydedin.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -375,7 +346,7 @@ export default function VMwareIntegrationPage() {
                 ) : (
                   <RefreshCw className="h-4 w-4" />
                 )}
-                <span className="ml-2">Start Synchronization</span>
+                <span className="ml-2">Kayıtlı ayarlarla senkronize et</span>
               </Button>
             </CardContent>
           </Card>
@@ -390,9 +361,9 @@ export default function VMwareIntegrationPage() {
                     <Cpu className="h-5 w-5 text-green-500" />
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Clusters</p>
+                    <p className="text-sm text-muted-foreground">Kümeler</p>
                     <p className="text-2xl font-bold">
-                      {(syncResult?.clustersCreated || 0) + (syncResult?.clustersUpdated || 0)}
+                      {syncResult ? syncResult.clustersCreated + syncResult.clustersUpdated : '—'}
                     </p>
                   </div>
                 </div>
@@ -405,9 +376,9 @@ export default function VMwareIntegrationPage() {
                     <Server className="h-5 w-5 text-blue-500" />
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">ESXi Hosts</p>
+                    <p className="text-sm text-muted-foreground">ESXi Sunucuları</p>
                     <p className="text-2xl font-bold">
-                      {(syncResult?.hostsCreated || 0) + (syncResult?.hostsUpdated || 0)}
+                      {syncResult ? syncResult.hostsCreated + syncResult.hostsUpdated : '—'}
                     </p>
                   </div>
                 </div>
@@ -420,9 +391,9 @@ export default function VMwareIntegrationPage() {
                     <HardDrive className="h-5 w-5 text-purple-500" />
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Virtual Machines</p>
+                    <p className="text-sm text-muted-foreground">Sanal Makineler</p>
                     <p className="text-2xl font-bold">
-                      {(syncResult?.vmsCreated || 0) + (syncResult?.vmsUpdated || 0)}
+                      {syncResult ? syncResult.vmsCreated + syncResult.vmsUpdated : '—'}
                     </p>
                   </div>
                 </div>
@@ -435,8 +406,8 @@ export default function VMwareIntegrationPage() {
                     <Database className="h-5 w-5 text-orange-500" />
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Datastores</p>
-                    <p className="text-2xl font-bold">{syncResult?.datastoresProcessed || 0}</p>
+                    <p className="text-sm text-muted-foreground">Veri Depoları</p>
+                    <p className="text-2xl font-bold">{syncResult?.datastoresProcessed ?? '—'}</p>
                   </div>
                 </div>
               </CardContent>
@@ -448,8 +419,8 @@ export default function VMwareIntegrationPage() {
                     <RefreshCw className="h-5 w-5 text-cyan-500" />
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Duration</p>
-                    <p className="text-2xl font-bold">{syncResult?.duration || 0}ms</p>
+                    <p className="text-sm text-muted-foreground">Süre</p>
+                    <p className="text-2xl font-bold">{syncResult ? `${syncResult.duration}ms` : '—'}</p>
                   </div>
                 </div>
               </CardContent>
@@ -461,27 +432,29 @@ export default function VMwareIntegrationPage() {
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    {syncResult.success ? (
+                    {syncResult.status === 'success' ? (
                       <CheckCircle className="h-5 w-5 text-green-500" />
+                    ) : syncResult.status === 'failed' ? (
+                      <XCircle className="h-5 w-5 text-destructive" />
                     ) : (
                       <AlertCircle className="h-5 w-5 text-yellow-500" />
                     )}
                     <div>
                       <p className="font-semibold">
-                        {syncResult.success ? 'Sync Completed' : 'Sync Completed with Warnings'}
+                        {inventorySyncLabel(syncResult.status)}
                       </p>
                       <p className="text-sm text-muted-foreground">
-                        Processed {syncResult.hostsCreated + syncResult.hostsUpdated + syncResult.vmsCreated + syncResult.vmsUpdated} items
+                        {syncResult.itemsProcessed} öğe işlendi · {syncResult.errorCount} hata
                       </p>
                     </div>
                   </div>
                 </div>
                 {syncResult.errors && syncResult.errors.length > 0 && (
                   <div className="mt-4 p-3 rounded-lg bg-destructive/10">
-                    <p className="text-sm font-medium mb-2">Errors:</p>
+                    <p className="text-sm font-medium mb-2">Hatalar:</p>
                     <ul className="text-sm text-destructive space-y-1">
                       {syncResult.errors.map((error, i) => (
-                        <li key={i}>• {error}</li>
+                        <li key={i}>• {uiError(error)}</li>
                       ))}
                     </ul>
                   </div>
@@ -494,9 +467,9 @@ export default function VMwareIntegrationPage() {
         <TabsContent value="modules" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Data Modules</CardTitle>
+              <CardTitle>Veri Modülleri</CardTitle>
               <CardDescription>
-                Select which VMware data to synchronize
+                Eşitlenecek VMware verilerini seçin
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -504,9 +477,9 @@ export default function VMwareIntegrationPage() {
                 <div className="flex items-center gap-3">
                   <Database className="h-5 w-5 text-muted-foreground" />
                   <div>
-                    <p className="font-medium">Datacenters</p>
+                    <p className="font-medium">Veri Merkezleri</p>
                     <p className="text-sm text-muted-foreground">
-                      Import datacenter hierarchy
+                      Veri merkezi hiyerarşisini içe aktar
                     </p>
                   </div>
                 </div>
@@ -522,9 +495,9 @@ export default function VMwareIntegrationPage() {
                 <div className="flex items-center gap-3">
                   <Cpu className="h-5 w-5 text-muted-foreground" />
                   <div>
-                    <p className="font-medium">Clusters</p>
+                    <p className="font-medium">Kümeler</p>
                     <p className="text-sm text-muted-foreground">
-                      Import cluster and resource pool information
+                      Küme ve kaynak havuzu bilgilerini içe aktar
                     </p>
                   </div>
                 </div>
@@ -540,9 +513,9 @@ export default function VMwareIntegrationPage() {
                 <div className="flex items-center gap-3">
                   <Server className="h-5 w-5 text-muted-foreground" />
                   <div>
-                    <p className="font-medium">ESXi Hosts</p>
+                    <p className="font-medium">ESXi Sunucuları</p>
                     <p className="text-sm text-muted-foreground">
-                      Import ESXi host inventory and status
+                      ESXi sunucu envanterini ve durumunu içe aktar
                     </p>
                   </div>
                 </div>
@@ -558,9 +531,9 @@ export default function VMwareIntegrationPage() {
                 <div className="flex items-center gap-3">
                   <HardDrive className="h-5 w-5 text-muted-foreground" />
                   <div>
-                    <p className="font-medium">Virtual Machines</p>
+                    <p className="font-medium">Sanal Makineler</p>
                     <p className="text-sm text-muted-foreground">
-                      Import VM inventory and configurations
+                      Sanal makine envanterini ve yapılandırmalarını içe aktar
                     </p>
                   </div>
                 </div>
@@ -576,9 +549,9 @@ export default function VMwareIntegrationPage() {
                 <div className="flex items-center gap-3">
                   <Database className="h-5 w-5 text-muted-foreground" />
                   <div>
-                    <p className="font-medium">Datastores</p>
+                    <p className="font-medium">Veri Depoları</p>
                     <p className="text-sm text-muted-foreground">
-                      Import datastore and storage information
+                      Veri deposu ve depolama bilgilerini içe aktar
                     </p>
                   </div>
                 </div>

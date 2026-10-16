@@ -1,251 +1,43 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import {
-  RefreshCw,
-  Server,
-  Cpu,
-  HardDrive,
-  Layers,
-  AlertTriangle,
-  Download,
-} from 'lucide-react';
-
-interface Cluster {
-  id: string;
-  name: string;
-  hostCount: number;
-  effectiveHosts: number;
-  totalCpu: number;
-  cpuCores: number;
-  totalMemoryGB: number;
-}
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ClusterWorkspace } from '@/components/virtualization/ClusterWorkspace';
+import type { ClusterWorkspaceRecord } from '@/lib/virtualization/cluster-workspace';
+import { uiError } from '@/lib/i18n/tr';
 
 export default function ClustersPage() {
-  const [clusters, setClusters] = useState<Cluster[]>([]);
+  const [clusters, setClusters] = useState<ClusterWorkspaceRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const fetchClusters = async () => {
+  const [collectedAt, setCollectedAt] = useState<string | null>(null);
+  const [focusClusterId, setFocusClusterId] = useState<string | null>(null);
+  const requestId = useRef(0);
+  const controller = useRef<AbortController | null>(null);
+  const loaded = useRef(false);
+  const fetchClusters = useCallback(async (bypass = false) => {
+    const request = ++requestId.current;
+    controller.current?.abort();
+    const current = new AbortController(); controller.current = current;
+    if (loaded.current) setRefreshing(true); else setLoading(true);
     try {
-      setLoading(true);
-      setError(null);
-      const res = await fetch('/api/integrations/vmware?type=clusters');
-      const json = await res.json();
-      
-      if (json.error) {
-        setError(json.error);
-        return;
-      }
-      
-      setClusters(json.clusters || []);
-    } catch (err) {
-      setError((err as Error).message);
+      const response = await fetch('/api/integrations/vmware?type=cluster-workspace', { signal: current.signal, headers: bypass ? { 'x-cache-bypass': '1' } : undefined });
+      const json = await response.json();
+      if (!response.ok || json.error) throw new Error(uiError(json.error || 'Küme verileri alınamadı.'));
+      if (!Array.isArray(json.clusters)) throw new Error('Küme yanıtı eksik. Lütfen tekrar deneyin.');
+      if (request !== requestId.current || current.signal.aborted) return;
+      setClusters(json.clusters); setCollectedAt(json.collectedAt || null); setError(null); loaded.current = true;
+    } catch (fetchError) {
+      if (request === requestId.current && !current.signal.aborted) setError(uiError(fetchError, 'Küme verileri alınamadı.'));
     } finally {
-      setLoading(false);
+      if (request === requestId.current && !current.signal.aborted) { setLoading(false); setRefreshing(false); }
     }
-  };
-
-  useEffect(() => {
-    fetchClusters();
-    const interval = setInterval(fetchClusters, 300000); // 5 min — matches server cache TTL
-    return () => clearInterval(interval);
   }, []);
-
-  // Export CSV
-  const exportCSV = () => {
-    const headers = ['Ad', 'Host Sayisi', 'Aktif Host', 'CPU Cores', 'Bellek (GB)'];
-    const rows = clusters.map(c => [
-      c.name,
-      c.hostCount,
-      c.effectiveHosts,
-      c.cpuCores,
-      c.totalMemoryGB,
-    ]);
-    
-    const csv = [headers, ...rows].map(row => row.join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `clusters_${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  // Summary
-  const totalHosts = clusters.reduce((sum, c) => sum + (c.hostCount || 0), 0);
-  const totalCpuCores = clusters.reduce((sum, c) => sum + (c.cpuCores || 0), 0);
-  const totalMemoryTB = clusters.reduce((sum, c) => sum + (c.totalMemoryGB || 0), 0) / 1024;
-
-  if (error) {
-    return (
-      <div className="p-6">
-        <Card className="border-red-200 bg-red-50">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-2 text-red-600">
-              <AlertTriangle className="h-5 w-5" />
-              <span>vCenter baglantisi basarisiz: {error}</span>
-            </div>
-            <Button onClick={fetchClusters} className="mt-4" variant="outline">
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Tekrar Dene
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Cluster</h1>
-          <p className="text-muted-foreground">
-            vCenter uzerindeki cluster yapilari
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button onClick={exportCSV} variant="outline" size="sm">
-            <Download className="h-4 w-4 mr-2" />
-            CSV
-          </Button>
-          <Button onClick={fetchClusters} disabled={loading} variant="outline">
-            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            Yenile
-          </Button>
-        </div>
-      </div>
-
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Toplam Cluster</CardTitle>
-            <Layers className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{clusters.length}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Toplam Host</CardTitle>
-            <Server className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalHosts}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Toplam CPU</CardTitle>
-            <Cpu className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalCpuCores}</div>
-            <p className="text-xs text-muted-foreground">CPU cekirdegi</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Toplam Bellek</CardTitle>
-            <HardDrive className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalMemoryTB.toFixed(1)} TB</div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Cluster Table */}
-      <Card>
-        <CardContent className="pt-6">
-          {loading && clusters.length === 0 ? (
-            <div className="space-y-2">
-              <div className="grid grid-cols-5 gap-2 px-2 pb-2 border-b text-xs font-medium text-muted-foreground">
-                {['Cluster Adı', 'Host Sayısı', 'Aktif Host', 'CPU Cores', 'Bellek'].map((h, i) => (
-                  <div key={i}>{h}</div>
-                ))}
-              </div>
-              {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="grid grid-cols-5 gap-2 px-2 py-2 border-b border-border/20 animate-pulse">
-                  {Array.from({ length: 5 }).map((_, j) => (
-                    <div key={j} className="h-4 bg-muted rounded" style={{ opacity: 0.4 + (j % 3) * 0.2 }} />
-                  ))}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Cluster Adi</TableHead>
-                  <TableHead className="text-center">Host Sayisi</TableHead>
-                  <TableHead className="text-center">Aktif Host</TableHead>
-                  <TableHead className="text-center">CPU Cores</TableHead>
-                  <TableHead className="text-center">Bellek</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {clusters.map((cluster) => (
-                  <TableRow key={cluster.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Layers className="h-4 w-4 text-muted-foreground" />
-                        <span className="font-medium">{cluster.name}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Badge className="bg-blue-100 text-blue-800">
-                        {cluster.hostCount} Host
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {cluster.effectiveHosts === cluster.hostCount ? (
-                        <Badge className="bg-green-100 text-green-800">
-                          {cluster.effectiveHosts} Aktif
-                        </Badge>
-                      ) : (
-                        <Badge className="bg-yellow-100 text-yellow-800">
-                          {cluster.effectiveHosts} / {cluster.hostCount} Aktif
-                        </Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {cluster.cpuCores} Core
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {cluster.totalMemoryGB >= 1024 
-                        ? `${(cluster.totalMemoryGB / 1024).toFixed(1)} TB` 
-                        : `${cluster.totalMemoryGB} GB`}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-
-          {clusters.length === 0 && !loading && (
-            <p className="text-center text-muted-foreground py-8">
-              Cluster bulunamadi
-            </p>
-          )}
-        </CardContent>
-      </Card>
-    </div>
-  );
+  useEffect(() => {
+    setFocusClusterId(new URLSearchParams(window.location.search).get('clusterId'));
+    fetchClusters();
+    const interval = setInterval(() => fetchClusters(), 300_000);
+    return () => { controller.current?.abort(); clearInterval(interval); };
+  }, [fetchClusters]);
+  return <ClusterWorkspace clusters={clusters} loading={loading} refreshing={refreshing} error={error} collectedAt={collectedAt} onRefresh={() => fetchClusters(true)} focusClusterId={focusClusterId} />;
 }

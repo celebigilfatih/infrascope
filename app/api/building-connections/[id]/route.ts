@@ -28,7 +28,7 @@ export async function GET(
       data: connection,
       timestamp: new Date()
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error fetching building connection:', error);
     return NextResponse.json({
       success: false,
@@ -73,7 +73,7 @@ export async function PUT(
       data: connection,
       timestamp: new Date()
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error updating building connection:', error);
     return NextResponse.json({
       success: false,
@@ -98,7 +98,7 @@ export async function DELETE(
       message: 'Building connection deleted successfully',
       timestamp: new Date()
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error deleting building connection:', error);
     return NextResponse.json({
       success: false,

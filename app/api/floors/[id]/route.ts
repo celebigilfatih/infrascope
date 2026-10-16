@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 /**
  * Floor Detail Endpoints
  * GET /api/floors/[id] - Get floor by ID
@@ -195,7 +196,7 @@ export async function PUT(
     }
 
     // Build update data
-    const updateData: any = {};
+    const updateData: Prisma.FloorUncheckedUpdateInput = {};
     if (name !== undefined) updateData.name = name;
     if (floorNumber !== undefined) updateData.floorNumber = floorNumber;
 

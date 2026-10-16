@@ -70,6 +70,8 @@ export async function GET(_request: NextRequest, { params }: RouteContext) {
     : null;
   const config = unprotectIntegrationConfig<FortiGateConfig>(connector.integrationConfig.config, 'FORTIGATE');
   const { config: _config, ...safeIntegrationConfig } = connector.integrationConfig;
+  // Exclude credentials from the serialized response.
+  void _config;
   let tls = { configured: false, updatedAt: null as string | null, summary: null as ReturnType<typeof inspectTrustedCaBundle> | null };
   if (config.tlsCaPem) {
     try {
@@ -117,7 +119,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     await prisma.$transaction([
       prisma.integrationConfig.update({
         where: { id: connector.integrationConfigId },
-        data: { config: protectedConfig as any, lastSyncStatus: 'pending-probe' },
+        data: { config: protectedConfig as Prisma.InputJsonObject, lastSyncStatus: 'pending-probe' },
       }),
       prisma.firewallConnector.update({
         where: { id: connector.id },

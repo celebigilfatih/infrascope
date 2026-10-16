@@ -1,5 +1,8 @@
 'use client';
 
+import { uiError, uiLabel } from '@/lib/i18n/tr';
+
+import { PageHeading } from '@/components/ui/page-heading';
 import React, { useState, useMemo } from 'react';
 import { useApi } from '@/lib/hooks/useApi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,34 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import {
-  History,
-  User,
-  Search,
-  RefreshCw,
-  AlertCircle,
-  LogIn,
-  LogOut,
-  Settings,
-  Shield,
-  Server,
-  ChevronLeft,
-  ChevronRight,
-  Eye,
-  X,
-  Terminal,
-  Globe,
-  Clock,
-  Cpu,
-  FileCode2,
-  GitCommit,
-  CheckCircle2,
-  XCircle,
-  Monitor,
-  Network,
-  Key,
-  Tag,
-} from 'lucide-react';
+import { History, User, Search, RefreshCw, AlertCircle, LogIn, LogOut, Settings, Shield, Server, ChevronLeft, ChevronRight, Eye, Terminal, Globe, Clock, Cpu, FileCode2, GitCommit, CheckCircle2, XCircle, Monitor, Network, Key, Tag } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -106,7 +82,7 @@ export default function ConfigRevisionsPage() {
       }));
       setError(null);
     } else if (apiResult && !apiResult.success) {
-      setError(apiResult.error || 'Veri yüklenemedi');
+      setError(uiError(apiResult.error || 'Veri yüklenemedi'));
     }
   }, [apiResult]);
 
@@ -128,7 +104,7 @@ export default function ConfigRevisionsPage() {
     return filteredLogs.slice(start, start + ITEMS_PER_PAGE);
   }, [filteredLogs, currentPage]);
 
-  const configChangeCount = useMemo(() => logs.length, [logs]);
+  useMemo(() => logs.length, [logs]);
   const uniqueAdmins = useMemo(() => [...new Set(logs.map(l => l.user).filter(Boolean))], [logs]);
   const uniqueDevices = useMemo(() => [...new Set(logs.map(l => l.devname).filter(Boolean))], [logs]);
 
@@ -159,7 +135,7 @@ export default function ConfigRevisionsPage() {
   const getActionBadge = (action?: string) => {
     const tr = action ? actionTranslations[action] : undefined;
     if (tr) return <Badge className={tr.color}>{tr.label}</Badge>;
-    return <Badge className="bg-slate-600">{action || 'Bilinmiyor'}</Badge>;
+    return <Badge variant="secondary">{action || 'Bilinmiyor'}</Badge>;
   };
 
   const getLevelBadge = (level?: string) => {
@@ -181,10 +157,9 @@ export default function ConfigRevisionsPage() {
     <div className="p-6 space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Firewall Konfigürasyon Değişiklikleri</h1>
-          <p className="text-muted-foreground">
+          <PageHeading section="revisions" description={<>
             FortiGate üzerinde firewall yöneten kullanıcıların yaptığı konfigürasyon değişiklikleri
-          </p>
+          </>}>Yapılandırma Geçmişi</PageHeading>
         </div>
         <Button onClick={() => refreshLogs()} variant="outline" disabled={isLoading}>
           <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
@@ -225,7 +200,7 @@ export default function ConfigRevisionsPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Shield className="h-5 w-5" />
-            Admin İşlem Geçmişi
+            Yönetici İşlem Geçmişi
             <Badge variant="secondary">{filteredLogs.length}</Badge>
           </CardTitle>
         </CardHeader>
@@ -235,7 +210,7 @@ export default function ConfigRevisionsPage() {
           ) : error ? (
             <div className="flex items-center gap-2 p-4 bg-destructive/10 rounded-lg">
               <AlertCircle className="h-5 w-5 text-destructive" />
-              <span className="text-destructive">{error}</span>
+              <span className="text-destructive">{uiError(error)}</span>
             </div>
           ) : (
             <>
@@ -244,7 +219,7 @@ export default function ConfigRevisionsPage() {
                   <TableRow>
                     <TableHead className="w-20">Tarih</TableHead>
                     <TableHead className="w-16">Saat</TableHead>
-                    <TableHead>Admin</TableHead>
+                    <TableHead>Yönetici</TableHead>
                     <TableHead>İşlem</TableHead>
                     <TableHead>Açıklama</TableHead>
                     <TableHead>Kaynak IP</TableHead>
@@ -284,7 +259,7 @@ export default function ConfigRevisionsPage() {
                             size="icon"
                             className="h-8 w-8"
                             onClick={() => setSelectedLog(log)}
-                          >
+                           aria-label="Detayları görüntüle">
                             <Eye className="h-4 w-4" />
                           </Button>
                         </TableCell>
@@ -297,8 +272,8 @@ export default function ConfigRevisionsPage() {
                 <div className="flex items-center justify-between mt-4">
                   <p className="text-sm text-muted-foreground">Sayfa {currentPage} / {totalPages} ({filteredLogs.length} kayıt)</p>
                   <div className="flex items-center gap-1">
-                    <Button variant="outline" size="icon" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}><ChevronLeft className="h-4 w-4" /></Button>
-                    <Button variant="outline" size="icon" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}><ChevronRight className="h-4 w-4" /></Button>
+                    <Button variant="outline" size="icon" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} aria-label="Önceki sayfa"><ChevronLeft className="h-4 w-4" /></Button>
+                    <Button variant="outline" size="icon" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} aria-label="Sonraki sayfa"><ChevronRight className="h-4 w-4" /></Button>
                   </div>
                 </div>
               )}
@@ -379,7 +354,7 @@ export default function ConfigRevisionsPage() {
                             <span className="flex items-center gap-1">{uiIcon}{uiMethod}{uiIp ? ` · ${uiIp}` : ''}</span>
                           )}
                           {isHaDaemon && (
-                            <span className="flex items-center gap-1 text-amber-400"><Cpu className="h-3 w-3" />HA Daemon (internal sync)</span>
+                            <span className="flex items-center gap-1 text-amber-400"><Cpu className="h-3 w-3" />HA Arka Plan Servisi (iç eşitleme)</span>
                           )}
                         </div>
                       </div>
@@ -478,7 +453,7 @@ export default function ConfigRevisionsPage() {
                           }`}>
                             {selectedLog.status === 'success' ? <CheckCircle2 className="h-3.5 w-3.5" /> :
                              selectedLog.status === 'failed'  ? <XCircle className="h-3.5 w-3.5" /> : null}
-                            {selectedLog.status}
+                            {uiLabel(selectedLog.status)}
                           </span>
                         ) : <p className="text-muted-foreground text-sm">—</p>}
                       </div>

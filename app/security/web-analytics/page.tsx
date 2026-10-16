@@ -1,5 +1,8 @@
 'use client';
 
+import { uiError } from '@/lib/i18n/tr';
+
+import { PageHeading } from '@/components/ui/page-heading';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -166,7 +169,7 @@ export default function WebAnalyticsPage() {
       const result = await response.json();
   
       if (!result.success) {
-        setError(result.error || 'FortiView verileri y\u00fcklenemedi');
+        setError(uiError(result.error || 'FortiView verileri y\u00fcklenemedi'));
         return;
       }
   
@@ -190,7 +193,7 @@ export default function WebAnalyticsPage() {
       }
     } catch (err) {
       console.error('Failed to fetch FortiView batch data:', err);
-      setError('FortiView verileri al\u0131namad\u0131');
+      setError(uiError('FortiView verileri al\u0131namad\u0131'));
     } finally {
       setLoadingWebsites(false);
       setLoadingUsers(false);
@@ -261,7 +264,7 @@ export default function WebAnalyticsPage() {
   });
 
   const totalBandwidth = websiteData.reduce((sum: number, w: WebsiteCategory) => sum + (parseFloat(w.bandwidth || '0') || 0), 0);
-  const totalSessions = websiteData.reduce((sum: number, w: WebsiteCategory) => sum + (parseInt(w.sessions || '0', 10) || 0), 0);
+
   const totalThreats = websiteData.reduce((sum: number, w: WebsiteCategory) => sum + (parseInt(w.threat_block || '0', 10) || 0), 0);
   const loading = loadingWebsites || loadingUsers || loadingPolicies || loadingCloud;
 
@@ -277,10 +280,9 @@ export default function WebAnalyticsPage() {
     <div className="p-6 space-y-6 max-w-full">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Web Analytics</h1>
-          <p className="text-muted-foreground">
-            FortiAnalyzer FortiView - Top Web Sitesi Kategorileri ve Kullanıcı Aktivitesi
-          </p>
+          <PageHeading section="webAnalytics" description={<>
+            FortiAnalyzer FortiView: öne çıkan web kategorileri ve kullanıcı etkinliği
+          </>}>Web Analizi</PageHeading>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
@@ -336,7 +338,7 @@ export default function WebAnalyticsPage() {
       {error && (
         <div className="flex items-center gap-2 p-4 bg-destructive/10 rounded-lg">
           <AlertCircle className="h-5 w-5 text-destructive" />
-          <span className="text-destructive">{error}</span>
+          <span className="text-destructive">{uiError(error)}</span>
         </div>
       )}
 
@@ -344,7 +346,7 @@ export default function WebAnalyticsPage() {
         <TabsList>
           <TabsTrigger value="categories">
             <Globe className="h-4 w-4 mr-2" />
-            Top Web Siteleri
+            Öne Çıkan Web Siteleri
           </TabsTrigger>
           <TabsTrigger value="threats">
             <ShieldAlert className="h-4 w-4 mr-2" />
@@ -359,7 +361,7 @@ export default function WebAnalyticsPage() {
           </TabsTrigger>
           <TabsTrigger value="policies">
             <FileCheck className="h-4 w-4 mr-2" />
-            Policy Hits
+            Politika Eşleşmeleri
           </TabsTrigger>
           <TabsTrigger value="cloud">
             <Cloud className="h-4 w-4 mr-2" />
@@ -371,13 +373,13 @@ export default function WebAnalyticsPage() {
         <TabsContent value="categories" className="space-y-4">
           <div className="relative max-w-md">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input placeholder="Kategori, domain veya cihaz ara..." value={websiteSearch} onChange={(e) => setWebsiteSearch(e.target.value)} className="pl-9" />
+            <Input placeholder="Kategori, alan adı veya cihaz ara…" value={websiteSearch} onChange={(e) => setWebsiteSearch(e.target.value)} className="pl-9" />
           </div>
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <BarChart3 className="h-5 w-5" />
-                Top Web Sitesi Kategorileri
+                Öne Çıkan Web Kategorileri
                 <Badge variant="secondary">{filteredWebsites.length}</Badge>
               </CardTitle>
             </CardHeader>
@@ -390,7 +392,7 @@ export default function WebAnalyticsPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-10">#</TableHead>
-                      <TableHead>Kategori / Domain</TableHead>
+                      <TableHead>Kategori / Alan Adı</TableHead>
                       <TableHead><div className="flex items-center gap-1"><ArrowUpDown className="h-3 w-3" />Bant Genişliği</div></TableHead>
                       <TableHead>Oturum</TableHead>
                       <TableHead>Gelen Trafik</TableHead>
@@ -426,7 +428,7 @@ export default function WebAnalyticsPage() {
                           </TableCell>
                           <TableCell>
                             {parseInt(w.threat_block || '0', 10) > 0 ? (
-                              <Badge className="bg-red-600 text-white">{formatNumber(w.threat_block)}</Badge>
+                              <Badge variant="destructive">{formatNumber(w.threat_block)}</Badge>
                             ) : (
                               <span className="text-muted-foreground">0</span>
                             )}
@@ -449,7 +451,7 @@ export default function WebAnalyticsPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <ShieldAlert className="h-5 w-5 text-red-500" />
-                Tehdit Skoru Yüksek Top 20 Web Sitesi
+                Tehdit Skoru En Yüksek 20 Web Sitesi
                 <Badge variant="destructive">{topThreatSites.length}</Badge>
               </CardTitle>
             </CardHeader>
@@ -467,7 +469,7 @@ export default function WebAnalyticsPage() {
                     <TableHeader>
                       <TableRow>
                         <TableHead className="w-10">#</TableHead>
-                        <TableHead className="whitespace-nowrap">Kategori / Domain</TableHead>
+                        <TableHead className="whitespace-nowrap">Kategori / Alan Adı</TableHead>
                         <TableHead className="whitespace-nowrap">
                           <div className="flex items-center gap-1 text-red-600 font-semibold">
                             <ShieldAlert className="h-3 w-3" />Tehdit Skoru
@@ -504,7 +506,7 @@ export default function WebAnalyticsPage() {
                             </TableCell>
                             <TableCell className="whitespace-nowrap">
                               {blocked > 0 ? (
-                                <Badge className="bg-red-600 text-white">{blocked.toLocaleString('tr-TR')}</Badge>
+                                <Badge variant="destructive">{blocked.toLocaleString('tr-TR')}</Badge>
                               ) : (
                                 <span className="text-muted-foreground">0</span>
                               )}
@@ -539,7 +541,7 @@ export default function WebAnalyticsPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Monitor className="h-5 w-5" />
-                Top Web Kullanıcıları
+                Öne Çıkan Web Kullanıcıları
                 <Badge variant="secondary">{filteredUsers.length}</Badge>
               </CardTitle>
             </CardHeader>
@@ -602,13 +604,13 @@ export default function WebAnalyticsPage() {
         <TabsContent value="policies" className="space-y-4">
           <div className="relative max-w-md">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input placeholder="Policy ID, interface veya cihaz ara..." value={policySearch} onChange={(e) => setPolicySearch(e.target.value)} className="pl-9" />
+            <Input placeholder="Politika kimliği, arayüz veya cihaz ara…" value={policySearch} onChange={(e) => setPolicySearch(e.target.value)} className="pl-9" />
           </div>
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <FileCheck className="h-5 w-5" />
-                Top Policy Hits
+                En Çok Eşleşen Politikalar
                 <Badge variant="secondary">{filteredPolicies.length}</Badge>
               </CardTitle>
             </CardHeader>
@@ -620,7 +622,7 @@ export default function WebAnalyticsPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-10">#</TableHead>
-                      <TableHead className="whitespace-nowrap">Policy</TableHead>
+                      <TableHead className="whitespace-nowrap">Politika</TableHead>
                       <TableHead className="whitespace-nowrap">Tür</TableHead>
                       <TableHead className="whitespace-nowrap"><div className="flex items-center gap-1"><ArrowUpDown className="h-3 w-3" />Bant Genişliği</div></TableHead>
                       <TableHead className="whitespace-nowrap">Hit Sayısı</TableHead>
@@ -628,8 +630,8 @@ export default function WebAnalyticsPage() {
                       <TableHead className="whitespace-nowrap">Engellenen</TableHead>
                       <TableHead className="whitespace-nowrap">Gelen Trafik</TableHead>
                       <TableHead className="whitespace-nowrap">Giden Trafik</TableHead>
-                      <TableHead className="whitespace-nowrap">Kaynak Int.</TableHead>
-                      <TableHead className="whitespace-nowrap">Hedef Int.</TableHead>
+                      <TableHead className="whitespace-nowrap">Kaynak Arayüz</TableHead>
+                      <TableHead className="whitespace-nowrap">Hedef Arayüz</TableHead>
                       <TableHead className="whitespace-nowrap">Cihaz</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -679,7 +681,7 @@ export default function WebAnalyticsPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Cloud className="h-5 w-5" />
-                Top Cloud Uygulamaları
+                Öne Çıkan Bulut Uygulamaları
                 <Badge variant="secondary">{filteredCloud.length}</Badge>
               </CardTitle>
             </CardHeader>

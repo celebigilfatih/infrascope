@@ -14,8 +14,13 @@
  */
 
 import nodemailer from 'nodemailer';
+import type SMTPPool from 'nodemailer/lib/smtp-pool';
 import { NotificationAttemptStatus } from '@prisma/client';
-import { prisma } from '@/lib/prisma';
+import { prisma as sharedPrisma } from '@/lib/prisma';
+import { alarmExecutionPrisma, verifyAlarmExecution } from '@/lib/alarms/execution-prisma';
+import { assertAlarmExecutionActive } from '@/lib/alarms/execution-context';
+const prisma = alarmExecutionPrisma(sharedPrisma);
+import { unprotectIntegrationConfig } from '@/lib/security/integration-credentials';
 import { createLogger } from '@/lib/logger';
 import { recordNotificationAttempt } from './attempts';
 
@@ -81,7 +86,7 @@ let hourlyResetTime = Date.now() + 60 * 60 * 1000;
 const alarmCooldowns = new Map<string, number>();
 
 // Cached SMTP transporter (connection pooling)
-let cachedTransporter: any = null;
+let cachedTransporter: nodemailer.Transporter<SMTPPool.SentMessageInfo, SMTPPool.Options> | null = null;
 let transporterConfig: string | null = null;
 
 function getSmtpTlsOptions() {
@@ -109,11 +114,12 @@ export async function getEmailConfig(): Promise<EmailConfig> {
     if (config?.config) {
       return {
         enabled: config.enabled,
-        ...(config.config as unknown as Omit<EmailConfig, 'enabled'>),
+        ...unprotectIntegrationConfig<Omit<EmailConfig, 'enabled'>>(config.config, 'SMTP'),
       };
     }
-  } catch (error) {
-    log.error({ err: error }, 'Failed to load email config from DB');
+  } catch {
+    log.error('Failed to resolve saved SMTP configuration');
+    throw new Error('Saved SMTP configuration could not be loaded or decrypted');
   }
   return EMPTY_EMAIL_CONFIG;
 }
@@ -131,7 +137,7 @@ function getEmailConfigError(config: EmailConfig, options?: { requireEnabled?: b
 /**
  * Get or create SMTP transporter (connection pooling)
  */
-async function getTransporter(): Promise<any> {
+async function getTransporter(): Promise<nodemailer.Transporter<SMTPPool.SentMessageInfo, SMTPPool.Options>> {
   const config = await getEmailConfig();
   const configError = getEmailConfigError(config, { requireEnabled: true });
   if (configError) throw new Error(configError);
@@ -435,11 +441,30 @@ function buildAlarmEmailHtml(data: AlarmEmailData): string {
  * - SMTP error (logged)
  */
 export async function sendAlarmEmail(data: AlarmEmailData, options?: { bypassCooldown?: boolean; skipDLQ?: boolean; attempt?: number }): Promise<boolean> {
+  assertAlarmExecutionActive();
   const startTime = Date.now();
   const bypassCooldown = options?.bypassCooldown ?? false;
   const skipDLQ = options?.skipDLQ ?? false;
   const cooldownKey = data.incidentId ?? data.alarmEventId ?? data.alarmCode;
-  const config = await getEmailConfig();
+  let config: EmailConfig;
+  try {
+    config = await getEmailConfig();
+    assertAlarmExecutionActive();
+  } catch {
+    const error = 'Saved SMTP configuration could not be loaded or decrypted';
+    await recordNotificationAttempt({
+      alarmEventId: data.alarmEventId, incidentId: data.incidentId, channel: 'email',
+      status: NotificationAttemptStatus.FAILED_RETRYABLE, attempt: options?.attempt, error,
+    });
+    if (!skipDLQ && data.alarmEventId) {
+      try {
+        const { addToDLQ } = await import('./dlq-worker');
+        await addToDLQ(data.alarmEventId, data, error);
+      } catch { log.error('Failed to queue email after SMTP configuration failure'); }
+    }
+    return false;
+  }
+
   const configError = getEmailConfigError(config, { requireEnabled: true });
   if (configError) {
     await recordNotificationAttempt({
@@ -490,6 +515,8 @@ export async function sendAlarmEmail(data: AlarmEmailData, options?: { bypassCoo
     const subject = `[${getSeverityLabel(data.severity)}] ${data.alarmName}`;
     const html = buildAlarmEmailHtml(data);
     
+    await verifyAlarmExecution(sharedPrisma);
+    assertAlarmExecutionActive();
     const info = await transporter.sendMail({
       from: `"InfraScope Alerts" <${config.smtpUser}>`,
       to: config.recipients.join(', '),
@@ -497,6 +524,7 @@ export async function sendAlarmEmail(data: AlarmEmailData, options?: { bypassCoo
       html,
     });
     
+    assertAlarmExecutionActive();
     // Record successful send
     recordAlarmSent(cooldownKey);
 

@@ -1,5 +1,10 @@
 'use client';
 
+import { uiError } from '@/lib/i18n/tr';
+
+import { ActionIcon } from '@/components/ui/action-icon';
+import { PageHeading } from '@/components/ui/page-heading';
+import { IncidentSeverityBadge } from '@/components/dashboard/IncidentVisuals';
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -51,26 +56,18 @@ interface AlarmCatalogStatus {
   synchronized: boolean;
 }
 
-const SEVERITY_MAP: Record<string, { label: string; color: string }> = {
-  ALARM_CRITICAL: { label: 'Kritik', color: 'bg-red-600' },
-  ALARM_HIGH: { label: 'Yuksek', color: 'bg-orange-500' },
-  ALARM_MEDIUM: { label: 'Orta', color: 'bg-yellow-500' },
-  ALARM_LOW: { label: 'Dusuk', color: 'bg-blue-500' },
-  ALARM_INFO: { label: 'Bilgi', color: 'bg-gray-400' },
-};
-
 const CATEGORY_MAP: Record<string, string> = {
-  CONFIG_ACCESS: 'Config & Access',
-  SECURITY: 'Security',
-  RISK_ANOMALY: 'Risk & Anomaly',
-  OPERATIONAL: 'Operational',
-  SOC_CORRELATION: 'SOC Correlation',
+  CONFIG_ACCESS: "Yapılandırma ve Erişim",
+  SECURITY: "Güvenlik",
+  RISK_ANOMALY: "Risk ve Anomali",
+  OPERATIONAL: "Operasyonel",
+  SOC_CORRELATION: "SOC İlişkilendirmesi",
 };
 
 export default function AlertSettingsPage() {
   const [definitions, setDefinitions] = useState<AlarmDef[]>([]);
   const [catalogStatus, setCatalogStatus] = useState<AlarmCatalogStatus | null>(null);
-  const [notifConfig, setNotifConfig] = useState<NotifConfig | null>(null);
+  const [, setNotifConfig] = useState<NotifConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [testingEmail, setTestingEmail] = useState(false);
   const [savingConfig, setSavingConfig] = useState(false);
@@ -167,12 +164,12 @@ export default function AlertSettingsPage() {
       });
       const data = await res.json();
       if (data.success) {
-        setMessage({ text: 'Email yapilandirmasi kaydedildi', type: 'success' });
+        setMessage({ text: "E-posta yapılandırması kaydedildi", type: 'success' });
         fetchData();
       } else {
         setMessage({ text: data.error || 'Kaydetme hatasi', type: 'error' });
       }
-    } catch (err) {
+    } catch {
       setMessage({ text: 'Kaydetme hatasi', type: 'error' });
     } finally {
       setSavingConfig(false);
@@ -181,7 +178,7 @@ export default function AlertSettingsPage() {
 
   const sendTestEmail = async () => {
     if (!emailEnabled) {
-      setMessage({ text: 'Email bildirimleri pasif. Test emaili icin once bildirimleri aktif edin.', type: 'error' });
+      setMessage({ text: "E-posta bildirimleri kapalı. Test e-postası için önce bildirimleri etkinleştirin.", type: 'error' });
       return;
     }
     setTestingEmail(true);
@@ -193,7 +190,7 @@ export default function AlertSettingsPage() {
       } else {
         setMessage({ text: `Test email hatasi: ${data.error}`, type: 'error' });
       }
-    } catch (err) {
+    } catch {
       setMessage({ text: 'Test email hatasi', type: 'error' });
     } finally {
       setTestingEmail(false);
@@ -223,13 +220,12 @@ export default function AlertSettingsPage() {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Alarm Yapilandirmasi</h1>
-          <p className="text-muted-foreground">Alarm tanimlari, bildirim kanallari ve yapilandirma</p>
+          <PageHeading section="alerts" description={<>Alarm tanımları, bildirim kanalları ve yapılandırma</>}>Alarm Yapılandırması</PageHeading>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={fetchData} disabled={loading}>
+          <Button variant="outline" size="icon" onClick={fetchData} disabled={loading} aria-label="Yenile">
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </Button>
         </div>
@@ -238,8 +234,8 @@ export default function AlertSettingsPage() {
       {message && (
         <div className={`p-3 rounded-lg flex items-center gap-2 text-sm ${message.type === 'success' ? 'bg-green-500/10 text-green-600' : 'bg-red-500/10 text-red-600'}`}>
           {message.type === 'success' ? <CheckCircle className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
-          {message.text}
-          <Button variant="ghost" size="sm" className="ml-auto h-6" onClick={() => setMessage(null)}>Kapat</Button>
+          {uiError(message.text)}
+          <Button variant="ghost" size="sm" className="ml-auto h-6" onClick={() => setMessage(null)}><ActionIcon action="cancel" />Kapat</Button>
         </div>
       )}
 
@@ -247,11 +243,11 @@ export default function AlertSettingsPage() {
         <TabsList>
           <TabsTrigger value="definitions">
             <Shield className="h-4 w-4 mr-2" />
-            Alarm Tanimlari ({definitions.length})
+            Alarm Tanımları ({definitions.length})
           </TabsTrigger>
           <TabsTrigger value="email">
             <Mail className="h-4 w-4 mr-2" />
-            Email Yapilandirmasi
+            E-posta Yapılandırması
           </TabsTrigger>
         </TabsList>
 
@@ -277,7 +273,7 @@ export default function AlertSettingsPage() {
             <Card>
               <CardContent className="p-12 text-center">
                 <Bell className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-                <h3 className="text-lg font-medium mb-2">Alarm Tanimi Bulunamadi</h3>
+                <h3 className="text-lg font-medium mb-2">Alarm Tanımı Bulunamadı</h3>
                 <p className="text-muted-foreground">Alarm katalogu uygulama baslangicinda otomatik hazirlanir. Sunucu loglarini kontrol edin.</p>
               </CardContent>
             </Card>
@@ -299,22 +295,21 @@ export default function AlertSettingsPage() {
                           <TableHead className="whitespace-nowrap">Aktif</TableHead>
                           <TableHead className="whitespace-nowrap">Seviye</TableHead>
                           <TableHead className="whitespace-nowrap">Kod</TableHead>
-                          <TableHead className="whitespace-nowrap">Alarm Adi</TableHead>
-                          <TableHead className="whitespace-nowrap">Cooldown</TableHead>
-                          <TableHead className="whitespace-nowrap">Email</TableHead>
+                          <TableHead className="whitespace-nowrap">Alarm Adı</TableHead>
+                          <TableHead className="whitespace-nowrap">Bekleme Süresi</TableHead>
+                          <TableHead className="whitespace-nowrap">E-posta</TableHead>
                           <TableHead className="whitespace-nowrap text-right">Olaylar</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {groupedDefs[cat].map((d: AlarmDef) => {
-                          const sev = SEVERITY_MAP[d.severity] || { label: d.severity, color: 'bg-gray-400' };
                           return (
                             <TableRow key={d.id} className={!d.enabled ? 'opacity-50' : ''}>
                               <TableCell>
                                 <Switch checked={d.enabled} onCheckedChange={(v) => toggleAlarm(d.id, v)} />
                               </TableCell>
                               <TableCell>
-                                <Badge className={`${sev.color} text-white text-xs`}>{sev.label}</Badge>
+                                <IncidentSeverityBadge value={d.severity} />
                               </TableCell>
                               <TableCell className="font-mono text-xs">{d.code}</TableCell>
                               <TableCell>
@@ -347,20 +342,20 @@ export default function AlertSettingsPage() {
               <div className="flex items-center justify-between gap-3">
                 <CardTitle className="flex items-center gap-2">
                   <Settings className="h-5 w-5" />
-                  SMTP Yapilandirmasi
+                  SMTP Yapılandırması
                 </CardTitle>
                 <Badge variant={emailEnabled && emailConfigured ? 'success' : emailEnabled ? 'warning' : 'secondary'}>
                   {emailEnabled ? (emailConfigured ? 'Aktif' : 'Eksik ayar') : 'Pasif'}
                 </Badge>
               </div>
-              <CardDescription>Email bildirim sunucu ayarlari</CardDescription>
+              <CardDescription>E-posta bildirim sunucusu ayarları</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-4 py-3">
                 <div>
-                  <Label className="font-semibold">Email bildirimleri</Label>
+                  <Label className="font-semibold">E-posta bildirimleri</Label>
                   <p className="text-xs text-muted-foreground">
-                    Aktif oldugunda notifyEmail acik alarm tanimlari SMTP ile email gonderir.
+                    Etkinleştirildiğinde, e-posta bildirimi açık olan alarm tanımları SMTP üzerinden e-posta gönderir.
                   </p>
                 </div>
                 <Switch checked={emailEnabled} onCheckedChange={setEmailEnabled} />
@@ -368,7 +363,7 @@ export default function AlertSettingsPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>SMTP Sunucu</Label>
+                  <Label>SMTP Sunucusu</Label>
                   <Input value={smtpHost} onChange={(e) => setSmtpHost(e.target.value)} placeholder="mail.example.com" />
                 </div>
                 <div className="space-y-2">
@@ -376,11 +371,11 @@ export default function AlertSettingsPage() {
                   <Input value={smtpPort} onChange={(e) => setSmtpPort(e.target.value)} placeholder="587" />
                 </div>
                 <div className="space-y-2">
-                  <Label>Kullanici Adi</Label>
+                  <Label>Kullanıcı Adı</Label>
                   <Input value={smtpUser} onChange={(e) => setSmtpUser(e.target.value)} placeholder="alert@example.com" />
                 </div>
                 <div className="space-y-2">
-                  <Label>Sifre</Label>
+                  <Label>Parola</Label>
                   <Input type="password" value={smtpPass} onChange={(e) => setSmtpPass(e.target.value)} placeholder="********" />
                 </div>
               </div>
@@ -388,7 +383,7 @@ export default function AlertSettingsPage() {
                 <div>
                   <Label className="font-semibold">TLS / SSL</Label>
                   <p className="text-xs text-muted-foreground">
-                    465 gibi implicit TLS portlari icin acin; 587 STARTTLS icin genelde kapali kalir.
+                    465 gibi doğrudan TLS kullanılan portlarda etkinleştirin; 587 STARTTLS için genellikle kapalı bırakılır.
                   </p>
                 </div>
                 <Switch checked={smtpSecure} onCheckedChange={setSmtpSecure} />
@@ -396,7 +391,7 @@ export default function AlertSettingsPage() {
               <div className="space-y-3">
                 <Label className="flex items-center gap-2">
                   <Users className="h-4 w-4" />
-                  Alicilar ({recipientList.length})
+                  Alıcılar ({recipientList.length})
                 </Label>
                 {recipientList.length > 0 && (
                   <div className="flex flex-wrap gap-2">
@@ -428,7 +423,7 @@ export default function AlertSettingsPage() {
                         }
                       }
                     }}
-                    placeholder="ornek@domain.com yazin, Enter ile ekleyin"
+                    placeholder="ornek@domain.com yazın, Enter ile ekleyin"
                   />
                   <Button
                     variant="outline"
@@ -440,12 +435,12 @@ export default function AlertSettingsPage() {
                         setNewRecipient('');
                       }
                     }}
-                  >
+                   aria-label="Yeni kayıt ekle">
                     <Plus className="h-4 w-4" />
                   </Button>
                 </div>
                 {recipientList.length === 0 && (
-                  <p className="text-xs text-muted-foreground">Henuz alici eklenmedi. Email adresi yazip Enter&#39;a basin.</p>
+                  <p className="text-xs text-muted-foreground">Henüz alıcı eklenmedi. E-posta adresini yazıp Enter tuşuna basın.</p>
                 )}
               </div>
               <div className="flex items-center gap-3 pt-2">
@@ -455,12 +450,12 @@ export default function AlertSettingsPage() {
                 </Button>
                 <Button variant="outline" onClick={sendTestEmail} disabled={testingEmail || !emailEnabled || !emailConfigured}>
                   {testingEmail ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
-                  Test Email Gonder
+                  Test E-postası Gönder
                 </Button>
               </div>
               {(!emailEnabled || !emailConfigured) && (
                 <p className="text-xs text-muted-foreground">
-                  Test email icin ayarlari kaydedin ve email bildirimlerini aktif hale getirin.
+                  Test e-postası için ayarları kaydedin ve e-posta bildirimlerini etkinleştirin.
                 </p>
               )}
             </CardContent>

@@ -1,0 +1,67 @@
+.page { min-width: 0; }
+.header { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 1.25rem; padding-bottom: 1.5rem; border-bottom: 1px solid oklch(var(--border)); }
+.headerActions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.serviceBar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: .75rem; }
+.stats { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 1rem; }
+.stat { min-width: 0; border: 1px solid oklch(var(--border)); border-radius: .75rem; background: oklch(var(--card)); padding: 1rem 1.125rem; }
+.statIcon,.fileIcon,.emptyIcon { display: grid; place-items: center; flex-shrink: 0; color: oklch(var(--primary)); background: oklch(var(--primary) / .08); border-radius: .625rem; }
+.statIcon { width: 2rem; height: 2rem; }
+.statIcon svg { width: 1rem; height: 1rem; }
+.fileIcon { width: 2.125rem; height: 2.125rem; }
+.tabs { background: transparent; padding: 0; border-radius: 0; border-bottom: 1px solid oklch(var(--border)); width: 100%; gap: 1.25rem; overflow: visible; }
+.tabs > button { border-radius: 0; padding: .75rem .25rem; border-bottom: 2px solid transparent; margin-bottom: -1px; font-size: .8125rem; }
+.tabs > button[data-state=active] { box-shadow: none; background: transparent; color: oklch(var(--primary)); border-bottom-color: oklch(var(--primary)); }
+.collection { min-width: 0; container-type: inline-size; overflow: hidden; border: 1px solid oklch(var(--border)); border-radius: .75rem; background: oklch(var(--card)); }
+.collectionHeader { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; padding: 1.25rem; border-bottom: 1px solid oklch(var(--border)); }
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: .625rem; padding: 1rem 1.25rem; border-bottom: 1px solid oklch(var(--border)); }
+.search { position: relative; min-width: 0; flex: 1 1 16rem; }
+.select { min-width: 0; width: 100%; height: 2.5rem; padding: 0 .75rem; border: 1px solid oklch(var(--input)); border-radius: .375rem; background: oklch(var(--background)); color: oklch(var(--foreground)); font-size: .8125rem; }
+.select:focus-visible { outline: 2px solid oklch(var(--ring)); outline-offset: 2px; }
+.select:disabled { opacity: .5; cursor: not-allowed; }
+.select option { color: oklch(var(--foreground)); background: oklch(var(--background)); }
+.filterSelect { flex: 1 1 11rem; width: 11rem; max-width: 16rem; }
+.filterBar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem; padding: .5rem 1.25rem; background: oklch(var(--muted) / .2); border-bottom: 1px solid oklch(var(--border)); overflow-wrap: anywhere; }
+.tableWrap { display: none; overflow-x: auto; }
+.table { width: 100%; table-layout: fixed; border-collapse: collapse; text-align: left; font-size: .8125rem; }
+.table th { padding: .875rem 1rem; font-size: .6875rem; font-weight: 500; color: oklch(var(--muted-foreground)); background: oklch(var(--muted) / .3); border-bottom: 1px solid oklch(var(--border)); }
+.table th:first-child { width: 37%; }
+.table th:last-child { width: 150px; }
+.table td { padding: 1rem; vertical-align: middle; border-bottom: 1px solid oklch(var(--border) / .65); overflow-wrap: anywhere; }
+.table tr:last-child td { border-bottom: 0; }
+.table tbody tr:hover { background: oklch(var(--muted) / .2); }
+.fileName { margin-top: .375rem; font-family: monospace; font-size: .6875rem; color: oklch(var(--muted-foreground)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mobileList { display: grid; grid-template-columns: minmax(0,1fr); gap: .875rem; padding: 1rem; background: oklch(var(--muted) / .15); }
+.record { min-width: 0; border: 1px solid oklch(var(--border)); border-radius: .625rem; background: oklch(var(--card)); padding: 1rem; }
+.record .fileName { white-space: normal; overflow-wrap: anywhere; overflow: visible; text-overflow: clip; }
+.pagination { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 1.25rem; border-top: 1px solid oklch(var(--border)); }
+.policyGrid { display: grid; align-items: start; gap: 1.5rem; }
+.policySummary { min-width: 0; padding: 1.25rem; border: 1px solid oklch(var(--border)); border-radius: .625rem; background: oklch(var(--muted) / .2); }
+.message,.notice { display: flex; align-items: flex-start; gap: .625rem; border: 1px solid; border-radius: .625rem; padding: .875rem 1rem; }
+.notice { align-items: center; border-color: oklch(var(--primary) / .2); background: oklch(var(--primary) / .04); }
+.empty { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 18rem; padding: 2rem 1.25rem; text-align: center; }
+.emptyIcon { width: 3.25rem; height: 3.25rem; margin-bottom: 1rem; border-radius: .875rem; }
+.emptyIcon svg { width: 1.5rem; height: 1.5rem; }
+.page input[aria-invalid=true] { border-color: oklch(var(--destructive)); }
+@container (min-width: 600px) { .mobileList { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@container (min-width: 880px) { .tableWrap { display: block; } .mobileList { display: none; } }
+@media (min-width: 1200px) { .policyGrid { grid-template-columns: minmax(0,1fr) 290px; } }
+@media (max-width: 1023px) { .stats { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media (max-width: 639px) {
+  .headerActions { width: 100%; }
+  .headerActions > :last-child { flex: 1; }
+  .stats { gap: .625rem; }
+  .stat { padding: .875rem; }
+  .stat > p:last-child { display: none; }
+  .statIcon { width: 1.625rem; height: 1.625rem; }
+  .statIcon svg { width: .875rem; height: .875rem; }
+  .tabs { gap: .875rem; }
+  .tabs > button { gap: .375rem; font-size: .75rem; }
+  .collectionHeader { padding: 1rem; }
+  .toolbar { padding: .875rem; }
+  .search { flex-basis: calc(100% - 5rem); }
+  .filterSelect { flex: 1 1 100%; max-width: none; }
+  .mobileList { padding: .875rem; }
+  .pagination { padding: .875rem; }
+  .pagination > p { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) { .page * { animation: none !important; transition: none !important; } }

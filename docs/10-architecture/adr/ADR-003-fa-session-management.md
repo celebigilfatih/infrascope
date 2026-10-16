@@ -4,6 +4,8 @@
 **Date:** 2026-02-17
 **Supersedes:** — (no prior ADR)
 
+**2026-10-15 refinement:** [ADR-012](ADR-012-fortianalyzer-credential-session-ownership.md) replaces the host-only ownership described below with credential-owned sessions and account-owned backoff. It also defines a centralized, transient connection-test exception to singleton reuse. The original incident evidence and code examples below are historical.
+
 ## Context
 
 The FortiAnalyzer integration (`lib/integrations/fortianalyzer.ts`) suffered from **permanent

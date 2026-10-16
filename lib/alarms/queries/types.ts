@@ -10,6 +10,17 @@
 
 import type { EventCacheService } from '../event-cache';
 import type FortiAnalyzerService from '@/lib/integrations/fortianalyzer';
+import type { FortiGateService } from '@/lib/integrations/fortigate';
+import type { AlarmDetectionEngine } from '@/lib/alarms/detection-engine';
+
+/** Shape of the legacy diagnostic singleton; declaring it does not initialize or select a source. */
+export type LegacyAlarmGlobal = typeof globalThis & {
+  __detectionEngine?: Pick<AlarmDetectionEngine, 'getSuppressionEngine' | 'getSuppressionStats'> & {
+    fortiGateService?: Pick<FortiGateService, 'getCmdbSnapshot' | 'getCmdbChanges' | 'getEventLogs'> & {
+      config?: { host?: string };
+    };
+  };
+};
 
 // ─── Context ─────────────────────────────────────────────────────────────────
 
@@ -27,7 +38,7 @@ export interface AlarmQueryContext {
   /** Shared event cache singleton. May be null if cache failed to initialize. */
   eventCache: EventCacheService | null;
 
-  /** Whether the cache is considered fresh (last sync < 8 minutes ago) */
+  /** Whether this logtype synced successfully within 8 minutes, including targeted searches. */
   cacheIsFresh: boolean;
 
   /** Live FortiAnalyzer service for fallback queries */
@@ -58,7 +69,7 @@ export interface QueryStats {
   queryDescription?: string;
 }
 
-/** Return type for every alarm query function */
+/** Successful query result. Source/storage failures reject instead of returning empty events. */
 export interface QueryResult {
   events: Array<Record<string, unknown>>;
   stats: QueryStats;

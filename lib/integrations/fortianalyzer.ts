@@ -1,20 +1,22 @@
 import { createLogger } from '@/lib/logger';
 import { secureFetch } from '@/lib/security/tls';
 import { createHash } from 'node:crypto';
+import { SourceQueryError, throwIfSourceCancelled, withSourceDeadline } from './source-query-error';
+import { FA_PROFILE_VERSION, normalizeFortiAnalyzerProfile, type FortiAnalyzerProfileInput } from './fortianalyzer-profile';
 
 const log = createLogger('fortianalyzer');
+
+interface MitreRpcResult {
+  status?: { code: number; message?: string };
+  [index: number]: { status?: { code: number; message?: string } };
+  [field: string]: unknown;
+}
 
 function fetchWithAgent(url: string, options: RequestInit) {
   return secureFetch('FORTIANALYZER', url, options);
 }
 
-interface FortiAnalyzerConfig {
-  host: string;
-  accessToken?: string;
-  username?: string;
-  password?: string;
-  pollingInterval?: number;
-}
+type FortiAnalyzerConfig = FortiAnalyzerProfileInput;
 
 /**
  * Retry configuration for API calls
@@ -73,70 +75,87 @@ async function withRetry<T>(
   throw lastError;
 }
 
-interface EventLog {
-  id: string;
-  eventtime: number;
-  logid: string;
-  type: string;
-  subtype: string;
-  action: string;
-  level: string;
-  vdom: string;
-  eventtype: string;
-  user: string;
-  srcip: string;
-  dstip: string;
-  srcport: number;
-  dstport: number;
-  proto: number;
-  devtype: string;
-  devname: string;
-  policyid: number;
-  policytype: string;
-  service: string;
-  direction: string;
-  srccountry: string;
-  dstcountry: string;
-  app: string;
-  appcat: string;
-  apprisk: string;
-  appact: string;
-  bytes: number;
-  packetcount: number;
-  duration: number;
-  msg: string;
-}
 
-// ── Global FA login state ────────────────────────────────────────────────────
-// Shared across ALL module instances (hot reloads, code splitting).
-// Keyed by host so multiple FA instances are supported.
-interface FAGlobalLoginState {
+
+// Credential-owned sessions and account-owned throttling survive module reloads.
+interface FASessionState {
   session: string | null;
   lastLoginTime: number;
   isConnecting: boolean;
   connectionQueue: Array<(session: string | null) => void>;
+}
+interface FAAccountState {
   consecutiveFailures: number;
-  backoffUntil: number; // epoch ms — login suppressed until this time
-  isAccountLocked: boolean; // true when FA returned code=-22 (too many failed logins)
-  lastFailureAt: number;  // epoch ms of last login failure
+  backoffUntil: number;
+  isAccountLocked: boolean;
+  lastFailureAt: number;
+  isConnecting: boolean;
+  connectionQueue: Array<() => void>;
 }
 
-function getGlobalLoginState(host: string): FAGlobalLoginState {
-  const g = globalThis as any;
-  if (!g._fazGlobalState) g._fazGlobalState = {};
-  if (!g._fazGlobalState[host]) {
-    g._fazGlobalState[host] = {
-      session: null,
-      lastLoginTime: 0,
-      isConnecting: false,
-      connectionQueue: [],
-      consecutiveFailures: 0,
-      backoffUntil: 0,
-      isAccountLocked: false,
-      lastFailureAt: 0,
-    };
-  }
-  return g._fazGlobalState[host];
+function authFingerprint(config: FortiAnalyzerConfig): string {
+  return createHash('sha256').update(JSON.stringify({
+    host: config.host.trim().toLowerCase(), username: config.username || '',
+    password: config.password || '', accessToken: config.accessToken || '',
+  })).digest('hex');
+}
+
+function authStore() {
+  const g = globalThis as typeof globalThis & { _fazAuthStateV2?: {
+    sessions: Record<string, FASessionState>; accounts: Record<string, FAAccountState>;
+  } };
+  // Never adopt legacy host-only sessions whose credential ownership is unknown.
+  return g._fazAuthStateV2 ??= { sessions: {}, accounts: {} };
+}
+
+function newSessionState(): FASessionState {
+  return { session: null, lastLoginTime: 0, isConnecting: false, connectionQueue: [] };
+}
+
+function accountState(config: Pick<FortiAnalyzerConfig, 'host' | 'username'>): FAAccountState {
+  const key = createHash('sha256').update(JSON.stringify([
+    config.host.trim().toLowerCase(), config.username || '',
+  ])).digest('hex');
+  return authStore().accounts[key] ??= {
+    consecutiveFailures: 0, backoffUntil: 0, isAccountLocked: false, lastFailureAt: 0,
+    isConnecting: false, connectionQueue: [],
+  };
+}
+
+async function acquireAccount(state: FAAccountState): Promise<() => void> {
+  if (state.isConnecting) {
+    await withSourceDeadline(signal => new Promise<void>((resolve, reject) => {
+      const grant = () => { signal.removeEventListener('abort', cancel); resolve(); };
+      const cancel = () => {
+        const index = state.connectionQueue.indexOf(grant);
+        if (index !== -1) state.connectionQueue.splice(index, 1);
+        reject(new SourceQueryError('SOURCE_CANCELLED', 'Login queue wait was cancelled'));
+      };
+      state.connectionQueue.push(grant);
+      signal.addEventListener('abort', cancel, { once: true });
+    }), 60_000);
+  } else state.isConnecting = true;
+  return () => {
+    const next = state.connectionQueue.shift();
+    if (next) next();
+    else state.isConnecting = false;
+  };
+}
+
+/** Explicit saved-configuration recovery must not reset other accounts. */
+export function resetFortiAnalyzerLoginBackoff(config: FortiAnalyzerConfig): void {
+  const profile = normalizeFortiAnalyzerProfile(config);
+  const state = profileAccountState(profile);
+  state.consecutiveFailures = 0;
+  state.backoffUntil = 0;
+  state.isAccountLocked = false;
+  state.lastFailureAt = 0;
+}
+
+function profileAccountState(profile: FortiAnalyzerConfig): FAAccountState {
+  return accountState(profile.accessToken
+    ? { host: profile.host, username: JSON.stringify([authFingerprint(profile), profile.adom]) }
+    : profile);
 }
 
 class FortiAnalyzerService {
@@ -144,16 +163,86 @@ class FortiAnalyzerService {
   private config: FortiAnalyzerConfig;
   private session: string | null = null;
   private lastLoginTime: number = 0;
+  private readonly loginState: FASessionState;
+  private readonly account: FAAccountState;
+  private releaseProbeAccount?: () => void;
+  private keyVerification?: Promise<boolean>;
   private readonly SESSION_TTL_MS = 30 * 60 * 1000; // 30 minutes session TTL
 
-  constructor(config: FortiAnalyzerConfig) {
-    this.config = config;
-    this.baseUrl = `https://${config.host}/jsonrpc`;
-    // If accessToken provided, use directly as session (API key auth - no login needed)
-    if (config.accessToken) {
-      this.session = config.accessToken;
+  constructor(config: FortiAnalyzerConfig, private readonly isolatedSession = false) {
+    this.config = normalizeFortiAnalyzerProfile(config);
+    this.baseUrl = `https://${this.config.host}/jsonrpc`;
+    this.loginState = isolatedSession ? newSessionState()
+      : (authStore().sessions[authFingerprint(this.config)] ??= newSessionState());
+    this.account = profileAccountState(this.config);
+    // Keep the legacy authenticated-state marker; fetchRpc sends only a Bearer header.
+    if (this.config.accessToken) {
+      this.session = this.config.accessToken;
       this.lastLoginTime = Date.now();
     }
+  }
+
+  /** Centralized exception to the singleton: authenticate, then close only this probe. */
+  static async testConnection(config: FortiAnalyzerConfig): Promise<boolean> {
+    const service = new FortiAnalyzerService(config, true);
+    try {
+      return await service.verifyAccess();
+    } catch {
+      return false;
+    } finally {
+      try {
+        await service.logout();
+      } finally {
+        service.releaseProbeAccount?.();
+      }
+    }
+  }
+
+  getLoginHealth() {
+    return {
+      consecutiveFailures: this.account.consecutiveFailures,
+      isAccountLocked: this.account.isAccountLocked,
+      backoffRemainingSec: Math.max(0, Math.round((this.account.backoffUntil - Date.now()) / 1000)),
+      lastFailureAt: this.account.lastFailureAt > 0 ? new Date(this.account.lastFailureAt) : null,
+    };
+  }
+
+  getTarget() { return { host: this.config.host, adom: this.config.adom, authMode: this.config.authMode }; }
+  async verifyAccess(): Promise<boolean> {
+    if (!await this.login()) return false;
+    if (!this.config.accessToken) await this.readAdomDevices(true);
+    return true;
+  }
+  private get adomPath() { return encodeURIComponent(this.config.adom!); }
+
+  /** Keep API keys out of URLs and JSON-RPC sessions on every data endpoint. */
+  private async fetchRpc(options: RequestInit) {
+    const body = JSON.parse(String(options.body)) as Record<string, unknown>;
+    const headers = { ...options.headers as Record<string, string> };
+    if (this.config.accessToken) {
+      headers.Authorization = `Bearer ${this.config.accessToken}`;
+      delete body.session;
+    }
+    const response = await fetchWithAgent(this.baseUrl, { ...options, headers, body: JSON.stringify(body) });
+    if (!response?.ok) throw new SourceQueryError('SOURCE_HTTP_ERROR', 'FortiAnalyzer request failed');
+    return response;
+  }
+
+  private async readAdomDevices(probe = false): Promise<Array<Record<string, unknown>>> {
+    return withSourceDeadline(async signal => {
+      const response = await this.fetchRpc({ method: 'POST', headers: { 'Content-Type': 'application/json' }, signal,
+        body: JSON.stringify({ jsonrpc: '2.0', method: 'get', params: [{ url: `/dvmdb/adom/${this.adomPath}/device`,
+          fields: ['name', 'devid', 'ip', 'platform'], ...(probe ? { range: [0, 0] } : {}) }], session: this.session, id: 20 }) });
+      if (!response.ok) throw new SourceQueryError('SOURCE_HTTP_ERROR', 'FortiAnalyzer ADOM read failed');
+      const data = await response.json() as { error?: unknown; result?: Array<{ status?: { code?: number }; data?: unknown }> };
+      throwIfSourceCancelled(signal);
+      if (data?.error || data?.result?.[0]?.status?.code !== 0) throw new SourceQueryError('SOURCE_REJECTED', 'FortiAnalyzer ADOM read was rejected');
+      const devices = data.result[0].data;
+      if (!Array.isArray(devices) || devices.some(row => !row || typeof row !== 'object' || Array.isArray(row))) {
+        throw new SourceQueryError('SOURCE_INVALID_RESPONSE', 'FortiAnalyzer ADOM read returned invalid data');
+      }
+      return devices;
+    }, 15_000);
   }
 
   /**
@@ -190,7 +279,7 @@ class FortiAnalyzerService {
    */
   private invalidateSession(reason: string): void {
     if (this.config.accessToken) return; // API keys don't expire
-    const state = getGlobalLoginState(this.config.host);
+    const state = this.loginState;
     if (state.session || this.session) {
       log.warn({ reason }, 'Invalidating session');
     }
@@ -207,7 +296,7 @@ class FortiAnalyzerService {
    * drive the account to permanent lockout that only user recreation fixes).
    */
   private async logout(): Promise<void> {
-    const state = getGlobalLoginState(this.config.host);
+    const state = this.loginState;
     const sess = state.session || this.session;
     if (!sess || this.config.accessToken) {
       // No session to close, or API-key auth (stateless)
@@ -215,13 +304,10 @@ class FortiAnalyzerService {
     }
 
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10_000);
-
-      await fetchWithAgent(this.baseUrl, {
+      await withSourceDeadline(signal => this.fetchRpc({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        signal: controller.signal,
+        signal,
         body: JSON.stringify({
           jsonrpc: '2.0',
           method: 'exec',
@@ -229,9 +315,7 @@ class FortiAnalyzerService {
           session: sess,
           id: 99,
         }),
-      } as any).catch(() => null); // best-effort, ignore network errors
-
-      clearTimeout(timeoutId);
+      }), 10_000);
       log.info('Logged out — server-side session released');
     } catch {
       // Best-effort: we're about to replace the session anyway
@@ -252,7 +336,7 @@ class FortiAnalyzerService {
     if (this.config.accessToken) return true; // API keys don't expire
 
     // Sync from global state (covers multi-instance / hot-reload scenarios)
-    const state = getGlobalLoginState(this.config.host);
+    const state = this.loginState;
     if (state.session && (Date.now() - state.lastLoginTime) < this.SESSION_TTL_MS) {
       this.session = state.session;
       this.lastLoginTime = state.lastLoginTime;
@@ -264,165 +348,106 @@ class FortiAnalyzerService {
   }
 
   /**
-   * Login with username/password.
-   *
-   * Uses a globalThis-level mutex so concurrent logins from ANY module instance
-   * (hot reloads, code splitting, EventCache + AlarmEngine startup race) are
-   * serialised into a single network request.
-   *
-   * Exponential backoff is applied after each failure to prevent FA account
-   * lock-out storms (code=-22 from too many consecutive bad logins).
+   * Same-credential clients share one login result. Different credentials never
+   * receive that result; account-level serialization/backoff still prevents storms.
    */
   async login(): Promise<boolean> {
-    // API key auth — no login needed
     if (this.config.accessToken) {
       this.session = this.config.accessToken;
-      return true;
+      if (this.keyVerification) return this.keyVerification;
+      if (Date.now() < this.account.backoffUntil) return false;
+      this.keyVerification = (async () => {
+        try {
+          await this.readAdomDevices(true);
+          this.account.consecutiveFailures = 0; this.account.backoffUntil = 0; this.account.lastFailureAt = 0;
+          return true;
+        } catch {
+          this.account.consecutiveFailures++; this.account.lastFailureAt = Date.now();
+          this.account.backoffUntil = Date.now() + this.calcBackoffMs(this.account.consecutiveFailures);
+          log.warn('API key or selected ADOM could not be verified'); return false;
+        }
+        finally { this.keyVerification = undefined; }
+      })();
+      return this.keyVerification;
     }
-
-    // Return existing valid session (also syncs from global)
     if (this.isSessionValid()) return true;
 
-    const state = getGlobalLoginState(this.config.host);
-
-    // Best-effort logout if we have a stale/cached session on file.
-    // This releases the server-side session so it does not pile up in FA's
-    // admin session table (the primary driver of permanent account lockout).
-    if (state.session) {
-      await this.logout();
-    }
-
-    // ── Backoff guard ────────────────────────────────────────────────────────
-    // Suppress login entirely while backoff window is active.
-    // This prevents the lockout storm where hundreds of failed attempts in quick
-    // succession cause FA to permanently lock the account.
-    if (Date.now() < state.backoffUntil) {
-      const waitSec = Math.round((state.backoffUntil - Date.now()) / 1000);
-      log.warn(
-        { waitSec, consecutiveFailures: state.consecutiveFailures },
-        'Login suppressed — backoff active. Account may be locked on FA; unlock via System → Administrators → infrascope → Unlock'
-      );
-      return false;
-    }
-
-    // ── Global login mutex ───────────────────────────────────────────────────
-    // If another instance is already logging in, wait for its result instead
-    // of firing a second simultaneous login request.
+    const state = this.loginState;
     if (state.isConnecting) {
-      log.info('Waiting for in-progress login from another instance');
-      const sess = await new Promise<string | null>((resolve) =>
-        state.connectionQueue.push(resolve)
-      );
-      if (sess) {
-        this.session = sess;
-        this.lastLoginTime = state.lastLoginTime;
-        return true;
-      }
-      return false;
+      const session = await new Promise<string | null>(resolve => state.connectionQueue.push(resolve));
+      if (!session) return false;
+      this.session = session;
+      this.lastLoginTime = state.lastLoginTime;
+      return true;
     }
-
-    // ── Acquire global lock ──────────────────────────────────────────────────
     state.isConnecting = true;
-
-    const releaseWithSession = (sess: string | null) => {
-      state.isConnecting = false;
-      while (state.connectionQueue.length > 0) {
-        state.connectionQueue.shift()!(sess);
-      }
+    const account = this.account;
+    let releaseAccount: (() => void) | undefined;
+    let loginSucceeded = false;
+    const fail = (code?: number) => {
+      account.consecutiveFailures++;
+      account.backoffUntil = Date.now() + this.calcBackoffMs(account.consecutiveFailures);
+      account.lastFailureAt = Date.now();
+      account.isAccountLocked = code === -22;
+      this.invalidateSession('login-failed');
+      // Provider messages and transport errors can contain authentication secrets.
+      log.warn({ code, consecutiveFailures: account.consecutiveFailures }, 'Login failed');
+      return false;
     };
-
     try {
-      log.info({ username: this.config.username }, 'Logging in');
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 60000);
-
-      const response = await fetchWithAgent(this.baseUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        signal: controller.signal,
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          method: 'exec',
-          params: [{
-            url: '/sys/login/user',
-            data: { user: this.config.username, passwd: this.config.password },
-          }],
-          id: 1,
-        }),
-      } as any).catch((err) => {
-        clearTimeout(timeoutId);
-        log.error({ err }, 'Login request failed');
-        return null;
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response) {
-        state.consecutiveFailures++;
-        const bMs = this.calcBackoffMs(state.consecutiveFailures);
-        state.backoffUntil = Date.now() + bMs;
-        state.session = null;
-        log.error({ consecutiveFailures: state.consecutiveFailures, backoffMin: Math.round(bMs / 60000) }, 'Login request failed');
-        releaseWithSession(null);
+      releaseAccount = await acquireAccount(account);
+      // Recheck after waiting for another credential/probe of this account.
+      if (Date.now() < account.backoffUntil) {
+        log.warn({ waitSec: Math.ceil((account.backoffUntil - Date.now()) / 1000) }, 'Login suppressed by account backoff');
         return false;
       }
+      if (state.session) await this.logout();
+      const result = await withSourceDeadline(async signal => {
+        const response = await this.fetchRpc({
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, signal,
+          body: JSON.stringify({
+            jsonrpc: '2.0', method: 'exec',
+            params: [{ url: '/sys/login/user', data: { user: this.config.username, passwd: this.config.password } }],
+            id: 1,
+          }),
+        });
+        throwIfSourceCancelled(signal);
+        if (!response.ok) throw new Error('FA login HTTP failure');
+        const data = await response.json() as {
+          result?: Array<{ status?: { code?: number } }>; error?: unknown; session?: unknown;
+        } | null;
+        throwIfSourceCancelled(signal);
+        const code = data?.result?.[0]?.status?.code;
+        if (!data || data.error || code !== 0 || typeof data.session !== 'string' || !data.session.trim()) {
+          return { session: null, code };
+        }
+        return { session: data.session, code };
+      }, 60_000);
+      if (!result.session) return fail(result.code);
 
-      const data = await response.json() as {
-        result?: Array<{ status: { code: number; message: string } }>;
-        session?: string;
-      };
-
-      const status = data.result?.[0]?.status;
-
-      if (status?.code === 0 && data.session) {
-        // ── Success ─────────────────────────────────────────────────────────
-        state.session = data.session;
-        state.lastLoginTime = Date.now();
-        state.consecutiveFailures = 0;
-        state.backoffUntil = 0;
-        state.isAccountLocked = false;
-        state.lastFailureAt = 0;
-        this.session = state.session;
-        this.lastLoginTime = state.lastLoginTime;
-        log.info('Login successful — failure counter reset');
-        releaseWithSession(state.session);
-        return true;
+      state.session = result.session;
+      state.lastLoginTime = Date.now();
+      account.consecutiveFailures = 0;
+      account.backoffUntil = 0;
+      account.isAccountLocked = false;
+      account.lastFailureAt = 0;
+      this.session = state.session;
+      this.lastLoginTime = state.lastLoginTime;
+      log.info('Login successful');
+      loginSucceeded = true;
+      return true;
+    } catch {
+      if (!releaseAccount) {
+        log.warn('Login suppressed because the account queue deadline elapsed');
+        return false;
       }
-
-      // ── Failure ──────────────────────────────────────────────────────────
-      state.consecutiveFailures++;
-      const bMs = this.calcBackoffMs(state.consecutiveFailures);
-      state.backoffUntil = Date.now() + bMs;
-      state.session = null;
-      state.lastFailureAt = Date.now();
-      this.session = null;
-      // code=-22 = FA account locked (too many failed logins)
-      if (status?.code === -22) {
-        state.isAccountLocked = true;
-        log.error(
-          { code: -22, backoffMin: Math.round(bMs / 60000) },
-          'Account LOCKED — unlock via FA GUI: System → Administrators → infrascope → Unlock'
-        );
-      } else {
-        state.isAccountLocked = false;
-        log.error(
-          { code: status?.code, message: status?.message, consecutiveFailures: state.consecutiveFailures, backoffMin: Math.round(bMs / 60000) },
-          'Login failed'
-        );
-      }
-      releaseWithSession(null);
-      return false;
-    } catch (error) {
-      state.consecutiveFailures++;
-      const bMs = this.calcBackoffMs(state.consecutiveFailures);
-      state.backoffUntil = Date.now() + bMs;
-      state.session = null;
-      state.lastFailureAt = Date.now();
-      this.session = null;
-      log.error({ err: error, consecutiveFailures: state.consecutiveFailures }, 'Login threw exception');
-      releaseWithSession(null);
-      return false;
+      return fail();
+    } finally {
+      state.isConnecting = false;
+      // A suppressed/failed attempt must not deliver an old session to waiters.
+      while (state.connectionQueue.length > 0) state.connectionQueue.shift()!(loginSucceeded ? state.session : null);
+      if (this.isolatedSession && loginSucceeded) this.releaseProbeAccount = releaseAccount;
+      else releaseAccount?.();
     }
   }
 
@@ -436,7 +461,7 @@ class FortiAnalyzerService {
     }
 
     try {
-      const response = await fetchWithAgent(this.baseUrl, {
+      const response = await this.fetchRpc({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -466,8 +491,8 @@ class FortiAnalyzerService {
         return null;
       }
 
-      if (data.result && data.result[0].status.code === 0) {
-        return data.result[0].data;
+      if (!data.error && innerStatus?.code === 0) {
+        return data.result?.[0]?.data ?? null;
       }
       return null;
     } catch (error) {
@@ -486,7 +511,7 @@ class FortiAnalyzerService {
     }
 
     try {
-      const response = await fetchWithAgent(this.baseUrl, {
+      const response = await this.fetchRpc({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -516,8 +541,8 @@ class FortiAnalyzerService {
         return null;
       }
 
-      if (data.result && data.result[0].status.code === 0) {
-        return data.result[0].data;
+      if (!data.error && innerStatus?.code === 0) {
+        return data.result?.[0]?.data ?? null;
       }
       return null;
     } catch (error) {
@@ -530,6 +555,7 @@ class FortiAnalyzerService {
    * Get config logs directly (alternative to logsearch)
    */
   async getConfigLogs(limit: number = 50): Promise<Array<Record<string, unknown>>> {
+    void limit; // Retain the legacy API contract until config-log collection is implemented.
     if (!this.session) {
       const loggedIn = await this.login();
       if (!loggedIn) return [];
@@ -589,53 +615,8 @@ class FortiAnalyzerService {
    * Get devices from ADOM
    */
   async getDevices(): Promise<Array<Record<string, unknown>>> {
-    if (!this.session) {
-      const loggedIn = await this.login();
-      if (!loggedIn) return [];
-    }
-
-    try {
-      const response = await fetchWithAgent(this.baseUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          method: 'get',
-          params: [{
-            url: '/dvmdb/adom/root/device',
-            fields: ['name', 'devid', 'ip', 'platform'],
-          }],
-          session: this.session,
-          id: 20,
-        }),
-      });
-
-      const data = await response.json() as {
-        result?: Array<{ data: Array<Record<string, unknown>>; status: { code: number; message?: string } }>;
-        error?: { code: number; message: string };
-      };
-
-      // Session expired on FA side — clear cache so the next call re-logs in
-      const outerErr = data.error;
-      const innerStatus = data.result?.[0]?.status;
-      if (outerErr && this.isSessionExpiredError(outerErr.code, outerErr.message)) {
-        this.invalidateSession(`getDevices outer error code=${outerErr.code}`);
-        return [];
-      }
-      if (innerStatus && innerStatus.code !== 0 &&
-          this.isSessionExpiredError(innerStatus.code, innerStatus.message)) {
-        this.invalidateSession(`getDevices status code=${innerStatus.code}`);
-        return [];
-      }
-
-      if (data.result && Array.isArray(data.result)) {
-        return data.result[0]?.data || [];
-      }
-      return [];
-    } catch (error) {
-      log.error({ err: error }, 'Failed to get devices');
-      return [];
-    }
+    if (!this.session && !await this.login()) throw new SourceQueryError('SOURCE_AUTH_FAILED', 'FortiAnalyzer authentication failed');
+    return this.readAdomDevices();
   }
 
   /**
@@ -645,177 +626,186 @@ class FortiAnalyzerService {
     logtype: string = 'event',
     limit: number = 20,
     filter?: string,
-    options: { deviceId?: string } = {}
+    options: { deviceId?: string; signal?: AbortSignal } = {}
   ): Promise<number | null> {
-    if (!this.session) {
-      const loggedIn = await this.login();
-      if (!loggedIn) return null;
-    }
-
-    // Use retry mechanism for transient failures
-    return withRetry(async () => {
-      // Calculate time range: last 30 days, with +24h buffer on end to handle timezone diffs (UTC vs local)
-      const now = new Date();
-      const end = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-      const start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-
-      const formatDate = (d: Date) => {
-        return d.toISOString().slice(0, 19).replace('T', ' ');
-      };
-
-      // Device filter can be configured via environment variable
-      // Use 'All_FortiGate' for all devices or specific device serial like 'FG4H0FT922903115'
-      const deviceFilter = options.deviceId || process.env.FA_DEVICE_FILTER || 'All_FortiGate';
-
-      const params: Record<string, unknown> = {
-        url: '/logview/adom/root/logsearch',
-        apiver: 3,
-        device: [{ devid: deviceFilter }],
-        logtype: logtype,
-        'time-order': 'desc',
-        'time-range': {
-          start: formatDate(start),
-          end: formatDate(end),
-        },
-        limit: limit,
-      };
-
-      if (filter) {
-        params.filter = filter;
+    return withSourceDeadline(async signal => {
+      if (!this.session) {
+        const loggedIn = await this.login();
+        if (!loggedIn) throw new SourceQueryError('SOURCE_AUTH_FAILED', 'FortiAnalyzer authentication failed');
       }
 
-      // Add timeout for fetch request
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 90000); // 90s timeout (increased for large datasets)
+      // Use retry mechanism for transient failures
+      return withRetry(async () => {
+        throwIfSourceCancelled(signal);
+        // Calculate time range: last 30 days, with +24h buffer on end to handle timezone diffs (UTC vs local)
+        const now = new Date();
+        const end = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+        const start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-      try {
-        const response = await fetchWithAgent(this.baseUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            jsonrpc: '2.0',
-            method: 'add',
-            params: [params],
-            session: this.session,
-            id: 10,
-          }),
-          signal: controller.signal,
-        });
-
-        clearTimeout(timeoutId);
-
-        if (!response) {
-          throw new Error('No response from FortiAnalyzer');
-        }
-
-        const data = await response.json() as {
-          result?: { tid: number; status?: { code: number; message?: string } };
-          error?: { code: number; message: string };
+        const formatDate = (d: Date) => {
+          return d.toISOString().slice(0, 19).replace('T', ' ');
         };
 
-        // Session expired on FA side — clear cache so the next call re-logs in
-        if (data.error && this.isSessionExpiredError(data.error.code, data.error.message)) {
-          this.invalidateSession(`startLogSearch outer error code=${data.error.code}`);
-          return null;
-        }
-        const innerStatus = data.result?.status;
-        if (innerStatus && innerStatus.code !== 0 &&
-            this.isSessionExpiredError(innerStatus.code, innerStatus.message)) {
-          this.invalidateSession(`startLogSearch status code=${innerStatus.code}`);
-          return null;
+        // Device filter can be configured via environment variable
+        // Use 'All_FortiGate' for all devices or specific device serial like 'FG4H0FT922903115'
+        const deviceFilter = options.deviceId || process.env.FA_DEVICE_FILTER || 'All_FortiGate';
+
+        const params: Record<string, unknown> = {
+          url: `/logview/adom/${this.adomPath}/logsearch`,
+          apiver: 3,
+          device: [{ devid: deviceFilter }],
+          logtype: logtype,
+          'time-order': 'desc',
+          'time-range': {
+            start: formatDate(start),
+            end: formatDate(end),
+          },
+          limit: limit,
+        };
+
+        if (filter) {
+          params.filter = filter;
         }
 
-        if (data.error) {
-          throw new Error(`Log search error: ${data.error.message}`);
-        }
+        try {
+          const response = await this.fetchRpc({
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              jsonrpc: '2.0',
+              method: 'add',
+              params: [params],
+              session: this.session,
+              id: 10,
+            }),
+            signal,
+          });
+          if (!response?.ok) {
+            throw new SourceQueryError('SOURCE_HTTP_ERROR', `FortiAnalyzer log search HTTP status ${response?.status ?? 'unavailable'}`);
+          }
 
-        return data.result?.tid || null;
-      } catch (err) {
-        clearTimeout(timeoutId);
-        throw err; // Re-throw for retry mechanism
-      }
-    }, { maxRetries: 3, baseDelay: 2000 });
+          const data = await response.json() as {
+            result?: { tid: number; status?: { code: number; message?: string } };
+            error?: { code: number; message: string };
+          };
+          if (!data || typeof data !== 'object') {
+            throw new SourceQueryError('SOURCE_INVALID_RESPONSE', 'FortiAnalyzer returned an invalid search response');
+          }
+
+          // Session expired on FA side — clear cache so the next call re-logs in
+          if (data.error && this.isSessionExpiredError(data.error.code, data.error.message)) {
+            this.invalidateSession(`startLogSearch outer error code=${data.error.code}`);
+            throw new SourceQueryError('SOURCE_SESSION_EXPIRED', 'FortiAnalyzer session expired');
+          }
+          const innerStatus = data.result?.status;
+          if (innerStatus && innerStatus.code !== 0 &&
+              this.isSessionExpiredError(innerStatus.code, innerStatus.message)) {
+            this.invalidateSession(`startLogSearch status code=${innerStatus.code}`);
+            throw new SourceQueryError('SOURCE_SESSION_EXPIRED', 'FortiAnalyzer session expired');
+          }
+
+          if (data.error || (innerStatus && innerStatus.code !== 0)) {
+            throw new SourceQueryError('SOURCE_REJECTED', 'FortiAnalyzer rejected the log search');
+          }
+
+          const tid = data.result?.tid;
+          if (!Number.isInteger(tid) || !tid || tid < 0) {
+            throw new SourceQueryError('SEARCH_NOT_STARTED', 'FortiAnalyzer did not return a valid search task');
+          }
+          return tid;
+        } catch (err) {
+          throwIfSourceCancelled(signal);
+          throw err; // Re-throw for retry mechanism
+        }
+      }, { maxRetries: 3, baseDelay: 2000 });
+    }, 90_000, options.signal);
   }
 
   /**
    * Fetch log search results by task ID
    */
-  async fetchLogResults(tid: number, offset: number = 0, limit: number = 20): Promise<Array<Record<string, unknown>> | null> {
-    if (!this.session) {
-      const loggedIn = await this.login();
-      if (!loggedIn) return null;
-    }
+  async fetchLogResults(
+    tid: number, offset: number = 0, limit: number = 20,
+    options: { requireComplete?: boolean; signal?: AbortSignal } = {},
+  ): Promise<Array<Record<string, unknown>> | null> {
+    return withSourceDeadline(async signal => {
+      if (!this.session) {
+        const loggedIn = await this.login();
+        if (!loggedIn) throw new SourceQueryError('SOURCE_AUTH_FAILED', 'FortiAnalyzer authentication failed');
+      }
 
-    // Use retry mechanism for transient failures
-    return withRetry(async () => {
-      // Add AbortController timeout to prevent hanging fetch (was causing isCheckRunning to stay stuck)
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 120000); // 120s timeout (increased for complex queries)
+      // Use retry mechanism for transient failures
+      return withRetry(async () => {
+        throwIfSourceCancelled(signal);
+        try {
+          const response = await this.fetchRpc({
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            signal,
+            body: JSON.stringify({
+              jsonrpc: '2.0',
+              method: 'get',
+              params: [{
+                url: `/logview/adom/${this.adomPath}/logsearch/${tid}`,
+                apiver: 3,
+                offset: offset,
+                limit: limit,
+              }],
+              session: this.session,
+              id: 11,
+            }),
+          });
 
-      try {
-        const response = await fetchWithAgent(this.baseUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          signal: controller.signal,
-          body: JSON.stringify({
-            jsonrpc: '2.0',
-            method: 'get',
-            params: [{
-              url: `/logview/adom/root/logsearch/${tid}`,
-              apiver: 3,
-              offset: offset,
-              limit: limit,
-            }],
-            session: this.session,
-            id: 11,
-          }),
-        });
+          if (!response?.ok) {
+            throw new SourceQueryError('SOURCE_HTTP_ERROR', `FortiAnalyzer log results HTTP status ${response?.status ?? 'unavailable'}`);
+          }
 
-        clearTimeout(timeoutId);
-
-        if (!response) {
-          throw new Error('No response from FortiAnalyzer');
-        }
-
-        // Also timeout the JSON parsing in case response body is truncated/slow
-        const data = await Promise.race([
-          response.json() as Promise<{
+          const data = await response.json() as {
             result?: {
-              data: Array<Record<string, unknown>>;
-              status: { code: number; message: string };
+              data?: Array<Record<string, unknown>>;
+              percentage?: number;
+              status?: { code: number; message?: string };
             };
             error?: { code: number; message: string };
-          }>,
-          new Promise<null>((_, reject) => setTimeout(() => reject(new Error('JSON parse timeout')), 30000)), // 30s for large result sets
-        ]);
+          };
+          if (!data || typeof data !== 'object') {
+            throw new SourceQueryError('SOURCE_INVALID_RESPONSE', 'FortiAnalyzer returned an invalid log results response');
+          }
 
-        if (!data) {
-          throw new Error(`fetchLogResults JSON parse timed out (tid=${tid})`);
-        }
+          // Session expired on FA side — clear cache so the next call re-logs in
+          const outerErr = data.error;
+          const innerStatus = data.result?.status;
+          if (outerErr && this.isSessionExpiredError(outerErr.code, outerErr.message)) {
+            this.invalidateSession(`fetchLogResults outer error code=${outerErr.code}`);
+            throw new SourceQueryError('SOURCE_SESSION_EXPIRED', 'FortiAnalyzer session expired');
+          }
+          if (innerStatus && innerStatus.code !== 0 &&
+              this.isSessionExpiredError(innerStatus.code, innerStatus.message)) {
+            this.invalidateSession(`fetchLogResults status code=${innerStatus.code}`);
+            throw new SourceQueryError('SOURCE_SESSION_EXPIRED', 'FortiAnalyzer session expired');
+          }
 
-        // Session expired on FA side — clear cache so the next call re-logs in
-        const outerErr = data.error;
-        const innerStatus = data.result?.status;
-        if (outerErr && this.isSessionExpiredError(outerErr.code, outerErr.message)) {
-          this.invalidateSession(`fetchLogResults outer error code=${outerErr.code}`);
-          return null;
-        }
-        if (innerStatus && innerStatus.code !== 0 &&
-            this.isSessionExpiredError(innerStatus.code, innerStatus.message)) {
-          this.invalidateSession(`fetchLogResults status code=${innerStatus.code}`);
-          return null;
-        }
+          if (data.error || (innerStatus && innerStatus.code !== 0)) {
+            throw new SourceQueryError('SOURCE_REJECTED', 'FortiAnalyzer rejected the log results request');
+          }
 
-        if (data.error) {
-          throw new Error(`Fetch logs error: ${data.error.message}`);
+          const progress = data.result?.percentage;
+          if (options.requireComplete) {
+            // LogView API v3 documents percentage=100 as the completion marker.
+            if (innerStatus?.code !== 0 || typeof progress !== 'number' || !Number.isFinite(progress) || progress < 0 || progress > 100) {
+              throw new SourceQueryError('SOURCE_INVALID_RESPONSE', 'FortiAnalyzer search completion metadata is missing or invalid');
+            }
+            if (progress < 100) return null;
+          }
+          if (Array.isArray(data.result?.data)) return data.result.data;
+          if (typeof progress === 'number' && progress >= 0 && progress < 100) return null;
+          throw new SourceQueryError('SOURCE_INVALID_RESPONSE', 'FortiAnalyzer did not return a log result array');
+        } catch (err) {
+          throwIfSourceCancelled(signal);
+          throw err; // Re-throw for retry mechanism
         }
-
-        return data.result?.data || null;
-      } catch (err) {
-        clearTimeout(timeoutId);
-        throw err; // Re-throw for retry mechanism
-      }
-    }, { maxRetries: 3, baseDelay: 2000 });
+      }, { maxRetries: 3, baseDelay: 2000 });
+    }, 120_000, options.signal);
   }
 
   /**
@@ -841,7 +831,7 @@ class FortiAnalyzerService {
       const formatDate = (d: Date) => d.toISOString().slice(0, 19).replace('T', ' ');
 
       const params: Record<string, unknown> = {
-        url: `/fortiview/adom/root/${viewName}/run`,
+        url: `/fortiview/adom/${this.adomPath}/${viewName}/run`,
         apiver: 3,
         device: [{ devid: 'All_FortiGate' }],
         limit: limit,
@@ -858,7 +848,7 @@ class FortiAnalyzerService {
       }
 
       // Step 1: Start FortiView task
-      const addResponse = await fetchWithAgent(this.baseUrl, {
+      const addResponse = await this.fetchRpc({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -883,7 +873,7 @@ class FortiAnalyzerService {
           this.invalidateSession(`getFortiView add outer error code=${addData.error.code}`);
           return null;
         }
-        log.error({ viewName, error: addData.error }, 'FortiView add error');
+        log.error({ viewName, code: addData.error?.code }, 'FortiView add error');
         return null;
       }
       if (Array.isArray(addData.result)) {
@@ -894,16 +884,18 @@ class FortiAnalyzerService {
             this.invalidateSession(`getFortiView add status code=${first.status.code}`);
             return null;
           }
-          log.error({ viewName, status: first.status }, 'FortiView add status error');
+          log.error({ viewName, code: first.status?.code }, 'FortiView add status error');
           return null;
         }
         tid = first?.tid ?? null;
       } else if (addData.result && 'tid' in addData.result) {
+        const status = (addData.result as { status?: { code?: number } }).status;
+        if (status && status.code !== 0) return null;
         tid = addData.result.tid;
       }
 
       if (!tid) {
-        log.error({ viewName, response: addData }, 'FortiView add: no tid in response');
+        log.error({ viewName }, 'FortiView add: no tid in response');
         return null;
       }
 
@@ -913,14 +905,14 @@ class FortiAnalyzerService {
       for (let i = 0; i < 12; i++) {
         await new Promise(resolve => setTimeout(resolve, 5000));
 
-        const getResponse = await fetchWithAgent(this.baseUrl, {
+        const getResponse = await this.fetchRpc({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             jsonrpc: '2.0',
             method: 'get',
             params: [{
-              url: `/fortiview/adom/root/${viewName}/run/${tid}`,
+              url: `/fortiview/adom/${this.adomPath}/${viewName}/run/${tid}`,
               apiver: 3,
             }],
             session: this.session,
@@ -945,7 +937,7 @@ class FortiAnalyzerService {
             this.invalidateSession(`getFortiView poll outer error code=${getData.error.code}`);
             return null;
           }
-          log.error({ error: getData.error }, 'FortiView get error');
+          log.error({ code: getData.error?.code }, 'FortiView get error');
           return null;
         }
 
@@ -956,7 +948,8 @@ class FortiAnalyzerService {
           this.invalidateSession(`getFortiView poll status code=${result.status.code}`);
           return null;
         }
-        if (result && result.percentage >= 90 && result.data && result.data.length > 0) {
+        if (result?.status && result.status.code !== 0) return null;
+        if (result && result.percentage === 100 && Array.isArray(result.data)) {
           log.info({ viewName, percentage: result.percentage, rowCount: result.data.length }, 'FortiView completed');
           return {
             data: result.data,
@@ -979,17 +972,18 @@ class FortiAnalyzerService {
   /**
    * Get MITRE ATT&CK Matrix data
    */
-  async getMitreAttackMatrix(options: { domain?: string; timeRange?: { start: string; end: string }; adom?: string } = {}): Promise<any> {
+  async getMitreAttackMatrix(options: { domain?: string; timeRange?: { start: string; end: string }; adom?: string } = {}): Promise<unknown> {
     if (!this.session) {
       const loggedIn = await this.login();
       if (!loggedIn) return null;
     }
 
-    const { domain = 'enterprise', timeRange, adom = 'root' } = options;
+    const { domain = 'enterprise', timeRange, adom = this.config.adom } = options;
+    if (adom !== this.config.adom) throw new SourceQueryError('SOURCE_TARGET_MISMATCH', 'Requested ADOM differs from the configured target');
 
     try {
       const params: Record<string, unknown> = {
-        url: `/eventmgmt/adom/${adom}/mitre-attack-matrix`,
+        url: `/eventmgmt/adom/${this.adomPath}/mitre-attack-matrix`,
         apiver: 3,
         'mitre-domain': domain,
         option: ['metadata', 'event-count', 'incident-count', 'handler-count'],
@@ -1010,14 +1004,14 @@ class FortiAnalyzerService {
         id: 40,
       };
 
-      const response = await fetchWithAgent(this.baseUrl, {
+      const response = await this.fetchRpc({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody),
       });
 
       const data = await response.json() as {
-        result?: any;
+        result?: MitreRpcResult;
         error?: { code: number; message: string };
       };
 
@@ -1034,8 +1028,8 @@ class FortiAnalyzerService {
         return null;
       }
 
-      if (data.error) {
-        log.error({ error: data.error }, 'MITRE error in response');
+      if (data.error || !innerStatus || innerStatus.code !== 0) {
+        log.error({ code: data.error?.code }, 'MITRE error in response');
         return null;
       }
 
@@ -1049,17 +1043,18 @@ class FortiAnalyzerService {
   /**
    * Get details for a specific MITRE technique
    */
-  async getMitreTechniqueDetails(techId: string, options: { domain?: string; timeRange?: { start: string; end: string }; adom?: string } = {}): Promise<any> {
+  async getMitreTechniqueDetails(techId: string, options: { domain?: string; timeRange?: { start: string; end: string }; adom?: string } = {}): Promise<unknown> {
     if (!this.session) {
       const loggedIn = await this.login();
       if (!loggedIn) return null;
     }
 
-    const { domain = 'enterprise', timeRange, adom = 'root' } = options;
+    const { domain = 'enterprise', timeRange, adom = this.config.adom } = options;
+    if (adom !== this.config.adom) throw new SourceQueryError('SOURCE_TARGET_MISMATCH', 'Requested ADOM differs from the configured target');
 
     try {
       const params: Record<string, unknown> = {
-        url: `/eventmgmt/adom/${adom}/mitre-attack-matrix/technique/${techId}`,
+        url: `/eventmgmt/adom/${this.adomPath}/mitre-attack-matrix/technique/${techId}`,
         apiver: 3,
         'mitre-domain': domain,
         option: ['metadata', 'handler-summary'],
@@ -1072,7 +1067,7 @@ class FortiAnalyzerService {
         };
       }
 
-      const response = await fetchWithAgent(this.baseUrl, {
+      const response = await this.fetchRpc({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1085,7 +1080,7 @@ class FortiAnalyzerService {
       });
 
       const data = await response.json() as {
-        result?: any;
+        result?: MitreRpcResult;
         error?: { code: number; message: string };
       };
 
@@ -1102,8 +1097,8 @@ class FortiAnalyzerService {
         return null;
       }
 
-      if (data.error) {
-        log.error({ techId, error: data.error }, 'MITRE technique get error');
+      if (data.error || !innerStatus || innerStatus.code !== 0) {
+        log.error({ techId, code: data.error?.code }, 'MITRE technique get error');
         return null;
       }
 
@@ -1137,8 +1132,7 @@ export default FortiAnalyzerService;
  * All services sharing this instance benefit from session pooling.
  */
 let _sharedInstance: FortiAnalyzerService | null = null;
-let _sharedInstanceHost: string | null = null;
-const _sharedInstances = new Map<string, { fingerprint: string; service: FortiAnalyzerService }>();
+const _sharedInstances = new Map<string, { host: string; fingerprint: string; service: FortiAnalyzerService }>();
 
 export function getSharedFortiAnalyzerService(): FortiAnalyzerService | null {
   // If already initialized, return the cached instance
@@ -1149,24 +1143,17 @@ export function getSharedFortiAnalyzerService(): FortiAnalyzerService | null {
 }
 
 export function initSharedFortiAnalyzerService(config: FortiAnalyzerConfig): FortiAnalyzerService {
-  const host = config.host.trim().toLowerCase();
-  const fingerprint = createHash('sha256')
-    .update(JSON.stringify({
-      host,
-      username: config.username || '',
-      password: config.password || '',
-      accessToken: config.accessToken || '',
-    }))
-    .digest('hex');
-  const existing = _sharedInstances.get(host);
+  const profile = normalizeFortiAnalyzerProfile(config);
+  const host = profile.host;
+  const key = JSON.stringify([host, profile.adom, profile.authMode, FA_PROFILE_VERSION]);
+  const fingerprint = authFingerprint(profile);
+  const existing = _sharedInstances.get(key);
   if (existing?.fingerprint === fingerprint) {
     _sharedInstance = existing.service;
-    _sharedInstanceHost = host;
     return existing.service;
   }
-  _sharedInstance = new FortiAnalyzerService({ ...config, host });
-  _sharedInstanceHost = host;
-  _sharedInstances.set(host, { fingerprint, service: _sharedInstance });
+  _sharedInstance = new FortiAnalyzerService(profile);
+  _sharedInstances.set(key, { host, fingerprint, service: _sharedInstance });
   log.info({ host }, existing ? 'Shared instance rotated' : 'Shared instance created');
   return _sharedInstance;
 }
@@ -1181,15 +1168,9 @@ export function getFortiAnalyzerLoginHealth(host?: string): {
   backoffRemainingSec: number;
   lastFailureAt: Date | null;
 } {
-  const resolvedHost = host || _sharedInstanceHost;
-  if (!resolvedHost) {
+  const service = host ? [..._sharedInstances.values()].reverse().find(entry => entry.host === host.trim().toLowerCase())?.service : _sharedInstance;
+  if (!service) {
     return { consecutiveFailures: 0, isAccountLocked: false, backoffRemainingSec: 0, lastFailureAt: null };
   }
-  const state = getGlobalLoginState(resolvedHost);
-  return {
-    consecutiveFailures: state.consecutiveFailures,
-    isAccountLocked: state.isAccountLocked,
-    backoffRemainingSec: Math.max(0, Math.round((state.backoffUntil - Date.now()) / 1000)),
-    lastFailureAt: state.lastFailureAt > 0 ? new Date(state.lastFailureAt) : null,
-  };
+  return service.getLoginHealth();
 }

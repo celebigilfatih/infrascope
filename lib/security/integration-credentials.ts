@@ -26,7 +26,7 @@ function currentCredentialEnvironment(): CredentialEnvironment {
   };
 }
 
-export type IntegrationCredentialProfile = 'FORTIGATE' | 'FORTIANALYZER';
+export type IntegrationCredentialProfile = 'FORTIGATE' | 'FORTIANALYZER' | 'VMWARE_VCENTER' | 'ZABBIX' | 'SMTP';
 export type NmsCredentialField =
   | 'snmpCommunity'
   | 'snmpV3AuthPassword'
@@ -35,7 +35,10 @@ export type NmsCredentialField =
 
 const PROFILE_FIELDS: Record<IntegrationCredentialProfile, readonly string[]> = {
   FORTIGATE: ['password', 'accessToken', 'tlsCaPem'],
-  FORTIANALYZER: ['password', 'apiKey'],
+  FORTIANALYZER: ['password', 'apiKey', 'accessToken'],
+  VMWARE_VCENTER: ['password'],
+  ZABBIX: ['authToken'],
+  SMTP: ['smtpPass'],
 };
 
 function copyBytes(value: ArrayLike<number>): SecretBytes {

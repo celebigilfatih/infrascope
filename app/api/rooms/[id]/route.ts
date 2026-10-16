@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 /**
  * Room Detail Endpoints
  * GET /api/rooms/[id] - Get room by ID
@@ -251,7 +252,7 @@ export async function PUT(
     }
 
     // Build update data
-    const updateData: any = {};
+    const updateData: Prisma.RoomUncheckedUpdateInput = {};
     if (name !== undefined) updateData.name = name;
     if (description !== undefined) updateData.description = description;
     if (capacity !== undefined) updateData.capacity = capacity;

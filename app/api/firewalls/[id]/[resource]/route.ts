@@ -302,6 +302,8 @@ function readResource(connectorId: string, resource: string, query: FirewallList
         const result = await service.fetchHAStatus();
         if (!result) return null;
         const { password: _password, ...safeResult } = result;
+  // Exclude credentials from the serialized response.
+  void _password;
         return safeResult;
       },
       stale: async (context) => statusSnapshot(context.device.metadata, 'ha'),

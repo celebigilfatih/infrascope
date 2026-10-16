@@ -1,0 +1,10 @@
+.subtext { display:block; margin-top:5px; color:oklch(var(--muted-foreground)); font-size:10px; }
+.power { border-top:1px solid oklch(var(--border)); padding-top:16px; min-width:0; }
+.power h3 { display:flex; align-items:center; gap:7px; font-size:12px; font-weight:600; }
+.power h3 svg { color:var(--ui-success-fg); }
+.power p { font-size:12px; line-height:1.8; margin-top:10px; overflow-wrap:anywhere; }
+.powerActions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+.confirm { border:1px solid var(--ui-warning-border); border-radius:10px; padding:14px; margin-top:14px; background:var(--ui-warning-bg); color:var(--ui-warning-fg); }
+.confirm strong { font-size:13px; overflow-wrap:anywhere; }
+.confirm > div { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+.failure { color:var(--ui-danger-fg); }

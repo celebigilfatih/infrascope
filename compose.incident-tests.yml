@@ -1,0 +1,34 @@
+name: infrascope-incident-regression
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_PASSWORD: incident-fixture-only
+      POSTGRES_DB: infrascope_incident_e2e
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d infrascope_incident_e2e"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+    tmpfs:
+      - /var/lib/postgresql/data
+  tests:
+    image: mcr.microsoft.com/playwright:v1.64.1-noble
+    init: true
+    shm_size: 1gb
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      CI: '1'
+      DATABASE_URL: postgresql://postgres:incident-fixture-only@postgres:5432/infrascope_incident_e2e
+      NEXTAUTH_SECRET: incident-e2e-session-secret-only
+      INFRASCOPE_INCIDENT_E2E: '1'
+      INFRASCOPE_COLLABORATION_DB_TEST: '1'
+      NEXT_TELEMETRY_DISABLED: '1'
+    working_dir: /app
+    volumes:
+      - .:/workspace:ro
+      - ./output/incident-regression:/artifacts
+    entrypoint: ["bash", "/workspace/scripts/run-incident-regression.sh"]

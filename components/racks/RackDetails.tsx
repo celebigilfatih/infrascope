@@ -1,0 +1,37 @@
+'use client';
+
+import { useState } from 'react';
+import Link from 'next/link';
+import { AlertTriangle, Box, Database, Info, Layers3, MapPin, Pencil, Server, Trash2, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { uiLabel } from '@/lib/i18n/tr';
+import { presentRack } from '@/lib/racks/presentation';
+import { cn } from '@/lib/utils';
+import type { RackRecord } from './types';
+import { RackElevation } from './RackElevation';
+import { RackStatus } from './RackStatus';
+import styles from './RackDetails.module.css';
+
+export function RackDetails({ rack, onEdit, onDelete }: { rack: RackRecord; onEdit: () => void; onDelete: () => void }) {
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
+  const { capacity, resolved, assignedUsedUnits, estimatedUnits } = presentRack(rack.maxUnits, rack.devices);
+  const selected = resolved.find(item => item.device.id === selectedDeviceId);
+  const devices = [...resolved].sort((a, b) => Number(a.isAutoPositioned) - Number(b.isAutoPositioned) || Number(b.device.rackUnitPosition || 0) - Number(a.device.rackUnitPosition || 0));
+  const location = [rack.room?.floor?.building?.name, rack.room?.floor?.name, rack.room?.name].filter(Boolean).join(' / ');
+  const range = (start: number, height: number) => height > 1 ? `U ${start}–${start + height - 1}` : `U ${start}`;
+  return <section className={styles.panel} aria-label={`${rack.name} kapasite ve yerleşim detayları`}>
+    <header className={styles.header}><div><div className={styles.title}><span><Database size={20} aria-hidden="true" /></span><h2>{rack.name}</h2></div><p className={styles.location}><MapPin size={13} aria-hidden="true" />{location || 'Oda bilgisi yok'}</p><div className={styles.tags}><RackStatus status={rack.operationalStatus} /><Badge variant="outline" icon={null}>{uiLabel(rack.type)} · {capacity.totalUnits} U</Badge>{rack.position && <Badge variant="outline" icon={MapPin}>{rack.position}</Badge>}</div></div><div className={styles.actions}><Button variant="ghost" size="icon" onClick={onEdit} aria-label={`${rack.name}: kabineti düzenle`} title="Kabineti düzenle"><Pencil size={16} /></Button><Button variant="ghost" size="icon" onClick={onDelete} aria-label={`${rack.name}: kabineti sil`} title="Kabineti sil"><Trash2 size={16} /></Button></div></header>
+    <div className={styles.capacity}><div className={styles.capacityTitle}><h3>Hesaplanan doluluk</h3><strong>%{capacity.utilization.toLocaleString('tr-TR')}</strong></div><div className={styles.progress} role="progressbar" aria-label="Hesaplanan kabinet doluluğu" aria-valuenow={capacity.utilization} aria-valuemin={0} aria-valuemax={100} aria-valuetext={`${assignedUsedUnits} U kayıtlı yerleşim, ${estimatedUnits} U tahmini yerleşim`}><span style={{ width: `${assignedUsedUnits / capacity.totalUnits * 100}%` }} /><span className={styles.estimated} style={{ width: `${estimatedUnits / capacity.totalUnits * 100}%` }} /></div><div className={styles.metrics}><Metric label="Kullanılan" value={`${capacity.usedUnits} U`} /><Metric label="Boş kapasite" value={`${capacity.availableUnits} U`} /><Metric label="Konumu atanmamış" value={`${capacity.unpositionedDevices} cihaz`} warn={capacity.unpositionedDevices > 0} /><Metric label="Yerleşim uyarısı" value={`${capacity.conflictDevices} cihaz`} warn={capacity.conflictDevices > 0} /></div><p className={styles.capacityHelp}><Info size={14} aria-hidden="true" />1 U ≈ 4,45 cm yüksekliktir. Boş kapasite toplam alanı gösterir; ardışık boş alanı şemadan inceleyin.</p></div>
+    {(capacity.unpositionedDevices > 0 || capacity.conflictDevices > 0) && <div className={styles.notice}><AlertTriangle size={18} aria-hidden="true" /><div>{capacity.unpositionedDevices > 0 && <p>{capacity.unpositionedDevices} cihazın U konumu atanmamış. Kapasite hesabına tahmini olarak eklenir; şemada kayıtlı bir yere yerleştirilmez. Çizgideki sarı bölüm tahmini kullanımdır.</p>}{capacity.conflictDevices > 0 && <p>{capacity.conflictDevices} cihazda konum çakışması veya kapasite aşımı var. Uyarılı cihazların konumlarını kontrol edin.</p>}</div></div>}
+    <div className={styles.workspace}><div><h3 className={styles.sectionTitle}><Layers3 size={16} aria-hidden="true" />Kabinet içi yerleşim</h3><RackElevation rack={rack} selectedDeviceId={selected?.device.id || null} onSelectDevice={setSelectedDeviceId} /></div><div className={styles.devices}>
+      <div className={styles.devicesTitle}><h3 className={styles.sectionTitle}><Server size={16} aria-hidden="true" />Cihazlar</h3><Badge variant="secondary" icon={null}>{devices.length}</Badge></div>
+      {selected && <section className={styles.selection} aria-label="Seçili cihaz bilgileri"><div className={styles.selectionTitle}><span>Seçili cihaz</span><Button variant="ghost" size="icon" onClick={() => setSelectedDeviceId(null)} aria-label="Cihaz seçimini temizle"><X size={14} /></Button></div><h4>{selected.device.name}</h4><p>{uiLabel(selected.device.type)}</p><div className={styles.selectionTags}><StatusBadge status={selected.device.status} />{selected.hasConflict && <Badge variant="warning">Konumu kontrol edin</Badge>}</div><dl><div><dt>Yükseklik</dt><dd>{selected.unitHeight} U</dd></div><div><dt>Kayıtlı konum</dt><dd>{selected.isAutoPositioned ? 'Atanmamış' : range(Number(selected.device.rackUnitPosition), selected.unitHeight)}</dd></div></dl>{selected.isAutoPositioned && <p>Kapasite hesabındaki otomatik konum bir tahmindir; kayıtlı cihaz konumu değişmez.</p>}</section>}
+      <div className={styles.deviceList}>{devices.map(item => <button key={item.device.id} type="button" className={cn(styles.device, item.device.id === selected?.device.id && styles.deviceSelected, (item.isAutoPositioned || item.hasConflict) && styles.deviceWarning)} aria-pressed={item.device.id === selected?.device.id} aria-label={`${item.device.name}: cihaz detaylarını göster`} onClick={() => setSelectedDeviceId(item.device.id)}><span className={styles.deviceName}><Server size={14} aria-hidden="true" /><strong>{item.device.name}</strong></span><span className={styles.deviceType}>{uiLabel(item.device.type)}</span><span className={styles.deviceMeta}><span>{item.isAutoPositioned ? 'Konum atanmamış' : range(Number(item.device.rackUnitPosition), item.unitHeight)}</span><span>{item.unitHeight} U</span></span>{item.hasConflict && <span className={styles.warningLabel}><AlertTriangle size={12} aria-hidden="true" />Çakışma / kapasite aşımı</span>}</button>)}{devices.length === 0 && <div className={styles.empty}><Server size={28} aria-hidden="true" /><h4>Bu kabinete cihaz eklenmemiş</h4><p>Cihaz envanterinden bu kabinete cihaz atayabilirsiniz. U konumları kaydedildiğinde yerleşim burada görünür.</p><Button variant="outline" size="sm" asChild><Link href="/devices"><Server size={15} />Cihaz envanterini aç</Link></Button></div>}</div>
+    </div></div>
+    {rack.room && <footer className={styles.footer}><span><Box size={16} aria-hidden="true" />Kabinetin oda içindeki konumunu da inceleyebilirsiniz.</span><Button variant="outline" size="sm" asChild><Link href={`/locations/rooms/${rack.room.id}`}><Box size={16} />Oda yerleşimini aç</Link></Button></footer>}
+  </section>;
+}
+
+function Metric({ label, value, warn }: { label: string; value: string; warn?: boolean }) { return <div><p>{label}</p><strong className={cn(warn && styles.warnText)}>{value}</strong></div>; }

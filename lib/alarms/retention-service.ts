@@ -216,7 +216,7 @@ type RetentionGlobal = typeof globalThis & {
 
 export function startAlarmRetentionScheduler(): void {
   const state = globalThis as RetentionGlobal;
-  if (state.__infrascopeAlarmRetentionTimer) return;
+  if (state.__infrascopeAlarmRetentionTimer || state.__infrascopeAlarmRetentionStartupTimer) return;
 
   const now = new Date();
   const firstRun = new Date(now);
@@ -225,6 +225,7 @@ export function startAlarmRetentionScheduler(): void {
   const delay = firstRun.getTime() - now.getTime();
 
   state.__infrascopeAlarmRetentionStartupTimer = setTimeout(() => {
+    state.__infrascopeAlarmRetentionStartupTimer = undefined;
     void runAlarmRetention().catch((error) => log.error({ err: error }, 'Scheduled retention failed'));
     state.__infrascopeAlarmRetentionTimer = setInterval(() => {
       void runAlarmRetention().catch((error) => log.error({ err: error }, 'Scheduled retention failed'));
@@ -232,4 +233,12 @@ export function startAlarmRetentionScheduler(): void {
   }, delay);
 
   log.info({ firstRun: firstRun.toISOString() }, 'Alarm retention scheduled');
+}
+
+export function stopAlarmRetentionScheduler(): void {
+  const state = globalThis as RetentionGlobal;
+  if (state.__infrascopeAlarmRetentionStartupTimer) clearTimeout(state.__infrascopeAlarmRetentionStartupTimer);
+  if (state.__infrascopeAlarmRetentionTimer) clearInterval(state.__infrascopeAlarmRetentionTimer);
+  state.__infrascopeAlarmRetentionStartupTimer = undefined;
+  state.__infrascopeAlarmRetentionTimer = undefined;
 }

@@ -1,21 +1,22 @@
 'use client';
 
+import { uiError, uiLabel } from '@/lib/i18n/tr';
+
+import { PageHeading } from '@/components/ui/page-heading';
 import { useRouter } from 'next/navigation';
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { apiGet, apiPost, apiPut, apiDelete } from '../../lib/api';
 import ReactFlow, {
   Node,
   Edge,
   Background,
-  Controls,
   Panel,
-  ReactFlowProvider,
+  useReactFlow,
   ConnectionLineType,
   NodeChange,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { toPng } from 'html-to-image';
-import download from 'downloadjs';
 import { BuildingNode } from '../../components/topology/BuildingNode';
 import { DeviceNode } from '../../components/topology/DeviceNode';
 import { CustomEdge, BuildingConnectionEdge } from '../../components/topology/CustomEdge';
@@ -43,6 +44,10 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { SemanticBadge } from '@/components/ui/semantic-badge';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { SeverityBadge } from '@/components/ui/severity-badge';
 import { 
   Select, 
   SelectContent, 
@@ -64,7 +69,6 @@ import {
   Box,
   LayoutDashboard,
   ChevronRight,
-  ChevronLeft,
   Undo2,
   MapPin,
   Building2,
@@ -78,12 +82,17 @@ import {
   RotateCcw,
   RefreshCw,
   CircleCheck,
-  WifiOff,
   Link2,
   AlertTriangle,
   EthernetPort
 } from 'lucide-react';
+import { Minus, Info, MousePointer2, Move, CircleHelp } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import styles from './page.module.css';
+import type { ApiResponse, BuildingConnection as SharedBuildingConnection } from '@/types';
+type BuildingConnection = Omit<SharedBuildingConnection, 'createdAt'> & { createdAt: string | Date };
+interface WireConnection { id: string; status: string; sourceInterfaceId?: string | null; destInterfaceId?: string | null; sourcePort?: { switchDevice?: { id: string }; networkInterface?: { device?: { id: string } } }; sourceInterface?: { device?: { id: string } } }
+type DataResponse<T> = ApiResponse<T> & { data: T };
 
 interface Device {
   id: string;
@@ -92,6 +101,7 @@ interface Device {
   vendor?: string;
   status: string;
   criticality: string;
+  managementIp?: string | null;
   rackId?: string;
   rack?: {
     id: string;
@@ -257,10 +267,40 @@ const NetworkTopologyPage = () => {
   }), []);
 
   // Topology is fully controlled by useMemo — no separate state needed
-  const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+  const [selectedNodeSnapshot, setSelectedNode] = useState<Node | null>(null);
   const [nodePositionOverrides, setNodePositionOverrides] = useState<Record<string, { x: number; y: number }>>({});
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [viewMode, setViewMode] = useState<'physical' | 'services' | 'hierarchy' | 'zoom' | 'building'>('building');
+  const { fitView, zoomIn, zoomOut } = useReactFlow();
+  const [viewportZoom, setViewportZoom] = useState(100);
+  const [compactMap, setCompactMap] = useState(false);
+  const [flowReady, setFlowReady] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState('');
+  const [exportPreview, setExportPreview] = useState<string | null>(null);
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const graphView = ['building', 'physical', 'services'].includes(viewMode);
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 767px)');
+    const update = () => setCompactMap(media.matches);
+    update(); media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
+  const selectedNode = useMemo(() => {
+    if (!selectedNodeSnapshot || selectedNodeSnapshot.data.isGroup || selectedNodeSnapshot.type === 'building' || selectedNodeSnapshot.data.isBuildingConnection) return selectedNodeSnapshot;
+    const device = devices.find(item => item.id === (selectedNodeSnapshot.data.deviceId || selectedNodeSnapshot.id));
+    if (!device) return selectedNodeSnapshot;
+    return { ...selectedNodeSnapshot, data: {
+      ...selectedNodeSnapshot.data, label: device.name, name: device.name,
+      type: device.type, vendor: device.vendor, status: device.status, criticality: device.criticality,
+      building: device.rack?.room?.floor?.building?.name, floor: device.rack?.room?.floor?.name,
+      room: device.rack?.room?.name, rack: device.rack?.name,
+      interfaces: device.networkInterfaces || [], interfaceCount: device.networkInterfaces?.length || 0,
+      serviceCount: services.filter(service => service.deviceId === device.id).length,
+      portDownCount: topologyStatusByDeviceId[device.id]?.portDownCount || 0,
+      downPorts: topologyStatusByDeviceId[device.id]?.downPorts || [],
+    } };
+  }, [selectedNodeSnapshot, devices, services, topologyStatusByDeviceId]);
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   
   // Zoom view state
@@ -276,6 +316,24 @@ const NetworkTopologyPage = () => {
   const [filterDeviceType, setFilterDeviceType] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterCriticality, setFilterCriticality] = useState<string>('all');
+  const activeFilterCount = [filterDeviceType, filterStatus, filterCriticality].filter(value => value !== 'all').length;
+  const hasFilters = !!searchQuery.trim() || activeFilterCount > 0;
+  useEffect(() => {
+    setSelectedNode(null);
+    setIsSidebarOpen(false);
+  }, [searchQuery, filterDeviceType, filterStatus, filterCriticality]);
+  const changeView = (next: typeof viewMode) => {
+    setViewMode(next); setSelectedNode(null); setIsSidebarOpen(false); setExportError('');
+    if (next === 'zoom') {
+      setZoomLevel('building'); setSelectedBuilding(null); setSelectedFloor(null);
+      setSelectedRoom(null); setSelectedRack(null); setBreadcrumbs([]);
+    }
+  };
+  useEffect(() => {
+    if (!graphView || !flowReady || loading) return;
+    const timer = setTimeout(() => void fitView({ padding: .18, maxZoom: 1, duration: 0 }), 100);
+    return () => clearTimeout(timer);
+  }, [viewMode, searchQuery, filterDeviceType, filterStatus, filterCriticality, devices.length, graphView, flowReady, loading, compactMap, fitView]);
   
   // Hierarchical navigation state (kept for future use in zoom view)
   // const [navigationPath, setNavigationPath] = useState<Array<{ type: string; name: string; id: string }>>([]);
@@ -283,8 +341,8 @@ const NetworkTopologyPage = () => {
   
   // Building connection modal state
   const [showBuildingConnectionModal, setShowBuildingConnectionModal] = useState(false);
-  const [buildingConnectionToEdit, setBuildingConnectionToEdit] = useState<any | null>(null);
-  const [buildingConnections, setBuildingConnections] = useState<any[]>([]);
+  const [buildingConnectionToEdit, setBuildingConnectionToEdit] = useState<BuildingConnection | null>(null);
+  const [buildingConnections, setBuildingConnections] = useState<BuildingConnection[]>([]);
   const [buildings, setBuildings] = useState<Building[]>([]);
   const [showManagementModal, setShowManagementModal] = useState(false);
   
@@ -304,27 +362,21 @@ const NetworkTopologyPage = () => {
 
   
   // Export topology as PNG
-  const onExport = useCallback(() => {
-    const element = document.querySelector('.react-flow') as HTMLElement;
-    if (element) {
-      toPng(element, {
-        backgroundColor: '#ffffff',
-        style: {
-          background: '#ffffff',
-          transform: 'none',
-          width: element.scrollWidth + 'px',
-          height: element.scrollHeight + 'px',
-        },
-        filter: (node) => {
-          // Exclude controls and minimap from export
-          return !node.classList?.contains('react-flow__controls') && 
-                 !node.classList?.contains('react-flow__minimap');
-        },
-      }).then((dataUrl) => {
-        download(dataUrl, `infrascope-topology-${new Date().toISOString().slice(0,10)}.png`);
+  const onExport = useCallback(async () => {
+    const element = canvasRef.current?.querySelector('.react-flow') as HTMLElement | null;
+    if (!element || exporting) return;
+    setExporting(true); setExportError('');
+    try {
+      const backgroundColor = getComputedStyle(canvasRef.current!).backgroundColor;
+      const dataUrl = await toPng(element, {
+        backgroundColor,
+        filter: node => !node.classList?.contains('react-flow__panel') && !node.classList?.contains('react-flow__controls'),
       });
-    }
-  }, []);
+      setExportPreview(dataUrl);
+    } catch {
+      setExportError('Görsel oluşturulamadı. Haritayı tekrar dışa aktarmayı deneyin.');
+    } finally { setExporting(false); }
+  }, [exporting]);
 
   // Auto-layout is disabled when using controlled topology (positions computed by useMemo)
 
@@ -374,7 +426,7 @@ const NetworkTopologyPage = () => {
       if (silent) setRefreshing(true);
       else setLoading(true);
       setError(null);
-      const [devicesRes, servicesRes, connectionsRes, orgsRes, buildingConnsRes, topologyStatusRes]: any = await Promise.all([
+      const [devicesRes, servicesRes, connectionsRes, orgsRes, buildingConnsRes, topologyStatusRes]: [DataResponse<Device[]>, DataResponse<Service[]>, DataResponse<WireConnection[]>, DataResponse<Organization[]>, DataResponse<{ items: BuildingConnection[] }>, DataResponse<{ devices: DeviceTopologyStatus[] }>] = await Promise.all([
         apiGet('/api/devices?filterType=all&mode=full&limit=200'),
         apiGet('/api/services'),
         apiGet('/api/network-connections'),
@@ -384,7 +436,7 @@ const NetworkTopologyPage = () => {
       ]);
 
       if (!devicesRes.success || !orgsRes.success) {
-        throw new Error('Topoloji için gerekli envanter verileri alınamadı');
+        throw new Error(uiError('Topoloji için gerekli envanter verileri alınamadı'));
       }
 
       if (devicesRes.success) setDevices(devicesRes.data);
@@ -417,7 +469,7 @@ const NetworkTopologyPage = () => {
       }
 
       const normalizedConnections: NetworkConnection[] = connectionsRes.success
-        ? connectionsRes.data.flatMap((connection: any) => {
+        ? connectionsRes.data.flatMap((connection: WireConnection) => {
             const sourceDeviceId = connection.sourcePort?.switchDevice?.id;
             const targetDeviceId = connection.sourceInterface?.device?.id
               || connection.sourcePort?.networkInterface?.device?.id;
@@ -436,8 +488,8 @@ const NetworkTopologyPage = () => {
         : [];
       setConnections(normalizedConnections);
       setLastUpdatedAt(new Date());
-    } catch (err: any) {
-      setError(err.message || 'Veriler yüklenirken bir hata oluştu');
+    } catch (err) {
+      setError(uiError((err as Error).message || 'Veriler yüklenirken bir hata oluştu'));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -498,7 +550,9 @@ const NetworkTopologyPage = () => {
   // Filter devices based on filters and search
   const filteredDevices = useMemo(() => devices.filter(device => {
     // Search filter
-    if (searchQuery && !device.name.toLowerCase().includes(searchQuery.toLowerCase())) {
+    const query = searchQuery.trim().toLocaleLowerCase('tr-TR');
+    const searchable = [device.name, device.managementIp, ...(device.networkInterfaces || []).map(iface => iface.ipv4)].filter(Boolean).join(' ').toLocaleLowerCase('tr-TR');
+    if (query && !searchable.includes(query)) {
       return false;
     }
     // Type filter
@@ -506,7 +560,7 @@ const NetworkTopologyPage = () => {
       return false;
     }
     // Status filter
-    if (filterStatus !== 'all' && device.status !== filterStatus) {
+    if (filterStatus !== 'all' && device.status.toUpperCase() !== filterStatus) {
       return false;
     }
     // Criticality filter
@@ -527,16 +581,15 @@ const NetworkTopologyPage = () => {
   // onConnect removed — nodes are not connectable in controlled topology mode
 
   const handleNodeClick = (node: Node) => {
+    if (viewMode === 'building' && node.type === 'building') {
+      const building = buildings.find(b => `building-${b.id}` === node.id)
+        || (node.data.buildingId === UNASSIGNED_BUILDING_ID ? { id: UNASSIGNED_BUILDING_ID, name: UNASSIGNED_BUILDING_NAME, organizationId: '' } : null);
+      if (building) setSelectedBuildingForPopup(building);
+      setSelectedNode(null);
+      return;
+    }
     setSelectedNode(node);
     setIsSidebarOpen(true);
-    
-    // Handle building popup for Building View
-    if (viewMode === 'building' && node.type === 'building') {
-      const building = buildings.find(b => `building-${b.id}` === node.id);
-      if (building) {
-        setSelectedBuildingForPopup(building);
-      }
-    }
     
     if (node.data.isGroup) {
       // Hierarchical navigation is not used after logical view removal
@@ -562,17 +615,17 @@ const NetworkTopologyPage = () => {
       case 'ping':
         // Simulate ping action
         console.log(`Pinging ${deviceName}...`);
-        alert(`${deviceName} için ping başlatılıyor...\n\nBu özellik entegrasyon sonrası aktif olacaktır.`);
+        alert(uiError(`${deviceName} için ping başlatılıyor...\n\nBu özellik entegrasyon sonrası aktif olacaktır.`));
         break;
       case 'ssh':
         // Simulate SSH action
         console.log(`Opening SSH to ${deviceName}...`);
-        alert(`${deviceName} için SSH bağlantısı kuruluyor...\n\nBu özellik entegrasyon sonrası aktif olacaktır.`);
+        alert(uiError(`${deviceName} için SSH bağlantısı kuruluyor...\n\nBu özellik entegrasyon sonrası aktif olacaktır.`));
         break;
       case 'view-logs':
         // View logs action
         console.log(`Viewing logs for ${deviceName}...`);
-        alert(`${deviceName} logları görüntüleniyor...\n\nBu özellik entegrasyon sonrası aktif olacaktır.`);
+        alert(uiError(`${deviceName} logları görüntüleniyor...\n\nBu özellik entegrasyon sonrası aktif olacaktır.`));
         break;
       case 'view-details':
         // Open sidebar with details
@@ -720,8 +773,6 @@ const NetworkTopologyPage = () => {
   const handleCreateConnection = async (connection: {
     sourceDeviceId: string;
     targetDeviceId: string;
-    connectionType: any;
-    bandwidth: string;
     status: string;
   }) => {
     try {
@@ -749,11 +800,13 @@ const NetworkTopologyPage = () => {
   
   // Helper function to determine visibility based on zoom level
   const shouldShowLevel = (_level: 'building' | 'floor' | 'room' | 'rack' | 'device') => {
+    void _level; // All hierarchy levels are currently visible.
     return true;
   };
   
   // Helper to determine if we should render a node type
   const shouldRenderNodeType = (_hierarchyLevel: string) => {
+    void _hierarchyLevel; // Preserve the current full-hierarchy rendering policy.
     return true;
   };
 
@@ -788,7 +841,7 @@ const NetworkTopologyPage = () => {
       });
       
       // Get all buildings from organizations
-      const allBuildings: Array<{ name: string; id: string; floors?: any[] }> = [];
+      const allBuildings: Array<{ name: string; id: string; floors?: Floor[] }> = [];
       organizations.forEach(org => {
         if (org.buildings) {
           org.buildings.forEach(building => {
@@ -823,11 +876,11 @@ const NetworkTopologyPage = () => {
         let buildingTotalHeight = 100; // Minimum height for empty building
         
         if (Object.keys(buildingDeviceHierarchy).length > 0) {
-          Object.entries(buildingDeviceHierarchy as Record<string, any>).forEach(([_floorName, rooms]) => {
+          Object.entries(buildingDeviceHierarchy).forEach(([, rooms]) => {
             let floorHeight = 60;
-            Object.entries(rooms as Record<string, any>).forEach(([_roomName, racks]) => {
+            Object.entries(rooms).forEach(([, racks]) => {
               let roomHeight = 50;
-              Object.entries(racks as Record<string, any>).forEach(([_rackName, devicesInRack]) => {
+              Object.entries(racks).forEach(([, devicesInRack]) => {
                 const itemsPerRow = 4;
                 const deviceGroupHeight = 150;
                 const devices = devicesInRack as Device[];
@@ -902,11 +955,11 @@ const NetworkTopologyPage = () => {
           // Render floors with devices
           let floorYOffset = buildingYOffset + 80;
           
-          Object.entries(buildingDeviceHierarchy as Record<string, any>).forEach(([floorName, rooms]) => {
+          Object.entries(buildingDeviceHierarchy).forEach(([floorName, rooms]) => {
             let floorHeight = 60;
-            Object.entries(rooms as Record<string, any>).forEach(([_roomName, racks]) => {
+            Object.entries(rooms).forEach(([, racks]) => {
               let roomHeight = 50;
-              Object.entries(racks as Record<string, any>).forEach(([_rackName, devicesInRack]) => {
+              Object.entries(racks).forEach(([, devicesInRack]) => {
                 const itemsPerRow = 4;
                 const deviceGroupHeight = 150;
                 const devices = devicesInRack as Device[];
@@ -948,9 +1001,9 @@ const NetworkTopologyPage = () => {
             
               let roomYOffset = floorYOffset + 60;
               
-              Object.entries(rooms as Record<string, any>).forEach(([roomName, racks]) => {
+              Object.entries(rooms).forEach(([roomName, racks]) => {
               let roomHeight = 50;
-              Object.entries(racks as Record<string, any>).forEach(([_rackName, devicesInRack]) => {
+              Object.entries(racks).forEach(([, devicesInRack]) => {
                 const itemsPerRow = 4;
                 const deviceGroupHeight = 150;
                 const devices = devicesInRack as Device[];
@@ -990,7 +1043,7 @@ const NetworkTopologyPage = () => {
               
               let rackYOffset = roomYOffset + 50;
               
-              Object.entries(racks as Record<string, any>).forEach(([rackName, devicesInRack]) => {
+              Object.entries(racks).forEach(([rackName, devicesInRack]) => {
                 const itemsPerRow = 4;
                 const deviceGroupHeight = 150;
                 const devices = devicesInRack as Device[];
@@ -1014,7 +1067,7 @@ const NetworkTopologyPage = () => {
                       isGroup: true,
                       hierarchyLevel: 'rack',
                       deviceCount: devices.length,
-                      imageUrl: (rackInfo as any)?.imageUrl,
+                      imageUrl: rackInfo?.imageUrl,
                     },
                     style: {
                       border: `2px solid ${buildingColor}`,
@@ -1145,7 +1198,7 @@ const NetworkTopologyPage = () => {
       // ====================================================================
       
       // Group devices by building
-      const buildingMap = new Map<string, { building: any; devices: Device[] }>();
+      const buildingMap = new Map<string, { building: Building; devices: Device[] }>();
       
       // Organize all buildings from organizations
       organizations.forEach(org => {
@@ -1183,7 +1236,7 @@ const NetworkTopologyPage = () => {
       
       // Calculate building positions — radial/concentric layout
       // Scales from 3 to 40+ buildings without crossings
-      const buildingsArray = Array.from(buildingMap.values());
+      const buildingsArray = Array.from(buildingMap.values()).filter(item => !hasFilters || item.devices.length > 0);
       const RING_RADIUS = 300;      // distance between rings
       const MIN_PER_RING = 8;      // max buildings per ring (ring N holds N*MIN_PER_RING)
 
@@ -1208,7 +1261,9 @@ const NetworkTopologyPage = () => {
 
       buildingsArray.forEach((buildingData, index) => {
         const { building, devices } = buildingData;
-        const pos = radialPositions[index] || { x: 0, y: 0 };
+        const pos = buildingsArray.length <= 4
+          ? compactMap ? { x: 0, y: (index - (buildingsArray.length - 1) / 2) * 180 } : { x: (index - (buildingsArray.length - 1) / 2) * 300, y: 0 }
+          : radialPositions[index] || { x: 0, y: 0 };
 
         // Calculate device counts by role
         const deviceRoles = devices.map(d => getDeviceRole(d.type, d.name));
@@ -1220,12 +1275,15 @@ const NetworkTopologyPage = () => {
         }, 0);
         
         // Determine building health status
-        const activeDevices = devices.filter(d => d.status === 'ACTIVE').length;
+        const activeDevices = devices.filter(d => d.status.toUpperCase() === 'ACTIVE').length;
         const totalDevices = devices.length;
-        let buildingStatus: 'healthy' | 'degraded' | 'down' = 'healthy';
+        const unknownDevices = devices.filter(d => !['ACTIVE', 'INACTIVE', 'MAINTENANCE', 'ERROR', 'DECOMMISSIONED'].includes(d.status.toUpperCase())).length;
+        let buildingStatus: 'healthy' | 'degraded' | 'down' | 'unknown' | 'empty' = 'healthy';
         
         if (totalDevices === 0) {
-          buildingStatus = 'degraded';
+          buildingStatus = 'empty';
+        } else if (unknownDevices === totalDevices) {
+          buildingStatus = 'unknown';
         } else if (activeDevices === 0) {
           buildingStatus = 'down';
         } else if (activeDevices / totalDevices < 0.8) {
@@ -1277,7 +1335,7 @@ const NetworkTopologyPage = () => {
 
       // Add building connection edges
       if (buildingConnections.length > 0) {
-        buildingConnections.forEach((buildingConn: any) => {
+        buildingConnections.forEach((buildingConn: BuildingConnection) => {
           const sourceBuilding = buildingConn.sourceBuilding;
           const destBuilding = buildingConn.destBuilding;
           
@@ -1345,7 +1403,7 @@ const NetworkTopologyPage = () => {
             vendor: device.vendor,
             role: role,
             status: device.status.toLowerCase() as 'active' | 'inactive' | 'maintenance' | 'error',
-            ipAddress: device.networkInterfaces?.[0]?.ipv4,
+            ipAddress: device.managementIp || device.networkInterfaces?.[0]?.ipv4,
             ports: device.networkInterfaces?.length,
             portDownCount: portStatus?.portDownCount || 0,
             downPorts: portStatus?.downPorts || [],
@@ -1399,7 +1457,7 @@ const NetworkTopologyPage = () => {
             vendor: device.vendor,
             role: role,
             status: device.status.toLowerCase() as 'active' | 'inactive' | 'maintenance' | 'error',
-            ipAddress: device.networkInterfaces?.[0]?.ipv4,
+            ipAddress: device.managementIp || device.networkInterfaces?.[0]?.ipv4,
             ports: deviceServices.length, // Show service count as ports in this view
             portDownCount: portStatus?.portDownCount || 0,
             downPorts: portStatus?.downPorts || [],
@@ -1407,7 +1465,7 @@ const NetworkTopologyPage = () => {
               c => c.sourceDeviceId === device.id || c.targetDeviceId === device.id
             ).length,
             buildingName: device.rack?.room?.floor?.building?.name,
-            location: `${deviceServices.length} service(s)`,
+            location: `${deviceServices.length} servis`,
           },
         };
 
@@ -1435,10 +1493,12 @@ const NetworkTopologyPage = () => {
       });
     }
 
-    return { topologyNodes: newNodes, topologyEdges: newEdges };
+    return { topologyNodes: newNodes, topologyEdges: filterEdgesByZoom(newEdges, newNodes) };
   }, [
     devices,
     filteredDevices,
+    hasFilters,
+    compactMap,
     services,
     connections,
     viewMode,
@@ -1457,20 +1517,20 @@ const NetworkTopologyPage = () => {
     });
   }, [generatedTopologyNodes, getNodePositionKey, nodePositionOverrides]);
 
-  const showTopologyEmptyState = topologyNodes.length === 0 && devices.length === 0;
+  const showTopologyEmptyState = topologyNodes.length === 0;
 
   const networkSummary = useMemo(() => {
-    const active = devices.filter((device) => device.status === 'ACTIVE').length;
-    const maintenance = devices.filter((device) => device.status === 'MAINTENANCE').length;
+    const active = devices.filter((device) => device.status.toUpperCase() === 'ACTIVE').length;
+    const maintenance = devices.filter((device) => device.status.toUpperCase() === 'MAINTENANCE').length;
     const unavailable = devices.filter((device) =>
-      ['INACTIVE', 'ERROR', 'DECOMMISSIONED'].includes(device.status)
+      ['INACTIVE', 'ERROR', 'DECOMMISSIONED'].includes(device.status.toUpperCase())
     ).length;
     const portDown = Object.values(topologyStatusByDeviceId).reduce(
       (total, device) => total + device.portDownCount,
       0
     );
 
-    return { active, maintenance, unavailable, portDown };
+    return { active, maintenance, unavailable, portDown, unknown: devices.length - active - maintenance - unavailable };
   }, [devices, topologyStatusByDeviceId]);
 
   const currentViewLabel = {
@@ -1482,7 +1542,6 @@ const NetworkTopologyPage = () => {
   }[viewMode];
 
   const networkNeedsAttention = networkSummary.unavailable > 0 || networkSummary.portDown > 0;
-  const visibleConnectionCount = viewMode === 'building' ? buildingConnections.length : connections.length;
 
   // Sync removed — topologyNodes/topologyEdges passed directly to ReactFlow
 
@@ -1490,236 +1549,75 @@ const NetworkTopologyPage = () => {
 
   return (
     <>
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
-        <div className="relative z-[1010] border-b border-border bg-background px-4 py-5 sm:px-6 lg:px-8">
-          <div className="mx-auto max-w-[1680px]">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-              <div className="min-w-0">
-                <div className="mb-1 flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                  <Network className="h-4 w-4" />
-                  Operasyon görünümü
-                </div>
-                <h1 className="text-2xl font-semibold tracking-normal text-foreground">Ağ Operasyonları</h1>
-                <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-                  Binalar, cihazlar ve servisler arasındaki ilişkileri izleyin ve yönetin.
-                </p>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="mr-1 hidden text-right sm:block">
-                  <p className="text-xs font-medium text-muted-foreground">Son güncelleme</p>
-                  <p className="text-sm text-foreground">
-                    {lastUpdatedAt ? lastUpdatedAt.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) : 'Bekleniyor'}
-                  </p>
-                </div>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => loadData(true)}
-                  disabled={refreshing}
-                  aria-label="Topoloji verilerini yenile"
-                  title="Yenile"
-                >
-                  <RefreshCw className={cn('h-4 w-4', refreshing && 'animate-spin')} />
-                </Button>
-                <Button variant="outline" onClick={() => setShowManagementModal(true)} className="gap-2">
-                  <Settings2 className="h-4 w-4" />
-                  <span className="hidden sm:inline">Bağlantıları yönet</span>
-                </Button>
-                <Button onClick={() => setShowBuildingConnectionModal(true)} className="gap-2">
-                  <Plus className="h-4 w-4" />
-                  Yeni bağlantı
-                </Button>
-                <Button variant="outline" size="icon" onClick={onExport} aria-label="Topolojiyi PNG olarak dışa aktar" title="Dışa aktar">
-                  <Download className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-
-            <div className="mt-5 grid grid-cols-2 border-y border-border md:grid-cols-4">
-              <div className="border-b border-r border-border px-3 py-3 md:border-b-0 sm:px-4">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <CircleCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" /> Aktif cihaz
-                </div>
-                <p className="mt-1 text-xl font-semibold text-foreground">{networkSummary.active}</p>
-              </div>
-              <div className="border-b border-border px-3 py-3 md:border-b-0 md:border-r sm:px-4">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <WifiOff className={cn('h-4 w-4', networkSummary.unavailable > 0 ? 'text-destructive' : 'text-muted-foreground')} /> Erişilemiyor
-                </div>
-                <p className={cn('mt-1 text-xl font-semibold', networkSummary.unavailable > 0 ? 'text-destructive' : 'text-foreground')}>{networkSummary.unavailable}</p>
-              </div>
-              <div className="border-r border-border px-3 py-3 sm:px-4">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <EthernetPort className={cn('h-4 w-4', networkSummary.portDown > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground')} /> İzlenen port down
-                </div>
-                <p className={cn('mt-1 text-xl font-semibold', networkSummary.portDown > 0 ? 'text-amber-700 dark:text-amber-300' : 'text-foreground')}>{networkSummary.portDown}</p>
-              </div>
-              <div className="px-3 py-3 sm:px-4">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Link2 className="h-4 w-4" /> Görünen bağlantı
-                </div>
-                <p className="mt-1 text-xl font-semibold text-foreground">{visibleConnectionCount}</p>
-              </div>
-            </div>
-
-            <div className="mt-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-              <div className="flex max-w-full items-center gap-1 overflow-x-auto rounded-md border border-border bg-muted/30 p-1" role="tablist" aria-label="Topoloji görünümü">
-                <Button
-                  variant={viewMode === 'building' ? 'default' : 'ghost'}
-                  size="sm"
-                  onClick={() => setViewMode('building')}
-                  className="shrink-0 gap-2"
-                  role="tab"
-                  aria-selected={viewMode === 'building'}
-                >
-                  <Box className="h-4 w-4" />
-                  Bina
-                </Button>
-                <Button
-                  variant={viewMode === 'physical' ? 'default' : 'ghost'}
-                  size="sm"
-                  onClick={() => setViewMode('physical')}
-                  className="shrink-0 gap-2"
-                  role="tab"
-                  aria-selected={viewMode === 'physical'}
-                >
-                  <Network className="h-4 w-4" />
-                  Fiziksel
-                </Button>
-                <Button
-                  variant={viewMode === 'services' ? 'default' : 'ghost'}
-                  size="sm"
-                  onClick={() => setViewMode('services')}
-                  className="shrink-0 gap-2"
-                  role="tab"
-                  aria-selected={viewMode === 'services'}
-                >
-                  <Server className="h-4 w-4" />
-                  Servisler
-                </Button>
-                <Button
-                  variant={viewMode === 'hierarchy' ? 'default' : 'ghost'}
-                  size="sm"
-                  onClick={() => setViewMode('hierarchy')}
-                  className="shrink-0 gap-2"
-                  role="tab"
-                  aria-selected={viewMode === 'hierarchy'}
-                >
-                  <Layers className="h-4 w-4" />
-                  Hiyerarşi
-                </Button>
-                <Button
-                  variant={viewMode === 'zoom' ? 'secondary' : 'ghost'}
-                  size="sm"
-                  onClick={() => {
-                    setViewMode('zoom');
-                    setZoomLevel('building');
-                    setBreadcrumbs([]);
-                  }}
-                  className="shrink-0 gap-2"
-                  role="tab"
-                  aria-selected={viewMode === 'zoom'}
-                >
-                  <Search className="h-4 w-4" />
-                  Yakınlaştır
-                </Button>
-              </div>
-
-              {viewMode !== 'hierarchy' && (
-                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 xl:justify-end">
-                  <div className="relative min-w-[220px] flex-1 xl:max-w-[320px]">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Cihaz ara..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-10"
-                      aria-label="Topolojide cihaz ara"
-                    />
-                    {searchQuery && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
-                        onClick={() => setSearchQuery('')}
-                        aria-label="Aramayı temizle"
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
-
-                  <Select value={filterDeviceType} onValueChange={setFilterDeviceType}>
-                      <SelectTrigger className="w-[150px]">
-                        <SelectValue placeholder="Tüm Tipler" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Tüm Tipler</SelectItem>
-                        {deviceTypes.filter(t => t !== 'all').map(type => (
-                          <SelectItem key={type} value={type}>{type.replace(/_/g, ' ')}</SelectItem>
-                        ))}
-                      </SelectContent>
-                  </Select>
-
-                  {/* Status Filter */}
-                  <Select value={filterStatus} onValueChange={setFilterStatus}>
-                    <SelectTrigger className="w-[145px]">
-                      <SelectValue placeholder="Tüm Durumlar" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Tüm Durumlar</SelectItem>
-                      <SelectItem value="ACTIVE">Aktif</SelectItem>
-                      <SelectItem value="INACTIVE">Pasif</SelectItem>
-                      <SelectItem value="MAINTENANCE">Bakımda</SelectItem>
-                      <SelectItem value="DECOMMISSIONED">Devre Dışı</SelectItem>
-                    </SelectContent>
-                  </Select>
-
-                  {/* Criticality Filter */}
-                  <Select value={filterCriticality} onValueChange={setFilterCriticality}>
-                    <SelectTrigger className="w-[150px]">
-                      <SelectValue placeholder="Tüm Öncelikler" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Tüm Öncelikler</SelectItem>
-                      <SelectItem value="CRITICAL">Kritik</SelectItem>
-                      <SelectItem value="HIGH">Yüksek</SelectItem>
-                      <SelectItem value="MEDIUM">Orta</SelectItem>
-                      <SelectItem value="LOW">Düşük</SelectItem>
-                    </SelectContent>
-                  </Select>
-
-                  {(searchQuery || filterDeviceType !== 'all' || filterStatus !== 'all' || filterCriticality !== 'all') && (
-                    <Button variant="ghost" size="sm" onClick={clearFilters} className="gap-2 text-muted-foreground">
-                      <X className="h-4 w-4" />
-                      Filtreleri Temizle
-                    </Button>
-                  )}
-                                    
-                  <div className="ml-auto xl:ml-0">
-                    <Badge variant="outline" className="h-9 px-3 font-medium">
-                      <Activity className="h-3 w-3 mr-2 text-primary" />
-                      {filteredDevices.length} / {devices.length} cihaz
-                    </Badge>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="mt-3 flex items-center justify-between gap-3 text-xs text-muted-foreground" aria-live="polite">
-              <span>{currentViewLabel}</span>
-              <span className={cn('flex items-center gap-1.5 font-medium', networkNeedsAttention ? 'text-amber-700 dark:text-amber-300' : 'text-emerald-700 dark:text-emerald-300')}>
-                {networkNeedsAttention ? <AlertTriangle className="h-3.5 w-3.5" /> : <CircleCheck className="h-3.5 w-3.5" />}
-                {networkNeedsAttention ? 'Dikkat gerektiren ağ öğeleri var' : 'İzlenen ağ öğeleri normal'}
-              </span>
-            </div>
+      <div className={styles.page}>
+        <header className={styles.header}>
+          <div className="min-w-0">
+            <p className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-primary"><Network className="h-3.5 w-3.5" />NMS Ağ görünümü</p>
+            <PageHeading section="network" showIcon={false} className="!text-2xl !font-semibold">Ağ topolojisi</PageHeading>
+            <p className="mt-1.5 text-sm text-muted-foreground">Binalar, cihazlar ve servisler arasındaki bağlantıları keşfedin.</p>
           </div>
+          <div className={styles.headerActions}>
+            <Button variant="outline" className="gap-2" onClick={() => loadData(true)} disabled={loading || refreshing}><RefreshCw className={cn('h-4 w-4', refreshing && 'animate-spin')} />{refreshing ? 'Yenileniyor' : 'Yenile'}</Button>
+            <Button variant="outline" className="gap-2" onClick={() => setShowManagementModal(true)} disabled={loading}><Settings2 className="h-4 w-4" /><span>Bağlantıları yönet</span></Button>
+            <Button variant="outline" size="icon" onClick={onExport} disabled={loading || !graphView || exporting || !topologyNodes.length} aria-label="Topolojiyi PNG olarak dışa aktar" title="Görünen haritayı PNG olarak indir">{exporting ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}</Button>
+            <Button onClick={() => setShowBuildingConnectionModal(true)} className="gap-2" disabled={loading}><Plus className="h-4 w-4" />Yeni bağlantı</Button>
+          </div>
+        </header>
+        <section className={styles.stats} aria-label="Ağ özeti">
+          <TopologyStat icon={<Server className="h-4 w-4" />} label="Toplam cihaz" value={loading ? '—' : devices.length} hint={`${buildings.length} bina · ${devices.filter(isUnassignedDevice).length} konumsuz cihaz`} />
+          <TopologyStat icon={<CircleCheck className="h-4 w-4" />} label="Aktif cihaz" value={loading ? '—' : networkSummary.active} hint={`${networkSummary.unknown} cihazın durumu bilinmiyor`} />
+          <TopologyStat icon={<EthernetPort className="h-4 w-4" />} label="Kapalı izlenen port" value={loading ? '—' : networkSummary.portDown} hint="NMS tarafından izlenen portlar" warning={networkSummary.portDown > 0} />
+          <TopologyStat icon={<Link2 className="h-4 w-4" />} label="Görünen bağlantı" value={loading ? '—' : graphView ? topologyEdges.length : buildingConnections.length} hint={graphView ? currentViewLabel : 'Binalar arası bağlantılar'} />
+        </section>
+        <div className={styles.viewToolbar}>
+          <div className={styles.viewTabs} role="tablist" aria-label="Topoloji görünümü" onKeyDown={event => {
+            const keys = ['building', 'physical', 'services', 'hierarchy', 'zoom'] as const;
+            const index = keys.indexOf(viewMode);
+            const next = event.key === 'ArrowRight' ? (index + 1) % keys.length : event.key === 'ArrowLeft' ? (index - 1 + keys.length) % keys.length : event.key === 'Home' ? 0 : event.key === 'End' ? keys.length - 1 : -1;
+            if (next < 0) return;
+            event.preventDefault(); changeView(keys[next]); document.getElementById(`topology-tab-${keys[next]}`)?.focus();
+          }}>
+            {([
+              { key: 'building', label: 'Binalar', icon: Building2 },
+              { key: 'physical', label: 'Fiziksel', icon: Network },
+              { key: 'services', label: 'Servisler', icon: Server },
+              { key: 'hierarchy', label: 'Hiyerarşi', icon: Layers },
+              { key: 'zoom', label: 'Konum keşfi', icon: Search },
+            ] as const).map(view => <button key={view.key} id={`topology-tab-${view.key}`} role="tab" type="button" aria-selected={viewMode === view.key} aria-controls="topology-view-panel" tabIndex={viewMode === view.key ? 0 : -1} onClick={() => changeView(view.key)}><view.icon className="h-4 w-4" />{view.label}</button>)}
+          </div>
+          {graphView && <div className={styles.tools}>
+            <div className={styles.search}>
+              <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+              <Input placeholder="Cihaz adı veya IP ile ara…" value={searchQuery} onChange={event => setSearchQuery(event.target.value)} className="pl-9 pr-9" aria-label="Topolojide cihaz ara" />
+              {searchQuery && <Button variant="ghost" size="icon" className="absolute right-0 top-0 h-10 w-9" onClick={() => setSearchQuery('')} aria-label="Aramayı temizle"><X className="h-3.5 w-3.5" /></Button>}
+            </div>
+            <Popover><PopoverTrigger asChild><Button variant="outline" className="gap-2"><Filter className="h-4 w-4" />Filtreler{activeFilterCount > 0 && <Badge variant="secondary" icon={null}>{activeFilterCount}</Badge>}</Button></PopoverTrigger>
+              <PopoverContent align="end" className="w-80 space-y-4" aria-labelledby="topology-filters-heading">
+                <div><h2 id="topology-filters-heading" className="text-sm font-semibold">Görünümü filtrele</h2><p className="mt-1 text-xs text-muted-foreground">Seçimler haritadaki cihazlara uygulanır.</p></div>
+                <div className="space-y-2"><Label htmlFor="topology-type">Cihaz türü</Label><select id="topology-type" className={styles.select} value={filterDeviceType} onChange={event => setFilterDeviceType(event.target.value)}><option value="all">Tüm türler</option>{deviceTypes.filter(type => type !== 'all').map(type => <option key={type} value={type}>{uiLabel(type)}</option>)}</select></div>
+                <div className="space-y-2"><Label htmlFor="topology-status">Cihaz durumu</Label><select id="topology-status" className={styles.select} value={filterStatus} onChange={event => setFilterStatus(event.target.value)}><option value="all">Tüm durumlar</option><option value="ACTIVE">Aktif</option><option value="INACTIVE">Pasif</option><option value="MAINTENANCE">Bakımda</option><option value="ERROR">Hata</option><option value="DECOMMISSIONED">Devre dışı</option><option value="UNKNOWN">Bilinmiyor</option></select></div>
+                <div className="space-y-2"><Label htmlFor="topology-criticality">Kritiklik</Label><select id="topology-criticality" className={styles.select} value={filterCriticality} onChange={event => setFilterCriticality(event.target.value)}><option value="all">Tüm öncelikler</option><option value="CRITICAL">Kritik</option><option value="HIGH">Yüksek</option><option value="MEDIUM">Orta</option><option value="LOW">Düşük</option></select></div>
+                <Button variant="outline" size="sm" className="w-full gap-2" disabled={!hasFilters} onClick={clearFilters}><RotateCcw className="h-3.5 w-3.5" />Filtreleri sıfırla</Button>
+              </PopoverContent>
+            </Popover>
+          </div>}
         </div>
-
+        {graphView && hasFilters && <div className={styles.activeFilters} aria-label="Etkin filtreler">
+          {searchQuery && <button type="button" onClick={() => setSearchQuery('')} aria-label="Arama filtresini kaldır">Arama: {searchQuery}<X className="h-3 w-3" /></button>}
+          {filterDeviceType !== 'all' && <button type="button" onClick={() => setFilterDeviceType('all')} aria-label="Cihaz türü filtresini kaldır">{uiLabel(filterDeviceType)}<X className="h-3 w-3" /></button>}
+          {filterStatus !== 'all' && <button type="button" onClick={() => setFilterStatus('all')} aria-label="Durum filtresini kaldır">{uiLabel(filterStatus)}<X className="h-3 w-3" /></button>}
+          {filterCriticality !== 'all' && <button type="button" onClick={() => setFilterCriticality('all')} aria-label="Kritiklik filtresini kaldır">{uiLabel(filterCriticality)}<X className="h-3 w-3" /></button>}
+          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={clearFilters}>Tümünü temizle</Button>
+        </div>}
+        <div className={styles.statusLine}>
+          <p className="text-xs text-muted-foreground" role="status">{loading ? 'Envanter yükleniyor…' : graphView ? `${filteredDevices.length} / ${devices.length} cihaz · ${currentViewLabel}` : `${currentViewLabel} · Tüm envanter`}</p>
+          <span className="text-[11px] text-muted-foreground">{lastUpdatedAt ? `Son güncelleme ${lastUpdatedAt.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}` : 'Güncelleme bekleniyor'}</span>
+          {!loading && !error && <SemanticBadge tone={networkNeedsAttention ? 'warning' : networkSummary.unknown ? 'neutral' : devices.length ? 'success' : 'neutral'} icon={networkSummary.unknown && !networkNeedsAttention ? CircleHelp : undefined}>{networkNeedsAttention ? `${networkSummary.unavailable} pasif cihaz · ${networkSummary.portDown} kapalı port` : networkSummary.unknown ? `${networkSummary.unknown} cihazın durumu bilinmiyor` : devices.length ? 'İzlenen ağ öğeleri normal' : 'Envanter boş'}</SemanticBadge>}
+        </div>
+        {exportError && <p role="alert" className="flex items-center gap-2 rounded-lg border border-destructive/25 bg-destructive/5 p-3 text-xs text-destructive"><AlertTriangle className="h-4 w-4 shrink-0" />{exportError}</p>}
         {/* Loading/Error States */}
         {loading && (
-          <div className="flex-1 flex items-center justify-center bg-background">
+          <div className="flex min-h-48 flex-1 items-center justify-center bg-background" role="status">
             <div className="text-center">
               <RefreshCw className="mx-auto h-6 w-6 animate-spin text-primary" />
               <p className="mt-3 text-sm font-medium text-foreground">Ağ topolojisi hazırlanıyor</p>
@@ -1729,11 +1627,11 @@ const NetworkTopologyPage = () => {
         )}
 
         {error && (
-          <div className="flex-1 flex items-center justify-center bg-background">
+          <div className="flex min-h-48 flex-1 items-center justify-center bg-background" role="alert">
             <div className="mx-4 w-full max-w-md rounded-md border border-destructive/30 bg-destructive/5 p-6 text-center">
               <AlertTriangle className="mx-auto h-6 w-6 text-destructive" />
               <p className="mt-3 text-sm font-semibold text-foreground">Topoloji yüklenemedi</p>
-              <p className="mt-1 text-sm text-muted-foreground">{error}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{uiError(error)}</p>
               <Button onClick={() => loadData()} className="mt-4 gap-2">
                 <RefreshCw className="h-4 w-4" />
                 Tekrar Dene
@@ -1744,13 +1642,13 @@ const NetworkTopologyPage = () => {
 
         {/* Content */}
         {!loading && !error && (
-          <>
+          <div className={styles.content} id="topology-view-panel" role="tabpanel" aria-labelledby={`topology-tab-${viewMode}`} tabIndex={0}>
             {viewMode === 'hierarchy' ? (
               // HIERARCHY VIEW
-              <div className="flex-1 overflow-auto p-8 bg-background">
+              <div className={styles.exploration}>
                 <div className="max-w-5xl mx-auto">
                   <div className="mb-10">
-                    <h2 className="text-3xl font-black tracking-tight text-foreground">Altyapı Hiyerarşisi</h2>
+                    <h2 className="text-xl font-semibold tracking-tight text-foreground">Altyapı Hiyerarşisi</h2>
                     <p className="text-muted-foreground mt-1">Sisteminizdeki tüm konumların ve cihazların hiyerarşik listesi</p>
                   </div>
                   
@@ -1879,7 +1777,7 @@ const NetworkTopologyPage = () => {
               </div>
             ) : viewMode === 'zoom' ? (
               // ZOOM VIEW - Modern Hierarchical Zoom Interface
-              <div className="flex-1 overflow-auto bg-background">
+              <div className={styles.exploration}>
                 {/* Breadcrumb Navigation */}
                 {breadcrumbs.length > 0 && (
                   <div className="sticky top-0 z-20 bg-background/80 backdrop-blur-md border-b border-border px-6 py-4 shadow-sm">
@@ -1940,7 +1838,7 @@ const NetworkTopologyPage = () => {
                     <div className="max-w-7xl mx-auto px-4">
                       <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-4">
                         <div className="space-y-1">
-                          <h2 className="text-4xl font-black tracking-tight text-foreground">Altyapıya Genel Bakış</h2>
+                          <h2 className="text-xl font-semibold tracking-tight text-foreground">Altyapıya Genel Bakış</h2>
                           <p className="text-muted-foreground flex items-center gap-2">
                             <MapPin className="h-4 w-4 text-primary/60" />
                             Sisteminizdeki tüm aktif lokasyonlar ve binalar
@@ -2023,7 +1921,7 @@ const NetworkTopologyPage = () => {
                     <div className="max-w-7xl mx-auto px-4">
                       <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-4">
                         <div className="space-y-1">
-                          <h2 className="text-4xl font-black tracking-tight text-foreground">{selectedBuilding.name}</h2>
+                          <h2 className="text-xl font-semibold tracking-tight text-foreground">{selectedBuilding.name}</h2>
                           <p className="text-muted-foreground flex items-center gap-2">
                             <Layers className="h-4 w-4 text-primary/60" />
                             Odaları ve kabinetleri keşfetmek için bir kat seçin
@@ -2093,7 +1991,7 @@ const NetworkTopologyPage = () => {
                     <div className="max-w-7xl mx-auto px-4">
                       <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-4">
                         <div className="space-y-1">
-                          <h2 className="text-4xl font-black tracking-tight text-foreground">{selectedFloor.name}</h2>
+                          <h2 className="text-xl font-semibold tracking-tight text-foreground">{selectedFloor.name}</h2>
                           <p className="text-muted-foreground flex items-center gap-2">
                             <DoorOpen className="h-4 w-4 text-primary/60" />
                             Kabinetleri görüntülemek için bir oda seçin
@@ -2161,7 +2059,7 @@ const NetworkTopologyPage = () => {
                     <div className="max-w-7xl mx-auto px-4">
                       <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-4">
                         <div className="space-y-1">
-                          <h2 className="text-4xl font-black tracking-tight text-foreground">{selectedRoom.name}</h2>
+                          <h2 className="text-xl font-semibold tracking-tight text-foreground">{selectedRoom.name}</h2>
                           <p className="text-muted-foreground flex items-center gap-2">
                             <BoxSelect className="h-4 w-4 text-primary/60" />
                             Cihazları görüntülemek için bir kabinet seçin
@@ -2219,14 +2117,14 @@ const NetworkTopologyPage = () => {
                                     <div className="p-3 bg-emerald-500 rounded-xl shadow-lg shadow-emerald-500/20 group-hover:scale-110 transition-transform duration-300">
                                       <BoxSelect className="h-6 w-6 text-white" />
                                     </div>
-                                    <Badge variant="secondary" className="h-6 font-black bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-none">
+                                    <Badge variant="success" className="h-6 font-black border-none">
                                       {rack.maxUnits}U
                                     </Badge>
                                   </div>
                                   
                                   <div className="mb-6">
                                     <h3 className="text-xl font-black tracking-tight group-hover:text-primary transition-colors">{rack.name}</h3>
-                                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{rack.type.replace(/_/g, ' ')}</p>
+                                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{uiLabel(rack.type)}</p>
                                   </div>
                                   
                                   <div className="space-y-3 mt-auto">
@@ -2253,7 +2151,7 @@ const NetworkTopologyPage = () => {
                     <div className="max-w-7xl mx-auto px-4">
                       <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-4">
                         <div className="space-y-1">
-                          <h2 className="text-4xl font-black tracking-tight text-foreground">{selectedRack.name}</h2>
+                          <h2 className="text-xl font-semibold tracking-tight text-foreground">{selectedRack.name}</h2>
                           <p className="text-muted-foreground flex items-center gap-2">
                             <Server className="h-4 w-4 text-primary/60" />
                             Kabinet içindeki aktif cihazlar ve servisleri
@@ -2303,12 +2201,12 @@ const NetworkTopologyPage = () => {
                                           <Server className="h-5 w-5 text-primary" />
                                         </div>
                                         <Badge variant={config.variant} className="h-5 text-[9px] font-black uppercase tracking-widest px-2">
-                                          {device.status}
+                                          {uiLabel(device.status)}
                                         </Badge>
                                       </div>
                                       
                                       <h3 className="text-lg font-black tracking-tight mb-1 truncate">{device.name}</h3>
-                                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{device.type.replace(/_/g, ' ')}</p>
+                                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{uiLabel(device.type)}</p>
                                     </div>
                                     
                                     <div className="p-6 space-y-4">
@@ -2324,7 +2222,7 @@ const NetworkTopologyPage = () => {
                                               "bg-primary/5 text-primary"
                                             )}
                                           >
-                                            {device.criticality}
+                                            {uiLabel(device.criticality)}
                                           </Badge>
                                         </div>
                                         <div className="space-y-1 text-right">
@@ -2343,7 +2241,7 @@ const NetworkTopologyPage = () => {
                                             {device.networkInterfaces.slice(0, 3).map(iface => (
                                               <div key={iface.id} className="flex items-center justify-between text-[10px] p-1.5 rounded bg-muted/30 border border-border/50">
                                                 <span className="font-bold truncate max-w-[80px]">{iface.name}</span>
-                                                <span className="font-mono text-muted-foreground">{iface.ipv4 || 'No IP'}</span>
+                                                <span className="font-mono text-muted-foreground">{iface.ipv4 || 'IP yok'}</span>
                                               </div>
                                             ))}
                                           </div>
@@ -2363,20 +2261,29 @@ const NetworkTopologyPage = () => {
               </div>
             ) : (
               // TOPOLOGY VIEWS
-              <div className="flex min-h-0 flex-1 overflow-hidden border-t border-border">
-                <div className="relative min-h-[520px] min-w-0 flex-1 bg-muted/10">
-                  <ReactFlow style={{ width: "100%", height: "100%" }}
+              <div className={styles.workspace}>
+                <div className={styles.canvas} ref={canvasRef} tabIndex={-1} aria-label="Topoloji haritası" role="region">
+                  <div className={styles.mapHeading}>
+                    <span className="flex items-center gap-2 text-xs font-medium"><Network className="h-3.5 w-3.5 text-primary" />{currentViewLabel}<span className="font-normal text-muted-foreground">{topologyNodes.length} öğe · {topologyEdges.length} bağlantı</span></span>
+                    <Popover><PopoverTrigger asChild><Button size="sm" variant="ghost" className="h-7 gap-1.5 text-xs"><Info className="h-3.5 w-3.5" />Harita rehberi</Button></PopoverTrigger><PopoverContent align="end" className="w-72 space-y-3"><p className="text-sm font-semibold">Haritayı keşfedin</p><p className="flex gap-2 text-xs text-muted-foreground"><Move className="h-4 w-4 shrink-0" />Boş alanı sürükleyerek haritada gezinin.</p><p className="flex gap-2 text-xs text-muted-foreground"><MousePointer2 className="h-4 w-4 shrink-0" />Bir öğeye tıklayarak detaylarını açın.</p><p className="text-xs text-muted-foreground">Öğeleri sürükleyerek bu görünümde yerlerini değiştirebilirsiniz.</p><div className="space-y-2 border-t border-border pt-3 text-xs"><p><span className="mr-2 inline-block w-6 border-t-2 border-red-600" />Fiber bağlantı</p><p><span className="mr-2 inline-block w-6 border-t-2 border-dashed border-green-600" />Bakır kablo</p><p><span className="mr-2 inline-block w-6 border-t-2 border-dashed border-blue-600" />Kablosuz bağlantı</p><p><span className="mr-2 inline-block w-6 border-t-2 border-dashed border-purple-600" />VPN / sanal bağlantı</p></div></PopoverContent></Popover>
+                  </div>
+                  <ReactFlow style={{ width: '100%', height: '100%' }}
                     nodes={topologyNodes}
                     edges={topologyEdges}
                     nodeTypes={nodeTypes}
                     edgeTypes={edgeTypes}
                     onNodesChange={handleNodesChange}
                     onNodeClick={(_, node) => handleNodeClick(node)}
+                    onInit={() => setFlowReady(true)}
+                    onPaneClick={() => { setSelectedNode(null); setIsSidebarOpen(false); }}
                     onNodeContextMenu={handleNodeContextMenu}
                     onEdgeClick={handleEdgeClick}
                     nodesDraggable
                     nodesConnectable={false}
+                    zoomOnScroll={!compactMap}
+                    preventScrolling={!compactMap}
                     onMove={(_, viewport) => {
+                      setViewportZoom(Math.round(viewport.zoom * 100));
                       if (viewMode === 'building') {
                         // Only update state when zoom crosses a threshold boundary
                         // to prevent onMove → setSemanticZoom → useMemo → setNodes → onMove loop
@@ -2389,6 +2296,10 @@ const NetworkTopologyPage = () => {
                       }
                     }}
                     fitView
+                    fitViewOptions={{ padding: .18, maxZoom: 1 }}
+                    minZoom={.05}
+                    maxZoom={2}
+                    aria-label="Etkileşimli ağ topolojisi"
                     attributionPosition="bottom-left"
                     connectionLineType={ConnectionLineType.Straight}
                     connectionLineStyle={{
@@ -2397,19 +2308,26 @@ const NetworkTopologyPage = () => {
                       strokeDasharray: '5,5',
                     }}
                   >
-                    <Background color="hsl(var(--muted-foreground))" gap={24} size={1} className="opacity-20" />
-                    <Controls className="border-border bg-card fill-foreground shadow-sm" />
+                    <Background color="oklch(var(--border))" gap={24} size={1} />
+                    <Panel position="bottom-left" className="!m-3">
+                      <div className={styles.mapControls}>
+                        <Button size="icon" variant="ghost" className="h-9 w-9 rounded-none" aria-label="Haritayı yakınlaştır" onClick={() => zoomIn({ duration: 0 })}><Plus className="h-4 w-4" /></Button>
+                        <span className="min-w-11 text-center text-[11px] tabular-nums text-muted-foreground">{viewportZoom}%</span>
+                        <Button size="icon" variant="ghost" className="h-9 w-9 rounded-none" aria-label="Haritayı uzaklaştır" onClick={() => zoomOut({ duration: 0 })}><Minus className="h-4 w-4" /></Button>
+                        <Button size="sm" variant="ghost" className="h-9 gap-1.5 rounded-none border-l border-border text-xs" onClick={() => fitView({ padding: .18, maxZoom: 1, duration: 0 })}><Maximize2 className="h-3.5 w-3.5" />Ekrana sığdır</Button>
+                      </div>
+                    </Panel>
 
                     {showTopologyEmptyState && (
                       <Panel position="top-center">
-                        <div className="mt-10 flex flex-col items-center justify-center rounded-md border border-dashed border-border bg-background/95 px-8 py-7 text-center shadow-sm">
+                        <div className={styles.emptyState}>
                           <Server className="mb-3 h-8 w-8 text-muted-foreground" />
-                          <h3 className="text-base font-semibold text-foreground">Topolojide gösterilecek cihaz yok</h3>
+                          <h3 className="text-base font-semibold text-foreground">{hasFilters ? 'Filtrelere uygun cihaz bulunamadı' : 'Topolojide gösterilecek cihaz yok'}</h3>
                           <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-                            Cihazlar sayfasından envantere cihaz ekleyerek başlayın.
+                            {hasFilters ? 'Aramayı değiştirin veya filtreleri temizleyerek yeniden deneyin.' : 'Cihazlar sayfasından envantere cihaz ekleyerek başlayın.'}
                           </p>
-                          <Button variant="outline" size="sm" className="mt-4" onClick={() => router.push('/devices')}>
-                            Cihazlara git
+                          <Button variant="outline" size="sm" className="mt-4" onClick={() => hasFilters ? clearFilters() : router.push('/devices')}>
+                            {hasFilters ? 'Filtreleri temizle' : 'Cihazlara git'}
                           </Button>
                         </div>
                       </Panel>
@@ -2474,34 +2392,10 @@ const NetworkTopologyPage = () => {
                   </div>
                 )}
 
-                {/* Sidebar Container */}
-                <div className="relative flex shrink-0">
-                  {selectedNode && (
-                    <Button
-                      variant="secondary"
-                      size="icon"
-                      className={cn(
-                        "absolute top-1/2 -translate-y-1/2 rounded-full h-10 w-10 shadow-xl z-[1060] border-2 border-primary/20 bg-card hover:bg-accent transition-all duration-300 flex items-center justify-center",
-                        isSidebarOpen ? "left-[-20px]" : "left-[-20px]"
-                      )}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        console.log('Sidebar toggle clicked, current state:', isSidebarOpen);
-                        setIsSidebarOpen(!isSidebarOpen);
-                      }}
-                    >
-                      {isSidebarOpen ? <ChevronRight className="h-6 w-6 text-primary" /> : <ChevronLeft className="h-6 w-6 text-primary" />}
-                    </Button>
-                  )}
-                  
-                  <aside 
-                    className={cn(
-                      "bg-card/80 backdrop-blur-md border-l border-border flex flex-col shadow-2xl transition-all duration-300 overflow-hidden",
-                      isSidebarOpen && selectedNode ? "w-96" : "w-0"
-                    )}
-                    style={{ display: selectedNode ? 'flex' : 'none' }}
-                  >
+                {selectedNode && !isSidebarOpen && <Button className={styles.reopenDetails} variant="outline" size="sm" onClick={() => setIsSidebarOpen(true)}><Info className="mr-1.5 h-3.5 w-3.5" />Detayları göster</Button>}
+                <div className={cn(styles.detailsContainer, (!selectedNode || !isSidebarOpen) && styles.detailsHidden)}>
+                  <aside className={styles.details} aria-label="Seçim detayları" aria-hidden={!isSidebarOpen || !selectedNode}>
+                    <div className={styles.detailsBar}><p className="text-xs font-semibold text-muted-foreground">Seçim detayları</p><Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Detay panelini kapat" onClick={() => { setIsSidebarOpen(false); canvasRef.current?.focus({ preventScroll: true }); }}><X className="h-4 w-4" /></Button></div>
                     {selectedNode ? (
                     <div className="flex-1 overflow-y-auto">
                       {selectedNode.data.isBuildingConnection ? (
@@ -2633,7 +2527,7 @@ const NetworkTopologyPage = () => {
                                 <div className="mt-3 flex items-center justify-between rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-red-700">
                                   <span className="flex items-center gap-2 text-sm font-semibold">
                                     <AlertTriangle className="h-4 w-4" />
-                                    Port Down
+                                    Kapalı port
                                   </span>
                                   <Badge variant="destructive">{selectedNode.data.portDownCount}</Badge>
                                 </div>
@@ -2662,9 +2556,9 @@ const NetworkTopologyPage = () => {
                                       className="h-7 w-7 object-contain"
                                     />
                                   )}
-                                  <h2 className="text-xl font-bold tracking-tight truncate max-w-[200px]">{selectedNode.data.label || selectedNode.data.name}</h2>
+                                  <h2 className="break-words text-base font-semibold tracking-tight">{selectedNode.data.label || selectedNode.data.name}</h2>
                                 </div>
-                                <Badge variant="secondary" className="mt-1">{selectedNode.data.type?.replace(/_/g, ' ')}</Badge>
+                                <Badge variant="secondary" className="mt-1" icon={null}>{uiLabel(selectedNode.data.type || 'UNKNOWN')}</Badge>
                               </div>
                             </div>
                           </div>
@@ -2673,18 +2567,11 @@ const NetworkTopologyPage = () => {
                             <div className="grid grid-cols-2 gap-3">
                               <Card className="p-3 bg-muted/30">
                                 <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Durum</p>
-                                <div className="flex items-center gap-2">
-                                  <div className={cn("h-2 w-2 rounded-full animate-pulse", 
-                                    selectedNode.data.status === 'ACTIVE' || selectedNode.data.status === 'active' ? "bg-emerald-500" : "bg-red-500"
-                                  )} />
-                                  <span className="text-xs font-bold">{selectedNode.data.status === 'ACTIVE' || selectedNode.data.status === 'active' ? 'AKTİF' : 'PASİF'}</span>
-                                </div>
+                                <StatusBadge status={selectedNode.data.status || 'UNKNOWN'} />
                               </Card>
                               <Card className="p-3 bg-muted/30">
                                 <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Kritiklik</p>
-                                <Badge variant={selectedNode.data.criticality === 'CRITICAL' ? 'destructive' : 'secondary'} className="w-full justify-center">
-                                  {selectedNode.data.criticality}
-                                </Badge>
+                                <SeverityBadge severity={selectedNode.data.criticality || 'Bilinmiyor'} />
                               </Card>
                             </div>
 
@@ -2712,7 +2599,7 @@ const NetworkTopologyPage = () => {
                                   <div className="flex min-w-0 items-center gap-2">
                                     <AlertTriangle className="h-5 w-5 shrink-0" />
                                     <div className="min-w-0">
-                                      <p className="text-sm font-bold">İzlenen Port Down</p>
+                                      <p className="text-sm font-bold">Kapalı izlenen portlar</p>
                                       <p className="text-[11px] text-red-700/80">NMS tarafından takip edilen portlarda kesinti var.</p>
                                     </div>
                                   </div>
@@ -2721,22 +2608,22 @@ const NetworkTopologyPage = () => {
                                   </Badge>
                                 </div>
                                 <div className="space-y-2">
-                                  {(selectedNode.data.downPorts || []).map((port: any) => (
+                                  {(selectedNode.data.downPorts || []).map((port: DownPortSummary) => (
                                     <div key={port.id} className="rounded-lg border border-red-200 bg-white/70 p-3">
                                       <div className="flex items-center justify-between gap-2">
                                         <span className="flex min-w-0 items-center gap-2 text-xs font-bold">
                                           <EthernetPort className="h-3.5 w-3.5 shrink-0" />
                                           <span className="truncate">{port.interfaceName}</span>
                                         </span>
-                                        <Badge variant="destructive" className="h-5 shrink-0 text-[10px]">DOWN</Badge>
+                                        <Badge variant="destructive" className="h-5 shrink-0 text-[10px]">KAPALI</Badge>
                                       </div>
                                       {port.description && (
                                         <p className="mt-1 truncate text-[11px] text-red-700/80">{port.description}</p>
                                       )}
                                       <p className="mt-1 text-[10px] text-red-700/70">
                                         {port.downSince
-                                          ? `Down since: ${new Date(port.downSince).toLocaleString('tr-TR')}`
-                                          : 'Down başlangıç zamanı bilinmiyor'}
+                                          ? `Kesinti başlangıcı: ${new Date(port.downSince).toLocaleString('tr-TR')}`
+                                          : 'Kesinti başlangıcı bilinmiyor'}
                                       </p>
                                     </div>
                                   ))}
@@ -2767,12 +2654,12 @@ const NetworkTopologyPage = () => {
                               <div className="space-y-3">
                                 <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Ağ Arayüzleri</p>
                                 <div className="space-y-2">
-                                  {selectedNode.data.interfaces.map((iface: any) => (
+                                  {selectedNode.data.interfaces.map((iface: NonNullable<Device['networkInterfaces']>[number]) => (
                                     <Card key={iface.id} className="p-3 bg-background border-border/50 hover:border-primary/50 transition-colors cursor-default">
                                       <div className="flex items-center justify-between mb-2">
                                         <span className="text-xs font-bold">{iface.name}</span>
                                         <Badge variant={iface.status === 'UP' ? 'default' : 'destructive'} className="h-4 text-[8px] px-1.5">
-                                          {iface.status}
+                                          {uiLabel(iface.status)}
                                         </Badge>
                                       </div>
                                       {iface.ipv4 && (
@@ -2805,9 +2692,17 @@ const NetworkTopologyPage = () => {
               </div>
             </div>
           )}  
-          </>
+          </div>
         )}
         
+        <Dialog open={!!exportPreview} onOpenChange={open => { if (!open) setExportPreview(null); }}>
+          <DialogContent className="max-w-3xl">
+            <DialogHeader><DialogTitle>Topoloji görseli hazır</DialogTitle><DialogDescription>Görünen harita PNG olarak hazırlandı. İndirmeden önce görünümü kontrol edebilirsiniz.</DialogDescription></DialogHeader>
+            {exportPreview && <img src={exportPreview} alt="Dışa aktarılacak ağ topolojisi" className="max-h-[55vh] w-full rounded-lg border border-border object-contain" />}
+            <DialogFooter className="gap-2"><Button variant="outline" onClick={() => setExportPreview(null)}>Kapat</Button><Button asChild className="gap-2"><a href={exportPreview || undefined} download={`infrascope-topology-${new Date().toISOString().slice(0,10)}.png`}><Download className="h-4 w-4" />PNG indir</a></Button></DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         {/* Building Connection Modal */}
         {showBuildingConnectionModal && (
           <BuildingConnectionModal
@@ -2834,7 +2729,7 @@ const NetworkTopologyPage = () => {
             onUpdate={async () => {
               await loadData();
             }}
-            onEdit={(conn: any) => {
+            onEdit={(conn: BuildingConnection) => {
               setBuildingConnectionToEdit(conn);
               setShowBuildingConnectionModal(true);
             }}
@@ -2883,7 +2778,7 @@ interface BuildingDetailPopupProps {
 const BuildingDetailPopup: React.FC<BuildingDetailPopupProps> = ({ building, devices, onClose }) => {
   return (
     <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-2xl bg-card border-border shadow-2xl z-[1011] max-h-[90vh] overflow-y-auto">
+      <DialogContent className={cn(styles.modal, "max-w-2xl bg-card border-border shadow-2xl z-[1011] max-h-[90vh] overflow-y-auto")}>
         <DialogHeader>
           <div className="flex items-center gap-3">
             <div className="bg-primary/10 p-2.5 rounded-xl">
@@ -2916,9 +2811,9 @@ const BuildingDetailPopup: React.FC<BuildingDetailPopupProps> = ({ building, dev
           </Card>
           <Card className="bg-destructive/5 border-destructive/20 shadow-none">
             <CardContent className="p-4">
-              <p className="text-[10px] font-bold text-destructive uppercase tracking-widest mb-1">Sorunlu</p>
+              <p className="text-[10px] font-bold text-destructive uppercase tracking-widest mb-1">Pasif / hata</p>
               <p className="text-3xl font-black text-destructive">
-                {devices.filter(d => d.status !== 'ACTIVE').length}
+                {devices.filter(d => ['INACTIVE', 'ERROR', 'DECOMMISSIONED'].includes(d.status.toUpperCase())).length}
               </p>
             </CardContent>
           </Card>
@@ -2934,23 +2829,19 @@ const BuildingDetailPopup: React.FC<BuildingDetailPopupProps> = ({ building, dev
             ) : (
               devices.map(device => (
                 <Card key={device.id} className="bg-background border-border/50 hover:border-primary/50 transition-colors shadow-none">
-                  <CardContent className="p-3 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center",
-                        device.status === 'ACTIVE' ? "bg-emerald-500/10 text-emerald-500" : "bg-destructive/10 text-destructive"
-                      )}>
+                  <CardContent className="p-3 flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                         <Box className="h-4 w-4" />
                       </div>
                       <div>
-                        <div className="text-sm font-bold">{device.name}</div>
+                        <div className="break-all text-sm font-semibold">{device.name}</div>
                         <div className="text-[10px] text-muted-foreground uppercase tracking-tighter">
-                          {device.type} • {device.rack?.room?.name || 'Oda Yok'}
+                          {uiLabel(device.type)} • {device.rack?.room?.name || 'Oda Yok'}
                         </div>
                       </div>
                     </div>
-                    <Badge variant={device.status === 'ACTIVE' ? 'default' : 'destructive'} className="h-5 text-[9px] uppercase font-black">
-                      {device.status}
-                    </Badge>
+                    <StatusBadge status={device.status || 'UNKNOWN'} />
                   </CardContent>
                 </Card>
               ))
@@ -2965,10 +2856,10 @@ const BuildingDetailPopup: React.FC<BuildingDetailPopupProps> = ({ building, dev
 // Building Connection Modal Component
 interface BuildingConnectionModalProps {
   buildings: Building[];
-  connection?: any | null;
+  connection?: BuildingConnection | null;
   onClose: () => void;
   onSuccess: () => void;
-  existingConnections: any[];
+  existingConnections: BuildingConnection[];
 }
 
 const BuildingConnectionModal: React.FC<BuildingConnectionModalProps> = ({
@@ -3051,10 +2942,10 @@ const BuildingConnectionModal: React.FC<BuildingConnectionModalProps> = ({
       if (response.success) {
         onSuccess();
       } else {
-        setError(response.error || `Bağlantı ${connection?.id ? 'güncellenemedi' : 'oluşturulamadı'}`);
+        setError(uiError(response.error || `Bağlantı ${connection?.id ? 'güncellenemedi' : 'oluşturulamadı'}`));
       }
-    } catch (err: any) {
-      setError(err.response?.data?.error || err.message || `Bağlantı ${connection?.id ? 'güncellenemedi' : 'oluşturulamadı'}`);
+    } catch (err) {
+      setError(uiError((err as Error & { response?: { data?: { error?: string }; status?: number } }).response?.data?.error || (err as Error & { response?: { data?: { error?: string }; status?: number } }).message || `Bağlantı ${connection?.id ? 'güncellenemedi' : 'oluşturulamadı'}`));
     } finally {
       setLoading(false);
     }
@@ -3062,7 +2953,7 @@ const BuildingConnectionModal: React.FC<BuildingConnectionModalProps> = ({
 
   return (
     <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-3xl bg-card border-border shadow-2xl overflow-hidden flex flex-col p-0 z-[1011] max-h-[90vh]">
+      <DialogContent className={cn(styles.modal, "max-w-3xl bg-card border-border shadow-2xl overflow-hidden flex flex-col p-0 z-[1011] max-h-[90vh]")}>
         <DialogHeader className="p-6 bg-primary/10 border-b border-primary/20">
           <div className="flex items-center gap-3">
             <div className="bg-primary rounded-xl p-2.5 shadow-lg shadow-primary/20">
@@ -3082,7 +2973,7 @@ const BuildingConnectionModal: React.FC<BuildingConnectionModalProps> = ({
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto custom-scrollbar p-6">
           {error && (
             <Card className="mb-6 bg-destructive/10 border-destructive/20 text-destructive p-4">
-              <p className="text-sm font-medium">{error}</p>
+              <p className="text-sm font-medium">{uiError(error)}</p>
             </Card>
           )}
 
@@ -3298,7 +3189,7 @@ const BuildingConnectionModal: React.FC<BuildingConnectionModalProps> = ({
             İptal
           </Button>
           <Button 
-            onClick={(e: any) => handleSubmit(e)} 
+            onClick={(e) => handleSubmit(e)}
             disabled={loading || !formData.sourceBuildingId || !formData.destBuildingId}
             className="min-w-[140px] gap-2"
           >
@@ -3317,10 +3208,10 @@ const BuildingConnectionModal: React.FC<BuildingConnectionModalProps> = ({
 
 // Building Connections Management Modal Component
 interface BuildingConnectionsManagementModalProps {
-  connections: any[];
+  connections: BuildingConnection[];
   onClose: () => void;
   onUpdate: () => void;
-  onEdit: (connection: any) => void;
+  onEdit: (connection: BuildingConnection) => void;
 }
 
 const BuildingConnectionsManagementModal: React.FC<BuildingConnectionsManagementModalProps> = ({
@@ -3329,7 +3220,7 @@ const BuildingConnectionsManagementModal: React.FC<BuildingConnectionsManagement
   onUpdate,
   onEdit,
 }) => {
-  const [selectedConnection, setSelectedConnection] = useState<any | null>(null);
+  const [selectedConnection, setSelectedConnection] = useState<BuildingConnection | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -3354,7 +3245,7 @@ const BuildingConnectionsManagementModal: React.FC<BuildingConnectionsManagement
 
   return (
     <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-5xl bg-card border-border shadow-2xl overflow-hidden flex flex-col p-0 z-[1011] max-h-[90vh]">
+      <DialogContent className={cn(styles.modal, "max-w-5xl bg-card border-border shadow-2xl overflow-hidden flex flex-col p-0 z-[1011] max-h-[90vh]")}>
         <DialogHeader className="p-6 bg-primary/10 border-b border-primary/20">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -3371,7 +3262,7 @@ const BuildingConnectionsManagementModal: React.FC<BuildingConnectionsManagement
           </div>
         </DialogHeader>
 
-        <div className="flex-1 overflow-hidden flex">
+        <div className={styles.managementBody}>
           {/* Main List */}
           <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-3">
             {connections.length === 0 ? (
@@ -3402,7 +3293,7 @@ const BuildingConnectionsManagementModal: React.FC<BuildingConnectionsManagement
                             {conn.connectionType?.replace(/_/g, ' ')}
                           </Badge>
                           <Badge variant={conn.status === 'ACTIVE' ? 'default' : 'secondary'} className="h-5 text-[9px] uppercase font-black">
-                            {conn.status}
+                            {uiLabel(conn.status)}
                           </Badge>
                           {conn.bandwidth && (
                             <span className="text-[10px] text-muted-foreground flex items-center gap-1 font-medium">
@@ -3418,7 +3309,7 @@ const BuildingConnectionsManagementModal: React.FC<BuildingConnectionsManagement
                           size="icon" 
                           className="h-8 w-8 text-primary hover:bg-primary/10"
                           onClick={(e) => { e.stopPropagation(); onEdit(conn); }}
-                        >
+                         aria-label="Ayarlar">
                           <Settings2 className="h-4 w-4" />
                         </Button>
                         {conn.recordingMethod === 'MANUAL' && (
@@ -3427,7 +3318,7 @@ const BuildingConnectionsManagementModal: React.FC<BuildingConnectionsManagement
                             size="icon" 
                             className="h-8 w-8 text-destructive hover:bg-destructive/10"
                             onClick={(e) => { e.stopPropagation(); setDeleteConfirm(conn.id); }}
-                          >
+                           aria-label="Kapat">
                             <X className="h-4 w-4" />
                           </Button>
                         )}
@@ -3485,7 +3376,7 @@ const BuildingConnectionsManagementModal: React.FC<BuildingConnectionsManagement
                   <div className="space-y-2">
                     <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest">Yönetici Notları</span>
                     <p className="text-xs text-muted-foreground italic leading-relaxed border-l-2 border-primary/20 pl-3">
-                      "{selectedConnection.notes}"
+                      &ldquo;{selectedConnection.notes}&rdquo;
                     </p>
                   </div>
                 )}
@@ -3518,6 +3409,14 @@ const BuildingConnectionsManagementModal: React.FC<BuildingConnectionsManagement
     </Dialog>
   );
 };
+
+function TopologyStat({ icon, label, value, hint, warning = false }: { icon: React.ReactNode; label: string; value: number | string; hint: string; warning?: boolean }) {
+  return <div className={styles.stat}>
+    <div className="flex items-center justify-between gap-2"><p className="text-xs font-medium text-muted-foreground">{label}</p><span className={cn(styles.statIcon, warning && '!bg-amber-500/10 !text-amber-600 dark:!text-amber-300')}>{icon}</span></div>
+    <p className="mt-1.5 text-2xl font-semibold tabular-nums">{value}</p>
+    <p className="mt-1 text-[11px] text-muted-foreground">{hint}</p>
+  </div>;
+}
 
 const NetworkTopologyPageWrapper = () => {
   return <NetworkTopologyPage />;

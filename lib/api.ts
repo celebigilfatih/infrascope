@@ -8,38 +8,38 @@ const api = axios.create({
   },
 });
 
-export const apiGet = async (url: string, params?: any, options?: { timeout?: number }) => {
+export const apiGet = async (url: string, params?: Record<string, unknown>, options?: { timeout?: number; signal?: AbortSignal }) => {
   try {
-    const response = await api.get(url, { params, timeout: options?.timeout });
+    const response = await api.get(url, { params, timeout: options?.timeout, signal: options?.signal });
     return response.data;
-  } catch (error: any) {
+  } catch (error) {
     return {
       success: false,
-      error: error.response?.data?.error || error.message || 'API request failed',
+      error: (error as Error & { response?: { data?: { error?: string }; status?: number } }).response?.data?.error || (error as Error & { response?: { data?: { error?: string }; status?: number } }).message || 'API request failed',
     };
   }
 };
 
-export const apiPost = async (url: string, data: any, options?: { headers?: Record<string, string>; timeout?: number }) => {
+export const apiPost = async (url: string, data: unknown, options?: { headers?: Record<string, string>; timeout?: number }) => {
   try {
     const response = await api.post(url, data, options);
     return response.data;
-  } catch (error: any) {
+  } catch (error) {
     return {
       success: false,
-      error: error.response?.data?.error || error.message || 'API request failed',
+      error: (error as Error & { response?: { data?: { error?: string }; status?: number } }).response?.data?.error || (error as Error & { response?: { data?: { error?: string }; status?: number } }).message || 'API request failed',
     };
   }
 };
 
-export const apiPut = async (url: string, data: any) => {
+export const apiPut = async (url: string, data: unknown) => {
   try {
     const response = await api.put(url, data);
     return response.data;
-  } catch (error: any) {
+  } catch (error) {
     return {
       success: false,
-      error: error.response?.data?.error || error.message || 'API request failed',
+      error: (error as Error & { response?: { data?: { error?: string }; status?: number } }).response?.data?.error || (error as Error & { response?: { data?: { error?: string }; status?: number } }).message || 'API request failed',
     };
   }
 };
@@ -48,10 +48,10 @@ export const apiDelete = async (url: string) => {
   try {
     const response = await api.delete(url);
     return response.data;
-  } catch (error: any) {
+  } catch (error) {
     return {
       success: false,
-      error: error.response?.data?.error || error.message || 'API request failed',
+      error: (error as Error & { response?: { data?: { error?: string }; status?: number } }).response?.data?.error || (error as Error & { response?: { data?: { error?: string }; status?: number } }).message || 'API request failed',
     };
   }
 };

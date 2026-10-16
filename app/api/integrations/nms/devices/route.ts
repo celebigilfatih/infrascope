@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { authorizeApiRequest } from '@/lib/auth/api-permission';
 import { prisma } from '@/lib/prisma';
+import { reserveNextNmsDeviceId } from '@/lib/nms/device-id';
 import {
   NmsSnmpValidationError,
   normalizeSnmpV3AuthProtocol,
@@ -20,19 +22,14 @@ import { protectNmsCredential } from '@/lib/security/integration-credentials';
  * Enable SNMP polling on an existing inventory device.
  */
 
-async function getNextNmsDeviceId(): Promise<number> {
-  const maxResult = await (prisma as any).device.aggregate({
-    _max: { nmsDeviceId: true },
-  });
-  return (maxResult._max.nmsDeviceId ?? 0) + 1;
-}
-
 export async function GET(req: NextRequest) {
+  const access = await authorizeApiRequest(req, 'devices', 'read');
+  if (!access.allowed) return access.response;
   try {
     const { searchParams } = new URL(req.url);
     const enabledOnly = searchParams.get('enabled') === 'true';
 
-    const devices = await (prisma as any).device.findMany({
+    const devices = await prisma.device.findMany({
       where: enabledOnly
         ? { pollingEnabled: true, nmsDeviceId: { not: null } }
         : { nmsDeviceId: { not: null } },
@@ -54,15 +51,15 @@ export async function GET(req: NextRequest) {
 
     // Attach latest health metric snapshot
     const enriched = await Promise.all(
-      devices.map(async (d: any) => {
-        const latestHealth = await (prisma as any).nmsHealthMetric.findFirst({
-          where: { nmsDeviceId: d.nmsDeviceId },
+      devices.map(async (d) => {
+        const latestHealth = await prisma.nmsHealthMetric.findFirst({
+          where: { nmsDeviceId: d.nmsDeviceId! },
           orderBy: { collectedAt: 'desc' },
           select: { cpuUsage: true, memoryUsage: true, temperature: true, collectedAt: true },
         });
 
-        const portDownCount = await (prisma as any).nmsInterface.count({
-          where: { nmsDeviceId: d.nmsDeviceId, adminStatus: 'up', operStatus: 'down' },
+        const portDownCount = await prisma.nmsInterface.count({
+          where: { nmsDeviceId: d.nmsDeviceId!, adminStatus: 'up', operStatus: 'down' },
         });
 
         return { ...d, latestHealth, portDownCount };
@@ -77,6 +74,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const access = await authorizeApiRequest(req, 'devices', 'write');
+  if (!access.allowed) return access.response;
   try {
     const body = await req.json();
     const deviceId = typeof body.deviceId === 'string' ? body.deviceId.trim() : '';
@@ -162,79 +161,80 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const existing = await (prisma as any).device.findUnique({
-      where: { id: deviceId },
-      select: { id: true, name: true, nmsDeviceId: true },
-    });
+    return await prisma.$transaction(async (tx) => {
+      const nextNmsId = await reserveNextNmsDeviceId(tx);
+      const existing = await tx.device.findUnique({
+        where: { id: deviceId },
+        select: { id: true, name: true, nmsDeviceId: true },
+      });
 
-    if (!existing) {
-      return NextResponse.json(
-        { error: 'Inventory device not found' },
-        { status: 404 }
-      );
-    }
+      if (!existing) {
+        return NextResponse.json(
+          { error: 'Inventory device not found' },
+          { status: 404 }
+        );
+      }
 
-    if (existing.nmsDeviceId !== null) {
-      return NextResponse.json(
-        { error: `Device "${existing.name}" already has NMS monitoring configured`, deviceId, nmsDeviceId: existing.nmsDeviceId },
-        { status: 409 }
-      );
-    }
+      if (existing.nmsDeviceId !== null) {
+        return NextResponse.json(
+          { error: `Device "${existing.name}" already has NMS monitoring configured`, deviceId, nmsDeviceId: existing.nmsDeviceId },
+          { status: 409 }
+        );
+      }
 
-    const duplicateIp = await (prisma as any).device.findFirst({
-      where: {
-        managementIp,
-        nmsDeviceId: { not: null },
-        NOT: { id: deviceId },
-      },
-      select: { id: true, name: true, nmsDeviceId: true },
-    });
+      const duplicateIp = await tx.device.findFirst({
+        where: {
+          managementIp,
+          nmsDeviceId: { not: null },
+          NOT: { id: deviceId },
+        },
+        select: { id: true, name: true, nmsDeviceId: true },
+      });
 
-    if (duplicateIp) {
-      return NextResponse.json(
-        { error: `Management IP ${managementIp} is already used by "${duplicateIp.name}"`, deviceId: duplicateIp.id, nmsDeviceId: duplicateIp.nmsDeviceId },
-        { status: 409 }
-      );
-    }
+      if (duplicateIp) {
+        return NextResponse.json(
+          { error: `Management IP ${managementIp} is already used by "${duplicateIp.name}"`, deviceId: duplicateIp.id, nmsDeviceId: duplicateIp.nmsDeviceId },
+          { status: 409 }
+        );
+      }
 
-    const nextNmsId = await getNextNmsDeviceId();
+      const updated = await tx.device.update({
+        where: { id: deviceId },
+        data: {
+          nmsDeviceId: nextNmsId,
+          managementIp,
+          ...snmpData,
+          snmpPort,
+          pollingEnabled,
+          pollingInterval,
+          sshUsername,
+          sshPassword: sshPassword
+            ? protectNmsCredential(String(sshPassword), 'sshPassword')
+            : null,
+          sshPort,
+        },
+        select: {
+          id: true,
+          name: true,
+          type: true,
+          vendor: true,
+          nmsDeviceId: true,
+          managementIp: true,
+          snmpVersion: true,
+          snmpV3Username: true,
+          snmpV3SecurityLevel: true,
+          snmpV3AuthProtocol: true,
+          snmpV3PrivacyProtocol: true,
+          snmpPort: true,
+          pollingEnabled: true,
+          pollingInterval: true,
+          sshUsername: true,
+          sshPort: true,
+        },
+      });
 
-    const updated = await (prisma as any).device.update({
-      where: { id: deviceId },
-      data: {
-        nmsDeviceId: nextNmsId,
-        managementIp,
-        ...snmpData,
-        snmpPort,
-        pollingEnabled,
-        pollingInterval,
-        sshUsername,
-        sshPassword: sshPassword
-          ? protectNmsCredential(String(sshPassword), 'sshPassword')
-          : null,
-        sshPort,
-      },
-      select: {
-        id: true,
-        name: true,
-        type: true,
-        vendor: true,
-        nmsDeviceId: true,
-        managementIp: true,
-        snmpVersion: true,
-        snmpV3Username: true,
-        snmpV3SecurityLevel: true,
-        snmpV3AuthProtocol: true,
-        snmpV3PrivacyProtocol: true,
-        snmpPort: true,
-        pollingEnabled: true,
-        pollingInterval: true,
-        sshUsername: true,
-        sshPort: true,
-      },
-    });
-
-    return NextResponse.json({ device: updated }, { status: 201 });
+      return NextResponse.json({ device: updated }, { status: 201 });
+    }, { isolationLevel: 'ReadCommitted' });
   } catch (error) {
     console.error('[NMS Devices] POST error:', error);
     if (error instanceof NmsSnmpValidationError) {

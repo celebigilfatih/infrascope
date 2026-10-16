@@ -14,6 +14,7 @@
  */
 
 import { runAlarmQuery, queryCache, queryFortiAnalyzerDirect, timeWindow } from './base';
+import { fortiAnalyzerCacheFilter, nativeFortiAnalyzerLog } from '@/lib/integrations/fortianalyzer-revision';
 import type { AlarmQueryContext, QueryResult } from './types';
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
@@ -56,14 +57,14 @@ export async function getFirewallPolicyChangeEvents(ctx: AlarmQueryContext): Pro
           { rawLog: { path: ['logdesc'], string_contains: 'attribute' } },
           { rawLog: { path: ['cfgpath'], string_contains: 'firewall.policy' } },
         ],
-      }),
+      }, undefined, ctx),
     fa =>
       queryFortiAnalyzerDirect(
         fa,
         'event',
         'subtype == system and logdesc like %attribute% and cfgpath like %firewall.policy% and ui != ha_daemon',
         ctx.timeWindowMinutes
-      ),
+      , undefined, ctx),
     { softFallback: false }
   );
 }
@@ -92,14 +93,14 @@ export async function getCoreConfigChangeEvents(ctx: AlarmQueryContext): Promise
           { rawLog: { path: ['logdesc'], string_contains: 'attribute' } },
           { rawLog: { path: ['logdesc'], string_contains: 'changed' } },
         ],
-      }),
+      }, undefined, ctx),
     fa =>
       queryFortiAnalyzerDirect(
         fa,
         'event',
         'subtype == system and (logdesc like %attribute% or logdesc like %changed%) and ui != ha_daemon',
         ctx.timeWindowMinutes
-      )
+      , undefined, ctx)
   );
 }
 
@@ -121,14 +122,14 @@ export async function getFirmwareChangeEvents(ctx: AlarmQueryContext): Promise<Q
       queryCache({
         ...baseConfigWhere(ctx.timeWindowMinutes),
         AND: [{ rawLog: { path: ['logdesc'], string_contains: 'firmware' } }],
-      }),
+      }, undefined, ctx),
     fa =>
       queryFortiAnalyzerDirect(
         fa,
         'event',
         'subtype == system and logdesc like %firmware% and ui != ha_daemon',
         ctx.timeWindowMinutes
-      )
+      , undefined, ctx)
   );
 }
 
@@ -157,14 +158,14 @@ export async function getAuthServerChangeEvents(ctx: AlarmQueryContext): Promise
           { rawLog: { path: ['cfgpath'], string_contains: 'user.tacacs' } },
           { rawLog: { path: ['cfgpath'], string_contains: 'user.fortitoken' } },
         ],
-      }),
+      }, undefined, ctx),
     fa =>
       queryFortiAnalyzerDirect(
         fa,
         'event',
         'subtype == system and logdesc like %attribute% and (cfgpath like %user.radius% or cfgpath like %user.ldap% or cfgpath like %user.tacacs%) and ui != ha_daemon',
         ctx.timeWindowMinutes
-      )
+      , undefined, ctx)
   );
 }
 
@@ -193,14 +194,14 @@ export async function getRouteTableChangeEvents(ctx: AlarmQueryContext): Promise
           { rawLog: { path: ['cfgpath'], string_contains: 'router.bgp' } },
           { rawLog: { path: ['cfgpath'], string_contains: 'router.ospf' } },
         ],
-      }),
+      }, undefined, ctx),
     fa =>
       queryFortiAnalyzerDirect(
         fa,
         'event',
         'subtype == system and logdesc like %attribute% and (cfgpath like %router.static% or cfgpath like %router.policy%) and ui != ha_daemon',
         ctx.timeWindowMinutes
-      )
+      , undefined, ctx)
   );
 }
 
@@ -226,14 +227,14 @@ export async function getAdminPasswordChangeEvents(ctx: AlarmQueryContext): Prom
           { rawLog: { path: ['logdesc'], string_contains: 'attribute' } },
           { rawLog: { path: ['cfgpath'], string_contains: 'system.admin' } },
         ],
-      }),
+      }, undefined, ctx),
     fa =>
       queryFortiAnalyzerDirect(
         fa,
         'event',
         'subtype == system and logdesc like %attribute% and cfgpath like %system.admin% and ui != ha_daemon',
         ctx.timeWindowMinutes
-      )
+      , undefined, ctx)
   );
 }
 
@@ -259,14 +260,14 @@ export async function getAddressObjectChangeEvents(ctx: AlarmQueryContext): Prom
           { rawLog: { path: ['logdesc'], string_contains: 'attribute' } },
           { rawLog: { path: ['cfgpath'], string_contains: 'firewall.address' } },
         ],
-      }),
+      }, undefined, ctx),
     fa =>
       queryFortiAnalyzerDirect(
         fa,
         'event',
         'subtype == system and logdesc like %attribute% and cfgpath like %firewall.address% and ui != ha_daemon',
         ctx.timeWindowMinutes
-      )
+      , undefined, ctx)
   );
 }
 
@@ -288,14 +289,14 @@ export async function getSdWanChangeEvents(ctx: AlarmQueryContext): Promise<Quer
           { rawLog: { path: ['logdesc'], string_contains: 'attribute' } },
           { rawLog: { path: ['cfgpath'], string_contains: 'system.sdwan' } },
         ],
-      }),
+      }, undefined, ctx),
     fa =>
       queryFortiAnalyzerDirect(
         fa,
         'event',
         'subtype == system and logdesc like %attribute% and cfgpath like %system.sdwan% and ui != ha_daemon',
         ctx.timeWindowMinutes
-      )
+      , undefined, ctx)
   );
 }
 
@@ -319,14 +320,14 @@ export async function getHaConfigChangeEvents(ctx: AlarmQueryContext): Promise<Q
           { rawLog: { path: ['logdesc'], string_contains: 'attribute' } },
           { rawLog: { path: ['cfgpath'], string_contains: 'system.ha' } },
         ],
-      }),
+      }, undefined, ctx),
     fa =>
       queryFortiAnalyzerDirect(
         fa,
         'event',
         'subtype == system and logdesc like %attribute% and cfgpath like %system.ha% and ui != ha_daemon',
         ctx.timeWindowMinutes
-      ),
+      , undefined, ctx),
     { softFallback: true } // HA changes are high-stakes — double-check if cache is empty
   );
 }
@@ -362,13 +363,14 @@ export async function getAdminConfigChangeEvents(ctx: AlarmQueryContext): Promis
           eventTime: timeWindow(ctx.timeWindowMinutes),
           user: { notIn: ['siem', 'fgtinfra', ''] },
           action: { in: ['Edit', 'Add', 'Delete', 'Move', 'Clone'] },
-          NOT: [{ rawLog: { path: ['ui'], equals: 'ha_daemon' } as any }],
+          NOT: [{ rawLog: { path: ['ui'], equals: 'ha_daemon' } }],
+          AND: [ctx.eventCache?.getSourceFilter() ?? fortiAnalyzerCacheFilter()],
         },
         orderBy: { eventTime: 'desc' },
         take: 500,
         select: { rawLog: true },
       });
-      return rows.map((r: any) => r.rawLog as Record<string, unknown>);
+      return rows.map(r => nativeFortiAnalyzerLog(r.rawLog));
     },
     fa =>
       queryFortiAnalyzerDirect(
@@ -376,7 +378,7 @@ export async function getAdminConfigChangeEvents(ctx: AlarmQueryContext): Promis
         'event',
         'subtype == system and user != "" and user != "fgtinfra" and user != "siem" and (action == Edit or action == Add or action == Delete or action == Move or action == Clone) and ui != ha_daemon',
         ctx.timeWindowMinutes
-      ),
+      , undefined, ctx),
     { softFallback: true }
   );
 }

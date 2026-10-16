@@ -1,16 +1,19 @@
 import { NextRequest } from 'next/server';
+import { authorizeApiRequest } from '@/lib/auth/api-permission';
 import { NextResponse } from 'next/server';
-import FortiAnalyzerService, { initSharedFortiAnalyzerService } from '@/lib/integrations/fortianalyzer';
+import { initSharedFortiAnalyzerService } from '@/lib/integrations/fortianalyzer';
 import { prisma } from '@/lib/prisma';
-import { unprotectIntegrationConfig } from '@/lib/security/integration-credentials';
+import { readFortiAnalyzerProfile } from '@/lib/integrations/fortianalyzer-source';
 
 export async function GET(request: NextRequest) {
+  const access = await authorizeApiRequest(request, 'settings', 'read');
+  if (!access.allowed) return access.response;
   try {
     const { searchParams } = new URL(request.url);
     const type = searchParams.get('type');
     const domain = searchParams.get('domain') || 'enterprise';
     const techId = searchParams.get('techId');
-    const adom = searchParams.get('adom') || 'root';
+    const adom = searchParams.get('adom') ?? undefined;
     
     // Parse time range if provided
     let timeRange = undefined;
@@ -32,24 +35,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const faConfig = unprotectIntegrationConfig<{
-      host: string;
-      username?: string;
-      password?: string;
-    }>(config.config, 'FORTIANALYZER');
-
-    if (!faConfig.password) {
-      return NextResponse.json({
-        success: false,
-        error: 'FortiAnalyzer password not configured',
-      }, { status: 400 });
-    }
-
-    const service = initSharedFortiAnalyzerService({
-      host: faConfig.host,
-      username: faConfig.username,
-      password: faConfig.password,
-    });
+    const service = initSharedFortiAnalyzerService(readFortiAnalyzerProfile(config.config));
 
     // Login first
     const loggedIn = await service.login();
@@ -65,6 +51,7 @@ export async function GET(request: NextRequest) {
     switch (type) {
       case 'matrix':
         result = await service.getMitreAttackMatrix({ domain, timeRange, adom });
+        if (result === null) throw new Error('FortiAnalyzer MITRE read failed');
         return NextResponse.json({ success: true, data: result, type: 'matrix' });
       
       case 'technique':
@@ -72,6 +59,7 @@ export async function GET(request: NextRequest) {
           return NextResponse.json({ success: false, error: 'techId parameter is required for technique details' }, { status: 400 });
         }
         result = await service.getMitreTechniqueDetails(techId, { domain, timeRange, adom });
+        if (result === null) throw new Error('FortiAnalyzer MITRE read failed');
         return NextResponse.json({ success: true, data: result, type: 'technique', techId });
       
       default:

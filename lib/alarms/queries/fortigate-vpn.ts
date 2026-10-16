@@ -17,13 +17,14 @@
  *   IPSEC_TUNNEL_CHANGED, SSL_VPN_SETTINGS_CHANGED, VPN_TUNNEL_DOWN
  */
 
-import type { AlarmQueryContext, QueryResult } from './types';
+import type { FortiGateEventLog } from '@/lib/integrations/fortigate';
+import type { AlarmQueryContext, QueryResult, LegacyAlarmGlobal } from './types';
 
 // ─── Helper ────────────────────────────────────────────────────────────────────
 
 /** Access FortiGateService from the detection engine singleton */
 function getFortiGateService() {
-  const engine = (globalThis as any).__detectionEngine;
+  const engine = (globalThis as LegacyAlarmGlobal).__detectionEngine;
   return engine?.fortiGateService ?? null;
 }
 
@@ -50,7 +51,7 @@ function emptyResult(ctx: AlarmQueryContext, description: string, durationMs = 0
 async function queryFortiGateBroad(
   ctx: AlarmQueryContext,
   broadFilter: string,
-  memFilter: (log: any) => boolean,
+  memFilter: (log: FortiGateEventLog) => boolean,
   description: string,
 ): Promise<QueryResult> {
   const start = Date.now();
@@ -66,11 +67,11 @@ async function queryFortiGateBroad(
 
     const cutoff = Date.now() / 1000 - ctx.timeWindowMinutes * 60;
     const events = allLogs
-      .filter((log: any) => {
+      .filter((log: FortiGateEventLog) => {
         const ts = log.eventtime ? Number(log.eventtime) / 1e9 : (log.itime_t ?? log.date_epoch ?? 0);
         return ts >= cutoff && memFilter(log);
       })
-      .map((log: any) => ({
+      .map((log: FortiGateEventLog) => ({
         rawLog: log,
         timestamp: log.eventtime ? Number(log.eventtime) / 1e9 : (log.itime_t ?? log.date_epoch),
       }));
@@ -111,7 +112,7 @@ const BROAD_SYSTEM_ATTRIBUTE = 'subtype==system&&logdesc=~attribute';
 
 // ─── In-memory matchers ─────────────────────────────────────────────────────
 
-const matchCfgpath = (log: any, pattern: string) =>
+const matchCfgpath = (log: FortiGateEventLog, pattern: string) =>
   typeof log.cfgpath === 'string' && log.cfgpath.includes(pattern);
 
 // ─── VPN & SSL-VPN Alarm Queries ───────────────────────────────────────────────

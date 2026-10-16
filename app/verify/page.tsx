@@ -1,5 +1,7 @@
 'use client';
 
+import { uiError } from '@/lib/i18n/tr';
+
 import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -38,7 +40,7 @@ function VerifyPageContent() {
   useEffect(() => {
     if (!token) {
       setState('invalid');
-      setErrorMessage('No invitation token provided');
+      setErrorMessage(uiError("Davet bağlantısında doğrulama kodu yok."));
       return;
     }
 
@@ -51,12 +53,12 @@ function VerifyPageContent() {
           setState('valid');
         } else {
           setState('invalid');
-          setErrorMessage(result.error || 'Invalid invitation');
+          setErrorMessage(uiError(result.error || 'Invalid invitation'));
         }
       })
       .catch(() => {
         setState('invalid');
-        setErrorMessage('Failed to validate invitation');
+        setErrorMessage(uiError("Davet doğrulanamadı."));
       });
   }, [token]);
 
@@ -89,11 +91,11 @@ function VerifyPageContent() {
         setState('success');
       } else {
         setState('error');
-        setErrorMessage(result.error || 'Failed to create account');
+        setErrorMessage(uiError(result.error || 'Failed to create account'));
       }
     } catch {
       setState('error');
-      setErrorMessage('An unexpected error occurred');
+      setErrorMessage(uiError("Beklenmeyen bir hata oluştu."));
     }
   };
 
@@ -105,7 +107,7 @@ function VerifyPageContent() {
         <Card className="w-full max-w-md">
           <CardContent className="p-8 text-center">
             <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
-            <p className="text-muted-foreground">Verifying invitation...</p>
+            <p className="text-muted-foreground">Davet doğrulanıyor…</p>
           </CardContent>
         </Card>
       </div>
@@ -118,10 +120,10 @@ function VerifyPageContent() {
         <Card className="w-full max-w-md">
           <CardContent className="p-8 text-center">
             <XCircle className="h-12 w-12 mx-auto mb-4 text-red-500" />
-            <h2 className="text-xl font-bold mb-2">Invalid Invitation</h2>
-            <p className="text-muted-foreground mb-6">{errorMessage}</p>
+            <h2 className="text-xl font-bold mb-2">Geçersiz Davet</h2>
+            <p className="text-muted-foreground mb-6">{uiError(errorMessage)}</p>
             <Button variant="outline" onClick={() => router.push('/dashboard')}>
-              Go to Dashboard
+              Genel bakışa git
             </Button>
           </CardContent>
         </Card>
@@ -135,12 +137,12 @@ function VerifyPageContent() {
         <Card className="w-full max-w-md">
           <CardContent className="p-8 text-center">
             <CheckCircle2 className="h-12 w-12 mx-auto mb-4 text-green-500" />
-            <h2 className="text-xl font-bold mb-2">Account Created!</h2>
+            <h2 className="text-xl font-bold mb-2">Hesap Oluşturuldu</h2>
             <p className="text-muted-foreground mb-6">
-              Your account has been set up successfully. You can now log in.
+              Hesabınız oluşturuldu. Şimdi giriş yapabilirsiniz.
             </p>
             <Button onClick={() => router.push('/dashboard')}>
-              Go to Dashboard
+              Genel bakışa git
             </Button>
           </CardContent>
         </Card>
@@ -154,10 +156,10 @@ function VerifyPageContent() {
         <Card className="w-full max-w-md">
           <CardContent className="p-8 text-center">
             <XCircle className="h-12 w-12 mx-auto mb-4 text-red-500" />
-            <h2 className="text-xl font-bold mb-2">Error</h2>
-            <p className="text-muted-foreground mb-6">{errorMessage}</p>
+            <h2 className="text-xl font-bold mb-2">Hata</h2>
+            <p className="text-muted-foreground mb-6">{uiError(errorMessage)}</p>
             <Button variant="outline" onClick={() => router.push('/dashboard')}>
-              Go to Dashboard
+              Genel bakışa git
             </Button>
           </CardContent>
         </Card>
@@ -173,49 +175,49 @@ function VerifyPageContent() {
           <div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-2">
             <Shield className="h-6 w-6 text-primary" />
           </div>
-          <CardTitle className="text-xl">Set Up Your Account</CardTitle>
+          <CardTitle className="text-xl">Hesabınızı Oluşturun</CardTitle>
           <p className="text-sm text-muted-foreground mt-1">
             <Mail className="h-3.5 w-3.5 inline mr-1" />
             {invitationData?.email}
           </p>
           <p className="text-xs text-muted-foreground">
-            Invited as <span className="capitalize font-medium">{invitationData?.role}</span>
+            Davet Edilen Rol <span className="capitalize font-medium">{invitationData?.role}</span>
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-1">Full Name</label>
+            <label className="block text-sm font-medium mb-1">Ad Soyad</label>
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Enter your full name"
+              placeholder="Adınızı ve soyadınızı girin"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Password</label>
+            <label className="block text-sm font-medium mb-1">Parola</label>
             <Input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Create a password"
+              placeholder="Parola oluşturun"
             />
             <div className="mt-2 space-y-1">
-              <PasswordCheck pass={passwordChecks.length} label="At least 8 characters" />
-              <PasswordCheck pass={passwordChecks.uppercase} label="One uppercase letter" />
-              <PasswordCheck pass={passwordChecks.number} label="One number" />
-              <PasswordCheck pass={passwordChecks.special} label="One special character" />
+              <PasswordCheck pass={passwordChecks.length} label="En az 8 karakter" />
+              <PasswordCheck pass={passwordChecks.uppercase} label="Bir büyük harf" />
+              <PasswordCheck pass={passwordChecks.number} label="Bir rakam" />
+              <PasswordCheck pass={passwordChecks.special} label="Bir özel karakter" />
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Confirm Password</label>
+            <label className="block text-sm font-medium mb-1">Parolayı Doğrula</label>
             <Input
               type="password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="Confirm your password"
+              placeholder="Parolanızı doğrulayın"
             />
             {confirmPassword && !passwordsMatch && (
-              <p className="text-xs text-red-500 mt-1">Passwords do not match</p>
+              <p className="text-xs text-red-500 mt-1">Parolalar eşleşmiyor</p>
             )}
           </div>
           <Button
@@ -226,10 +228,10 @@ function VerifyPageContent() {
             {state === 'submitting' ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Creating Account...
+                Hesap oluşturuluyor…
               </>
             ) : (
-              'Create Account'
+              "Hesap Oluştur"
             )}
           </Button>
         </CardContent>

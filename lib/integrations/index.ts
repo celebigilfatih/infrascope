@@ -19,7 +19,7 @@ export type { ZabbixConfig, ZabbixHost, ZabbixInterface, ZabbixTrigger } from '.
 export type { VMwareConfig, VMwareCluster, VMwareHost, VMwareVM, VMwareDatastore } from './vmware';
 export type { FortiGateConfig, FortiGateInterface, FortiGatePolicy, FortiGateAddress } from './fortigate';
 
-import type FortiAnalyzerService from './fortianalyzer';
+
 export type { default as FortiAnalyzerServiceType } from './fortianalyzer';
 
 /**

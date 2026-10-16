@@ -26,7 +26,7 @@
  *   ADDRESS_OBJECT_CHANGED, ADDRESS_GROUP_CHANGED, CORE_CONFIG_CHANGE
  */
 
-import type { AlarmQueryContext, QueryResult } from './types';
+import type { AlarmQueryContext, QueryResult, LegacyAlarmGlobal } from './types';
 import { prisma } from '@/lib/prisma';
 import { createLogger } from '@/lib/logger';
 
@@ -81,7 +81,7 @@ async function resolveAdminUsers(
 // ─── Helper ────────────────────────────────────────────────────────────────────
 
 function getFortiGateService() {
-  const engine = (globalThis as any).__detectionEngine;
+  const engine = (globalThis as LegacyAlarmGlobal).__detectionEngine;
   return engine?.fortiGateService ?? null;
 }
 
@@ -149,7 +149,7 @@ async function cmdbDiff(
     ? current
     : (current?.results && Array.isArray(current.results) ? current.results : null);
   
-  let diffDetails: any = null;
+  let diffDetails: ReturnType<typeof computeArrayDiff> | null = null;
   if (prevItems && currItems) {
     log.info({ alarmCode: ctx.alarmCode, prevItems: prevItems.length, currItems: currItems.length }, 'Computing diff');
     diffDetails = computeArrayDiff(prevItems, currItems);
@@ -218,17 +218,22 @@ async function cmdbDiff(
  * Compute detailed diff between two arrays of CMDB objects.
  * Returns { added, removed, modified } with item details.
  */
+type CmdbItem = Record<string, unknown>;
+type CmdbFieldChange = { field: string; oldValue: unknown; newValue: unknown };
+type CmdbItemChange = { key: string; name: unknown; data: CmdbItem };
+type CmdbModifiedItem = { key: string; name: unknown; changes: CmdbFieldChange[] };
+export type CmdbDiff = ReturnType<typeof computeArrayDiff>;
 function computeArrayDiff(
-  previous: any[],
-  current: any[],
-): { added: any[]; removed: any[]; modified: any[] } {
+  previous: CmdbItem[],
+  current: CmdbItem[],
+): { added: CmdbItemChange[]; removed: CmdbItemChange[]; modified: CmdbModifiedItem[] } {
   // Use 'policyid' or 'name' or 'id' as the unique key
-  const getKey = (item: any): string => {
+  const getKey = (item: CmdbItem): string => {
     return String(item.policyid || item.name || item.id || JSON.stringify(item));
   };
 
-  const prevMap = new Map<string, any>();
-  const currMap = new Map<string, any>();
+  const prevMap = new Map<string, CmdbItem>();
+  const currMap = new Map<string, CmdbItem>();
 
   for (const item of previous) {
     prevMap.set(getKey(item), item);
@@ -237,9 +242,9 @@ function computeArrayDiff(
     currMap.set(getKey(item), item);
   }
 
-  const added: any[] = [];
-  const removed: any[] = [];
-  const modified: any[] = [];
+  const added: CmdbItemChange[] = [];
+  const removed: CmdbItemChange[] = [];
+  const modified: CmdbModifiedItem[] = [];
 
   // Find added and modified items
   for (const [key, currItem] of currMap) {
@@ -282,8 +287,8 @@ function computeArrayDiff(
  * Find specific field changes between two objects.
  * Returns array of { field, oldValue, newValue } for changed fields.
  */
-function findObjectChanges(oldObj: any, newObj: any): Array<{ field: string; oldValue: any; newValue: any }> {
-  const changes: Array<{ field: string; oldValue: any; newValue: any }> = [];
+function findObjectChanges(oldObj: CmdbItem, newObj: CmdbItem): CmdbFieldChange[] {
+  const changes: CmdbFieldChange[] = [];
   const allKeys = new Set([...Object.keys(oldObj), ...Object.keys(newObj)]);
 
   for (const key of allKeys) {

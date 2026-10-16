@@ -1,5 +1,11 @@
 'use client';
 
+import { uiError, uiLabel } from '@/lib/i18n/tr';
+
+import { ActionIcon } from '@/components/ui/action-icon';
+import { PageHeading } from '@/components/ui/page-heading';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { SeverityBadge } from '@/components/ui/severity-badge';
 import React, { useState, useEffect } from 'react';
 import { apiGet, apiDelete } from '../../lib/api';
 import { Service, ApiResponse } from '../../types';
@@ -11,7 +17,6 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Search, Plus, Trash2, Settings2, RefreshCcw } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
 export default function ServicesPage() {
   const { toast } = useToast();
@@ -36,10 +41,10 @@ export default function ServicesPage() {
       if (response.success) {
         setServices(response.data || []);
       } else {
-        setError('Servisler yüklenemedi');
+        setError(uiError('Servisler yüklenemedi'));
       }
-    } catch (err: any) {
-      setError(err.message || 'Servisler yüklenirken hata oluştu');
+    } catch (err) {
+      setError(uiError((err as Error).message || 'Servisler yüklenirken hata oluştu'));
     } finally {
       setLoading(false);
     }
@@ -54,7 +59,7 @@ export default function ServicesPage() {
     if (!serviceToDelete) return;
 
     try {
-      const response: any = await apiDelete(`/api/services/${serviceToDelete.id}`);
+      const response: ApiResponse<unknown> = await apiDelete(`/api/services/${serviceToDelete.id}`);
       if (response.success) {
         toast({
           title: "Başarılı",
@@ -68,7 +73,7 @@ export default function ServicesPage() {
           variant: "destructive",
         });
       }
-    } catch (err: any) {
+    } catch {
       toast({
         title: "Hata",
         description: 'Servis silinirken hata oluştu',
@@ -85,22 +90,12 @@ export default function ServicesPage() {
            service.displayName?.toLowerCase().includes(searchQuery.toLowerCase());
   });
 
-  const getStatusVariant = (status: string): "default" | "secondary" | "destructive" | "outline" | "success" | "warning" => {
-    switch (status) {
-      case 'RUNNING': return 'success';
-      case 'STOPPED': return 'destructive';
-      case 'DEGRADED': return 'warning';
-      default: return 'secondary';
-    }
-  };
-
   return (
     <>
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Servisler ve Uygulamalar</h1>
-            <p className="mt-2 text-muted-foreground">Ağ servislerini ve yazılım yığınlarını izleyin ve yönetin</p>
+            <PageHeading section="services" description={<>Ağ servislerini ve yazılım yığınlarını izleyin ve yönetin</>}>Servisler ve Uygulamalar</PageHeading>
           </div>
           <Button size="lg" className="font-bold shadow-lg shadow-primary/20">
             <Plus className="mr-2 h-5 w-5" />
@@ -120,7 +115,7 @@ export default function ServicesPage() {
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-            <Button variant="outline" size="icon" onClick={loadServices} title="Yenile">
+            <Button variant="outline" size="icon" onClick={loadServices} title="Yenile" aria-label="Yenile">
               <RefreshCcw className="h-4 w-4" />
             </Button>
           </CardContent>
@@ -133,8 +128,8 @@ export default function ServicesPage() {
         ) : error ? (
           <Card className="border-destructive bg-destructive/10">
             <CardContent className="p-6 flex items-center justify-between">
-              <p className="text-destructive font-medium">{error}</p>
-              <Button variant="outline" size="sm" onClick={loadServices}>Tekrar Dene</Button>
+              <p className="text-destructive font-medium">{uiError(error)}</p>
+              <Button variant="outline" size="sm" onClick={loadServices}><ActionIcon action="refresh" />Tekrar Dene</Button>
             </CardContent>
           </Card>
         ) : (
@@ -162,14 +157,10 @@ export default function ServicesPage() {
                           {service.displayName || service.name}
                         </CardTitle>
                         <CardDescription className="text-[10px] uppercase tracking-widest font-bold">
-                          {service.type.replace(/_/g, ' ')}
+                          {uiLabel(service.type)}
                         </CardDescription>
                       </div>
-                      <Badge variant={getStatusVariant(service.status)}>
-                        {service.status === 'RUNNING' ? 'ÇALIŞIYOR' : 
-                         service.status === 'STOPPED' ? 'DURDURULDU' : 
-                         service.status === 'DEGRADED' ? 'SORUNLU' : service.status}
-                      </Badge>
+                      <StatusBadge status={service.status} />
                     </div>
                   </CardHeader>
                   
@@ -183,13 +174,7 @@ export default function ServicesPage() {
                       </div>
                       <div className="flex items-center text-sm">
                         <span className="w-20 text-muted-foreground font-semibold text-xs uppercase tracking-wider">Kritiklik:</span>
-                        <span className={cn(
-                          "text-xs font-black uppercase tracking-tight",
-                          service.criticality === 'CRITICAL' ? 'text-destructive' : 
-                          service.criticality === 'HIGH' ? 'text-orange-500' : 'text-primary'
-                        )}>
-                          {service.criticality}
-                        </span>
+                        <SeverityBadge severity={service.criticality} />
                       </div>
                     </div>
                   </CardContent>

@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
 // Cache for 60 seconds to prevent database overload
-let cachedBuildings: any = null;
+let cachedBuildings: unknown = null;
 let cacheTimestamp: number = 0;
 const CACHE_TTL = 60000; // 60 seconds
 
-export async function GET(_request: NextRequest) {
+export async function GET() {
   try {
     // Return cached data if available and not expired
     const now = Date.now();
@@ -68,7 +68,7 @@ export async function GET(_request: NextRequest) {
       timestamp: new Date(),
       cached: false
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error fetching buildings:', error);
     return NextResponse.json({
       success: false,
@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
       data: building,
       timestamp: new Date()
     }, { status: 201 });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error creating building:', error);
     return NextResponse.json({
       success: false,

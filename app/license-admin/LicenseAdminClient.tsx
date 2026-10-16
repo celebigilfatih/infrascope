@@ -1,21 +1,11 @@
 'use client';
 
+import { uiError, uiLabel } from '@/lib/i18n/tr';
+
+import { ActionIcon } from '@/components/ui/action-icon';
+import { PageHeading } from '@/components/ui/page-heading';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  Activity,
-  AlertTriangle,
-  CheckCircle2,
-  Copy,
-  Eye,
-  Key,
-  Plus,
-  RefreshCw,
-  Save,
-  Search,
-  Server,
-  Users,
-  XCircle,
-} from 'lucide-react';
+import { Activity, AlertTriangle, CheckCircle2, Copy, Eye, Plus, RefreshCw, Save, Search, Server, Users, XCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -147,8 +137,8 @@ function tierBadge(tier: string) {
 }
 
 function formatDate(value: string | null): string {
-  if (!value) return 'Never';
-  return new Date(value).toLocaleDateString();
+  if (!value) return 'Belirtilmedi';
+  return new Date(value).toLocaleDateString('tr-TR');
 }
 
 function daysRemaining(value: string): number {
@@ -183,14 +173,14 @@ export default function LicenseAdminClient() {
   const loadSummary = useCallback(async () => {
     const response = await fetch('/api/license-admin/summary');
     const result = await response.json();
-    if (!result.success) throw new Error(result.error || 'Failed to load summary');
+    if (!result.success) throw new Error(uiError(result.error || 'Failed to load summary'));
     setSummary(result.data);
   }, []);
 
   const loadLicenses = useCallback(async () => {
     const response = await fetch(`/api/license-admin/licenses${query ? `?${query}` : ''}`);
     const result = await response.json();
-    if (!result.success) throw new Error(result.error || 'Failed to load licenses');
+    if (!result.success) throw new Error(uiError(result.error || 'Failed to load licenses'));
     setLicenses(result.data || []);
   }, [query]);
 
@@ -200,7 +190,7 @@ export default function LicenseAdminClient() {
     try {
       await Promise.all([loadSummary(), loadLicenses()]);
     } catch (err) {
-      setError((err as Error).message);
+      setError(uiError((err as Error).message));
     } finally {
       setLoading(false);
     }
@@ -231,12 +221,12 @@ export default function LicenseAdminClient() {
         }),
       });
       const result = await response.json();
-      if (!result.success) throw new Error(result.error || 'Failed to create license');
+      if (!result.success) throw new Error(uiError(result.error || 'Failed to create license'));
       setCreatedKey(result.data.key);
       setForm(initialForm);
       await refresh();
     } catch (err) {
-      setError((err as Error).message);
+      setError(uiError((err as Error).message));
     } finally {
       setWorking(false);
     }
@@ -248,11 +238,11 @@ export default function LicenseAdminClient() {
     try {
       const response = await fetch(`/api/license-admin/licenses/${licenseId}`);
       const result = await response.json();
-      if (!result.success) throw new Error(result.error || 'Failed to load license detail');
+      if (!result.success) throw new Error(uiError(result.error || 'Failed to load license detail'));
       setDetail(result.data);
       setDetailOpen(true);
     } catch (err) {
-      setError((err as Error).message);
+      setError(uiError((err as Error).message));
     } finally {
       setWorking(false);
     }
@@ -268,11 +258,11 @@ export default function LicenseAdminClient() {
         body: JSON.stringify(payload),
       });
       const result = await response.json();
-      if (!result.success) throw new Error(result.error || 'Failed to update license');
+      if (!result.success) throw new Error(uiError(result.error || 'Failed to update license'));
       await refresh();
       await openDetail(licenseId);
     } catch (err) {
-      setError((err as Error).message);
+      setError(uiError((err as Error).message));
     } finally {
       setWorking(false);
     }
@@ -288,11 +278,11 @@ export default function LicenseAdminClient() {
         body: JSON.stringify({ status: 'DEACTIVATED' }),
       });
       const result = await response.json();
-      if (!result.success) throw new Error(result.error || 'Failed to update activation');
+      if (!result.success) throw new Error(uiError(result.error || 'Failed to update activation'));
       await openDetail(licenseId);
       await refresh();
     } catch (err) {
-      setError((err as Error).message);
+      setError(uiError((err as Error).message));
     } finally {
       setWorking(false);
     }
@@ -307,54 +297,53 @@ export default function LicenseAdminClient() {
     <div className="p-6 space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold">
-            <Key className="h-6 w-6" />
-            License Admin
-          </h1>
-          <p className="text-sm text-muted-foreground">Central customer license operations</p>
+          <PageHeading section="license" description={<>Müşteri lisanslarını tek merkezden yönetin</>}>
+
+            Merkezi Lisans Yönetimi
+          </PageHeading>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="icon" onClick={refresh} disabled={loading}>
+          <Button variant="outline" size="icon" onClick={refresh} disabled={loading} aria-label="Yenile">
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </Button>
           <Button className="gap-2" onClick={() => setCreateOpen(true)}>
             <Plus className="h-4 w-4" />
-            Create License
+            Lisans Oluştur
           </Button>
         </div>
       </div>
 
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400">
-          {error}
+          {uiError(error)}
         </div>
       )}
 
       {createdKey && (
         <div className="flex flex-col gap-2 rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-800 dark:border-green-800 dark:bg-green-900/20 dark:text-green-300 sm:flex-row sm:items-center sm:justify-between">
-          <span>Generated license key: <strong className="font-mono">{createdKey}</strong></span>
+          <span>Oluşturulan lisans anahtarı: <strong className="font-mono">{createdKey}</strong></span>
           <Button variant="outline" size="sm" className="gap-2" onClick={() => copyKey(createdKey)}>
             <Copy className="h-4 w-4" />
-            Copy
+            Kopyala
           </Button>
         </div>
       )}
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Customers</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Müşteriler</CardTitle></CardHeader>
           <CardContent className="flex items-center gap-3"><Users className="h-5 w-5 text-primary" /><span className="text-2xl font-bold">{summary?.totalCustomers ?? 0}</span></CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Active Licenses</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Aktif Lisanslar</CardTitle></CardHeader>
           <CardContent className="flex items-center gap-3"><CheckCircle2 className="h-5 w-5 text-green-600" /><span className="text-2xl font-bold">{summary?.activeLicenses ?? 0}</span></CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Expiring Soon</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Yakında Sona Erecek</CardTitle></CardHeader>
           <CardContent className="flex items-center gap-3"><AlertTriangle className="h-5 w-5 text-yellow-600" /><span className="text-2xl font-bold">{summary?.expiringSoon ?? 0}</span></CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Activations</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Etkinleştirmeler</CardTitle></CardHeader>
           <CardContent className="flex items-center gap-3"><Server className="h-5 w-5 text-blue-600" /><span className="text-2xl font-bold">{summary?.activeActivations ?? 0}</span></CardContent>
         </Card>
       </div>
@@ -362,37 +351,37 @@ export default function LicenseAdminClient() {
       <Card>
         <CardHeader>
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-            <CardTitle>Licenses</CardTitle>
+            <CardTitle>Lisanslar</CardTitle>
             <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
               <div className="relative">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input className="pl-8" placeholder="Search customer or key" value={search} onChange={(e) => setSearch(e.target.value)} />
+                <Input className="pl-8" placeholder="Müşteri veya anahtar ara" value={search} onChange={(e) => setSearch(e.target.value)} />
               </div>
               <Select value={tier} onValueChange={setTier}>
-                <SelectTrigger><SelectValue placeholder="Tier" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Plan" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All tiers</SelectItem>
-                  <SelectItem value="TRIAL">Trial</SelectItem>
-                  <SelectItem value="STANDARD">Standard</SelectItem>
-                  <SelectItem value="ENTERPRISE">Enterprise</SelectItem>
+                  <SelectItem value="all">Tüm planlar</SelectItem>
+                  <SelectItem value="TRIAL">Deneme</SelectItem>
+                  <SelectItem value="STANDARD">Standart</SelectItem>
+                  <SelectItem value="ENTERPRISE">Kurumsal</SelectItem>
                 </SelectContent>
               </Select>
               <Select value={status} onValueChange={setStatus}>
-                <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Durum" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All statuses</SelectItem>
-                  <SelectItem value="ACTIVE">Active</SelectItem>
-                  <SelectItem value="SUSPENDED">Suspended</SelectItem>
-                  <SelectItem value="REVOKED">Revoked</SelectItem>
-                  <SelectItem value="EXPIRED">Expired</SelectItem>
+                  <SelectItem value="all">Tüm durumlar</SelectItem>
+                  <SelectItem value="ACTIVE">Aktif</SelectItem>
+                  <SelectItem value="SUSPENDED">Askıda</SelectItem>
+                  <SelectItem value="REVOKED">İptal Edildi</SelectItem>
+                  <SelectItem value="EXPIRED">Süresi Doldu</SelectItem>
                 </SelectContent>
               </Select>
               <Select value={expiry} onValueChange={setExpiry}>
-                <SelectTrigger><SelectValue placeholder="Expiry" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Bitiş Tarihi" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All expiry</SelectItem>
-                  <SelectItem value="expiring">Next 30 days</SelectItem>
-                  <SelectItem value="expired">Expired</SelectItem>
+                  <SelectItem value="all">Tüm bitiş tarihleri</SelectItem>
+                  <SelectItem value="expiring">Önümüzdeki 30 gün</SelectItem>
+                  <SelectItem value="expired">Süresi Doldu</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -402,14 +391,14 @@ export default function LicenseAdminClient() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Customer</TableHead>
-                <TableHead>License</TableHead>
-                <TableHead>Tier</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Limits</TableHead>
-                <TableHead>Activations</TableHead>
-                <TableHead>Valid Until</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead>Müşteri</TableHead>
+                <TableHead>Lisans</TableHead>
+                <TableHead>Plan</TableHead>
+                <TableHead>Durum</TableHead>
+                <TableHead>Limitler</TableHead>
+                <TableHead>Etkinleştirmeler</TableHead>
+                <TableHead>Geçerlilik Tarihi</TableHead>
+                <TableHead className="text-right">İşlemler</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -422,14 +411,14 @@ export default function LicenseAdminClient() {
                   <TableCell className="font-mono text-xs">{license.key}</TableCell>
                   <TableCell>{tierBadge(license.tier)}</TableCell>
                   <TableCell>{statusBadge(license.status)}</TableCell>
-                  <TableCell className="text-sm">{license.maxDevices} devices / {license.maxUsers} users</TableCell>
+                  <TableCell className="text-sm">{license.maxDevices} cihaz / {license.maxUsers} kullanıcı</TableCell>
                   <TableCell>{license.activationCount} / {license.activationLimit}</TableCell>
                   <TableCell>
                     <div>{formatDate(license.validUntil)}</div>
-                    <div className="text-xs text-muted-foreground">{daysRemaining(license.validUntil)} days</div>
+                    <div className="text-xs text-muted-foreground">{daysRemaining(license.validUntil)} gün</div>
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="icon" onClick={() => openDetail(license.id)} disabled={working}>
+                    <Button variant="ghost" size="icon" onClick={() => openDetail(license.id)} disabled={working} aria-label="Detayları görüntüle">
                       <Eye className="h-4 w-4" />
                     </Button>
                   </TableCell>
@@ -438,7 +427,7 @@ export default function LicenseAdminClient() {
               {licenses.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
-                    No licenses found.
+                    Lisans bulunamadı.
                   </TableCell>
                 </TableRow>
               )}
@@ -450,36 +439,36 @@ export default function LicenseAdminClient() {
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Create License</DialogTitle>
-            <DialogDescription>Create or update the customer and issue a new license key.</DialogDescription>
+            <DialogTitle>Lisans Oluştur</DialogTitle>
+            <DialogDescription>Müşteriyi oluşturun veya güncelleyin ve yeni bir lisans anahtarı üretin.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2"><Label>Company</Label><Input value={form.companyName} onChange={(e) => updateForm('companyName', e.target.value)} /></div>
-            <div className="space-y-2"><Label>Contact</Label><Input value={form.contactName} onChange={(e) => updateForm('contactName', e.target.value)} /></div>
-            <div className="space-y-2"><Label>Email</Label><Input type="email" value={form.email} onChange={(e) => updateForm('email', e.target.value)} /></div>
-            <div className="space-y-2"><Label>Phone</Label><Input value={form.phone} onChange={(e) => updateForm('phone', e.target.value)} /></div>
+            <div className="space-y-2"><Label>Şirket</Label><Input value={form.companyName} onChange={(e) => updateForm('companyName', e.target.value)} /></div>
+            <div className="space-y-2"><Label>İletişim</Label><Input value={form.contactName} onChange={(e) => updateForm('contactName', e.target.value)} /></div>
+            <div className="space-y-2"><Label>E-posta</Label><Input type="email" value={form.email} onChange={(e) => updateForm('email', e.target.value)} /></div>
+            <div className="space-y-2"><Label>Telefon</Label><Input value={form.phone} onChange={(e) => updateForm('phone', e.target.value)} /></div>
             <div className="space-y-2">
-              <Label>Tier</Label>
+              <Label>Plan</Label>
               <Select value={form.tier} onValueChange={(value) => updateForm('tier', value)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="TRIAL">Trial</SelectItem>
-                  <SelectItem value="STANDARD">Standard</SelectItem>
-                  <SelectItem value="ENTERPRISE">Enterprise</SelectItem>
+                  <SelectItem value="TRIAL">Deneme</SelectItem>
+                  <SelectItem value="STANDARD">Standart</SelectItem>
+                  <SelectItem value="ENTERPRISE">Kurumsal</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2"><Label>Days</Label><Input type="number" min="1" value={form.days} onChange={(e) => updateForm('days', e.target.value)} /></div>
-            <div className="space-y-2"><Label>Max Devices</Label><Input type="number" min="1" value={form.maxDevices} onChange={(e) => updateForm('maxDevices', e.target.value)} /></div>
-            <div className="space-y-2"><Label>Max Users</Label><Input type="number" min="1" value={form.maxUsers} onChange={(e) => updateForm('maxUsers', e.target.value)} /></div>
-            <div className="space-y-2"><Label>Activation Limit</Label><Input type="number" min="1" value={form.activationLimit} onChange={(e) => updateForm('activationLimit', e.target.value)} /></div>
-            <div className="space-y-2 sm:col-span-2"><Label>Notes</Label><Input value={form.notes} onChange={(e) => updateForm('notes', e.target.value)} /></div>
+            <div className="space-y-2"><Label>Gün</Label><Input type="number" min="1" value={form.days} onChange={(e) => updateForm('days', e.target.value)} /></div>
+            <div className="space-y-2"><Label>En Fazla Cihaz</Label><Input type="number" min="1" value={form.maxDevices} onChange={(e) => updateForm('maxDevices', e.target.value)} /></div>
+            <div className="space-y-2"><Label>En Fazla Kullanıcı</Label><Input type="number" min="1" value={form.maxUsers} onChange={(e) => updateForm('maxUsers', e.target.value)} /></div>
+            <div className="space-y-2"><Label>Etkinleştirme Limiti</Label><Input type="number" min="1" value={form.activationLimit} onChange={(e) => updateForm('activationLimit', e.target.value)} /></div>
+            <div className="space-y-2 sm:col-span-2"><Label>Notlar</Label><Input value={form.notes} onChange={(e) => updateForm('notes', e.target.value)} /></div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setCreateOpen(false)}><ActionIcon action="cancel" />Vazgeç</Button>
             <Button className="gap-2" onClick={createLicense} disabled={working}>
               <Plus className="h-4 w-4" />
-              Create
+              Oluştur
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -495,36 +484,36 @@ export default function LicenseAdminClient() {
               </DialogHeader>
               <div className="space-y-5">
                 <div className="grid gap-3 rounded-lg border p-4 md:grid-cols-4">
-                  <div><div className="text-xs text-muted-foreground">Key</div><div className="font-mono text-xs">{detail.key}</div></div>
-                  <div><div className="text-xs text-muted-foreground">Tier</div>{tierBadge(detail.tier)}</div>
-                  <div><div className="text-xs text-muted-foreground">Status</div>{statusBadge(detail.status)}</div>
-                  <div><div className="text-xs text-muted-foreground">Valid Until</div><div className="text-sm">{formatDate(detail.validUntil)}</div></div>
+                  <div><div className="text-xs text-muted-foreground">Anahtar</div><div className="font-mono text-xs">{detail.key}</div></div>
+                  <div><div className="text-xs text-muted-foreground">Plan</div>{tierBadge(detail.tier)}</div>
+                  <div><div className="text-xs text-muted-foreground">Durum</div>{statusBadge(detail.status)}</div>
+                  <div><div className="text-xs text-muted-foreground">Geçerlilik Tarihi</div><div className="text-sm">{formatDate(detail.validUntil)}</div></div>
                 </div>
 
                 <div className="grid gap-3 md:grid-cols-4">
                   <Button variant="outline" className="gap-2" onClick={() => copyKey(detail.fullKey)}>
                     <Copy className="h-4 w-4" />
-                    Copy full key
+                    Anahtarın tamamını kopyala
                   </Button>
                   <Button variant="outline" className="gap-2" onClick={() => updateLicense(detail.id, { status: 'ACTIVE' })} disabled={working}>
                     <CheckCircle2 className="h-4 w-4" />
-                    Reactivate
+                    Yeniden Etkinleştir
                   </Button>
                   <Button variant="outline" className="gap-2" onClick={() => updateLicense(detail.id, { status: 'SUSPENDED' })} disabled={working}>
                     <AlertTriangle className="h-4 w-4" />
-                    Suspend
+                    Askıya Al
                   </Button>
                   <Button variant="outline" className="gap-2 text-red-600" onClick={() => updateLicense(detail.id, { status: 'REVOKED' })} disabled={working}>
                     <XCircle className="h-4 w-4" />
-                    Revoke
+                    İptal Et
                   </Button>
                 </div>
 
                 <div className="grid gap-3 md:grid-cols-4">
-                  <div className="space-y-2"><Label>Max Devices</Label><Input id="edit-max-devices" type="number" defaultValue={detail.maxDevices} /></div>
-                  <div className="space-y-2"><Label>Max Users</Label><Input id="edit-max-users" type="number" defaultValue={detail.maxUsers} /></div>
-                  <div className="space-y-2"><Label>Activation Limit</Label><Input id="edit-activation-limit" type="number" defaultValue={detail.activationLimit} /></div>
-                  <div className="space-y-2"><Label>Valid Until</Label><Input id="edit-valid-until" type="date" defaultValue={detail.validUntil.slice(0, 10)} /></div>
+                  <div className="space-y-2"><Label>En Fazla Cihaz</Label><Input id="edit-max-devices" type="number" defaultValue={detail.maxDevices} /></div>
+                  <div className="space-y-2"><Label>En Fazla Kullanıcı</Label><Input id="edit-max-users" type="number" defaultValue={detail.maxUsers} /></div>
+                  <div className="space-y-2"><Label>Etkinleştirme Limiti</Label><Input id="edit-activation-limit" type="number" defaultValue={detail.activationLimit} /></div>
+                  <div className="space-y-2"><Label>Geçerlilik Tarihi</Label><Input id="edit-valid-until" type="date" defaultValue={detail.validUntil.slice(0, 10)} /></div>
                   <Button
                     className="gap-2 md:col-span-4"
                     onClick={() => updateLicense(detail.id, {
@@ -536,50 +525,50 @@ export default function LicenseAdminClient() {
                     disabled={working}
                   >
                     <Save className="h-4 w-4" />
-                    Save limits and expiry
+                    Limitleri ve bitiş tarihini kaydet
                   </Button>
                 </div>
 
                 <div>
-                  <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold"><Server className="h-4 w-4" /> Activations</h3>
+                  <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold"><Server className="h-4 w-4" /> Etkinleştirmeler</h3>
                   <Table>
-                    <TableHeader><TableRow><TableHead>Machine</TableHead><TableHead>Status</TableHead><TableHead>Last Seen</TableHead><TableHead>Version</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
+                    <TableHeader><TableRow><TableHead>Makine</TableHead><TableHead>Durum</TableHead><TableHead>Son Görülme</TableHead><TableHead>Sürüm</TableHead><TableHead className="text-right">İşlem</TableHead></TableRow></TableHeader>
                     <TableBody>
                       {detail.activations.map((activation) => (
                         <TableRow key={activation.id}>
                           <TableCell className="font-mono text-xs">{activation.machineId}</TableCell>
-                          <TableCell>{activation.status}</TableCell>
+                          <TableCell>{uiLabel(activation.status)}</TableCell>
                           <TableCell>{formatDate(activation.lastSeenAt)}</TableCell>
                           <TableCell>{activation.version || '-'}</TableCell>
                           <TableCell className="text-right">
                             {activation.status === 'ACTIVE' && (
                               <Button variant="ghost" size="sm" onClick={() => deactivateActivation(detail.id, activation.id)} disabled={working}>
-                                Deactivate
+                                Devre Dışı Bırak
                               </Button>
                             )}
                           </TableCell>
                         </TableRow>
                       ))}
-                      {detail.activations.length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground">No activations.</TableCell></TableRow>}
+                      {detail.activations.length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground">Etkinleştirme yok.</TableCell></TableRow>}
                     </TableBody>
                   </Table>
                 </div>
 
                 <div>
-                  <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold"><Activity className="h-4 w-4" /> Recent Heartbeats</h3>
+                  <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold"><Activity className="h-4 w-4" /> Son Durum Bildirimleri</h3>
                   <Table>
-                    <TableHeader><TableRow><TableHead>Time</TableHead><TableHead>Machine</TableHead><TableHead>Usage</TableHead><TableHead>Version</TableHead><TableHead>IP</TableHead></TableRow></TableHeader>
+                    <TableHeader><TableRow><TableHead>Zaman</TableHead><TableHead>Makine</TableHead><TableHead>Kullanım</TableHead><TableHead>Sürüm</TableHead><TableHead>IP</TableHead></TableRow></TableHeader>
                     <TableBody>
                       {detail.heartbeats.map((heartbeat) => (
                         <TableRow key={heartbeat.id}>
-                          <TableCell>{new Date(heartbeat.createdAt).toLocaleString()}</TableCell>
+                          <TableCell>{new Date(heartbeat.createdAt).toLocaleString('tr-TR')}</TableCell>
                           <TableCell className="font-mono text-xs">{heartbeat.machineId.slice(0, 18)}...</TableCell>
-                          <TableCell>{heartbeat.deviceCount} devices / {heartbeat.userCount} users</TableCell>
+                          <TableCell>{heartbeat.deviceCount} cihaz / {heartbeat.userCount} kullanıcı</TableCell>
                           <TableCell>{heartbeat.appVersion || '-'}</TableCell>
                           <TableCell>{heartbeat.ipAddress || '-'}</TableCell>
                         </TableRow>
                       ))}
-                      {detail.heartbeats.length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground">No heartbeats.</TableCell></TableRow>}
+                      {detail.heartbeats.length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground">Durum bildirimi yok.</TableCell></TableRow>}
                     </TableBody>
                   </Table>
                 </div>

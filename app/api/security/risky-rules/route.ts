@@ -40,7 +40,7 @@ export async function GET() {
     );
     
     // Cache the results (5 minutes)
-    const globalCache = globalThis as any;
+    const globalCache = globalThis as typeof globalThis & { riskyRulesCache?: { data?: ReturnType<typeof analyzePolicyRisks>; timestamp?: number } };
     if (!globalCache.riskyRulesCache) {
       globalCache.riskyRulesCache = {};
     }

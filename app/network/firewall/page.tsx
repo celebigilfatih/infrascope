@@ -1,5 +1,7 @@
 'use client';
 
+import { uiLabel } from '@/lib/i18n/tr';
+import { PageHeading } from '@/components/ui/page-heading';
 import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -235,9 +237,7 @@ export default function FirewallPage() {
     return `${hours}h ${mins}m`;
   };
 
-  const formatDate = (_timestamp: number) => {
-    return new Date(_timestamp * 1000).toLocaleString('tr-TR');
-  };
+
 
   const getPageNumbers = (currentPage: number, totalPages: number) => {
     const pages: (number | 'ellipsis')[] = [];
@@ -258,13 +258,12 @@ export default function FirewallPage() {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-4">
         <div>
-          <h1 className="text-2xl font-bold">FortiGate Firewall</h1>
-          <p className="text-muted-foreground">{status?.hostname} ({status?.serial})</p>
+          <PageHeading section="firewall" description={<>{status?.hostname} ({status?.serial})</>}>FortiGate Güvenlik Duvarı</PageHeading>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={() => { fetchFortiGateData(); fetchFortiAnalyzerData(); }} disabled={loading}>
+          <Button variant="outline" size="icon" onClick={() => { fetchFortiGateData(); fetchFortiAnalyzerData(); }} disabled={loading} aria-label="Yenile">
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </Button>
         </div>
@@ -325,8 +324,8 @@ export default function FirewallPage() {
                   <Network className="h-5 w-5 text-purple-500" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Aktif Session</p>
-                  <p className="text-lg font-bold">{status.session.current.toLocaleString()}</p>
+                  <p className="text-sm text-muted-foreground">Aktif Oturum</p>
+                  <p className="text-lg font-bold">{status.session.current.toLocaleString('tr-TR')}</p>
                   <p className="text-xs text-muted-foreground">%{status.session.percent} kullanımda</p>
                 </div>
               </div>
@@ -349,20 +348,20 @@ export default function FirewallPage() {
                 <div className="flex justify-between items-center">
                   <span className="text-sm">Rol</span>
                   <Badge variant={status.ha.role === 'Master' ? 'default' : 'secondary'}>
-                    {status.ha.role}
+                    {uiLabel(status.ha.role)}
                   </Badge>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-sm">Master Serial</span>
+                  <span className="text-sm">Birincil Seri No</span>
                   <span className="font-mono text-xs">{status.serial}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-sm">Slave Serial</span>
+                  <span className="text-sm">İkincil Seri No</span>
                   <span className="font-mono text-xs">{status.ha.serial}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm">Lisans</span>
-                  <Badge className="bg-green-600">{status.license.support}</Badge>
+                  <Badge variant="success">{uiLabel(status.license.support)}</Badge>
                 </div>
               </div>
             </CardContent>
@@ -371,7 +370,7 @@ export default function FirewallPage() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Activity className="h-4 w-4" /> SD-WAN Interfaces
+                <Activity className="h-4 w-4" /> SD-WAN Arayüzleri
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -401,7 +400,7 @@ export default function FirewallPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Network className="h-5 w-5" />
-            Interface İstatistikleri
+            Arayüz İstatistikleri
             <Badge variant="secondary">{filteredInterfaces.length}</Badge>
           </CardTitle>
         </CardHeader>
@@ -411,7 +410,7 @@ export default function FirewallPage() {
             <div className="relative flex-1 max-w-sm">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Interface ara..."
+                placeholder="Arayüz ara…"
                 value={interfaceSearch}
                 onChange={(e) => {
                   setInterfaceSearch(e.target.value);
@@ -469,7 +468,7 @@ export default function FirewallPage() {
                           {(iface.rx_bytes / 1000000000).toFixed(2)} / {(iface.tx_bytes / 1000000000).toFixed(2)}
                         </TableCell>
                         <TableCell className="text-xs">
-                          {iface.rx_packets.toLocaleString()} / {iface.tx_packets.toLocaleString()}
+                          {iface.rx_packets.toLocaleString('tr-TR')} / {iface.tx_packets.toLocaleString('tr-TR')}
                         </TableCell>
                         <TableCell>
                           {(iface.rx_errors + iface.tx_errors) > 0 ? (
@@ -494,7 +493,7 @@ export default function FirewallPage() {
                     size="sm"
                     onClick={() => setInterfacePage(p => Math.max(1, p - 1))}
                     disabled={interfacePage === 1}
-                  >
+                   aria-label="Önceki sayfa">
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
                   <span className="text-sm">
@@ -505,7 +504,7 @@ export default function FirewallPage() {
                     size="sm"
                     onClick={() => setInterfacePage(p => Math.min(interfaceTotalPages, p + 1))}
                     disabled={interfacePage === interfaceTotalPages}
-                  >
+                   aria-label="Sonraki sayfa">
                     <ChevronRight className="h-4 w-4" />
                   </Button>
                 </div>
@@ -540,31 +539,31 @@ export default function FirewallPage() {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="p-3 bg-muted rounded-lg">
-                  <p className="text-xs text-muted-foreground">Hostname</p>
+                  <p className="text-xs text-muted-foreground">Sunucu Adı</p>
                   <p className="font-medium">{fortiAnalyzerStatus.Hostname as string}</p>
                 </div>
                 <div className="p-3 bg-muted rounded-lg">
-                  <p className="text-xs text-muted-foreground">Version</p>
+                  <p className="text-xs text-muted-foreground">Sürüm</p>
                   <p className="font-medium">{fortiAnalyzerStatus.Version as string}</p>
                 </div>
                 <div className="p-3 bg-muted rounded-lg">
                   <p className="text-xs text-muted-foreground">Platform</p>
-                  <p className="font-medium">{fortiAnalyzerStatus['Platform Full Name'] as string}</p>
+                  <p className="font-medium">{fortiAnalyzerStatus["Platform Adı"] as string}</p>
                 </div>
                 <div className="p-3 bg-muted rounded-lg">
-                  <p className="text-xs text-muted-foreground">Serial</p>
-                  <p className="font-medium">{fortiAnalyzerStatus['Serial Number'] as string}</p>
+                  <p className="text-xs text-muted-foreground">Seri No</p>
+                  <p className="font-medium">{fortiAnalyzerStatus["Seri Numarası"] as string}</p>
                 </div>
               </div>
               
               <div className="p-3 bg-muted rounded-lg">
                 <p className="text-xs text-muted-foreground mb-2">Disk Kullanımı</p>
-                <p className="text-sm">{fortiAnalyzerStatus['Disk Usage'] as string}</p>
+                <p className="text-sm">{fortiAnalyzerStatus["Disk Kullanımı"] as string}</p>
               </div>
 
               {fortiAnalyzerAdoms.length > 0 && (
                 <div>
-                  <p className="text-xs text-muted-foreground mb-2">ADOM'lar ({fortiAnalyzerAdoms.length})</p>
+                  <p className="text-xs text-muted-foreground mb-2">ADOM&apos;lar ({fortiAnalyzerAdoms.length})</p>
                   <div className="flex flex-wrap gap-2">
                     {fortiAnalyzerAdoms.slice(0, 8).map((adom: Record<string, unknown>, idx: number) => (
                       <Badge key={idx} variant="outline" className="text-xs">
@@ -615,10 +614,10 @@ export default function FirewallPage() {
                     <TableHead>Kullanıcı</TableHead>
                     <TableHead>IP Adresi</TableHead>
                     <TableHead>VPN IP</TableHead>
-                    <TableHead>Interface</TableHead>
+                    <TableHead>Arayüz</TableHead>
                     <TableHead>Süre</TableHead>
                     <TableHead>2FA</TableHead>
-                    <TableHead className="text-right">Traffic</TableHead>
+                    <TableHead className="text-right">Trafik</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -640,7 +639,7 @@ export default function FirewallPage() {
                         <TableCell className="text-sm">{formatDuration(user.duration)}</TableCell>
                         <TableCell>
                           {user.two_factor_auth ? (
-                            <Badge className="bg-green-600 text-xs">Aktif</Badge>
+                            <Badge variant="success" className="text-xs">Aktif</Badge>
                           ) : (
                             <Badge variant="destructive" className="text-xs">Pasif</Badge>
                           )}
@@ -658,7 +657,7 @@ export default function FirewallPage() {
                 <div className="flex items-center justify-between mt-4">
                   <p className="text-sm text-muted-foreground">Sayfa {sslPage} / {sslTotalPages}</p>
                   <div className="flex items-center gap-1">
-                    <Button variant="outline" size="icon" onClick={() => setSslPage((p) => Math.max(1, p - 1))} disabled={sslPage === 1}>
+                    <Button variant="outline" size="icon" onClick={() => setSslPage((p) => Math.max(1, p - 1))} disabled={sslPage === 1} aria-label="Önceki sayfa">
                       <ChevronLeft className="h-4 w-4" />
                     </Button>
                     {getPageNumbers(sslPage, sslTotalPages).map((page, idx) => (
@@ -677,7 +676,7 @@ export default function FirewallPage() {
                         )}
                       </React.Fragment>
                     ))}
-                    <Button variant="outline" size="icon" onClick={() => setSslPage((p) => Math.min(sslTotalPages, p + 1))} disabled={sslPage === sslTotalPages}>
+                    <Button variant="outline" size="icon" onClick={() => setSslPage((p) => Math.min(sslTotalPages, p + 1))} disabled={sslPage === sslTotalPages} aria-label="Sonraki sayfa">
                       <ChevronRight className="h-4 w-4" />
                     </Button>
                   </div>

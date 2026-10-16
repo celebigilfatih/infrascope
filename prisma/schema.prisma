@@ -236,6 +236,8 @@ model Device {
   // Integration links
   zabbixHostId      String?
   vmwareMoref       String?  // VMware Managed Object Reference
+  zabbixSourceScope String?
+  vmwareSourceScope String?
   fortiDeviceId     String?
   
   // NMS / SNMP integration
@@ -297,6 +299,8 @@ model Device {
   @@index([parentDeviceId])
   @@index([zabbixHostId])
   @@index([vmwareMoref])
+  @@unique([zabbixSourceScope, zabbixHostId])
+  @@unique([vmwareSourceScope, vmwareMoref])
   @@index([vmwareClusterId])
   @@index([nmsDeviceId])
   @@map("devices")
@@ -754,6 +758,7 @@ model VMwareCluster {
   id              String   @id @default(cuid())
   organizationId  String
   vcenterId       String   // External vCenter identifier
+  sourceScope     String?
   datacenterName  String
   name            String
   cpuTotal        BigInt?
@@ -771,6 +776,7 @@ model VMwareCluster {
 
   @@index([organizationId])
   @@map("vmware_clusters")
+  @@unique([sourceScope, vcenterId])
 }
 
 /// VMware Datastore
@@ -778,6 +784,7 @@ model VMwareDatastore {
   id              String   @id @default(cuid())
   organizationId  String
   vcenterId       String
+  sourceScope     String?
   name            String
   type            String?  // VMFS, NFS, VVTD
   capacity        BigInt?
@@ -792,6 +799,7 @@ model VMwareDatastore {
   @@index([organizationId])
   @@index([clusterId])
   @@map("vmware_datastores")
+  @@unique([sourceScope, vcenterId])
 }
 
 /// Capacity Metrics Time Series
@@ -799,6 +807,7 @@ model CapacityMetric {
   id              String   @id @default(cuid())
   resourceType    String   // 'cluster', 'host', 'datastore'
   resourceId      String   // vCenter moref or DB id
+  sourceScope     String?
   resourceName    String
   metricType      String   // 'cpu', 'memory', 'disk'
   value           Float    // Usage percentage or absolute value
@@ -806,6 +815,7 @@ model CapacityMetric {
   timestamp       DateTime @default(now())
   
   @@index([resourceType, resourceId, metricType, timestamp])
+  @@index([sourceScope, resourceType, resourceId, metricType, timestamp], map: "capacity_metrics_sourceScope_resourceType_resourceId_metric_idx")
   @@map("capacity_metrics")
 }
 
@@ -935,6 +945,7 @@ model IntegrationSyncLog {
 model ZabbixTrigger {
   id              String   @id @default(cuid())
   triggerId       String   // Zabbix internal ID
+  sourceScope     String?
   hostId          String
   description     String
   expression      String?
@@ -950,6 +961,7 @@ model ZabbixTrigger {
   @@index([hostId])
   @@index([status])
   @@map("zabbix_triggers")
+  @@unique([sourceScope, triggerId, hostId])
 }
 
 /// Alert Event
@@ -1196,6 +1208,7 @@ model AlarmLifecycleTransition {
   actorName   String?
   reason      String?
   metadata    Json?
+  requestId   String?                 @unique
   createdAt   DateTime                @default(now())
 
   incident    AlarmIncident           @relation(fields: [incidentId], references: [id], onDelete: Cascade)
@@ -1370,6 +1383,7 @@ enum AlarmTransitionType {
   ASSIGNED
   LEGAL_HOLD_SET
   LEGAL_HOLD_RELEASED
+  NOTE_ADDED
 }
 
 enum NotificationAttemptStatus {

@@ -1,5 +1,7 @@
 'use client';
 
+import { uiError } from '@/lib/i18n/tr';
+
 import { useState } from 'react';
 import { Eye, EyeOff, Loader2, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -83,11 +85,11 @@ export function FirewallOnboardingDialog({ open, onOpenChange, onCreated }: Prop
         }),
       });
       const data = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(data?.error || 'Firewall kaydedilemedi.');
+      if (!response.ok) throw new Error(uiError(data?.error || 'Firewall kaydedilemedi.'));
       onOpenChange(false);
       onCreated(data.data.connector.id);
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : 'Firewall kaydedilemedi.');
+      setError(uiError(submitError instanceof Error ? submitError.message : "Güvenlik duvarı kaydedilemedi."));
     } finally {
       setSubmitting(false);
     }
@@ -130,7 +132,7 @@ export function FirewallOnboardingDialog({ open, onOpenChange, onCreated }: Prop
                       className={cn('h-8 rounded-sm px-3 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', authMode === mode && 'bg-background shadow-sm')}
                       aria-pressed={authMode === mode}
                     >
-                      {mode === 'password' ? 'Kullanıcı / parola' : 'API token'}
+                      {mode === 'password' ? 'Kullanıcı / parola' : "API erişim anahtarı"}
                     </button>
                   ))}
                 </div>
@@ -143,14 +145,14 @@ export function FirewallOnboardingDialog({ open, onOpenChange, onCreated }: Prop
                   </>
                 ) : (
                   <div className="sm:col-span-2">
-                    <SecretField label="API token" name="accessToken" visible={showSecrets} required />
+                    <SecretField label="API erişim anahtarı" name="accessToken" visible={showSecrets} required />
                   </div>
                 )}
               </div>
             </section>
 
             <FallbackSection
-              title="SNMP fallback"
+              title="SNMP yedek kaynağı"
               description="REST sertifikası sorunluysa sağlık ve port verilerini toplamaya devam eder."
               checked={snmpEnabled}
               onCheckedChange={setSnmpEnabled}
@@ -167,7 +169,7 @@ export function FirewallOnboardingDialog({ open, onOpenChange, onCreated }: Prop
                 <Field label="Polling aralığı (sn)" name="pollingInterval" type="number" defaultValue="300" min="10" max="86400" required />
               </div>
               {snmpVersion === '2c' ? (
-                <SecretField label="Community" name="snmpCommunity" visible={showSecrets} required />
+                <SecretField label="Topluluk Adı" name="snmpCommunity" visible={showSecrets} required />
               ) : (
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Field label="SNMPv3 kullanıcı adı" name="snmpV3Username" required />
@@ -196,7 +198,7 @@ export function FirewallOnboardingDialog({ open, onOpenChange, onCreated }: Prop
             </FallbackSection>
 
             <FallbackSection
-              title="SSH fallback"
+              title="SSH yedek kaynağı"
               description="Salt okunur durum ve konfigürasyon yedeği için kullanılır. Host key ayrıca onaylanır."
               checked={sshEnabled}
               onCheckedChange={setSshEnabled}
@@ -213,7 +215,7 @@ export function FirewallOnboardingDialog({ open, onOpenChange, onCreated }: Prop
               {showSecrets ? 'Gizli alanları maskele' : 'Gizli alanları göster'}
             </button>
 
-            {error && <p role="alert" className="border-l-2 border-red-500 bg-red-500/5 px-4 py-3 text-sm text-red-700 dark:text-red-300">{error}</p>}
+            {error && <p role="alert" className="border-l-2 border-red-500 bg-red-500/5 px-4 py-3 text-sm text-red-700 dark:text-red-300">{uiError(error)}</p>}
 
             <div className="flex gap-3 rounded-md border border-emerald-500/25 bg-emerald-500/5 p-4 text-sm">
               <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" aria-hidden="true" />
@@ -225,7 +227,7 @@ export function FirewallOnboardingDialog({ open, onOpenChange, onCreated }: Prop
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>Vazgeç</Button>
             <Button type="submit" disabled={submitting}>
               {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />}
-              Firewall ekle
+              Güvenlik Duvarı Ekle
             </Button>
           </DialogFooter>
         </form>

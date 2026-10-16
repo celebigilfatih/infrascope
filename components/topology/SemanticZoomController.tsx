@@ -32,14 +32,14 @@ export const SemanticZoomController: React.FC<SemanticZoomControllerProps> = ({
       <button
         onClick={handleZoomIn}
         className="w-8 h-8 flex items-center justify-center bg-gray-50 hover:bg-gray-100 rounded text-gray-600 font-bold"
-        title="Zoom In"
+        title="Yakınlaştır"
       >
         +
       </button>
       <button
         onClick={handleZoomOut}
         className="w-8 h-8 flex items-center justify-center bg-gray-50 hover:bg-gray-100 rounded text-gray-600 font-bold"
-        title="Zoom Out"
+        title="Uzaklaştır"
       >
         -
       </button>

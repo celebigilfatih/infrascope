@@ -1,11 +1,17 @@
 # FortiAnalyzer Integration
 
+**B20 update (2026-10-16):** All active readers now resolve one decrypted host/ADOM/authentication profile. Settings expose explicit ADOM and session/API-key selection; local keys use Bearer headers without JSON-RPC sessions, and connection tests perform a bounded read in the selected ADOM. Legacy root defaults and `accessToken` aliases remain supported; keys are protected at rest. Client, event-cache, FortiView response-cache and health revisions isolate target changes. See [ADR-027](../../10-architecture/adr/ADR-027-fortianalyzer-adom-authentication.md) and the [ADOM/authentication runbook](../../30-runbooks/FORTIANALYZER_ADOM_AUTH.md) for current contracts, coverage and limitations. Historical singleton/root examples below are not the current target/authentication contract.
+
 > **File:** `lib/integrations/fortianalyzer.ts` (1,072 lines, 17 async methods)
 > **Protocol:** JSON-RPC over HTTPS (`/jsonrpc`)
 > **Auth:** Username/password session (30-min TTL) or API key (stateless)
 > **Singleton:** `getSharedFortiAnalyzerService()` / `initSharedFortiAnalyzerService()`
 
+**B05 update (2026-10-15):** Shared authentication is bound to normalized host and exact credentials in `globalThis._fazAuthStateV2`; account backoff/serialization is bound to host plus username. The older host-only diagram/examples below are historical. Use `FortiAnalyzerService.testConnection` for the ADMIN password test: it owns a fresh, bounded session and attempts logout in `finally`, without adopting or closing a collector session. Blank passwords retain the saved encrypted-password fallback; active account backoff returns failure rather than a successful validation. See [ADR-012](../../10-architecture/adr/ADR-012-fortianalyzer-credential-session-ownership.md) and run `npm run test:fortianalyzer-auth`.
+
 ## Architecture
+
+**B06 update (2026-10-15):** `fortianalyzer-cache-runtime.ts` owns one process-global collector per saved configuration revision. Successful saves retire old timers/source work and rebind an already running collector; scheduled cycles re-read settings. Cache IDs/JSONB provenance and HTTP cache keys are revision-scoped. Native results exclude internal provenance metadata. See [ADR-013](../../10-architecture/adr/ADR-013-fortianalyzer-cache-configuration-lifecycle.md); run `test:fortianalyzer-cache` and the opt-in `test:fortianalyzer-cache:db`. The historical diagram below is not the current ownership contract.
 
 ```
 ┌─────────────────────────────────────────────────┐
@@ -126,6 +132,8 @@ Query pattern: `runAlarmQuery(ctx, description, cacheQueryFn, faQueryFn, options
 Exposed via `/api/health` → used by alarm runner to skip FA queries when locked.
 
 ## Related
+
+- [UTC event-time contract and cache recovery](../../30-runbooks/FORTIANALYZER_EVENT_TIME.md) — B18 normalization, explicit offsets, invalid-source errors and derived-cache versioning.
 
 - `docs/10-architecture/adr/ADR-003-fa-session-management.md` — Session lifecycle decision
 - `docs/30-runbooks/FA_ACCOUNT_LOCKED.md` — Incident playbook

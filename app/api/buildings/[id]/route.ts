@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 /**
  * Building Detail Endpoints
  * GET /api/buildings/[id] - Get building by ID
@@ -172,7 +173,7 @@ export async function PUT(
       }
     }
 
-    const updateData: any = {};
+    const updateData: Prisma.BuildingUncheckedUpdateInput = {};
     if (name !== undefined) updateData.name = name.trim();
     if (address !== undefined) updateData.address = address || '';
     if (city !== undefined) updateData.city = city || '';

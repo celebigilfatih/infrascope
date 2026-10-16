@@ -19,6 +19,7 @@ interface Room3DProps {
   displayMode?: 'operation' | 'capacity';
   cameraPreset?: CameraPreset;
   cameraRequestKey?: number;
+  focusSelectedRack?: boolean;
 }
 
 function CameraController({ width, depth, height, preset, requestKey, focusedRack }: { width: number; depth: number; height: number; preset: CameraPreset; requestKey: number; focusedRack?: { x: number; z: number; height: number } }) {
@@ -48,20 +49,20 @@ function CameraController({ width, depth, height, preset, requestKey, focusedRac
   return <OrbitControls ref={controls} makeDefault enableDamping dampingFactor={0.06} minDistance={1.2} maxDistance={Math.max(width, depth) * 3.5} maxPolarAngle={Math.PI / 2.03} onChange={() => invalidate()} />;
 }
 
-export function Room3D({ room, selectedRackId, onRackClick, visibleRackIds, displayMode = 'operation', cameraPreset = 'isometric', cameraRequestKey = 0 }: Room3DProps) {
+export function Room3D({ room, selectedRackId, onRackClick, visibleRackIds, displayMode = 'operation', cameraPreset = 'isometric', cameraRequestKey = 0, focusSelectedRack = true }: Room3DProps) {
   const [isDark, setIsDark] = useState(false);
   const width = Math.max(2, room.width || 10);
   const depth = Math.max(2, room.depth || 8);
   const height = Math.max(2.2, room.height || 3);
-  const racks = room.racks || [];
+  const racks = useMemo(() => room.racks || [], [room.racks]);
   const positions = useMemo(() => computeRoomRackPositions(racks, width, depth), [racks, width, depth]);
   const selectedRack = racks.find((rack) => rack.id === selectedRackId);
   const selectedPosition = selectedRack ? positions.get(selectedRack.id) : undefined;
-  const focusedRack = selectedRack && selectedPosition ? {
+  const focusedRack = useMemo(() => focusSelectedRack && selectedRack && selectedPosition ? {
     x: selectedPosition.x + RACK_WIDTH_METERS / 2 - width / 2,
     z: selectedPosition.z + RACK_DEPTH_METERS / 2 - depth / 2,
     height: selectedRack.maxUnits * 0.04445,
-  } : undefined;
+  } : undefined, [focusSelectedRack, selectedRack, selectedPosition, width, depth]);
 
   useEffect(() => {
     const update = () => setIsDark(document.documentElement.classList.contains('dark'));
@@ -80,18 +81,18 @@ export function Room3D({ room, selectedRackId, onRackClick, visibleRackIds, disp
         performance={{ min: 0.5 }}
         gl={{ antialias: true, powerPreference: 'high-performance' }}
       >
-        <color attach="background" args={[isDark ? '#07090d' : '#edf0f3']} />
-        <fog attach="fog" args={[isDark ? '#07090d' : '#edf0f3', Math.max(width, depth) * 1.4, Math.max(width, depth) * 3.4]} />
+        <color attach="background" args={[isDark ? '#111b29' : '#edf0f3']} />
+        <fog attach="fog" args={[isDark ? '#111b29' : '#edf0f3', Math.max(width, depth) * 1.4, Math.max(width, depth) * 3.4]} />
         <Suspense fallback={null}>
           <PerspectiveCamera makeDefault fov={46} near={0.1} far={500} />
           <CameraController width={width} depth={depth} height={height} preset={cameraPreset} requestKey={cameraRequestKey} focusedRack={focusedRack} />
-          <ambientLight intensity={isDark ? 0.72 : 0.9} />
+          <ambientLight intensity={isDark ? 1.1 : 0.9} />
           <hemisphereLight intensity={0.55} color={isDark ? '#cbd5e1' : '#ffffff'} groundColor={isDark ? '#111827' : '#9ca3af'} />
           <directionalLight position={[width, height * 2.4, depth]} intensity={1.25} castShadow={racks.length <= 60} shadow-mapSize={[1024, 1024]} />
 
           <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
             <planeGeometry args={[width, depth]} />
-            <meshStandardMaterial color={isDark ? '#11151c' : '#d8dde3'} metalness={0.08} roughness={0.78} />
+            <meshStandardMaterial color={isDark ? '#26364a' : '#d8dde3'} metalness={0.08} roughness={0.78} />
           </mesh>
           <gridHelper args={[Math.max(width, depth), Math.max(8, Math.round(Math.max(width, depth) * 2)), isDark ? '#334155' : '#94a3b8', isDark ? '#1e293b' : '#cbd5e1']} position={[0, 0.004, 0]} />
           <mesh position={[0, height / 2, -depth / 2]} receiveShadow><boxGeometry args={[width, height, 0.06]} /><meshStandardMaterial color={isDark ? '#1f2937' : '#cbd5e1'} transparent opacity={0.42} /></mesh>
@@ -124,7 +125,7 @@ export function Room3D({ room, selectedRackId, onRackClick, visibleRackIds, disp
         </Suspense>
       </Canvas>
 
-      {racks.length === 0 && <div className="pointer-events-none absolute inset-0 flex items-center justify-center"><div className="rounded-md border border-dashed border-border bg-background/90 px-6 py-5 text-center shadow-sm"><p className="font-medium">Bu odada kabinet yok</p><p className="mt-1 text-sm text-muted-foreground">Locations portföyünden kabinet ekleyin.</p></div></div>}
+      {racks.length === 0 && <div className="pointer-events-none absolute inset-0 flex items-center justify-center"><div className="rounded-md border border-dashed border-border bg-background/90 px-6 py-5 text-center shadow-sm"><p className="font-medium">Bu odada kabinet yok</p><p className="mt-1 text-sm text-muted-foreground">Konumlar ve Odalar sayfasından kabinet ekleyin.</p></div></div>}
     </div>
   );
 }

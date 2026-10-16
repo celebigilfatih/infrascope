@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { authorizeApiRequest } from '@/lib/auth/api-permission';
 import { prisma } from '@/lib/prisma';
 import {
   NmsSnmpValidationError,
@@ -34,8 +35,10 @@ function serializeBigInt(obj: unknown): unknown {
  */
 
 export async function GET(_req: NextRequest, { params }: Params) {
+  const access = await authorizeApiRequest(_req, 'devices', 'read');
+  if (!access.allowed) return access.response;
   try {
-    const device = await (prisma as any).device.findUnique({
+    const device = await prisma.device.findUnique({
       where: { id: params.id },
       select: {
         id: true,
@@ -74,7 +77,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
     }
 
     // Latest health metrics (last 24h)
-    const healthMetrics = await (prisma as any).nmsHealthMetric.findMany({
+    const healthMetrics = await prisma.nmsHealthMetric.findMany({
       where: { nmsDeviceId: device.nmsDeviceId },
       orderBy: { collectedAt: 'desc' },
       take: 48, // ~24h at 30-min intervals
@@ -82,7 +85,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
     });
 
     // Current interface state
-    const interfaces = await (prisma as any).nmsInterface.findMany({
+    const interfaces = await prisma.nmsInterface.findMany({
       where: { nmsDeviceId: device.nmsDeviceId },
       orderBy: [{ adminStatus: 'asc' }, { interfaceName: 'asc' }],
       select: {
@@ -106,7 +109,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
     });
 
     // Topology links
-    const topologyLinks = await (prisma as any).nmsTopologyLink.findMany({
+    const topologyLinks = await prisma.nmsTopologyLink.findMany({
       where: { nmsDeviceId: device.nmsDeviceId },
       select: {
         id: true,
@@ -145,6 +148,8 @@ export async function GET(_req: NextRequest, { params }: Params) {
 }
 
 export async function PUT(req: NextRequest, { params }: Params) {
+  const access = await authorizeApiRequest(req, 'devices', 'write');
+  if (!access.allowed) return access.response;
   try {
     const body = await req.json();
     const {
@@ -165,7 +170,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
       sshPort,
     } = body;
 
-    const existing = await (prisma as any).device.findUnique({
+    const existing = await prisma.device.findUnique({
       where: { id: params.id },
       select: {
         id: true,
@@ -196,7 +201,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
         return NextResponse.json({ error: 'Management IP is required' }, { status: 400 });
       }
 
-      const duplicateIp = await (prisma as any).device.findFirst({
+      const duplicateIp = await prisma.device.findFirst({
         where: {
           managementIp: normalizedIp,
           nmsDeviceId: { not: null },
@@ -324,7 +329,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
     }
     if (sshPort !== undefined) updateData.sshPort = Number(sshPort);
 
-    const updated = await (prisma as any).device.update({
+    const updated = await prisma.device.update({
       where: { id: params.id },
       data: updateData,
       select: {
@@ -359,6 +364,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
 }
 
 export async function DELETE(_req: NextRequest, { params }: Params) {
+  const access = await authorizeApiRequest(_req, 'devices', 'delete');
+  if (!access.allowed) return access.response;
   try {
     const existing = await prisma.device.findUnique({
       where: { id: params.id },
@@ -378,12 +385,12 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
     }
 
     const updated = await prisma.$transaction(async (tx) => {
-      await (tx as any).nmsInterface.deleteMany({ where: { nmsDeviceId: existing.nmsDeviceId } });
-      await (tx as any).nmsHealthMetric.deleteMany({ where: { nmsDeviceId: existing.nmsDeviceId } });
-      await (tx as any).nmsTopologyLink.deleteMany({ where: { nmsDeviceId: existing.nmsDeviceId } });
-      await (tx as any).nmsDeviceMetric.deleteMany({ where: { nmsDeviceId: existing.nmsDeviceId } });
-      await (tx as any).nmsInterfaceMetric.deleteMany({ where: { nmsDeviceId: existing.nmsDeviceId } });
-      await (tx as any).nmsBackup.deleteMany({ where: { nmsDeviceId: existing.nmsDeviceId } });
+      await tx.nmsInterface.deleteMany({ where: { nmsDeviceId: existing.nmsDeviceId! } });
+      await tx.nmsHealthMetric.deleteMany({ where: { nmsDeviceId: existing.nmsDeviceId! } });
+      await tx.nmsTopologyLink.deleteMany({ where: { nmsDeviceId: existing.nmsDeviceId! } });
+      await tx.nmsDeviceMetric.deleteMany({ where: { nmsDeviceId: existing.nmsDeviceId! } });
+      await tx.nmsInterfaceMetric.deleteMany({ where: { nmsDeviceId: existing.nmsDeviceId! } });
+      await tx.nmsBackup.deleteMany({ where: { nmsDeviceId: existing.nmsDeviceId! } });
 
       return tx.device.update({
         where: { id: params.id },

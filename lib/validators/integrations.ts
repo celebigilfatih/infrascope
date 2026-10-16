@@ -1,20 +1,24 @@
-import { z } from 'zod';
+import { z } from '@/lib/i18n/validation';
 
 export const fortianalyzerConfigSchema = z.object({
-  host: z.string().min(1, 'Host is required'),
-  username: z.string().min(1, 'Username is required'),
+  host: z.string().min(1, "Sunucu adresi zorunludur."),
+  username: z.string().optional(),
   password: z.string().optional(),
+  apiKey: z.string().optional(),
+  accessToken: z.string().optional(),
+  authMode: z.enum(['session', 'api-key']).optional(),
+  adom: z.string().trim().min(1, 'ADOM zorunludur.').max(128).optional(),
 });
 
 export const vmwareTestSchema = z.object({
-  host: z.string().min(1, 'Host is required'),
-  username: z.string().min(1, 'Username is required'),
-  password: z.string().min(1, 'Password is required'),
+  host: z.string().min(1, "Sunucu adresi zorunludur."),
+  username: z.string().min(1, "Kullanıcı adı zorunludur."),
+  password: z.string().min(1, "Parola zorunludur."),
 });
 
 export const vmwareSaveConfigSchema = z.object({
-  host: z.string().min(1, 'Host is required'),
-  username: z.string().min(1, 'Username is required'),
+  host: z.string().min(1, "Sunucu adresi zorunludur."),
+  username: z.string().min(1, "Kullanıcı adı zorunludur."),
   password: z.string().optional(),
   thumbprint: z.string().optional(),
   pollingInterval: z.number().int().min(1).max(1440).default(10),
@@ -28,5 +32,5 @@ export const vmwareSaveConfigSchema = z.object({
 });
 
 export const topologyActionSchema = z.object({
-  action: z.enum(['correlate'], { message: 'Invalid action. Supported: correlate' }),
+  action: z.enum(['correlate'], { message: "İşlem geçersiz. Desteklenen işlem: ilişkilendirme." }),
 });

@@ -1,5 +1,7 @@
 'use client';
 
+import { uiError } from '@/lib/i18n/tr';
+
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -55,7 +57,7 @@ export default function LoginPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    setError(uiError(''));
     setLoading(true);
 
     try {
@@ -69,9 +71,9 @@ export default function LoginPage() {
 
       if (res.status === 429) {
         const retryAfter = Number(res.headers.get('Retry-After'));
-        setError(Number.isFinite(retryAfter) && retryAfter > 0
+        setError(uiError(Number.isFinite(retryAfter) && retryAfter > 0
           ? `Çok fazla giriş denemesi yapıldı. ${Math.ceil(retryAfter)} saniye sonra tekrar deneyin.`
-          : 'Çok fazla giriş denemesi yapıldı. Biraz sonra tekrar deneyin.');
+          : 'Çok fazla giriş denemesi yapıldı. Biraz sonra tekrar deneyin.'));
         return;
       }
 
@@ -86,10 +88,10 @@ export default function LoginPage() {
         }
         router.push(targetPath);
       } else {
-        setError(data.error || 'Giriş başarısız');
+        setError(uiError(data.error || 'Giriş başarısız'));
       }
-    } catch (err) {
-      setError('Bağlantı hatası');
+    } catch {
+      setError(uiError('Bağlantı hatası'));
     } finally {
       setLoading(false);
     }
@@ -127,7 +129,7 @@ export default function LoginPage() {
         <div className="flex-1 flex items-center justify-center my-4">
           <Image
             src="/images/login-hero.png"
-            alt="InfraScope Network Topology"
+            alt="InfraScope Ağ Topolojisi"
             width={1200}
             height={700}
             className="object-contain w-full h-auto max-h-[55vh]"
@@ -205,7 +207,7 @@ export default function LoginPage() {
           <form onSubmit={handleLogin} className="space-y-5">
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
-                {error}
+                {uiError(error)}
               </div>
             )}
 

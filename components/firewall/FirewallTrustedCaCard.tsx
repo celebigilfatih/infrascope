@@ -1,5 +1,7 @@
 'use client';
 
+import { uiError } from '@/lib/i18n/tr';
+
 import { useRef, useState } from 'react';
 import { CheckCircle2, FileUp, Loader2, ShieldCheck, Trash2 } from 'lucide-react';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
@@ -16,7 +18,7 @@ type Props = {
 
 async function readJson(response: Response) {
   const data = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(data?.error || `HTTP ${response.status}`);
+  if (!response.ok) throw new Error(uiError(data?.error || `HTTP ${response.status}`));
   return data;
 }
 

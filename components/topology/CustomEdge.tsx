@@ -21,7 +21,7 @@ export const CustomEdge = ({
     targetY,
   });
 
-  const connectionTypeStyles: Record<string, any> = {
+  const connectionTypeStyles: Record<string, React.CSSProperties> = {
     fiber: { stroke: '#DC2626', strokeWidth: 3 },
     copper: { stroke: '#16A34A', strokeWidth: 2 },
     wireless: { stroke: '#2563EB', strokeWidth: 2, strokeDasharray: '5,5' },

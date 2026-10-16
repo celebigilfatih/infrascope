@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { authorizeApiRequest } from '@/lib/auth/api-permission';
 import { prisma } from '@/lib/prisma';
 
 interface Params { params: { id: string; portName: string } }
@@ -10,12 +11,14 @@ function serializeBigInt(obj: unknown): unknown {
 }
 
 export async function GET(_req: NextRequest, { params }: Params) {
+  const access = await authorizeApiRequest(_req, 'devices', 'read');
+  if (!access.allowed) return access.response;
   try {
     const deviceId = params.id;
     const portName = decodeURIComponent(params.portName);
 
     // Get device
-    const device = await (prisma as any).device.findFirst({
+    const device = await prisma.device.findFirst({
       where: { id: deviceId },
       select: {
         id: true, name: true, type: true, vendor: true,
@@ -27,9 +30,9 @@ export async function GET(_req: NextRequest, { params }: Params) {
     }
 
     // Get interface — search by name OR description (NMS stores real port names in description)
-    const iface = await (prisma as any).nmsInterface.findFirst({
+    const iface = await prisma.nmsInterface.findFirst({
       where: {
-        nmsDeviceId: device.nmsDeviceId,
+        nmsDeviceId: device.nmsDeviceId!,
         OR: [
           { interfaceName: portName },
           { description: portName },
@@ -57,9 +60,9 @@ export async function GET(_req: NextRequest, { params }: Params) {
     }
 
     // Get topology neighbors for this port
-    const neighbors = await (prisma as any).nmsTopologyLink.findMany({
+    const neighbors = await prisma.nmsTopologyLink.findMany({
       where: {
-        nmsDeviceId: device.nmsDeviceId,
+        nmsDeviceId: device.nmsDeviceId!,
         localInterface: portName,
       },
       select: {

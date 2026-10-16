@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Upsert activation
-    const activation = await prisma.licenseActivation.upsert({
+    await prisma.licenseActivation.upsert({
       where: {
         licenseId_machineId: { licenseId: license.id, machineId },
       },

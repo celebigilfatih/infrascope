@@ -27,6 +27,8 @@ yarn-error.log*
 pnpm-debug.log*
 
 # Runtime data
+.machine-id
+data/machine-id/
 pids
 *.pid
 *.seed

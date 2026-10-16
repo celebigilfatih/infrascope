@@ -8,16 +8,20 @@ import { NextResponse } from 'next/server';
 import { getSchedulerStatus } from '@/lib/alarm-scheduler';
 import { getAlarmMonitor } from '@/lib/alarms/alarm-monitor';
 import { prisma } from '@/lib/prisma';
-import { getSharedFortiAnalyzerService, getFortiAnalyzerLoginHealth } from '@/lib/integrations/fortianalyzer';
+import { readFortiAnalyzerProfile } from '@/lib/integrations/fortianalyzer-source';
+import { fortiAnalyzerRevision } from '@/lib/integrations/fortianalyzer-revision';
+import { initSharedFortiAnalyzerService } from '@/lib/integrations/fortianalyzer';
 import { getEventCacheStatus } from '@/lib/alarms/detection-engine';
 import { getDLQStats } from '@/lib/notifications/dlq-worker';
 import { getAlarmHealthStats, type AlarmHealthStats } from '@/lib/alarms/health';
+import { checkSavedVMwareHealth, type VMwareHealthResult } from '@/lib/integrations/vmware-health';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 interface FAHealthResult {
   status: 'healthy' | 'unhealthy' | 'unknown';
+  target?: { configId: string; adom: string; authMode: string };
   responseTimeMs: number;
   error?: string;
   consecutiveFailures?: number;
@@ -27,14 +31,7 @@ interface FAHealthResult {
   eventCache?: { lastSyncAt: string | null; isFresh: boolean; syncInProgress: boolean; consecutiveSyncFailures: number; nextSyncDelayMin: number } | null;
 }
 
-interface VMwareHealthResult {
-  status: 'healthy' | 'unhealthy' | 'unknown';
-  responseTimeMs?: number;
-  error?: string;
-  version?: string;
-  lastSyncAt?: string | null;
-  lastSyncStatus?: string | null;
-}
+
 
 interface NmsHealthResult {
   status: 'healthy' | 'unhealthy' | 'unknown';
@@ -92,6 +89,7 @@ async function checkDatabaseHealth(): Promise<{ status: 'healthy' | 'unhealthy';
  * keep the block active indefinitely, so we must back off.
  */
 let _lastFAHealth: {
+  revision: string;
   result: { status: 'healthy' | 'unhealthy'; responseTimeMs: number; error?: string };
   time: number;
 } | null = null;
@@ -99,10 +97,13 @@ const FA_HEALTH_CACHE_MS = 5 * 60 * 1000; // 5-minute cache for failed health ch
 
 async function checkFortiAnalyzerHealth(): Promise<FAHealthResult> {
   const startTime = Date.now();
+  let revision = '';
+  let target: FAHealthResult['target'];
+  let service: ReturnType<typeof initSharedFortiAnalyzerService> | undefined;
 
   // Build event cache info from detection engine singleton (no API call needed)
   const cacheStatus = getEventCacheStatus();
-  const eventCacheInfo = cacheStatus ? {
+  let eventCacheInfo = cacheStatus ? {
     lastSyncAt: cacheStatus.lastSyncTime?.toISOString() ?? null,
     isFresh: cacheStatus.isFresh,
     syncInProgress: cacheStatus.syncInProgress,
@@ -111,31 +112,33 @@ async function checkFortiAnalyzerHealth(): Promise<FAHealthResult> {
   } : null;
 
   try {
-    // Use shared singleton (if available) to avoid creating competing login sessions
-    const service = getSharedFortiAnalyzerService();
-    if (!service) {
-      return { status: 'unknown' as 'unhealthy', responseTimeMs: 0, error: 'Not initialized', eventCache: eventCacheInfo };
-    }
+    const record = await prisma.integrationConfig.findFirst({ where: { type: 'FORTIANALYZER', enabled: true } });
+    if (!record) return { status: 'unknown', responseTimeMs: 0, error: 'Not configured', eventCache: null, target };
+    revision = fortiAnalyzerRevision(record);
+    if (cacheStatus?.sourceRevision !== revision) eventCacheInfo = null;
+    const profile = readFortiAnalyzerProfile(record.config);
+    target = { configId: record.id, adom: profile.adom, authMode: profile.authMode };
+    service = initSharedFortiAnalyzerService(profile);
 
     // Return cached UNHEALTHY result if last check failed recently.
     // Without this backoff, each health check (every 30s) retries a login, which
     // keeps the FA account block (code=-22) alive indefinitely.
     if (
-      _lastFAHealth &&
+      _lastFAHealth && _lastFAHealth.revision === revision &&
       _lastFAHealth.result.status === 'unhealthy' &&
       Date.now() - _lastFAHealth.time < FA_HEALTH_CACHE_MS
     ) {
-      const loginHealth = getFortiAnalyzerLoginHealth();
+      const loginHealth = service.getLoginHealth();
       return {
         ..._lastFAHealth.result,
         ...loginHealth,
         session: { active: false, lastLoginAt: null },
-        eventCache: eventCacheInfo,
+        eventCache: eventCacheInfo, target,
       };
     }
 
-    const loggedIn = await service.login();
-    const loginHealth = getFortiAnalyzerLoginHealth();
+    const loggedIn = await service.verifyAccess();
+    const loginHealth = service.getLoginHealth();
     if (!loggedIn) {
       const result = {
         status: 'unhealthy' as const,
@@ -143,8 +146,8 @@ async function checkFortiAnalyzerHealth(): Promise<FAHealthResult> {
         error: loginHealth.isAccountLocked ? 'Account locked (code=-22) — unlock via FA GUI' : 'Login failed',
         ...loginHealth,
       };
-      _lastFAHealth = { result, time: Date.now() };
-      return { ...result, session: { active: false, lastLoginAt: null }, eventCache: eventCacheInfo };
+      _lastFAHealth = { revision, result, time: Date.now() };
+      return { ...result, session: { active: false, lastLoginAt: null }, eventCache: eventCacheInfo, target };
     }
 
     // Success — clear the cache so next health check validates fresh
@@ -154,71 +157,22 @@ async function checkFortiAnalyzerHealth(): Promise<FAHealthResult> {
       responseTimeMs: Date.now() - startTime,
       ...loginHealth,
       session: { active: true, lastLoginAt: null },
-      eventCache: eventCacheInfo,
+      eventCache: eventCacheInfo, target,
     };
   } catch (error) {
-    const loginHealth = getFortiAnalyzerLoginHealth();
+    const loginHealth = service?.getLoginHealth() ?? { consecutiveFailures: 0, isAccountLocked: false, backoffRemainingSec: 0 };
     const result = {
       status: 'unhealthy' as const,
       responseTimeMs: Date.now() - startTime,
       error: (error as Error).message,
       ...loginHealth,
     };
-    _lastFAHealth = { result, time: Date.now() };
-    return { ...result, session: { active: false, lastLoginAt: null }, eventCache: eventCacheInfo };
+    _lastFAHealth = { revision, result, time: Date.now() };
+    return { ...result, session: { active: false, lastLoginAt: null }, eventCache: eventCacheInfo, target };
   }
 }
 
-/**
- * Check VMware health (if configured).
- * Uses VMwareService.getStatus() for connectivity + version check,
- * and queries IntegrationConfig for last sync time.
- */
-async function checkVMwareHealth(): Promise<VMwareHealthResult> {
-  const vmwareHost = process.env.VMWARE_HOST;
-  if (!vmwareHost) {
-    return { status: 'unknown', error: 'Not configured' };
-  }
 
-  const startTime = Date.now();
-
-  // Fetch last sync info from DB in parallel with connectivity check
-  const syncInfoPromise = prisma.integrationConfig.findFirst({
-    where: { type: 'VMWARE_VCENTER' },
-    select: { lastSyncAt: true, lastSyncStatus: true },
-  }).catch(() => null);
-
-  try {
-    const { VMwareService } = await import('@/lib/integrations/vmware');
-    const service = new VMwareService({
-      host: vmwareHost,
-      username: process.env.VMWARE_USERNAME || '',
-      password: process.env.VMWARE_PASSWORD || '',
-      pollingInterval: 5,
-      enabledModules: { datacenters: false, clusters: false, hosts: false, vms: false, datastores: false },
-    });
-
-    const [vmStatus, syncInfo] = await Promise.all([
-      service.getStatus(),
-      syncInfoPromise,
-    ]);
-
-    return {
-      status: vmStatus.connected ? 'healthy' : 'unhealthy',
-      responseTimeMs: Date.now() - startTime,
-      error: vmStatus.error,
-      version: vmStatus.version,
-      lastSyncAt: syncInfo?.lastSyncAt?.toISOString() ?? null,
-      lastSyncStatus: syncInfo?.lastSyncStatus ?? null,
-    };
-  } catch (error) {
-    return {
-      status: 'unhealthy',
-      responseTimeMs: Date.now() - startTime,
-      error: (error as Error).message,
-    };
-  }
-}
 
 /**
  * Check NMS (Network Management System) health.
@@ -343,7 +297,7 @@ export async function GET() {
   const [dbHealth, fazHealth, vmwareHealth, nmsHealth, alarmStats, dlqStats] = await Promise.all([
     checkDatabaseHealth(),
     checkFortiAnalyzerHealth(),
-    checkVMwareHealth(),
+    checkSavedVMwareHealth(),
     checkNmsHealth(),
     getAlarmHealthStats(),
     getDLQStats(),

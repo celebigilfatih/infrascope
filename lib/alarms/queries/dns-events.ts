@@ -49,8 +49,8 @@ export async function getDnsTunnelSuspectEvents(ctx: AlarmQueryContext): Promise
       queryCache({
         logtype: 'dns',
         eventTime: timeWindow(ctx.timeWindowMinutes),
-      }),
-    fa => queryFortiAnalyzerDirect(fa, 'dns', '', ctx.timeWindowMinutes)
+      }, undefined, ctx),
+    fa => queryFortiAnalyzerDirect(fa, 'dns', '', ctx.timeWindowMinutes, undefined, ctx)
   );
 }
 
@@ -78,8 +78,8 @@ export async function getDnsExternalResolutionEvents(ctx: AlarmQueryContext): Pr
       queryCache({
         logtype: 'dns',
         eventTime: timeWindow(ctx.timeWindowMinutes),
-      }),
-    fa => queryFortiAnalyzerDirect(fa, 'dns', '', ctx.timeWindowMinutes)
+      }, undefined, ctx),
+    fa => queryFortiAnalyzerDirect(fa, 'dns', '', ctx.timeWindowMinutes, undefined, ctx)
   );
 }
 
@@ -105,14 +105,14 @@ export async function getDnsBlockedEvents(ctx: AlarmQueryContext): Promise<Query
         logtype: 'dns',
         action: 'blocked',
         eventTime: timeWindow(ctx.timeWindowMinutes),
-      }),
+      }, undefined, ctx),
     fa =>
       queryFortiAnalyzerDirect(
         fa,
         'dns',
         'action == blocked',
         ctx.timeWindowMinutes
-      ),
+      , undefined, ctx),
     { softFallback: true }
   );
 }

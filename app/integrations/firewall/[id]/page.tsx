@@ -1,5 +1,9 @@
 'use client';
 
+import { uiError } from '@/lib/i18n/tr';
+
+import { ActionIcon } from '@/components/ui/action-icon';
+import { PageHeading, PageStateFrame } from '@/components/ui/page-heading';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -42,7 +46,7 @@ const RESOURCE: Record<ResourceKey, { label: string; endpoint: (id: string) => s
 
 async function readJson(response: Response) {
   const data = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(data?.error || `HTTP ${response.status}`);
+  if (!response.ok) throw new Error(uiError(data?.error || `HTTP ${response.status}`));
   return data;
 }
 
@@ -65,7 +69,7 @@ export default function FirewallDetailPage() {
   const fallbackRefreshRef = useRef<string | null>(null);
 
   const breadcrumbs = useMemo(() => detail ? [
-    { label: 'Firewall Yönetimi', href: '/integrations/firewall' },
+    { label: "Güvenlik Duvarı Yönetimi", href: '/integrations/firewall' },
     { label: detail.device.name },
   ] : null, [detail]);
   usePageBreadcrumb(breadcrumbs);
@@ -77,7 +81,7 @@ export default function FirewallDetailPage() {
       const result = await fetch(`/api/firewalls/${id}`, { cache: 'no-store' }).then(readJson);
       setDetail(result.data);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'Firewall detayı yüklenemedi.');
+      setError(uiError(loadError instanceof Error ? loadError.message : 'Firewall detayı yüklenemedi.'));
     } finally {
       setLoading(false);
     }
@@ -156,14 +160,14 @@ export default function FirewallDetailPage() {
   }
 
   if (loading && !detail) {
-    return <main className="flex min-h-[60vh] items-center justify-center"><Loader2 className="mr-2 h-5 w-5 animate-spin motion-reduce:animate-none" /> Firewall detayı yükleniyor</main>;
+    return <PageStateFrame section="firewall" title="Güvenlik Duvarı Yönetimi">{<main className="flex min-h-[60vh] items-center justify-center"><Loader2 className="mr-2 h-5 w-5 animate-spin motion-reduce:animate-none" /> Firewall detayı yükleniyor</main>}</PageStateFrame>;
   }
   if (!detail) {
-    return (
+    return <PageStateFrame section="firewall" title="Güvenlik Duvarı Yönetimi">{(
       <main className="flex min-h-[60vh] items-center justify-center p-6 text-center">
-        <div><CircleOff className="mx-auto h-8 w-8 text-muted-foreground" /><h1 className="mt-4 text-xl font-semibold">Firewall açılamadı</h1><p className="mt-2 text-sm text-muted-foreground">{error}</p><Button asChild className="mt-5" variant="outline"><Link href="/integrations/firewall">Listeye dön</Link></Button></div>
+        <div><CircleOff className="mx-auto h-8 w-8 text-muted-foreground" /><h1 className="mt-4 text-xl font-semibold">Güvenlik duvarı açılamadı</h1><p className="mt-2 text-sm text-muted-foreground">{uiError(error)}</p><Button asChild className="mt-5" variant="outline"><Link href="/integrations/firewall">Listeye dön</Link></Button></div>
       </main>
-    );
+    )}</PageStateFrame>;
   }
 
   const capabilities = detail.capabilities || [];
@@ -174,9 +178,9 @@ export default function FirewallDetailPage() {
       <div className="mx-auto w-full max-w-[1600px] space-y-7">
         <header className="flex flex-col gap-5 border-b pb-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="min-w-0">
-            <Link href="/integrations/firewall" className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground"><ArrowLeft className="h-3.5 w-3.5" />Firewall Yönetimi</Link>
+            <Link href="/integrations/firewall" className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground"><ArrowLeft className="h-3.5 w-3.5" />Güvenlik Duvarı Yönetimi</Link>
             <div className="mt-3 flex flex-wrap items-center gap-3">
-              <h1 className="truncate text-2xl font-semibold tracking-normal sm:text-3xl">{detail.device.name}</h1>
+              <PageHeading section="firewall">{detail.device.name}</PageHeading>
               <FirewallModeBadge mode={detail.monitoringMode} />
             </div>
             <p className="mt-2 text-sm text-muted-foreground">{detail.managementHost} · VDOM {detail.vdom} · {detail.device.model || 'FortiGate'}</p>
@@ -256,10 +260,10 @@ function IdentityReview({ detail, busy, onReview }: { detail: FirewallDetail; bu
   return (
     <section className="border-l-2 border-red-500 bg-red-500/5 px-5 py-4" aria-labelledby="identity-review-title">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div><h2 id="identity-review-title" className="flex items-center gap-2 text-sm font-semibold"><AlertTriangle className="h-4 w-4 text-red-600" />Firewall kimliği değişti</h2><p className="mt-1 text-xs text-muted-foreground">Mevcut: {detail.identityKey || 'yok'} · Aday: {detail.identityCandidateKey || 'yok'}</p></div>
+        <div><h2 id="identity-review-title" className="flex items-center gap-2 text-sm font-semibold"><AlertTriangle className="h-4 w-4 text-red-600" />Güvenlik duvarı kimliği değişti</h2><p className="mt-1 text-xs text-muted-foreground">Mevcut: {detail.identityKey || 'yok'} · Aday: {detail.identityCandidateKey || 'yok'}</p></div>
         <div className="flex flex-wrap gap-2">
           {detail.identityKey && <Button variant="outline" size="sm" onClick={() => onReview('keep-current')} disabled={Boolean(busy)}>Mevcut kimliği koru</Button>}
-          {!detail.conflict && <Button variant="outline" size="sm" onClick={() => onReview('accept-candidate')} disabled={Boolean(busy)}>Yeni kimliği kabul et</Button>}
+          {!detail.conflict && <Button variant="outline" size="sm" onClick={() => onReview('accept-candidate')} disabled={Boolean(busy)}><ActionIcon action="add" />Yeni kimliği kabul et</Button>}
           {detail.conflict && <Button size="sm" onClick={() => onReview('merge-into-existing')} disabled={Boolean(busy)}>Mevcut kayıtla birleştir</Button>}
         </div>
       </div>
@@ -280,7 +284,7 @@ function SourceActions({ detail, busy, sshInspection, onUpdated, onCorrelate, on
     <div className="divide-y rounded-md border">
       <FirewallTrustedCaCard connectorId={detail.id} tls={detail.tls} onUpdated={onUpdated} />
       <div className="p-4"><h2 className="text-sm font-semibold">FortiAnalyzer korelasyonu</h2><p className="mt-1 text-xs text-muted-foreground">Doğrulanmış seri numarasını managed-device devid ile eşleştirir.</p><Button className="mt-3" variant="outline" size="sm" onClick={onCorrelate} disabled={Boolean(busy) || detail.identityStatus !== 'VERIFIED'}>{busy === 'analyzer' && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{detail.analyzerDeviceId ? 'Eşleştirmeyi yenile' : 'FortiAnalyzer ile eşleştir'}</Button></div>
-      <div className="p-4"><h2 className="text-sm font-semibold">SSH host key güveni</h2><p className="mt-1 text-xs text-muted-foreground">Anahtar otomatik kabul edilmez. Gözlemlenen SHA-256 fingerprint açıkça onaylanır.</p><Button className="mt-3" variant="outline" size="sm" onClick={onInspectSsh} disabled={Boolean(busy) || !detail.device.nmsDeviceId || !detail.device.sshUsername}><KeyRound className="mr-2 h-4 w-4" />Anahtarı incele</Button>{sshInspection && <div className="mt-3 rounded-md bg-muted p-3"><p className="break-all font-mono text-xs">{sshInspection.observed.fingerprint}</p><p className="mt-2 text-xs text-muted-foreground">{sshInspection.observed.algorithm}</p>{!sshInspection.trusted?.matches && <Button className="mt-3" size="sm" onClick={onTrustSsh} disabled={Boolean(busy)}>Bu anahtara güven</Button>}{sshInspection.trusted?.matches && <p className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300"><CheckCircle2 className="h-4 w-4" />Güvenilen anahtarla eşleşiyor</p>}</div>}</div>
+      <div className="p-4"><h2 className="text-sm font-semibold">SSH Sunucu Anahtarı Güveni</h2><p className="mt-1 text-xs text-muted-foreground">Anahtar otomatik kabul edilmez. Gözlemlenen SHA-256 fingerprint açıkça onaylanır.</p><Button className="mt-3" variant="outline" size="sm" onClick={onInspectSsh} disabled={Boolean(busy) || !detail.device.nmsDeviceId || !detail.device.sshUsername}><KeyRound className="mr-2 h-4 w-4" />Anahtarı incele</Button>{sshInspection && <div className="mt-3 rounded-md bg-muted p-3"><p className="break-all font-mono text-xs">{sshInspection.observed.fingerprint}</p><p className="mt-2 text-xs text-muted-foreground">{sshInspection.observed.algorithm}</p>{!sshInspection.trusted?.matches && <Button className="mt-3" size="sm" onClick={onTrustSsh} disabled={Boolean(busy)}>Bu anahtara güven</Button>}{sshInspection.trusted?.matches && <p className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300"><CheckCircle2 className="h-4 w-4" />Güvenilen anahtarla eşleşiyor</p>}</div>}</div>
     </div>
   );
 }
@@ -295,7 +299,7 @@ function DataPanel({ connectorId, resource, endpoint, title, active, compact = f
       const result = await fetch(endpoint || RESOURCE[resource].endpoint(connectorId), { cache: 'no-store' }).then(readJson);
       setData(result);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'Veri alınamadı.');
+      setError(uiError(loadError instanceof Error ? loadError.message : 'Veri alınamadı.'));
     } finally { setLoading(false); }
   }, [connectorId, endpoint, resource]);
   useEffect(() => { if (active && !data && !loading && !error) void load(); }, [active, data, error, load, loading]);

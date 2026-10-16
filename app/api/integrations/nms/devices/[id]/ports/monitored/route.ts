@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { authorizeApiRequest } from '@/lib/auth/api-permission';
 import { prisma } from '@/lib/prisma';
 
 type Params = { params: { id: string } };
 
-function serializeBigInt(obj: any): any {
+function serializeBigInt(obj: unknown): unknown {
   return JSON.parse(
     JSON.stringify(obj, (_key, value) =>
       typeof value === 'bigint' ? value.toString() : value
@@ -16,8 +17,10 @@ function serializeBigInt(obj: any): any {
  * Returns all interfaces for a device with their monitored status
  */
 export async function GET(_req: NextRequest, { params }: Params) {
+  const access = await authorizeApiRequest(_req, 'devices', 'read');
+  if (!access.allowed) return access.response;
   try {
-    const device = await (prisma as any).device.findUnique({
+    const device = await prisma.device.findUnique({
       where: { id: params.id },
       select: { id: true, name: true, nmsDeviceId: true },
     });
@@ -29,7 +32,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
       );
     }
 
-    const interfaces = await (prisma as any).nmsInterface.findMany({
+    const interfaces = await prisma.nmsInterface.findMany({
       where: { nmsDeviceId: device.nmsDeviceId },
       select: {
         id: true,
@@ -44,7 +47,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
       orderBy: [{ monitored: 'desc' }, { interfaceIndex: 'asc' }],
     });
 
-    const monitoredCount = interfaces.filter((i: any) => i.monitored).length;
+    const monitoredCount = interfaces.filter((i) => i.monitored).length;
 
     return NextResponse.json(
       serializeBigInt({
@@ -74,8 +77,10 @@ export async function GET(_req: NextRequest, { params }: Params) {
  *   { all: true, monitored: true }  -- toggle ALL interfaces for this device
  */
 export async function PATCH(req: NextRequest, { params }: Params) {
+  const access = await authorizeApiRequest(req, 'devices', 'write');
+  if (!access.allowed) return access.response;
   try {
-    const device = await (prisma as any).device.findUnique({
+    const device = await prisma.device.findUnique({
       where: { id: params.id },
       select: { id: true, name: true, nmsDeviceId: true },
     });
@@ -108,14 +113,14 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
     if (all) {
       // Toggle all interfaces for this device
-      const result = await (prisma as any).nmsInterface.updateMany({
+      const result = await prisma.nmsInterface.updateMany({
         where: { nmsDeviceId: device.nmsDeviceId },
         data: { monitored },
       });
       updated = result.count;
     } else {
       // Toggle specific interfaces (verify they belong to this device)
-      const result = await (prisma as any).nmsInterface.updateMany({
+      const result = await prisma.nmsInterface.updateMany({
         where: {
           id: { in: interfaceIds },
           nmsDeviceId: device.nmsDeviceId,

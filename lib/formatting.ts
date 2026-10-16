@@ -35,11 +35,11 @@ export function getStatusColor(status: string): string {
  */
 export function formatCriticality(level: string): string {
   const levelMap: Record<string, string> = {
-    CRITICAL: 'Critical',
-    HIGH: 'High',
-    MEDIUM: 'Medium',
-    LOW: 'Low',
-    INFORMATIONAL: 'Info',
+    CRITICAL: "Kritik",
+    HIGH: "Yüksek",
+    MEDIUM: "Orta",
+    LOW: "Düşük",
+    INFORMATIONAL: "Bilgi",
   };
   return levelMap[level] || level;
 }
@@ -92,14 +92,14 @@ export function getVendorLogo(vendor?: string): string | null {
  * Format IP address with null safety
  */
 export function formatIp(ip?: string): string {
-  return ip || 'N/A';
+  return ip || "Belirtilmedi";
 }
 
 /**
  * Format MAC address
  */
 export function formatMac(mac?: string): string {
-  if (!mac) return 'N/A';
+  if (!mac) return "Belirtilmedi";
   return mac.toUpperCase();
 }
 
@@ -108,7 +108,7 @@ export function formatMac(mac?: string): string {
  */
 export function formatDate(date: Date | string): string {
   const d = new Date(date);
-  return d.toLocaleDateString('en-US', {
+  return d.toLocaleDateString('tr-TR', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -120,7 +120,7 @@ export function formatDate(date: Date | string): string {
  */
 export function formatDateTime(date: Date | string): string {
   const d = new Date(date);
-  return d.toLocaleString('en-US', {
+  return d.toLocaleString('tr-TR', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -160,9 +160,9 @@ export function formatPort(port: number): string {
  * Format bytes to human-readable size
  */
 export function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 Bytes';
+  if (bytes === 0) return "0 Bayt";
   const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+  const sizes = ["Bayt", 'KB', 'MB', 'GB', 'TB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
 }

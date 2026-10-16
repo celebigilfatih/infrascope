@@ -148,6 +148,9 @@ portable authenticated DB-and-key recovery bundles serve different purposes; see
 
 ## Related
 
+- [NMS device ID allocation](../../30-runbooks/NMS_DEVICE_ID_ALLOCATION.md) — B17: shared transaction lock for legacy enablement, discovery import and firewall onboarding; atomic discovery marker and concurrency regressions
+- [ADR-024](../../10-architecture/adr/ADR-024-shared-nms-device-id-allocation.md) — Allocation boundary and explicit ReadCommitted isolation
+
 - `docs/30-runbooks/DUPLICATE_PORT_DOWN_EVENTS.md` — Race condition fix
 - `docs/20-modules/alarms/NMS_ALARM_FALSE_POSITIVE_PREVENTION.md` — False positive prevention
 - `lib/alarms/detection-engine.ts` — NMS_PORT_DOWN detection logic

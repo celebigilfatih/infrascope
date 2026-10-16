@@ -13,6 +13,10 @@ export interface PriorityIncident {
   entityId: string | null;
   lastSeenAt: string;
   occurrenceCount: number;
+  deviceId?: string | null;
+  deviceName?: string | null;
+  managementIp?: string | null;
+  value?: number | null;
 }
 
 export interface IntegrationHealth {
@@ -26,6 +30,7 @@ export interface IntegrationHealth {
 
 export interface DashboardSummary {
   generatedAt: string;
+  coverage: { total: number; monitored: number; fresh: number; unknown: number; stale: number; unmonitored: number };
   posture: {
     status: DashboardPosture;
     critical: number;
@@ -59,6 +64,33 @@ export interface DashboardSummary {
       networkDeviceTypes: string[];
     };
   };
+}
+
+export type DashboardRange = '6h' | '24h' | '7d';
+export type ResourceMetric = 'cpu' | 'memory';
+export interface ResourcePoint {
+  at: string;
+  cpu: number | null;
+  memory: number | null;
+  cpuPeak: number | null;
+  memoryPeak: number | null;
+  samples: number;
+}
+export interface DashboardDevice {
+  id: string;
+  name: string;
+  managementIp: string | null;
+  nmsDeviceId: number | null;
+  pollingEnabled: boolean;
+  lastPolledAt: string | null;
+}
+export interface DashboardAnalytics {
+  generatedAt: string;
+  range: DashboardRange;
+  device: DashboardDevice | null;
+  devices: DashboardDevice[];
+  points: ResourcePoint[];
+  latest: { cpu: { value: number; at: string } | null; memory: { value: number; at: string } | null };
 }
 
 export interface IpsecTunnel {

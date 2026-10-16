@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 /**
  * Device Detail Endpoints
  * GET /api/devices/[id] - Get device by ID
@@ -7,12 +8,13 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { deviceUnitHeight, mergeUnitHeight, placementIssue } from '@/lib/racks/device-placement';
 
 // Valid device types, statuses, and criticalities
 const VALID_DEVICE_TYPES = [
   'PHYSICAL_SERVER', 'VIRTUAL_HOST', 'VIRTUAL_MACHINE', 'FIREWALL',
   'SWITCH', 'ROUTER', 'COMPUTER', 'LAPTOP', 'STORAGE', 'PDU',
-  'PATCH_PANEL', 'OTHER'
+  'PATCH_PANEL', 'PRINTER', 'CAMERA', 'OTHER'
 ];
 
 const VALID_DEVICE_STATUSES = [
@@ -166,6 +168,7 @@ export async function PUT(
       parentDeviceId,
       supportDate,
       metadata,
+      unitHeight,
     } = body;
 
     if (!id) {
@@ -185,7 +188,7 @@ export async function PUT(
       firmwareVersion !== undefined || operatingSystem !== undefined ||
       criticality !== undefined || status !== undefined || rackId !== undefined ||
       rackUnitPosition !== undefined || parentDeviceId !== undefined || 
-      supportDate !== undefined || metadata !== undefined;
+      supportDate !== undefined || metadata !== undefined || unitHeight !== undefined;
 
     if (!hasUpdate) {
       return NextResponse.json(
@@ -278,33 +281,21 @@ export async function PUT(
       );
     }
 
-    // If updating rackId, verify rack exists and validate position
-    if (rackId !== undefined && rackId !== null) {
-      const rack = await prisma.rack.findUnique({
-        where: { id: rackId },
-      });
-
-      if (!rack) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: `Rack with ID ${rackId} not found`,
-            timestamp: new Date(),
-          },
-          { status: 404 }
-        );
-      }
-
-      const position = rackUnitPosition !== undefined ? rackUnitPosition : existing.rackUnitPosition;
-      if (position && position > rack.maxUnits) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: `rackUnitPosition (${position}) exceeds rack maxUnits (${rack.maxUnits})`,
-            timestamp: new Date(),
-          },
-          { status: 400 }
-        );
+    const placementChanged = rackId !== undefined || rackUnitPosition !== undefined || metadata !== undefined || unitHeight !== undefined;
+    const effectiveRackId = rackId === undefined ? existing.rackId : rackId || null;
+    const effectivePosition = effectiveRackId ? (rackUnitPosition === undefined ? existing.rackUnitPosition : rackUnitPosition) : null;
+    let nextMetadata = metadata;
+    if (placementChanged) {
+      const height = unitHeight === undefined ? deviceUnitHeight(metadata === undefined ? existing.metadata : metadata) : unitHeight;
+      const rack = effectiveRackId ? await prisma.rack.findUnique({
+        where: { id: effectiveRackId },
+        select: { id: true, maxUnits: true, devices: { select: { id: true, name: true, rackUnitPosition: true, metadata: true } } },
+      }) : null;
+      const issue = placementIssue({ rackId: effectiveRackId, rack, start: effectivePosition, height, deviceId: id });
+      if (issue) return NextResponse.json({ success: false, error: issue }, { status: 400 });
+      if (unitHeight !== undefined) {
+        try { nextMetadata = mergeUnitHeight(metadata === undefined ? existing.metadata : metadata, height); }
+        catch (error) { return NextResponse.json({ success: false, error: error instanceof Error ? error.message : 'Cihaz yüksekliği kaydedilemedi.' }, { status: 400 }); }
       }
     }
 
@@ -350,7 +341,7 @@ export async function PUT(
     }
 
     // Build update data
-    const updateData: any = {};
+    const updateData: Prisma.DeviceUncheckedUpdateInput = {};
     if (name !== undefined) updateData.name = name;
     if (type !== undefined) updateData.type = type;
     if (vendor !== undefined) updateData.vendor = vendor;
@@ -361,11 +352,11 @@ export async function PUT(
     if (operatingSystem !== undefined) updateData.operatingSystem = operatingSystem;
     if (criticality !== undefined) updateData.criticality = criticality;
     if (status !== undefined) updateData.status = status;
-    if (rackId !== undefined) updateData.rackId = rackId;
-    if (rackUnitPosition !== undefined) updateData.rackUnitPosition = rackUnitPosition;
+    if (rackId !== undefined) updateData.rackId = effectiveRackId;
+    if (rackUnitPosition !== undefined || rackId !== undefined && !effectiveRackId) updateData.rackUnitPosition = effectivePosition;
     if (parentDeviceId !== undefined) updateData.parentDeviceId = parentDeviceId;
     if (supportDate !== undefined) updateData.supportDate = supportDate ? new Date(supportDate) : null;
-    if (metadata !== undefined) updateData.metadata = metadata;
+    if (nextMetadata !== undefined) updateData.metadata = nextMetadata;
 
     // Update device
     const updated = await prisma.device.update({

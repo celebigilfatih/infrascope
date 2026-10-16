@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { authorizeApiRequest } from '@/lib/auth/api-permission';
 import { prisma } from '@/lib/prisma';
 
 /**
@@ -9,6 +10,8 @@ import { prisma } from '@/lib/prisma';
  * `status=active` means NOT acknowledged. This schema has no explicit status field.
  */
 export async function GET(req: NextRequest) {
+  const access = await authorizeApiRequest(req, 'alarms', 'read');
+  if (!access.allowed) return access.response;
   try {
     const { searchParams } = new URL(req.url);
     const status = searchParams.get('status') || 'active';
@@ -16,7 +19,7 @@ export async function GET(req: NextRequest) {
     // Active = not acknowledged (schema has no status enum on AlarmEvent)
     const ackFilter = status === 'active' ? { acknowledged: false } : {};
 
-    const events = await (prisma as any).alarmEvent.findMany({
+    const events = await prisma.alarmEvent.findMany({
       where: {
         ...ackFilter,
         alarm: {
@@ -47,7 +50,7 @@ export async function GET(req: NextRequest) {
     });
 
     // Normalize to the shape the dashboard expects
-    const data = events.map((e: any) => ({
+    const data = events.map((e) => ({
       id: e.id,
       device_name: e.deviceName || '—',
       message: e.message || e.title,
@@ -58,10 +61,10 @@ export async function GET(req: NextRequest) {
     }));
 
     return NextResponse.json({ data, total: data.length });
-  } catch (error: any) {
-    console.error('[NMS Alarms] GET error:', error.message);
+  } catch (error) {
+    console.error('[NMS Alarms] GET error:', (error as Error).message);
     return NextResponse.json(
-      { error: 'Failed to fetch alarms', details: error.message },
+      { error: 'Failed to fetch alarms', details: (error as Error).message },
       { status: 500 }
     );
   }
@@ -72,16 +75,18 @@ export async function GET(req: NextRequest) {
  * Acknowledge an alarm event (schema has no resolve state on AlarmEvent).
  */
 export async function PATCH(req: NextRequest) {
+  const access = await authorizeApiRequest(req, 'alarms', 'write');
+  if (!access.allowed) return access.response;
   try {
     const { id } = await req.json();
-    const updated = await (prisma as any).alarmEvent.update({
+    const updated = await prisma.alarmEvent.update({
       where: { id },
       data: { acknowledged: true, acknowledgedAt: new Date() },
     });
     return NextResponse.json({ alarm: updated });
-  } catch (error: any) {
+  } catch (error) {
     return NextResponse.json(
-      { error: 'Failed to update alarm', details: error.message },
+      { error: 'Failed to update alarm', details: (error as Error).message },
       { status: 500 }
     );
   }

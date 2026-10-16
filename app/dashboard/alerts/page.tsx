@@ -1,9 +1,13 @@
 'use client';
 
+import { uiError } from '@/lib/i18n/tr';
+import { incidentExclusionTarget } from '@/lib/alarms/incident-exclusion';
+
+import { ActionIcon } from '@/components/ui/action-icon';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import type { Device, NmsInterface, NmsTopologyLink } from '@prisma/client';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import {
   Dialog,
@@ -14,10 +18,19 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import {
-  AlertTriangle, AlertCircle, AlertOctagon, CheckCircle, Clock, RefreshCw,
-  Search, Play, Shield, Bell, Trash2, BarChart3, Eye, User, Router, Monitor,
-  ChevronDown, ChevronRight, Code2, MapPin, Globe, Archive, CircleCheckBig, Download, LockKeyhole,
+  AlertOctagon, CheckCircle, RefreshCw,
+  Play, Shield, BarChart3, Eye, Router,
+  ChevronDown, ChevronRight, Code2, MapPin, Globe, Archive, Download,
+  MoreHorizontal, Info, ArrowRight, BellRing,
 } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import incidentStyles from '@/components/dashboard/incident-operations.module.css';
+import detailStyles from '@/components/dashboard/incident-detail.module.css';
+import { IncidentDetailWorkspace } from '@/components/dashboard/IncidentDetailWorkspace';
+import { IncidentExclusions } from '@/components/dashboard/IncidentExclusions';
+import type { IncidentBulkAssignmentResult } from '@/components/dashboard/IncidentBulkAssignment';
+import { isIncidentBulkLifecycleEligible, type IncidentBulkLifecycleAction, type IncidentBulkLifecycleResult } from '@/lib/alarms/incident-bulk-lifecycle';
+import { incidentStatusLabels, type IncidentActionPayload, type IncidentDetailAction, type IncidentDetailData } from '@/lib/alarms/incident-detail-presentation';
 import {
   IncidentFilters,
   IncidentList,
@@ -26,8 +39,12 @@ import {
   type IncidentListItem,
   type IncidentSourceFilter,
   type IncidentStatusFilter,
+  type IncidentSort,
+  type IncidentSortDirection,
 } from '@/components/dashboard/IncidentOperations';
 import { cn } from '@/lib/utils';
+import type { FortiGatePolicy, FortiGateAddress } from '@/lib/integrations/fortigate';
+import type { getAlarmRetentionStats } from '@/lib/alarms/retention-service';
 
 interface AlarmEventData {
   id: string;
@@ -61,6 +78,7 @@ interface AlarmEventData {
     lastSeenAt: string;
     reopenCount: number;
     assignedTo: string | null;
+    assignedToId?: string | null;
     resolvedAt: string | null;
     closedAt: string | null;
     legalHold: boolean;
@@ -79,29 +97,34 @@ interface NmsPipelineHealth {
   blockingReasons: string[];
 }
 
-const SEVERITY_CONFIG: Record<string, { label: string; color: string; bgColor: string; headerBg: string; icon: typeof AlertOctagon }> = {
-  ALARM_CRITICAL: { label: 'Kritik', color: 'text-red-500', bgColor: 'bg-red-500/20', headerBg: 'bg-red-600', icon: AlertOctagon },
-  ALARM_HIGH: { label: 'Yuksek', color: 'text-orange-500', bgColor: 'bg-orange-500/20', headerBg: 'bg-orange-500', icon: AlertTriangle },
-  ALARM_MEDIUM: { label: 'Orta', color: 'text-yellow-500', bgColor: 'bg-yellow-500/20', headerBg: 'bg-amber-500', icon: AlertCircle },
-  ALARM_LOW: { label: 'Dusuk', color: 'text-blue-500', bgColor: 'bg-blue-500/20', headerBg: 'bg-blue-500', icon: Bell },
-  ALARM_INFO: { label: 'Bilgi', color: 'text-gray-400', bgColor: 'bg-gray-400/20', headerBg: 'bg-slate-500', icon: Bell },
-};
+interface AlarmIncidentListRecord extends NonNullable<AlarmEventData['incident']>, Pick<AlarmEventData, 'alarmId' | 'severity' | 'title' | 'message' | 'acknowledgedBy' | 'acknowledgedAt'> {
+  category: string;
+  source: string;
+  entityId: string | null;
+  alarm: Pick<AlarmEventData['alarm'], 'code' | 'name' | 'description'>;
+  occurrences: Array<Partial<Omit<AlarmEventData, 'alarm' | 'incident'>>>;
+}
 
-const CATEGORY_MAP: Record<string, string> = {
-  CONFIG_ACCESS: 'Config & Access',
-  SECURITY: 'Security',
-  RISK_ANOMALY: 'Risk & Anomaly',
-  OPERATIONAL: 'Operational',
-  SOC_CORRELATION: 'SOC Correlation',
-};
+type CleanupStats = Partial<Pick<Awaited<ReturnType<typeof getAlarmRetentionStats>>, 'counts' | 'config'>> & { wouldArchive?: number };
 
-const CATEGORY_EMOJI: Record<string, string> = {
-  CONFIG_ACCESS: '🔧',
-  SECURITY: '🛡️',
-  RISK_ANOMALY: '⚡',
-  OPERATIONAL: '⚙️',
-  SOC_CORRELATION: '🔍',
-};
+interface PortDetails {
+  device: Pick<Device, 'name' | 'vendor' | 'type' | 'managementIp'>;
+  port: Pick<NmsInterface, 'id' | 'interfaceName' | 'description' | 'adminStatus' | 'operStatus' | 'mtu' | 'inErrors' | 'outErrors'> & {
+    // The port API serializes BigInt counters and dates before returning JSON.
+    speed: string;
+    inOctets: string;
+    outOctets: string;
+    lastPolledAt: string;
+  };
+  neighbors: Array<Pick<NmsTopologyLink, 'remoteDeviceName' | 'remoteInterface' | 'protocol'>>;
+}
+
+interface DevicePorts {
+  deviceName: string;
+  total: number;
+  monitoredCount: number;
+  interfaces: Array<Pick<NmsInterface, 'id' | 'interfaceName' | 'description' | 'adminStatus' | 'operStatus' | 'monitored'>>;
+}
 
 // Config change alarm codes that should show structured change details
 const CONFIG_CHANGE_CODES = new Set([
@@ -119,7 +142,7 @@ const ATTR_LABELS: Record<string, string> = {
   status: 'Durum', name: 'Isim', action: 'Aksiyon', srcintf: 'Kaynak Arayuzu',
   dstintf: 'Hedef Arayuzu', srcaddr: 'Kaynak Adresi', dstaddr: 'Hedef Adresi',
   service: 'Servis', schedule: 'Zamanlama', logtraffic: 'Log Trafigi',
-  nat: 'NAT', comments: 'Aciklama', groups: 'Gruplar', password: 'Sifre',
+  nat: 'NAT', comments: "Açıklama", groups: 'Gruplar', password: "Parola",
   mode: 'Mod', type: 'Tip', interface: 'Arayuz', ip: 'IP Adresi',
   allowaccess: 'Izin Verilen Erisim', mtu: 'MTU', vlanid: 'VLAN ID',
   member: 'Uye', dst: 'Hedef', src: 'Kaynak', protocol: 'Protokol',
@@ -132,7 +155,7 @@ const ATTR_LABELS: Record<string, string> = {
   ssl_ssh_profile: 'SSL/SSH Profili', deep_packet_inspection: 'Derin Paket Incelemesi',
   gateway: 'Gateway', distance: 'Mesafe', device: 'Cihaz', 'sdwan-zone': 'SD-WAN Bolgesi',
   'net-device': 'Ag Cihazi', 'remote-gw': 'Uzak Gateway', 'local-gw': 'Yerel Gateway',
-  proposal: 'Oneri', psksecret: 'PSK Sifresi', dhgrp: 'DH Grubu', keylifeseconds: 'Anahtar Omru',
+  proposal: "Öneri", psksecret: 'PSK Sifresi', dhgrp: 'DH Grubu', keylifeseconds: 'Anahtar Omru',
   dpd: 'Dead Peer Detection', network: 'Ag', 'auto-negotiate': 'Otomatik Pazarlik',
   authmethod: 'Kimlik Dogrulama Metodu', peertype: 'Es Tipi', xauthtype: 'XAuth Tipi',
   peerid: 'Es ID', localid: 'Yerel ID', phase1name: 'Phase 1 Adi', seq_num: 'Sira Numarasi',
@@ -328,21 +351,29 @@ export default function AlertsDashboardPage() {
   const [statusFilter, setStatusFilter] = useState<IncidentStatusFilter>('ACTIVE');
   const [severityFilter, setSeverityFilter] = useState('all');
   const [sourceFilter, setSourceFilter] = useState<IncidentSourceFilter>('all');
+  const [assigneeFilter, setAssigneeFilter] = useState('all');
+  const [filtersReady, setFiltersReady] = useState(false);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [ordering, setOrdering] = useState<{ sort: IncidentSort; direction: IncidentSortDirection }>({ sort: 'severity', direction: 'asc' });
+  const [pagination, setPagination] = useState<{ key: string; cursors: Array<string | null>; index: number }>({ key: '', cursors: [null], index: 0 });
+  const [selection, setSelection] = useState<{ key: string; ids: Set<string> }>({ key: '', ids: new Set() });
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [exclusionsOpen, setExclusionsOpen] = useState(false);
+  const pendingExclusions = useRef(false);
+  const actionsTrigger = useRef<HTMLButtonElement>(null);
   const [archiveFilter, setArchiveFilter] = useState<IncidentArchiveFilter>('HOT');
   const [statusStats, setStatusStats] = useState<Record<string, number>>({});
   const [fetchError, setFetchError] = useState<string | null>(null);
-  const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [message, setMessage] = useState<{ text: string; type: 'success' | 'error'; incidentId?: string; authStatus?: 401 | 403 } | null>(null);
   const [rawLogExpanded, setRawLogExpanded] = useState(false);
   const [nmsPipeline, setNmsPipeline] = useState<NmsPipelineHealth | null>(null);
 
   // Cleanup states
   const [cleanupStatsOpen, setCleanupStatsOpen] = useState(false);
-  const [cleanupStats, setCleanupStats] = useState<any>(null);
+  const [cleanupStats, setCleanupStats] = useState<CleanupStats | null>(null);
   const [cleanupOpen, setCleanupOpen] = useState(false);
   const [cleanupHours, setCleanupHours] = useState(168); // 7 days default
   const [cleanupLoading, setCleanupLoading] = useState(false);
@@ -351,35 +382,49 @@ export default function AlertsDashboardPage() {
   // Detail view state
   const [selectedEvent, setSelectedEvent] = useState<AlarmEventData | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
-  const [incidentDetail, setIncidentDetail] = useState<any>(null);
+  const [incidentDetail, setIncidentDetail] = useState<IncidentDetailData | null>(null);
+  const [incidentDetailLoading, setIncidentDetailLoading] = useState(false);
+  const [incidentDetailError, setIncidentDetailError] = useState<string | null>(null);
+  const [incidentDetailRevision, setIncidentDetailRevision] = useState(0);
   // Policy enrichment for FW_POLICY_CHANGED alarms
-  const [policyData, setPolicyData] = useState<{ host: string; policies: any[]; total: number } | null>(null);
+  const [policyData, setPolicyData] = useState<{ host: string; policies: FortiGatePolicy[]; total: number } | null>(null);
   const [policyLoading, setPolicyLoading] = useState(false);
   const [policyError, setPolicyError] = useState<string | null>(null);
   const [policySearch, setPolicySearch] = useState('');
   const [policyExpanded, setPolicyExpanded] = useState(false);
   // Address object enrichment for ADDRESS_OBJECT_CHANGED alarms
-  const [addressData, setAddressData] = useState<{ host: string; addresses: any[]; total: number } | null>(null);
+  const [addressData, setAddressData] = useState<{ host: string; addresses: FortiGateAddress[]; total: number } | null>(null);
   const [addressLoading, setAddressLoading] = useState(false);
   const [addressError, setAddressError] = useState<string | null>(null);
   const [addressSearch, setAddressSearch] = useState('');
   const [addressExpanded, setAddressExpanded] = useState(false);
   // Port enrichment for NMS_PORT_DOWN alarms
-  const [portData, setPortData] = useState<{ device: any; port: any; neighbors: any[] } | null>(null);
+  const [portData, setPortData] = useState<PortDetails | null>(null);
   const [portLoading, setPortLoading] = useState(false);
   const [portError, setPortError] = useState<string | null>(null);
   // Device-ports enrichment for NMS_DEVICE_UNREACHABLE alarms
-  const [devicePortsData, setDevicePortsData] = useState<{ deviceName: string; total: number; monitoredCount: number; interfaces: any[] } | null>(null);
+  const [devicePortsData, setDevicePortsData] = useState<DevicePorts | null>(null);
   const [devicePortsLoading, setDevicePortsLoading] = useState(false);
   const [devicePortsError, setDevicePortsError] = useState<string | null>(null);
   // Discard/Whitelist dialog state
   const [discardOpen, setDiscardOpen] = useState(false);
   const [discardReason, setDiscardReason] = useState('');
   const [discardLoading, setDiscardLoading] = useState(false);
+  const [discardAccessError, setDiscardAccessError] = useState<401 | 403 | null>(null);
+  const exclusionInFlight = useRef(false);
   // Track which event IDs are currently being acknowledged
   const [acknowledgingIds, setAcknowledgingIds] = useState<Set<string>>(new Set());
 
   const PAGE_SIZE = 25;
+  const eventRequestSequence = useRef(0);
+  const detailReturnFocus = useRef<HTMLElement | null>(null);
+  const bulkOperationInFlight = useRef(false);
+  const filterKey = JSON.stringify([statusFilter, severityFilter, sourceFilter, assigneeFilter, debouncedSearch, archiveFilter, ordering]);
+  const page = pagination.key === filterKey ? pagination.index : 0;
+  const pageCursor = pagination.key === filterKey ? pagination.cursors[page] : null;
+  const viewKey = `${filterKey}:${page}`;
+  const selectedIds = selection.key === viewKey ? selection.ids : new Set<string>();
+  useEffect(() => { setSelection({ key: viewKey, ids: new Set() }); }, [viewKey]);
 
   const fetchAlarmHealth = useCallback(async () => {
     try {
@@ -404,38 +449,56 @@ export default function AlertsDashboardPage() {
     const requestedFilter = params.get('filter');
     const requestedStatus = params.get('status');
     const requestedSearch = params.get('search');
-    if (requestedStatus === 'OPEN,ACKNOWLEDGED') setStatusFilter('ACTIVE');
+    const requestedSeverity = params.get('severity');
+    if (requestedSeverity && ['ALARM_CRITICAL', 'ALARM_HIGH', 'ALARM_MEDIUM', 'ALARM_LOW', 'ALARM_INFO'].includes(requestedSeverity)) setSeverityFilter(requestedSeverity);
+    if (requestedStatus === 'all') setStatusFilter('ALL');
+    else if (requestedStatus === 'OPEN,ACKNOWLEDGED') setStatusFilter('ACTIVE');
     else if (requestedStatus && ['OPEN', 'ACKNOWLEDGED', 'RESOLVED', 'CLOSED'].includes(requestedStatus)) setStatusFilter(requestedStatus as IncidentStatusFilter);
     else if (requestedFilter === 'unacknowledged') setStatusFilter('OPEN');
     else if (requestedFilter && ['ACKNOWLEDGED', 'RESOLVED', 'CLOSED'].includes(requestedFilter)) setStatusFilter(requestedFilter as IncidentStatusFilter);
     else if (requestedFilter?.startsWith('ALARM_')) setSeverityFilter(requestedFilter);
     if (requestedSearch) setSearch(requestedSearch);
+    const requestedAssignee = params.get('assignee');
+    if (requestedAssignee) setAssigneeFilter(requestedAssignee);
+    setFiltersReady(true);
   }, []);
+
+  useEffect(() => {
+    if (!filtersReady) return;
+    const url = new URL(window.location.href);
+    if (assigneeFilter === 'all') url.searchParams.delete('assignee');
+    else url.searchParams.set('assignee', assigneeFilter);
+    window.history.replaceState(window.history.state, '', url);
+  }, [assigneeFilter, filtersReady]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
     return () => window.clearTimeout(timeout);
   }, [search]);
 
-  const fetchEvents = useCallback(async (silent = false, appendCursor: string | null = null) => {
-    const isAppend = Boolean(appendCursor);
-    if (isAppend) setLoadingMore(true);
-    else if (!silent) setLoading(true);
+  const fetchEvents = useCallback(async (silent = false) => {
+    if (!filtersReady) return;
+    const requestSequence = ++eventRequestSequence.current;
+    if (!silent) setLoading(true);
     else setRefreshing(true);
     setFetchError(null);
     try {
       const params = new URLSearchParams({ limit: PAGE_SIZE.toString(), archiveState: archiveFilter });
-      if (appendCursor) params.set('cursor', appendCursor);
+      if (pageCursor) params.set('cursor', pageCursor);
+      params.set('sort', ordering.sort);
+      params.set('direction', ordering.direction);
       if (statusFilter === 'ACTIVE') params.set('status', 'OPEN,ACKNOWLEDGED');
-      else params.set('status', statusFilter);
+      else if (statusFilter !== 'ALL') params.set('status', statusFilter);
       if (severityFilter !== 'all') params.set('severity', severityFilter);
       if (sourceFilter !== 'all') params.set('source', sourceFilter);
+      if (assigneeFilter !== 'all') params.set('assignee', assigneeFilter);
       if (debouncedSearch) params.set('search', debouncedSearch);
 
       const res = await fetch(`/api/alarm-incidents?${params}`);
       const data = await res.json();
-      if (data.success) {
-        const newEvents = (data.data || []).map((incident: any) => {
+      if (requestSequence !== eventRequestSequence.current) return;
+      if (res.ok && data.success) {
+        const newEvents: AlarmEventData[] = (data.data || []).map((incident: AlarmIncidentListRecord) => {
           const occurrence = incident.occurrences?.[0] || {};
           const acknowledged = incident.status !== 'OPEN';
           return {
@@ -461,71 +524,66 @@ export default function AlertsDashboardPage() {
               source: incident.source,
             },
             incident,
-          } as AlarmEventData;
+          };
         });
-        if (isAppend) {
-          setEvents((prev: AlarmEventData[]) => [...prev, ...newEvents]);
-        } else {
-          setEvents(newEvents);
+        setEvents(newEvents);
+        setSelection(previous => ({ ...previous, ids: new Set([...previous.ids].filter(id => newEvents.some(event => event.incident?.id === id))) }));
+        if (newEvents.length === 0 && page > 0) {
+          setPagination(previous => ({ ...previous, index: Math.max(0, previous.index - 1) }));
         }
-        setStats(data.overview?.severity || data.stats?.severity || {});
+        setStats(data.overview?.activeSeverity || data.overview?.severity || data.stats?.severity || {});
         setStatusStats(data.overview?.status || data.stats?.status || {});
         setTotal(data.total || 0);
         setNextCursor(data.nextCursor || null);
         setHasMore(Boolean(data.nextCursor));
       } else {
-        setFetchError(data.error || 'Incident kayıtları alınamadı.');
+        setFetchError(uiError(data.error || "Olay kayıtları alınamadı."));
       }
     } catch (err) {
+      if (requestSequence !== eventRequestSequence.current) return;
       console.error('Fetch events error:', err);
-      setFetchError('Incident kayıtları alınamadı. Bağlantınızı kontrol edip tekrar deneyin.');
+      setFetchError(uiError("Olay kayıtları alınamadı. Bağlantınızı kontrol edip tekrar deneyin."));
     } finally {
-      if (isAppend) setLoadingMore(false);
-      else if (!silent) setLoading(false);
-      setRefreshing(false);
+      if (requestSequence === eventRequestSequence.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
-  }, [statusFilter, severityFilter, sourceFilter, debouncedSearch, archiveFilter]);
+  }, [statusFilter, severityFilter, sourceFilter, assigneeFilter, filtersReady, debouncedSearch, archiveFilter, ordering, pageCursor, page]);
 
   useEffect(() => { fetchEvents(); }, [fetchEvents]);
 
   useEffect(() => {
     const incidentId = selectedEvent?.incident?.id;
+    setIncidentDetail(null);
+    setIncidentDetailError(null);
     if (!detailOpen || !incidentId) {
-      setIncidentDetail(null);
+      setIncidentDetailLoading(false);
       return;
     }
     const controller = new AbortController();
-    fetch(`/api/alarm-incidents/${incidentId}`, { signal: controller.signal })
-      .then((response) => response.json())
-      .then((data) => { if (data.success) setIncidentDetail(data.data); })
-      .catch((error) => { if (error.name !== 'AbortError') console.error('Incident detail error:', error); });
+    setIncidentDetailLoading(true);
+    fetch(`/api/alarm-incidents/${encodeURIComponent(incidentId)}`, { signal: controller.signal, cache: 'no-store' })
+      .then(async response => {
+        const payload = await response.json();
+        if (!response.ok || !payload.success || payload.data?.id !== incidentId) throw new Error(uiError(payload.error || "Olay ayrıntıları alınamadı."));
+        if (!controller.signal.aborted) setIncidentDetail(payload.data as IncidentDetailData);
+      })
+      .catch(error => { if (!controller.signal.aborted) setIncidentDetailError(uiError(error instanceof Error ? error.message : "Olay ayrıntıları alınamadı.")); })
+      .finally(() => { if (!controller.signal.aborted) setIncidentDetailLoading(false); });
     return () => controller.abort();
-  }, [detailOpen, selectedEvent?.incident?.id]);
+  }, [detailOpen, selectedEvent?.incident?.id, incidentDetailRevision]);
 
-  // Reset offset when filters change
-  useEffect(() => {
-    setNextCursor(null);
-    setHasMore(true);
-  }, [statusFilter, severityFilter, sourceFilter, debouncedSearch, archiveFilter]);
-
-  // Infinite scroll observer
-  const loadMoreRef = useRef<HTMLDivElement>(null);
-  const loadMore = useCallback(() => {
-    if (loadingMore || !hasMore) return;
-    if (!nextCursor) return;
-    fetchEvents(false, nextCursor);
-  }, [loadingMore, hasMore, nextCursor, fetchEvents]);
-
-  useEffect(() => {
-    const el = loadMoreRef.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting) loadMore(); },
-      { rootMargin: '200px' },
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [loadMore]);
+  const changeSort = (sort: IncidentSort) => setOrdering(previous => ({
+    sort,
+    direction: previous.sort === sort ? previous.direction === 'asc' ? 'desc' : 'asc' : sort === 'severity' ? 'asc' : 'desc',
+  }));
+  const nextPage = () => {
+    if (!nextCursor || loading || refreshing) return;
+    const cursors = pagination.key === filterKey ? pagination.cursors.slice(0, page + 1) : [null];
+    setPagination({ key: filterKey, cursors: [...cursors, nextCursor], index: page + 1 });
+  };
+  const previousPage = () => setPagination(previous => ({ ...previous, index: Math.max(0, previous.index - 1) }));
 
   // Fetch cleanup statistics
   const fetchCleanupStats = useCallback(async () => {
@@ -570,7 +628,7 @@ export default function AlertsDashboardPage() {
       } else {
         setMessage({ text: `Error: ${data.error}`, type: 'error' });
       }
-    } catch (err) {
+    } catch {
       setMessage({ text: 'Arşivleme işlemi başarısız', type: 'error' });
     } finally {
       setCleanupLoading(false);
@@ -634,7 +692,7 @@ export default function AlertsDashboardPage() {
       } else {
         setMessage({ text: data.error || 'Tarama hatasi', type: 'error' });
       }
-    } catch (err) {
+    } catch {
       setMessage({ text: 'Alarm tarama hatasi', type: 'error' });
     } finally {
       setChecking(false);
@@ -643,42 +701,54 @@ export default function AlertsDashboardPage() {
 
   const transitionIncident = async (
     event: AlarmEventData,
-    action: 'ACKNOWLEDGE' | 'RESOLVE' | 'CLOSE' | 'ARCHIVE' | 'RESTORE' | 'SET_LEGAL_HOLD' | 'RELEASE_LEGAL_HOLD',
+    action: IncidentDetailAction,
+    payload: IncidentActionPayload = {},
   ) => {
     const incidentId = event.incident?.id;
     if (!incidentId) {
-      setMessage({ text: 'Bu eski alarm henüz bir incident ile ilişkilendirilmemiş', type: 'error' });
+      setMessage({ text: "Bu eski alarm henüz bir olay ile ilişkilendirilmemiş", type: 'error' });
       return false;
     }
+    if (acknowledgingIds.has(incidentId)) return false;
     setAcknowledgingIds(prev => new Set(prev).add(incidentId));
     try {
       const res = await fetch('/api/alarm-incidents', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: [incidentId], action }),
+        body: JSON.stringify({ ids: [incidentId], action, ...payload }),
       });
+      if (action === 'ADD_NOTE' && (res.status === 401 || res.status === 403)) {
+        setMessage({ text: res.status === 401
+          ? 'Oturumunuzun süresi doldu veya oturumunuz geçersiz. Tekrar giriş yapın. Not taslağınız bu pencerede korunuyor.'
+          : 'Operasyon notu ekleme yetkiniz yok. Not taslağınız korundu.', type: 'error', incidentId, authStatus: res.status });
+        return false;
+      }
       const data = await res.json();
-      if (data.success) {
+      if (res.ok && data.success) {
         const labels = {
           ACKNOWLEDGE: 'Alarm onaylandı',
+          UNACKNOWLEDGE: 'Onay geri alındı',
           RESOLVE: 'Alarm çözüldü',
           CLOSE: 'Alarm kapatıldı',
           ARCHIVE: 'Alarm arşivlendi',
           RESTORE: 'Alarm arşivden çıkarıldı',
           SET_LEGAL_HOLD: 'Alarm için legal hold etkinleştirildi',
           RELEASE_LEGAL_HOLD: 'Alarm legal hold korumasından çıkarıldı',
+          ASSIGN: payload.assigneeId ? "Olay sorumlusu güncellendi" : 'Sorumlu ataması kaldırıldı',
+          ADD_NOTE: 'Operasyon notu eklendi',
         };
-        setMessage({ text: labels[action], type: 'success' });
-        setTimeout(() => setMessage(null), 3000);
-        setDetailOpen(false);
-        fetchEvents(true);
+        setMessage({ text: labels[action], type: 'success', incidentId });
+        const updated = data.data?.[0];
+        if (updated?.id === incidentId) setSelectedEvent(previous => previous?.incident?.id === incidentId ? { ...previous, incident: { ...previous.incident, ...updated } } : previous);
+        setIncidentDetailRevision(value => value + 1);
+        void fetchEvents(true);
         return true;
       } else {
-        setMessage({ text: `İşlem hatası: ${data.error || 'Bilinmeyen hata'}`, type: 'error' });
+        setMessage({ text: `İşlem hatası: ${data.error || 'Bilinmeyen hata'}`, type: 'error', incidentId });
       }
     } catch (err) {
-      console.error('Incident transition error:', err);
-      setMessage({ text: 'Incident güncellenirken bağlantı hatası oluştu', type: 'error' });
+      console.error("Olay transition error:", err);
+      setMessage({ text: "Olay güncellenirken bağlantı hatası oluştu", type: 'error', incidentId });
     } finally {
       setAcknowledgingIds(prev => {
         const next = new Set(prev);
@@ -689,15 +759,80 @@ export default function AlertsDashboardPage() {
     return false;
   };
 
-  const acknowledgeEvent = async (event: AlarmEventData) => {
-    await transitionIncident(event, 'ACKNOWLEDGE');
+  const assignSelected = async (assigneeId: string): Promise<IncidentBulkAssignmentResult> => {
+    if (bulkOperationInFlight.current || acknowledgingIds.size > 0 || loading || refreshing) return { success: false, error: uiError('Devam eden işlemin tamamlanmasını bekleyin.') };
+    const ids = events.filter(event => event.incident && selectedIds.has(event.incident.id)).map(event => event.incident!.id);
+    if (ids.length === 0 || !assigneeId) return { success: false, error: uiError("Olay ve sorumlu seçin.") };
+    bulkOperationInFlight.current = true;
+    setAcknowledgingIds(new Set(ids)); setMessage(null);
+    try {
+      const response = await fetch('/api/alarm-incidents', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids, action: 'ASSIGN', assigneeId }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) throw new Error(uiError(result.error || 'Toplu atama yapılamadı.'));
+      const updated: NonNullable<AlarmEventData['incident']>[] = result.data || [];
+      setSelectedEvent(previous => {
+        const match = updated.find(incident => incident.id === previous?.incident?.id);
+        return previous?.incident && match ? { ...previous, incident: { ...previous.incident, ...match } } : previous;
+      });
+      setIncidentDetailRevision(value => value + 1);
+      setSelection({ key: viewKey, ids: new Set() });
+      setMessage({ text: `${result.updated ?? ids.length} olay için sorumlu ataması kaydedildi.`, type: 'success' });
+      await fetchEvents(true);
+      return { success: true };
+    } catch (cause) {
+      const error = cause instanceof Error ? cause.message : 'Toplu atama sırasında bağlantı hatası oluştu.';
+      setMessage({ text: error, type: 'error' });
+      return { success: false, error };
+    } finally {
+      setAcknowledgingIds(new Set()); bulkOperationInFlight.current = false;
+    }
   };
 
-  const acknowledgeAll = async () => {
+  const transitionSelected = async (action: IncidentBulkLifecycleAction, reason: string): Promise<IncidentBulkLifecycleResult> => {
+    if (bulkOperationInFlight.current || acknowledgingIds.size > 0 || loading || refreshing) return { success: false, error: uiError('Devam eden işlemin tamamlanmasını bekleyin.') };
+    if (!reason?.trim()) return { success: false, error: uiError('İşlem açıklaması zorunludur.') };
+    const selected = events.filter(event => event.incident && selectedIds.has(event.incident.id));
+    if (!selected.some(event => isIncidentBulkLifecycleEligible(event.incident!.status, action))) return { success: false, error: uiError('Bu işlem için uygun durumda seçili kayıt kalmadı.') };
+    const ids = selected.map(event => event.incident!.id);
+    bulkOperationInFlight.current = true;
+    setAcknowledgingIds(new Set(ids)); setMessage(null);
+    try {
+      const response = await fetch('/api/alarm-incidents', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids, action, bulk: true, reason }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) throw new Error(uiError(result.error || 'Toplu durum işlemi yapılamadı.'));
+      if (result.updated === 0) throw new Error(uiError('İşlem uygulanabilecek kayıt kalmadı. Önceki isteğin sonucu sunucuda kaydedilmiş olabilir. Listeyi yenileyerek olay geçmişini kontrol edin; seçiminiz ve açıklamanız korundu.'));
+      const updated: NonNullable<AlarmEventData['incident']>[] = result.data || [];
+      setSelectedEvent(previous => {
+        const match = updated.find(incident => incident.id === previous?.incident?.id);
+        return previous?.incident && match ? { ...previous, incident: { ...previous.incident, ...match } } : previous;
+      });
+      setIncidentDetailRevision(value => value + 1);
+      setSelection({ key: viewKey, ids: new Set() });
+      const count = result.updated ?? updated.length;
+      const skipped = result.skipped || 0;
+      setMessage({ text: `${count} olay ${action === 'RESOLVE' ? 'çözüldü olarak işaretlendi' : 'kapatıldı'}.${skipped ? ` ${skipped} uygun olmayan kayıt değiştirilmedi.` : ''}`, type: 'success' });
+      await fetchEvents(true);
+      return { success: true };
+    } catch (cause) {
+      const error = cause instanceof Error ? cause.message : 'Toplu durum işlemi sırasında bağlantı hatası oluştu.';
+      setMessage({ text: error, type: 'error' });
+      return { success: false, error };
+    } finally { setAcknowledgingIds(new Set()); bulkOperationInFlight.current = false; }
+  };
+
+  const acknowledgeSelected = async () => {
+    if (acknowledgingIds.size > 0 || loading || refreshing) return;
     const unackedIds = events
-      .filter((event: AlarmEventData) => event.incident?.status === 'OPEN')
+      .filter((event: AlarmEventData) => event.incident?.status === 'OPEN' && selectedIds.has(event.incident.id))
       .map((event: AlarmEventData) => event.incident!.id);
     if (unackedIds.length === 0) return;
+    setAcknowledgingIds(new Set(unackedIds));
     try {
       const res = await fetch('/api/alarm-incidents', {
         method: 'PATCH',
@@ -705,36 +840,31 @@ export default function AlertsDashboardPage() {
         body: JSON.stringify({ ids: unackedIds, action: 'ACKNOWLEDGE' }),
       });
       const data = await res.json();
-      if (data.success) fetchEvents(true);
+      if (!res.ok || !data.success) throw new Error(uiError(data.error || 'Incident’lar onaylanamadı.'));
+      setSelection({ key: viewKey, ids: new Set() });
+      setMessage({ text: `${data.updated ?? unackedIds.length} olay onaylandı.`, type: 'success' });
     } catch (err) {
-      console.error('Acknowledge all error:', err);
+      setMessage({ text: err instanceof Error ? err.message : 'Onaylama sırasında bağlantı hatası oluştu.', type: 'error' });
+    } finally {
+      // The API may have applied part of a batch before returning an error.
+      await fetchEvents(true);
+      setAcknowledgingIds(new Set());
     }
   };
 
   // Add to whitelist (discard alarm)
   const addToWhitelist = async () => {
-    if (!selectedEvent || !discardReason.trim()) return;
-    
+    if (!selectedEvent || !discardReason.trim() || exclusionInFlight.current) return;
+    const noticeId = selectedEvent.incident?.id || selectedEvent.id;
+    exclusionInFlight.current = true;
     setDiscardLoading(true);
+    setDiscardAccessError(null);
     try {
-      // Determine which field to whitelist based on alarm code
-      let field = 'sourceIp';
-      if (selectedEvent.alarm.code === 'SSLVPN_AUTH_FAILED') {
-        field = 'user';
-      } else if (selectedEvent.destIp && selectedEvent.alarm.code.includes('DNS')) {
-        field = 'destIp';
-      } else if (selectedEvent.alarm.code.startsWith('NMS_') || selectedEvent.alarm.code.startsWith('VM_')) {
-        // NMS and VMware alarms use deviceName instead of sourceIp
-        field = 'deviceName';
-      }
-      
-      const value = field === 'sourceIp' ? selectedEvent.sourceIp 
-                : field === 'destIp' ? selectedEvent.destIp 
-                : selectedEvent.deviceName || '';
-      
+      const { field, value } = incidentExclusionTarget(selectedEvent);
+
       // Validate value is not null/empty before calling API
       if (!value) {
-        setMessage({ text: `Cannot whitelist: No ${field} value available for this alarm`, type: 'error' });
+        setMessage({ text: 'Hariç tutulacak kaynak bilgisi bulunamadı.', type: 'error', incidentId: noticeId });
         setDiscardLoading(false);
         return;
       }
@@ -747,23 +877,30 @@ export default function AlertsDashboardPage() {
           field,
           value,
           reason: discardReason.trim(),
-          createdBy: 'admin',
         }),
       });
       
+      if (res.status === 401 || res.status === 403) {
+        setDiscardAccessError(res.status);
+        setMessage({ text: res.status === 401
+          ? 'Oturumunuzun süresi doldu veya oturumunuz geçersiz. Tekrar giriş yapın. Açıklamanız bu pencerede korunuyor.'
+          : 'Bu alarmı hariç tutma yetkiniz yok. Açıklamanız korundu.', type: 'error', incidentId: noticeId });
+        return;
+      }
       const data = await res.json();
-      if (data.success) {
-        setMessage({ text: 'Alarm whitelisted successfully', type: 'success' });
+      if (res.ok && data.success) {
+        setMessage({ text: 'Alarm yok sayma listesine eklendi.', type: 'success', incidentId: noticeId });
         setDiscardOpen(false);
         setDiscardReason('');
         fetchEvents(true);
       } else {
-        setMessage({ text: `Error: ${data.error}`, type: 'error' });
+        setMessage({ text: data.error || 'Alarm hariç tutulamadı.', type: 'error', incidentId: noticeId });
       }
     } catch (err) {
       console.error('Whitelist error:', err);
-      setMessage({ text: 'Failed to add to whitelist', type: 'error' });
+      setMessage({ text: 'Alarm hariç tutulurken bağlantı hatası oluştu.', type: 'error', incidentId: noticeId });
     } finally {
+      exclusionInFlight.current = false;
       setDiscardLoading(false);
     }
   };
@@ -779,10 +916,10 @@ export default function AlertsDashboardPage() {
         setAddressData(data);
         setAddressExpanded(true);
       } else {
-        setAddressError(data.error || 'Adres nesneleri alinamadi');
+        setAddressError(uiError(data.error || 'Adres nesneleri alinamadi'));
       }
-    } catch (err: any) {
-      setAddressError(err.message);
+    } catch (err) {
+      setAddressError(uiError(err instanceof Error ? err.message : 'Adres nesneleri alinamadi'));
     } finally {
       setAddressLoading(false);
     }
@@ -797,17 +934,17 @@ export default function AlertsDashboardPage() {
       const match = selectedEvent?.title.match(/Device Unreachable:\s+(.+)/);
       const deviceName = match?.[1]?.trim() || selectedEvent?.deviceName;
       if (!deviceName) {
-        setDevicePortsError('Could not parse device name from alarm');
+        setDevicePortsError(uiError('Could not parse device name from alarm'));
         setDevicePortsLoading(false);
         return;
       }
 
       const devRes = await fetch('/api/integrations/nms/devices?enabled=true');
-      const devData = await devRes.json();
-      const device = devData.devices?.find((d: any) => d.name === deviceName);
+      const devData: { devices?: Array<Pick<Device, 'id' | 'name'>> } = await devRes.json();
+      const device = devData.devices?.find(d => d.name === deviceName);
 
       if (!device) {
-        setDevicePortsError(`Device "${deviceName}" not found in NMS`);
+        setDevicePortsError(uiError(`Device "${deviceName}" not found in NMS`));
         setDevicePortsLoading(false);
         return;
       }
@@ -817,10 +954,10 @@ export default function AlertsDashboardPage() {
       if (data.interfaces) {
         setDevicePortsData(data);
       } else {
-        setDevicePortsError(data.error || 'Port list not found');
+        setDevicePortsError(uiError(data.error || 'Port list not found'));
       }
-    } catch (err: any) {
-      setDevicePortsError(err.message);
+    } catch (err) {
+      setDevicePortsError(uiError(err instanceof Error ? err.message : "Port listesi bulunamadı."));
     } finally {
       setDevicePortsLoading(false);
     }
@@ -835,7 +972,7 @@ export default function AlertsDashboardPage() {
       // Format: "Port Down: GigabitEthernet1/0/22 on B_BLOK_KAT_1_POE"
       const match = selectedEvent?.title.match(/Port Down:\s+(.+?)\s+on\s+(.+)/);
       if (!match) {
-        setPortError('Could not parse port name from alarm');
+        setPortError(uiError('Could not parse port name from alarm'));
         setPortLoading(false);
         return;
       }
@@ -844,11 +981,11 @@ export default function AlertsDashboardPage() {
       
       // Find device ID by name
       const devRes = await fetch('/api/integrations/nms/devices?enabled=true');
-      const devData = await devRes.json();
-      const device = devData.devices?.find((d: any) => d.name === deviceName);
+      const devData: { devices?: Array<Pick<Device, 'id' | 'name'>> } = await devRes.json();
+      const device = devData.devices?.find(d => d.name === deviceName);
       
       if (!device) {
-        setPortError(`Device "${deviceName}" not found in NMS`);
+        setPortError(uiError(`Device "${deviceName}" not found in NMS`));
         setPortLoading(false);
         return;
       }
@@ -858,10 +995,10 @@ export default function AlertsDashboardPage() {
       if (data.port) {
         setPortData(data);
       } else {
-        setPortError(data.error || 'Port details not found');
+        setPortError(uiError(data.error || 'Port details not found'));
       }
-    } catch (err: any) {
-      setPortError(err.message);
+    } catch (err) {
+      setPortError(uiError(err instanceof Error ? err.message : "Port detayları bulunamadı."));
     } finally {
       setPortLoading(false);
     }
@@ -878,10 +1015,10 @@ export default function AlertsDashboardPage() {
         setPolicyData(data);
         setPolicyExpanded(true);
       } else {
-        setPolicyError(data.error || 'Politika listesi alınamadı');
+        setPolicyError(uiError(data.error || 'Politika listesi alınamadı'));
       }
     } catch {
-      setPolicyError('Bağlantı hatası');
+      setPolicyError(uiError('Bağlantı hatası'));
     } finally {
       setPolicyLoading(false);
     }
@@ -890,6 +1027,7 @@ export default function AlertsDashboardPage() {
   // Filtering is now server-side; events array is the filtered result
 
   const openEventDetail = (event: AlarmEventData) => {
+    setMessage(null);
     setSelectedEvent(event);
     setRawLogExpanded(false);
     setPolicyData(null);
@@ -910,97 +1048,82 @@ export default function AlertsDashboardPage() {
   const exportIncidents = () => {
     const params = new URLSearchParams({ archiveState: archiveFilter });
     if (statusFilter === 'ACTIVE') params.set('status', 'OPEN,ACKNOWLEDGED');
-    else params.set('status', statusFilter);
+    else if (statusFilter !== 'ALL') params.set('status', statusFilter);
     if (severityFilter !== 'all') params.set('severity', severityFilter);
     if (sourceFilter !== 'all') params.set('source', sourceFilter);
+    if (assigneeFilter !== 'all') params.set('assignee', assigneeFilter);
+    if (debouncedSearch) params.set('search', debouncedSearch);
+    params.set('sort', ordering.sort);
+    params.set('direction', ordering.direction);
     window.location.href = `/api/alarm-incidents/export?${params}`;
   };
 
   return (
-    <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:px-8">
-      <div className="mx-auto w-full max-w-[1600px] space-y-8">
-        <header className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase text-primary">InfraScope operasyon merkezi</p>
-            <h1 className="mt-1 text-2xl font-semibold tracking-normal sm:text-3xl">Alarm Operasyonları</h1>
-            <p className="mt-2 text-sm text-muted-foreground">Incident yaşam döngüsünü yönetin, öncelikli sorunları takip edin ve olay geçmişini koruyun.</p>
+    <div className={incidentStyles.workspace}>
+      <div className="w-full">
+        <header className={incidentStyles.heading}>
+          <div className={incidentStyles.headingGroup}>
+            <span className={incidentStyles.titleIcon}><BellRing size={24} aria-hidden="true" /></span>
+            <div><h1 className={incidentStyles.title}>Olay Merkezi</h1>
+            <p className={incidentStyles.subtitle}>Olayları önceliklendirin ve çözüm sürecini takip edin.</p></div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => { fetchCleanupStats(); setCleanupStatsOpen(true); }}>
-              <BarChart3 className="mr-2 h-4 w-4" aria-hidden="true" />Retention
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => setCleanupOpen(true)}>
-              <Archive className="mr-2 h-4 w-4" aria-hidden="true" />Arşivle
-            </Button>
-            <Button variant="outline" size="sm" onClick={exportIncidents}>
-              <Download className="mr-2 h-4 w-4" aria-hidden="true" />CSV
-            </Button>
-            <Button variant="outline" size="sm" onClick={runAlarmCheck} disabled={checking}>
-              {checking ? <RefreshCw className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Play className="mr-2 h-4 w-4" aria-hidden="true" />}
+          <div className={incidentStyles.utilities}>
+            <div className={incidentStyles.actions}>
+            <Button variant="outline" onClick={runAlarmCheck} disabled={checking || acknowledgingIds.size > 0}>
+              {checking ? <RefreshCw size={16} className="animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Play size={16} aria-hidden="true" />}
               {checking ? 'Taranıyor' : 'Alarm tara'}
             </Button>
-            <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => fetchEvents()} disabled={loading || refreshing} aria-label="Incident listesini yenile" title="Yenile">
-              <RefreshCw className={cn('h-4 w-4 motion-reduce:animate-none', (loading || refreshing) && 'animate-spin')} aria-hidden="true" />
-            </Button>
+            <Popover open={actionsOpen} onOpenChange={setActionsOpen}>
+              <PopoverTrigger asChild><Button ref={actionsTrigger} variant="outline" disabled={acknowledgingIds.size > 0}><MoreHorizontal size={17} aria-hidden="true" />İşlemler<ChevronDown size={14} aria-hidden="true" /></Button></PopoverTrigger>
+              <PopoverContent align="end" className="z-[1050] w-60 p-1.5" aria-label="Olay işlemleri" onCloseAutoFocus={event => {
+                if (pendingExclusions.current) {
+                  event.preventDefault(); pendingExclusions.current = false; setExclusionsOpen(true);
+                }
+              }}>
+                <Button variant="ghost" className="w-full justify-start gap-3" disabled={loading || refreshing} onClick={() => { setActionsOpen(false); void fetchEvents(); }}><RefreshCw size={16} />Listeyi yenile</Button>
+                <Button variant="ghost" className="w-full justify-start gap-3" onClick={() => { setActionsOpen(false); exportIncidents(); }}><Download size={16} />CSV olarak indir</Button>
+                <div className="my-1 border-t" />
+                <Button variant="ghost" className="w-full justify-start gap-3" onClick={() => { pendingExclusions.current = true; setActionsOpen(false); }}><Shield size={16} />Hariç tutma kayıtları</Button>
+                <Button variant="ghost" className="w-full justify-start gap-3" onClick={() => { setActionsOpen(false); void fetchCleanupStats(); setCleanupStatsOpen(true); }}><BarChart3 size={16} />Saklama ayarları</Button>
+                <Button variant="ghost" className="w-full justify-start gap-3" onClick={() => { setActionsOpen(false); setCleanupOpen(true); }}><Archive size={16} />Arşivleme işlemleri</Button>
+              </PopoverContent>
+            </Popover>
+            </div>
+            {nmsPipeline && nmsPipeline.state !== 'healthy' && <div className={incidentStyles.health}>
+              <Popover><PopoverTrigger asChild><button type="button"><Info size={16} aria-hidden="true" />İzleme kapsamı eksik</button></PopoverTrigger>
+                <PopoverContent align="end" className="z-[1050] w-[min(350px,calc(100vw-32px))] p-5">
+                  <h2 className="text-sm font-semibold">NMS izleme kapsamı</h2><p className="mt-2 text-sm leading-6 text-muted-foreground">{nmsPipeline.blockingReasons.join(' ') || 'Switch alarm izlemesi için yapılandırmayı kontrol edin.'}</p>
+                  <dl className="mt-4 grid grid-cols-2 gap-3 text-xs"><div><dt className="text-muted-foreground">Cihaz</dt><dd className="mt-1 font-medium">{nmsPipeline.registeredDevices}/{nmsPipeline.pollingDevices}</dd></div><div><dt className="text-muted-foreground">İzlenen port</dt><dd className="mt-1 font-medium">{nmsPipeline.monitoredPorts}</dd></div><div><dt className="text-muted-foreground">Taze arayüz</dt><dd className="mt-1 font-medium">{nmsPipeline.freshInterfaces}</dd></div><div><dt className="text-muted-foreground">Taze metrik</dt><dd className="mt-1 font-medium">{nmsPipeline.freshHealthMetrics}</dd></div></dl>
+                </PopoverContent>
+              </Popover>
+              <Link href={nmsPipeline.pollingDevices === 0 ? '/integrations/nms/add-device' : '/integrations/nms/devices'}>NMS ayarları<ArrowRight size={14} aria-hidden="true" /></Link>
+            </div>}
           </div>
         </header>
 
+        <IncidentOverview status={statusStats} severity={stats} archive={archiveFilter} loading={loading} />
+
         {message && (
-          <div role="status" className={cn('flex items-center gap-2 border-l-2 px-4 py-3 text-sm', message.type === 'success' ? 'border-emerald-500 bg-emerald-500/5 text-emerald-700 dark:text-emerald-200' : 'border-rose-500 bg-rose-500/5 text-rose-700 dark:text-rose-200')}>
+          <div role={message.type === 'error' ? 'alert' : 'status'} className={cn('mb-4 flex items-center gap-2 border-l-2 px-4 py-3 text-sm', message.type === 'success' ? 'border-emerald-500 bg-emerald-500/5 text-emerald-700 dark:text-emerald-200' : 'border-rose-500 bg-rose-500/5 text-rose-700 dark:text-rose-200')}>
             {message.type === 'success' ? <CheckCircle className="h-4 w-4 shrink-0" aria-hidden="true" /> : <AlertOctagon className="h-4 w-4 shrink-0" aria-hidden="true" />}
-            <span className="flex-1">{message.text}</span>
-            <Button variant="ghost" size="sm" className="h-8" onClick={() => setMessage(null)}>Kapat</Button>
+            <span className="flex-1">{uiError(message.text)}</span>
+            <Button variant="ghost" size="sm" className="h-8" onClick={() => setMessage(null)}><ActionIcon action="cancel" />Kapat</Button>
           </div>
         )}
-
-        {nmsPipeline && nmsPipeline.state !== 'healthy' && (
-          <section
-            aria-labelledby="nms-pipeline-title"
-            className="border-l-2 border-amber-500 bg-amber-500/5 px-4 py-4"
-          >
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex min-w-0 items-start gap-3">
-                <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-300">
-                  <Router className="h-4 w-4" aria-hidden="true" />
-                </span>
-                <div className="min-w-0">
-                  <h2 id="nms-pipeline-title" className="text-sm font-semibold">
-                    {nmsPipeline.state === 'not_configured'
-                      ? 'Switch alarm izleme henüz yapılandırılmamış'
-                      : 'Switch alarm zinciri dikkat gerektiriyor'}
-                  </h2>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {nmsPipeline.blockingReasons.join(' ')}
-                  </p>
-                  <dl className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground">
-                    <div><dt className="inline">Cihaz: </dt><dd className="inline font-medium text-foreground">{nmsPipeline.registeredDevices}/{nmsPipeline.pollingDevices}</dd></div>
-                    <div><dt className="inline">İzlenen port: </dt><dd className="inline font-medium text-foreground">{nmsPipeline.monitoredPorts}</dd></div>
-                    <div><dt className="inline">Taze arayüz: </dt><dd className="inline font-medium text-foreground">{nmsPipeline.freshInterfaces}</dd></div>
-                    <div><dt className="inline">Taze metrik: </dt><dd className="inline font-medium text-foreground">{nmsPipeline.freshHealthMetrics}</dd></div>
-                  </dl>
-                </div>
-              </div>
-              <Button asChild variant="outline" size="sm" className="shrink-0">
-                <Link href={nmsPipeline.pollingDevices === 0 ? '/integrations/nms/add-device' : '/integrations/nms/devices'}>
-                  NMS ayarlarını aç
-                  <ChevronRight className="ml-2 h-4 w-4" aria-hidden="true" />
-                </Link>
-              </Button>
-            </div>
-          </section>
-        )}
-
-        <IncidentOverview status={statusStats} severity={stats} archive={archiveFilter} />
 
         <IncidentFilters
           status={statusFilter}
           severity={severityFilter}
           source={sourceFilter}
+          assignee={assigneeFilter}
           archive={archiveFilter}
           search={search}
+          counts={statusStats}
+          disabled={acknowledgingIds.size > 0}
           onStatus={setStatusFilter}
           onSeverity={setSeverityFilter}
           onSource={setSourceFilter}
+          onAssignee={setAssigneeFilter}
           onArchive={setArchiveFilter}
           onSearch={setSearch}
         />
@@ -1009,24 +1132,34 @@ export default function AlertsDashboardPage() {
           events={events as IncidentListItem[]}
           total={total}
           loading={loading}
-          loadingMore={loadingMore}
+          refreshing={refreshing}
           hasMore={hasMore}
           error={fetchError}
           acknowledgingIds={acknowledgingIds}
-          loadMoreRef={loadMoreRef}
+          selectedIds={selectedIds}
+          onSelection={(ids) => setSelection({ key: viewKey, ids })}
+          page={page}
+          sort={ordering.sort}
+          direction={ordering.direction}
+          onSort={changeSort}
+          onPrevious={previousPage}
+          onNext={nextPage}
           onOpen={(event) => openEventDetail(event as AlarmEventData)}
-          onAcknowledge={(event) => acknowledgeEvent(event as AlarmEventData)}
-          onAcknowledgeVisible={acknowledgeAll}
+          onAcknowledgeSelected={acknowledgeSelected}
+          onAssignSelected={assignSelected}
+          onTransitionSelected={transitionSelected}
+          onRetry={() => void fetchEvents()}
         />
       </div>
 
       {/* Retention Statistics Dialog */}
+      {exclusionsOpen && <IncidentExclusions onClose={() => setExclusionsOpen(false)} onReturnFocus={() => actionsTrigger.current?.focus()} />}
       <Dialog open={cleanupStatsOpen} onOpenChange={setCleanupStatsOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Alarm Retention Durumu</DialogTitle>
+            <DialogTitle>Alarm Saklama Durumu</DialogTitle>
             <DialogDescription>
-              Alarm incident yaşam döngüsü ve arşiv politikası
+              Alarm olay yaşam döngüsü ve arşiv politikası
             </DialogDescription>
           </DialogHeader>
 
@@ -1061,7 +1194,7 @@ export default function AlertsDashboardPage() {
 
               <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-900">
                 <p className="text-sm font-medium mb-2">Korunan kayıtlar</p>
-                <div className="flex justify-between text-sm"><span>Legal hold</span><span className="font-mono font-medium">{cleanupStats?.counts?.legalHold || 0}</span></div>
+                <div className="flex justify-between text-sm"><span>Yasal Saklama</span><span className="font-mono font-medium">{cleanupStats?.counts?.legalHold || 0}</span></div>
                 <div className="flex justify-between text-sm"><span>Sıkıştırılmış payload</span><span className="font-mono font-medium">{cleanupStats?.counts?.compressedPayloads || 0}</span></div>
               </div>
             </div>
@@ -1072,7 +1205,7 @@ export default function AlertsDashboardPage() {
           )}
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCleanupStatsOpen(false)}>
+            <Button variant="outline" onClick={() => setCleanupStatsOpen(false)}><ActionIcon action="cancel" />
               Kapat
             </Button>
           </DialogFooter>
@@ -1085,7 +1218,7 @@ export default function AlertsDashboardPage() {
           <DialogHeader>
             <DialogTitle>Kapatılmış Alarmları Arşivle</DialogTitle>
             <DialogDescription>
-              Yalnızca CLOSED durumundaki incident kayıtları arşivlenir. Olay geçmişi ve audit izi silinmez.
+              Yalnızca CLOSED durumundaki olay kayıtları arşivlenir. Olay geçmişi ve audit izi silinmez.
             </DialogDescription>
           </DialogHeader>
 
@@ -1138,7 +1271,7 @@ export default function AlertsDashboardPage() {
 
             {cleanupStats && cleanupDryRun && (
               <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-sm">
-                <p className="font-medium text-blue-900 dark:text-blue-200 mb-1">Preview</p>
+                <p className="font-medium text-blue-900 dark:text-blue-200 mb-1">Önizleme</p>
                 <p className="text-blue-700 dark:text-blue-300">
                   {cleanupStats.wouldArchive || 0} kapatılmış alarm arşivlenecek
                 </p>
@@ -1151,7 +1284,7 @@ export default function AlertsDashboardPage() {
               variant="outline"
               onClick={() => setCleanupOpen(false)}
               disabled={cleanupLoading}
-            >
+            ><ActionIcon action="cancel" />
               Vazgeç
             </Button>
             {cleanupDryRun ? (
@@ -1171,51 +1304,92 @@ export default function AlertsDashboardPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Alarm Detail Dialog — redesigned */}
-      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-0">
-          {/* Hidden accessible title */}
-          <DialogTitle className="sr-only">Alarm Detaylari</DialogTitle>
-          <DialogDescription className="sr-only">{selectedEvent?.alarm?.code}</DialogDescription>
+      {/* Incident workspace: overview, history and preserved source-specific technical details. */}
+      <Dialog open={detailOpen} onOpenChange={open => { if (exclusionInFlight.current) return; if (!open && discardOpen) setDiscardOpen(false); else setDetailOpen(open); }}>
+        <DialogContent className={discardOpen ? 'max-w-md' : detailStyles.dialog} closeLabel={discardOpen ? 'Hariç tutmayı iptal et' : 'Detayı kapat'} onOpenAutoFocus={event => {
+          detailReturnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+          if (!discardOpen && event.target instanceof HTMLElement) {
+            const heading = event.target.querySelector<HTMLElement>('[data-incident-heading]');
+            if (heading) { event.preventDefault(); heading.focus({ preventScroll: true }); }
+          }
+        }} onCloseAutoFocus={event => {
+          if (detailReturnFocus.current?.isConnected) { event.preventDefault(); detailReturnFocus.current.focus({ preventScroll: true }); }
+        }}>
+          {discardOpen ? <>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Shield className="h-5 w-5" />
+              Alarmı hariç tut
+            </DialogTitle>
+            <DialogDescription>
+              Seçilen değerle eşleşen alarmlar yok sayma listesine eklenir. Yanlış pozitif olduğundan emin olduğunuz kayıtlar için kullanın.
+            </DialogDescription>
+          </DialogHeader>
 
-          {selectedEvent && (() => {
-            const sev = SEVERITY_CONFIG[selectedEvent.severity] || SEVERITY_CONFIG['ALARM_INFO'];
-            const Icon = sev.icon;
+          {selectedEvent && (
+            <div className="space-y-4 py-4">
+              <div className="rounded-lg bg-muted/30 p-3">
+                <p className="text-xs font-semibold mb-1">Alarm:</p>
+                <p className="text-sm">{selectedEvent.title}</p>
+              </div>
+
+              <div className="rounded-lg bg-muted/30 p-3">
+                <p className="text-xs font-semibold mb-1">Hariç tutulacak değer:</p>
+                <p className="text-sm font-mono">
+                  {(() => {
+                    const { field, value } = incidentExclusionTarget(selectedEvent);
+                    return `${field}: ${value || 'N/A'}`;
+                  })()}
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="incident-exclusion-reason" className="text-sm font-medium">Hariç tutma nedeni (zorunlu)</label>
+                <textarea
+                  id="incident-exclusion-reason"
+                  required
+                  autoFocus
+                  className="w-full min-h-[80px] rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  placeholder="Hariç tutma nedeni (örn. kurum içi DNS sunucusu)"
+                  value={discardReason}
+                  disabled={discardLoading}
+                  onChange={(e) => setDiscardReason(e.target.value)}
+                />
+              </div>
+            </div>
+          )}
+          {message?.type === 'error' && message.incidentId === (selectedEvent?.incident?.id || selectedEvent?.id) && <p role="alert" className="text-sm text-destructive">{uiError(message.text)}</p>}
+
+          <DialogFooter>
+            {discardAccessError === 401 && !discardLoading && <Button asChild variant="outline"><Link href="/login?next=%2Fdashboard%2Falerts" target="_blank" rel="noopener noreferrer">Yeni sekmede giriş yap</Link></Button>}
+            <Button variant="outline" onClick={() => setDiscardOpen(false)} disabled={discardLoading}>
+              İptal
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={addToWhitelist}
+              disabled={!discardReason.trim() || discardLoading}
+            >
+              {discardLoading ? 'Ekleniyor…' : 'Hariç tut'}
+            </Button>
+          </DialogFooter>
+</> : selectedEvent && (() => {
             const parsed = parseAlarmMessage(selectedEvent.message || '', selectedEvent.alarm?.description || '');
-            const emoji = CATEGORY_EMOJI[selectedEvent.alarm?.category] || '🔔';
-
-            return (
-              <div>
-                {/* Colored header band */}
-                <div className={`${sev.headerBg} text-white px-6 py-5 rounded-t-lg`}>
-                  <h2 className="text-xl font-bold">{emoji} {selectedEvent.alarm?.name}</h2>
-                  <div className="mt-2">
-                    <span className="inline-flex items-center gap-1.5 bg-white/25 text-white text-xs font-semibold px-2.5 py-1 rounded">
-                      <Icon className="h-3 w-3" />
-                      {sev.label} &bull; {CATEGORY_MAP[selectedEvent.alarm?.category] || selectedEvent.alarm?.category}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="px-6 py-5 space-y-5">
-
-                  {/* Alarm Basligı */}
-                  <section>
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Alarm Başlığı</p>
-                    <p className="font-semibold text-sm leading-snug">{selectedEvent.title}</p>
-                  </section>
-
-                  {/* Açıklama — first as requested */}
-                  {(selectedEvent.alarm?.description || parsed.description) && (
-                    <section>
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Açıklama</p>
-                      <p className="text-sm">{selectedEvent.alarm?.description || parsed.description}</p>
-                      {parsed.eventCount && (
-                        <p className="text-xs italic text-muted-foreground mt-1">{parsed.eventCount}</p>
-                      )}
-                    </section>
-                  )}
-
+            return <IncidentDetailWorkspace
+              key={selectedEvent.incident?.id || selectedEvent.id}
+              event={selectedEvent}
+              detail={incidentDetail}
+              loading={incidentDetailLoading}
+              error={incidentDetailError}
+              busy={Boolean(selectedEvent.incident && acknowledgingIds.has(selectedEvent.incident.id))}
+              notice={message?.incidentId === (selectedEvent.incident?.id || selectedEvent.id) ? message : null}
+              description={selectedEvent.alarm.description || parsed.description}
+              recommendedAction={parsed.recommendedAction}
+              onRetry={() => setIncidentDetailRevision(value => value + 1)}
+              onAction={(action, payload) => transitionIncident(selectedEvent, action, payload)}
+              onDiscard={() => { setMessage(null); setDiscardReason(''); setDiscardAccessError(null); setDiscardOpen(true); }}
+            >
+              <div className={detailStyles.technical}>
                   {/* Olay Detayları — key-value table */}
                   {parsed.keyValueRows.filter(r => r.key !== 'Giris Zamani' && r.key !== 'Olay Zamani').length > 0 && (
                     <section>
@@ -1252,7 +1426,7 @@ export default function AlertsDashboardPage() {
                     return (
                       <section>
                         <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
-                          Degisiklik Detaylari
+                          Değişiklik Detayları
                         </p>
                         <div className="space-y-2">
                           {entries.map((entry, idx) => (
@@ -1303,7 +1477,7 @@ export default function AlertsDashboardPage() {
                                               </span>
                                             </span>
                                           ) : (
-                                            <span className="text-muted-foreground italic">degistirildi</span>
+                                            <span className="text-muted-foreground italic">değiştirildi</span>
                                           )}
                                         </td>
                                       </tr>
@@ -1317,7 +1491,7 @@ export default function AlertsDashboardPage() {
                           ))}
                           {selectedEvent.rawData!.length > 10 && (
                             <p className="text-xs text-muted-foreground italic text-center">
-                              ... ve {selectedEvent.rawData!.length - 10} degisiklik daha
+                              ... ve {selectedEvent.rawData!.length - 10} değişiklik daha
                             </p>
                           )}
                         </div>
@@ -1387,11 +1561,11 @@ export default function AlertsDashboardPage() {
                     if (!ui && !vd && !devid && !logdesc && !msgDecoded) return null;
                     return (
                       <section>
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Islem Detaylari</p>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">İşlem Detayları</p>
                         <div className="grid grid-cols-2 gap-3">
                           {ui && (
                             <div className="p-3 rounded-lg bg-muted/30">
-                              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Erisim Yontemi</p>
+                              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Erişim Yöntemi</p>
                               <p className="text-sm font-medium">{ui}</p>
                             </div>
                           )}
@@ -1409,14 +1583,14 @@ export default function AlertsDashboardPage() {
                           )}
                           {logdesc && (
                             <div className="p-3 rounded-lg bg-muted/30">
-                              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Log Aciklamasi</p>
+                              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Günlük Açıklaması</p>
                               <p className="text-sm font-medium">{logdesc}</p>
                             </div>
                           )}
                         </div>
                         {msgDecoded && msgDecoded !== logdesc && (
                           <div className="mt-2 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800">
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-blue-700 dark:text-blue-300 mb-1">Islem Ozeti</p>
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-blue-700 dark:text-blue-300 mb-1">İşlem Özeti</p>
                             <p className="text-sm font-medium text-blue-800 dark:text-blue-200">{msgDecoded}</p>
                           </div>
                         )}
@@ -1449,12 +1623,12 @@ export default function AlertsDashboardPage() {
                           <p><span className="text-muted-foreground text-xs">Zaman:</span> {new Date(selectedEvent.notifiedAt).toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' })}</p>
                         </div>
                       ) : (
-                        <p className="text-muted-foreground text-xs">Bildirim gonderilmedi</p>
+                        <p className="text-muted-foreground text-xs">Bildirim gönderilmedi</p>
                       )}
                     </div>
                     <div className="p-3 rounded-lg bg-muted/30">
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Incident Durumu</p>
-                      <p className="text-sm font-semibold">{selectedEvent.incident?.status || 'LEGACY'}</p>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Olay Durumu</p>
+                      <p className="text-sm font-semibold">{selectedEvent.incident ? incidentStatusLabels[selectedEvent.incident.status] : 'Eski alarm kaydı'}</p>
                       {selectedEvent.incident && (
                         <p className="text-xs text-muted-foreground mt-1">
                           {selectedEvent.incident.occurrenceCount} oluşum, {selectedEvent.incident.reopenCount} yeniden açılma
@@ -1466,17 +1640,6 @@ export default function AlertsDashboardPage() {
                     </div>
                   </div>
 
-                  {/* Onerilen Aksiyon — amber highlight box */}
-                  {parsed.recommendedAction && (
-                    <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-sm">⚡</span>
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-amber-800 dark:text-amber-300">Önerilen Aksiyon</p>
-                      </div>
-                      <p className="text-sm text-amber-700 dark:text-amber-200">{parsed.recommendedAction}</p>
-                    </div>
-                  )}
-
                   {/* Firewall Policy Enrichment — only for FW_POLICY_CHANGED */}
                   {selectedEvent.alarm?.code === 'FW_POLICY_CHANGED' && (
                     <section className="rounded-lg border overflow-hidden">
@@ -1484,7 +1647,7 @@ export default function AlertsDashboardPage() {
                         <div className="flex items-center gap-2">
                           <Shield className="h-4 w-4 text-orange-500" />
                           <span className="text-xs font-bold uppercase tracking-widest text-orange-700 dark:text-orange-300">
-                            Firewall Politika Listesi
+                            Güvenlik Politikaları
                           </span>
                           {policyData && (
                             <span className="text-xs text-muted-foreground">({policyData.host} • {policyData.total} politika)</span>
@@ -1507,7 +1670,7 @@ export default function AlertsDashboardPage() {
 
                       {policyError && (
                         <div className="px-4 py-3 text-xs text-red-600 bg-red-50 dark:bg-red-900/20">
-                          <AlertOctagon className="h-3.5 w-3.5 inline mr-1" />{policyError}
+                          <AlertOctagon className="h-3.5 w-3.5 inline mr-1" />{uiError(policyError)}
                         </div>
                       )}
 
@@ -1525,8 +1688,8 @@ export default function AlertsDashboardPage() {
                                 <tr className="bg-muted/40 text-left">
                                   <th className="px-2 py-1.5 font-semibold border-b">#</th>
                                   <th className="px-2 py-1.5 font-semibold border-b">Ad</th>
-                                  <th className="px-2 py-1.5 font-semibold border-b">Kaynak Ara./ Adres</th>
-                                  <th className="px-2 py-1.5 font-semibold border-b">Hedef Ara./ Adres</th>
+                                  <th className="px-2 py-1.5 font-semibold border-b">Kaynak Arayüz / Adres</th>
+                                  <th className="px-2 py-1.5 font-semibold border-b">Hedef Arayüz / Adres</th>
                                   <th className="px-2 py-1.5 font-semibold border-b">Servis</th>
                                   <th className="px-2 py-1.5 font-semibold border-b">Aksiyon</th>
                                   <th className="px-2 py-1.5 font-semibold border-b">Durum</th>
@@ -1534,32 +1697,32 @@ export default function AlertsDashboardPage() {
                               </thead>
                               <tbody>
                                 {policyData.policies
-                                  .filter((p: any) => {
+                                  .filter((p) => {
                                     if (!policySearch) return true;
                                     const t = policySearch.toLowerCase();
                                     return (
                                       String(p.policyid).includes(t) ||
                                       (p.name || '').toLowerCase().includes(t) ||
-                                      (p.srcintf || []).some((x: any) => x.name?.toLowerCase().includes(t)) ||
-                                      (p.dstintf || []).some((x: any) => x.name?.toLowerCase().includes(t)) ||
-                                      (p.srcaddr || []).some((x: any) => x.name?.toLowerCase().includes(t)) ||
-                                      (p.dstaddr || []).some((x: any) => x.name?.toLowerCase().includes(t)) ||
-                                      (p.service || []).some((x: any) => x.name?.toLowerCase().includes(t))
+                                      (p.srcintf || []).some((x) => x.name?.toLowerCase().includes(t)) ||
+                                      (p.dstintf || []).some((x) => x.name?.toLowerCase().includes(t)) ||
+                                      (p.srcaddr || []).some((x) => x.name?.toLowerCase().includes(t)) ||
+                                      (p.dstaddr || []).some((x) => x.name?.toLowerCase().includes(t)) ||
+                                      (p.service || []).some((x) => x.name?.toLowerCase().includes(t))
                                     );
                                   })
-                                  .map((p: any) => (
+                                  .map((p) => (
                                     <tr key={p.policyid} className="border-b hover:bg-muted/10">
                                       <td className="px-2 py-1.5 font-mono text-muted-foreground">{p.policyid}</td>
                                       <td className="px-2 py-1.5 max-w-[120px] truncate" title={p.name}>{p.name || <span className="text-muted-foreground italic">isimsiz</span>}</td>
                                       <td className="px-2 py-1.5">
-                                        <div className="text-[10px] text-muted-foreground">{(p.srcintf || []).map((x: any) => x.name).join(', ')}</div>
-                                        <div>{(p.srcaddr || []).map((x: any) => x.name).join(', ')}</div>
+                                        <div className="text-[10px] text-muted-foreground">{(p.srcintf || []).map((x) => x.name).join(', ')}</div>
+                                        <div>{(p.srcaddr || []).map((x) => x.name).join(', ')}</div>
                                       </td>
                                       <td className="px-2 py-1.5">
-                                        <div className="text-[10px] text-muted-foreground">{(p.dstintf || []).map((x: any) => x.name).join(', ')}</div>
-                                        <div>{(p.dstaddr || []).map((x: any) => x.name).join(', ')}</div>
+                                        <div className="text-[10px] text-muted-foreground">{(p.dstintf || []).map((x) => x.name).join(', ')}</div>
+                                        <div>{(p.dstaddr || []).map((x) => x.name).join(', ')}</div>
                                       </td>
-                                      <td className="px-2 py-1.5 max-w-[100px] truncate">{(p.service || []).map((x: any) => x.name).join(', ')}</td>
+                                      <td className="px-2 py-1.5 max-w-[100px] truncate">{(p.service || []).map((x) => x.name).join(', ')}</td>
                                       <td className="px-2 py-1.5">
                                         <span className={`font-semibold ${
                                           p.action === 'accept' ? 'text-green-600' : 'text-red-500'
@@ -1610,7 +1773,7 @@ export default function AlertsDashboardPage() {
 
                       {addressError && (
                         <div className="px-4 py-3 text-xs text-red-600 bg-red-50 dark:bg-red-900/20">
-                          <AlertOctagon className="h-3.5 w-3.5 inline mr-1" />{addressError}
+                          <AlertOctagon className="h-3.5 w-3.5 inline mr-1" />{uiError(addressError)}
                         </div>
                       )}
 
@@ -1618,7 +1781,7 @@ export default function AlertsDashboardPage() {
                       {addressData && addressExpanded && (
                         <div className="p-3 space-y-2">
                           <Input
-                            placeholder="Adres ara... (isim, IP, subnet, FQDN)"
+                            placeholder="Adres ara… (ad, IP, alt ağ, FQDN)"
                             value={addressSearch}
                             onChange={(e) => setAddressSearch(e.target.value)}
                             className="h-7 text-xs"
@@ -1636,7 +1799,7 @@ export default function AlertsDashboardPage() {
                               </thead>
                               <tbody>
                                 {addressData.addresses
-                                  .filter((a: any) => {
+                                  .filter((a) => {
                                     if (!addressSearch) return true;
                                     const t = addressSearch.toLowerCase();
                                     return (
@@ -1646,7 +1809,7 @@ export default function AlertsDashboardPage() {
                                       (a.type || '').toLowerCase().includes(t)
                                     );
                                   })
-                                  .map((a: any) => (
+                                  .map((a) => (
                                     <tr key={a.name} className="border-b hover:bg-muted/10">
                                       <td className="px-2 py-1.5 max-w-[140px] truncate font-medium" title={a.name}>{a.name || <span className="text-muted-foreground italic">isimsiz</span>}</td>
                                       <td className="px-2 py-1.5">
@@ -1679,7 +1842,7 @@ export default function AlertsDashboardPage() {
                         <div className="flex items-center gap-2">
                           <Router className="h-4 w-4 text-sky-500" />
                           <span className="text-xs font-bold uppercase tracking-widest text-sky-700 dark:text-sky-300">
-                            Port Detaylari
+                            Port Detayları
                           </span>
                           {portData && (
                             <span className="text-xs text-muted-foreground">({portData.device.name} • {portData.port.interfaceName})</span>
@@ -1702,7 +1865,7 @@ export default function AlertsDashboardPage() {
 
                       {portError && (
                         <div className="px-4 py-3 text-xs text-red-600 bg-red-50 dark:bg-red-900/20">
-                          <AlertOctagon className="h-3.5 w-3.5 inline mr-1" />{portError}
+                          <AlertOctagon className="h-3.5 w-3.5 inline mr-1" />{uiError(portError)}
                         </div>
                       )}
 
@@ -1715,11 +1878,11 @@ export default function AlertsDashboardPage() {
                               <span className="font-medium">{portData.device.name}</span>
                             </div>
                             <div>
-                              <span className="text-muted-foreground">Vendor:</span>{' '}
+                              <span className="text-muted-foreground">Üretici:</span>{' '}
                               <span className="font-medium">{portData.device.vendor || '—'}</span>
                             </div>
                             <div>
-                              <span className="text-muted-foreground">Management IP:</span>{' '}
+                              <span className="text-muted-foreground">Yönetim IP Adresi:</span>{' '}
                               <span className="font-mono">{portData.device.managementIp || '—'}</span>
                             </div>
                             <div>
@@ -1737,19 +1900,19 @@ export default function AlertsDashboardPage() {
                                 <span className="font-mono font-medium">{portData.port.interfaceName}</span>
                               </div>
                               <div>
-                                <span className="text-muted-foreground">Admin Status:</span>{' '}
+                                <span className="text-muted-foreground">Yönetim Durumu:</span>{' '}
                                 <span className={`font-semibold ${portData.port.adminStatus === 'up' ? 'text-green-600' : 'text-red-500'}`}>
-                                  {portData.port.adminStatus === 'up' ? '✓ UP' : '✕ DOWN'}
+                                  {portData.port.adminStatus === 'up' ? "✓ Açık" : "✕ Kapalı"}
                                 </span>
                               </div>
                               <div>
-                                <span className="text-muted-foreground">Oper Status:</span>{' '}
+                                <span className="text-muted-foreground">Çalışma Durumu:</span>{' '}
                                 <span className={`font-semibold ${portData.port.operStatus === 'up' ? 'text-green-600' : 'text-red-500'}`}>
-                                  {portData.port.operStatus === 'up' ? '✓ UP' : '✕ DOWN'}
+                                  {portData.port.operStatus === 'up' ? "✓ Açık" : "✕ Kapalı"}
                                 </span>
                               </div>
                               <div>
-                                <span className="text-muted-foreground">Speed:</span>{' '}
+                                <span className="text-muted-foreground">Hız:</span>{' '}
                                 <span className="font-medium">
                                   {portData.port.speed ? `${(Number(portData.port.speed) / 1000000).toFixed(0)} Mbps` : '—'}
                                 </span>
@@ -1759,13 +1922,13 @@ export default function AlertsDashboardPage() {
                                 <span>{portData.port.mtu || '—'}</span>
                               </div>
                               <div>
-                                <span className="text-muted-foreground">Last Polled:</span>{' '}
+                                <span className="text-muted-foreground">Son Veri Toplama:</span>{' '}
                                 <span className="font-mono text-[10px]">
                                   {portData.port.lastPolledAt ? new Date(portData.port.lastPolledAt).toLocaleString('tr-TR') : '—'}
                                 </span>
                               </div>
                               <div className="col-span-2">
-                                <span className="text-muted-foreground">Description:</span>{' '}
+                                <span className="text-muted-foreground">Açıklama:</span>{' '}
                                 <span className="font-medium">{portData.port.description || '—'}</span>
                               </div>
                             </div>
@@ -1776,15 +1939,15 @@ export default function AlertsDashboardPage() {
                             <div className="text-xs font-semibold mb-2">Hata Sayaçlari</div>
                             <div className="grid grid-cols-2 gap-2 text-xs">
                               <div className="text-center p-2 rounded bg-red-50 dark:bg-red-900/10">
-                                <div className="text-muted-foreground">In Errors</div>
+                                <div className="text-muted-foreground">Gelen Hatalar</div>
                                 <div className="font-mono font-semibold text-red-500 text-sm">
-                                  {Number(portData.port.inErrors || 0).toLocaleString()}
+                                  {Number(portData.port.inErrors || 0).toLocaleString('tr-TR')}
                                 </div>
                               </div>
                               <div className="text-center p-2 rounded bg-red-50 dark:bg-red-900/10">
-                                <div className="text-muted-foreground">Out Errors</div>
+                                <div className="text-muted-foreground">Giden Hatalar</div>
                                 <div className="font-mono font-semibold text-red-500 text-sm">
-                                  {Number(portData.port.outErrors || 0).toLocaleString()}
+                                  {Number(portData.port.outErrors || 0).toLocaleString('tr-TR')}
                                 </div>
                               </div>
                             </div>
@@ -1792,16 +1955,16 @@ export default function AlertsDashboardPage() {
 
                           {/* Traffic Stats */}
                           <div className="rounded-md border p-3 bg-muted/30">
-                            <div className="text-xs font-semibold mb-2">Trafik Istatistikleri</div>
+                            <div className="text-xs font-semibold mb-2">Trafik İstatistikleri</div>
                             <div className="grid grid-cols-2 gap-2 text-xs">
                               <div>
-                                <span className="text-muted-foreground">In Octets:</span>{' '}
+                                <span className="text-muted-foreground">Gelen Bayt:</span>{' '}
                                 <span className="font-mono">
                                   {portData.port.inOctets ? `${(Number(portData.port.inOctets) / 1048576).toFixed(2)} MB` : '—'}
                                 </span>
                               </div>
                               <div>
-                                <span className="text-muted-foreground">Out Octets:</span>{' '}
+                                <span className="text-muted-foreground">Giden Bayt:</span>{' '}
                                 <span className="font-mono">
                                   {portData.port.outOctets ? `${(Number(portData.port.outOctets) / 1048576).toFixed(2)} MB` : '—'}
                                 </span>
@@ -1814,7 +1977,7 @@ export default function AlertsDashboardPage() {
                             <div className="rounded-md border p-3 bg-muted/30">
                               <div className="text-xs font-semibold mb-2">Komşu Cihazlar (LLDP/CDP)</div>
                               <div className="space-y-1">
-                                {portData.neighbors.map((n: any, i: number) => (
+                                {portData.neighbors.map((n, i) => (
                                   <div key={i} className="flex items-center gap-2 text-xs">
                                     <Router className="h-3 w-3 text-muted-foreground" />
                                     <span className="font-medium">{n.remoteDeviceName}</span>
@@ -1866,25 +2029,25 @@ export default function AlertsDashboardPage() {
 
                       {devicePortsError && (
                         <div className="px-4 py-3 text-xs text-red-600 bg-red-50 dark:bg-red-900/20">
-                          <AlertOctagon className="h-3.5 w-3.5 inline mr-1" />{devicePortsError}
+                          <AlertOctagon className="h-3.5 w-3.5 inline mr-1" />{uiError(devicePortsError)}
                         </div>
                       )}
 
                       {devicePortsData && devicePortsData.interfaces.length > 0 && (() => {
                         const ifs = devicePortsData.interfaces;
-                        const upCount = ifs.filter((i: any) => i.operStatus === 'up').length;
-                        const downCount = ifs.filter((i: any) => i.operStatus === 'down').length;
-                        const monitoredDown = ifs.filter((i: any) => i.monitored && i.operStatus === 'down');
+                        const upCount = ifs.filter((i) => i.operStatus === 'up').length;
+                        const downCount = ifs.filter((i) => i.operStatus === 'down').length;
+                        const monitoredDown = ifs.filter((i) => i.monitored && i.operStatus === 'down');
                         return (
                           <div className="p-3 space-y-3">
                             {/* Summary */}
                             <div className="grid grid-cols-3 gap-2 text-xs">
                               <div className="text-center p-2 rounded bg-green-50 dark:bg-green-900/10">
-                                <div className="text-muted-foreground">Up</div>
+                                <div className="text-muted-foreground">Açık</div>
                                 <div className="font-mono font-bold text-green-600 text-sm">{upCount}</div>
                               </div>
                               <div className="text-center p-2 rounded bg-red-50 dark:bg-red-900/10">
-                                <div className="text-muted-foreground">Down</div>
+                                <div className="text-muted-foreground">Kapalı</div>
                                 <div className="font-mono font-bold text-red-500 text-sm">{downCount}</div>
                               </div>
                               <div className="text-center p-2 rounded bg-sky-50 dark:bg-sky-900/10">
@@ -1905,23 +2068,23 @@ export default function AlertsDashboardPage() {
                                       <tr>
                                         <th className="px-3 py-1.5 text-left font-semibold">Port</th>
                                         <th className="px-3 py-1.5 text-left font-semibold">Açıklama</th>
-                                        <th className="px-3 py-1.5 text-center font-semibold">Admin</th>
+                                        <th className="px-3 py-1.5 text-center font-semibold">Yönetici</th>
                                         <th className="px-3 py-1.5 text-center font-semibold">Oper</th>
                                       </tr>
                                     </thead>
                                     <tbody>
-                                      {monitoredDown.map((iface: any) => (
+                                      {monitoredDown.map((iface) => (
                                         <tr key={iface.id} className="border-t">
                                           <td className="px-3 py-1.5 font-mono font-medium">{iface.interfaceName}</td>
                                           <td className="px-3 py-1.5 text-muted-foreground">{(iface.description && iface.description !== 'None') ? iface.description : '—'}</td>
                                           <td className="px-3 py-1.5 text-center">
                                             <span className={`font-semibold ${iface.adminStatus === 'up' ? 'text-green-600' : 'text-red-500'}`}>
-                                              {iface.adminStatus === 'up' ? '✓ UP' : '✕ DOWN'}
+                                              {iface.adminStatus === 'up' ? "✓ Açık" : "✕ Kapalı"}
                                             </span>
                                           </td>
                                           <td className="px-3 py-1.5 text-center">
                                             <span className={`font-semibold ${iface.operStatus === 'up' ? 'text-green-600' : 'text-red-500'}`}>
-                                              {iface.operStatus === 'up' ? '✓ UP' : '✕ DOWN'}
+                                              {iface.operStatus === 'up' ? "✓ Açık" : "✕ Kapalı"}
                                             </span>
                                           </td>
                                         </tr>
@@ -1943,13 +2106,13 @@ export default function AlertsDashboardPage() {
                                     <tr>
                                       <th className="px-3 py-1.5 text-left font-semibold">Port</th>
                                       <th className="px-3 py-1.5 text-left font-semibold">Açıklama</th>
-                                      <th className="px-3 py-1.5 text-center font-semibold">Admin</th>
+                                      <th className="px-3 py-1.5 text-center font-semibold">Yönetici</th>
                                       <th className="px-3 py-1.5 text-center font-semibold">Oper</th>
                                       <th className="px-3 py-1.5 text-center font-semibold">İzleniyor</th>
                                     </tr>
                                   </thead>
                                   <tbody>
-                                    {ifs.map((iface: any) => (
+                                    {ifs.map((iface) => (
                                       <tr key={iface.id} className="border-t">
                                         <td className="px-3 py-1.5 font-mono">{iface.interfaceName}</td>
                                         <td className="px-3 py-1.5 text-muted-foreground truncate max-w-[180px]">{(iface.description && iface.description !== 'None') ? iface.description : '—'}</td>
@@ -2001,7 +2164,7 @@ export default function AlertsDashboardPage() {
                             : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
                           <Code2 className="h-3.5 w-3.5 text-muted-foreground" />
                           <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground group-hover:text-foreground transition-colors">
-                            Ham Log Verisi
+                            Ham Günlük Verisi
                             <span className="ml-2 text-[9px] font-normal normal-case">({logs.length} kayıt)</span>
                           </p>
                         </button>
@@ -2041,161 +2204,13 @@ export default function AlertsDashboardPage() {
                     );
                   })()}
 
-                  {incidentDetail?.transitions?.length > 0 && (
-                    <section>
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Yaşam Döngüsü</p>
-                      <div className="space-y-2">
-                        {incidentDetail.transitions.slice(0, 8).map((transition: any) => (
-                          <div key={transition.id} className="flex items-start justify-between gap-3 rounded-md border px-3 py-2 text-xs">
-                            <div>
-                              <p className="font-semibold">{transition.type}</p>
-                              <p className="text-muted-foreground">
-                                {transition.fromStatus || '—'} → {transition.toStatus || '—'} · {transition.actorName || transition.actorType}
-                              </p>
-                              {transition.reason && <p className="mt-1">{transition.reason}</p>}
-                            </div>
-                            <span className="text-muted-foreground whitespace-nowrap">
-                              {new Date(transition.createdAt).toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' })}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </section>
-                  )}
-
-                  {/* Footer branding */}
-                  <div className="text-center text-xs text-muted-foreground pt-3 border-t">
-                    <p>InfraScope Alarm Management System</p>
-                    <p>{new Date(selectedEvent.createdAt).toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul' })}</p>
-                  </div>
-                </div>
-
-                {/* Action buttons */}
-                <div className="flex justify-end gap-2 px-6 pb-5">
-                  {selectedEvent.incident?.status === 'OPEN' && (
-                    <Button
-                      onClick={() => acknowledgeEvent(selectedEvent)}
-                    >
-                      <CheckCircle className="h-4 w-4 mr-2" />
-                      Onayla
-                    </Button>
-                  )}
-                  {selectedEvent.incident && ['OPEN', 'ACKNOWLEDGED'].includes(selectedEvent.incident.status) && (
-                    <Button variant="outline" onClick={() => transitionIncident(selectedEvent, 'RESOLVE')}>
-                      <CircleCheckBig className="h-4 w-4 mr-2" />
-                      Çözüldü
-                    </Button>
-                  )}
-                  {selectedEvent.incident?.status === 'RESOLVED' && (
-                    <Button variant="outline" onClick={() => transitionIncident(selectedEvent, 'CLOSE')}>
-                      <CheckCircle className="h-4 w-4 mr-2" />
-                      Kapat
-                    </Button>
-                  )}
-                  {selectedEvent.incident?.status === 'CLOSED' && selectedEvent.incident.archiveState === 'HOT' && (
-                    <Button variant="outline" onClick={() => transitionIncident(selectedEvent, 'ARCHIVE')}>
-                      <Archive className="h-4 w-4 mr-2" />
-                      Arşivle
-                    </Button>
-                  )}
-                  {selectedEvent.incident?.archiveState === 'ARCHIVED' && (
-                    <Button variant="outline" onClick={() => transitionIncident(selectedEvent, 'RESTORE')}>
-                      Arşivden Çıkar
-                    </Button>
-                  )}
-                  {selectedEvent.incident && (
-                    <Button
-                      variant="outline"
-                      onClick={() => transitionIncident(
-                        selectedEvent,
-                        selectedEvent.incident!.legalHold ? 'RELEASE_LEGAL_HOLD' : 'SET_LEGAL_HOLD',
-                      )}
-                      title="Legal hold retention işlemlerini durdurur"
-                    >
-                      <LockKeyhole className="h-4 w-4 mr-2" />
-                      {selectedEvent.incident.legalHold ? 'Hold Kaldır' : 'Legal Hold'}
-                    </Button>
-                  )}
-                  <Button
-                    variant="outline"
-                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                    onClick={() => setDiscardOpen(true)}
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Discard
-                  </Button>
-                  <Button variant="outline" onClick={() => setDetailOpen(false)}>Kapat</Button>
-                </div>
               </div>
-            );
+            </IncidentDetailWorkspace>;
           })()}
         </DialogContent>
       </Dialog>
 
-      {/* Discard/Whitelist Dialog */}
-      <Dialog open={discardOpen} onOpenChange={setDiscardOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-red-600">
-              <Trash2 className="h-5 w-5" />
-              Alarm'i Whitelist'e Ekle
-            </DialogTitle>
-            <DialogDescription>
-              Bu alarm bir daha üretilmeyecek. False positive ise whitelist'e ekleyin.
-            </DialogDescription>
-          </DialogHeader>
-          
-          {selectedEvent && (
-            <div className="space-y-4 py-4">
-              <div className="rounded-lg bg-muted/30 p-3">
-                <p className="text-xs font-semibold mb-1">Alarm:</p>
-                <p className="text-sm">{selectedEvent.title}</p>
-              </div>
-              
-              <div className="rounded-lg bg-muted/30 p-3">
-                <p className="text-xs font-semibold mb-1">Whitelist Edilecek:</p>
-                <p className="text-sm font-mono">
-                  {(() => {
-                    let field = 'sourceIp';
-                    if (selectedEvent.alarm.code === 'SSLVPN_AUTH_FAILED') field = 'user';
-                    else if (selectedEvent.destIp && selectedEvent.alarm.code.includes('DNS')) field = 'destIp';
-                    else if (selectedEvent.alarm.code.startsWith('NMS_') || selectedEvent.alarm.code.startsWith('VM_')) field = 'deviceName';
-                    
-                    const value = field === 'sourceIp' ? selectedEvent.sourceIp 
-                                  : field === 'destIp' ? selectedEvent.destIp 
-                                  : field === 'deviceName' ? selectedEvent.deviceName
-                                  : selectedEvent.deviceName || '';
-                    return `${field}: ${value || 'N/A'}`;
-                  })()}
-                </p>
-              </div>
-              
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Sebep (opsiyonel):</label>
-                <textarea
-                  className="w-full min-h-[80px] rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                  placeholder="Neden whitelist'e ekliyorsunuz? (örn: Kurum içi DNS sunucusu)"
-                  value={discardReason}
-                  onChange={(e) => setDiscardReason(e.target.value)}
-                />
-              </div>
-            </div>
-          )}
-          
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDiscardOpen(false)} disabled={discardLoading}>
-              İptal
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={addToWhitelist}
-              disabled={!discardReason.trim() || discardLoading}
-            >
-              {discardLoading ? 'Ekleniyor...' : 'Whitelist\'e Ekle'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+
     </div>
   );
 }

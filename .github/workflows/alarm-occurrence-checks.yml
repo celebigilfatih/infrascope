@@ -1,0 +1,176 @@
+name: Alarm occurrence checks
+
+on:
+  workflow_call:
+  pull_request:
+    paths:
+      - 'lib/alarms/**'
+      - 'lib/notifications/**'
+      - 'lib/firewall/connector-factory.ts'
+      - 'lib/firewall/target.ts'
+      - 'lib/firewall/snmp-read.ts'
+      - 'lib/integrations/fortigate-snmp.ts'
+      - 'lib/integrations/fortigate.ts'
+      - 'lib/auth/**'
+      - 'middleware.ts'
+      - 'app/api/integrations/**'
+      - 'app/api/firewalls/route.ts'
+      - 'lib/nms/device-id.ts'
+      - 'scripts/check-nms-device-ids*.cjs'
+      - 'app/api/alarms/check/route.ts'
+      - 'app/integrations/vmware/page.tsx'
+      - 'app/analytics/capacity/page.tsx'
+      - 'lib/integrations/fortianalyzer.ts'
+      - 'lib/integrations/fortianalyzer-revision.ts'
+      - 'lib/integrations/fortianalyzer-profile.ts'
+      - 'lib/integrations/fortianalyzer-source.ts'
+      - 'lib/validators/integrations.ts'
+      - 'lib/firewall/fortianalyzer-*.ts'
+      - 'app/integrations/fortianalyzer/page.tsx'
+      - 'lib/integrations/vmware.ts'
+      - 'lib/integrations/vmware-source.ts'
+      - 'lib/integrations/vmware-health.ts'
+      - 'app/api/health/route.ts'
+      - 'lib/integrations/vmware-cache.ts'
+      - 'lib/integrations/vmware-python.ts'
+      - 'lib/integrations/zabbix.ts'
+      - 'lib/integrations/sync-outcome.ts'
+      - 'lib/integrations/sync-log.ts'
+      - 'lib/integrations/sync-coordinator.ts'
+      - 'lib/integrations/inventory-scheduler.ts'
+      - 'lib/integrations/inventory-source-*.ts'
+      - 'lib/topology/relationship-engine.ts'
+      - 'scripts/check-inventory-source-scope*.cjs'
+      - 'instrumentation-node.ts'
+      - 'nms_service/orchestrator.py'
+      - 'nms_service/core/config.py'
+      - 'app/integrations/nms/devices/[id]/edit/page.tsx'
+      - 'scripts/check-inventory-scheduling*.cjs'
+      - 'scripts/check-poll-scheduling.py'
+      - 'scripts/check-inventory-sync*.cjs'
+      - 'lib/security/tls.ts'
+      - 'lib/security/integration-credential*.ts'
+      - 'scripts/security/rotate-integration-credentials.ts'
+      - 'scripts/check-credential-storage*.cjs'
+      - 'app/api/alarms/notification/route.ts'
+      - 'scripts/get-snapshots.py'
+      - 'scripts/get-host-details.py'
+      - 'scripts/vmware_helper.py'
+      - 'scripts/requirements-vmware.txt'
+      - 'Dockerfile'
+      - 'Dockerfile.dev'
+      - 'lib/integrations/source-query-error.ts'
+      - 'app/api/alarms/check-vmware/route.ts'
+      - 'scripts/check-alarm-occurrences*.cjs'
+      - 'scripts/check-alarm-health.cjs'
+      - 'scripts/check-alarm-sources.cjs'
+      - 'scripts/check-alarm-dispatch.cjs'
+      - 'scripts/check-integration-permissions.cjs'
+      - 'scripts/check-fortianalyzer-auth.cjs'
+      - 'scripts/check-fortianalyzer-profile*.cjs'
+      - 'scripts/check-fortianalyzer-cache*.cjs'
+      - 'scripts/check-fortianalyzer-time*.cjs'
+      - 'scripts/check-vmware-cache.cjs'
+      - 'scripts/check-vmware-collection.cjs'
+      - 'scripts/check-vmware-health.cjs'
+      - 'scripts/check-vmware-python.py'
+      - 'scripts/check-zabbix-auth.cjs'
+      - 'scripts/check-fortigate-alarm-targets.cjs'
+      - 'scripts/check-fortigate-alarm-targets-db.cjs'
+      - 'scripts/check-fortigate-snmp.cjs'
+      - 'scripts/check-fortigate-snmp-db.cjs'
+      - 'lib/alarm-scheduler.ts'
+      - 'scripts/check-alarm-ownership*.cjs'
+      - 'scripts/helpers/alarm-run-fixture.cjs'
+      - 'prisma/**'
+      - 'package*.json'
+      - '.github/workflows/alarm-occurrence-checks.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_PASSWORD: occurrence-fixture-only
+          POSTGRES_DB: infrascope_occurrence_tests
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d infrascope_occurrence_tests"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:occurrence-fixture-only@127.0.0.1:5432/infrascope_occurrence_tests
+      INFRASCOPE_OCCURRENCE_DB_TEST: '1'
+      INFRASCOPE_ALARM_RUN_DB_TEST: '1'
+      INFRASCOPE_FA_CACHE_DB_TEST: '1'
+      INFRASCOPE_FA_PROFILE_DB_TEST: '1'
+      INFRASCOPE_FA_TIME_DB_TEST: '1'
+      INFRASCOPE_FG_ALARM_DB_TEST: '1'
+      INFRASCOPE_FG_SNMP_DB_TEST: '1'
+      INFRASCOPE_CREDENTIAL_DB_TEST: '1'
+      INFRASCOPE_SYNC_DB_TEST: '1'
+      INFRASCOPE_SCHEDULE_DB_TEST: '1'
+      INFRASCOPE_SCOPE_DB_TEST: '1'
+      INFRASCOPE_NMS_ID_DB_TEST: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci --legacy-peer-deps
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install -r scripts/requirements-vmware.txt
+      - run: npx prisma generate
+      - run: npm run type-check
+      - run: npm run test:alarm-occurrences
+      - run: npm run test:alarm-health
+      - run: npm run test:alarm-ownership
+      - run: npm run test:alarm-sources
+      - run: npm run test:alarm-dispatch
+      - run: npm run test:integration-permissions
+      - run: npm run test:fortianalyzer-auth
+      - run: npm run test:fortianalyzer-profile
+      - run: npm run test:fortianalyzer-cache
+      - run: npm run test:fortianalyzer-time
+        env:
+          TZ: UTC
+      - run: npm run test:fortianalyzer-time
+        env:
+          TZ: Europe/Istanbul
+      - run: npm run test:vmware-cache
+      - run: npm run test:vmware-collection
+      - run: npm run test:vmware-health
+      - run: npm run test:vmware-python
+      - run: npm run test:zabbix-auth
+      - run: npm run test:credential-storage
+      - run: npm run test:inventory-sync
+      - run: npm run test:inventory-scheduling
+      - run: npm run test:inventory-source-scope
+      - run: npm run test:poll-scheduling
+      - run: npm run test:fortigate-alarm-targets
+      - run: npm run test:fortigate-snmp
+      - run: npm run test:nms-backups
+      - run: npm run test:nms-device-ids
+      - run: npx prisma migrate deploy
+      - run: npm run test:alarm-ownership:db
+      - run: npm run test:nms-device-ids:db
+      - run: npm run test:inventory-source-scope:db
+      - run: npm run test:inventory-sync:db
+      - run: npm run test:inventory-scheduling:db
+      - run: npm run test:credential-storage:db
+      - run: npm run test:alarm-occurrences:db
+      - run: npm run test:fortigate-alarm-targets:db
+      - run: npm run test:fortigate-snmp:db
+      - run: npm run test:fortianalyzer-cache:db
+      - run: npm run test:fortianalyzer-profile:db
+      - run: npm run test:fortianalyzer-time:db

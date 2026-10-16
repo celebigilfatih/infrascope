@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
 // Cache for 60 seconds
-let cachedFloors: any = null;
+let cachedFloors: unknown = null;
 let cacheTimestamp: number = 0;
 const CACHE_TTL = 60000;
 
-export async function GET(_request: NextRequest) {
+export async function GET() {
   try {
     // Return cached data if available
     const now = Date.now();
@@ -59,7 +59,7 @@ export async function GET(_request: NextRequest) {
       timestamp: new Date(),
       cached: false
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error fetching floors:', error);
     return NextResponse.json({
       success: false,
@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
       data: floor,
       timestamp: new Date()
     }, { status: 201 });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error creating floor:', error);
     return NextResponse.json({
       success: false,

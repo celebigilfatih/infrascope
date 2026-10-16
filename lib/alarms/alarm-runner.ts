@@ -1,54 +1,19 @@
-/**
- * Alarm Runner — shared in-process detection executor.
- *
- * WHY THIS EXISTS
- * ───────────────
- * Previously both the scheduler and the watchdog triggered alarm checks via
- * HTTP POST to `/api/alarms/check` (the same process). This created two
- * critical failure modes:
- *
- *   1. HTTP connection drops: When Node/Next.js drops the incoming HTTP
- *      connection mid-execution (e.g. timeout, process pressure), the route
- *      handler's finally block may not run → mutex stays locked forever,
- *      DB write never happens → 4-hour detection blackouts.
- *
- *   2. Cascade lock starvation: The 9-minute mutex auto-expiry could release
- *      the lock while the original check was STILL RUNNING, starting a second
- *      concurrent check that conflicts with the first FA session.
- *
- * SOLUTION
- * ────────
- * Call the detection engine directly from the scheduler and watchdog
- * (in-process, no HTTP). Because these are regular async functions invoked
- * from setInterval callbacks, the Node.js event loop GUARANTEES the finally
- * block runs even on error or timeout — there is no HTTP connection that can
- * be dropped.
- *
- * The HTTP route (/api/alarms/check) still exists for manual triggers and
- * simply delegates here.
- */
-
-import { prisma } from '@/lib/prisma';
+/** Shared alarm runner: atomic database ownership with finite, fenced execution. */
+import { prisma as sharedPrisma } from '@/lib/prisma';
+import { alarmExecutionPrisma } from './execution-prisma';
+import { assertAlarmExecutionActive, withAlarmExecution } from './execution-context';
+import { claimAlarmRun, createAlarmExecution, finishAlarmRun, reconcileAlarmRuns, ALARM_RUN_TIMEOUT_MS } from './run-lease';
 import { initSharedFortiAnalyzerService, getFortiAnalyzerLoginHealth } from '@/lib/integrations/fortianalyzer';
 import { AlarmDetectionEngine, type EvaluationResult } from '@/lib/alarms/detection-engine';
-import { FortiGateService } from '@/lib/integrations/fortigate';
 import { processDLQ, cleanupDLQ, getDLQStats } from '@/lib/notifications/dlq-worker';
 import { sendAlarmEmail } from '@/lib/notifications/email';
 import { createLogger } from '@/lib/logger';
 import { initLicense, isLicenseValid } from '@/lib/license/client';
-import { unprotectIntegrationConfig } from '@/lib/security/integration-credentials';
-import { getFortiGateConnector } from '@/lib/firewall/connector-factory';
+import { readFortiAnalyzerProfile } from '@/lib/integrations/fortianalyzer-source';
+import { fortiAnalyzerRevision as getFortiAnalyzerRevision } from '@/lib/integrations/fortianalyzer-revision';
 
 const log = createLogger('alarm-runner');
-
-async function getOrInitFortiGateService(): Promise<FortiGateService | null> {
-  try {
-    return (await getFortiGateConnector()).service;
-  } catch (err) {
-    log.error({ err }, 'FortiGate init error');
-    return null;
-  }
-}
+const prisma = alarmExecutionPrisma(sharedPrisma);
 
 // ── FA health alert throttle ───────────────────────────────────────────────
 const FA_ALERT_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour between FA health alerts
@@ -90,15 +55,6 @@ async function maybeSendFAHealthAlert(): Promise<void> {
   }
 }
 
-// ── Mutex ────────────────────────────────────────────────────────────────────
-// Timestamp-based: allows auto-recovery after 12 min if the runner somehow
-// crashes without releasing (should never happen with direct calls, but kept
-// as a safety net).
-// 12 min > normal run (85-120 s) + generous buffer.
-const MAX_LOCK_DURATION_MS = 12 * 60 * 1000;
-let checkStartTime: number | null = null;
-
-// ── Result cache ─────────────────────────────────────────────────────────────
 export interface AlarmCheckResult {
   success: boolean;
   error?: string;
@@ -118,385 +74,210 @@ export interface AlarmCheckResult {
     code: string;
     matchCount: number;
     sampleEvents: Array<Record<string, unknown>>;
+    target?: EvaluationResult['target'];
   }>;
-  errors: Array<{ code: string; error: string | undefined }>;
+  errors: Array<{ code: string; error: string | undefined; target?: EvaluationResult['target'] }>;
 }
 
-let lastResult: AlarmCheckResult | null = null;
-
-export function getLastAlarmCheckResult(): AlarmCheckResult | null {
-  return lastResult;
-}
-
-async function recordPreflightFailure(error: string, startedAt: number): Promise<void> {
-  try {
-    await prisma.alarmCheckLog.create({
-      data: {
-        checkTime: new Date(startedAt),
-        totalAlarms: 0,
-        triggeredCount: 0,
-        errorCount: 1,
-        durationMs: Date.now() - startedAt,
-        status: 'FAILED',
-      },
-    });
-  } catch (logError) {
-    log.error({ err: logError, preflightError: error }, 'Failed to record alarm preflight failure');
-  }
-}
-
-// ── Startup Initialization ────────────────────────────────────────────────────
-// Called once when the alarm system starts. Cleans up RUNNING records left
-// behind by a previous process (container restart, crash, forced stop).
-// Without this, a new process would be blocked by the DB guard for up to
-// MAX_LOCK_DURATION_MS (12 min) on every container restart.
+type CheckOptions = { sources?: import('./detection-engine').AlarmSource[]; requireConfiguredSources?: boolean };
+const globalRunner = globalThis as typeof globalThis & { __infrascopeAlarmRunner?: { busy: boolean; lastResult: AlarmCheckResult | null } };
+function state() { return globalRunner.__infrascopeAlarmRunner ??= { busy: false, lastResult: null }; }
+export function getLastAlarmCheckResult() { return state().lastResult; }
 export async function initializeAlarmRunner(): Promise<void> {
+  try { await reconcileAlarmRuns(); }
+  catch (error) { log.warn({ err: error }, 'Alarm ownership reconciliation unavailable; claims remain fail closed'); }
+}
+function failed(error: string, code = 'SYSTEM_ERROR'): AlarmCheckResult {
+  return { success: false, error, summary: { total: 0, triggered: 0, skippedCooldown: 0, errors: 1 }, triggered: [], errors: [{ code, error }] };
+}
+function busy(): AlarmCheckResult {
+  return { success: false, error: 'Check already in progress', summary: { total: 0, triggered: 0, skippedCooldown: 0, errors: 0 }, triggered: [], errors: [] };
+}
+export async function runAlarmCheck(options: CheckOptions = {}): Promise<AlarmCheckResult> {
+  const current = state();
+  if (current.busy) return busy();
+  current.busy = true;
+  const startTime = Date.now();
+  let claim: Awaited<ReturnType<typeof claimAlarmRun>> = null;
+  let scope: ReturnType<typeof createAlarmExecution> | undefined;
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    const orphaned = await prisma.alarmCheckLog.updateMany({
-      where: { status: 'RUNNING' },
-      data: { status: 'ORPHANED' },
-    });
-    if (orphaned.count > 0) {
-      log.warn(
-        { count: orphaned.count },
-        'Cleaned up orphan RUNNING lock(s) from previous process'
-      );
-    } else {
-      log.info('No orphan locks found');
+    claim = await claimAlarmRun();
+    if (!claim) return busy();
+    scope = createAlarmExecution(claim);
+    const active = scope;
+    const result = await Promise.race([
+      withAlarmExecution(active.execution, () => evaluateAlarmRun(options, startTime)),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => { active.cancel(); reject(new Error('Alarm evaluation timeout (10 minutes)')); }, ALARM_RUN_TIMEOUT_MS);
+      }),
+    ]);
+    active.execution.assertActive();
+    await finishAlarmRun(claim, { totalAlarms: result.summary.total, triggeredCount: result.summary.triggered,
+      errorCount: result.summary.errors, durationMs: Date.now() - startTime,
+      status: (options.sources ? 'SOURCE_' : '') + (result.summary.errors ? 'PARTIAL' : 'SUCCESS') }, active.execution);
+    if (!options.sources) current.lastResult = result;
+    return result;
+  } catch (error) {
+    scope?.cancel();
+    log.error({ err: error }, 'Alarm execution failed');
+    if (claim) {
+      try { await finishAlarmRun(claim, { totalAlarms: 0, triggeredCount: 0, errorCount: 1,
+        durationMs: Date.now() - startTime, status: options.sources ? 'SOURCE_FAILED' : 'FAILED' }); }
+      catch (failure) { log.error({ err: failure }, 'Alarm finalization unavailable or ownership lost'); }
     }
-  } catch (err) {
-    log.warn({ err }, 'Could not clean up orphan locks (non-fatal)');
+    return failed((error as Error).message, (error as Error).message === 'License validation failed' ? 'LICENSE' : 'SYSTEM_ERROR');
+  } finally {
+    scope?.cancel();
+    if (timer !== undefined) clearTimeout(timer);
+    current.busy = false;
   }
 }
+async function evaluateAlarmRun(options: CheckOptions, startTime: number): Promise<AlarmCheckResult> {
+  await initLicense();
+  assertAlarmExecutionActive();
+  if (!isLicenseValid()) throw new Error('License validation failed');
+  const sourceErrors: Array<{ code: string; error: string }> = [];
+  let fortiAnalyzerConfigured = false;
 
-// ── Core runner ──────────────────────────────────────────────────────────────
-export async function runAlarmCheck(): Promise<AlarmCheckResult> {
-  const preflightStartedAt = Date.now();
+  const combined: EvaluationResult[] = [];
+
+  assertAlarmExecutionActive();
   try {
-    await initLicense();
-    if (!isLicenseValid()) {
-      log.warn('License invalid or grace period expired; skipping alarm evaluation');
-      await recordPreflightFailure('License validation failed', preflightStartedAt);
-      return {
-        success: false,
-        error: 'License validation failed',
-        summary: { total: 0, triggered: 0, skippedCooldown: 0, errors: 1 },
-        triggered: [],
-        errors: [{ code: 'LICENSE', error: 'License validation failed' }],
-      };
-    }
-  } catch (licenseErr) {
-    log.error({ err: licenseErr }, 'License validation failed before alarm evaluation');
-    await recordPreflightFailure('License validation failed', preflightStartedAt);
-    return {
-      success: false,
-      error: 'License validation failed',
-      summary: { total: 0, triggered: 0, skippedCooldown: 0, errors: 1 },
-      triggered: [],
-      errors: [{ code: 'LICENSE', error: 'License validation failed' }],
-    };
-  }
-
-  // Mutex: skip if already running (in-process guard)
-  if (checkStartTime !== null) {
-    const elapsed = Date.now() - checkStartTime;
-    if (elapsed < MAX_LOCK_DURATION_MS) {
-      log.info(
-        { elapsedSec: Math.round(elapsed / 1000) },
-        'Already running, skipping'
-      );
-      return (
-        lastResult ?? {
-          success: false,
-          error: 'Check already in progress',
-          summary: { total: 0, triggered: 0, skippedCooldown: 0, errors: 0 },
-          triggered: [],
-          errors: [],
-        }
-      );
-    }
-    log.warn(
-      { elapsedSec: Math.round(elapsed / 1000), maxLockSec: MAX_LOCK_DURATION_MS / 1000 },
-      'Stale lock detected, force resetting'
-    );
-  }
-
-  // DB-level guard: prevent concurrent runs from DIFFERENT module instances
-  // (e.g. health-check chunk and scheduler chunk each have separate in-process mutexes).
-  // Only check recent RUNNING locks — stale ones are cleaned up by AlarmScheduler before each tick.
-  try {
-    const recentRunning = await prisma.alarmCheckLog.findFirst({
-      where: {
-        status: 'RUNNING',
-        checkTime: { gte: new Date(Date.now() - MAX_LOCK_DURATION_MS) },
-      },
-      orderBy: { checkTime: 'desc' },
-    });
-    if (recentRunning) {
-      const ageS = Math.round((Date.now() - recentRunning.checkTime.getTime()) / 1000);
-      log.info({ ageSec: ageS }, 'DB guard: another instance recently started, skipping');
-      return (
-        lastResult ?? {
-          success: false,
-          error: 'Check already in progress (DB guard)',
-          summary: { total: 0, triggered: 0, skippedCooldown: 0, errors: 0 },
-          triggered: [],
-          errors: [],
-        }
-      );
-    }
-  } catch (dbGuardErr) {
-    // Non-fatal: if DB guard check fails, proceed with in-process mutex only
-    log.warn({ err: dbGuardErr }, 'DB guard check failed (non-fatal)');
-  }
-
-  checkStartTime = Date.now();
-  const startTime = checkStartTime;
-  log.info('Lock acquired');
-
-  // Insert RUNNING sentinel row — lets other instances detect us via DB guard above
-  let runLogId: string | null = null;
-  try {
-    const runLog = await prisma.alarmCheckLog.create({
-      data: {
-        checkTime: new Date(),
-        totalAlarms: 0,
-        triggeredCount: 0,
-        errorCount: 0,
-        durationMs: 0,
-        status: 'RUNNING',
-      },
-    });
-    runLogId = runLog.id;
-  } catch (sentinelErr) {
-    log.warn({ err: sentinelErr }, 'Could not insert RUNNING sentinel (non-fatal)');
-  }
-
-  try {
-    // Run independent sources first. NMS must not depend on FortiAnalyzer.
-    const GLOBAL_TIMEOUT_MS = 10 * 60 * 1000;
-    log.info({ timeoutSec: GLOBAL_TIMEOUT_MS / 1000 }, 'Starting evaluation');
-    const sourceErrors: Array<{ code: string; error: string }> = [];
-    let fortiAnalyzerConfigured = false;
-
-    const results = await Promise.race<EvaluationResult[]>([
-      (async () => {
-        const combined: EvaluationResult[] = [];
-
-        try {
-          const nmsEngine = new AlarmDetectionEngine(null);
-          combined.push(...await nmsEngine.evaluateNmsAlarms());
-        } catch (error) {
-          const message = (error as Error).message;
-          sourceErrors.push({ code: 'NMS_SOURCE', error: message });
-          log.error({ err: error }, 'NMS alarm source failed');
-        }
-
-        const config = await prisma.integrationConfig.findFirst({
-          where: { type: 'FORTIANALYZER', enabled: true },
-        });
-
-        if (!config) {
-          log.info({ source: 'FORTIANALYZER', reason: 'not-configured' }, 'Skipping optional alarm source; independent sources completed');
-          return combined;
-        }
-        fortiAnalyzerConfigured = true;
-
-        const faConfig = unprotectIntegrationConfig<{
-          host: string;
-          username?: string;
-          password?: string;
-        }>(config.config, 'FORTIANALYZER');
-
-        if (!faConfig.password) {
-          sourceErrors.push({ code: 'FORTIANALYZER_SOURCE', error: 'FortiAnalyzer password not configured' });
-          log.error('FortiAnalyzer password not configured; independent alarm sources completed');
-          return combined;
-        }
-
-        try {
-          const service = initSharedFortiAnalyzerService({
-            host: faConfig.host,
-            username: faConfig.username,
-            password: faConfig.password,
-          });
-          const engine = new AlarmDetectionEngine(service);
-          const fgService = await getOrInitFortiGateService();
-          if (fgService) {
-            engine.injectFortiGateService(fgService);
-            fgService.clearCmdbResponseCache();
-          }
-          combined.push(...await engine.evaluateAllAlarms({ includeNms: false }));
-        } catch (error) {
-          const message = (error as Error).message;
-          sourceErrors.push({ code: 'FORTIANALYZER_SOURCE', error: message });
-          log.error({ err: error }, 'FortiAnalyzer alarm source failed; preserving independent results');
-        }
-
-        return combined;
-      })(),
-      new Promise<never>((_, reject) =>
-        setTimeout(
-          () => reject(new Error('Alarm evaluation timeout (10 minutes)')),
-          GLOBAL_TIMEOUT_MS
-        )
-      ),
-    ]).catch((err) => {
-      // Log timeout or any other error immediately
-      log.error({ err }, 'Evaluation failed');
-      throw err;
-    });
-
-    const triggered = results.filter((r) => r.triggered);
-    const resultErrors = results.filter((r) => r.error && r.error !== 'cooldown-active');
-    const errors = [
-      ...resultErrors.map((result) => ({ code: result.alarmCode, error: result.error })),
-      ...sourceErrors,
-    ];
-    const cooldowns = results.filter((r) => r.error === 'cooldown-active');
-    const durationMs = Date.now() - startTime;
-
-    // ── Build metrics ──────────────────────────────────────────────────────
-    const severityStats: Record<string, { triggered: number; errors: number }> = {};
-    const categoryStats: Record<string, { triggered: number; total: number }> = {};
-
-    for (const result of results) {
-      const alarmDef = await prisma.alarmDefinition.findFirst({
-        where: { code: result.alarmCode },
-        select: { severity: true, category: true },
-      });
-      if (alarmDef) {
-        if (!severityStats[alarmDef.severity])
-          severityStats[alarmDef.severity] = { triggered: 0, errors: 0 };
-        if (result.triggered) severityStats[alarmDef.severity].triggered++;
-        if (result.error && result.error !== 'cooldown-active')
-          severityStats[alarmDef.severity].errors++;
-
-        if (!categoryStats[alarmDef.category])
-          categoryStats[alarmDef.category] = { triggered: 0, total: 0 };
-        categoryStats[alarmDef.category].total++;
-        if (result.triggered) categoryStats[alarmDef.category].triggered++;
-      }
-    }
-
-    const durationSec = Math.round(durationMs / 1000);
-    const alarmsPerSec = parseFloat((results.length / (durationMs / 1000)).toFixed(1));
-    log.info(
-      { durationSec, triggered: triggered.length, errors: errors.length, cooldowns: cooldowns.length },
-      'Evaluation complete'
-    );
-    if (errors.length > 0) {
-      log.warn({ errors }, 'Alarm evaluation reported errors');
-    }
-    log.info({ alarmsPerSec }, 'Performance metric');
-
-    // ── Write to DB (update RUNNING → final status) ────────────────────────
-    const finalLogData = {
-      totalAlarms: results.length,
-      triggeredCount: triggered.length,
-      errorCount: errors.length,
-      durationMs,
-      status: errors.length > 0 ? 'PARTIAL' : 'SUCCESS',
-    };
-    if (runLogId) {
-      await prisma.alarmCheckLog.update({ where: { id: runLogId }, data: finalLogData });
-    } else {
-      await prisma.alarmCheckLog.create({ data: { checkTime: new Date(), ...finalLogData } });
-    }
-    log.info('Logged to alarm_check_logs');
-
-    // ── DLQ processing ─────────────────────────────────────────────────────
-    try {
-      const dlqStats = await getDLQStats();
-      if (dlqStats.pending > 0) {
-        log.info({ pending: dlqStats.pending }, 'DLQ has pending notifications, processing');
-        const dlqResult = await processDLQ();
-        log.info(
-          { succeeded: dlqResult.succeeded, failed: dlqResult.failed, permanentlyFailed: dlqResult.permanentlyFailed },
-          'DLQ processing complete'
-        );
-      }
-      await cleanupDLQ();
-    } catch (dlqErr) {
-      log.error({ err: dlqErr }, 'DLQ error (non-fatal)');
-    }
-
-    // ── FA health alert ─────────────────────────────────────────
-    // After every check, if FA has been failing, notify ops team once per hour.
-    if (fortiAnalyzerConfigured) {
-      maybeSendFAHealthAlert().catch((err) =>
-        log.error({ err }, 'maybeSendFAHealthAlert failed (non-fatal)')
-      );
-    }
-
-    lastResult = {
-      success: true,
-      summary: {
-        total: results.length,
-        triggered: triggered.length,
-        skippedCooldown: cooldowns.length,
-        errors: errors.length,
-      },
-      metrics: {
-        durationMs,
-        alarmsPerSecond: alarmsPerSec,
-        severityBreakdown: severityStats,
-        categoryBreakdown: categoryStats,
-      },
-      triggered: triggered.map((r) => ({
-        code: r.alarmCode,
-        matchCount: r.matchCount,
-        sampleEvents: r.events.slice(0, 2),
-      })),
-      errors,
-    };
-
-    return lastResult;
+    const nmsEngine = new AlarmDetectionEngine(null);
+    if (!options.sources || options.sources.includes('nms')) combined.push(...await nmsEngine.evaluateNmsAlarms());
   } catch (error) {
-    const durationMs = Date.now() - startTime;
-    log.error(
-      { err: error, durationSec: Math.round(durationMs / 1000) },
-      'Error during alarm check'
-    );
-
-    // Timeout detection - force cleanup if stuck
-    const isTimeout = (error as Error).message.includes('timeout');
-    if (isTimeout) {
-      log.warn('Timeout detected - forcing lock cleanup');
-      checkStartTime = null; // Force reset the in-process lock
-    }
-
-    // ── Write FAILED log (update RUNNING → FAILED) ────────────────────────
-    // This is a plain async call — guaranteed to run because we're NOT inside
-    // an HTTP handler that could be dropped by the connection layer.
-    try {
-      const failedLogData = {
-        totalAlarms: 0,
-        triggeredCount: 0,
-        errorCount: 1,
-        durationMs,
-        status: 'FAILED',
-      };
-      if (runLogId) {
-        await prisma.alarmCheckLog.update({ where: { id: runLogId }, data: failedLogData });
-      } else {
-        await prisma.alarmCheckLog.create({ data: { checkTime: new Date(), ...failedLogData } });
-      }
-      log.info({ durationMs }, 'Logged FAILED check to alarm_check_logs');
-    } catch (logErr) {
-      log.error({ err: logErr }, 'Failed to write FAILED log');
-    }
-
-    return {
-      success: false,
-      error: (error as Error).message,
-      summary: { total: 0, triggered: 0, skippedCooldown: 0, errors: 1 },
-      triggered: [],
-      errors: [{ code: 'SYSTEM_ERROR', error: (error as Error).message }],
-    };
-  } finally {
-    // ── Always release lock ────────────────────────────────────────────────
-    checkStartTime = null;
-    log.info('Lock released');
+    const message = (error as Error).message;
+    sourceErrors.push({ code: 'NMS_SOURCE', error: message });
+    log.error({ err: error }, 'NMS alarm source failed');
   }
+
+  assertAlarmExecutionActive();
+  let service: ReturnType<typeof initSharedFortiAnalyzerService> | null = null;
+  let fortiAnalyzerConfigId: string | undefined;
+  let fortiAnalyzerRevision: string | undefined;
+  assertAlarmExecutionActive();
+  try {
+    const config = !options.sources || options.sources.includes('fortianalyzer') ? await prisma.integrationConfig.findFirst({
+      where: { type: 'FORTIANALYZER', enabled: true },
+    }) : null;
+    if (config) {
+      fortiAnalyzerConfigured = true;
+      fortiAnalyzerConfigId = config.id;
+      fortiAnalyzerRevision = getFortiAnalyzerRevision(config);
+      service = initSharedFortiAnalyzerService(readFortiAnalyzerProfile(config.config));
+    } else {
+      log.info({ source: 'FORTIANALYZER', reason: 'not-configured' }, 'Skipping optional alarm source');
+    }
+  } catch (error) {
+    sourceErrors.push({ code: 'FORTIANALYZER_SOURCE', error: (error as Error).message });
+    log.error({ err: error }, 'FortiAnalyzer configuration failed; continuing independent sources');
+  }
+
+  // The existing engine dispatches VMware/FG even when FA could not initialize.
+  // NMS already ran above and must not be evaluated twice.
+  assertAlarmExecutionActive();
+  try {
+    const engine = new AlarmDetectionEngine(service, { fortiAnalyzerConfigId, fortiAnalyzerRevision });
+    combined.push(...await engine.evaluateAllAlarms({ includeNms: false, ...options }));
+  } catch (error) {
+    sourceErrors.push({ code: 'ALARM_ENGINE', error: (error as Error).message });
+    log.error({ err: error }, 'Alarm engine failed; preserving independent results');
+  }
+
+  const results = combined;
+  assertAlarmExecutionActive();
+  const triggered = results.filter((r) => r.triggered);
+  const resultErrors = results.filter((r) => r.error && r.error !== 'cooldown-active');
+  const errors = [
+    ...resultErrors.map((result) => ({ code: result.alarmCode, error: result.error,
+      ...(result.target ? { target: result.target } : {}) })),
+    ...sourceErrors,
+  ];
+  const cooldowns = results.filter((r) => r.error === 'cooldown-active');
+  const durationMs = Date.now() - startTime;
+
+  // ── Build metrics ──────────────────────────────────────────────────────
+  const severityStats: Record<string, { triggered: number; errors: number }> = {};
+  const categoryStats: Record<string, { triggered: number; total: number }> = {};
+
+  for (const result of results) {
+    const alarmDef = await prisma.alarmDefinition.findFirst({
+      where: { code: result.alarmCode },
+      select: { severity: true, category: true },
+    });
+    if (alarmDef) {
+      if (!severityStats[alarmDef.severity])
+        severityStats[alarmDef.severity] = { triggered: 0, errors: 0 };
+      if (result.triggered) severityStats[alarmDef.severity].triggered++;
+      if (result.error && result.error !== 'cooldown-active')
+        severityStats[alarmDef.severity].errors++;
+
+      if (!categoryStats[alarmDef.category])
+        categoryStats[alarmDef.category] = { triggered: 0, total: 0 };
+      categoryStats[alarmDef.category].total++;
+      if (result.triggered) categoryStats[alarmDef.category].triggered++;
+    }
+  }
+
+  const durationSec = Math.round(durationMs / 1000);
+  const alarmsPerSec = parseFloat((results.length / (durationMs / 1000)).toFixed(1));
+  log.info(
+    { durationSec, triggered: triggered.length, errors: errors.length, cooldowns: cooldowns.length },
+    'Evaluation complete'
+  );
+  if (errors.length > 0) {
+    log.warn({ errors }, 'Alarm evaluation reported errors');
+  }
+  log.info({ alarmsPerSec }, 'Performance metric');
+
+  // ── DLQ processing ─────────────────────────────────────────────────────
+  try {
+    const dlqStats = await getDLQStats();
+    assertAlarmExecutionActive();
+    if (dlqStats.pending > 0) {
+      log.info({ pending: dlqStats.pending }, 'DLQ has pending notifications, processing');
+      const dlqResult = await processDLQ();
+      log.info(
+        { succeeded: dlqResult.succeeded, failed: dlqResult.failed, permanentlyFailed: dlqResult.permanentlyFailed },
+        'DLQ processing complete'
+      );
+    }
+    assertAlarmExecutionActive();
+    await cleanupDLQ();
+  } catch (dlqErr) {
+    log.error({ err: dlqErr }, 'DLQ error (non-fatal)');
+  }
+
+  // ── FA health alert ─────────────────────────────────────────
+  // After every check, if FA has been failing, notify ops team once per hour.
+  if (fortiAnalyzerConfigured) {
+    assertAlarmExecutionActive();
+    await maybeSendFAHealthAlert();
+  }
+
+  return {
+    success: true,
+    summary: {
+      total: results.length,
+      triggered: triggered.length,
+      skippedCooldown: cooldowns.length,
+      errors: errors.length,
+    },
+    metrics: {
+      durationMs,
+      alarmsPerSecond: alarmsPerSec,
+      severityBreakdown: severityStats,
+      categoryBreakdown: categoryStats,
+    },
+    triggered: triggered.map((r) => ({
+      code: r.alarmCode,
+      matchCount: r.matchCount,
+      sampleEvents: r.events.slice(0, 2),
+      ...(r.target ? { target: r.target } : {}),
+    })),
+    errors,
+  };
+
+
 }

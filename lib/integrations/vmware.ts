@@ -1,3 +1,20 @@
+type VMwareTaskResponse = {
+  task?: string;
+  id?: string;
+  operation?: string;
+  type?: string;
+  status?: string;
+  state?: string;
+  target?: { type?: string; name?: string };
+  entity?: { name?: string };
+  user?: string;
+  start_time?: string;
+  startTime?: string;
+  completion_time?: string;
+  completeTime?: string;
+  error?: { localized_message?: string; message?: string };
+};
+
 /**
  * VMware vCenter Integration Service
  * 
@@ -10,20 +27,23 @@
  */
 
 import { PrismaClient, DeviceType, DeviceStatus, DeviceCriticality } from '@prisma/client';
-import { execSync } from 'child_process';
+import { runVMwarePython, isVMwarePythonError, vmwareCollectionErrorMessage, type VMwareSnapshot } from './vmware-python';
+import { SourceQueryError, throwIfSourceCancelled } from './source-query-error';
+import { inventorySyncOutcome, type InventorySyncOutcome } from './sync-outcome';
+import { inventorySourceScope } from './inventory-source-scope';
 import { createLogger } from '@/lib/logger';
 import { secureFetch } from '@/lib/security/tls';
+import { cacheVMwareValue, getVMwareCachedValue, getVMwareCacheScope, invalidateVMwareCache, normalizeVMwareHost } from './vmware-cache';
 
 const log = createLogger('vmware');
 
 const prisma = new PrismaClient();
 
-// In-memory cache for snapshots
-const snapshotCache = new Map<string, { data: any[]; timestamp: number }>();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 // VMware API Types
 export interface VMwareConfig {
+  integrationId?: string;
   host: string;
   username: string;
   password: string;
@@ -141,8 +161,7 @@ export interface VMSprawlResult {
   recommendation: string;
 }
 
-export interface SyncResult {
-  success: boolean;
+export interface SyncResult extends InventorySyncOutcome {
   clustersCreated: number;
   clustersUpdated: number;
   hostsCreated: number;
@@ -158,11 +177,12 @@ export interface SyncResult {
 export class VMwareService {
   private config: VMwareConfig;
   private sessionCookie: string | null = null;
+  private sessionEndpoint = '/api/session';
   private baseUrl: string;
 
   constructor(config: VMwareConfig) {
-    this.config = config;
-    this.baseUrl = `https://${config.host}/sdk`;
+    this.config = { ...config, host: normalizeVMwareHost(config.host), enabledModules: { ...config.enabledModules } };
+    this.baseUrl = `https://${this.config.host}/sdk`;
   }
 
   /**
@@ -319,6 +339,7 @@ export class VMwareService {
     minutesBack: number,
     eventTypes?: string[]
   ): Promise<string | null> {
+    void eventTypes; // SOAP collection is unfiltered; callers filter event types locally.
     const now = new Date();
     const startTime = new Date(now.getTime() - minutesBack * 60 * 1000);
     const beginTime = startTime.toISOString();
@@ -693,15 +714,16 @@ export class VMwareService {
   /**
    * Authenticate with vCenter
    */
-  async authenticate(): Promise<boolean> {
+  async authenticate(options: { signal?: AbortSignal } = {}): Promise<boolean> {
     try {
-      // Disable SSL verification for self-signed certificates (common in vCenter)
+      if (options.signal) throwIfSourceCancelled(options.signal);
 
       // Try vSphere 7+ REST API authentication first (/api/session)
       log.info({ host: this.config.host, username: this.config.username }, 'Authenticating');
       
       let response = await secureFetch('VMWARE', `https://${this.config.host}/api/session`, {
         method: 'POST',
+        signal: options.signal,
         headers: {
           'Authorization': `Basic ${Buffer.from(`${this.config.username}:${this.config.password}`).toString('base64')}`,
           'Content-Type': 'application/json',
@@ -709,9 +731,14 @@ export class VMwareService {
       });
 
       if (response.ok) {
-        const sessionId = await response.text();
+        const raw = await response.text();
+        if (options.signal) throwIfSourceCancelled(options.signal);
+        let sessionId: unknown;
+        try { sessionId = JSON.parse(raw); } catch { sessionId = raw; }
+        if (typeof sessionId !== 'string' || !sessionId.trim() || /[\r\n]/.test(sessionId)) return false;
         // vSphere 7 returns session ID as plain text with quotes
-        this.sessionCookie = sessionId.replace(/"/g, '');
+        this.sessionCookie = sessionId;
+        this.sessionEndpoint = '/api/session';
         log.info('Authentication successful (vSphere 7+ API)');
         return true;
       }
@@ -719,8 +746,10 @@ export class VMwareService {
       log.info({ status: response.status }, 'vSphere 7 API failed, trying legacy endpoint');
 
       // Try legacy REST API authentication (vCenter 6.5-6.7)
+      if (options.signal) throwIfSourceCancelled(options.signal);
       response = await secureFetch('VMWARE', `https://${this.config.host}/rest/com/vmware/cis/session`, {
         method: 'POST',
+        signal: options.signal,
         headers: {
           'Authorization': `Basic ${Buffer.from(`${this.config.username}:${this.config.password}`).toString('base64')}`,
         },
@@ -728,14 +757,15 @@ export class VMwareService {
 
       if (response.ok) {
         const data = await response.json() as { value: string };
+        if (options.signal) throwIfSourceCancelled(options.signal);
+        if (typeof data?.value !== 'string' || !data.value.trim() || /[\r\n]/.test(data.value)) return false;
         this.sessionCookie = data.value;
+        this.sessionEndpoint = '/rest/com/vmware/cis/session';
         log.info('Authentication successful (legacy API)');
         return true;
       }
 
       log.error({ status: response.status, statusText: response.statusText }, 'Authentication failed');
-      const errorBody = await response.text();
-      log.error({ errorBody }, 'Error body');
       return false;
     } catch (error) {
       log.error({ err: error }, 'Authentication error');
@@ -870,7 +900,7 @@ export class VMwareService {
   /**
    * Parse tasks response and filter by time
    */
-  private parseTasksResponse(data: any, minutesBack: number): Array<{
+  private parseTasksResponse(data: VMwareTaskResponse[] | { value?: VMwareTaskResponse[] }, minutesBack: number): Array<{
     taskId: string;
     type: string;
     state: string;
@@ -885,11 +915,11 @@ export class VMwareService {
     const tasks = Array.isArray(data) ? data : (data.value || []);
 
     return tasks
-      .filter((t: any) => {
-        const startTime = new Date(t.start_time || t.startTime);
+      .filter((t) => {
+        const startTime = new Date((t.start_time || t.startTime)!);
         return startTime >= cutoff;
       })
-      .map((t: any) => ({
+      .map((t) => ({
         taskId: t.task || t.id || '',
         type: t.operation || t.type || '',
         state: t.status || t.state || '',
@@ -909,16 +939,19 @@ export class VMwareService {
     // vSphere 7 returns array directly
     const result = await this.restRequest<Array<{
       cluster: string;
+      resourcePool?: VMwareCluster['resourcePool'];
+      host?: VMwareCluster['host'];
+      summary?: VMwareCluster['summary'];
       name: string;
       ha_enabled?: boolean;
       drs_enabled?: boolean;
     }>>('vcenter/cluster');
 
     // Handle both vSphere 7 array format and legacy { value: [...] } format
-    const clusters = Array.isArray(result) ? result : (result as any).value || [];
+    const clusters = Array.isArray(result) ? result : (result as { value?: typeof result }).value || [];
 
-    return clusters.map((c: any) => ({
-      cluster: { value: c.cluster || c.cluster?.value },
+    return clusters.map((c) => ({
+      cluster: { value: c.cluster || (c.cluster as unknown as { value: string })?.value },
       name: c.name,
       resourcePool: c.resourcePool,
       host: c.host,
@@ -931,6 +964,24 @@ export class VMwareService {
     }));
   }
 
+  /** Cluster screen: real membership, health and physical resources from one SDK collection. */
+  async fetchClusterWorkspace() {
+    return runVMwarePython('clusters', this.config);
+  }
+
+  /** ESXi workspace includes cluster membership and standalone hosts with real quick stats. */
+  async fetchHostWorkspace() {
+    return runVMwarePython('hostWorkspace', this.config);
+  }
+
+  async fetchVMWorkspace() {
+    return runVMwarePython('vmWorkspace', this.config);
+  }
+
+  async fetchDatastoreWorkspace() {
+    return runVMwarePython('datastoreWorkspace', this.config);
+  }
+
   /**
    * Fetch ESXi hosts
    * Note: vSphere 7 REST API provides only basic info (name, connection state).
@@ -939,46 +990,35 @@ export class VMwareService {
   async fetchHosts(): Promise<VMwareHost[]> {
     // vSphere 7 returns array directly with snake_case fields
     const result = await this.restRequest<Array<{
-      host: string;  // e.g., "host-1001"
+      host: string | { value: string };  // e.g., "host-1001"
+      parent?: VMwareHost['parent'];
       name: string;
       connection_state?: string;
       power_state?: string;
     }>>('vcenter/host');
 
     // Handle both vSphere 7 array format and legacy { value: [...] } format
-    const hostList = Array.isArray(result) ? result : (result as any).value || [];
-
-    // Try to get detailed host info via Python/PyVmomi (best effort)
-    let hostDetails: any[] = [];
-    try {
-      const scriptPath = '/app/scripts/get-host-details.py';
-      const pyResult = execSync(
-        `python3 "${scriptPath}" "${this.config.host}" "${this.config.username}" "${this.config.password}"`,
-        { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024, timeout: 15000, killSignal: 'SIGKILL' }
-      );
-      const data = JSON.parse(pyResult);
-      if (data.success && data.hosts) {
-        hostDetails = data.hosts;
-        log.info({ count: hostDetails.length }, 'Fetched detailed host info via PyVmomi');
-      } else if (data.error) {
-        log.warn({ error: data.error }, 'PyVmomi host details error');
-      }
-    } catch (err) {
-      // PyVmomi failed - will use REST API fallback
-      log.warn('PyVmomi host details unavailable, using REST API fallback');
+    const hostList = Array.isArray(result) ? result : (result as { value?: typeof result }).value;
+    if (!Array.isArray(hostList)) {
+      throw new SourceQueryError('VMWARE_HELPER_SOURCE_INCOMPLETE', 'VMware host inventory is invalid');
     }
 
-    // Create a map for quick lookup by name
-    const hostDetailsMap = new Map<string, any>();
-    for (const hd of hostDetails) {
-      hostDetailsMap.set(hd.name, hd);
+    // Hardware is an explicit required source, not an invented zero-capacity fallback.
+    const hostDetails = await runVMwarePython('hosts', this.config);
+    const hostDetailsMap = new Map(hostDetails.map(details => [details.host_moid, details]));
+    for (const host of hostList) {
+      const id = typeof host.host === 'string' ? host.host : host.host?.value;
+      if (!id || !hostDetailsMap.has(id)) {
+        throw new SourceQueryError('VMWARE_HELPER_SOURCE_INCOMPLETE', 'VMware host enrichment is incomplete');
+      }
     }
 
     // Map to VMwareHost interface
-    return hostList.map((h: any) => {
-      const details = hostDetailsMap.get(h.name) || {};
+    return hostList.map((h) => {
+      const id = typeof h.host === 'string' ? h.host : h.host?.value;
+      const details = hostDetailsMap.get(id)!;
       return {
-        host: { value: h.host || h.host?.value },
+        host: { value: id },
         name: h.name,
         parent: h.parent,
         summary: {
@@ -1004,7 +1044,8 @@ export class VMwareService {
    * Get detailed host information
    * vSphere 7 REST API limitation: full hardware info requires SOAP API (PyVmomi)
    */
-  private async getHostDetail(hostId: string): Promise<any | null> {
+  private async getHostDetail(hostId: string): Promise<null> {
+    void hostId; // Reserved by this legacy SOAP extension point.
     // Placeholder for future SOAP API integration
     return null;
   }
@@ -1426,8 +1467,7 @@ export class VMwareService {
       log.info({ count: recentSnapshots.length, timeWindowMinutes }, 'Found recently created snapshots');
       return recentSnapshots;
     } catch (error) {
-      log.error({ err: error }, 'Error fetching recently created snapshots');
-      return [];
+      throw error;
     }
   }
 
@@ -1443,10 +1483,12 @@ export class VMwareService {
       cpu_count?: number;
       memory_size_MiB?: number;
       host?: string;  // Host moref
+      guest_OS?: string;
+      summary?: VMwareVM['summary'];
     }>>('vcenter/vm');
 
     // Handle both vSphere 7 array format and legacy { value: [...] } format
-    const vms = Array.isArray(result) ? result : (result as any).value || [];
+    const vms = Array.isArray(result) ? result : (result as { value?: typeof result }).value || [];
 
     // Build VM->Host mapping by querying each host's VMs
     // This is more efficient than querying each VM individually
@@ -1465,14 +1507,15 @@ export class VMwareService {
       }
       log.info({ count: vmToHostMap.size }, 'Built VM->Host mapping');
     } catch (err) {
+      if (isVMwarePythonError(err)) throw err;
       log.warn({ err: (err as Error).message }, 'Failed to build VM->Host mapping');
     }
 
     // Fetch detailed info for VMs (IP address from guest identity)
     // Note: This makes multiple API calls but provides complete data
     const vmsWithDetails = await Promise.all(
-      vms.map(async (v: any) => {
-        const vmId = v.vm || v.vm?.value;
+      vms.map(async (v) => {
+        const vmId = v.vm || (v.vm as unknown as { value: string })?.value;
         
         // Get host from mapping
         const hostMoref = vmToHostMap.get(vmId);
@@ -1480,9 +1523,9 @@ export class VMwareService {
         // Try to get guest identity for IP address (requires VMware Tools)
         let guestIP: string | undefined;
         try {
-          const guestIdentity = await this.restRequest<any>(`vcenter/vm/${vmId}/guest/identity`);
+          const guestIdentity = await this.restRequest<{ ip_address?: string; primary_ip_address?: string }>(`vcenter/vm/${vmId}/guest/identity`);
           guestIP = guestIdentity?.ip_address || guestIdentity?.primary_ip_address;
-        } catch (err) {
+        } catch {
           // Guest identity not available (VMware Tools not running or not installed)
         }
 
@@ -1517,13 +1560,17 @@ export class VMwareService {
       type?: string;
       capacity?: number;
       free_space?: number;
+      parent?: VMwareDatastore['parent'];
+      info?: VMwareDatastore['info'];
+      summary?: VMwareDatastore['summary'];
+      accessible?: boolean;
     }>>('vcenter/datastore');
 
     // Handle both vSphere 7 array format and legacy { value: [...] } format
-    const datastores = Array.isArray(result) ? result : (result as any).value || [];
+    const datastores = Array.isArray(result) ? result : (result as { value?: typeof result }).value || [];
 
-    return datastores.map((d: any) => ({
-      datastore: { value: d.datastore || d.datastore?.value },
+    return datastores.map((d) => ({
+      datastore: { value: d.datastore || (d.datastore as unknown as { value: string })?.value },
       name: d.name,
       parent: d.parent,
       info: {
@@ -1568,6 +1615,7 @@ export class VMwareService {
     const startTime = Date.now();
     const result: SyncResult = {
       success: false,
+      status: 'failed', itemsProcessed: 0, itemsCreated: 0, itemsUpdated: 0, errorCount: 0,
       clustersCreated: 0,
       clustersUpdated: 0,
       hostsCreated: 0,
@@ -1580,6 +1628,7 @@ export class VMwareService {
     };
 
     try {
+      const sourceScope = inventorySourceScope('VMWARE_VCENTER', this.config.integrationId, this.config.host);
       // Authenticate
       const authenticated = await this.authenticate();
       if (!authenticated) {
@@ -1594,6 +1643,7 @@ export class VMwareService {
         for (const cluster of clusters) {
           try {
             const clusterData = {
+              sourceScope,
               organizationId,
               vcenterId: cluster.cluster.value,
               datacenterName: cluster.name.split('/')[0] || 'Unknown',
@@ -1608,7 +1658,7 @@ export class VMwareService {
             };
 
             const existing = await prisma.vMwareCluster.findFirst({
-              where: { vcenterId: cluster.cluster.value },
+              where: { sourceScope, vcenterId: cluster.cluster.value },
             });
 
             if (existing) {
@@ -1633,7 +1683,12 @@ export class VMwareService {
         
         for (const host of hosts) {
           try {
+            const cluster = host.parent ? await prisma.vMwareCluster.findFirst({
+              where: { sourceScope, vcenterId: host.parent.value },
+            }) : null;
             const hostData = {
+              vmwareSourceScope: sourceScope,
+              ...(host.parent ? { vmwareClusterId: cluster?.id ?? null } : {}),
               name: host.name,
               type: DeviceType.VIRTUAL_HOST,
               vendor: host.summary?.vendor || null,
@@ -1651,7 +1706,7 @@ export class VMwareService {
             };
 
             const existing = await prisma.device.findFirst({
-              where: { vmwareMoref: host.host.value },
+              where: { vmwareSourceScope: sourceScope, vmwareMoref: host.host.value },
             });
 
             if (existing) {
@@ -1678,23 +1733,25 @@ export class VMwareService {
           try {
             // Find parent host (ESXi host or cluster)
             let hostId: string | null = null;
+            let clusterId: string | null = null;
             if (vm.parent) {
               const host = await prisma.device.findFirst({
-                where: { vmwareMoref: vm.parent.value },
+                where: { vmwareSourceScope: sourceScope, vmwareMoref: vm.parent.value },
               });
               hostId = host?.id || null;
+              clusterId = host?.vmwareClusterId ?? null;
             }
 
             // Find cluster
-            let clusterId: string | null = null;
-            if (vm.parent) {
+            if (vm.parent && !clusterId) {
               const cluster = await prisma.vMwareCluster.findFirst({
-                where: { vcenterId: vm.parent.value },
+                where: { sourceScope, vcenterId: vm.parent.value },
               });
               clusterId = cluster?.id || null;
             }
 
             const vmData = {
+              vmwareSourceScope: sourceScope,
               name: vm.name,
               type: DeviceType.VIRTUAL_MACHINE,
               vendor: 'VMware' as const,
@@ -1720,7 +1777,7 @@ export class VMwareService {
             };
 
             const existing = await prisma.device.findFirst({
-              where: { vmwareMoref: vm.vm.value },
+              where: { vmwareSourceScope: sourceScope, vmwareMoref: vm.vm.value },
             });
 
             if (existing) {
@@ -1747,10 +1804,10 @@ export class VMwareService {
           try {
             await prisma.vMwareDatastore.upsert({
               where: {
-                id: ds.datastore.value, // Using moref as ID for simplicity
+                sourceScope_vcenterId: { sourceScope, vcenterId: ds.datastore.value },
               },
               create: {
-                id: ds.datastore.value,
+                sourceScope,
                 organizationId,
                 vcenterId: ds.datastore.value,
                 name: ds.name,
@@ -1773,38 +1830,79 @@ export class VMwareService {
         }
       }
 
-      result.success = true;
     } catch (error) {
       result.errors.push(`VMware sync failed: ${(error as Error).message}`);
+    } finally {
+      Object.assign(result, inventorySyncOutcome(result.clustersCreated + result.hostsCreated + result.vmsCreated,
+        result.clustersUpdated + result.hostsUpdated + result.vmsUpdated, result.datastoresProcessed, result.errors));
+      result.duration = Date.now() - startTime;
     }
 
-    result.duration = Date.now() - startTime;
     return result;
   }
 
   /**
    * Get connection status
    */
-  async getStatus(): Promise<{ connected: boolean; version?: string; error?: string }> {
+  async getStatus(options: { signal?: AbortSignal } = {}): Promise<{ connected: boolean; version?: string; error?: string }> {
     try {
-      const authenticated = await this.authenticate();
+      const authenticated = await this.authenticate(options);
       if (!authenticated) {
         return { connected: false, error: 'Authentication failed' };
       }
 
       // Try to get version info
+      if (options.signal) throwIfSourceCancelled(options.signal);
       const response = await secureFetch('VMWARE', `https://${this.config.host}/rest/appliance/version`, {
+        signal: options.signal,
         headers: { 'Authorization': `Basic ${Buffer.from(`${this.config.username}:${this.config.password}`).toString('base64')}` },
       });
 
       if (response.ok) {
         const data = await response.json() as { version: string };
+        if (options.signal) throwIfSourceCancelled(options.signal);
         return { connected: true, version: data.version };
       }
 
       return { connected: true };
     } catch (error) {
       return { connected: false, error: (error as Error).message };
+    }
+  }
+
+  /** Close only this client's owned REST session, preserving its modern/legacy endpoint. */
+  async closeSession(options: { signal?: AbortSignal } = {}): Promise<void> {
+    const session = this.sessionCookie;
+    if (!session) return;
+    try {
+      const response = await secureFetch('VMWARE', `https://${this.config.host}${this.sessionEndpoint}`, {
+        method: 'DELETE', headers: { 'vmware-api-session-id': session }, signal: options.signal,
+      });
+      if (!response.ok) throw new Error('VMware session cleanup failed');
+    } finally {
+      if (this.sessionCookie === session) this.sessionCookie = null;
+    }
+  }
+
+  /** Verify the same required transports used by collection, without warming saved-profile caches. */
+  async testConnection(): Promise<{ connected: boolean; version?: string; error?: string; code?: string }> {
+    try {
+      await runVMwarePython('preflight');
+      const status = await this.getStatus();
+      if (!status.connected) return { connected: false, error: 'vCenter kimlik doğrulaması başarısız.' };
+      const collections = await Promise.allSettled([
+        this.fetchHosts(),
+        this.fetchAllSnapshots({ bypassCache: true, cacheResult: false }),
+      ]);
+      const failed = collections.find(result => result.status === 'rejected');
+      if (failed?.status === 'rejected') throw failed.reason;
+      return { connected: true, version: status.version };
+    } catch (error) {
+      return { connected: false, error: vmwareCollectionErrorMessage(error),
+        ...(isVMwarePythonError(error) ? { code: error.code } : {}) };
+    } finally {
+      try { await this.closeSession(); }
+      catch { log.warn('Failed to close the VMware connection-test session'); }
     }
   }
 
@@ -2026,7 +2124,7 @@ export class VMwareService {
           log.info({ count: powerOffEvents.length }, 'Found power-off events (filtered)');
           return powerOffEvents;
         }
-      } catch (restError) {
+      } catch {
         log.info('REST Events API not available, using SOAP EventManager');
         
         // Fallback to SOAP API
@@ -2046,101 +2144,24 @@ export class VMwareService {
   /**
    * Get all snapshots for all VMs (batch operation)
    */
-  async fetchAllSnapshots(): Promise<Array<{
-    id: string;
-    vmId: string;
-    vmName: string;
-    name: string;
-    description: string;
-    createTime: string;
-    state: string;
-    size: number;
-  }>> {
-    try {
-      const cacheKey = 'all_snapshots';
-      const now = Date.now();
-      
-      // Check cache
-      const cached = snapshotCache.get(cacheKey);
-      if (cached && (now - cached.timestamp) < CACHE_TTL) {
-        log.info('Returning cached snapshots');
-        return cached.data;
-      }
-      
-      // Use Python script to fetch all snapshots at once
-      const scriptPath = '/app/scripts/get-snapshots.py';
-      
-      const result = execSync(
-        `python3 ${scriptPath} "${this.config.host}" "${this.config.username}" "${this.config.password}"`,
-        { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024, timeout: 30000, killSignal: 'SIGKILL' }
-      );
-      
-      const data = JSON.parse(result);
-      
-      if (!data.success) {
-        log.error({ error: data.error }, 'Batch snapshot fetch error');
-        return [];
-      }
-      
-      const snapshots = data.snapshots || [];
-      
-      // Cache result
-      snapshotCache.set(cacheKey, { data: snapshots, timestamp: now });
-      log.info({ count: snapshots.length }, 'Cached snapshots');
-      
-      return snapshots;
-    } catch (error) {
-      log.error({ err: error }, 'Error fetching all snapshots');
-      return [];
-    }
+  async fetchAllSnapshots(options: { bypassCache?: boolean; cacheResult?: boolean } = {}): Promise<VMwareSnapshot[]> {
+    const scope = getVMwareCacheScope(this.config);
+    const cached = options.bypassCache ? undefined : getVMwareCachedValue<VMwareSnapshot[]>(scope, 'all_snapshots');
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) return cached.data;
+    const snapshots = await runVMwarePython('snapshots', this.config);
+    if (options.cacheResult !== false) cacheVMwareValue(scope, 'all_snapshots', snapshots, CACHE_TTL);
+    return snapshots;
   }
 
-  /**
-   * Get snapshots for a VM
-   */
-  async getSnapshots(vmId: string): Promise<Array<{
-    id: string;
-    name: string;
-    description: string;
-    createTime: string;
-    state: string;
-    size: number;
-  }>> {
-    try {
-      const cacheKey = `snapshots_${vmId}`;
-      const now = Date.now();
-      
-      // Check cache
-      const cached = snapshotCache.get(cacheKey);
-      if (cached && (now - cached.timestamp) < CACHE_TTL) {
-        return cached.data;
-      }
-      
-      // vSphere 8: Use PyVmomi for reliable snapshot access
-      const scriptPath = '/app/scripts/get-snapshots.py';
-      
-      const result = execSync(
-        `python3 ${scriptPath} "${this.config.host}" "${this.config.username}" "${this.config.password}" "${vmId}"`,
-        { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024, timeout: 30000, killSignal: 'SIGKILL' }
-      );
-      
-      const data = JSON.parse(result);
-      
-      if (!data.success) {
-        log.error({ error: data.error }, 'Snapshot fetch error');
-        return [];
-      }
-      
-      const snapshots = data.snapshots || [];
-      
-      // Cache result
-      snapshotCache.set(cacheKey, { data: snapshots, timestamp: now });
-      
-      return snapshots;
-    } catch (error) {
-      log.error({ err: error }, 'Error fetching snapshots');
-      return [];
-    }
+  /** Get a VM's snapshots; source errors are never authoritative empty arrays. */
+  async getSnapshots(vmId: string, options: { bypassCache?: boolean } = {}): Promise<VMwareSnapshot[]> {
+    const scope = getVMwareCacheScope(this.config);
+    const key = `snapshots_${vmId}`;
+    const cached = options.bypassCache ? undefined : getVMwareCachedValue<VMwareSnapshot[]>(scope, key);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) return cached.data;
+    const snapshots = await runVMwarePython('snapshots', this.config, vmId);
+    cacheVMwareValue(scope, key, snapshots, CACHE_TTL);
+    return snapshots;
   }
 
   /**
@@ -2171,8 +2192,7 @@ export class VMwareService {
       const data = await response.json() as { value: string };
       
       // Invalidate cache
-      snapshotCache.delete('all_snapshots');
-      snapshotCache.delete(`snapshots_${vmId}`);
+      invalidateVMwareCache(getVMwareCacheScope(this.config));
       
       return { success: true, snapshotId: data.value };
     } catch (error) {
@@ -2194,8 +2214,7 @@ export class VMwareService {
       
       // Invalidate cache on success
       if (response.ok) {
-        snapshotCache.delete('all_snapshots');
-        snapshotCache.delete(`snapshots_${vmId}`);
+        invalidateVMwareCache(getVMwareCacheScope(this.config));
       }
       
       return { success: response.ok };
@@ -2218,8 +2237,7 @@ export class VMwareService {
       
       // Invalidate cache on success (snapshot state changed)
       if (response.ok) {
-        snapshotCache.delete('all_snapshots');
-        snapshotCache.delete(`snapshots_${vmId}`);
+        invalidateVMwareCache(getVMwareCacheScope(this.config));
       }
       
       return { success: response.ok };
@@ -2342,7 +2360,8 @@ export class VMwareService {
     let collected = 0;
 
     try {
-      const [clusters, hosts, datastores] = await Promise.all([
+      const sourceScope = this.getInventoryScope();
+      const [clusters, , datastores] = await Promise.all([
         this.fetchClusters(),
         this.fetchHosts(),
         this.fetchDatastores(),
@@ -2410,7 +2429,7 @@ export class VMwareService {
       for (const metric of metrics) {
         try {
           await prisma.capacityMetric.create({
-            data: metric,
+            data: { ...metric, sourceScope },
           });
           collected++;
         } catch (err) {
@@ -2423,6 +2442,11 @@ export class VMwareService {
       errors.push((error as Error).message);
       return { collected, errors };
     }
+  }
+
+  /** Stable saved source identity, independent of credentials and cache revisions. */
+  getInventoryScope(): string {
+    return inventorySourceScope('VMWARE_VCENTER', this.config.integrationId, this.config.host);
   }
 }
 

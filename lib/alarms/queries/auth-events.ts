@@ -47,7 +47,7 @@ export async function getAdminLoginFailEvents(ctx: AlarmQueryContext): Promise<Q
         subtype: 'system',
         action: 'login',
         eventTime: timeWindow(ctx.timeWindowMinutes),
-      });
+      }, undefined, ctx);
       
       // Filter for failed attempts based on msg field
       return allLogins.filter(log => {
@@ -61,7 +61,7 @@ export async function getAdminLoginFailEvents(ctx: AlarmQueryContext): Promise<Q
         'event',
         'subtype == system and action == login',  // Fetch all logins, filter for failed in-memory
         ctx.timeWindowMinutes
-      ),
+      , undefined, ctx),
     { softFallback: true } // Don't miss failed logins — verify via FA if cache empty
   );
 }
@@ -92,14 +92,14 @@ export async function getAdminLoginSuccessEvents(ctx: AlarmQueryContext): Promis
         action: 'login',
         eventTime: timeWindow(ctx.timeWindowMinutes),
         AND: [{ rawLog: { path: ['status'], equals: 'success' } }],
-      }),
+      }, undefined, ctx),
     fa =>
       queryFortiAnalyzerDirect(
         fa,
         'event',
         'subtype == system and action == login and status == success',
         ctx.timeWindowMinutes
-      )
+      , undefined, ctx)
   );
 }
 
@@ -137,14 +137,14 @@ export async function getVpnLoginEvents(ctx: AlarmQueryContext): Promise<QueryRe
         logtype: 'event',
         action: 'auth-logon',
         eventTime: timeWindow(ctx.timeWindowMinutes),
-      }),
+      }, undefined, ctx),
     fa =>
       queryFortiAnalyzerDirect(
         fa,
         'event',
         'action == auth-logon',
         ctx.timeWindowMinutes
-      )
+      , undefined, ctx)
   );
 }
 
@@ -170,14 +170,14 @@ export async function getSslvpnTunnelUpEvents(ctx: AlarmQueryContext): Promise<Q
         subtype: 'vpn',
         action: 'tunnel-up',
         eventTime: timeWindow(ctx.timeWindowMinutes),
-      }),
+      }, undefined, ctx),
     fa =>
       queryFortiAnalyzerDirect(
         fa,
         'event',
         'subtype == vpn and action == tunnel-up',
         ctx.timeWindowMinutes
-      )
+      , undefined, ctx)
   );
 }
 
@@ -199,13 +199,13 @@ export async function getSslvpnTunnelDownEvents(ctx: AlarmQueryContext): Promise
         subtype: 'vpn',
         action: 'tunnel-down',
         eventTime: timeWindow(ctx.timeWindowMinutes),
-      }),
+      }, undefined, ctx),
     fa =>
       queryFortiAnalyzerDirect(
         fa,
         'event',
         'subtype == vpn and action == tunnel-down',
         ctx.timeWindowMinutes
-      )
+      , undefined, ctx)
   );
 }

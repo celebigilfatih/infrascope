@@ -1,7 +1,9 @@
 'use client';
 
+import { uiError } from '@/lib/i18n/tr';
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Minus, Plus, RefreshCw } from 'lucide-react';
+import { Focus, Minus, Plus, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import { calculateRackCapacity } from '@/lib/rack-capacity';
@@ -14,6 +16,7 @@ interface FloorPlanViewProps {
   selectedRackId?: string | null;
   onRackClick?: (rackId: string) => void;
   editMode?: boolean;
+  visibleRackIds?: Set<string>;
 }
 
 interface Point { x: number; y: number }
@@ -33,11 +36,11 @@ function overlaps(a: { x: number; z: number; width: number; depth: number }, b: 
   return !(a.x + a.width + gap <= b.x || b.x + b.width + gap <= a.x || a.z + a.depth + gap <= b.z || b.z + b.depth + gap <= a.z);
 }
 
-export function FloorPlanView({ room, onUpdate, selectedRackId, onRackClick, editMode = false }: FloorPlanViewProps) {
+export function FloorPlanView({ room, onUpdate, selectedRackId, onRackClick, editMode = false, visibleRackIds }: FloorPlanViewProps) {
   const { toast } = useToast();
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const dragRef = useRef<{ rackId: string; startPointer: Point; startPosition: { x: number; z: number } } | null>(null);
+  const dragRef = useRef<{ rackId: string; startPointer: Point; startPosition: { x: number; z: number }; originalPosition: Pick<LocationRack, 'coordX' | 'coordZ'> } | null>(null);
   const [racks, setRacks] = useState<LocationRack[]>(() => (room.racks || []).map((rack) => ({ ...rack })));
   const [canvasSize, setCanvasSize] = useState({ width: 1200, height: 700 });
   const [scale, setScale] = useState(60);
@@ -101,7 +104,8 @@ export function FloorPlanView({ room, onUpdate, selectedRackId, onRackClick, edi
     context.fillRect(offset.x, offset.y, roomWidth * scale, roomDepth * scale);
     context.strokeRect(offset.x, offset.y, roomWidth * scale, roomDepth * scale);
 
-    racks.forEach((rack) => {
+    racks.forEach((rack, index) => {
+      if (visibleRackIds && !visibleRackIds.has(rack.id)) return;
       const position = positions.get(rack.id)!;
       const size = footprint(rack);
       const x = offset.x + position.x * scale;
@@ -128,10 +132,13 @@ export function FloorPlanView({ room, onUpdate, selectedRackId, onRackClick, edi
       context.font = '600 11px Inter, sans-serif';
       context.textAlign = 'center';
       context.textBaseline = 'middle';
-      context.fillText(rack.name.length > 14 ? `${rack.name.slice(0, 13)}…` : rack.name, x + width / 2, y + depth / 2 - 5, Math.max(20, width - 8));
-      context.font = '10px Inter, sans-serif';
-      context.fillStyle = '#cbd5e1';
-      context.fillText(`${capacity.usedUnits}/${capacity.totalUnits}U`, x + width / 2, y + depth / 2 + 9);
+      const label = width < 65 ? `#${index + 1}` : rack.name.length > 14 ? `${rack.name.slice(0, 13)}…` : rack.name;
+      context.fillText(label, x + width / 2, y + depth / 2 - (width >= 44 ? 5 : 0), Math.max(20, width - 8));
+      if (width >= 44) {
+        context.font = '10px Inter, sans-serif';
+        context.fillStyle = '#cbd5e1';
+        context.fillText(`${capacity.usedUnits}/${capacity.totalUnits}U`, x + width / 2, y + depth / 2 + 9);
+      }
 
       if (position.isAutoPositioned) {
         context.fillStyle = '#fbbf24';
@@ -143,7 +150,7 @@ export function FloorPlanView({ room, onUpdate, selectedRackId, onRackClick, edi
     context.font = '12px Inter, sans-serif';
     context.textAlign = 'left';
     context.fillText(`${roomWidth} m`, offset.x, offset.y - 10);
-  }, [canvasSize, isDark, offset, positions, racks, roomDepth, roomWidth, scale, selectedRackId]);
+  }, [canvasSize, isDark, offset, positions, racks, roomDepth, roomWidth, scale, selectedRackId, visibleRackIds]);
 
   useEffect(() => { draw(); }, [draw]);
 
@@ -153,6 +160,7 @@ export function FloorPlanView({ room, onUpdate, selectedRackId, onRackClick, edi
   };
 
   const hitRack = (point: Point) => [...racks].reverse().find((rack) => {
+    if (visibleRackIds && !visibleRackIds.has(rack.id)) return false;
     const position = positions.get(rack.id)!;
     const size = footprint(rack);
     const x = offset.x + position.x * scale;
@@ -161,18 +169,19 @@ export function FloorPlanView({ room, onUpdate, selectedRackId, onRackClick, edi
   });
 
   const onPointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (savingRackId) return;
     const point = pointer(event);
     const rack = hitRack(point);
     if (rack) {
       onRackClick?.(rack.id);
       if (editMode) {
         const position = positions.get(rack.id)!;
-        dragRef.current = { rackId: rack.id, startPointer: point, startPosition: { x: position.x, z: position.z } };
+        dragRef.current = { rackId: rack.id, startPointer: point, startPosition: { x: position.x, z: position.z }, originalPosition: { coordX: rack.coordX, coordZ: rack.coordZ } };
         event.currentTarget.setPointerCapture(event.pointerId);
       }
       return;
     }
-    if (!editMode) setPanning({ start: point, offset });
+    if (!editMode) { setPanning({ start: point, offset }); event.currentTarget.setPointerCapture(event.pointerId); }
   };
 
   const onPointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
@@ -202,20 +211,29 @@ export function FloorPlanView({ room, onUpdate, selectedRackId, onRackClick, edi
     const drag = dragRef.current;
     dragRef.current = null;
     setPanning(null);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
     if (!drag) return;
-    event.currentTarget.releasePointerCapture(event.pointerId);
     const rack = racks.find((item) => item.id === drag.rackId);
-    if (!rack || (rack.coordX === drag.startPosition.x && rack.coordZ === drag.startPosition.z)) return;
+    if (!rack || !Number.isFinite(rack.coordX) || !Number.isFinite(rack.coordZ) || (rack.coordX === drag.startPosition.x && rack.coordZ === drag.startPosition.z)) return;
     setSavingRackId(rack.id);
     try {
       const response = await fetch(`/api/racks/${rack.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ coordX: rack.coordX, coordZ: rack.coordZ, rotation: rack.rotation || 0 }) });
       const body = await response.json();
-      if (!response.ok || body.success === false) throw new Error(body.error || 'Kabinet konumu kaydedilemedi');
+      if (!response.ok || body.success === false) throw new Error(uiError(body.error || 'Kabinet konumu kaydedilemedi'));
       await onUpdate?.();
+      toast({ title: 'Kabinet konumu kaydedildi', description: `${rack.name} oda planında güncellendi.` });
     } catch (saveError) {
-      setRacks((current) => current.map((item) => item.id === drag.rackId ? { ...item, coordX: drag.startPosition.x, coordZ: drag.startPosition.z } : item));
+      setRacks((current) => current.map((item) => item.id === drag.rackId ? { ...item, ...drag.originalPosition } : item));
       toast({ title: 'Konum kaydedilemedi', description: saveError instanceof Error ? saveError.message : 'Kabinet eski konumuna alındı.', variant: 'destructive' });
     } finally { setSavingRackId(null); }
+  };
+
+  const onPointerCancel = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const drag = dragRef.current;
+    dragRef.current = null;
+    setPanning(null);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    if (drag) setRacks((current) => current.map((rack) => rack.id === drag.rackId ? { ...rack, ...drag.originalPosition } : rack));
   };
 
   useEffect(() => {
@@ -228,14 +246,13 @@ export function FloorPlanView({ room, onUpdate, selectedRackId, onRackClick, edi
 
   return (
     <div ref={containerRef} className="relative h-full w-full overflow-hidden bg-background">
-      <div className="absolute right-3 top-3 z-20 flex flex-col gap-1 rounded-md border border-border bg-background/90 p-1 shadow-sm backdrop-blur">
-        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setScale((value) => Math.min(160, value + 10))} aria-label="Planı yakınlaştır"><Plus className="h-4 w-4" /></Button>
-        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setScale((value) => Math.max(15, value - 10))} aria-label="Planı uzaklaştır"><Minus className="h-4 w-4" /></Button>
-        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={fitView} aria-label="Planı ekrana sığdır"><RefreshCw className="h-4 w-4" /></Button>
+      <div role="group" aria-label="Plan yakınlaştırma kontrolleri" className="absolute bottom-3 right-3 z-20 flex items-center gap-1 rounded-lg border border-border bg-background/95 p-1 shadow-sm backdrop-blur">
+        <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setScale((value) => Math.min(160, value + 10))} disabled={scale >= 160} aria-label="Planı yakınlaştır" title="Yakınlaştır"><Plus className="h-4 w-4" /></Button>
+        <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setScale((value) => Math.max(15, value - 10))} disabled={scale <= 15} aria-label="Planı uzaklaştır" title="Uzaklaştır"><Minus className="h-4 w-4" /></Button>
+        <Button variant="ghost" size="sm" className="h-9 text-xs" onClick={fitView} aria-label="Planı ekrana sığdır"><Focus className="h-4 w-4" />Sığdır</Button>
       </div>
-      {editMode && <div className="absolute bottom-3 left-3 z-20 rounded-md border border-primary/30 bg-background/90 px-3 py-2 text-xs font-medium text-primary shadow-sm backdrop-blur">Yerleşim düzenleme açık · 25 cm grid</div>}
-      {savingRackId && <div className="absolute left-3 top-3 z-20 flex items-center gap-2 rounded-md border border-border bg-background/90 px-3 py-2 text-xs shadow-sm"><RefreshCw className="h-3.5 w-3.5 animate-spin" />Kaydediliyor</div>}
-      <canvas ref={canvasRef} className={editMode ? 'touch-none cursor-crosshair' : 'touch-none cursor-grab active:cursor-grabbing'} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp} role="img" aria-label={`${room.name} iki boyutlu kabinet yerleşim planı`} />
+      {savingRackId && <div role="status" className="absolute left-3 top-3 z-20 flex items-center gap-2 rounded-md border border-border bg-background/90 px-3 py-2 text-xs shadow-sm"><RefreshCw className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />Konum kaydediliyor…</div>}
+      <canvas ref={canvasRef} className={editMode ? 'touch-none cursor-crosshair' : 'touch-none cursor-grab active:cursor-grabbing'} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerCancel} role="img" aria-label={`${room.name} iki boyutlu kabinet yerleşim planı`} />
     </div>
   );
 }

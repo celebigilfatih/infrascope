@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getRequestActor } from '@/lib/auth/request-actor';
@@ -138,7 +139,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     await prisma.$transaction(async (tx) => {
       await tx.integrationConfig.update({
         where: { id: target.integrationConfigId },
-        data: { config: protectedConfig as any, lastSyncStatus: 'pending-probe' },
+        data: { config: protectedConfig as Prisma.InputJsonObject, lastSyncStatus: 'pending-probe' },
       });
       await tx.firewallConnector.update({
         where: { id: target.id },

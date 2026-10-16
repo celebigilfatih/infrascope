@@ -31,6 +31,21 @@
     --chart-4: 0.828 0.189 84.429;
     --chart-5: 0.769 0.188 70.08;
     --radius: 0.5rem;
+    --ui-action-bg: #198052;
+    --ui-action-hover: #146942;
+    --ui-action-fg: #ffffff;
+    --ui-success-bg: #edf9f1;
+    --ui-success-fg: #21704c;
+    --ui-success-border: #c0e5d2;
+    --ui-warning-bg: #fff6e7;
+    --ui-warning-fg: #935d08;
+    --ui-warning-border: #f0dbb2;
+    --ui-danger-bg: #fff0f2;
+    --ui-danger-fg: #b4233d;
+    --ui-danger-border: #f3cbd0;
+    --ui-info-bg: #eef6ff;
+    --ui-info-fg: #2563a4;
+    --ui-info-border: #c5dbf3;
     --sidebar: 0.985 0 0;
     --sidebar-foreground: 0.141 0.005 285.823;
     --sidebar-primary: 0.723 0.219 149.579;
@@ -42,6 +57,21 @@
   }
 
   .dark {
+    --ui-action-bg: #61ce9d;
+    --ui-action-hover: #8be0b9;
+    --ui-action-fg: #142b22;
+    --ui-success-bg: #1e3329;
+    --ui-success-fg: #8bdfb5;
+    --ui-success-border: #2e5744;
+    --ui-warning-bg: #372e20;
+    --ui-warning-fg: #f4ca83;
+    --ui-warning-border: #645030;
+    --ui-danger-bg: #39252c;
+    --ui-danger-fg: #ffacbb;
+    --ui-danger-border: #623840;
+    --ui-info-bg: #202d3e;
+    --ui-info-fg: #9ac9ff;
+    --ui-info-border: #314b69;
     --background: 0.141 0.005 285.823;
     --foreground: 0.985 0 0;
     --card: 0.21 0.006 285.885;
@@ -58,8 +88,8 @@
     --accent-foreground: 0.985 0 0;
     --destructive: 0.704 0.191 22.216;
     --destructive-foreground: 0.985 0 0;
-    --border: 1 0 0 / 10%;
-    --input: 1 0 0 / 15%;
+    --border: 0.32 0.008 286;
+    --input: 0.36 0.008 286;
     --ring: 0.527 0.154 150.069;
     --chart-1: 0.488 0.243 264.376;
     --chart-2: 0.696 0.17 162.48;
@@ -72,7 +102,7 @@
     --sidebar-primary-foreground: 0.393 0.095 152.535;
     --sidebar-accent: 0.274 0.006 286.033;
     --sidebar-accent-foreground: 0.985 0 0;
-    --sidebar-border: 1 0 0 / 10%;
+    --sidebar-border: 0.32 0.008 286;
     --sidebar-ring: 0.527 0.154 150.069;
   }
 }
@@ -93,6 +123,12 @@
 
   button {
     @apply transition-all duration-200;
+  }
+
+  * { @apply border-border; }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
   }
 }
 

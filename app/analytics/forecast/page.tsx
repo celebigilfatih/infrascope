@@ -1,5 +1,8 @@
 'use client';
 
+import { uiError } from '@/lib/i18n/tr';
+
+import { PageHeading, PageStateFrame } from '@/components/ui/page-heading';
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -41,13 +44,13 @@ export default function ForecastPage() {
       const json = await res.json();
       
       if (json.error) {
-        setError(json.error);
+        setError(uiError(json.error));
         return;
       }
       
       setForecasts(json.forecast || []);
     } catch (err) {
-      setError((err as Error).message);
+      setError(uiError((err as Error).message));
     } finally {
       setLoading(false);
     }
@@ -64,9 +67,9 @@ export default function ForecastPage() {
       case 'critical':
         return <Badge variant="destructive"><AlertTriangle className="h-3 w-3 mr-1" />Kritik</Badge>;
       case 'warning':
-        return <Badge className="bg-yellow-100 text-yellow-800"><AlertTriangle className="h-3 w-3 mr-1" />Uyari</Badge>;
+        return <Badge variant="warning"><AlertTriangle className="h-3 w-3 mr-1" />Uyarı</Badge>;
       default:
-        return <Badge className="bg-green-100 text-green-800">Normal</Badge>;
+        return <Badge variant="success">Normal</Badge>;
     }
   };
 
@@ -88,13 +91,13 @@ export default function ForecastPage() {
     : null;
 
   if (error) {
-    return (
+    return <PageStateFrame section="forecast" title="Kapasite Tahminleri">{(
       <div className="p-6">
         <Card className="border-red-200 bg-red-50">
           <CardContent className="pt-6">
             <div className="flex items-center gap-2 text-red-600">
               <AlertTriangle className="h-5 w-5" />
-              <span>Forecast verileri alinamadi: {error}</span>
+              <span>Tahmin verileri alınamadı: {uiError(error)}</span>
             </div>
             <Button onClick={fetchForecast} className="mt-4" variant="outline">
               <RefreshCw className="h-4 w-4 mr-2" />
@@ -103,15 +106,14 @@ export default function ForecastPage() {
           </CardContent>
         </Card>
       </div>
-    );
+    )}</PageStateFrame>;
   }
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Kapasite Tahminleri</h1>
-          <p className="text-muted-foreground">Lineer regresyon ile gelecek projeksiyon analizi</p>
+          <PageHeading section="forecast" description={<>Doğrusal regresyon ile gelecek tahmini</>}>Kapasite Tahminleri</PageHeading>
         </div>
         <Button onClick={fetchForecast} disabled={loading} variant="outline">
           <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
@@ -123,37 +125,37 @@ export default function ForecastPage() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Kritik Uyari</CardTitle>
+            <CardTitle className="text-sm font-medium">Kritik Uyarı</CardTitle>
             <AlertTriangle className="h-4 w-4 text-red-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-red-600">{criticalCount}</div>
-            <p className="text-xs text-muted-foreground">30 gun icinde %85+</p>
+            <p className="text-xs text-muted-foreground">30 gün içinde %85+</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Uyari</CardTitle>
+            <CardTitle className="text-sm font-medium">Uyarı</CardTitle>
             <TrendingUp className="h-4 w-4 text-yellow-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-yellow-600">{warningCount}</div>
-            <p className="text-xs text-muted-foreground">30 gun icinde %70+</p>
+            <p className="text-xs text-muted-foreground">30 gün içinde %70+</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">En Yakin Dolum</CardTitle>
+            <CardTitle className="text-sm font-medium">En Yakın Dolum</CardTitle>
             <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{nearestFull ? `${nearestFull} gun` : 'N/A'}</div>
+            <div className="text-2xl font-bold">{nearestFull ? `${nearestFull} gün` : '—'}</div>
             <p className="text-xs text-muted-foreground">Disk kapasitesi</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Izlenen Kaynak</CardTitle>
+            <CardTitle className="text-sm font-medium">İzlenen Kaynak</CardTitle>
             <HardDrive className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -166,9 +168,9 @@ export default function ForecastPage() {
       {/* Forecast Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Gelecek Projeksiyon (Linear Regression)</CardTitle>
+          <CardTitle>Gelecek Tahmini (Doğrusal Regresyon)</CardTitle>
           <CardDescription>
-            Son 30 gun verisine gore 30/60/90 gunluk tahmin
+            Son 30 gün verisine göre 30/60/90 günlük tahmin
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -182,12 +184,12 @@ export default function ForecastPage() {
                 <TableRow>
                   <TableHead>Kaynak</TableHead>
                   <TableHead>Metrik</TableHead>
-                  <TableHead>Guncel</TableHead>
-                  <TableHead>30 Gun</TableHead>
-                  <TableHead>60 Gun</TableHead>
-                  <TableHead>90 Gun</TableHead>
-                  <TableHead>Buyume Orani</TableHead>
-                  <TableHead>Dolum Suresi</TableHead>
+                  <TableHead>Güncel</TableHead>
+                  <TableHead>30 Gün</TableHead>
+                  <TableHead>60 Gün</TableHead>
+                  <TableHead>90 Gün</TableHead>
+                  <TableHead>Büyüme Oranı</TableHead>
+                  <TableHead>Dolum Süresi</TableHead>
                   <TableHead>Durum</TableHead>
                 </TableRow>
               </TableHeader>
@@ -219,7 +221,7 @@ export default function ForecastPage() {
                     <TableCell>
                       {forecast.daysUntilFull ? (
                         <Badge variant={forecast.daysUntilFull < 60 ? 'destructive' : 'secondary'}>
-                          {forecast.daysUntilFull} gun
+                          {forecast.daysUntilFull} gün
                         </Badge>
                       ) : (
                         <span className="text-muted-foreground">-</span>
@@ -234,7 +236,7 @@ export default function ForecastPage() {
 
           {forecasts.length === 0 && !loading && (
             <div className="text-center py-8">
-              <p className="text-muted-foreground">Henuz yeterli veri yok (min 3 veri noktasi gerekli)</p>
+              <p className="text-muted-foreground">Henüz yeterli veri yok (en az 3 veri noktası gerekli)</p>
             </div>
           )}
         </CardContent>
@@ -246,13 +248,13 @@ export default function ForecastPage() {
           <div className="flex items-start gap-3">
             <TrendingUp className="h-5 w-5 text-blue-600 mt-0.5" />
             <div className="text-sm text-blue-900">
-              <p className="font-semibold mb-1">Nasil Hesaplaniyor?</p>
+              <p className="font-semibold mb-1">Nasıl Hesaplanıyor?</p>
               <p>
-                Lineer regresyon (y = ax + b) ile son 30 gunun verisi analiz edilir.
+                Doğrusal regresyon (y = ax + b) ile son 30 günün verileri analiz edilir.
                 <br />
-                Buyume orani (slope) hesaplanir ve gelecek degerler tahmin edilir.
+                Büyüme eğimi hesaplanır ve gelecek değerler tahmin edilir.
                 <br />
-                <strong>Disk icin:</strong> %100 dolum suresi hesaplama → (100 - guncel) / buyume_orani
+                <strong>Disk için:</strong> Tam doluluk süresi → (100 - güncel doluluk) / büyüme oranı
               </p>
             </div>
           </div>

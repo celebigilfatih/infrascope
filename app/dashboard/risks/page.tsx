@@ -1,5 +1,8 @@
 'use client';
 
+import { uiLabel } from '@/lib/i18n/tr';
+
+import { PageHeading } from '@/components/ui/page-heading';
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -39,7 +42,7 @@ export default function RisksPage() {
           type: 'Firewall',
           riskScore: 78,
           category: 'compliance',
-          issues: ['Outdated firmware', 'Expired SSL certificates'],
+          issues: ['Outdated firmware', 'Süresi dolan SSL sertifikaları'],
           lastUpdated: new Date(Date.now() - 86400000).toISOString(),
         },
         {
@@ -83,8 +86,8 @@ export default function RisksPage() {
 
   const getRiskBadge = (score: number) => {
     if (score >= 80) return <Badge variant="destructive">Kritik</Badge>;
-    if (score >= 60) return <Badge className="bg-orange-500">Yüksek</Badge>;
-    if (score >= 40) return <Badge className="bg-yellow-500">Orta</Badge>;
+    if (score >= 60) return <Badge variant="warning">Yüksek</Badge>;
+    if (score >= 40) return <Badge variant="warning">Orta</Badge>;
     return <Badge variant="secondary">Düşük</Badge>;
   };
 
@@ -104,12 +107,11 @@ export default function RisksPage() {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Riskli Asset'ler</h1>
-          <p className="text-muted-foreground">Güvenlik ve uyumluluk riskleri</p>
+          <PageHeading section="risks" description={<>Güvenlik ve uyumluluk riskleri</>}>Riskli Varlıklar</PageHeading>
         </div>
-        <Button variant="outline" size="icon">
+        <Button variant="outline" size="icon" aria-label="Yenile">
           <RefreshCw className="h-4 w-4" />
         </Button>
       </div>
@@ -181,7 +183,7 @@ export default function RisksPage() {
       <Card>
         <CardHeader>
           <CardTitle>Risk Değerlendirmesi</CardTitle>
-          <CardDescription>Yüksek riskli asset'ler ve tespit edilen sorunlar</CardDescription>
+          <CardDescription>Yüksek riskli asset&apos;ler ve tespit edilen sorunlar</CardDescription>
         </CardHeader>
         <CardContent>
           {loading ? (
@@ -210,7 +212,7 @@ export default function RisksPage() {
                           {getCategoryIcon(risk.category)}
                           {risk.category.charAt(0).toUpperCase() + risk.category.slice(1)}
                         </Badge>
-                        <span className="text-sm text-muted-foreground">{risk.type}</span>
+                        <span className="text-sm text-muted-foreground">{uiLabel(risk.type)}</span>
                       </div>
                       <h4 className="font-semibold text-lg">{risk.name}</h4>
                       <div className="mt-3 space-y-2">

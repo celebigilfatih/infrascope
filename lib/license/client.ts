@@ -275,7 +275,7 @@ async function performValidation(): Promise<void> {
 
   // Server unreachable — check grace period
   if (cache?.state) {
-    const cachedAt = new Date(cache.cachedAt);
+
     const daysSinceCache = (Date.now() - cache.cachedAt) / (1000 * 60 * 60 * 24);
 
     if (daysSinceCache <= GRACE_PERIOD_DAYS) {

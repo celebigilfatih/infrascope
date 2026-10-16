@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { authorizeApiRequest } from '@/lib/auth/api-permission';
 import { prisma } from '@/lib/prisma';
 
 interface Params { params: { scanId: string } }
@@ -8,8 +9,10 @@ interface Params { params: { scanId: string } }
  * Get scan progress and discovered devices.
  */
 export async function GET(_req: NextRequest, { params }: Params) {
+  const access = await authorizeApiRequest(_req, 'devices', 'read');
+  if (!access.allowed) return access.response;
   try {
-    const scan = await (prisma as any).nmsDiscoveryScan.findUnique({
+    const scan = await prisma.nmsDiscoveryScan.findUnique({
       where: { id: params.scanId },
       include: {
         discoveredDevices: {
@@ -42,7 +45,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
     return NextResponse.json({
       ...scan,
       progress,
-      pendingImport: scan.discoveredDevices.filter((d: any) => !d.imported).length,
+      pendingImport: scan.discoveredDevices.filter((d) => !d.imported).length,
     });
   } catch (error) {
     console.error('[NMS Scan] GET error:', error);

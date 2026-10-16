@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
   const service = new ReportsService();
 
   try {
-    let data: any;
+    let data: unknown;
 
     switch (reportType) {
       case 'inventory':

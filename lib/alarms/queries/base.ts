@@ -13,6 +13,9 @@ import type { Prisma } from '@prisma/client';
 import type FortiAnalyzerService from '@/lib/integrations/fortianalyzer';
 import type { AlarmQueryContext, QueryResult, QueryStats, CachedEventWhere } from './types';
 import { createLogger } from '@/lib/logger';
+import { startFortiAnalyzerSearch, waitForFortiAnalyzerResults } from './fortianalyzer-search';
+import { fortiAnalyzerCacheFilter, nativeFortiAnalyzerLog } from '@/lib/integrations/fortianalyzer-revision';
+import { filterFortiAnalyzerTimeWindow } from '../fortianalyzer-event-time';
 
 const log = createLogger('alarm-queries');
 
@@ -20,9 +23,10 @@ const log = createLogger('alarm-queries');
 
 /** Build a time window object for Prisma eventTime filtering */
 export function timeWindow(minutes: number): { gte: Date; lte: Date } {
+  const now = Date.now();
   return {
-    gte: new Date(Date.now() - minutes * 60 * 1000),
-    lte: new Date(),
+    gte: new Date(now - minutes * 60 * 1000),
+    lte: new Date(now),
   };
 }
 
@@ -33,7 +37,7 @@ export function timeWindow(minutes: number): { gte: Date; lte: Date } {
  *
  * Strategy:
  *  1. If cache is fresh AND not bypassed → run cacheQueryFn (fast Prisma WHERE query)
- *  2. If cache is stale/empty/bypassed  → run faQueryFn (live FortiAnalyzer API)
+ *  2. If cache is stale/bypassed or its read fails → run faQueryFn (live FortiAnalyzer API)
  *  3. If cache query returns 0 events   → optionally fall back to FA (soft fallback)
  *
  * All outcomes are logged with source, count, and duration.
@@ -51,67 +55,43 @@ export async function runAlarmQuery(
   } = {}
 ): Promise<QueryResult> {
   const start = Date.now();
+  if (!options.databaseOnly) ctx.eventCache?.assertActive?.();
   const useCache = options.databaseOnly || (!ctx.bypassCache && ctx.cacheIsFresh && ctx.eventCache != null);
 
+  let cachedEvents: Array<Record<string, unknown>> | undefined;
   if (useCache) {
     try {
-      const events = await cacheQueryFn();
-      const durationMs = Date.now() - start;
-      const stats: QueryStats = {
-        alarmCode: ctx.alarmCode,
-        source: 'cache',
-        eventCount: events.length,
-        durationMs,
-        usedFallback: false,
-        queryDescription,
-      };
-      log.info(
-        { alarmCode: ctx.alarmCode, eventCount: events.length, durationMs, queryDescription },
-        'Cache query completed'
-      );
-
-      // Optional soft fallback: if cache says 0 but this is a critical alarm,
-      // do a quick FA verification. Only fires when softFallback=true.
-      if (events.length === 0 && options.softFallback) {
-        log.info({ alarmCode: ctx.alarmCode }, 'Cache empty — soft fallback to FA');
-        try {
-          const faEvents = await faQueryFn(ctx.faService);
-          if (faEvents.length > 0) {
-            log.info({ alarmCode: ctx.alarmCode, eventCount: faEvents.length }, 'FA found events cache missed');
-            return {
-              events: faEvents,
-              stats: {
-                ...stats,
-                source: 'fortianalyzer',
-                eventCount: faEvents.length,
-                durationMs: Date.now() - start,
-                usedFallback: true,
-              },
-            };
-          }
-        } catch (faErr) {
-          log.warn({ alarmCode: ctx.alarmCode, err: faErr }, 'Soft FA fallback failed');
-        }
-        return { events: [], stats: { ...stats, durationMs: Date.now() - start } };
-      }
-
-      return { events, stats };
+      cachedEvents = await cacheQueryFn();
+      if (!options.databaseOnly) ctx.eventCache?.assertActive?.();
     } catch (cacheErr) {
       if (options.databaseOnly) throw cacheErr;
+      ctx.eventCache?.assertActive?.();
       log.warn({ alarmCode: ctx.alarmCode, err: cacheErr }, 'Cache query failed, falling back to FA');
     }
   }
 
+  if (cachedEvents && (cachedEvents.length > 0 || !options.softFallback || options.databaseOnly)) {
+    const stats: QueryStats = {
+      alarmCode: ctx.alarmCode, source: 'cache', eventCount: cachedEvents.length,
+      durationMs: Date.now() - start, usedFallback: false, queryDescription,
+    };
+    log.info(stats, 'Cache query completed');
+    return { events: cachedEvents, stats };
+  }
+
+  // Cache-read fallback and optional empty-cache verification run exactly once.
+  // A failed verification cannot establish a successful empty result.
   // Live FortiAnalyzer query
   try {
     const events = await faQueryFn(ctx.faService);
+    if (!options.databaseOnly) ctx.eventCache?.assertActive?.();
     const durationMs = Date.now() - start;
     const stats: QueryStats = {
       alarmCode: ctx.alarmCode,
       source: 'fortianalyzer',
       eventCount: events.length,
       durationMs,
-      usedFallback: useCache === false && ctx.cacheIsFresh, // we had fresh cache but bypassed it
+      usedFallback: Boolean(useCache || ctx.eventCache || ctx.cacheIsFresh),
       queryDescription,
     };
     log.info(
@@ -122,17 +102,7 @@ export async function runAlarmQuery(
   } catch (faErr) {
     const durationMs = Date.now() - start;
     log.error({ alarmCode: ctx.alarmCode, durationMs, err: faErr }, 'FA query FAILED');
-    return {
-      events: [],
-      stats: {
-        alarmCode: ctx.alarmCode,
-        source: 'fortianalyzer',
-        eventCount: 0,
-        durationMs,
-        usedFallback: true,
-        queryDescription,
-      },
-    };
+    throw faErr;
   }
 }
 
@@ -151,16 +121,18 @@ export async function runAlarmQuery(
  */
 export async function queryCache(
   where: CachedEventWhere,
-  limit = 500
+  limit = 500,
+  ctx?: AlarmQueryContext,
 ): Promise<Array<Record<string, unknown>>> {
   const rows = await prisma.cachedEvent.findMany({
-    where: where as Prisma.CachedEventWhereInput,
+    where: { AND: [where as Prisma.CachedEventWhereInput, ctx?.eventCache?.getSourceFilter() ?? fortiAnalyzerCacheFilter()] },
     orderBy: { eventTime: 'desc' },
     take: limit,
     select: { rawLog: true },
   });
   // Return rawLog objects — consistent with the rest of the alarm engine
-  return rows.map(r => r.rawLog as Record<string, unknown>);
+  ctx?.eventCache?.assertActive();
+  return rows.map(r => nativeFortiAnalyzerLog(r.rawLog));
 }
 
 // ─── FortiAnalyzer Direct Query ───────────────────────────────────────────────
@@ -170,7 +142,7 @@ export async function queryCache(
  *
  * Uses the FA async search pattern:
  *  1. startLogSearch() → returns TID (transaction ID)
- *  2. Poll fetchLogResults() until results arrive (max N attempts × interval)
+ *  2. Poll fetchLogResults() until the search completes (bounded attempts/deadline)
  *  3. Filter results by time window (FA doesn't always respect start_time)
  *
  * @param fa            FortiAnalyzer service instance
@@ -184,43 +156,16 @@ export async function queryFortiAnalyzerDirect(
   logtype: string,
   filter: string,
   windowMinutes: number,
-  limit = 500
+  limit = 500,
+  ctx?: AlarmQueryContext,
 ): Promise<Array<Record<string, unknown>>> {
-  // Wrap startLogSearch with a 10s timeout — FA occasionally hangs under load
-  const startLogSearchWithTimeout = () =>
-    Promise.race([
-      fa.startLogSearch(logtype, limit, filter),
-      new Promise<null>(resolve => setTimeout(() => resolve(null), 10_000)),
-    ]);
-
-  const tid = await startLogSearchWithTimeout();
-  if (!tid) {
-    log.warn({ logtype, filter: filter.substring(0, 80) }, 'No TID returned from FA');
-    return [];
-  }
-
-  // Poll up to 4 times × 2s = 8s max wait (well under the 25s batch timeout)
-  const POLL_ATTEMPTS = 4;
-  const POLL_INTERVAL_MS = 2000;
-  let logs: Array<Record<string, unknown>> | null = null;
-
-  for (let attempt = 0; attempt < POLL_ATTEMPTS; attempt++) {
-    await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
-    logs = await fa.fetchLogResults(tid, 0, limit);
-    if (logs && logs.length > 0) {
-      log.info({ logtype, resultCount: logs.length, pollAttempts: attempt + 1 }, 'FA results received');
-      break;
-    }
-  }
-
-  if (!logs || logs.length === 0) return [];
+  const signal = ctx?.eventCache?.getAbortSignal?.();
+  const window = timeWindow(windowMinutes);
+  const tid = await startFortiAnalyzerSearch(fa, logtype, limit, filter, signal);
+  const logs = await waitForFortiAnalyzerResults(fa, tid, limit, { signal });
 
   // Filter by time window (FA may return older events beyond our window)
-  const cutoff = new Date(Date.now() - windowMinutes * 60 * 1000);
-  let filtered = logs.filter(log => {
-    const t = parseLogTimestamp(log);
-    return t ? t >= cutoff : true; // if unparseable, keep it (safe default)
-  });
+  let filtered = filterFortiAnalyzerTimeWindow(logs, window.gte, window.lte);
 
   // For login events, also filter for failed attempts in-memory
   // (FortiAnalyzer filter syntax may not support msg ~ failed)
@@ -232,15 +177,4 @@ export async function queryFortiAnalyzerDirect(
   }
 
   return filtered;
-}
-
-// ─── Internal Helpers ─────────────────────────────────────────────────────────
-
-function parseLogTimestamp(log: Record<string, unknown>): Date | null {
-  const raw = log.eventtime ?? log.itime_t;
-  if (!raw) return null;
-  const n = typeof raw === 'number' ? raw : Number(raw);
-  if (Number.isNaN(n)) return null;
-  // eventtime is nanoseconds; itime_t is seconds
-  return new Date(n > 1e12 ? n / 1e6 : n * 1000);
 }

@@ -1,7 +1,10 @@
 'use client';
 
+import { uiError } from '@/lib/i18n/tr';
+
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { usePathname } from 'next/navigation';
+import { findNavigationItem } from './navigation';
 
 export interface BreadcrumbItem {
   label: string;
@@ -19,7 +22,7 @@ const BreadcrumbContext = createContext<BreadcrumbContextValue | null>(null);
 const STATIC_BREADCRUMBS: Record<string, BreadcrumbItem[]> = {
   '/dashboard/alerts': [
     { label: 'Genel Sağlık', href: '/dashboard' },
-    { label: 'Alarm Operasyonları' },
+    { label: 'Olay Merkezi' },
   ],
   '/dashboard/risks': [
     { label: 'Genel Sağlık', href: '/dashboard' },
@@ -31,11 +34,11 @@ const STATIC_BREADCRUMBS: Record<string, BreadcrumbItem[]> = {
   ],
   '/integrations/nms/backups': [
     { label: 'NMS İzlenen Cihazlar', href: '/integrations/nms/devices' },
-    { label: 'Konfigürasyon Yedekleri' },
+    { label: 'Yapılandırma Yedekleri' },
   ],
   '/network/config-revisions': [
     { label: 'Topoloji', href: '/network' },
-    { label: 'Konfigürasyon Yedekleri' },
+    { label: 'Yapılandırma Geçmişi' },
   ],
   '/network/firewall': [
     { label: 'Topoloji', href: '/network' },
@@ -43,7 +46,7 @@ const STATIC_BREADCRUMBS: Record<string, BreadcrumbItem[]> = {
   ],
   '/network/ipsec': [
     { label: 'Güvenlik Duvarı', href: '/network/firewall' },
-    { label: 'IPSec Tünelleri' },
+    { label: 'IPsec Tünelleri' },
   ],
   '/network/ssl-vpn': [
     { label: 'Güvenlik Duvarı', href: '/network/firewall' },
@@ -86,11 +89,14 @@ function getRouteBreadcrumbs(pathname: string): BreadcrumbItem[] {
   if (/^\/locations\/rooms\/[^/]+$/.test(pathname)) {
     return [
       { label: 'Fiziksel Konumlar', href: '/locations' },
-      { label: 'Oda dijital ikizi' },
+      { label: 'Oda yerleşimi' },
     ];
   }
 
-  return [];
+  const item = findNavigationItem(pathname);
+  if (!item) return [];
+  if (pathname === item.href) return [{ label: item.name }];
+  return [{ label: item.name, href: item.href }, { label: 'Detay' }];
 }
 
 export function BreadcrumbProvider({ children }: { children: React.ReactNode }) {
@@ -113,7 +119,7 @@ export function BreadcrumbProvider({ children }: { children: React.ReactNode }) 
 
 export function useBreadcrumbs() {
   const context = useContext(BreadcrumbContext);
-  if (!context) throw new Error('useBreadcrumbs must be used within BreadcrumbProvider');
+  if (!context) throw new Error(uiError('useBreadcrumbs must be used within BreadcrumbProvider'));
   return context;
 }
 

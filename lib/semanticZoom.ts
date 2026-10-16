@@ -7,7 +7,7 @@ export const getZoomConfig = (zoom: number) => {
   };
 };
 
-export const filterNodesByZoom = (nodes: any[], config: any) => {
+export const filterNodesByZoom = <T extends { type?: string; data: { alwaysVisible?: boolean; hierarchyLevel?: string } }>(nodes: T[], config: ReturnType<typeof getZoomConfig>) => {
   return nodes.filter(node => {
     if (node.data?.alwaysVisible) return true;
     if (node.data.hierarchyLevel === 'floor') return config.showFloors;
@@ -18,7 +18,7 @@ export const filterNodesByZoom = (nodes: any[], config: any) => {
   });
 };
 
-export const filterEdgesByZoom = (edges: any[], visibleNodes: any[]) => {
+export const filterEdgesByZoom = <T extends { source: string; target: string }>(edges: T[], visibleNodes: Array<{ id: string }>) => {
   const visibleNodeIds = new Set(visibleNodes.map(n => n.id));
   return edges.filter(edge => visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target));
 };

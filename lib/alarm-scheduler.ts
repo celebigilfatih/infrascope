@@ -25,6 +25,7 @@ interface AlarmSchedulerState {
   interval: NodeJS.Timeout | null;
   tickInProgress: boolean;
   startedAt: Date | null;
+  generation?: number;
 }
 
 const globalScheduler = globalThis as typeof globalThis & {
@@ -71,17 +72,6 @@ async function runScheduledTick(): Promise<void> {
   let ok = false;
 
   try {
-    const stale = await prisma.alarmCheckLog.updateMany({
-      where: {
-        status: 'RUNNING',
-        checkTime: { lte: new Date(Date.now() - 15 * 60 * 1000) },
-      },
-      data: { status: 'ORPHANED' },
-    });
-    if (stale.count > 0) {
-      log.warn({ staleCount: stale.count }, 'Marked stale alarm checks as orphaned');
-    }
-
     log.info('Starting scheduled alarm check');
     const result = await runAlarmCheck();
     ok = result.success;
@@ -121,7 +111,9 @@ export function startAlarmScheduler(options: { runImmediately?: boolean } = {}) 
   }
 
   state.startedAt = new Date();
+  const generation = state.generation = (state.generation ?? 0) + 1;
   state.interval = setInterval(() => {
+    if (state.generation !== generation || !state.interval) return;
     void runScheduledTick();
   }, SCHEDULER_INTERVAL_MS);
 
@@ -129,6 +121,7 @@ export function startAlarmScheduler(options: { runImmediately?: boolean } = {}) 
 
   if (options.runImmediately !== false) {
     queueMicrotask(() => {
+      if (state.generation !== generation || !state.interval) return;
       void runScheduledTick();
     });
   }
@@ -139,6 +132,7 @@ export function startAlarmScheduler(options: { runImmediately?: boolean } = {}) 
  */
 export function stopAlarmScheduler() {
   const state = getState();
+  state.generation = (state.generation ?? 0) + 1;
   if (state.interval) {
     clearInterval(state.interval);
     state.interval = null;

@@ -1,5 +1,6 @@
-import { prisma } from '@/lib/prisma';
-import { createLogger } from '@/lib/logger';
+import { prisma } from '../prisma';
+import type { Prisma } from '@prisma/client';
+import { createLogger } from '../logger';
 import {
   integrationConfigNeedsDedicatedKey,
   integrationConfigNeedsProtection,
@@ -8,44 +9,70 @@ import {
   protectNmsBackup,
   protectNmsCredential,
   protectIntegrationConfig,
+  unprotectIntegrationConfig,
   type IntegrationCredentialProfile,
 } from './integration-credentials';
 
 const log = createLogger('integration-credential-migration');
-const PROFILES: readonly IntegrationCredentialProfile[] = ['FORTIGATE', 'FORTIANALYZER'];
+const PROFILES = ['FORTIGATE', 'FORTIANALYZER', 'VMWARE_VCENTER', 'ZABBIX'] as const;
 
-export async function migrateIntegrationCredentials(): Promise<{
+export async function migrateIntegrationCredentials(options: { rotate?: boolean; includeNms?: boolean } = {}): Promise<{
   inspected: number;
   protected: number;
   nmsCredentialsProtected: number;
   backupsProtected: number;
+  smtpProtected: number;
   rotationRequested: boolean;
 }> {
-  const rotationRequested = Boolean(
+  const rotationRequested = Boolean(options.rotate ||
     process.env.INTEGRATION_CREDENTIALS_PREVIOUS_KEY?.trim()
   );
-  const configs = await prisma.integrationConfig.findMany({
-    where: { type: { in: [...PROFILES] } },
-    select: { id: true, type: true, config: true },
-  });
-
-  let protectedCount = 0;
-  for (const config of configs) {
-    const profile = config.type as IntegrationCredentialProfile;
-    const needsProtection = integrationConfigNeedsProtection(config.config, profile);
-    const needsDedicatedKey = integrationConfigNeedsDedicatedKey(config.config, profile);
-    if (!rotationRequested && !needsProtection && !needsDedicatedKey) continue;
-
-    const protectedConfig = protectIntegrationConfig<Record<string, unknown>>(
-      config.config,
-      profile
-    );
-    await prisma.integrationConfig.update({
-      where: { id: config.id },
-      data: { config: protectedConfig as any },
+  // Snapshot comparison prevents a concurrent settings save from being overwritten.
+  // Prepare all envelopes before the first write; crypto errors abort the transaction.
+  const migrated = await prisma.$transaction(async tx => {
+    const configs = await tx.integrationConfig.findMany({
+      where: { type: { in: [...PROFILES] } },
+      select: { id: true, type: true, config: true },
     });
-    protectedCount += 1;
-  }
+
+    const email = await tx.notificationConfig.findUnique({ where: { channel: 'email' } });
+    const updates: Array<{ id: string; before: typeof configs[number]['config']; after: Prisma.InputJsonObject }> = [];
+    for (const config of configs) {
+      const profile = config.type as IntegrationCredentialProfile;
+      const needsProtection = integrationConfigNeedsProtection(config.config, profile);
+      const needsDedicatedKey = integrationConfigNeedsDedicatedKey(config.config, profile);
+      unprotectIntegrationConfig(config.config, profile);
+      if (!rotationRequested && !needsProtection && !needsDedicatedKey) continue;
+
+      const protectedConfig = protectIntegrationConfig<Prisma.InputJsonObject>(
+        config.config,
+        profile
+      );
+      updates.push({ id: config.id, before: config.config, after: protectedConfig });
+    }
+    if (email) unprotectIntegrationConfig(email.config, 'SMTP');
+    const emailNeedsUpdate = email && (rotationRequested
+      || integrationConfigNeedsProtection(email.config, 'SMTP')
+      || integrationConfigNeedsDedicatedKey(email.config, 'SMTP'));
+    const protectedEmail = emailNeedsUpdate ? protectIntegrationConfig<Prisma.InputJsonObject>(email.config, 'SMTP') : null;
+    for (const update of updates) {
+      const result = await tx.integrationConfig.updateMany({
+        where: { id: update.id, config: { equals: update.before as Prisma.InputJsonValue } },
+        data: { config: update.after },
+      });
+      if (result.count !== 1) throw new Error('Credential migration interrupted by a concurrent integration settings change; retry');
+    }
+    if (email && protectedEmail) {
+      const result = await tx.notificationConfig.updateMany({
+        where: { id: email.id, config: { equals: email.config as Prisma.InputJsonValue } },
+        data: { config: protectedEmail },
+      });
+      if (result.count !== 1) throw new Error('Credential migration interrupted by a concurrent email settings change; retry');
+    }
+    return { inspected: configs.length, protected: updates.length, smtpProtected: protectedEmail ? 1 : 0 };
+  }, { timeout: 60_000 });
+
+  if (options.includeNms === false) return { ...migrated, nmsCredentialsProtected: 0, backupsProtected: 0, rotationRequested };
 
   const devices = await prisma.device.findMany({
     where: {
@@ -136,8 +163,7 @@ export async function migrateIntegrationCredentials(): Promise<{
 
   log.info(
     {
-      inspected: configs.length,
-      protected: protectedCount,
+      ...migrated,
       nmsCredentialsProtected,
       backupsProtected,
       rotationRequested,
@@ -145,8 +171,7 @@ export async function migrateIntegrationCredentials(): Promise<{
     'Integration credential migration completed'
   );
   return {
-    inspected: configs.length,
-    protected: protectedCount,
+    ...migrated,
     nmsCredentialsProtected,
     backupsProtected,
     rotationRequested,

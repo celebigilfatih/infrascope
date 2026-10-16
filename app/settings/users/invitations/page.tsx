@@ -1,7 +1,11 @@
 'use client';
 
+import { uiError, uiLabel } from '@/lib/i18n/tr';
+
+import { ActionIcon } from '@/components/ui/action-icon';
+import { PageHeading } from '@/components/ui/page-heading';
 import React, { useState, useEffect, useCallback } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -27,16 +31,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import {
-  RefreshCw,
-  Plus,
-  Mail,
-  Clock,
-  CheckCircle2,
-  XCircle,
-  Send,
-  ArrowLeft,
-} from 'lucide-react';
+import { RefreshCw, Mail, Clock, CheckCircle2, XCircle, Send, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 
 interface InvitationType {
@@ -61,32 +56,32 @@ function getStatusBadge(status: string) {
   switch (status) {
     case 'pending':
       return (
-        <Badge className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
+        <Badge variant="warning">
           <Clock className="h-3 w-3 mr-1" />
-          Pending
+          Bekliyor
         </Badge>
       );
     case 'accepted':
       return (
-        <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+        <Badge variant="success">
           <CheckCircle2 className="h-3 w-3 mr-1" />
-          Accepted
+          Kabul Edildi
         </Badge>
       );
     case 'expired':
       return (
-        <Badge className="bg-gray-100 text-gray-600 dark:bg-gray-900/30 dark:text-gray-400">
+        <Badge variant="secondary">
           <XCircle className="h-3 w-3 mr-1" />
-          Expired
+          Süresi Doldu
         </Badge>
       );
     default:
-      return <Badge variant="outline">{status}</Badge>;
+      return <Badge variant="outline">{uiLabel(status)}</Badge>;
   }
 }
 
 function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('en-US', {
+  return new Date(dateStr).toLocaleDateString('tr-TR', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -128,7 +123,7 @@ export default function InvitationsPage() {
 
   const handleSendInvitation = async () => {
     if (!inviteEmail) {
-      alert('Email is required');
+      alert(uiError("E-posta adresi zorunludur."));
       return;
     }
     setIsSubmitting(true);
@@ -148,11 +143,11 @@ export default function InvitationsPage() {
         setInviteEmail('');
         setInviteRole('viewer');
       } else {
-        alert(`Error: ${result.error}`);
+        alert(uiError(`Error: ${result.error}`));
       }
     } catch (error) {
       console.error('Error sending invitation:', error);
-      alert('Failed to send invitation');
+      alert(uiError("Davet gönderilemedi."));
     } finally {
       setIsSubmitting(false);
     }
@@ -161,28 +156,27 @@ export default function InvitationsPage() {
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-4">
         <div className="flex items-center gap-4">
           <Link href="/settings/users">
-            <Button variant="ghost" size="icon">
+            <Button variant="ghost" size="icon" aria-label="Geri dön">
               <ArrowLeft className="h-4 w-4" />
             </Button>
           </Link>
           <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <Mail className="h-6 w-6" />
-              Invitations
-            </h1>
-            <p className="text-muted-foreground">Manage user invitations and verification</p>
+            <PageHeading section="invitations" description={<>Kullanıcı davetlerini ve doğrulama süreçlerini yönetin</>}>
+
+              Davetler
+            </PageHeading>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={fetchInvitations} disabled={loading}>
+          <Button variant="outline" size="icon" onClick={fetchInvitations} disabled={loading} aria-label="Yenile">
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </Button>
           <Button onClick={() => setIsInviteDialogOpen(true)}>
             <Send className="h-4 w-4 mr-2" />
-            Invite User
+            Kullanıcı Davet Et
           </Button>
         </div>
       </div>
@@ -195,7 +189,7 @@ export default function InvitationsPage() {
               <Mail className="h-5 w-5 text-blue-600 dark:text-blue-400" />
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Total</p>
+              <p className="text-sm text-muted-foreground">Toplam</p>
               <p className="text-2xl font-bold">{stats.total}</p>
             </div>
           </CardContent>
@@ -206,7 +200,7 @@ export default function InvitationsPage() {
               <Clock className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Pending</p>
+              <p className="text-sm text-muted-foreground">Bekliyor</p>
               <p className="text-2xl font-bold">{stats.pending}</p>
             </div>
           </CardContent>
@@ -217,7 +211,7 @@ export default function InvitationsPage() {
               <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Accepted</p>
+              <p className="text-sm text-muted-foreground">Kabul Edildi</p>
               <p className="text-2xl font-bold">{stats.accepted}</p>
             </div>
           </CardContent>
@@ -228,7 +222,7 @@ export default function InvitationsPage() {
               <XCircle className="h-5 w-5 text-gray-600 dark:text-gray-400" />
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Expired</p>
+              <p className="text-sm text-muted-foreground">Süresi Doldu</p>
               <p className="text-2xl font-bold">{stats.expired}</p>
             </div>
           </CardContent>
@@ -241,33 +235,33 @@ export default function InvitationsPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Email</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Invited By</TableHead>
-                <TableHead>Expires</TableHead>
-                <TableHead>Accepted</TableHead>
-                <TableHead>Created</TableHead>
+                <TableHead>E-posta</TableHead>
+                <TableHead>Rol</TableHead>
+                <TableHead>Durum</TableHead>
+                <TableHead>Davet Eden</TableHead>
+                <TableHead>Bitiş Tarihi</TableHead>
+                <TableHead>Kabul Edildi</TableHead>
+                <TableHead>Oluşturulma</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                    Loading invitations...
+                    Davetler yükleniyor…
                   </TableCell>
                 </TableRow>
               ) : invitations.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                    No invitations yet. Click &quot;Invite User&quot; to send one.
+                    Henüz davet yok. Göndermek için Kullanıcı Davet Et düğmesini seçin.
                   </TableCell>
                 </TableRow>
               ) : (
                 invitations.map((inv) => (
                   <TableRow key={inv.id}>
                     <TableCell className="font-medium">{inv.email}</TableCell>
-                    <TableCell className="capitalize">{inv.role}</TableCell>
+                    <TableCell className="capitalize">{uiLabel(inv.role)}</TableCell>
                     <TableCell>{getStatusBadge(inv.status)}</TableCell>
                     <TableCell className="text-muted-foreground">{inv.invitedBy}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">
@@ -293,12 +287,12 @@ export default function InvitationsPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Send className="h-5 w-5" />
-              Invite New User
+              Yeni Kullanıcı Davet Et
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-1">Email Address</label>
+              <label className="block text-sm font-medium mb-1">E-posta Adresi</label>
               <Input
                 type="email"
                 value={inviteEmail}
@@ -306,32 +300,32 @@ export default function InvitationsPage() {
                 placeholder="colleague@company.com"
               />
               <p className="text-xs text-muted-foreground mt-1">
-                An invitation email with a verification link will be sent to this address.
+                Bu adrese doğrulama bağlantısı içeren bir davet e-postası gönderilir.
               </p>
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Role</label>
+              <label className="block text-sm font-medium mb-1">Rol</label>
               <Select value={inviteRole} onValueChange={setInviteRole}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select a role" />
+                  <SelectValue placeholder="Rol seçin" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="admin">Admin</SelectItem>
-                  <SelectItem value="editor">Editor</SelectItem>
-                  <SelectItem value="viewer">Viewer</SelectItem>
+                  <SelectItem value="admin">Yönetici</SelectItem>
+                  <SelectItem value="editor">Editör</SelectItem>
+                  <SelectItem value="viewer">İzleyici</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsInviteDialogOpen(false)}>
-              Cancel
+            <Button variant="outline" onClick={() => setIsInviteDialogOpen(false)}><ActionIcon action="cancel" />
+              Vazgeç
             </Button>
             <Button onClick={handleSendInvitation} disabled={isSubmitting}>
-              {isSubmitting ? 'Sending...' : (
+              {isSubmitting ? "Gönderiliyor…" : (
                 <>
                   <Send className="h-4 w-4 mr-2" />
-                  Send Invitation
+                  Davet Gönder
                 </>
               )}
             </Button>

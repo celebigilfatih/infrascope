@@ -19,7 +19,7 @@ export async function GET() {
       email: user.email,
       role: user.role.toLowerCase(),
       status: user.status.toLowerCase(),
-      lastLogin: user.lastLoginAt ? formatTimeAgo(user.lastLoginAt) : 'Never',
+      lastLogin: user.lastLoginAt ? formatTimeAgo(user.lastLoginAt) : 'Henüz giriş yapılmadı',
     }));
 
     // Calculate stats
@@ -51,11 +51,11 @@ function formatTimeAgo(date: Date): string {
   const diffHours = Math.floor(diffMs / 3600000);
   const diffDays = Math.floor(diffMs / 86400000);
 
-  if (diffMins < 1) return 'Just now';
-  if (diffMins < 60) return `${diffMins} minutes ago`;
-  if (diffHours < 24) return `${diffHours} hours ago`;
-  if (diffDays < 7) return `${diffDays} days ago`;
-  return new Date(date).toLocaleDateString();
+  if (diffMins < 1) return 'Az önce';
+  if (diffMins < 60) return `${diffMins} dakika önce`;
+  if (diffHours < 24) return `${diffHours} saat önce`;
+  if (diffDays < 7) return `${diffDays} gün önce`;
+  return new Date(date).toLocaleDateString('tr-TR');
 }
 
 export async function POST(request: Request) {

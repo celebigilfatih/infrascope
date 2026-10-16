@@ -1,5 +1,8 @@
 'use client';
 
+import { uiError, uiLabel } from '@/lib/i18n/tr';
+
+import { PageHeading, PageStateFrame } from '@/components/ui/page-heading';
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -44,7 +47,7 @@ interface UsageStats {
 
 const FEATURE_MATRIX = {
   TRIAL: {
-    label: 'Trial',
+    label: "Deneme",
     color: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400',
     features: {
       'Dashboard': true,
@@ -58,7 +61,7 @@ const FEATURE_MATRIX = {
     },
   },
   STANDARD: {
-    label: 'Standard',
+    label: "Standart",
     color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
     features: {
       'Dashboard': true,
@@ -72,7 +75,7 @@ const FEATURE_MATRIX = {
     },
   },
   ENTERPRISE: {
-    label: 'Enterprise',
+    label: "Kurumsal",
     color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400',
     features: {
       'Dashboard': true,
@@ -105,7 +108,7 @@ export default function LicensePage() {
       setUsage(data.usage || { deviceCount: 0, userCount: 0 });
     } catch (err) {
       console.error('Failed to fetch license:', err);
-      setError('Failed to load license information');
+      setError(uiError("Lisans bilgileri yüklenemedi."));
     } finally {
       setLoading(false);
     }
@@ -117,7 +120,7 @@ export default function LicensePage() {
 
   const handleActivate = async () => {
     if (!licenseKey.trim()) {
-      setError('Please enter a license key');
+      setError(uiError("Lütfen lisans anahtarını girin."));
       return;
     }
 
@@ -138,11 +141,11 @@ export default function LicensePage() {
         setLicenseKey('');
         await fetchLicense();
       } else {
-        setError(data.error || 'Failed to activate license');
+        setError(uiError(data.error || 'Failed to activate license'));
       }
     } catch (err) {
       console.error('Activation error:', err);
-      setError('Failed to activate license. Please try again.');
+      setError(uiError("Lisans etkinleştirilemedi. Lütfen yeniden deneyin."));
     } finally {
       setActivating(false);
     }
@@ -158,10 +161,10 @@ export default function LicensePage() {
         setSuccess('License validated successfully!');
         await fetchLicense();
       } else {
-        setError(data.error || 'Validation failed');
+        setError(uiError(data.error || 'Validation failed'));
       }
-    } catch (err) {
-      setError('Failed to validate license');
+    } catch {
+      setError(uiError("Lisans doğrulanamadı."));
     } finally {
       setLoading(false);
     }
@@ -177,58 +180,57 @@ export default function LicensePage() {
     if (!license) return null;
     if (!license.valid) {
       return (
-        <Badge className="bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">
+        <Badge variant="destructive">
           <XCircle className="h-3 w-3 mr-1" />
-          Invalid
+          Geçersiz
         </Badge>
       );
     }
     if (license.graceMode) {
       return (
-        <Badge className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
+        <Badge variant="warning">
           <AlertTriangle className="h-3 w-3 mr-1" />
-          Grace Period
+          Ek Süre
         </Badge>
       );
     }
     if (license.daysRemaining <= 30) {
       return (
-        <Badge className="bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400">
+        <Badge variant="warning">
           <Clock className="h-3 w-3 mr-1" />
-          Expiring Soon
+          Yakında Sona Erecek
         </Badge>
       );
     }
     return (
-      <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+      <Badge variant="success">
         <CheckCircle2 className="h-3 w-3 mr-1" />
-        Active
+        Aktif
       </Badge>
     );
   };
 
   if (loading && !license) {
-    return (
+    return <PageStateFrame section="license" title="Lisans Yönetimi">{(
       <div className="p-6">
         <div className="flex items-center justify-center h-64">
           <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
       </div>
-    );
+    )}</PageStateFrame>;
   }
 
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-4">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Key className="h-6 w-6" />
-            License Management
-          </h1>
-          <p className="text-muted-foreground">Manage your InfraScope license and subscription</p>
+          <PageHeading section="license" description={<>InfraScope lisansınızı ve aboneliğinizi yönetin</>}>
+
+            Lisans Yönetimi
+          </PageHeading>
         </div>
-        <Button variant="outline" size="icon" onClick={fetchLicense} disabled={loading}>
+        <Button variant="outline" size="icon" onClick={fetchLicense} disabled={loading} aria-label="Yenile">
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
         </Button>
       </div>
@@ -238,7 +240,7 @@ export default function LicensePage() {
         <div className="p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
           <div className="flex items-center gap-2 text-red-700 dark:text-red-400">
             <XCircle className="h-5 w-5" />
-            <span>{error}</span>
+            <span>{uiError(error)}</span>
           </div>
         </div>
       )}
@@ -258,9 +260,9 @@ export default function LicensePage() {
             <div>
               <CardTitle className="flex items-center gap-2">
                 <Shield className="h-5 w-5" />
-                License Status
+                Lisans Durumu
               </CardTitle>
-              <CardDescription>Current subscription information</CardDescription>
+              <CardDescription>Mevcut abonelik bilgileri</CardDescription>
             </div>
             <div className="flex items-center gap-2">
               {getStatusBadge()}
@@ -274,40 +276,40 @@ export default function LicensePage() {
             <div className="space-y-1">
               <p className="text-sm text-muted-foreground flex items-center gap-1.5">
                 <Calendar className="h-3.5 w-3.5" />
-                Valid Until
+                Geçerlilik Tarihi
               </p>
               <p className="font-medium">
                 {license?.validUntil
-                  ? new Date(license.validUntil).toLocaleDateString()
-                  : 'N/A'}
+                  ? new Date(license.validUntil).toLocaleDateString('tr-TR')
+                  : '—'}
               </p>
             </div>
             <div className="space-y-1">
               <p className="text-sm text-muted-foreground flex items-center gap-1.5">
                 <Clock className="h-3.5 w-3.5" />
-                Days Remaining
+                Kalan Gün
               </p>
               <p className="font-medium">
                 {license?.daysRemaining !== undefined ? (
                   <span className={license.daysRemaining <= 30 ? 'text-orange-600' : ''}>
-                    {license.daysRemaining} days
+                    {license.daysRemaining} gün
                   </span>
                 ) : (
-                  'N/A'
+                  '—'
                 )}
               </p>
             </div>
             <div className="space-y-1">
               <p className="text-sm text-muted-foreground flex items-center gap-1.5">
                 <Server className="h-3.5 w-3.5" />
-                Device Limit
+                Cihaz Limiti
               </p>
               <p className="font-medium">{license?.maxDevices || 0}</p>
             </div>
             <div className="space-y-1">
               <p className="text-sm text-muted-foreground flex items-center gap-1.5">
                 <Users className="h-3.5 w-3.5" />
-                User Limit
+                Kullanıcı Limiti
               </p>
               <p className="font-medium">{license?.maxUsers || 0}</p>
             </div>
@@ -316,11 +318,11 @@ export default function LicensePage() {
           {/* Usage Progress */}
           {license && (
             <div className="space-y-4 pt-4 border-t">
-              <h4 className="text-sm font-medium">Current Usage</h4>
+              <h4 className="text-sm font-medium">Mevcut Kullanım</h4>
               <div className="space-y-3">
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Devices</span>
+                    <span className="text-muted-foreground">Cihazlar</span>
                     <span className="font-medium">
                       {usage.deviceCount} / {license.maxDevices}
                     </span>
@@ -336,7 +338,7 @@ export default function LicensePage() {
                 </div>
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Users</span>
+                    <span className="text-muted-foreground">Kullanıcılar</span>
                     <span className="font-medium">
                       {usage.userCount} / {license.maxUsers}
                     </span>
@@ -357,7 +359,7 @@ export default function LicensePage() {
             <div className="pt-4 border-t">
               <h4 className="text-sm font-medium mb-2 flex items-center gap-1.5">
                 <AlertTriangle className="h-4 w-4 text-yellow-500" />
-                Warnings
+                Uyarılar
               </h4>
               <ul className="space-y-1">
                 {license.warnings.map((warning, idx) => (
@@ -374,15 +376,15 @@ export default function LicensePage() {
             <div className="pt-4 border-t">
               <h4 className="text-sm font-medium mb-2 flex items-center gap-1.5">
                 <Info className="h-4 w-4 text-muted-foreground" />
-                Technical Details
+                Teknik Detaylar
               </h4>
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
-                  <span className="text-muted-foreground">License Key:</span>{' '}
+                  <span className="text-muted-foreground">Lisans Anahtarı:</span>{' '}
                   <code className="bg-muted px-1.5 py-0.5 rounded">{license.licenseKey}</code>
                 </div>
                 <div>
-                  <span className="text-muted-foreground">Machine ID:</span>{' '}
+                  <span className="text-muted-foreground">Makine Kimliği:</span>{' '}
                   <code className="bg-muted px-1.5 py-0.5 rounded">
                     {license.machineId?.slice(0, 12)}...
                   </code>
@@ -398,17 +400,17 @@ export default function LicensePage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Key className="h-5 w-5" />
-            Activate License
+            Lisansı Etkinleştir
           </CardTitle>
           <CardDescription>
-            Enter your license key to activate or upgrade your subscription
+            Aboneliğinizi etkinleştirmek veya yükseltmek için lisans anahtarınızı girin
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex gap-3">
             <div className="flex-1">
               <Label htmlFor="license-key" className="sr-only">
-                License Key
+                Lisans Anahtarı
               </Label>
               <Input
                 id="license-key"
@@ -422,18 +424,18 @@ export default function LicensePage() {
               {activating ? (
                 <>
                   <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                  Activating...
+                  Etkinleştiriliyor…
                 </>
               ) : (
-                'Activate'
+                "Etkinleştir"
               )}
             </Button>
             <Button variant="outline" onClick={handleValidate} disabled={loading}>
-              Validate
+              Doğrula
             </Button>
           </div>
           <p className="text-xs text-muted-foreground mt-2">
-            Contact sales@infrascope.com to obtain a license key
+            Lisans anahtarı için sales@infrascope.com adresiyle iletişime geçin
           </p>
         </CardContent>
       </Card>
@@ -443,16 +445,16 @@ export default function LicensePage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Cpu className="h-5 w-5" />
-            Feature Comparison
+            Özellik Karşılaştırması
           </CardTitle>
-          <CardDescription>Features available in each license tier</CardDescription>
+          <CardDescription>Her lisans planında kullanılabilen özellikler</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b">
-                  <th className="text-left py-3 px-4 text-sm font-medium">Feature</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium">Özellik</th>
                   {Object.entries(FEATURE_MATRIX).map(([tier, info]) => (
                     <th key={tier} className="text-center py-3 px-4 text-sm font-medium">
                       <span className="inline-block">{info.label}</span>
@@ -463,7 +465,7 @@ export default function LicensePage() {
               <tbody>
                 {Object.keys(FEATURE_MATRIX.TRIAL.features).map((feature) => (
                   <tr key={feature} className="border-b last:border-b-0 hover:bg-muted/50">
-                    <td className="py-3 px-4 text-sm">{feature}</td>
+                    <td className="py-3 px-4 text-sm">{uiLabel(feature)}</td>
                     {Object.entries(FEATURE_MATRIX).map(([tier, info]) => (
                       <td key={tier} className="py-3 px-4 text-center">
                         {info.features[feature as keyof typeof info.features] ? (

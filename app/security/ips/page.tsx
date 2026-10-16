@@ -1,5 +1,6 @@
 'use client';
 
+import { PageHeading } from '@/components/ui/page-heading';
 import React from 'react';
 import Link from 'next/link';
 import { Card, CardContent } from '@/components/ui/card';
@@ -17,14 +18,13 @@ export default function IpsDisabledPage() {
           <div className="h-14 w-14 rounded-full bg-muted flex items-center justify-center">
             <ShieldAlert className="h-7 w-7 text-muted-foreground" />
           </div>
-          <h1 className="text-xl font-semibold">IPS / DoS Events disabled</h1>
-          <p className="text-sm text-muted-foreground">
-            This page is temporarily disabled and is not available from the navigation.
-          </p>
+          <PageHeading section="risks" description={<>
+            Bu sayfa geçici olarak devre dışı bırakıldı ve menüde gösterilmiyor.
+          </>}>IPS / DoS Olayları Devre Dışı</PageHeading>
           <Link href="/dashboard">
             <Button variant="outline" size="sm">
               <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Dashboard
+              Genel bakışa dön
             </Button>
           </Link>
         </CardContent>

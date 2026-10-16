@@ -6,11 +6,12 @@
  */
 
 import { NextResponse } from 'next/server';
+import type { LegacyAlarmGlobal } from '@/lib/alarms/queries/types';
 
 export async function GET() {
   try {
     // Access the detection engine's FortiGate service
-    const engine = (globalThis as any).__detectionEngine;
+    const engine = (globalThis as LegacyAlarmGlobal).__detectionEngine;
     
     if (!engine) {
       return NextResponse.json({
@@ -45,7 +46,7 @@ export async function GET() {
       '/cmdb/system/accprofile',
     ];
 
-    const snapshotStatus: Record<string, any> = {};
+    const snapshotStatus: Record<string, { hasSnapshot: boolean; snapshotTime: number | null; itemCount: number }> = {};
 
     for (const endpoint of cmdbEndpoints) {
       const snapshot = fgService.getCmdbSnapshot(endpoint);
@@ -64,7 +65,7 @@ export async function GET() {
       },
       cmdbSnapshots: snapshotStatus,
       totalEndpoints: cmdbEndpoints.length,
-      snapshottedEndpoints: Object.values(snapshotStatus).filter((s: any) => s.hasSnapshot).length,
+      snapshottedEndpoints: Object.values(snapshotStatus).filter(s => s.hasSnapshot).length,
     });
   } catch (error) {
     console.error('[CMDB Status] Error:', error);

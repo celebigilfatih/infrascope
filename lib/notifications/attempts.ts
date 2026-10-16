@@ -1,5 +1,7 @@
 import { NotificationAttemptStatus, Prisma } from '@prisma/client';
-import { prisma } from '@/lib/prisma';
+import { prisma as sharedPrisma } from '@/lib/prisma';
+import { alarmExecutionPrisma } from '@/lib/alarms/execution-prisma';
+const prisma = alarmExecutionPrisma(sharedPrisma);
 
 export async function recordNotificationAttempt(params: {
   alarmEventId?: string;

@@ -6,39 +6,40 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import FortiAnalyzerService, { initSharedFortiAnalyzerService } from '@/lib/integrations/fortianalyzer';
+import { authorizeApiRequest } from '@/lib/auth/api-permission';
+import FortiAnalyzerService, { initSharedFortiAnalyzerService, resetFortiAnalyzerLoginBackoff } from '@/lib/integrations/fortianalyzer';
 import { prisma } from '@/lib/prisma';
+import type { Prisma } from '@prisma/client';
+import { mergeFortiAnalyzerProfile, type FortiAnalyzerProfileInput } from '@/lib/integrations/fortianalyzer-profile';
+import { readFortiAnalyzerProfile } from '@/lib/integrations/fortianalyzer-source';
+import { SourceQueryError } from '@/lib/integrations/source-query-error';
 import { validateBody } from '@/lib/validators';
 import { fortianalyzerConfigSchema } from '@/lib/validators/integrations';
+import { fortiAnalyzerRevision, fortiAnalyzerCacheFilter } from '@/lib/integrations/fortianalyzer-revision';
+import { refreshFortiAnalyzerEventCache } from '@/lib/alarms/fortianalyzer-cache-runtime';
 import {
   hasIntegrationCredential,
   protectIntegrationConfig,
   unprotectIntegrationConfig,
 } from '@/lib/security/integration-credentials';
 
-type StoredFortiAnalyzerConfig = {
-  host: string;
-  username?: string;
-  password?: string;
-  apiKey?: string;
-};
-
-function readFortiAnalyzerConfig(config: unknown): StoredFortiAnalyzerConfig {
-  return unprotectIntegrationConfig<StoredFortiAnalyzerConfig>(config, 'FORTIANALYZER');
-}
-
 // ─── In-memory cache for heavy FA queries ───────────────────────────────────
 const FAZ_CACHE_TTL = 5 * 60 * 1000; // 5 minutes default
+type LogRow = Record<string, unknown>;
+type ViewResult = NonNullable<Awaited<ReturnType<FortiAnalyzerService['getFortiView']>>>;
+type CacheEntry<T> = { data: T; timestamp: number };
+type FazGlobal = typeof globalThis & { fazCache?: Record<string, CacheEntry<LogRow[]>> };
+type ViewGlobal<T> = typeof globalThis & { fortiviewCache?: Record<string, CacheEntry<T>> };
 
 function getCached(key: string, ttlMs?: number) {
-  const store = (globalThis as any);
+  const store = globalThis as FazGlobal;
   if (!store.fazCache) store.fazCache = {};
   const entry = store.fazCache[key];
   if (entry && Date.now() - entry.timestamp < (ttlMs ?? FAZ_CACHE_TTL)) return entry.data;
   return null;
 }
-function setCache(key: string, data: unknown) {
-  const store = (globalThis as any);
+function setCache(key: string, data: LogRow[]) {
+  const store = globalThis as FazGlobal;
   if (!store.fazCache) store.fazCache = {};
   store.fazCache[key] = { data, timestamp: Date.now() };
 }
@@ -54,7 +55,7 @@ async function pollForResult(
   limit: number,
   maxAttempts: number = 5,
   startIntervalMs: number = 1000,
-): Promise<any[] | null> {
+): Promise<LogRow[] | null> {
   let interval = startIntervalMs;
   for (let i = 0; i < maxAttempts; i++) {
     await new Promise(resolve => setTimeout(resolve, interval));
@@ -68,6 +69,8 @@ async function pollForResult(
 // ────────────────────────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
+  const access = await authorizeApiRequest(request, 'settings', 'write');
+  if (!access.allowed) return access.response;
   try {
     const body = await request.json();
     const { action, config: reqConfig } = body;
@@ -77,31 +80,20 @@ export async function POST(request: NextRequest) {
       if (!parsed.success) {
         return NextResponse.json({ success: false, connected: false, error: parsed.error });
       }
-      const { host, username, password: rawPassword } = parsed.data;
-
-      // If password is blank, use the saved password from DB
-      let password = rawPassword;
-      if (!password) {
+      const input = parsed.data;
+      const mode = input.authMode ?? (input.apiKey || input.accessToken ? 'api-key' : 'session');
+      const secret = mode === 'api-key' ? input.apiKey || input.accessToken : input.password;
+      let saved: FortiAnalyzerProfileInput | undefined;
+      if (!secret || secret === '********') {
         const existing = await prisma.integrationConfig.findFirst({ where: { type: 'FORTIANALYZER' } });
-        password = existing
-          ? readFortiAnalyzerConfig(existing.config).password || ''
-          : '';
+        if (existing) saved = unprotectIntegrationConfig<FortiAnalyzerProfileInput>(existing.config, 'FORTIANALYZER');
       }
-
-      if (!password) {
-        return NextResponse.json({ success: false, connected: false, error: 'Password is required.' });
-      }
-
-      // Intentionally NOT using initSharedFortiAnalyzerService() here:
-      // test action uses user-supplied credentials which may differ from the
-      // saved singleton config. A temporary instance validates the new creds
-      // without polluting the shared session state.
-      const service = new FortiAnalyzerService({ host, username, password });
-      const loggedIn = await service.login();
+      const profile = mergeFortiAnalyzerProfile(input, saved);
+      const loggedIn = await FortiAnalyzerService.testConnection(profile);
       if (loggedIn) {
         return NextResponse.json({ success: true, connected: true });
       } else {
-        return NextResponse.json({ success: false, connected: false, error: 'Login failed — check credentials or account lock status' });
+        return NextResponse.json({ success: false, connected: false, error: 'Bağlantı doğrulanamadı. Bilgileri ve hesap kilidini kontrol edin; bekleme süresi etkinse dolmasını bekleyin.' });
       }
     }
 
@@ -110,52 +102,28 @@ export async function POST(request: NextRequest) {
       if (!parsed.success) {
         return NextResponse.json({ success: false, error: parsed.error });
       }
-      const { host, username, password } = parsed.data;
-
-      // Fetch existing config to preserve password if not provided
-      const existing = await prisma.integrationConfig.findFirst({
-        where: { type: 'FORTIANALYZER' },
-      });
-      const existingConfig: Partial<StoredFortiAnalyzerConfig> = existing
-        ? readFortiAnalyzerConfig(existing.config)
-        : {};
-
-      const newConfig = {
-        ...existingConfig,
-        host,
-        username,
-        password: password && password.length > 0 ? password : existingConfig.password,
-      };
+      const existing = await prisma.integrationConfig.findFirst({ where: { type: 'FORTIANALYZER' } });
+      const existingConfig = existing
+        ? unprotectIntegrationConfig<FortiAnalyzerProfileInput>(existing.config, 'FORTIANALYZER') : undefined;
+      const profile = mergeFortiAnalyzerProfile(parsed.data, existingConfig);
+      const { accessToken, ...plainProfile } = profile;
+      const newConfig: Record<string, unknown> = { ...plainProfile };
+      if (profile.authMode === 'api-key') newConfig.apiKey = accessToken;
       const protectedConfig = protectIntegrationConfig<Record<string, unknown>>(
         newConfig,
         'FORTIANALYZER'
       );
 
-      await prisma.integrationConfig.upsert({
+      const saved = await prisma.integrationConfig.upsert({
         where: { type_name: { type: 'FORTIANALYZER', name: 'FortiAnalyzer' } },
-        create: { type: 'FORTIANALYZER', name: 'FortiAnalyzer', enabled: true, config: protectedConfig as any },
-        update: { enabled: true, config: protectedConfig as any },
+        create: { type: 'FORTIANALYZER', name: 'FortiAnalyzer', enabled: true, config: protectedConfig as Prisma.InputJsonObject },
+        update: { enabled: true, config: protectedConfig as Prisma.InputJsonObject },
       });
 
-      // Reset global login backoff so the new creds are tried immediately
-      const g = globalThis as any;
-      if (g._fazGlobalState && g._fazGlobalState[host]) {
-        g._fazGlobalState[host].consecutiveFailures = 0;
-        g._fazGlobalState[host].backoffUntil = 0;
-        g._fazGlobalState[host].session = null;
-        g._fazGlobalState[host].lastLoginTime = 0;
-        console.log('[FortiAnalyzer] 🔄 Credentials updated via UI — backoff reset for', host);
-      }
-      // Also clear state for old host if host changed
-      if (g._fazGlobalState) {
-        Object.keys(g._fazGlobalState).forEach(h => {
-          if (h !== host) {
-            g._fazGlobalState[h].session = null;
-            g._fazGlobalState[h].consecutiveFailures = 0;
-            g._fazGlobalState[h].backoffUntil = 0;
-          }
-        });
-      }
+      // Explicit configuration recovery resets only this account's throttle.
+      resetFortiAnalyzerLoginBackoff(profile);
+      refreshFortiAnalyzerEventCache(fortiAnalyzerRevision(saved));
+      (globalThis as typeof globalThis & { fazCache?: Record<string, unknown> }).fazCache = {};
 
       return NextResponse.json({ success: true });
     }
@@ -163,11 +131,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
   } catch (error) {
     console.error('FortiAnalyzer POST error:', error);
-    return NextResponse.json({ success: false, error: (error as Error).message }, { status: 500 });
+    return NextResponse.json({ success: false, connected: false, error: (error as Error).message },
+      { status: error instanceof SourceQueryError && error.code === 'SOURCE_INVALID_CONFIG' ? 400 : 500 });
   }
 }
 
 export async function GET(request: NextRequest) {
+  const access = await authorizeApiRequest(request, 'settings', 'read');
+  if (!access.allowed) return access.response;
   try {
     // Get query params
     const { searchParams } = new URL(request.url);
@@ -181,14 +152,15 @@ export async function GET(request: NextRequest) {
     // Return config (without password) — no login needed
     if (dataType === 'config') {
       if (!config) return NextResponse.json({ config: null });
-      const cfg = config.config as { host?: string; username?: string };
+      const cfg = config.config as FortiAnalyzerProfileInput;
       return NextResponse.json({
         config: {
           host: cfg.host || '',
           username: cfg.username || '',
-          passwordSet:
-            hasIntegrationCredential(config.config, 'FORTIANALYZER', 'password') ||
-            hasIntegrationCredential(config.config, 'FORTIANALYZER', 'apiKey'),
+          adom: cfg.adom ?? 'root',
+          authMode: cfg.authMode ?? (hasIntegrationCredential(config.config, 'FORTIANALYZER', 'apiKey') || hasIntegrationCredential(config.config, 'FORTIANALYZER', 'accessToken') ? 'api-key' : 'session'),
+          passwordSet: hasIntegrationCredential(config.config, 'FORTIANALYZER', 'password'),
+          apiKeySet: hasIntegrationCredential(config.config, 'FORTIANALYZER', 'apiKey') || hasIntegrationCredential(config.config, 'FORTIANALYZER', 'accessToken'),
         }
       });
     }
@@ -200,20 +172,9 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const faConfig = readFortiAnalyzerConfig(config.config);
-
-    if (!faConfig.password) {
-      return NextResponse.json({
-        success: false,
-        error: 'FortiAnalyzer password not configured',
-      }, { status: 400 });
-    }
-
-    const service = initSharedFortiAnalyzerService({
-      host: faConfig.host,
-      username: faConfig.username,
-      password: faConfig.password,
-    });
+    const faConfig = readFortiAnalyzerProfile(config.config);
+    const revision = fortiAnalyzerRevision(config);
+    const service = initSharedFortiAnalyzerService(faConfig);
 
     // Login first
     const loggedIn = await service.login();
@@ -225,7 +186,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Return data based on type
-    let data = null;
+    let data: Awaited<ReturnType<typeof service.getStatus>> | LogRow[] | null = null;
 
     if (dataType === 'status') {
       data = await service.getStatus();
@@ -236,7 +197,7 @@ export async function GET(request: NextRequest) {
       console.log('FortiAnalyzer event logs data:', JSON.stringify(data, null, 2));
     } else if (dataType === 'config-revisions') {
       // Admin system logs — 2-min server-side cache (data changes infrequently)
-      const cacheKey = 'config_revisions_500';
+      const cacheKey = revision + ':config_revisions_500';
       const cached = getCached(cacheKey, 2 * 60 * 1000);
       if (cached) {
         data = cached;
@@ -256,6 +217,7 @@ export async function GET(request: NextRequest) {
           // Query NMS database for recent event logs
           const recentEvents = await prisma.cachedEvent.findMany({
             where: {
+              AND: [fortiAnalyzerCacheFilter(revision)],
               logtype: 'event',
               subtype: 'system',
               user: {
@@ -276,21 +238,21 @@ export async function GET(request: NextRequest) {
             id: event.id,
             date: event.eventTime?.toISOString().split('T')[0],
             time: event.eventTime?.toISOString().split('T')[1]?.split('.')[0],
-            user: (event.rawLog as any)?.user || '',
-            action: event.action || (event.rawLog as any)?.action || '',
-            msg: (event.rawLog as any)?.msg || '',
-            logdesc: (event.rawLog as any)?.logdesc || '',
-            srcip: (event.rawLog as any)?.srcip || '',
-            dstip: (event.rawLog as any)?.dstip || '',
-            status: (event.rawLog as any)?.status || '',
-            level: event.level || (event.rawLog as any)?.level || '',
-            ui: (event.rawLog as any)?.ui || '',
-            profile: (event.rawLog as any)?.profile || '',
-            devname: (event.rawLog as any)?.devname || (event.rawLog as any)?.dev_name || '',
-            devid: (event.rawLog as any)?.devid || '',
-            cfgpath: (event.rawLog as any)?.cfgpath || '',
-            cfgattr: (event.rawLog as any)?.cfgattr || '',
-            cfgobj: (event.rawLog as any)?.cfgobj || '',
+            user: (event.rawLog as Prisma.JsonObject)?.user || '',
+            action: event.action || (event.rawLog as Prisma.JsonObject)?.action || '',
+            msg: (event.rawLog as Prisma.JsonObject)?.msg || '',
+            logdesc: (event.rawLog as Prisma.JsonObject)?.logdesc || '',
+            srcip: (event.rawLog as Prisma.JsonObject)?.srcip || '',
+            dstip: (event.rawLog as Prisma.JsonObject)?.dstip || '',
+            status: (event.rawLog as Prisma.JsonObject)?.status || '',
+            level: event.level || (event.rawLog as Prisma.JsonObject)?.level || '',
+            ui: (event.rawLog as Prisma.JsonObject)?.ui || '',
+            profile: (event.rawLog as Prisma.JsonObject)?.profile || '',
+            devname: (event.rawLog as Prisma.JsonObject)?.devname || (event.rawLog as Prisma.JsonObject)?.dev_name || '',
+            devid: (event.rawLog as Prisma.JsonObject)?.devid || '',
+            cfgpath: (event.rawLog as Prisma.JsonObject)?.cfgpath || '',
+            cfgattr: (event.rawLog as Prisma.JsonObject)?.cfgattr || '',
+            cfgobj: (event.rawLog as Prisma.JsonObject)?.cfgobj || '',
           }));
           
           console.log(`[ConfigRevisions] NMS EventCache returned ${data.length} events`);
@@ -311,7 +273,7 @@ export async function GET(request: NextRequest) {
     } else if (dataType === 'ips-critical') {
       // IPS attack logs — critical severity, with 5-min server-side cache
       const limit = parseInt(searchParams.get('limit') || '500', 10);
-      const cacheKey = `ips_critical_${limit}`;
+      const cacheKey = `${revision}:ips_critical_${limit}`;
 
       // Serve from cache if fresh
       const cached = getCached(cacheKey);
@@ -352,8 +314,8 @@ export async function GET(request: NextRequest) {
       const rangeMinutes = parseInt(searchParams.get('range') || '240', 10);
       
       // Generate cache key
-      const cacheKey = `fortiview_single_${viewName}_${limit}_${sortField}_${rangeMinutes}`;
-      const globalCache = globalThis as any;
+      const cacheKey = `${revision}:fortiview_single_${viewName}_${limit}_${sortField}_${rangeMinutes}`;
+      const globalCache = globalThis as ViewGlobal<ViewResult>;
       if (!globalCache.fortiviewCache) globalCache.fortiviewCache = {};
       
       // Check cache (5 minute TTL)
@@ -387,7 +349,7 @@ export async function GET(request: NextRequest) {
           cached: false
         });
       }
-      return NextResponse.json({ success: true, data: [], type: dataType, view: viewName });
+      throw new Error('FortiAnalyzer FortiView read failed');
     } else if (dataType === 'fortiview-batch') {
       // Batch FortiView: single login, multiple views sequentially
       const viewsParam = searchParams.get('views') || 'top-websites,top-browsing-users,policy-hits';
@@ -397,8 +359,8 @@ export async function GET(request: NextRequest) {
       const rangeMinutes = parseInt(searchParams.get('range') || '240', 10);
 
       // Generate cache key from parameters
-      const cacheKey = `fortiview_batch_${viewsParam}_${limit}_${sortField}_${rangeMinutes}`;
-      const globalCache = globalThis as any;
+      const cacheKey = `${revision}:fortiview_batch_${viewsParam}_${limit}_${sortField}_${rangeMinutes}`;
+      const globalCache = globalThis as ViewGlobal<Record<string, ViewResult>>;
       if (!globalCache.fortiviewCache) globalCache.fortiviewCache = {};
       
       // Check cache (5 minute TTL)
@@ -410,13 +372,9 @@ export async function GET(request: NextRequest) {
 
       const results: Record<string, { data: Array<Record<string, unknown>>; totalCount?: number }> = {};
       for (const viewName of views) {
-        try {
-          const result = await service.getFortiView(viewName.trim(), limit, { field: sortField, order: 'desc' }, undefined, rangeMinutes);
-          results[viewName.trim()] = result || { data: [] };
-        } catch (err) {
-          console.error(`FortiView batch error for ${viewName}:`, err);
-          results[viewName.trim()] = { data: [] };
-        }
+        const result = await service.getFortiView(viewName.trim(), limit, { field: sortField, order: 'desc' }, undefined, rangeMinutes);
+        if (!result) throw new Error('FortiAnalyzer FortiView batch read failed');
+        results[viewName.trim()] = result;
       }
       
       // Cache the results
@@ -433,6 +391,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    if (data === null || data === undefined) throw new Error('FortiAnalyzer read failed');
     return NextResponse.json({ 
       success: true, 
       data,

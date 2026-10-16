@@ -104,6 +104,14 @@ export function getHttpsRequestTlsOptions(integration: TlsIntegration, overrides
   return getTlsMaterial(integration, overrides);
 }
 
+/** Carry the same verification decision and Node trust roots to SDK subprocesses. */
+export function getPythonTlsPolicy(integration: TlsIntegration): { verify: boolean; caPem?: string } {
+  const material = getTlsMaterial(integration);
+  if (!material.rejectUnauthorized) return { verify: false };
+  const roots = material.ca ?? rootCertificates;
+  return { verify: true, caPem: typeof roots === 'string' ? roots : roots.join('\n') };
+}
+
 export function secureFetch(
   integration: TlsIntegration,
   url: string | URL,

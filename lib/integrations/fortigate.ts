@@ -1,8 +1,8 @@
 /**
  * FortiGate Integration Service
  * 
- * Supports three integration modes:
- * - SNMP: Interfaces, VLANs, routing basics, HA status
+ * Supports mode-selected interface inventory:
+ * - SNMP/both: Existing stored NMS interface observations with explicit availability
  * - REST API: Firewall policies, NAT, VIPs, zones, SD-WAN, VPNs
  * - Logs: Traffic and security events (optional)
  */
@@ -13,6 +13,8 @@ import * as querystring from 'querystring';
 import { createLogger } from '@/lib/logger';
 import { getHttpsRequestTlsOptions, secureFetch } from '@/lib/security/tls';
 import { prisma } from '@/lib/prisma';
+import { readFortiGateSnmpInterfaces } from './fortigate-snmp';
+import type { FirewallSnmpInterface } from '@/lib/firewall/snmp-read';
 import {
   classifyFortiGateError,
   createFortiGateHttpError,
@@ -22,12 +24,29 @@ import {
 
 const log = createLogger('fortigate');
 
+export interface FortiGateEventLog extends Record<string, unknown> {
+  eventtime?: string | number;
+  itime_t?: number;
+  date_epoch?: number;
+  user?: string;
+  srcip?: string;
+  timestamp?: number;
+  action?: string;
+  status?: string;
+  msg?: string;
+}
+export interface FortiGateCmdbObject extends Record<string, unknown> {
+  results?: Array<Record<string, unknown>>;
+}
+export type FortiGateCmdbData = FortiGateCmdbObject | Array<Record<string, unknown>>;
+
 // Configuration Types
 export interface FortiGateConfig {
   host: string;
   username?: string;   // Admin username for cookie-based auth
   password?: string;   // Admin password for cookie-based auth
   accessToken: string; // REST API token (fallback if no username/password)
+  /** Legacy settings; the linked NMS device owns operational SNMP credentials. */
   snmp?: {
     community: string;
     version: '2c' | '3';
@@ -60,15 +79,18 @@ export interface FortiGateConfig {
 
 export interface FortiGateInterface {
   name: string;
-  status: 'up' | 'down';
-  speed: number;
-  duplex: 'full' | 'half' | 'auto';
-  ip: string;
-  mask: string;
+  status: 'up' | 'down' | 'unknown';
+  speed: number | null;
+  duplex: 'full' | 'half' | 'auto' | null;
+  ip: string | null;
+  mask: string | null;
   mtu: number;
-  interface: string; // Parent interface for VLANs
+  interface: string | null; // Parent interface for VLANs
   vlanid?: number;
-  type: 'physical' | 'vlan' | 'tunnel';
+  type: 'physical' | 'vlan' | 'tunnel' | null;
+  source?: 'nms' | 'fortigate-rest';
+  collectedAt?: string;
+  observation?: FirewallSnmpInterface;
 }
 
 export interface FortiGateVlan {
@@ -156,38 +178,13 @@ export interface SyncResult {
   addressesProcessed: number;
   errors: string[];
   duration: number;
-}
-
-// SNMP Helper (using node-snmp library concepts)
-class SNMPClient {
-  private community: string;
-  private host: string;
-
-  constructor(host: string, community: string, _version: '2c' | '3' = '2c') {
-    this.host = host;
-    this.community = community;
-  }
-
-  async get(oid: string): Promise<{ value: string }> {
-    // In production, use actual SNMP library
-    // This is a placeholder for the interface
-    const response = await fetch(`http://${this.host}:161/snmp?oid=${oid}`, {
-      headers: { 'Authorization': `Community ${this.community}` },
-    });
-    return response.json();
-  }
-
-  async walk(_baseOid: string): Promise<Array<{ oid: string; value: string }>> {
-    // SNMP walk implementation
-    return [];
-  }
+  interfaceSource?: { source: 'nms' | 'fortigate-rest'; collectedAt: string | null };
 }
 
 // FortiGate REST API Client
 export class FortiGateService {
   private config: FortiGateConfig;
   private baseUrl: string;
-  private snmpClient?: SNMPClient;
 
   // Cookie-based session state
   private sessionCookie: string | null = null;
@@ -198,10 +195,6 @@ export class FortiGateService {
   constructor(config: FortiGateConfig) {
     this.config = config;
     this.baseUrl = `https://${config.host}/api/v2`;
-
-    if (config.snmp) {
-      this.snmpClient = new SNMPClient(config.host, config.snmp.community, config.snmp.version);
-    }
   }
 
   getTargetKey(): string {
@@ -348,6 +341,9 @@ export class FortiGateService {
     method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET',
     body?: Record<string, unknown>
   ): Promise<T> {
+    if (this.config.syncMode === 'snmp') {
+      throw new FirewallIntegrationError('UNSUPPORTED_OPERATION', 'This operation requires FortiGate REST mode', false, 501);
+    }
     const requestUrl = new URL(`${this.baseUrl}${endpoint}`);
     if (this.config.vdom && !requestUrl.searchParams.has('vdom')) {
       requestUrl.searchParams.set('vdom', this.config.vdom);
@@ -410,7 +406,7 @@ export class FortiGateService {
    * Fetch interfaces (REST API or SNMP)
    */
   async fetchInterfaces(): Promise<FortiGateInterface[]> {
-    if (this.config.syncMode === 'snmp' && this.snmpClient) {
+    if (this.config.syncMode === 'snmp' || this.config.syncMode === 'both') {
       return this.fetchInterfacesSNMP();
     }
     return this.fetchInterfacesREST();
@@ -455,10 +451,7 @@ export class FortiGateService {
   }
 
   private async fetchInterfacesSNMP(): Promise<FortiGateInterface[]> {
-    // SNMP implementation would use OIDs like:
-    // IF-MIB::ifDescr, IF-MIB::ifOperStatus, IF-MIB::ifSpeed
-    // FORTINET-CORE-MIB::fortiGateMib
-    return [];
+    return readFortiGateSnmpInterfaces(this.config);
   }
 
   /**
@@ -649,6 +642,7 @@ export class FortiGateService {
    * Get or create the FortiGate device record
    */
   private async getOrCreateDevice(_organizationId: string): Promise<string> {
+    void _organizationId; // Retain the existing caller contract; this path does not use this argument.
     if (this.config.deviceId) {
       const configuredDevice = await prisma.device.findUnique({
         where: { id: this.config.deviceId },
@@ -710,13 +704,31 @@ export class FortiGateService {
     };
 
     try {
-      // Get or create device
-      const deviceId = await this.getOrCreateDevice(organizationId);
+      if (this.config.syncMode === 'snmp'
+        && (['vlans', 'policies', 'addresses', 'vips', 'sdwan'] as const).some(module => this.config.enabledModules[module])) {
+        throw new FirewallIntegrationError('UNSUPPORTED_OPERATION',
+          'SNMP-only inventory supports interfaces; disable REST-only modules or select both mode', false, 501);
+      }
+      // Validate the complete source before creating or updating inventory rows.
+      const interfaces = this.config.enabledModules.interfaces ? await this.fetchInterfaces() : null;
+      if (interfaces) {
+        result.interfaceSource = {
+          source: this.config.syncMode === 'rest' ? 'fortigate-rest' : 'nms',
+          collectedAt: interfaces.length && interfaces.every(iface => iface.collectedAt)
+            ? new Date(Math.min(...interfaces.map(iface => Date.parse(iface.collectedAt!)))).toISOString() : null,
+        };
+      }
+      // NMS observations must retain their validated device, including if it disappears before persistence.
+      // The foreign key then fails the write; never recreate or guess a different NMS target.
+      const deviceId = interfaces?.[0]?.source === 'nms'
+        ? this.config.deviceId : await this.getOrCreateDevice(organizationId);
+      if (!deviceId) {
+        throw new FirewallIntegrationError('UPSTREAM_UNAVAILABLE', 'NMS inventory device is unavailable', true, 503);
+      }
       result.deviceId = deviceId;
 
       // Fetch and sync interfaces
-      if (this.config.enabledModules.interfaces) {
-        const interfaces = await this.fetchInterfaces();
+      if (interfaces) {
         
         for (const iface of interfaces) {
           try {
@@ -730,15 +742,15 @@ export class FortiGateService {
               create: {
                 deviceId,
                 name: iface.name,
-                type: iface.type === 'vlan' ? 'FIBER' : 'ETHERNET',
+                type: iface.type === null ? 'OTHER' : iface.type === 'vlan' ? 'FIBER' : 'ETHERNET',
                 ipv4: iface.ip ? `${iface.ip}/${iface.mask}` : null,
-                status: iface.status === 'up' ? 'UP' : 'DOWN',
+                status: iface.status === 'up' ? 'UP' : iface.status === 'down' ? 'DOWN' : 'UNKNOWN',
                 // speed: BigInt(iface.speed),
                 createdAt: new Date(),
                 updatedAt: new Date(),
               },
               update: {
-                status: iface.status === 'up' ? 'UP' : 'DOWN',
+                status: iface.status === 'up' ? 'UP' : iface.status === 'down' ? 'DOWN' : 'UNKNOWN',
                 ipv4: iface.ip ? `${iface.ip}/${iface.mask}` : undefined,
                 // speed: BigInt(iface.speed),
                 updatedAt: new Date(),
@@ -861,7 +873,7 @@ export class FortiGateService {
         }
       }
 
-      result.success = true;
+      result.success = result.errors.length === 0;
     } catch (error) {
       result.errors.push(`FortiGate sync failed: ${(error as Error).message}`);
     }
@@ -1010,9 +1022,9 @@ export class FortiGateService {
   }
 
   // ── Per-cycle cache, request dedup & sequential queue to avoid 429 ──────────
-  private _eventLogCache = new Map<string, { ts: number; data: Array<Record<string, any>> }>();
+  private _eventLogCache = new Map<string, { ts: number; data: FortiGateEventLog[] }>();
   private _eventLogCacheTTL = 5 * 60 * 1000; // 5 min TTL
-  private _inflight = new Map<string, Promise<Array<Record<string, any>>>>();
+  private _inflight = new Map<string, Promise<FortiGateEventLog[]>>();
   private _requestQueue: Promise<void> = Promise.resolve();
   private _requestDelay = 1000; // ms between requests
 
@@ -1027,8 +1039,8 @@ export class FortiGateService {
   // On first call (no stored snapshot) → isFirstRun=true, alarm does NOT fire.
   // On subsequent calls → changed=true when fingerprint differs.
   private _cmdbSnapshotStore = new Map<string, string>(); // endpoint → fingerprint
-  private _previousCmdbData = new Map<string, any>(); // endpoint → previous actual data (before this cycle's update)
-  private _cmdbResponseCache = new Map<string, { ts: number; data: any }>(); // short-lived
+  private _previousCmdbData = new Map<string, FortiGateCmdbData>(); // endpoint → previous actual data (before this cycle's update)
+  private _cmdbResponseCache = new Map<string, { ts: number; data: FortiGateCmdbData }>(); // short-lived
   private readonly _cmdbResponseCacheTTL = 90_000; // 90s — covers one full alarm cycle
 
   /**
@@ -1046,7 +1058,7 @@ export class FortiGateService {
   async getCmdbChanges(endpoint: string): Promise<{
     changed: boolean;
     isFirstRun: boolean;
-    current: any[] | Record<string, any> | null;
+    current: FortiGateCmdbData | null;
   }> {
     // 1. Return cached response if available (avoids duplicate calls in same cycle)
     const cached = this._cmdbResponseCache.get(endpoint);
@@ -1060,8 +1072,8 @@ export class FortiGateService {
     }
 
     try {
-      const data = await this.apiRequest<{ results?: any; [k: string]: any }>(endpoint);
-      const current: any = data.results ?? data;
+      const data = await this.apiRequest<FortiGateCmdbObject>(endpoint);
+      const current: FortiGateCmdbData = data.results ?? data;
 
       // Preserve previous data BEFORE updating cache — needed for computeArrayDiff
       const prevCached = this._cmdbResponseCache.get(endpoint);
@@ -1117,7 +1129,7 @@ export class FortiGateService {
    * otherwise returns current cached data. Used by computeArrayDiff to compare
    * old vs new state.
    */
-  getCmdbSnapshot(endpoint: string): { timestamp: number; data: any } | null {
+  getCmdbSnapshot(endpoint: string): { timestamp: number; data: FortiGateCmdbData } | null {
     // If we have previous data (change was detected this cycle), return it
     const prevData = this._previousCmdbData.get(endpoint);
     if (prevData !== undefined) {
@@ -1159,7 +1171,7 @@ export class FortiGateService {
    *   "subtype==system&&action==login&&status==failed"
    * @param rows    Max rows to return (default 1000)
    */
-  async getEventLogs(filter: string, rows = 1000): Promise<Array<Record<string, any>>> {
+  async getEventLogs(filter: string, rows = 1000): Promise<FortiGateEventLog[]> {
     const cacheKey = `${filter}|${rows}`;
 
     // 1. Return from cache if available
@@ -1175,7 +1187,7 @@ export class FortiGateService {
     }
 
     // 3. Queue a new request
-    const promise = new Promise<Array<Record<string, any>>>((resolve, reject) => {
+    const promise = new Promise<FortiGateEventLog[]>((resolve, reject) => {
       this._requestQueue = this._requestQueue.then(async () => {
         // Double-check cache (might have been populated by a previous queued request)
         const cached2 = this._eventLogCache.get(cacheKey);
@@ -1188,7 +1200,7 @@ export class FortiGateService {
           const params = new URLSearchParams({ rows: String(rows) });
           if (filter) params.set('filter', filter);
 
-          const data = await this.apiRequest<{ results?: Array<Record<string, any>> }>(
+          const data = await this.apiRequest<{ results?: FortiGateEventLog[] }>(
             `/monitor/log/event?${params}`
           );
           const logs = data.results || [];

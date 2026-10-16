@@ -34,6 +34,7 @@ function integrationState(input: {
 }): SourceState {
   if (!input.configured || input.enabled === false) return 'unconfigured';
   if (input.lastSyncStatus === 'failed') return 'error';
+  if (input.lastSyncStatus === 'partial') return 'stale';
   if (!input.lastSyncAt || Date.now() - input.lastSyncAt.getTime() > input.staleAfterMs) return 'stale';
   return 'healthy';
 }
@@ -68,6 +69,8 @@ export async function GET() {
       integrationConfigs,
       latestNmsDevice,
       firewallPolicyCount,
+      networkTotal,
+      nmsUnknown,
     ] = await Promise.all([
       prisma.device.count(),
       prisma.device.count({ where: { status: DeviceStatus.ACTIVE } }),
@@ -75,11 +78,11 @@ export async function GET() {
       prisma.device.count({ where: { type: DeviceType.VIRTUAL_HOST, status: DeviceStatus.ACTIVE } }),
       prisma.device.count({ where: { type: DeviceType.VIRTUAL_MACHINE } }),
       prisma.device.count({ where: { type: DeviceType.VIRTUAL_MACHINE, status: DeviceStatus.ACTIVE } }),
-      prisma.device.count({ where: { pollingEnabled: true } }),
+      prisma.device.count({ where: { pollingEnabled: true, nmsDeviceId: { not: null } } }),
       prisma.device.count({
         where: {
           pollingEnabled: true,
-          status: DeviceStatus.ACTIVE,
+          nmsDeviceId: { not: null },
           lastPolledAt: { gte: recentNmsThreshold },
         },
       }),
@@ -101,7 +104,6 @@ export async function GET() {
         where: {
           pollingEnabled: true,
           OR: [
-            { status: { not: DeviceStatus.ACTIVE } },
             { lastPolledAt: null },
             { lastPolledAt: { lt: recentNmsThreshold } },
           ],
@@ -123,7 +125,7 @@ export async function GET() {
       }),
       prisma.alarmIncident.findMany({
         where: { ...activeIncidentWhere, severity: { in: PRIORITY_SEVERITIES } },
-        include: { alarm: { select: { code: true, name: true } } },
+        include: { alarm: { select: { code: true, name: true } }, occurrences: { orderBy: { createdAt: 'desc' }, take: 1, select: { rawData: true } } },
         orderBy: { lastSeenAt: 'desc' },
         take: 20,
       }),
@@ -145,6 +147,8 @@ export async function GET() {
         orderBy: { lastPolledAt: 'desc' },
       }),
       prisma.firewallPolicy.count(),
+      prisma.device.count({ where: { OR: [{ nmsDeviceId: { not: null } }, { type: { in: NETWORK_TYPES } }] } }),
+      prisma.device.count({ where: { pollingEnabled: true, nmsDeviceId: { not: null }, lastPolledAt: null } }),
     ]);
 
     const vmIds = [...new Set(oldSnapshots.map((snapshot) => snapshot.vmId))];
@@ -152,6 +156,14 @@ export async function GET() {
       ? await prisma.device.findMany({ where: { id: { in: vmIds } }, select: { id: true, name: true } })
       : [];
     const vmNames = new Map(snapshotDevices.map((device) => [device.id, device.name]));
+
+    const nmsIds = incidentCandidates.filter(item => item.entityType?.startsWith('nms-'))
+      .map(item => Number(item.entityId?.split(':')[0])).filter(id => Number.isInteger(id) && id > 0 && id <= 2147483647);
+    const inventoryIds = incidentCandidates.filter(item => item.entityType === 'nms-backup').map(item => item.entityId).filter((id): id is string => Boolean(id));
+    const incidentDevices = nmsIds.length || inventoryIds.length ? await prisma.device.findMany({
+      where: { OR: [{ nmsDeviceId: { in: nmsIds } }, { id: { in: inventoryIds } }] },
+      select: { id: true, nmsDeviceId: true, name: true, managementIp: true },
+    }) : [];
 
     const severityCounts = Object.fromEntries(incidentStats.map((item) => [item.severity, item._count.id]));
     const severityRank: Record<string, number> = {
@@ -164,7 +176,14 @@ export async function GET() {
     const priorityIncidents = incidentCandidates
       .sort((a, b) => severityRank[a.severity] - severityRank[b.severity] || b.lastSeenAt.getTime() - a.lastSeenAt.getTime())
       .slice(0, 5)
-      .map((incident) => ({
+      .map((incident) => {
+        const device = incidentDevices.find(item => incident.entityType === 'nms-backup' ? item.id === incident.entityId : item.nmsDeviceId === Number(incident.entityId?.split(':')[0]));
+        const raw = incident.occurrences[0]?.rawData;
+        const data = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw as Record<string, unknown> : {};
+        const candidate = incident.alarm.code.includes('MEMORY') ? data.memory_usage ?? data.memoryUsage : incident.alarm.code.includes('CPU') ? data.cpu_usage ?? data.cpuUsage : null;
+        const titleValue = incident.title.match(/([\d.]+)%/);
+        const value = typeof candidate === 'number' ? candidate : titleValue ? Number(titleValue[1]) : null;
+        return {
         id: incident.id,
         code: incident.alarm.code,
         title: incident.title,
@@ -175,7 +194,9 @@ export async function GET() {
         entityId: incident.entityId,
         lastSeenAt: incident.lastSeenAt,
         occurrenceCount: incident.occurrenceCount,
-      }));
+        deviceId: device?.id ?? null, deviceName: device?.name ?? null, managementIp: device?.managementIp ?? null,
+        value: value !== null && Number.isFinite(value) && value >= 0 && value <= 100 ? value : null,
+      }; });
 
     const configsByType = new Map<IntegrationType, typeof integrationConfigs[number]>();
     for (const config of integrationConfigs) {
@@ -209,7 +230,8 @@ export async function GET() {
           staleAfterMs,
         }),
         lastSyncAt: config?.lastSyncAt ?? null,
-        message: config?.lastSyncStatus === 'failed' ? 'Son senkronizasyon başarısız' : null,
+        message: config?.lastSyncStatus === 'failed' ? 'Son senkronizasyon başarısız'
+          : config?.lastSyncStatus === 'partial' ? 'Son senkronizasyon kısmen tamamlandı' : null,
       };
     });
     integrations.push({
@@ -241,6 +263,8 @@ export async function GET() {
 
     return NextResponse.json({
       generatedAt: new Date().toISOString(),
+      coverage: { total: networkTotal, monitored: nmsTotal, fresh: nmsOnline, unknown: nmsUnknown,
+        stale: Math.max(0, nmsTotal - nmsOnline - nmsUnknown), unmonitored: Math.max(0, networkTotal - nmsTotal) },
       posture: {
         status: overallStatus,
         critical: criticalCount,

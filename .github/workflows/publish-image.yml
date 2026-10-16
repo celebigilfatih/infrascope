@@ -15,11 +15,22 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository_owner }}/infrascope
 
+permissions:
+  contents: read
+
 jobs:
   backup-checks:
     uses: ./.github/workflows/backup-checks.yml
+  release-quality:
+    uses: ./.github/workflows/release-quality.yml
+  alarm-checks:
+    uses: ./.github/workflows/alarm-occurrence-checks.yml
+  dashboard-checks:
+    uses: ./.github/workflows/dashboard-checks.yml
+  incident-checks:
+    uses: ./.github/workflows/incident-regression.yml
   publish:
-    needs: backup-checks
+    needs: [release-quality, alarm-checks, dashboard-checks, incident-checks, backup-checks]
     name: Build and push Docker image
     runs-on: ubuntu-latest
     permissions:

@@ -1,6 +1,6 @@
 /**
  * POST /api/alarms/check — Manual alarm evaluation trigger.
- * GET  /api/alarms/check — Same (cron-friendly).
+ * GET  /api/alarms/check — Method not allowed; triggers require POST.
  *
  * This route is now a thin wrapper around runAlarmCheck() from alarm-runner.ts.
  * The scheduler and watchdog call runAlarmCheck() directly (in-process) and no
@@ -12,10 +12,13 @@
  *  - Integration testing
  */
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { runAlarmCheck } from '@/lib/alarms/alarm-runner';
+import { authorizeApiRequest } from '@/lib/auth/api-permission';
 
-export async function POST() {
+export async function POST(request: NextRequest) {
+  const access = await authorizeApiRequest(request, 'alarms', 'write');
+  if (!access.allowed) return access.response;
   try {
     const result = await runAlarmCheck();
     return NextResponse.json(result, { status: result.success ? 200 : 400 });
@@ -29,5 +32,5 @@ export async function POST() {
 }
 
 export async function GET() {
-  return POST();
+  return NextResponse.json({ success: false, error: 'Alarm kontrolü için POST kullanın.' }, { status: 405, headers: { Allow: 'POST' } });
 }

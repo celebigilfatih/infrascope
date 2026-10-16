@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
 // Cache for 60 seconds to prevent database overload
-let cachedOrganizations: any = null;
+let cachedOrganizations: unknown = null;
 let cacheTimestamp: number = 0;
 const CACHE_TTL = 60000; // 60 seconds
 
@@ -75,11 +75,11 @@ export async function GET(request: NextRequest) {
       timestamp: new Date(),
       cached: false
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error fetching organizations details:', {
-      message: error.message,
-      stack: error.stack,
-      code: error.code
+      message: (error as Error & { code?: string }).message,
+      stack: (error as Error & { code?: string }).stack,
+      code: (error as Error & { code?: string }).code
     });
     return NextResponse.json({
       success: false,
@@ -119,7 +119,7 @@ export async function POST(request: NextRequest) {
       data: organization,
       timestamp: new Date()
     }, { status: 201 });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error creating organization:', error);
     return NextResponse.json({
       success: false,

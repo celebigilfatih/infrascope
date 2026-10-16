@@ -1,5 +1,8 @@
 'use client';
 
+import { uiError } from '@/lib/i18n/tr';
+
+import { PageHeading } from '@/components/ui/page-heading';
 import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -72,10 +75,10 @@ export default function VirtualIPsPage() {
       if (result.success && Array.isArray(result.data)) {
         setVips(result.data);
       } else {
-        setError(result.error || 'Virtual IP verileri yüklenemedi');
+        setError(uiError(result.error || 'Virtual IP verileri yüklenemedi'));
       }
     } catch (err) {
-      setError('Virtual IP listesi alınamadı');
+      setError(uiError('Virtual IP listesi alınamadı'));
       console.error('Failed to fetch VIPs:', err);
     } finally {
       setLoading(false);
@@ -110,22 +113,22 @@ export default function VirtualIPsPage() {
   };
 
   const getStatusBadge = (status?: string) => {
-    if (status === 'enable') return <Badge className="bg-green-600 text-white">Aktif</Badge>;
-    return <Badge className="bg-gray-500 text-white">Pasif</Badge>;
+    if (status === 'enable') return <Badge variant="success">Aktif</Badge>;
+    return <Badge variant="secondary">Pasif</Badge>;
   };
 
   const getTypeBadge = (type?: string) => {
     switch (type) {
-      case 'static-nat': return <Badge className="bg-blue-600 text-white">Statik NAT</Badge>;
+      case 'static-nat': return <Badge variant="info">Statik NAT</Badge>;
       case 'server-load-balance': return <Badge className="bg-purple-600 text-white">Yük Dengeleme</Badge>;
       case 'dns-translation': return <Badge className="bg-teal-600 text-white">DNS Çeviri</Badge>;
       case 'fqdn': return <Badge className="bg-indigo-600 text-white">FQDN</Badge>;
-      default: return <Badge className="bg-slate-600 text-white">{type || 'Statik NAT'}</Badge>;
+      default: return <Badge variant="secondary">{type || 'Statik NAT'}</Badge>;
     }
   };
 
   const getPortForwardBadge = (pf?: string) => {
-    if (pf === 'enable') return <Badge className="bg-amber-600 text-white">Evet</Badge>;
+    if (pf === 'enable') return <Badge variant="warning">Evet</Badge>;
     return <Badge variant="outline">Hayır</Badge>;
   };
 
@@ -133,10 +136,9 @@ export default function VirtualIPsPage() {
     <div className="p-6 space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Virtual IP (VIP) Listesi</h1>
-          <p className="text-muted-foreground">
-            FortiGate üzerindeki Virtual IP (DNAT) kuralları
-          </p>
+          <PageHeading section="virtualIps" description={<>
+            FortiGate üzerindeki sanal IP (DNAT) kuralları
+          </>}>Sanal IP (VIP) Listesi</PageHeading>
         </div>
         <Button onClick={fetchVIPs} variant="outline" disabled={loading}>
           <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
@@ -161,13 +163,13 @@ export default function VirtualIPsPage() {
         <Card><CardContent className="p-4">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-full bg-amber-500/20"><ArrowRightLeft className="h-5 w-5 text-amber-500" /></div>
-            <div><p className="text-sm text-muted-foreground">Port Forward</p><p className="text-2xl font-bold">{portForwardCount}</p></div>
+            <div><p className="text-sm text-muted-foreground">Port Yönlendirme</p><p className="text-2xl font-bold">{portForwardCount}</p></div>
           </div>
         </CardContent></Card>
         <Card><CardContent className="p-4">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-full bg-purple-500/20"><Wifi className="h-5 w-5 text-purple-500" /></div>
-            <div><p className="text-sm text-muted-foreground">Interface</p><p className="text-2xl font-bold">{uniqueInterfaces.length}</p></div>
+            <div><p className="text-sm text-muted-foreground">Arayüz</p><p className="text-2xl font-bold">{uniqueInterfaces.length}</p></div>
           </div>
         </CardContent></Card>
       </div>
@@ -183,7 +185,7 @@ export default function VirtualIPsPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <ExternalLink className="h-5 w-5" />
-            Virtual IP Kuralları
+            Sanal IP Kuralları
             <Badge variant="secondary">{filteredVips.length}</Badge>
           </CardTitle>
         </CardHeader>
@@ -193,7 +195,7 @@ export default function VirtualIPsPage() {
           ) : error ? (
             <div className="flex items-center gap-2 p-4 bg-destructive/10 rounded-lg">
               <AlertCircle className="h-5 w-5 text-destructive" />
-              <span className="text-destructive">{error}</span>
+              <span className="text-destructive">{uiError(error)}</span>
             </div>
           ) : (
             <>
@@ -207,8 +209,8 @@ export default function VirtualIPsPage() {
                     <TableHead>Harici Port</TableHead>
                     <TableHead>Dahili IP</TableHead>
                     <TableHead>Dahili Port</TableHead>
-                    <TableHead>Interface</TableHead>
-                    <TableHead>Port Forward</TableHead>
+                    <TableHead>Arayüz</TableHead>
+                    <TableHead>Port Yönlendirme</TableHead>
                     <TableHead>Açıklama</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -239,8 +241,8 @@ export default function VirtualIPsPage() {
                 <div className="flex items-center justify-between mt-4">
                   <p className="text-sm text-muted-foreground">Sayfa {currentPage} / {totalPages} ({filteredVips.length} kayıt)</p>
                   <div className="flex items-center gap-1">
-                    <Button variant="outline" size="icon" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}><ChevronLeft className="h-4 w-4" /></Button>
-                    <Button variant="outline" size="icon" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}><ChevronRight className="h-4 w-4" /></Button>
+                    <Button variant="outline" size="icon" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} aria-label="Önceki sayfa"><ChevronLeft className="h-4 w-4" /></Button>
+                    <Button variant="outline" size="icon" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} aria-label="Sonraki sayfa"><ChevronRight className="h-4 w-4" /></Button>
                   </div>
                 </div>
               )}

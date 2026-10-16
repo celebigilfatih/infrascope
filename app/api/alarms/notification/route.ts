@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { protectIntegrationConfig } from '@/lib/security/integration-credentials';
 import { sendTestEmail } from '@/lib/notifications/email';
 import { validateBody } from '@/lib/validators';
 import { notificationConfigSchema } from '@/lib/validators/alarms';
@@ -83,14 +84,14 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'SMTP password is required' }, { status: 400 });
     }
 
-    const newConfig = {
+    const newConfig = protectIntegrationConfig<Record<string, string | number | boolean | string[]>>({
       smtpHost,
       smtpPort,
       smtpUser,
       smtpPass: resolvedPassword,
       smtpSecure: smtpSecure ?? false,
       recipients,
-    };
+    }, 'SMTP');
 
     const result = await prisma.notificationConfig.upsert({
       where: { channel: 'email' },

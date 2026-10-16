@@ -1,3 +1,4 @@
+import { PageHeading } from '@/components/ui/page-heading';
 import { notFound } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { isLicenseServerMode } from '@/lib/license/server-mode';
@@ -16,10 +17,9 @@ export default async function LicenseAdminPage() {
     return (
       <div className="p-6">
         <div className="rounded-lg border bg-card p-6">
-          <h1 className="text-xl font-semibold">License Admin</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            This area requires an ADMIN account on the central license server.
-          </p>
+          <PageHeading section="license" description={<>
+            Bu alan, merkezi lisans sunucusunda yönetici hesabı gerektirir.
+          </>}>Merkezi Lisans Yönetimi</PageHeading>
         </div>
       </div>
     );

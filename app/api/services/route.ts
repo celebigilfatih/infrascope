@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
       totalPages: Math.ceil(total / limit),
       timestamp: new Date()
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error fetching services:', error);
     return NextResponse.json({
       success: false,
@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
       data: service,
       timestamp: new Date()
     }, { status: 201 });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error creating service:', error);
     return NextResponse.json({
       success: false,

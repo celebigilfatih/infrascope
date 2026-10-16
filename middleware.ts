@@ -27,7 +27,13 @@ const ROUTE_RESOURCE_MAP: Record<string, Resource> = {
   '/api/settings': 'settings',
   '/api/audit': 'audit',
   '/api/permissions': 'settings',
+  '/api/integrations/nms/backup-policies': 'settings',
+  '/api/integrations/nms/alarms': 'alarms',
+  '/api/integrations/nms': 'devices',
+  '/api/integrations/vmware': 'devices',
+  '/api/integrations/zabbix': 'devices',
   '/api/integrations/fortigate': 'firewall',
+  '/api/integrations': 'settings',
   '/api/security/quarantine': 'firewall',
   '/api/firewall-policies': 'firewall',
   '/api/firewalls': 'firewall',
@@ -36,6 +42,7 @@ const ROUTE_RESOURCE_MAP: Record<string, Resource> = {
 // Map HTTP methods to action types
 const METHOD_ACTION_MAP: Record<string, Action> = {
   GET: 'read',
+  HEAD: 'read',
   POST: 'write',
   PATCH: 'write',
   PUT: 'write',
@@ -131,7 +138,7 @@ export async function middleware(request: NextRequest) {
   // Find matching resource
   let resource: Resource | undefined;
   for (const [prefix, res] of Object.entries(ROUTE_RESOURCE_MAP)) {
-    if (pathname.startsWith(prefix)) {
+    if (isRouteMatch(pathname, prefix)) {
       resource = res;
       break;
     }

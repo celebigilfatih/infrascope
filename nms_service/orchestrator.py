@@ -41,6 +41,8 @@ class NMSOrchestrator:
         self.ssh_poller = SSHPoller()
         # nms_device_id (int) -> Device record
         self.device_map: Dict[int, Device] = {}
+        self._registration_ready = False
+        self._registration_summary = None
         self.last_topology_poll: Dict[int, datetime] = {}
         self.last_device_poll: Dict[int, datetime] = {}  # per-device interval throttle
         # Per-device outcome tracking to drive dynamic polling intervals
@@ -76,18 +78,19 @@ class NMSOrchestrator:
     def _effective_interval(self, nms_device_id: int, device) -> int:
         """Pick a polling interval for this device.
 
-        Falls back to the device record's polling_interval if no outcome is
-        tracked yet. Applies deterministic per-device jitter to spread load.
+        Saved seconds are the base; recovery floors may only slow polling.
+        Applies stable per-device jitter to spread load.
         """
         status = self.device_status.get(nms_device_id)
-        if status == 'snmp_ok':
-            base = getattr(config, 'poll_interval_snmp_ok', 60)
-        elif status == 'ssh_only':
-            base = getattr(config, 'poll_interval_ssh_only', 300)
-        elif status == 'unstable':
-            base = getattr(config, 'poll_interval_unstable', 600)
+        saved = getattr(device, 'polling_interval', None)
+        if isinstance(saved, int) and not isinstance(saved, bool) and 10 <= saved <= 86400:
+            base = saved
         else:
-            base = (device.polling_interval or 300) if device else 300
+            base = max(10, getattr(config, 'poll_interval_snmp_ok', 60))
+        if status == 'ssh_only':
+            base = max(base, getattr(config, 'poll_interval_ssh_only', 300))
+        elif status == 'unstable':
+            base = max(base, getattr(config, 'poll_interval_unstable', 600))
 
         # Deterministic jitter per device (0..jitter_max)
         jitter = self._jitter_offset.get(nms_device_id)
@@ -95,6 +98,21 @@ class NMSOrchestrator:
             jitter = random.randint(0, max(0, getattr(config, 'poll_jitter_max', 10)))
             self._jitter_offset[nms_device_id] = jitter
         return base + jitter
+
+    def _next_poll_delay(self) -> float:
+        """Wake for due work/settings refresh; never replace device due times with a global sleep."""
+        now = datetime.utcnow()
+        remaining = [5.0, max(0.1, config.polling.interface_poll_interval)]
+        with self._active_lock:
+            active = set(self._active_polls)
+        with self._last_poll_lock:
+            for device_id, device in list(self.device_map.items()):
+                if device_id in active or (device_id not in self.poller.sessions and device_id not in self.ssh_poller.sessions):
+                    continue
+                last = self.last_device_poll.get(device_id)
+                if last:
+                    remaining.append(max(0.1, self._effective_interval(device_id, device) - (now - last).total_seconds()))
+        return max(0.1, min(remaining))
 
     def register_devices_from_db(self) -> int:
         """Load polling-enabled devices from InfraScope DB.
@@ -104,6 +122,7 @@ class NMSOrchestrator:
         Re-called every cycle to pick up newly added devices automatically.
         Also registers devices for SSH polling as fallback.
         """
+        self._registration_ready = False
         try:
             session = db_manager.get_session()
             device_repo = DeviceRepository(session)
@@ -114,6 +133,12 @@ class NMSOrchestrator:
                 self.poller.unregister_device(stale_id)
                 self.ssh_poller.unregister_device(stale_id)
                 self.device_map.pop(stale_id, None)
+                self.device_status.pop(stale_id, None)
+                self._jitter_offset.pop(stale_id, None)
+                with self._last_poll_lock:
+                    self.last_device_poll.pop(stale_id, None)
+                with self._topo_lock:
+                    self.last_topology_poll.pop(stale_id, None)
             count = 0
 
             for device in devices:
@@ -229,10 +254,14 @@ class NMSOrchestrator:
                 self.device_map[device.nms_device_id] = device
                 count += 1
 
-            logger.info(
-                f"Loaded {count} polling-enabled device candidates from InfraScope DB "
-                f"(SNMP registered={len(self.poller.sessions)}, SSH registered={len(self.ssh_poller.sessions)})"
-            )
+            summary = (count, len(self.poller.sessions), len(self.ssh_poller.sessions))
+            if summary != self._registration_summary:
+                logger.info(
+                    f"Loaded {count} polling-enabled device candidates from InfraScope DB "
+                    f"(SNMP registered={len(self.poller.sessions)}, SSH registered={len(self.ssh_poller.sessions)})"
+                )
+                self._registration_summary = summary
+            self._registration_ready = True
             return count
 
         except Exception as e:
@@ -295,6 +324,8 @@ class NMSOrchestrator:
 
         device_name = snmp_session.device_name if snmp_session else (ssh_session.device_name if ssh_session else "Unknown")
         device = self.device_map.get(nms_device_id)
+        if not device or not device.polling_enabled:
+            return False
         polling_interval = self._effective_interval(nms_device_id, device)
 
         # Per-device interval throttle -- respect the dynamic polling_interval
@@ -305,6 +336,8 @@ class NMSOrchestrator:
                 elapsed = (now - last_poll).total_seconds()
                 if elapsed < polling_interval:
                     return False  # not yet due for this device
+            # Throttle attempted polls too, including source/DB persistence failures.
+            self.last_device_poll[nms_device_id] = now
 
         # Each thread uses its own independent DB session
         session = db_manager.get_session()
@@ -445,12 +478,10 @@ class NMSOrchestrator:
                     f"Poll produced no interface or health data for {device_name}; "
                     "last_polled_at was not advanced"
                 )
-            with self._last_poll_lock:
-                self.last_device_poll[nms_device_id] = now
-
             return poll_succeeded
 
         except Exception as e:
+            self.device_status[nms_device_id] = 'unstable'
             logger.error(f"Error polling device {device_name} (nms_id={nms_device_id}): {e}")
             return False
         finally:
@@ -522,13 +553,13 @@ class NMSOrchestrator:
                     # Re-read devices on every cycle to pick up newly added devices
                     self.register_devices_from_db()
 
-                    if self.poller.sessions or self.ssh_poller.sessions:
+                    if self._registration_ready and (self.poller.sessions or self.ssh_poller.sessions):
                         self.poll_cycle()
                     else:
-                        logger.info("No polling-enabled devices registered yet, sleeping...")
+                        logger.debug("Polling skipped: no current registered devices")
 
                     # Short sleep -- per-device throttle controls actual poll frequency
-                    time.sleep(config.polling.interface_poll_interval)
+                    time.sleep(self._next_poll_delay())
 
                 except KeyboardInterrupt:
                     logger.info("Keyboard interrupt received, shutting down")

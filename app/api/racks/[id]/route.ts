@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 /**
  * Rack Detail Endpoints
  * GET /api/racks/[id] - Get rack by ID
@@ -274,7 +275,7 @@ export async function PUT(
     // If reducing maxUnits, ensure no devices exceed new limit
     if (maxUnits !== undefined && maxUnits < existing.maxUnits) {
       const hasDevicesBeyondLimit = existing.devices.some(
-        (device: any) => device.rackUnitPosition > maxUnits
+        (device) => device.rackUnitPosition! > maxUnits
       );
 
       if (hasDevicesBeyondLimit) {
@@ -290,7 +291,7 @@ export async function PUT(
     }
 
     // Build update data
-    const updateData: any = {};
+    const updateData: Prisma.RackUncheckedUpdateInput = {};
     if (name !== undefined) updateData.name = name;
     if (type !== undefined) updateData.type = type;
     if (maxUnits !== undefined) updateData.maxUnits = maxUnits;

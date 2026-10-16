@@ -1,5 +1,9 @@
 'use client';
 
+import { uiLabel } from '@/lib/i18n/tr';
+
+import { ActionIcon } from '@/components/ui/action-icon';
+import { PageHeading } from '@/components/ui/page-heading';
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -59,7 +63,7 @@ export default function OrganizationsPage() {
       const response = await apiGet('/api/organizations');
       if (response.success && response.data) {
         // Transform Prisma data to our interface
-        const transformedOrgs = response.data.map((org: any) => ({
+        const transformedOrgs = response.data.map((org: Organization & { _count?: { users?: number } }) => ({
           id: org.id,
           name: org.name,
           description: org.description || '',
@@ -191,16 +195,15 @@ export default function OrganizationsPage() {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Organizations</h1>
-          <p className="text-muted-foreground">Organizasyon yönetimi</p>
+          <PageHeading section="organizations" description={<>Organizasyon yönetimi</>}>Organizasyonlar</PageHeading>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="icon" onClick={() => {
             setOrgs(orgs);
             toast({ title: 'Yenilendi', description: 'Organizasyon listesi yenilendi', variant: 'default' });
-          }}>
+          }} aria-label="Yenile">
             <RefreshCw className="h-4 w-4" />
           </Button>
           <Button onClick={openAddModal}>
@@ -241,7 +244,7 @@ export default function OrganizationsPage() {
                           className="cursor-pointer"
                           onClick={() => handleStatusToggle(org)}
                         >
-                          {org.status}
+                          {uiLabel(org.status)}
                         </Badge>
                       </div>
                       <p className="text-sm text-muted-foreground">{org.description}</p>
@@ -256,13 +259,13 @@ export default function OrganizationsPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="icon" onClick={() => openViewModal(org)} title="Görüntüle">
+                    <Button variant="ghost" size="icon" onClick={() => openViewModal(org)} title="Görüntüle" aria-label="Görüntüle">
                       <Eye className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="icon" onClick={() => openEditModal(org)} title="Düzenle">
+                    <Button variant="ghost" size="icon" onClick={() => openEditModal(org)} title="Düzenle" aria-label="Düzenle">
                       <Edit className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="icon" onClick={() => openDeleteModal(org)} title="Sil" className="text-red-500 hover:text-red-600 hover:bg-red-50">
+                    <Button variant="ghost" size="icon" onClick={() => openDeleteModal(org)} title="Sil" className="text-red-500 hover:text-red-600 hover:bg-red-50" aria-label="Sil">
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
@@ -358,7 +361,7 @@ export default function OrganizationsPage() {
               <div className="grid grid-cols-3 gap-4 py-2">
                 <span className="text-sm text-muted-foreground">Durum:</span>
                 <Badge variant={selectedOrg.status === 'active' ? 'success' : 'secondary'} className="col-span-2 w-fit">
-                  {selectedOrg.status}
+                  {uiLabel(selectedOrg.status)}
                 </Badge>
               </div>
               <div className="grid grid-cols-3 gap-4 py-2">
@@ -384,7 +387,7 @@ export default function OrganizationsPage() {
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsViewModalOpen(false)}>Kapat</Button>
+            <Button variant="outline" onClick={() => setIsViewModalOpen(false)}><ActionIcon action="cancel" />Kapat</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -404,7 +407,7 @@ export default function OrganizationsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsDeleteModalOpen(false)}>İptal</Button>
-            <Button variant="destructive" onClick={handleDelete}>Sil</Button>
+            <Button variant="destructive" onClick={handleDelete}><ActionIcon action="delete" />Sil</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

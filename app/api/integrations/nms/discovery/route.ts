@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { authorizeApiRequest } from '@/lib/auth/api-permission';
 import { prisma } from '@/lib/prisma';
 import { nmsInternalFetch } from '@/lib/nms/internal-client';
 
@@ -11,11 +12,13 @@ import { nmsInternalFetch } from '@/lib/nms/internal-client';
  */
 
 export async function GET(req: NextRequest) {
+  const access = await authorizeApiRequest(req, 'devices', 'read');
+  if (!access.allowed) return access.response;
   try {
     const { searchParams } = new URL(req.url);
     const limit = parseInt(searchParams.get('limit') || '20');
 
-    const scans = await (prisma as any).nmsDiscoveryScan.findMany({
+    const scans = await prisma.nmsDiscoveryScan.findMany({
       orderBy: { createdAt: 'desc' },
       take: limit,
       include: {
@@ -36,6 +39,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const access = await authorizeApiRequest(req, 'devices', 'write');
+  if (!access.allowed) return access.response;
   try {
     const body = await req.json();
     const { cidr, communities = [] } = body;
@@ -65,7 +70,7 @@ export async function POST(req: NextRequest) {
     } catch (nmsErr) {
       // NMS service not available — create scan record directly for UI tracking
       console.warn('[NMS Discovery] NMS service unavailable, creating record directly:', nmsErr);
-      const scan = await (prisma as any).nmsDiscoveryScan.create({
+      const scan = await prisma.nmsDiscoveryScan.create({
         data: { cidr, status: 'failed', errorMessage: 'NMS service not available' },
       });
       scan_id = scan.id;

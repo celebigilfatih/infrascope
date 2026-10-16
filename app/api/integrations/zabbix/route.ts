@@ -7,15 +7,23 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { authorizeApiRequest, forbiddenApiPermission } from '@/lib/auth/api-permission';
+import { canAccessSync } from '@/lib/auth/permission-policy';
 import { ZabbixService } from '@/lib/integrations/zabbix';
 import { prisma } from '@/lib/prisma';
+import { recordInventorySync } from '@/lib/integrations/sync-log';
+import { InventorySyncBusyError, isInventorySyncInterval, withInventorySync } from '@/lib/integrations/sync-coordinator';
+import { InventorySourceSelectionError, selectInventorySource } from '@/lib/integrations/inventory-source-selection';
+import type { Prisma } from '@prisma/client';
+import { protectIntegrationConfig, unprotectIntegrationConfig } from '@/lib/security/integration-credentials';
+import type { ZabbixConfig } from '@/lib/integrations/zabbix';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const access = await authorizeApiRequest(request, 'devices', 'read');
+  if (!access.allowed) return access.response;
   try {
     // Get Zabbix configuration from database
-    const config = await prisma.integrationConfig.findFirst({
-      where: { type: 'ZABBIX', enabled: true },
-    });
+    const config = await selectInventorySource('ZABBIX', request.nextUrl.searchParams.get('configId') ?? undefined);
 
     if (!config) {
       return NextResponse.json({
@@ -24,17 +32,7 @@ export async function GET() {
       });
     }
 
-    const zabbixConfig = config.config as {
-      url: string;
-      authToken: string;
-      pollingInterval: number;
-      enabledModules: {
-        hosts: boolean;
-        interfaces: boolean;
-        triggers: boolean;
-        items: boolean;
-      };
-    };
+    const zabbixConfig = unprotectIntegrationConfig<ZabbixConfig>(config.config, 'ZABBIX');
 
     const service = new ZabbixService({
       url: zabbixConfig.url,
@@ -47,6 +45,7 @@ export async function GET() {
     
     return NextResponse.json(status);
   } catch (error) {
+    if (error instanceof InventorySourceSelectionError) return NextResponse.json({ error: error.message, code: error.code }, { status: 409 });
     console.error('Zabbix status check failed:', error);
     return NextResponse.json(
       { connected: false, error: (error as Error).message },
@@ -56,9 +55,14 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const access = await authorizeApiRequest(request, 'devices', 'write');
+  if (!access.allowed) return access.response;
   try {
     const body = await request.json();
     const { action, config } = body;
+    if (['test', 'save-config'].includes(action) && !canAccessSync(access.auth.role, 'settings', 'write')) {
+      return forbiddenApiPermission('settings', 'write');
+    }
 
     if (action === 'test') {
       // Test connection without saving
@@ -96,9 +100,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Get Zabbix configuration
-      const zabbixConfig = await prisma.integrationConfig.findFirst({
-        where: { type: 'ZABBIX', enabled: true },
-      });
+      const zabbixConfig = await selectInventorySource('ZABBIX', body.configId);
 
       if (!zabbixConfig) {
         return NextResponse.json(
@@ -107,65 +109,44 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const config = zabbixConfig.config as {
-        url: string;
-        authToken: string;
-        pollingInterval: number;
-        enabledModules: {
-          hosts: boolean;
-          interfaces: boolean;
-          triggers: boolean;
-          items: boolean;
-        };
-      };
+      return await withInventorySync('ZABBIX', zabbixConfig.id, async () => {
+        const config = unprotectIntegrationConfig<ZabbixConfig>(zabbixConfig.config, 'ZABBIX');
 
-      const service = new ZabbixService({
-        url: config.url,
-        authToken: config.authToken,
-        pollingInterval: config.pollingInterval,
-        enabledModules: config.enabledModules,
+        const service = new ZabbixService({
+          integrationId: zabbixConfig.id,
+          url: config.url,
+          authToken: config.authToken,
+          pollingInterval: zabbixConfig.syncInterval || 5,
+          enabledModules: config.enabledModules,
+        });
+
+        // Perform sync and atomically record its outcome metadata.
+        const startedAt = new Date();
+        const result = await service.syncToInventory(organizationId);
+        await recordInventorySync(zabbixConfig.id, result, startedAt);
+
+        return NextResponse.json(result);
       });
-
-      // Perform sync
-      const result = await service.syncToInventory(organizationId);
-
-      // Log the sync
-      await prisma.integrationSyncLog.create({
-        data: {
-          configId: zabbixConfig.id,
-          status: result.success ? 'success' : 'failed',
-          message: result.errors.length > 0 ? result.errors.join('; ') : null,
-          itemsProcessed: result.hostsCreated + result.hostsUpdated,
-          itemsCreated: result.hostsCreated,
-          itemsUpdated: result.hostsUpdated,
-          completedAt: new Date(),
-        },
-      });
-
-      // Update last sync time
-      await prisma.integrationConfig.update({
-        where: { id: zabbixConfig.id },
-        data: {
-          lastSyncAt: new Date(),
-          lastSyncStatus: result.success ? 'success' : 'partial',
-        },
-      });
-
-      return NextResponse.json(result);
     }
 
     if (action === 'save-config') {
-      const newConfig = config as {
-        url: string;
-        authToken: string;
-        pollingInterval: number;
-        enabledModules: {
-          hosts: boolean;
-          interfaces: boolean;
-          triggers: boolean;
-          items: boolean;
-        };
+      const name = body.name || 'Default Zabbix';
+      const previous = await prisma.integrationConfig.findFirst({ where: { type: 'ZABBIX', name } });
+      const previousPlain = previous ? unprotectIntegrationConfig<ZabbixConfig>(previous.config, 'ZABBIX') : null;
+      // Only the supported token-auth profile may be persisted; ignore unknown credential aliases.
+      const newConfig: ZabbixConfig = {
+        url: config?.url,
+        authToken: !config?.authToken || config.authToken === '********' ? previousPlain?.authToken || '' : config.authToken,
+        pollingInterval: config?.pollingInterval === undefined ? 5 : config.pollingInterval,
+        enabledModules: config?.enabledModules,
       };
+      if (!isInventorySyncInterval(newConfig.pollingInterval)) {
+        return NextResponse.json({ success: false, error: 'Senkronizasyon aralığı 1–1440 dakika olmalıdır.' }, { status: 400 });
+      }
+      if (typeof newConfig.authToken !== 'string' || !newConfig.authToken.trim()) {
+        return NextResponse.json({ success: false, error: 'Zabbix API tokenı gerekli.' }, { status: 400 });
+      }
+      const protectedConfig = protectIntegrationConfig<Prisma.InputJsonObject>(newConfig, 'ZABBIX');
 
       await prisma.integrationConfig.upsert({
         where: {
@@ -178,12 +159,12 @@ export async function POST(request: NextRequest) {
           type: 'ZABBIX',
           name: body.name || 'Default Zabbix',
           enabled: true,
-          config: newConfig,
+          config: protectedConfig,
           syncInterval: newConfig.pollingInterval,
         },
         update: {
           enabled: true,
-          config: newConfig,
+          config: protectedConfig,
           syncInterval: newConfig.pollingInterval,
         },
       });
@@ -193,6 +174,10 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
   } catch (error) {
+    if (error instanceof InventorySourceSelectionError) return NextResponse.json({ error: error.message, code: error.code }, { status: 409 });
+    if (error instanceof InventorySyncBusyError) {
+      return NextResponse.json({ error: 'Bu kaynak için senkronizasyon zaten çalışıyor.', code: error.code }, { status: 409 });
+    }
     console.error('Zabbix API error:', error);
     return NextResponse.json(
       { error: (error as Error).message },

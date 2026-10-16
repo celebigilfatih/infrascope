@@ -2,6 +2,12 @@
 
 > External system connections. Each integration has its own service, auth lifecycle, and error handling.
 
+VMware/Zabbix inventory identity is now scoped by saved connection and endpoint. Multiple enabled sources may import independently; ambiguous manual/operational selection requires `configId`. See [source identities](../../30-runbooks/INVENTORY_SOURCE_IDENTITIES.md) and [ADR-023](../../10-architecture/adr/ADR-023-inventory-source-identities.md), including conservative legacy attribution and deployment requirements.
+
+Saved inventory intervals and NMS polling now have separate runtime contracts; see [scheduling](../../30-runbooks/SAVED_SYNC_POLL_SCHEDULING.md) and [ADR-022](../../10-architecture/adr/ADR-022-saved-inventory-poll-scheduling.md). Automatic inventory work uses the existing source services and manual exclusion, not an alarm-engine copy.
+
+VMware/Zabbix inventory imports share explicit `success / partial / failed` outcomes and atomic log/config metadata. Partial progress is never full success. See [the sync outcome runbook](../../30-runbooks/INVENTORY_SYNC_OUTCOMES.md) and [ADR-021](../../10-architecture/adr/ADR-021-inventory-sync-outcomes.md).
+
 ## Integrations
 
 | Integration | File | Protocol | Auth | Singleton? |

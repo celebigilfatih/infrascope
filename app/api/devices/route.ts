@@ -1,44 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { deviceUnitHeight, mergeUnitHeight, placementIssue } from '@/lib/racks/device-placement';
+import type { Prisma } from '@prisma/client';
+import { inventoryQuery, InventoryQueryError } from '@/lib/devices/inventory-query';
 import { checkDeviceLimit } from '@/lib/license/middleware';
-
-// Manually-managed device types (not auto-discovered from integrations)
-const MANUAL_DEVICE_TYPES = [
-  'PHYSICAL_SERVER', 'VIRTUAL_HOST', 'VIRTUAL_MACHINE', 'FIREWALL',
-  'SWITCH', 'ROUTER', 'COMPUTER', 'LAPTOP', 'STORAGE', 'PDU',
-  'PATCH_PANEL', 'PRINTER', 'CAMERA', 'OTHER',
-];
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get('page') || '1', 10);
-    const limit = Math.min(parseInt(searchParams.get('limit') || '25', 10), 200);
+    const { page, limit, where } = inventoryQuery(searchParams);
     const offset = (page - 1) * limit;
-    const filterType = searchParams.get('filterType') || 'manual';
-    const search = searchParams.get('search') || '';
-
-    // Build where clause based on filter
-    const typeFilter: any =
-      filterType === 'manual' ? { type: { in: MANUAL_DEVICE_TYPES } }
-      : filterType !== 'all' ? { type: filterType }
-      : {};
-
-    const searchFilter: any = search
-      ? {
-          OR: [
-            { name: { contains: search, mode: 'insensitive' } },
-            { serialNumber: { contains: search, mode: 'insensitive' } },
-            { vendor: { contains: search, mode: 'insensitive' } },
-            { model: { contains: search, mode: 'insensitive' } },
-          ],
-        }
-      : {};
-
-    const where: any =
-      search
-        ? { AND: [typeFilter, searchFilter] }
-        : typeFilter;
 
     // 'minimal' mode returns only basic fields (no joins) - used by dashboard
     // 'full' mode (default) returns all nested relations - used by device detail pages
@@ -82,11 +53,12 @@ export async function GET(request: NextRequest) {
       totalPages: Math.ceil(total / limit),
       timestamp: new Date()
     });
-  } catch (error: any) {
+  } catch (error) {
+    if (error instanceof InventoryQueryError) return NextResponse.json({ success: false, error: (error as Error & { code?: string }).message }, { status: 400 });
     console.error('Error fetching devices details:', {
-      message: error.message,
-      stack: error.stack,
-      code: error.code
+      message: (error as Error & { code?: string }).message,
+      stack: (error as Error & { code?: string }).stack,
+      code: (error as Error & { code?: string }).code
     });
     return NextResponse.json({
       success: false,
@@ -105,7 +77,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { 
       name, type, vendor, model, serialNumber, assetTag, 
-      criticality, status, rackId, rackUnitPosition, supportDate 
+      criticality, status, rackId, rackUnitPosition, supportDate, unitHeight, metadata
     } = body;
 
     if (!name || !type) {
@@ -118,7 +90,7 @@ export async function POST(request: NextRequest) {
 
     const parsedRackUnitPosition =
       rackUnitPosition !== undefined && rackUnitPosition !== null && rackUnitPosition !== ''
-        ? parseInt(rackUnitPosition, 10)
+        ? Number(rackUnitPosition)
         : null;
 
     if (parsedRackUnitPosition !== null) {
@@ -131,28 +103,17 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    if (rackId) {
-      const rack = await prisma.rack.findUnique({
-        where: { id: rackId },
-        select: { id: true, maxUnits: true },
-      });
-
-      if (!rack) {
-        return NextResponse.json({
-          success: false,
-          error: `Rack with ID ${rackId} not found`,
-          timestamp: new Date()
-        }, { status: 404 });
-      }
-
-      if (parsedRackUnitPosition !== null && parsedRackUnitPosition > rack.maxUnits) {
-        return NextResponse.json({
-          success: false,
-          error: `rackUnitPosition (${parsedRackUnitPosition}) exceeds rack maxUnits (${rack.maxUnits})`,
-          timestamp: new Date()
-        }, { status: 400 });
-      }
-    }
+    const effectiveRackId = rackId || null;
+    const height = unitHeight === undefined ? deviceUnitHeight(metadata) : unitHeight;
+    const rack = effectiveRackId ? await prisma.rack.findUnique({
+      where: { id: effectiveRackId },
+      select: { id: true, maxUnits: true, devices: { select: { id: true, name: true, rackUnitPosition: true, metadata: true } } },
+    }) : null;
+    const issue = placementIssue({ rackId: effectiveRackId, rack, start: parsedRackUnitPosition, height });
+    if (issue) return NextResponse.json({ success: false, error: issue }, { status: 400 });
+    let nextMetadata;
+    try { nextMetadata = mergeUnitHeight(metadata, height); }
+    catch (error) { return NextResponse.json({ success: false, error: error instanceof Error ? error.message : 'Cihaz yüksekliği kaydedilemedi.' }, { status: 400 }); }
 
     const device = await prisma.device.create({
       data: {
@@ -164,8 +125,9 @@ export async function POST(request: NextRequest) {
         assetTag,
         criticality: criticality || 'MEDIUM',
         status: status || 'UNKNOWN',
-        rackId,
+        rackId: effectiveRackId,
         rackUnitPosition: parsedRackUnitPosition,
+        metadata: nextMetadata as Prisma.InputJsonValue,
         supportDate: supportDate ? new Date(supportDate) : null
       }
     });
@@ -175,7 +137,7 @@ export async function POST(request: NextRequest) {
       data: device,
       timestamp: new Date()
     }, { status: 201 });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error creating device:', error);
     return NextResponse.json({
       success: false,

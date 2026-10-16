@@ -13,7 +13,10 @@
  * - After 5 failures: marked as failed_permanent
  */
 
-import { prisma } from '@/lib/prisma';
+import { prisma as sharedPrisma } from '@/lib/prisma';
+import type { Prisma } from '@prisma/client';
+import { alarmExecutionPrisma } from '@/lib/alarms/execution-prisma';
+const prisma = alarmExecutionPrisma(sharedPrisma);
 import { sendAlarmEmail, AlarmEmailData } from './email';
 import { createLogger } from '@/lib/logger';
 
@@ -56,7 +59,7 @@ export async function addToDLQ(
     if (existing) {
       await prisma.notificationDLQ.update({
         where: { id: existing.id },
-        data: { payload: payload as any, lastError: error.substring(0, 1000), nextRetry },
+        data: { payload: payload as unknown as Prisma.InputJsonObject, lastError: error.substring(0, 1000), nextRetry },
       });
       return;
     }
@@ -65,7 +68,7 @@ export async function addToDLQ(
       data: {
         alarmEventId,
         channel: 'email',
-        payload: payload as any,
+        payload: payload as unknown as Prisma.InputJsonObject,
         attempts: 1, // First attempt already failed
         maxAttempts: MAX_ATTEMPTS,
         lastAttempt: new Date(),

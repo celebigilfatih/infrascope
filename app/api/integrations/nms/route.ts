@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { authorizeApiRequest } from '@/lib/auth/api-permission';
 import { prisma } from '@/lib/prisma';
 
 /**
  * GET /api/integrations/nms/status
  * Returns the health status of the NMS FastAPI service and polling statistics.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const access = await authorizeApiRequest(request, 'devices', 'read');
+  if (!access.allowed) return access.response;
   try {
     // Query the internal NMS FastAPI service
     const nmsUrl = process.env.NMS_INTERNAL_URL || 'http://nms:8500';
@@ -23,18 +26,18 @@ export async function GET() {
     }
 
     // Count polling-enabled devices from DB
-    const pollingDevices = await (prisma as any).device.count({
+    const pollingDevices = await prisma.device.count({
       where: { pollingEnabled: true, nmsDeviceId: { not: null } },
     });
 
     // Count recent health metrics (last 10 minutes) as a sign-of-life indicator
     const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000);
-    const recentMetrics = await (prisma as any).nmsHealthMetric.count({
+    const recentMetrics = await prisma.nmsHealthMetric.count({
       where: { collectedAt: { gte: tenMinAgo } },
     });
 
     // Count active scans
-    const activeScans = await (prisma as any).nmsDiscoveryScan.count({
+    const activeScans = await prisma.nmsDiscoveryScan.count({
       where: { status: { in: ['pending', 'running'] } },
     });
 

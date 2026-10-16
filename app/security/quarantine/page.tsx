@@ -1,5 +1,8 @@
 'use client';
 
+import { uiError } from '@/lib/i18n/tr';
+
+import { PageHeading } from '@/components/ui/page-heading';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -54,16 +57,16 @@ function expiryBadge(expires: string | null) {
   const hours = diff / 3600000;
   if (diff < 0) return <Badge variant="secondary">Süresi Dolmuş</Badge>;
   if (hours < 1) return <Badge variant="destructive">&lt; 1 saat</Badge>;
-  if (hours < 24) return <Badge className="bg-orange-500 text-white">{Math.round(hours)}s</Badge>;
-  return <Badge className="bg-blue-500 text-white">{Math.round(hours / 24)}g</Badge>;
+  if (hours < 24) return <Badge variant="warning">{Math.round(hours)}s</Badge>;
+  return <Badge variant="info">{Math.round(hours / 24)}g</Badge>;
 }
 
 function sourceBadge(source: string) {
   const s = source.toLowerCase();
-  if (s === 'manual') return <Badge className="bg-slate-600 text-white">Manuel</Badge>;
+  if (s === 'manual') return <Badge variant="secondary">Manuel</Badge>;
   if (s.includes('ips') || s.includes('intrusion')) return <Badge variant="destructive">IPS</Badge>;
   if (s.includes('av') || s.includes('virus')) return <Badge className="bg-purple-600 text-white">AV</Badge>;
-  if (s.includes('dos')) return <Badge className="bg-orange-600 text-white">DoS</Badge>;
+  if (s.includes('dos')) return <Badge variant="warning">DoS</Badge>;
   return <Badge variant="outline">{source}</Badge>;
 }
 
@@ -91,10 +94,10 @@ export default function QuarantinePage() {
       if (json.success) {
         setData(json.data || []);
       } else {
-        setError(json.error || 'Veri alınamadı');
+        setError(uiError(json.error || 'Veri alınamadı'));
       }
     } catch {
-      setError('API bağlantı hatası');
+      setError(uiError('API bağlantı hatası'));
     } finally {
       setLoading(false);
     }
@@ -123,7 +126,7 @@ export default function QuarantinePage() {
   const paginated = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
   const handleRelease = async (ip: string) => {
-    if (!confirm(`${ip} adresini karantinadan çıkarmak istediğinize emin misiniz?`)) return;
+    if (!confirm(uiError(`${ip} adresini karantinadan çıkarmak istediğinize emin misiniz?`))) return;
     try {
       const res = await fetch(`/api/security/quarantine?ip=${encodeURIComponent(ip)}`, { method: 'DELETE' });
       const json = await res.json();
@@ -170,14 +173,13 @@ export default function QuarantinePage() {
   return (
     <div className="space-y-4 p-4 max-w-full">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-4">
         <div className="flex items-center gap-3">
           <Lock className="h-8 w-8 text-red-500" />
           <div>
-            <h1 className="text-2xl font-bold">Firewall Karantina</h1>
-            <p className="text-sm text-muted-foreground">
+            <PageHeading section="quarantine" description={<>
               FortiGate tarafından karantinaya alınmış IP adresleri
-            </p>
+            </>}>Güvenlik Duvarı Karantinası</PageHeading>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -276,7 +278,7 @@ export default function QuarantinePage() {
         <Card className="border-red-200 bg-red-50">
           <CardContent className="p-3 flex items-center gap-2 text-red-600">
             <AlertCircle className="h-4 w-4" />
-            <span className="text-sm">{error}</span>
+            <span className="text-sm">{uiError(error)}</span>
           </CardContent>
         </Card>
       )}
@@ -380,12 +382,12 @@ export default function QuarantinePage() {
                   <div className="flex items-center gap-1">
                     <Button variant="outline" size="icon" className="h-8 w-8"
                       onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                      disabled={currentPage === 1}>
+                      disabled={currentPage === 1} aria-label="Önceki sayfa">
                       <ChevronLeft className="h-4 w-4" />
                     </Button>
                     <Button variant="outline" size="icon" className="h-8 w-8"
                       onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                      disabled={currentPage === totalPages}>
+                      disabled={currentPage === totalPages} aria-label="Sonraki sayfa">
                       <ChevronRight className="h-4 w-4" />
                     </Button>
                   </div>

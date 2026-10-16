@@ -45,14 +45,14 @@ export async function getVpnBruteForceEvents(ctx: AlarmQueryContext): Promise<Qu
         subtype: 'vpn',
         action: 'ssl-login-fail',
         eventTime: timeWindow(ctx.timeWindowMinutes),
-      }),
+      }, undefined, ctx),
     fa =>
       queryFortiAnalyzerDirect(
         fa,
         'event',
         'subtype == vpn and action == ssl-login-fail',
         ctx.timeWindowMinutes
-      ),
+      , undefined, ctx),
     { softFallback: true } // Brute force is high-priority — verify via FA if cache empty
   );
 }
@@ -79,14 +79,14 @@ export async function getSslvpnAuthFailedEvents(ctx: AlarmQueryContext): Promise
         subtype: 'vpn',
         action: 'ssl-login-fail',
         eventTime: timeWindow(ctx.timeWindowMinutes),
-      });
+      }, undefined, ctx);
       if (primary.length > 0) return primary;
 
       // Fallback: ssl-exit-error / ssl-alert events with an identifiable user
       // FortiAnalyzer may log auth failures under these actions on some firmware versions
       const [exitErrors, alerts] = await Promise.all([
-        queryCache({ logtype: 'event', subtype: 'vpn', action: 'ssl-exit-error', eventTime: timeWindow(ctx.timeWindowMinutes) }),
-        queryCache({ logtype: 'event', subtype: 'vpn', action: 'ssl-alert',     eventTime: timeWindow(ctx.timeWindowMinutes) }),
+        queryCache({ logtype: 'event', subtype: 'vpn', action: 'ssl-exit-error', eventTime: timeWindow(ctx.timeWindowMinutes) }, undefined, ctx),
+        queryCache({ logtype: 'event', subtype: 'vpn', action: 'ssl-alert',     eventTime: timeWindow(ctx.timeWindowMinutes) }, undefined, ctx),
       ]);
       // Only keep events where user field is a real username (not 'N/A' or empty)
       return [...exitErrors, ...alerts].filter(
@@ -99,7 +99,7 @@ export async function getSslvpnAuthFailedEvents(ctx: AlarmQueryContext): Promise
         'event',
         'subtype == vpn and action == ssl-login-fail',
         ctx.timeWindowMinutes
-      ),
+      , undefined, ctx),
     { softFallback: true }
   );
 }
@@ -135,14 +135,14 @@ export async function getSslvpnLockoutEvents(ctx: AlarmQueryContext): Promise<Qu
         subtype: 'vpn',
         eventTime: timeWindow(ctx.timeWindowMinutes),
         AND: [{ rawLog: { path: ['logdesc'], string_contains: 'lockout' } }],
-      }),
+      }, undefined, ctx),
     fa =>
       queryFortiAnalyzerDirect(
         fa,
         'event',
         'subtype == vpn and logdesc like %lockout%',
         ctx.timeWindowMinutes
-      )
+      , undefined, ctx)
     // No softFallback — see note above
   );
 }
@@ -169,13 +169,13 @@ export async function getIpsecTunnelDownEvents(ctx: AlarmQueryContext): Promise<
         action: 'tunnel-down',
         eventTime: timeWindow(ctx.timeWindowMinutes),
         AND: [{ rawLog: { path: ['tunneltype'], equals: 'ipsec' } }],
-      }),
+      }, undefined, ctx),
     fa =>
       queryFortiAnalyzerDirect(
         fa,
         'event',
         'subtype == vpn and action == tunnel-down and tunneltype == ipsec',
         ctx.timeWindowMinutes
-      )
+      , undefined, ctx)
   );
 }

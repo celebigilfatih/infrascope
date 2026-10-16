@@ -5,8 +5,8 @@ import React, { useState } from 'react';
 interface ConnectionWizardProps {
   isOpen: boolean;
   onClose: () => void;
-  devices: any[];
-  onCreateConnection: (data: any) => Promise<void>;
+  devices: Array<{ id: string; name: string }>;
+  onCreateConnection: (data: { sourceDeviceId: string; targetDeviceId: string; status: 'UP' }) => Promise<void>;
 }
 
 export const ConnectionWizard: React.FC<ConnectionWizardProps> = ({

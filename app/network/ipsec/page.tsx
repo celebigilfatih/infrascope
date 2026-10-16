@@ -1,5 +1,6 @@
 'use client';
 
+import { PageHeading } from '@/components/ui/page-heading';
 import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,18 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import {
-  ChevronLeft,
-  ChevronRight,
-  RefreshCw,
-  Search,
-  Shield,
-  Network,
-  Activity,
-  Lock,
-  Globe,
-  ArrowLeft
-} from 'lucide-react';
+import { ChevronLeft, ChevronRight, RefreshCw, Search, Network, Activity, Lock, Globe, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 
 interface IPsecTunnel {
@@ -95,21 +85,20 @@ export default function IPsecPage() {
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-4">
         <div className="flex items-center gap-4">
           <Link href="/network/firewall">
-            <Button variant="outline" size="icon">
+            <Button variant="outline" size="icon" aria-label="Geri dön">
               <ArrowLeft className="h-4 w-4" />
             </Button>
           </Link>
           <div>
-            <h1 className="text-3xl font-bold flex items-center gap-2">
-              <Shield className="h-8 w-8" />
-              IPsec Tunnel'ları
-            </h1>
-            <p className="text-muted-foreground">
+            <PageHeading section="ipsec" description={<>
               FortiGate IPsec VPN tunnel durumları ve istatistikleri
-            </p>
+            </>}>
+
+              IPsec Tünelleri
+            </PageHeading>
           </div>
         </div>
         <Button onClick={fetchTunnels} disabled={loading}>
@@ -123,7 +112,7 @@ export default function IPsecPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Network className="h-4 w-4" /> Toplam Tunnel
+              <Network className="h-4 w-4" /> Toplam Tünel
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -173,7 +162,7 @@ export default function IPsecPage() {
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Tunnel ara..."
+            placeholder="Tünel ara…"
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
@@ -252,7 +241,7 @@ export default function IPsecPage() {
             size="sm"
             onClick={() => setPage(p => Math.max(1, p - 1))}
             disabled={page === 1}
-          >
+           aria-label="Önceki sayfa">
             <ChevronLeft className="h-4 w-4" />
           </Button>
           <span className="text-sm">
@@ -263,7 +252,7 @@ export default function IPsecPage() {
             size="sm"
             onClick={() => setPage(p => Math.min(totalPages, p + 1))}
             disabled={page === totalPages}
-          >
+           aria-label="Sonraki sayfa">
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>

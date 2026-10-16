@@ -14,6 +14,8 @@ Müşteri ana kaynak kod reposuna erişmez. Uygulama dosyalarını kaynak kod ol
 
 ## 2. Image Yayınlama
 
+**B21 update (2026-10-16):** Tag/manual publication requires reusable static-quality, alarm/integration, dashboard, incident and backup checks. `npm run build` enforces policy, TLS, type and lint checks before Next compilation, with native Next type/lint bypasses disabled. The subsequent module cleanup resolved the 390 lint errors; the full quality gate passes with 9 existing warnings. Inter is now bundled locally, and the real product build succeeds with networking disabled and dependencies already installed. See [release quality gates](RELEASE_QUALITY_GATES.md) and [offline font/build verification](LOCAL_FONTS.md) for actual results and scope.
+
 GitHub Actions workflow'u tag push ile image yayınlar.
 
 ```bash

@@ -1,17 +1,26 @@
-import { prisma } from '@/lib/prisma';
+import type { Prisma } from '@prisma/client';
+import type { CmdbDiff } from './queries/fortigate-cmdb';
+import { parseFortiAnalyzerEventTime, filterFortiAnalyzerTimeWindow } from './fortianalyzer-event-time';
+import { assertAlarmExecutionActive, withAlarmStage, withoutAlarmExecution } from './execution-context';
+import { prisma as sharedPrisma } from '@/lib/prisma';
+import { alarmExecutionPrisma } from '@/lib/alarms/execution-prisma';
+const prisma = alarmExecutionPrisma(sharedPrisma);
 import { randomUUID } from 'crypto';
 import { createLogger } from '@/lib/logger';
 import FortiAnalyzerService from '@/lib/integrations/fortianalyzer';
-import { VMwareService } from '@/lib/integrations/vmware';
-import { FortiGateService, FortiGateConfig } from '@/lib/integrations/fortigate';
+import type { VMwareService } from '@/lib/integrations/vmware';
+import { createSavedVMwareSource, loadSavedVMwareIntegration } from '@/lib/integrations/vmware-source';
 import { sendAlarmEmail, getEmailStats } from '@/lib/notifications/email';
 import type { AlarmDetectionLogic, CorrelationRule } from './alarm-definitions';
 import { EventCacheService } from './event-cache';
+import { getFortiAnalyzerEventCache, getSharedFortiAnalyzerCacheStatus } from './fortianalyzer-cache-runtime';
 import { ALARM_QUERY_REGISTRY, BYPASS_CACHE_ALARMS } from './queries';
 import { createDefaultSuppressionEngine, SuppressionEvent } from './suppression-engine';
 import { recordAlarmOccurrence, resolveIncidentsForEvents } from './incident-service';
-import { getFortiGateConnector } from '@/lib/firewall/connector-factory';
+import { getFortiGateConnector, type FortiGateConnector, type FortiGateTarget } from '@/lib/firewall/connector-factory';
+import { fortiGateAlarmEntity, fortiGateSessionOccurrenceId } from './fortigate-target-scope';
 import { isNmsPortDownCandidate, isNmsPortRecovered } from './nms-port-state';
+import { startFortiAnalyzerSearch, waitForFortiAnalyzerResults } from './queries/fortianalyzer-search';
 
 const log = createLogger('detection-engine');
 
@@ -35,23 +44,32 @@ export interface EvaluationResult {
   matchCount: number;
   events: Array<Record<string, unknown>>;
   error?: string;
+  /** Safe identifiers only; never expose the resolved connection configuration. */
+  target?: { configId: string; vdom?: string; key?: string };
+}
+
+export type AlarmSource = 'nms' | 'vmware' | 'fortigate-sslvpn' | 'fortianalyzer';
+
+function alarmSource(alarm: AlarmDef): AlarmSource {
+  const logic = alarm.detectionLogic;
+  if (alarm.source === 'nms' || logic.source === 'nms' || alarm.code.startsWith('NMS_')) return 'nms';
+  if (alarm.source === 'vmware' || logic.source === 'vmware' || logic.logtype === 'vmware') return 'vmware';
+  if (alarm.source === 'fortigate-sslvpn' || logic.source === 'fortigate-sslvpn') return 'fortigate-sslvpn';
+  return 'fortianalyzer';
 }
 
 /**
  * Module-level EventCache singleton — prevents duplicate background syncs
  * accumulating across concurrent check cycles and Next.js hot reloads.
- * A single EventCacheService is shared for the lifetime of the process.
+ * The coordinator owns one collector per active configuration revision.
  */
-let _sharedEventCache: EventCacheService | null = null;
-let _sharedCacheInitialized = false;
 
 /**
  * Expose the shared event cache status for the /api/health endpoint.
  * Returns null if the cache hasn't been initialized yet.
  */
 export function getEventCacheStatus() {
-  if (!_sharedEventCache) return null;
-  return _sharedEventCache.getCacheStatus();
+  return getSharedFortiAnalyzerCacheStatus();
 }
 
 /**
@@ -62,15 +80,14 @@ export class AlarmDetectionEngine {
   private service: FortiAnalyzerService | null;
   private vmwareService: VMwareService | null = null;
   private vmwareInitialized: boolean = false;
-  private fortiGateService: FortiGateService | null = null;
-  private fortiGateInitialized: boolean = false;
+  private vmwareInventoryScope: string | null = null;
   
   // VMware cache to avoid repeated API calls during same check run
   private vmwareCache: {
-    vms: Array<any> | null;
-    hosts: Array<any> | null;
-    datastores: Array<any> | null;
-    snapshots: Array<any> | null;
+    vms: Array<unknown> | null;
+    hosts: Array<unknown> | null;
+    datastores: Array<unknown> | null;
+    snapshots: Array<unknown> | null;
     timestamp: number;
     ttl: number;
   } = {
@@ -89,7 +106,10 @@ export class AlarmDetectionEngine {
   // Suppression engine for filtering noisy events
   private suppressionEngine = createDefaultSuppressionEngine();
 
-  constructor(service: FortiAnalyzerService | null) {
+  constructor(
+    service: FortiAnalyzerService | null,
+    private readonly sourceContext: { fortiAnalyzerConfigId?: string; fortiAnalyzerRevision?: string } = {},
+  ) {
     this.service = service;
   }
 
@@ -114,70 +134,25 @@ export class AlarmDetectionEngine {
     return this.suppressionEngine.getStats();
   }
 
-  /**
-   * Inject a pre-initialized FortiGate service (singleton from alarm-runner).
-   * Skips the internal initializeFortiGate() call so the CMDB snapshot store persists.
-   */
-  injectFortiGateService(fgService: FortiGateService): void {
-    this.fortiGateService = fgService;
-    this.fortiGateInitialized = true;
-    (globalThis as any).__detectionEngine = this;
-  }
-
-  private async initializeVMware() {
+  private async initializeVMware(): Promise<boolean> {
+    assertAlarmExecutionActive();
     try {
-      log.info('Initializing VMware service');
-      const vmwareConfig = await prisma.integrationConfig.findFirst({
-        where: { type: 'VMWARE_VCENTER', enabled: true },
-      });
-      
-      if (!vmwareConfig) {
+      const integration = await loadSavedVMwareIntegration();
+      if (!integration) {
         log.info('No enabled VMware integration found in database');
-        return;
+        return false;
       }
-      
-      log.info({ configName: vmwareConfig.name }, 'Found VMware config');
-      
-      if (vmwareConfig && vmwareConfig.config) {
-        const config = vmwareConfig.config as any;
-        this.vmwareService = new VMwareService({
-          host: config.host,
-          username: config.username,
-          password: config.password,
-          pollingInterval: config.pollingInterval || 15,
-          enabledModules: config.enabledModules || {
-            datacenters: true,
-            clusters: true,
-            hosts: true,
-            vms: true,
-            datastores: true,
-          },
-        });
-        
-        // Authenticate
-        const authenticated = await this.vmwareService.authenticate();
-        if (!authenticated) {
-          log.error('VMware authentication failed');
-          this.vmwareService = null;
-        } else {
-          log.info('VMware service initialized and authenticated');
-        }
-      }
+      const source = createSavedVMwareSource(integration);
+      this.vmwareService = source.service;
+      this.vmwareInventoryScope = source.inventoryScope;
+      if (!await this.vmwareService.authenticate()) throw new Error('VMware authentication failed');
+      log.info({ configId: integration.id }, 'VMware service initialized and authenticated');
+      return true;
     } catch (error) {
       log.error({ err: error }, 'Error initializing VMware service');
       this.vmwareService = null;
-    }
-  }
-
-  private async initializeFortiGate() {
-    try {
-      log.info('Initializing FortiGate service');
-      const connector = await getFortiGateConnector();
-      this.fortiGateService = connector.service;
-      log.info({ targetKey: connector.target.key }, 'FortiGate service initialized');
-    } catch (error) {
-      log.error({ err: error }, 'Error initializing FortiGate service');
-      this.fortiGateService = null;
+      this.vmwareInventoryScope = null;
+      throw error;
     }
   }
 
@@ -224,46 +199,28 @@ export class AlarmDetectionEngine {
   }
 
   private async initializeEventCache() {
-    if (this.cacheInitialized) return;
-
-    // Use module-level singleton to prevent multiple background syncs accumulating
-    // across concurrent check cycles and hot reloads.
-    if (_sharedCacheInitialized && _sharedEventCache) {
-      this.eventCache = _sharedEventCache;
-      this.cacheInitialized = true;
-      log.info('Reusing shared Event Cache (already initialized)');
+    assertAlarmExecutionActive();
+    if (this.cacheInitialized) {
+      this.eventCache?.assertActive();
       return;
     }
-    
+    const entry = await getFortiAnalyzerEventCache({
+      configId: this.sourceContext.fortiAnalyzerConfigId,
+      revision: this.sourceContext.fortiAnalyzerRevision,
+    });
+    assertAlarmExecutionActive();
+    this.eventCache = entry.cache;
+    this.service = entry.service;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      log.info('Initializing shared Event Cache service');
-      _sharedEventCache = new EventCacheService(this.requireFortiAnalyzer());
-      this.eventCache = _sharedEventCache;
-      
-      // startBackgroundSync() is async — it awaits the initial sync then schedules
-      // recurring syncs in the background. We race it against a 3-minute timeout so
-      // we don't block alarm evaluation forever if FA is very slow or unreachable.
-      log.info('Waiting for initial event cache sync (timeout: 3 min)');
-      const SYNC_TIMEOUT_MS = 3 * 60 * 1000;
-      const syncCount = await Promise.race([
-        _sharedEventCache.startBackgroundSync(),
-        new Promise<number>((resolve) => setTimeout(() => resolve(-1), SYNC_TIMEOUT_MS)),
+      await Promise.race([
+        entry.ready,
+        new Promise<number>(resolve => { timer = setTimeout(() => resolve(-1), 3 * 60 * 1000); }),
       ]);
-
-      if (syncCount === -1) {
-        log.warn('Initial event cache sync timed out after 3 min — proceeding (cache may be stale)');
-      } else {
-        log.info({ syncCount, total: 7 }, 'Initial event cache sync done');
-      }
-      
-      _sharedCacheInitialized = true;
+      entry.cache.assertActive();
       this.cacheInitialized = true;
-      log.info('Shared Event cache initialized');
-    } catch (error) {
-      log.error({ err: error }, 'Failed to initialize event cache');
-      // Continue without cache (fallback to live API)
-      this.eventCache = null;
-      _sharedEventCache = null;
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
     }
   }
 
@@ -271,277 +228,242 @@ export class AlarmDetectionEngine {
    * Main evaluation loop: check all enabled alarms
    * OPTIMIZED: Parallel logtype group evaluation with batched searches
    */
-  async evaluateAllAlarms(options: { includeNms?: boolean } = {}): Promise<EvaluationResult[]> {
+  async evaluateAllAlarms(options: {
+    includeNms?: boolean;
+    sources?: AlarmSource[];
+    /** Explicit source actions must report missing configuration instead of skipping it. */
+    requireConfiguredSources?: boolean;
+  } = {}): Promise<EvaluationResult[]> {
+    assertAlarmExecutionActive();
     const results: EvaluationResult[] = [];
-    const includeNms = options.includeNms !== false;
+    const selected = new Set<AlarmSource>(options.sources ?? ['nms', 'vmware', 'fortigate-sslvpn', 'fortianalyzer']);
+    const includeNms = options.includeNms !== false && selected.has('nms');
 
-    this.requireFortiAnalyzer();
-
-    try {
-      // Prune expired alarm cooldowns to keep the table small
+    // Shared local maintenance must not initialize an unrelated remote source.
+    if (!options.sources) {
       try {
-        const pruned = await prisma.alarmCooldown.deleteMany({
-          where: { cooldownUntil: { lt: new Date() } },
-        });
-        if (pruned.count > 0) {
-          log.info({ count: pruned.count }, 'Pruned expired alarm cooldowns');
-        }
+        await prisma.alarmCooldown.deleteMany({ where: { cooldownUntil: { lt: new Date() } } });
       } catch {
-        // Table may not exist yet (before migration)
+        // Compatibility with installations that have not applied the cooldown migration.
       }
+    }
+    const suppressionStats = this.getSuppressionStats();
+    log.info({ enabledRules: suppressionStats.enabledRules, totalRules: suppressionStats.totalRules }, 'Suppression engine status');
+    const emailStats = getEmailStats();
+    log.info({ emailsThisHour: emailStats.emailsThisHour, maxPerHour: emailStats.maxPerHour, activeCooldowns: emailStats.activeCooldowns, transporterActive: emailStats.transporterActive }, 'Email state');
+    const alarms = await prisma.alarmDefinition.findMany({ where: { enabled: true } });
+    const priorityOrder: Record<string, number> = {
+      ALARM_CRITICAL: 0, ALARM_HIGH: 1, ALARM_MEDIUM: 2, ALARM_LOW: 3, ALARM_INFO: 4,
+    };
+    const sorted = alarms
+      .map(alarm => ({ ...alarm, detectionLogic: alarm.detectionLogic as unknown as AlarmDetectionLogic }))
+      .filter(alarm => selected.has(alarmSource(alarm)))
+      .sort((a, b) => (priorityOrder[a.severity] ?? 5) - (priorityOrder[b.severity] ?? 5));
+    const vmwareAlarms: AlarmDef[] = [];
+    const fortiGateAlarms: AlarmDef[] = [];
+    const correlationAlarms: AlarmDef[] = [];
+    const logTypeGroups = new Map<string, AlarmDef[]>();
+    for (const alarm of sorted) {
+      const source = alarmSource(alarm);
+      if (source === 'nms') continue; // Existing metric evaluator owns NMS rules.
+      if (source === 'vmware') { vmwareAlarms.push(alarm); continue; }
+      if (source === 'fortigate-sslvpn') { fortiGateAlarms.push(alarm); continue; }
+      if (alarm.detectionLogic.clientCheck === 'correlation') { correlationAlarms.push(alarm); continue; }
+      const type = alarm.detectionLogic.logtype || 'event';
+      if (!logTypeGroups.has(type)) logTypeGroups.set(type, []);
+      logTypeGroups.get(type)!.push(alarm);
+    }
 
-      // Log suppression engine status
-      const suppressionStats = this.getSuppressionStats();
-      log.info({ enabledRules: suppressionStats.enabledRules, totalRules: suppressionStats.totalRules }, 'Suppression engine status');
+    if (includeNms) {
+      try { results.push(...await this.evaluateNmsAlarms()); }
+      catch (error) {
+        log.error({ err: error }, 'NMS alarm source failed');
+        results.push({ alarmCode: 'NMS_SOURCE', triggered: false, matchCount: 0, events: [], error: (error as Error).message });
+      }
+    }
 
-      // Initialize VMware service on first run
+    // Independent sources complete before any FA login/cache warmup can fail or wait.
+    results.push(...await this.evaluateSourceAlarms('vmware', vmwareAlarms, async () => {
       if (!this.vmwareInitialized) {
-        await this.initializeVMware();
+        if (!await this.initializeVMware()) return false;
         this.vmwareInitialized = true;
       }
-
-      // Initialize FortiGate service on first run
-      if (!this.fortiGateInitialized) {
-        await this.initializeFortiGate();
-        this.fortiGateInitialized = true;
-        // Expose engine instance so FortiGate query functions can access fortiGateService
-        (globalThis as any).__detectionEngine = this;
-      }
-
-      // Clear VMware cache at start of each check run for fresh data
       this.clearVMwareCache();
+      return true;
+    }, () => this.evaluateLogTypeGroupOptimized('vmware', vmwareAlarms), options.requireConfiguredSources));
 
-      // Clear FortiGate event log cache to get fresh data each cycle
-      if (this.fortiGateService) {
-        this.fortiGateService.clearEventLogCache();
-        // NOTE: clearCmdbResponseCache() is called in alarm-runner.ts before evaluation starts
-        // Calling it here would reset frozen snapshots AFTER some alarms have already run
+    results.push(...await this.evaluateFortiGateAlarms(fortiGateAlarms, options.requireConfiguredSources));
+
+    const faAlarms = [...logTypeGroups.values()].flat().concat(correlationAlarms);
+    results.push(...await this.evaluateSourceAlarms('fortianalyzer', faAlarms, async () => {
+      if (!this.service) return false;
+      await this.initializeEventCache();
+      assertAlarmExecutionActive();
+      if (!await this.service!.login()) throw new Error('FortiAnalyzer login failed');
+      this.eventCache?.assertActive();
+      const status = this.eventCache?.getCacheStatus();
+      if (status && !status.isFresh) {
+        await Promise.race([
+          withoutAlarmExecution(() => this.eventCache!.forceSync()),
+          new Promise<void>(resolve => setTimeout(resolve, 2 * 60 * 1000)),
+        ]);
       }
+      return true;
+    }, () => this.evaluateFortiAnalyzerGroups(logTypeGroups, correlationAlarms), options.requireConfiguredSources));
 
-      // Initialize event cache on first run
-      if (!this.cacheInitialized) {
-        await this.initializeEventCache();
-      }
+    // Global delivery retries belong to full cycles, not a source-specific manual action.
+    if (!options.sources) await this.retryFailedNotifications();
+    log.info({ evaluated: results.length, triggered: results.filter(r => r.triggered).length,
+      errors: results.filter(r => r.error && r.error !== 'cooldown-active').length }, 'Evaluation complete');
+    return results;
+  }
 
-      // Log email service state — makes rate-limit/cooldown/SMTP issues immediately visible
-      const emailStats = getEmailStats();
-      log.info({ emailsThisHour: emailStats.emailsThisHour, maxPerHour: emailStats.maxPerHour, activeCooldowns: emailStats.activeCooldowns, transporterActive: emailStats.transporterActive, hourlyResetIn: emailStats.hourlyResetIn }, 'Email state');
+  private sourceAlarmError(alarm: AlarmDef, error: unknown): EvaluationResult {
+    return { alarmCode: alarm.code, triggered: false, matchCount: 0, events: [],
+      error: error instanceof Error ? error.message : String(error) };
+  }
 
-      // Log cache state
-      if (this.eventCache) {
-        const cacheStatus = this.eventCache.getCacheStatus();
-        log.info({ lastSync: cacheStatus.lastSyncTime?.toISOString() ?? 'never', isFresh: cacheStatus.isFresh, syncInProgress: cacheStatus.syncInProgress }, 'Cache state');
-
-        // ── Cache Freshness Guarantee ────────────────────────────────────────────
-        // If cache is stale and no sync is running, force an immediate sync before
-        // evaluation. This prevents alarm checks from silently running against old
-        // data when the background scheduler has fallen behind (FA downtime, backoff).
-        // We cap the wait at 2 minutes so the alarm check never hangs indefinitely.
-        if (!cacheStatus.isFresh) {
-          log.warn('Cache is stale — forcing sync before evaluation (max 2 min)');
-          try {
-            await Promise.race([
-              this.eventCache.forceSync(),
-              new Promise<void>(resolve => setTimeout(resolve, 2 * 60 * 1000)),
-            ]);
-            const refreshed = this.eventCache.getCacheStatus();
-            if (refreshed.isFresh) {
-              log.info('Cache freshened successfully — proceeding with fresh data');
-            } else {
-              log.warn('Cache still stale after force sync — proceeding with live FA fallback');
-            }
-          } catch (forceSyncErr) {
-            log.warn({ err: forceSyncErr }, 'forceSync threw (non-fatal)');
-          }
-        }
-      }
-
-      // Get all enabled alarm definitions
-      const alarms = await prisma.alarmDefinition.findMany({
-        where: { enabled: true },
+  private async evaluateFortiGateAlarms(alarms: AlarmDef[], requireConfigured = false): Promise<EvaluationResult[]> {
+    assertAlarmExecutionActive();
+    if (alarms.length === 0) return [];
+    let integrations: Array<{ id: string }>;
+    try {
+      integrations = await prisma.integrationConfig.findMany({
+        where: { type: 'FORTIGATE', enabled: true },
+        select: { id: true },
+        orderBy: { createdAt: 'asc' },
       });
-
-      if (alarms.length === 0) {
-        log.info('No enabled alarms found');
-        return results;
+      if (integrations.length === 0) {
+        if (requireConfigured) throw new Error('fortigate-sslvpn alarm source is not configured');
+        log.info({ source: 'fortigate-sslvpn', reason: 'not-configured' }, 'Skipping optional alarm source');
+        return [];
       }
-
-      // Sort alarms by priority (CRITICAL/HIGH first, then MEDIUM, then LOW/INFO)
-      const priorityOrder: Record<string, number> = {
-        'ALARM_CRITICAL': 0,
-        'ALARM_HIGH': 1,
-        'ALARM_MEDIUM': 2,
-        'ALARM_LOW': 3,
-        'ALARM_INFO': 4,
-      };
-      
-      const sortedAlarms = alarms.sort((a, b) => {
-        return (priorityOrder[a.severity] || 5) - (priorityOrder[b.severity] || 5);
-      });
-
-      log.info({ count: sortedAlarms.length }, 'Evaluating enabled alarms (sorted by priority)');
-
-      // Separate correlation alarms and FortiGate source alarms from regular alarms
-      const correlationAlarms: AlarmDef[] = [];
-      const fortiGateSslvpnAlarms: AlarmDef[] = [];
-      const regularAlarms = sortedAlarms;
-
-      // Group regular alarms by logtype to batch searches
-      const logTypeGroups = new Map<string, AlarmDef[]>();
-      for (const alarm of regularAlarms) {
-        const logic = alarm.detectionLogic as unknown as AlarmDetectionLogic;
-        const logtype = logic.logtype || 'event';
-        const alarmDef: AlarmDef = { ...alarm, detectionLogic: logic };
-
-        // NMS rules are evaluated from PostgreSQL metrics by evaluateNmsAlarms().
-        // They must never be sent through the FortiAnalyzer log query pipeline.
-        if (alarm.source === 'nms' || alarm.code.startsWith('NMS_')) {
-          continue;
-        }
-
-        if (logic.clientCheck === 'correlation') {
-          correlationAlarms.push(alarmDef);
-          continue;
-        }
-
-        // Handle FortiGate source alarms separately
-        if (logic.source === 'fortigate-sslvpn') {
-          fortiGateSslvpnAlarms.push(alarmDef);
-          continue;
-        }
-
-        if (!logTypeGroups.has(logtype)) {
-          logTypeGroups.set(logtype, []);
-        }
-        logTypeGroups.get(logtype)!.push(alarmDef);
-      }
-
-      log.info({ logTypeGroups: [...logTypeGroups.keys()], fortiGateSslvpnAlarmCount: fortiGateSslvpnAlarms.length }, 'LogTypeGroups summary');
-
-      // NMS is an independent data source. Evaluate it before any FortiAnalyzer
-      // login so a missing/unavailable FA integration cannot suppress SNMP alarms.
-      if (includeNms) {
-        try {
-          const nmsResults = await this.evaluateNmsAlarms();
-          results.push(...nmsResults);
-        } catch (nmsErr) {
-          log.error({ err: nmsErr }, 'NMS alarm evaluation error');
-        }
-      }
-
-      const needsFortiAnalyzer = logTypeGroups.size > 0 || correlationAlarms.length > 0;
-      if (needsFortiAnalyzer) {
-        const loggedIn = await this.requireFortiAnalyzer().login();
-        if (!loggedIn) {
-          log.error('Failed to login to FortiAnalyzer');
-          throw new Error('FortiAnalyzer login failed — cannot evaluate FortiAnalyzer alarms');
-        }
-      }
-
-      // Check overall cache freshness to decide how to run logtype groups:
-      //  - Cache FRESH  → full parallel (all groups + all filter batches at once = fast DB reads, zero FA load)
-      //  - Cache STALE  → run logtype groups SEQUENTIALLY; each group is still limited to
-      //    5 concurrent filter batches (see evaluateLogTypeGroupOptimized).
-      //    This keeps the global live-FA concurrency at ≤ 5 at any point in time,
-      //    preventing the "40 simultaneous requests" cascade that caused 53 errors.
-      const overallCacheStatus = this.eventCache?.getCacheStatus();
-      const overallCacheFresh = overallCacheStatus?.isFresh ?? false;
-
-      const groupEntries = Array.from(logTypeGroups.entries());
-      const groupResults: Array<{ logtype: string; results: EvaluationResult[]; error: string | null }> = [];
-
-      if (overallCacheFresh) {
-        // FAST PATH: All logtype groups in full parallel — cache serves all queries
-        const groupPromises = groupEntries.map(async ([logtype, groupAlarms]) => {
-          log.info({ logtype, alarmCount: groupAlarms.length }, 'Starting parallel evaluation');
-          try {
-            const groupResult = await this.evaluateLogTypeGroupOptimized(logtype, groupAlarms);
-            return { logtype, results: groupResult, error: null };
-          } catch (error) {
-            log.error({ err: error, logtype }, 'Error evaluating logtype group');
-            const errorResults = groupAlarms.map(a => ({
-              alarmCode: a.code, triggered: false, matchCount: 0, events: [],
-              error: (error as Error).message,
-            }));
-            return { logtype, results: errorResults, error: (error as Error).message };
-          }
-        });
-        groupResults.push(...await Promise.all(groupPromises));
-      } else {
-        // SAFE PATH: Run logtype groups one-at-a-time; each group caps itself at 5 concurrent
-        // live FA calls via runWithConcurrency inside evaluateLogTypeGroupOptimized.
-        // Global max live-FA concurrency = 5 (avoids overwhelming FortiAnalyzer).
-        log.warn('Cache stale — running logtype groups sequentially to limit FA load');
-        for (const [logtype, groupAlarms] of groupEntries) {
-          log.info({ logtype, alarmCount: groupAlarms.length }, 'Starting sequential evaluation');
-          try {
-            const groupResult = await this.evaluateLogTypeGroupOptimized(logtype, groupAlarms);
-            groupResults.push({ logtype, results: groupResult, error: null });
-          } catch (error) {
-            log.error({ err: error, logtype }, 'Error evaluating logtype group');
-            const errorResults = groupAlarms.map(a => ({
-              alarmCode: a.code, triggered: false, matchCount: 0, events: [],
-              error: (error as Error).message,
-            }));
-            groupResults.push({ logtype, results: errorResults, error: (error as Error).message });
-          }
-        }
-      }
-      
-      // Collect results from all groups
-      for (const { logtype, results: groupResult, error } of groupResults) {
-        if (error) {
-          log.error({ logtype, error }, 'Group evaluation failed');
-        }
-        results.push(...groupResult);
-      }
-
-      // Evaluate FortiGate SSL-VPN alarms (uses FortiGate API, not FortiAnalyzer)
-      if (fortiGateSslvpnAlarms.length > 0) {
-        log.info({ count: fortiGateSslvpnAlarms.length }, 'Evaluating FortiGate SSL-VPN alarms');
-        for (const alarm of fortiGateSslvpnAlarms) {
-          try {
-            const result = await this.evaluateFortiGateSslvpnAlarm(alarm);
-            results.push(result);
-          } catch (error) {
-            log.error({ err: error, alarmCode: alarm.code }, 'FortiGate SSL-VPN evaluation error');
-            results.push({ alarmCode: alarm.code, triggered: false, matchCount: 0, events: [], error: (error as Error).message });
-          }
-        }
-      }
-
-      // Evaluate correlation alarms (after regular alarms, so precursor events exist)
-      if (correlationAlarms.length > 0) {
-        log.info({ count: correlationAlarms.length }, 'Evaluating correlation alarms');
-        // Correlation alarms are fast (DB queries only), evaluate sequentially
-        for (const alarm of correlationAlarms) {
-          try {
-            const result = await this.evaluateCorrelationAlarm(alarm);
-            results.push(result);
-          } catch (error) {
-            log.error({ err: error, alarmCode: alarm.code }, 'Correlation evaluation error');
-            results.push({ alarmCode: alarm.code, triggered: false, matchCount: 0, events: [], error: (error as Error).message });
-          }
-        }
-      }
-
-      log.info({ triggered: results.filter(r => r.triggered).length, errors: results.filter(r => r.error && r.error !== 'cooldown-active' && r.error !== 'cache-empty').length, onCooldown: results.filter(r => r.error === 'cooldown-active').length, cacheEmpty: results.filter(r => r.error === 'cache-empty').length }, 'Evaluation complete');
-      
-      // Retry any failed notifications from previous cycles
-      await this.retryFailedNotifications();
-      
-      return results;
     } catch (error) {
-      const msg = (error as Error).message || '';
-      // Login failures and other infrastructure errors should propagate to alarm-runner
-      // (alarm-runner's catch block will log it as FAILED and write to DB correctly)
-      if (msg.includes('login failed') || msg.includes('cannot evaluate')) {
-        throw error;
-      }
-      log.error({ err: error }, 'Critical error in evaluateAllAlarms');
-      // Return results collected so far for non-critical partial failures
-      return results;
+      return alarms.map(alarm => this.sourceAlarmError(alarm, error));
     }
+
+    const results: EvaluationResult[] = [];
+    for (const integration of integrations) {
+      let target: EvaluationResult['target'] = { configId: integration.id };
+      try {
+        // Resolve every cycle: the factory owns saved VDOM, credentials and revision fencing.
+        const connector = await getFortiGateConnector({ configId: integration.id });
+        target = { configId: connector.target.configId, vdom: connector.target.vdom, key: connector.target.key };
+        connector.service.clearEventLogCache();
+        connector.service.clearCmdbResponseCache();
+        for (const alarm of alarms) {
+          try { results.push({ ...await this.evaluateFortiGateSslvpnAlarm(alarm, connector), target }); }
+          catch (error) { results.push({ ...this.sourceAlarmError(alarm, error), target }); }
+        }
+      } catch (error) {
+        log.error({ err: error, configId: integration.id }, 'FortiGate alarm target failed; continuing other targets');
+        results.push(...alarms.map(alarm => ({ ...this.sourceAlarmError(alarm, error), target })));
+      }
+    }
+    return results;
+  }
+
+  private async evaluateSourceAlarms(
+    source: AlarmSource,
+    alarms: AlarmDef[],
+    initialize: () => Promise<boolean>,
+    evaluate: () => Promise<EvaluationResult[]>,
+    requireConfigured = false,
+  ): Promise<EvaluationResult[]> {
+    assertAlarmExecutionActive();
+    if (alarms.length === 0) return [];
+    try {
+      if (!await initialize()) {
+        if (requireConfigured) throw new Error(`${source} alarm source is not configured`);
+        log.info({ source, reason: 'not-configured' }, 'Skipping optional alarm source');
+        return [];
+      }
+      assertAlarmExecutionActive();
+      return await evaluate();
+    } catch (error) {
+      log.error({ err: error, source }, 'Alarm source failed; preserving other source results');
+      return alarms.map(alarm => this.sourceAlarmError(alarm, error));
+    }
+  }
+
+  private async evaluateFortiAnalyzerGroups(
+    logTypeGroups: Map<string, AlarmDef[]>,
+    correlationAlarms: AlarmDef[],
+  ): Promise<EvaluationResult[]> {
+    const results: EvaluationResult[] = [];
+    // Check overall cache freshness to decide how to run logtype groups:
+    //  - Cache FRESH  → full parallel (all groups + all filter batches at once = fast DB reads, zero FA load)
+    //  - Cache STALE  → run logtype groups SEQUENTIALLY; each group is still limited to
+    //    5 concurrent filter batches (see evaluateLogTypeGroupOptimized).
+    //    This keeps the global live-FA concurrency at ≤ 5 at any point in time,
+    //    preventing the "40 simultaneous requests" cascade that caused 53 errors.
+    const overallCacheStatus = this.eventCache?.getCacheStatus();
+    const overallCacheFresh = overallCacheStatus?.isFresh ?? false;
+
+    const groupEntries = Array.from(logTypeGroups.entries());
+    const groupResults: Array<{ logtype: string; results: EvaluationResult[]; error: string | null }> = [];
+
+    if (overallCacheFresh) {
+      // FAST PATH: All logtype groups in full parallel — cache serves all queries
+      const groupPromises = groupEntries.map(async ([logtype, groupAlarms]) => {
+        log.info({ logtype, alarmCount: groupAlarms.length }, 'Starting parallel evaluation');
+        try {
+          const groupResult = await this.evaluateLogTypeGroupOptimized(logtype, groupAlarms);
+          return { logtype, results: groupResult, error: null };
+        } catch (error) {
+          log.error({ err: error, logtype }, 'Error evaluating logtype group');
+          const errorResults = groupAlarms.map(a => ({
+            alarmCode: a.code, triggered: false, matchCount: 0, events: [],
+            error: (error as Error).message,
+          }));
+          return { logtype, results: errorResults, error: (error as Error).message };
+        }
+      });
+      groupResults.push(...await Promise.all(groupPromises));
+    } else {
+      // SAFE PATH: Run logtype groups one-at-a-time; each group caps itself at 5 concurrent
+      // live FA calls via runWithConcurrency inside evaluateLogTypeGroupOptimized.
+      // Global max live-FA concurrency = 5 (avoids overwhelming FortiAnalyzer).
+      log.warn('Cache stale — running logtype groups sequentially to limit FA load');
+      for (const [logtype, groupAlarms] of groupEntries) {
+        log.info({ logtype, alarmCount: groupAlarms.length }, 'Starting sequential evaluation');
+        try {
+          const groupResult = await this.evaluateLogTypeGroupOptimized(logtype, groupAlarms);
+          groupResults.push({ logtype, results: groupResult, error: null });
+        } catch (error) {
+          log.error({ err: error, logtype }, 'Error evaluating logtype group');
+          const errorResults = groupAlarms.map(a => ({
+            alarmCode: a.code, triggered: false, matchCount: 0, events: [],
+            error: (error as Error).message,
+          }));
+          groupResults.push({ logtype, results: errorResults, error: (error as Error).message });
+        }
+      }
+    }
+
+    // Collect results from all groups
+    for (const { logtype, results: groupResult, error } of groupResults) {
+      if (error) {
+        log.error({ logtype, error }, 'Group evaluation failed');
+      }
+      results.push(...groupResult);
+    }
+
+    // Evaluate correlation alarms (after regular alarms, so precursor events exist)
+    if (correlationAlarms.length > 0) {
+      log.info({ count: correlationAlarms.length }, 'Evaluating correlation alarms');
+      // Correlation alarms are fast (DB queries only), evaluate sequentially
+      for (const alarm of correlationAlarms) {
+        try {
+          const result = await this.evaluateCorrelationAlarm(alarm);
+          results.push(result);
+        } catch (error) {
+          log.error({ err: error, alarmCode: alarm.code }, 'Correlation evaluation error');
+          results.push({ alarmCode: alarm.code, triggered: false, matchCount: 0, events: [], error: (error as Error).message });
+        }
+      }
+    }
+    return results;
   }
 
   /**
@@ -692,28 +614,16 @@ export class AlarmDetectionEngine {
       log.info({ alarmCode: alarm.code, secondaryLogtype: rules.secondaryLogtype, secondaryFilter: rules.secondaryFilter }, 'Correlation secondary search');
       const limit = 50;
       const service = this.requireFortiAnalyzer();
-      const tid = await service.startLogSearch(rules.secondaryLogtype, limit, rules.secondaryFilter);
-      if (!tid) {
-        return { alarmCode: alarm.code, triggered: false, matchCount: 0, events: [], error: 'secondary-search-failed' };
-      }
+      const tid = await startFortiAnalyzerSearch(service, rules.secondaryLogtype, limit, rules.secondaryFilter);
+      const logs = await waitForFortiAnalyzerResults(service, tid, limit);
 
-      let logs: Array<Record<string, unknown>> | null = null;
-      for (let i = 0; i < 3; i++) {
-        await new Promise((resolve) => setTimeout(resolve, 5000));
-        logs = await service.fetchLogResults(tid, 0, limit);
-        if (logs && logs.length > 0) break;
-      }
-
-      if (!logs || logs.length === 0) {
+      if (logs.length === 0) {
         return { alarmCode: alarm.code, triggered: false, matchCount: 0, events: [] };
       }
 
       // Filter by time window
       const cutoff = new Date(Date.now() - logic.timeWindowMinutes * 60 * 1000);
-      const recentLogs = logs.filter((log) => {
-        const logTime = this.parseLogTime(log);
-        return logTime && logTime >= cutoff;
-      });
+      const recentLogs = filterFortiAnalyzerTimeWindow(logs, cutoff, new Date());
 
       // Match IPs between precursor alarms and secondary logs
       const matchField = rules.matchField === 'destIp' ? 'dstip' : 'srcip';
@@ -734,12 +644,12 @@ export class AlarmDetectionEngine {
           const precDetails = relatedPrecursors
             .map((e: PrecursorEvent) => {
               const ip = e.sourceIp || e.destIp || 'unknown';
-              const raw = (e as any).rawData as any;
+              const raw = e.rawData;
               let country: string | undefined;
               let ts: string;
 
               if (Array.isArray(raw) && raw.length > 0) {
-                const log0 = raw[0] as any;
+                const log0 = raw[0] as { country?: string; src_country?: string; dst_country?: string; src_country_code?: string; dst_country_code?: string; date?: string; time?: string; tz?: string; itime?: string | number };
                 country =
                   (log0 &&
                     (log0.country ||
@@ -866,6 +776,11 @@ export class AlarmDetectionEngine {
         // not registered (non-deterministic Prisma findMany order).
         const representativeAlarm =
           filterAlarms.find(a => ALARM_QUERY_REGISTRY.has(a.code)) ?? filterAlarms[0];
+        // Shared collection must cover the widest rule window before per-rule UTC filtering.
+        const searchAlarm = { ...representativeAlarm, detectionLogic: {
+          ...representativeAlarm.detectionLogic,
+          timeWindowMinutes: Math.max(...filterAlarms.map(a => a.detectionLogic.timeWindowMinutes)),
+        } };
         
         // CMDB-based alarms need more time (fetching 400+ items from FortiGate)
         const CMDB_ALARMS = new Set([
@@ -875,12 +790,7 @@ export class AlarmDetectionEngine {
         const isCmdbAlarm = filterAlarms.some(a => CMDB_ALARMS.has(a.code));
         const timeoutMs = isCmdbAlarm ? 180000 : 25000; // 3 min for CMDB, 25s for others
         
-        const searchResult = await Promise.race([
-          this.performLogSearch(representativeAlarm, logtype, filter, limit),
-          new Promise<{ tid: string | null; logs: Array<Record<string, unknown>> }>((resolve) =>
-            setTimeout(() => resolve({ tid: null, logs: [] }), timeoutMs)
-          ),
-        ]);
+        const searchResult = await withAlarmStage(() => this.performLogSearch(searchAlarm, logtype, filter, limit), timeoutMs);
 
         if (!searchResult.tid || searchResult.logs.length === 0) {
           // No logs found — determine whether this is a real failure or just no events
@@ -919,10 +829,7 @@ export class AlarmDetectionEngine {
         
         // Filter by time window
         const cutoff = new Date(Date.now() - logic.timeWindowMinutes * 60 * 1000);
-        const recentLogs = searchResult.logs.filter((log) => {
-          const logTime = this.parseLogTime(log);
-          return logTime && logTime >= cutoff;
-        });
+        const recentLogs = filterFortiAnalyzerTimeWindow(searchResult.logs, cutoff, new Date());
 
         // Apply client-side checks
         let filteredLogs = recentLogs;
@@ -966,12 +873,12 @@ export class AlarmDetectionEngine {
                 update: { cooldownUntil },
               });
               newUserLogs.push(entry);
-            } catch (err: any) {
+            } catch (err) {
               // P2002 = unique constraint violation → another check claimed it first
-              if (err?.code === 'P2002') {
+              if ((err as Error & { code?: string })?.code === 'P2002') {
                 log.info({ alarmCode: alarm.code, username }, 'Skipping user — cooldown claimed by concurrent check');
               } else {
-                log.error({ err: err?.message, alarmCode: alarm.code, username }, 'Cooldown check failed');
+                log.error({ err: (err as Error & { code?: string })?.message, alarmCode: alarm.code, username }, 'Cooldown check failed');
                 // On unexpected error, fall through — still fire alarm to avoid missing alerts
                 newUserLogs.push(entry);
               }
@@ -1017,11 +924,11 @@ export class AlarmDetectionEngine {
                 update: { cooldownUntil },
               });
               newUserLogs.push(entry);
-            } catch (err: any) {
-              if (err?.code === 'P2002') {
+            } catch (err) {
+              if ((err as Error & { code?: string })?.code === 'P2002') {
                 log.info({ alarmCode: alarm.code, username }, 'Skipping user — cooldown claimed by concurrent check');
               } else {
-                log.error({ err: err?.message, alarmCode: alarm.code, username }, 'Cooldown check failed');
+                log.error({ err: (err as Error & { code?: string })?.message, alarmCode: alarm.code, username }, 'Cooldown check failed');
                 newUserLogs.push(entry);
               }
             }
@@ -1248,12 +1155,7 @@ export class AlarmDetectionEngine {
     ]);
     const timeoutMs = CMDB_ALARMS.has(alarm.code) ? 180000 : 30000;
     
-    const searchResult = await Promise.race([
-      this.performLogSearch(alarm, logtype, filter, limit),
-      new Promise<{ tid: string | null; logs: Array<Record<string, unknown>> }>((resolve) =>
-        setTimeout(() => resolve({ tid: null, logs: [] }), timeoutMs)
-      ),
-    ]);
+    const searchResult = await withAlarmStage(() => this.performLogSearch(alarm, logtype, filter, limit), timeoutMs);
     
     if (!searchResult.tid || searchResult.logs.length === 0) {
       const isCleanCache = searchResult.tid === 'cache-empty' || searchResult.tid === 'dedicated-query-empty';
@@ -1268,10 +1170,7 @@ export class AlarmDetectionEngine {
 
     // Filter by time window (client-side)
     const cutoff = new Date(Date.now() - logic.timeWindowMinutes * 60 * 1000);
-    const recentLogs = searchResult.logs.filter((log) => {
-      const logTime = this.parseLogTime(log);
-      return logTime && logTime >= cutoff;
-    });
+    const recentLogs = filterFortiAnalyzerTimeWindow(searchResult.logs, cutoff, new Date());
 
     // Apply client-side checks
     let filteredLogs = recentLogs;
@@ -1327,6 +1226,7 @@ export class AlarmDetectionEngine {
     filter: string,
     limit: number
   ): Promise<{ tid: string | null; logs: Array<Record<string, unknown>> }> {
+    this.eventCache?.assertActive?.();
     const logic = alarm.detectionLogic as unknown as AlarmDetectionLogic;
     const endTime = new Date();
     const startTime = new Date(Date.now() - logic.timeWindowMinutes * 60 * 1000);
@@ -1338,7 +1238,7 @@ export class AlarmDetectionEngine {
     // the "fetch N rows then filter in memory" problem.
     if (ALARM_QUERY_REGISTRY.has(alarm.code)) {
       const queryFn = ALARM_QUERY_REGISTRY.get(alarm.code)!;
-      const cacheStatus = this.eventCache?.getCacheStatus() ?? null;
+      const cacheStatus = this.eventCache?.getCacheStatus(logtype) ?? null;
       try {
         const result = await queryFn({
           alarmCode: alarm.code,
@@ -1348,18 +1248,19 @@ export class AlarmDetectionEngine {
           faService: this.requireFortiAnalyzer(),
           bypassCache: BYPASS_CACHE_ALARMS.has(alarm.code),
         });
+        this.eventCache?.assertActive?.();
         // Use sentinel TIDs that the caller understands
         const tid = result.events.length > 0 ? 'dedicated-query' : 'dedicated-query-empty';
         return { tid, logs: result.events };
       } catch (err) {
-        log.error({ err, alarmCode: alarm.code }, 'Dedicated query failed, falling back to generic');
-        // Fall through to generic path on error
+        log.error({ err, alarmCode: alarm.code }, 'Dedicated query failed');
+        throw err;
       }
     }
     // ─────────────────────────────────────────────────────────────────────
 
     // Try cache first
-    if (this.eventCache && this.cacheInitialized) {
+    if (this.eventCache && this.cacheInitialized && this.eventCache.getCacheStatus(logtype).isFresh) {
       try {
         const cachedLogs = await this.eventCache.queryCachedEvents({
           logtype,
@@ -1374,17 +1275,9 @@ export class AlarmDetectionEngine {
           return { tid: 'cache', logs: cachedLogs };
         }
 
-        // Cache initialized and returned zero — check if cache itself has any events
-        // for this logtype at all (guards against stale/empty cache after sync failure)
-        const cacheStatus = this.eventCache.getCacheStatus();
-        if (!cacheStatus.isFresh) {
-          // Cache is stale (last sync >5min ago) — fall through to live FA as safety net
-          log.warn({ lastSync: cacheStatus.lastSyncTime?.toISOString() ?? 'never', alarmCode: alarm.code }, 'Cache is stale — falling back to live FA');
-        } else {
-          // Cache is fresh and has zero matching events — authoritative empty result
-          log.info({ alarmCode: alarm.code, logtype }, 'Cache clean — no events in window, skipping FA');
-          return { tid: 'cache-empty', logs: [] };
-        }
+        // Only a successfully synced logtype can establish an empty result.
+        log.info({ alarmCode: alarm.code, logtype }, 'Cache clean — no events in window, skipping FA');
+        return { tid: 'cache-empty', logs: [] };
       } catch (cacheError) {
         log.warn({ err: cacheError }, 'Cache query failed, falling back to live API');
       }
@@ -1395,26 +1288,15 @@ export class AlarmDetectionEngine {
     
     try {
       const service = this.requireFortiAnalyzer();
-      const tid = await service.startLogSearch(logtype, limit, filter || undefined);
-      
-      if (!tid) {
-        log.warn({ logtype }, 'FortiAnalyzer search returned no TID');
-        return { tid: null, logs: [] };
-      }
-
-      // Poll for results (max 30s for alarm checks)
-      let logs: Array<Record<string, unknown>> | null = null;
-      for (let i = 0; i < 6; i++) {
-        await new Promise((resolve) => setTimeout(resolve, 5000));
-        logs = await service.fetchLogResults(tid, 0, limit);
-        if (logs && logs.length > 0) break;
-      }
-
-      log.info({ eventCount: logs?.length || 0, logtype }, 'Live API returned events');
-      return { tid: String(tid), logs: logs || [] };
+      const signal = this.eventCache?.getAbortSignal?.();
+      const tid = await startFortiAnalyzerSearch(service, logtype, limit, filter || undefined, signal);
+      const logs = await waitForFortiAnalyzerResults(service, tid, limit, { signal });
+      this.eventCache?.assertActive?.();
+      log.info({ eventCount: logs.length, logtype }, 'Live API search completed');
+      return { tid: String(tid), logs: filterFortiAnalyzerTimeWindow(logs, startTime, endTime) };
     } catch (error) {
       log.error({ err: error, logtype }, 'FortiAnalyzer search failed');
-      return { tid: null, logs: [] };
+      throw error;
     }
   }
 
@@ -1429,6 +1311,7 @@ export class AlarmDetectionEngine {
     const recentEvent = await prisma.alarmEvent.findFirst({
       where: {
         alarmId: alarm.id,
+        ...(this.vmwareInventoryScope ? { rawData: { path: ['0', 'inventorySourceScope'], equals: this.vmwareInventoryScope } } : {}),
         createdAt: { gte: cooldownThreshold },
       },
       orderBy: { createdAt: 'desc' },
@@ -1915,7 +1798,9 @@ export class AlarmDetectionEngine {
       }
 
       // Apply filter to data
-      let matchingData = this.applyVMwareFilter(vmwareData, logic.filter || '');
+      let matchingData: Array<Record<string, unknown>> = this.applyVMwareFilter(vmwareData, logic.filter || '').map(item => ({
+        ...item, ...(this.vmwareInventoryScope ? { inventorySourceScope: this.vmwareInventoryScope } : {}),
+      }));
 
       // SNAPSHOT_CREATED: Filter out Veeam backup snapshots (both Backup and Sure Backup test snapshots)
       if (alarm.code === 'SNAPSHOT_CREATED') {
@@ -2034,21 +1919,23 @@ export class AlarmDetectionEngine {
    * Evaluate a FortiGate SSL-VPN alarm using live FortiGate API
    * Checks currently connected SSL-VPN users for off-hours logins
    */
-  private async evaluateFortiGateSslvpnAlarm(alarm: AlarmDef): Promise<EvaluationResult> {
+  private async evaluateFortiGateSslvpnAlarm(alarm: AlarmDef, connector: FortiGateConnector): Promise<EvaluationResult> {
     const logic = alarm.detectionLogic;
+    const { target, service } = connector;
 
     // Determine alarm type first — SSLVPN_CONNECTION uses per-user cooldown (skip alarm-level cooldown)
     const isOffHoursAlarm2 = alarm.code === 'VPN_LOGIN_OFF_HOURS';
     const isBusinessHoursAlarm2 = alarm.code === 'SSLVPN_BUSINESS_HOURS';
     const isAllConnectionsAlarm2 = !isOffHoursAlarm2 && !isBusinessHoursAlarm2;
 
-    // For non-all-connections alarms, apply standard alarm-level cooldown
+    // Business-hours rules retain one cooldown per target, across its users.
     const cooldownThreshold = new Date(Date.now() - alarm.cooldownMinutes * 60 * 1000);
-    // VPN_LOGIN_OFF_HOURS uses per-user dedup (like SSLVPN_CONNECTION), so skip alarm-level cooldown here
+    // Off-hours and all-connections rules use target/user cooldowns below.
     if (!isAllConnectionsAlarm2 && alarm.code !== 'VPN_LOGIN_OFF_HOURS') {
       const recentEvent = await prisma.alarmEvent.findFirst({
         where: {
           alarmId: alarm.id,
+          incident: { is: fortiGateAlarmEntity(target.key) },
           createdAt: { gte: cooldownThreshold },
         },
         orderBy: { createdAt: 'desc' },
@@ -2058,17 +1945,11 @@ export class AlarmDetectionEngine {
       }
     }
 
-    // Check if FortiGate service is available
-    if (!this.fortiGateService) {
-      log.warn({ alarmCode: alarm.code }, 'FortiGate service not available');
-      return { alarmCode: alarm.code, triggered: false, matchCount: 0, events: [], error: 'fortigate-service-unavailable' };
-    }
-
     try {
       log.info({ alarmCode: alarm.code }, 'Evaluating FortiGate SSL-VPN alarm');
 
       // Get currently connected SSL-VPN users from FortiGate
-      const sslvpnUsers = await this.fortiGateService.getSSLVPNUsers();
+      const sslvpnUsers = await service.getSSLVPNUsers();
 
       if (!sslvpnUsers || sslvpnUsers.length === 0) {
         log.info('No active SSL-VPN users found');
@@ -2090,6 +1971,10 @@ export class AlarmDetectionEngine {
 
       // Filter users based on alarm type
       const matchedUsers: Array<Record<string, unknown>> = [];
+      const scopedSession = (user: typeof sslvpnUsers[number]) => ({
+        source: 'fortigate-sslvpn', configId: target.configId, vdom: target.vdom,
+        targetKey: target.key, inventoryDeviceId: target.inventoryDeviceId, interface: user.interface,
+      });
       const now = new Date();
 
       // Only consider users who logged in recently (within timeWindow)
@@ -2117,6 +2002,7 @@ export class AlarmDetectionEngine {
 
         if (isOffHoursAlarm && (isWeekend || isOffHours)) {
           matchedUsers.push({
+            ...scopedSession(user),
             user: user.user_name,
             remoteIp: user.remote_host,
             assignedIp: user.aip,
@@ -2129,6 +2015,7 @@ export class AlarmDetectionEngine {
           });
         } else if (isBusinessHoursAlarm && isBusinessHours) {
           matchedUsers.push({
+            ...scopedSession(user),
             user: user.user_name,
             remoteIp: user.remote_host,
             assignedIp: user.aip,
@@ -2141,6 +2028,7 @@ export class AlarmDetectionEngine {
         } else if (isAllConnectionsAlarm) {
           // SSLVPN_CONNECTION: match all users regardless of time-of-day
           matchedUsers.push({
+            ...scopedSession(user),
             user: user.user_name,
             remoteIp: user.remote_host,
             assignedIp: user.aip,
@@ -2165,13 +2053,14 @@ export class AlarmDetectionEngine {
             where: {
               alarmId: alarm.id,
               deviceName: username,
+              incident: { is: fortiGateAlarmEntity(target.key, username) },
               createdAt: { gte: cooldownThreshold },
             },
           });
           if (!recentUserAlarm) {
             const logPrefix = isOffHoursAlarm ? 'VPN_OFF_HOURS' : 'SSLVPN_CONNECTION';
             log.info({ logPrefix, username, remoteIp: userData.remoteIp || 'unknown IP' }, 'New SSL-VPN connection');
-            await this.fireAlarm(alarm, [userData]);
+            await this.fireAlarm(alarm, [userData], target);
             firedCount++;
           } else {
             const logPrefix = isOffHoursAlarm ? 'VPN_OFF_HOURS' : 'SSLVPN_CONNECTION';
@@ -2195,7 +2084,7 @@ export class AlarmDetectionEngine {
         } else {
           log.info({ matchCount }, 'BUSINESS-HOURS SSL-VPN detected');
         }
-        await this.fireAlarm(alarm, matchedUsers);
+        await this.fireAlarm(alarm, matchedUsers, target);
       }
 
       return {
@@ -2219,10 +2108,13 @@ export class AlarmDetectionEngine {
   /**
    * Fire an alarm: create DB record and send email notification
    */
-  private async fireAlarm(alarm: AlarmDef, matchingLogs: Array<Record<string, unknown>>): Promise<void> {
+  private async fireAlarm(alarm: AlarmDef, matchingLogs: Array<Record<string, unknown>>, fortiGateTarget?: FortiGateTarget): Promise<void> {
+    assertAlarmExecutionActive();
+    if (alarmSource(alarm) === 'fortianalyzer') this.eventCache?.assertActive?.();
     const firstLog = matchingLogs[0] || {};
-    const title = this.buildAlarmTitle(alarm, matchingLogs);
-    const message = this.buildAlarmMessage(alarm, matchingLogs);
+    const targetLabel = fortiGateTarget ? `Hedef: ${fortiGateTarget.key}` : '';
+    const title = this.buildAlarmTitle(alarm, matchingLogs) + (targetLabel ? ` • ${targetLabel}` : '');
+    const message = this.buildAlarmMessage(alarm, matchingLogs) + (targetLabel ? `\n\n${targetLabel}` : '');
 
     // Extract metadata based on log type
     let sourceIp: string | null = null;
@@ -2279,17 +2171,25 @@ export class AlarmDetectionEngine {
       return;  // Don't fire alarm, method returns void
     }
 
+    if (alarmSource(alarm) === 'fortianalyzer') this.eventCache?.assertActive?.();
     const recorded = await recordAlarmOccurrence({
-      alarm,
+      alarm: fortiGateTarget ? { ...alarm, source: 'fortigate-sslvpn' }
+        : alarmSource(alarm) === 'vmware' ? { ...alarm, source: 'vmware' } : alarm,
       title,
       message,
-      rawData: matchingLogs.slice(0, 10) as any,
+      rawData: matchingLogs.slice(0, 10) as Prisma.InputJsonArray,
       sourceIp,
       destIp,
       deviceName,
-      sourceOccurredAt: this.parseLogTime(firstLog),
+      ...(fortiGateTarget ? fortiGateAlarmEntity(fortiGateTarget.key,
+        alarm.code === 'SSLVPN_BUSINESS_HOURS' ? undefined : String(firstLog.user)) : {}),
+      sourceEventId: fortiGateTarget ? fortiGateSessionOccurrenceId(fortiGateTarget.key, matchingLogs) : undefined,
+      sourceScope: fortiGateTarget?.key ?? (alarmSource(alarm) === 'vmware' ? this.vmwareInventoryScope ?? undefined : this.sourceContext.fortiAnalyzerConfigId),
+      sourceOccurredAt: fortiGateTarget && typeof firstLog.loginTime === 'string'
+        ? new Date(firstLog.loginTime) : this.parseLogTime(firstLog),
     });
     const alarmEvent = recorded.event;
+    assertAlarmExecutionActive();
 
     if (!recorded.created) {
       log.info({ alarmCode: alarm.code, eventId: alarmEvent.id }, 'Duplicate source occurrence suppressed');
@@ -2332,36 +2232,8 @@ export class AlarmDetectionEngine {
    * Parse log timestamp from FortiAnalyzer log entry
    */
   private parseLogTime(log: Record<string, unknown>): Date | null {
-    // itime_t is Unix timestamp (seconds)
-    if (log.itime_t) {
-      const ts = typeof log.itime_t === 'string' ? parseInt(log.itime_t, 10) : (log.itime_t as number);
-      if (ts > 1e9) return new Date(ts * 1000);
-    }
-    // itime can be a date string "2026-02-11 08:42:02" or Unix timestamp
-    if (log.itime) {
-      const itimeStr = String(log.itime);
-      if (itimeStr.includes('-')) {
-        // Date string format
-        const dt = new Date(itimeStr.replace(' ', 'T'));
-        if (!isNaN(dt.getTime())) return dt;
-      } else {
-        const ts = parseInt(itimeStr, 10);
-        if (ts > 1e9) return new Date(ts * 1000);
-      }
-    }
-    // date + time fields
-    if (log.date && log.time) {
-      const dt = new Date(`${log.date}T${log.time}`);
-      if (!isNaN(dt.getTime())) return dt;
-    }
-    // eventtime (nanoseconds from FortiAnalyzer)
-    if (log.eventtime) {
-      const et = typeof log.eventtime === 'string' ? parseInt(log.eventtime, 10) : (log.eventtime as number);
-      if (et > 1e18) return new Date(et / 1e6); // nanoseconds
-      if (et > 1e15) return new Date(et / 1000); // microseconds
-      if (et > 1e12) return new Date(et); // milliseconds
-      return new Date(et * 1000); // seconds
-    }
+    const nativeTime = parseFortiAnalyzerEventTime(log);
+    if (nativeTime) return nativeTime;
     // eventTime (ISO 8601 string from VMware events)
     if (log.eventTime && typeof log.eventTime === 'string') {
       const dt = new Date(log.eventTime as string);
@@ -2953,7 +2825,7 @@ export class AlarmDetectionEngine {
         if (firstLog.hostList && Array.isArray(firstLog.hostList)) {
           vmwareDetails.push('');
           vmwareDetails.push('Host Detaylari:');
-          (firstLog.hostList as any[]).forEach((host, idx) => {
+          (firstLog.hostList as Array<{ inMaintenanceMode?: boolean; connectionState?: string; cpuTotalMHz: number; cpuUsedMHz: number; memTotalMB: number; memUsedMB: number; hostName?: string }>).forEach((host, idx) => {
             const status = host.inMaintenanceMode ? '[MAINTENANCE]' : host.connectionState === 'connected' ? '[CONNECTED]' : '[DISCONNECTED]';
             const cpuPct = host.cpuTotalMHz > 0 ? Math.round((host.cpuUsedMHz / host.cpuTotalMHz) * 100) : 0;
             const memPct = host.memTotalMB > 0 ? Math.round((host.memUsedMB / host.memTotalMB) * 100) : 0;
@@ -3455,9 +3327,9 @@ export class AlarmDetectionEngine {
         const changedEps   = (firstLog.changedEndpoints as string[] | undefined) || [];
         const detectedAt   = firstLog.detectedAt as string | undefined;
         const itemCount    = firstLog.itemCount as number | undefined;
-        const diffDetails  = (firstLog as any).diffDetails;
+        const diffDetails  = firstLog.diffDetails as CmdbDiff | undefined;
         // Admin user enrichment fields (set by fortigate-cmdb.ts resolveAdminUsers)
-        const adminUsers   = (firstLog as any).admin_users as Array<{ user: string; ui: string; objects: string[] }> | undefined;
+        const adminUsers   = firstLog.admin_users as Array<{ user: string; ui: string; objects: string[] }> | undefined;
         const adminUser    = (firstLog.admin_user as string | null) || null;
         const adminUi      = (firstLog.admin_ui as string | null) || null;
         const detectedAtStr = detectedAt
@@ -3495,7 +3367,7 @@ export class AlarmDetectionEngine {
         if (diffDetails && (diffDetails.added?.length > 0 || diffDetails.removed?.length > 0 || diffDetails.modified?.length > 0)) {
           // Added items
           if (diffDetails.added.length > 0) {
-            const addedList = diffDetails.added.slice(0, 10).map((item: any, idx: number) => {
+            const addedList = diffDetails.added.slice(0, 10).map((item, idx) => {
               const name = item.name || item.key || '#N/A';
               return `${idx + 1}. ${name}`;
             }).join('\n');
@@ -3506,7 +3378,7 @@ export class AlarmDetectionEngine {
 
           // Removed items
           if (diffDetails.removed.length > 0) {
-            const removedList = diffDetails.removed.slice(0, 10).map((item: any, idx: number) => {
+            const removedList = diffDetails.removed.slice(0, 10).map((item, idx) => {
               const name = item.name || item.key || '#N/A';
               return `${idx + 1}. ${name}`;
             }).join('\n');
@@ -3517,9 +3389,9 @@ export class AlarmDetectionEngine {
 
           // Modified items
           if (diffDetails.modified.length > 0) {
-            const modifiedList = diffDetails.modified.slice(0, 5).map((item: any, idx: number) => {
+            const modifiedList = diffDetails.modified.slice(0, 5).map((item, idx) => {
               const name = item.name || item.key || '#N/A';
-              const changes = (item.changes || []).slice(0, 3).map((c: any) => {
+              const changes = (item.changes || []).slice(0, 3).map(c => {
                 const oldVal = typeof c.oldValue === 'object' ? JSON.stringify(c.oldValue) : String(c.oldValue ?? '-');
                 const newVal = typeof c.newValue === 'object' ? JSON.stringify(c.newValue) : String(c.newValue ?? '-');
                 return `   - ${c.field}: ${oldVal} -> ${newVal}`;
@@ -4020,11 +3892,11 @@ export class AlarmDetectionEngine {
         if (openPortDownAlarms.length > 0) {
           const toAckIds: string[] = [];
           for (const ev of openPortDownAlarms) {
-            const raw = (ev.rawData || {}) as any;
+            const raw = (ev.rawData || {}) as Record<string, unknown>;
             const idx = raw.interface_index as number | undefined;
             const nmsDevId = raw.nms_device_id as number | undefined;
             if (idx == null || nmsDevId == null) continue;
-            const cur = await (prisma as any).nmsInterface.findFirst({
+            const cur = await prisma.nmsInterface.findFirst({
               where: { nmsDeviceId: nmsDevId, interfaceIndex: idx },
               select: { operStatus: true, monitored: true, operUpSince: true },
             });
@@ -4044,7 +3916,7 @@ export class AlarmDetectionEngine {
 
       try {
         const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000);
-        const downInterfaces = await (prisma as any).nmsInterface.findMany({
+        const downInterfaces = await prisma.nmsInterface.findMany({
           where: {
             monitored: true,
             adminStatus: 'up',
@@ -4054,7 +3926,7 @@ export class AlarmDetectionEngine {
           },
           include: { device: { select: { id: true, name: true, managementIp: true } } },
           take: 20,
-        }) as Array<any>;
+        });
 
         // Track created events in this evaluation to prevent duplicates
         const createdPortsThisEval = new Set<string>();
@@ -4074,7 +3946,7 @@ export class AlarmDetectionEngine {
           const desc = iface.description;
           const ifaceLabel = (desc && desc !== 'None' && desc.trim() !== '') ? desc : iface.interfaceName;
 
-          const downSince = new Date(iface.downSince).getTime();
+          const downSince = new Date(iface.downSince!).getTime();
           const downDurationMs = Date.now() - downSince;
 
           const downMinutes = Math.round(downDurationMs / 60000);
@@ -4085,7 +3957,6 @@ export class AlarmDetectionEngine {
           // checks from both firing for the same port.
           const cooldownMs = portDownAlarm.cooldownMinutes * 60 * 1000;
           const cooldownUntil = new Date(Date.now() + cooldownMs);
-          const cooldownKey = `${portDownAlarm.id}:${portKey}`;
           try {
             // Check for active cooldown
             const existingCooldown = await prisma.alarmCooldown.findUnique({
@@ -4101,9 +3972,9 @@ export class AlarmDetectionEngine {
               create: { alarmId: portDownAlarm.id, deviceName: portKey, cooldownUntil },
               update: { cooldownUntil },
             });
-          } catch (err: any) {
+          } catch (err) {
             // P2002 = unique constraint violation → another check claimed it first
-            if (err?.code === 'P2002') {
+            if ((err as Error & { code?: string })?.code === 'P2002') {
               results.push({ alarmCode: 'NMS_PORT_DOWN', triggered: false, matchCount: 0, events: [], error: 'cooldown-active' });
               continue;
             }
@@ -4144,7 +4015,7 @@ export class AlarmDetectionEngine {
               down_since: iface.downSince,
               down_duration_minutes: downMinutes,
               source: 'nms',
-            } as any,
+            },
           });
           const event = recorded.event;
           if (!recorded.created) {
@@ -4172,7 +4043,7 @@ export class AlarmDetectionEngine {
 
       try {
         const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
-        const latestMetrics = await (prisma as any).$queryRaw`
+        const latestMetrics = await prisma.$queryRaw`
           SELECT DISTINCT ON (nms_device_id)
             id, nms_device_id, cpu_usage, memory_usage, temperature, uptime_seconds, collected_at
           FROM nms_health_metrics
@@ -4189,7 +4060,7 @@ export class AlarmDetectionEngine {
           if (value === null || value === undefined || value < threshold) continue;
 
           // Resolve device name
-          const device = await (prisma as any).device.findFirst({
+          const device = await prisma.device.findFirst({
             where: { nmsDeviceId: metric.nms_device_id },
             select: { id: true, name: true },
           }) as { id: string; name: string } | null;
@@ -4232,7 +4103,7 @@ export class AlarmDetectionEngine {
               uptime_seconds: metric.uptime_seconds,
               threshold,
               source: 'nms',
-            } as any,
+            },
           });
           const event = recorded.event;
           if (!recorded.created) continue;
@@ -4265,10 +4136,10 @@ export class AlarmDetectionEngine {
           const recoveryCutoff = new Date(Date.now() - 15 * 60 * 1000);
           const toAckIds: string[] = [];
           for (const ev of openUnreachableAlarms) {
-            const raw = (ev.rawData || {}) as any;
+            const raw = (ev.rawData || {}) as Record<string, unknown>;
             const nmsDevId = raw.nms_device_id as number | undefined;
             if (nmsDevId == null) continue;
-            const recentMetric = await (prisma as any).nmsHealthMetric.findFirst({
+            const recentMetric = await prisma.nmsHealthMetric.findFirst({
               where: { nmsDeviceId: nmsDevId, collectedAt: { gte: recoveryCutoff } },
               select: { collectedAt: true },
             });
@@ -4289,9 +4160,8 @@ export class AlarmDetectionEngine {
         // Using 6× intervals gives enough margin to avoid false positives
         // when the NMS service is momentarily busy or restarting.
         const silenceThresholdMs = 30 * 60 * 1000;
-        const silenceCutoff = new Date(Date.now() - silenceThresholdMs);
 
-        const pollingDevices = await (prisma as any).device.findMany({
+        const pollingDevices = await prisma.device.findMany({
           where: {
             pollingEnabled: true,
             nmsDeviceId: { not: null },
@@ -4312,7 +4182,7 @@ export class AlarmDetectionEngine {
           const effectiveCutoff = new Date(Date.now() - effectiveThreshold);
 
           // Check if we got any health metric within the threshold window
-          const recentMetric = await (prisma as any).nmsHealthMetric.findFirst({
+          const recentMetric = await prisma.nmsHealthMetric.findFirst({
             where: {
               nmsDeviceId: device.nmsDeviceId,
               collectedAt: { gte: effectiveCutoff },
@@ -4342,7 +4212,7 @@ export class AlarmDetectionEngine {
           }
 
           // Calculate how long device has been silent
-          const lastMetric = await (prisma as any).nmsHealthMetric.findFirst({
+          const lastMetric = await prisma.nmsHealthMetric.findFirst({
             where: { nmsDeviceId: device.nmsDeviceId },
             orderBy: { collectedAt: 'desc' },
             select: { collectedAt: true },
@@ -4386,7 +4256,7 @@ export class AlarmDetectionEngine {
               silent_minutes: silentMinutes,
               polling_interval_sec: device.pollingInterval || 300,
               source: 'nms',
-            } as any,
+            },
           });
           const event = recorded.event;
           if (!recorded.created) continue;

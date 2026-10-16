@@ -53,7 +53,7 @@ export function Rack3D({ position, rotation = [0, 0, 0], name, maxUnits, operati
   const resolvedDevices = showDeviceDetails ? resolveRackDevices(maxUnits, devices) : [];
   const frameColor = displayMode === 'capacity'
     ? capacityColor(utilization)
-    : operationalStatus === 'OPERATIONAL' ? '#1f2937' : operationalStatus === 'MAINTENANCE' ? '#92400e' : '#4b5563';
+    : operationalStatus === 'OPERATIONAL' ? '#64748b' : operationalStatus === 'MAINTENANCE' ? '#a16207' : '#6b7280';
   const indicator = operationalStatus === 'OPERATIONAL' ? '#10b981' : operationalStatus === 'MAINTENANCE' ? '#f59e0b' : '#64748b';
 
   return (
@@ -66,13 +66,13 @@ export function Rack3D({ position, rotation = [0, 0, 0], name, maxUnits, operati
         onClick={(event) => { event.stopPropagation(); onClick?.(); }}
       >
         <boxGeometry args={[RACK_WIDTH, rackHeight, RACK_DEPTH]} />
-        <meshStandardMaterial color={frameColor} metalness={0.78} roughness={0.28} transparent opacity={displayMode === 'capacity' ? 0.82 : 0.68} />
+        <meshStandardMaterial color={frameColor} metalness={0.3} roughness={0.58} transparent opacity={displayMode === 'capacity' ? 0.88 : 0.86} />
         {(isSelected || hovered) && <Edges color={isSelected ? '#22c55e' : '#94a3b8'} threshold={15} />}
       </mesh>
 
       <mesh position={[0, 0, RACK_DEPTH / 2 + 0.008]}>
         <boxGeometry args={[RACK_WIDTH * 0.92, rackHeight * 0.97, 0.012]} />
-        <meshStandardMaterial color="#020617" metalness={0.9} roughness={0.25} transparent opacity={0.34} />
+        <meshStandardMaterial color="#0f172a" metalness={0.25} roughness={0.6} transparent opacity={0.18} />
       </mesh>
 
       {[-1, 1].map((side) => (

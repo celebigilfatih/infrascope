@@ -1,5 +1,8 @@
 'use client';
 
+import { uiLabel, auditActionLabel, auditActionQuery } from '@/lib/i18n/tr';
+
+import { PageHeading } from '@/components/ui/page-heading';
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -56,12 +59,12 @@ interface Pagination {
 }
 
 const RESOURCE_OPTIONS = [
-  { value: 'all', label: 'All Resources' },
-  { value: 'user', label: 'Users' },
-  { value: 'alarm', label: 'Alarms' },
-  { value: 'device', label: 'Devices' },
-  { value: 'permission', label: 'Permissions' },
-  { value: 'settings', label: 'Settings' },
+  { value: 'all', label: "Tüm Kaynaklar" },
+  { value: 'user', label: "Kullanıcılar" },
+  { value: 'alarm', label: "Alarmlar" },
+  { value: 'device', label: "Cihazlar" },
+  { value: 'permission', label: "Yetkiler" },
+  { value: 'settings', label: "Ayarlar" },
 ];
 
 function getActionBadgeVariant(action: string): 'default' | 'destructive' | 'secondary' | 'outline' {
@@ -73,7 +76,7 @@ function getActionBadgeVariant(action: string): 'default' | 'destructive' | 'sec
 
 function formatTimestamp(ts: string): string {
   const date = new Date(ts);
-  return date.toLocaleString();
+  return date.toLocaleString('tr-TR');
 }
 
 export default function AuditLogPage() {
@@ -92,7 +95,7 @@ export default function AuditLogPage() {
     setLoading(true);
     try {
       const params = new URLSearchParams({ page: String(page), pageSize: '25' });
-      if (searchAction) params.set('action', searchAction);
+      if (searchAction) params.set('action', auditActionQuery(searchAction));
       if (resourceFilter !== 'all') params.set('resource', resourceFilter);
       if (userFilter) params.set('userId', userFilter);
       if (startDate) params.set('startDate', startDate);
@@ -117,7 +120,7 @@ export default function AuditLogPage() {
 
   const handleExport = () => {
     const params = new URLSearchParams();
-    if (searchAction) params.set('action', searchAction);
+    if (searchAction) params.set('action', auditActionQuery(searchAction));
     if (resourceFilter !== 'all') params.set('resource', resourceFilter);
     if (userFilter) params.set('userId', userFilter);
     if (startDate) params.set('startDate', startDate);
@@ -139,21 +142,20 @@ export default function AuditLogPage() {
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-4">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Shield className="h-6 w-6" />
-            Audit Log
-          </h1>
-          <p className="text-muted-foreground">Track all user actions and system events</p>
+          <PageHeading section="audit" description={<>Kullanıcı işlemlerini ve sistem olaylarını takip edin</>}>
+
+            Denetim Kayıtları
+          </PageHeading>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={() => fetchLogs(pagination.page)} disabled={loading}>
+          <Button variant="outline" size="icon" onClick={() => fetchLogs(pagination.page)} disabled={loading} aria-label="Yenile">
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </Button>
           <Button variant="outline" onClick={handleExport}>
             <Download className="h-4 w-4 mr-2" />
-            Export CSV
+            CSV İndir
           </Button>
         </div>
       </div>
@@ -166,7 +168,7 @@ export default function AuditLogPage() {
               <FileText className="h-5 w-5 text-blue-600 dark:text-blue-400" />
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Total Events</p>
+              <p className="text-sm text-muted-foreground">Toplam Olay</p>
               <p className="text-2xl font-bold">{pagination.total}</p>
             </div>
           </CardContent>
@@ -177,7 +179,7 @@ export default function AuditLogPage() {
               <Shield className="h-5 w-5 text-red-600 dark:text-red-400" />
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Delete Actions</p>
+              <p className="text-sm text-muted-foreground">Silme İşlemleri</p>
               <p className="text-2xl font-bold">
                 {logs.filter((l) => l.action.includes('delete')).length}
               </p>
@@ -190,7 +192,7 @@ export default function AuditLogPage() {
               <User className="h-5 w-5 text-green-600 dark:text-green-400" />
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Unique Users</p>
+              <p className="text-sm text-muted-foreground">Benzersiz Kullanıcılar</p>
               <p className="text-2xl font-bold">
                 {new Set(logs.filter((l) => l.userId).map((l) => l.userId)).size}
               </p>
@@ -203,7 +205,7 @@ export default function AuditLogPage() {
               <Clock className="h-5 w-5 text-orange-600 dark:text-orange-400" />
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Last 24h</p>
+              <p className="text-sm text-muted-foreground">Son 24 Saat</p>
               <p className="text-2xl font-bold">
                 {logs.filter((l) => {
                   const ts = new Date(l.timestamp);
@@ -220,7 +222,7 @@ export default function AuditLogPage() {
         <CardHeader className="pb-3">
           <CardTitle className="text-sm flex items-center gap-2">
             <Filter className="h-4 w-4" />
-            Filters
+            Filtreler
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -228,7 +230,7 @@ export default function AuditLogPage() {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search action..."
+                placeholder="İşlem ara…"
                 value={searchAction}
                 onChange={(e) => setSearchAction(e.target.value)}
                 className="pl-9"
@@ -236,7 +238,7 @@ export default function AuditLogPage() {
             </div>
             <Select value={resourceFilter} onValueChange={setResourceFilter}>
               <SelectTrigger>
-                <SelectValue placeholder="Resource" />
+                <SelectValue placeholder="Kaynak" />
               </SelectTrigger>
               <SelectContent>
                 {RESOURCE_OPTIONS.map((opt) => (
@@ -247,7 +249,7 @@ export default function AuditLogPage() {
               </SelectContent>
             </Select>
             <Input
-              placeholder="User ID..."
+              placeholder="Kullanıcı kimliği…"
               value={userFilter}
               onChange={(e) => setUserFilter(e.target.value)}
             />
@@ -264,7 +266,7 @@ export default function AuditLogPage() {
                 className="flex-1"
               />
               {hasActiveFilters && (
-                <Button variant="ghost" size="icon" onClick={clearFilters} title="Clear filters">
+                <Button variant="ghost" size="icon" onClick={clearFilters} title="Filtreleri temizle" aria-label="Filtreleri temizle">
                   <RefreshCw className="h-4 w-4" />
                 </Button>
               )}
@@ -279,25 +281,25 @@ export default function AuditLogPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[180px]">Timestamp</TableHead>
-                <TableHead>Action</TableHead>
-                <TableHead>Resource</TableHead>
-                <TableHead>User</TableHead>
-                <TableHead>IP Address</TableHead>
-                <TableHead>Details</TableHead>
+                <TableHead className="w-[180px]">Tarih ve Saat</TableHead>
+                <TableHead>İşlem</TableHead>
+                <TableHead>Kaynak</TableHead>
+                <TableHead>Kullanıcı</TableHead>
+                <TableHead>IP Adresi</TableHead>
+                <TableHead>Detaylar</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                    Loading audit logs...
+                    Denetim kayıtları yükleniyor…
                   </TableCell>
                 </TableRow>
               ) : logs.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                    No audit logs found.
+                    Denetim kaydı bulunamadı.
                   </TableCell>
                 </TableRow>
               ) : (
@@ -308,11 +310,11 @@ export default function AuditLogPage() {
                     </TableCell>
                     <TableCell>
                       <Badge variant={getActionBadgeVariant(log.action)} className="text-xs">
-                        {log.action}
+                        {auditActionLabel(log.action)}
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <span className="text-sm capitalize">{log.resource || '-'}</span>
+                      <span className="text-sm capitalize">{uiLabel(log.resource)}</span>
                       {log.resourceId && (
                         <span className="text-xs text-muted-foreground ml-1">
                           ({log.resourceId.slice(0, 8)}...)
@@ -321,10 +323,10 @@ export default function AuditLogPage() {
                     </TableCell>
                     <TableCell>
                       <div>
-                        <p className="text-sm">{log.userName}</p>
+                        <p className="text-sm">{!log.userId && log.userName === 'System' ? 'Sistem' : log.userName}</p>
                         {log.userRole && (
                           <Badge variant="outline" className="text-[10px] mt-0.5 capitalize">
-                            {log.userRole}
+                            {uiLabel(log.userRole)}
                           </Badge>
                         )}
                       </div>
@@ -347,9 +349,9 @@ export default function AuditLogPage() {
       {pagination.totalPages > 1 && (
         <div className="flex items-center justify-between">
           <p className="text-sm text-muted-foreground">
-            Showing {((pagination.page - 1) * pagination.pageSize) + 1} -{' '}
-            {Math.min(pagination.page * pagination.pageSize, pagination.total)} of{' '}
-            {pagination.total} entries
+            Gösterilen {((pagination.page - 1) * pagination.pageSize) + 1} -{' '}
+            {Math.min(pagination.page * pagination.pageSize, pagination.total)} /{' '}
+            {pagination.total} kayıt
           </p>
           <div className="flex items-center gap-2">
             <Button
@@ -357,18 +359,18 @@ export default function AuditLogPage() {
               size="icon"
               onClick={() => fetchLogs(pagination.page - 1)}
               disabled={pagination.page <= 1 || loading}
-            >
+             aria-label="Önceki sayfa">
               <ChevronLeft className="h-4 w-4" />
             </Button>
             <span className="text-sm">
-              Page {pagination.page} of {pagination.totalPages}
+              Sayfa {pagination.page} / {pagination.totalPages}
             </span>
             <Button
               variant="outline"
               size="icon"
               onClick={() => fetchLogs(pagination.page + 1)}
               disabled={pagination.page >= pagination.totalPages || loading}
-            >
+             aria-label="Sonraki sayfa">
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>

@@ -1,0 +1,7 @@
+.badge { display:inline-flex; align-items:center; justify-content:center; gap:6px; width:max-content; max-width:100%; padding:3px 9px; border:1px solid; border-radius:6px; font-size:12px; line-height:1.5; font-weight:600; white-space:nowrap; vertical-align:middle; }
+.badge svg { flex:none; }
+.success { border-color:var(--ui-success-border); background:var(--ui-success-bg); color:var(--ui-success-fg); }
+.warning { border-color:var(--ui-warning-border); background:var(--ui-warning-bg); color:var(--ui-warning-fg); }
+.danger { border-color:var(--ui-danger-border); background:var(--ui-danger-bg); color:var(--ui-danger-fg); }
+.info { border-color:var(--ui-info-border); background:var(--ui-info-bg); color:var(--ui-info-fg); }
+.neutral { border-color:oklch(var(--border)); background:oklch(var(--muted)); color:oklch(var(--muted-foreground)); }

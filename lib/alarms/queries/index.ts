@@ -162,33 +162,8 @@ export {
 import type { AlarmQueryFn } from './types';
 
 // FortiAnalyzer cache imports — all log-based alarms use FA event cache
-import {
-  cmdbFirewallPolicyChanged,
-  cmdbNewVip,
-  cmdbNewAdminUser,
-  cmdbAdminPasswordChanged,
-  cmdbAdminPrivilegeChange,
-  cmdbRouteTableChanged,
-  cmdbIpsecTunnelChanged,
-  cmdbSslVpnSettingsChanged,
-  cmdbAuthServerChanged,
-  cmdbInterfaceConfigChanged,
-  cmdbAddressObjectChanged,
-  cmdbAddressGroupChanged,
-  cmdbCoreConfigChange,
-} from './fortigate-cmdb';
-import {
-  getFirewallPolicyChangeEvents,
-  getCoreConfigChangeEvents,
-  getFirmwareChangeEvents,
-  getAdminPasswordChangeEvents,
-  getAddressObjectChangeEvents,
-  getAuthServerChangeEvents,
-  getRouteTableChangeEvents,
-  getSdWanChangeEvents,
-  getHaConfigChangeEvents,
-  getAdminConfigChangeEvents,
-} from './config-change';
+
+import { getFirmwareChangeEvents, getSdWanChangeEvents, getHaConfigChangeEvents, getAdminConfigChangeEvents } from './config-change';
 import {
   getAdminLoginFailEvents,
   getAdminLoginSuccessEvents,
@@ -196,12 +171,7 @@ import {
   getSslvpnTunnelUpEvents,
   getSslvpnTunnelDownEvents,
 } from './auth-events';
-import {
-  getVpnBruteForceEvents,
-  getSslvpnLockoutEvents,
-  getSslvpnAuthFailedEvents,
-  getIpsecTunnelDownEvents,
-} from './vpn-events';
+import { getVpnBruteForceEvents, getSslvpnLockoutEvents, getSslvpnAuthFailedEvents } from './vpn-events';
 import { getIpsHighSeverityEvents, getMalwareDetectedEvents, getAppCtrlViolationEvents, getShadowItEvents, getWebFilterBlockEvents, getIocHitEvents } from './security-events';
 import { getDnsTunnelSuspectEvents } from './dns-events';
 import {

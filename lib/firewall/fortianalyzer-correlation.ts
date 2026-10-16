@@ -1,18 +1,13 @@
 import FortiAnalyzerService, { initSharedFortiAnalyzerService } from '@/lib/integrations/fortianalyzer';
 import { prisma } from '@/lib/prisma';
-import { unprotectIntegrationConfig } from '@/lib/security/integration-credentials';
+import { readFortiAnalyzerProfile } from '@/lib/integrations/fortianalyzer-source';
+import { fortiAnalyzerRevision } from '@/lib/integrations/fortianalyzer-revision';
 import type { IncidentActor } from '@/lib/alarms/incident-service';
 import {
   decideFortiAnalyzerIdentity,
   type FortiAnalyzerManagedDevice,
 } from './fortianalyzer-identity';
 
-type StoredFortiAnalyzerConfig = {
-  host?: string;
-  username?: string;
-  password?: string;
-  apiKey?: string;
-};
 
 export class FirewallAnalyzerCorrelationError extends Error {
   constructor(
@@ -27,6 +22,7 @@ export class FirewallAnalyzerCorrelationError extends Error {
 
 export async function resolveFirewallAnalyzerService(configId?: string): Promise<{
   configId: string;
+  revision: string;
   service: FortiAnalyzerService;
 }> {
   const integrations = configId
@@ -54,25 +50,13 @@ export async function resolveFirewallAnalyzerService(configId?: string): Promise
     );
   }
   const integration = integrations[0];
-  const config = unprotectIntegrationConfig<StoredFortiAnalyzerConfig>(
-    integration.config,
-    'FORTIANALYZER'
-  );
-  if (!config.host || (!config.apiKey && (!config.username || !config.password))) {
-    throw new FirewallAnalyzerCorrelationError(
-      'FortiAnalyzer read credentials are incomplete',
-      'FORTIANALYZER_INVALID_CONFIG',
-      422
-    );
-  }
+  let config;
+  try { config = readFortiAnalyzerProfile(integration.config); }
+  catch { throw new FirewallAnalyzerCorrelationError('FortiAnalyzer read credentials are incomplete', 'FORTIANALYZER_INVALID_CONFIG', 422); }
   return {
     configId: integration.id,
-    service: initSharedFortiAnalyzerService({
-      host: config.host,
-      username: config.username,
-      password: config.password,
-      accessToken: config.apiKey,
-    }),
+    revision: fortiAnalyzerRevision(integration),
+    service: initSharedFortiAnalyzerService(config),
   };
 }
 

@@ -1,5 +1,7 @@
 'use client';
 
+import { uiError, uiLabel } from '@/lib/i18n/tr';
+
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Activity, ArrowRight, CheckCircle2, KeyRound, Loader2, ShieldCheck, UserPlus } from 'lucide-react';
@@ -59,7 +61,7 @@ export default function SetupPage() {
         }
         setStatus(data);
       } catch {
-        setError('Kurulum durumu okunamadı.');
+        setError(uiError('Kurulum durumu okunamadı.'));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -72,13 +74,13 @@ export default function SetupPage() {
   }, [router]);
 
   const activateLicense = async () => {
-    setError('');
+    setError(uiError(''));
     if (status?.licenseConfigured && !licenseKey.trim()) {
       setStep(2);
       return;
     }
     if (!licenseKey.trim()) {
-      setError('Lisans anahtarı gerekli.');
+      setError(uiError('Lisans anahtarı gerekli.'));
       return;
     }
 
@@ -91,14 +93,14 @@ export default function SetupPage() {
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
-        setError(data.error || 'Lisans aktivasyonu başarısız.');
+        setError(uiError(data.error || 'Lisans aktivasyonu başarısız.'));
         return;
       }
 
       setLicense(data.license);
       setStep(2);
     } catch {
-      setError('Lisans sunucusuna ulaşılamadı.');
+      setError(uiError('Lisans sunucusuna ulaşılamadı.'));
     } finally {
       setWorking(false);
     }
@@ -106,7 +108,7 @@ export default function SetupPage() {
 
   const createAdmin = async (event: React.FormEvent) => {
     event.preventDefault();
-    setError('');
+    setError(uiError(''));
     setWorking(true);
 
     try {
@@ -123,13 +125,13 @@ export default function SetupPage() {
       const data = await res.json();
       if (!res.ok || !data.success) {
         const details = Array.isArray(data.details) ? ` ${data.details.join(', ')}` : '';
-        setError(`${data.error || 'İlk admin oluşturulamadı.'}${details}`);
+        setError(uiError(`${data.error || 'İlk admin oluşturulamadı.'}${details}`));
         return;
       }
 
       setStep(3);
     } catch {
-      setError('İlk admin oluşturulamadı.');
+      setError(uiError('İlk admin oluşturulamadı.'));
     } finally {
       setWorking(false);
     }
@@ -160,7 +162,7 @@ export default function SetupPage() {
             </div>
           </div>
           <Badge className="border-emerald-500/30 bg-emerald-500/10 text-emerald-300">
-            {isLicenseServerMode ? 'License Server' : 'On-Prem Docker'}
+            {isLicenseServerMode ? "Lisans Sunucusu" : "Yerel Docker"}
           </Badge>
         </div>
 
@@ -181,7 +183,7 @@ export default function SetupPage() {
                 {!isLicenseServerMode && (
                   <span className={step >= 1 ? 'text-emerald-300' : ''}>Lisans</span>
                 )}
-                <span className={step >= 2 ? 'text-emerald-300' : ''}>Admin</span>
+                <span className={step >= 2 ? 'text-emerald-300' : ''}>Yönetici</span>
                 <span className={step >= 3 ? 'text-emerald-300' : ''}>Tamamlandı</span>
               </div>
             </div>
@@ -196,7 +198,7 @@ export default function SetupPage() {
                     Lisans aktivasyonu
                   </CardTitle>
                   <CardDescription>
-                    Kurulum script'i lisans anahtarını .env dosyasına yazdıysa bu adımı geçebilirsiniz.
+                    Kurulum script&apos;i lisans anahtarını .env dosyasına yazdıysa bu adımı geçebilirsiniz.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-5">
@@ -207,7 +209,7 @@ export default function SetupPage() {
                   )}
                   {license && (
                     <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-                      {license.tier} lisans aktif. Cihaz limiti: {license.maxDevices}, kullanıcı limiti: {license.maxUsers}.
+                      {uiLabel(license.tier)} lisans aktif. Cihaz limiti: {license.maxDevices}, kullanıcı limiti: {license.maxUsers}.
                     </div>
                   )}
                   <div className="space-y-2">
@@ -219,7 +221,7 @@ export default function SetupPage() {
                       placeholder="IS-2026-XXXX-XXXX"
                     />
                   </div>
-                  {error && <p className="text-sm text-red-600">{error}</p>}
+                  {error && <p className="text-sm text-red-600">{uiError(error)}</p>}
                   <Button className="w-full gap-2" onClick={activateLicense} disabled={working}>
                     {working ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
                     {status?.licenseConfigured && !licenseKey.trim() ? 'Devam Et' : 'Lisansı Aktive Et'}
@@ -233,7 +235,7 @@ export default function SetupPage() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <UserPlus className="h-5 w-5 text-emerald-600" />
-                    İlk admin hesabı
+                    İlk yönetici hesabı
                   </CardTitle>
                   <CardDescription>
                     Bu hesap sistemin ilk ve tam yetkili kullanıcısı olacak.
@@ -283,7 +285,7 @@ export default function SetupPage() {
                       En az 8 karakter, bir büyük harf, bir sayı ve bir özel karakter içermeli.
                     </p>
                   </div>
-                  {error && <p className="text-sm text-red-600">{error}</p>}
+                  {error && <p className="text-sm text-red-600">{uiError(error)}</p>}
                   <Button className="w-full gap-2" disabled={working}>
                     {working ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
                     İlk Admini Oluştur

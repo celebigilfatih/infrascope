@@ -137,7 +137,7 @@ export async function GET() {
     let schedulerLastTick: Date | null = null;
     let schedulerOk = false;
     try {
-      const heartbeat = await (prisma as any).systemConfig?.findUnique?.({
+      const heartbeat = await prisma.systemConfig?.findUnique?.({
         where: { key: 'scheduler_last_tick' },
       });
       if (heartbeat?.value) {

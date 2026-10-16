@@ -1,10 +1,16 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import { uiError } from '@/lib/i18n/tr';
+
+import { StatusBadge } from '@/components/ui/status-badge';
+import { PageHeading } from '@/components/ui/page-heading';
+import React, { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
+import { SemanticBadge } from '@/components/ui/semantic-badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { RefreshCw, CheckCircle, XCircle, AlertCircle, Activity } from 'lucide-react';
+import { RefreshCw, CheckCircle, XCircle, AlertCircle, Activity, Settings2, ArrowUpRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface IntegrationStatus {
@@ -20,35 +26,25 @@ interface IntegrationStatus {
 export default function StatusPage() {
   const [integrations, setIntegrations] = useState<IntegrationStatus[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchIntegrations = async () => {
+  const fetchIntegrations = useCallback(async () => {
       setLoading(true);
+      setError(null);
       try {
         const response = await fetch('/api/integrations/status');
         const result = await response.json();
-        if (result.success && result.data) {
-          setIntegrations(result.data);
-        }
-      } catch (error) {
-        console.error('Error fetching integration status:', error);
+        if (!response.ok || !result.success || !Array.isArray(result.data)) throw new Error(uiError(result.error || 'Entegrasyon durumu alınamadı.'));
+        setIntegrations(result.data);
+      } catch (failure) {
+        setError(uiError(failure instanceof Error ? failure.message : 'Entegrasyon durumu alınamadı.'));
       } finally {
         setLoading(false);
       }
-    };
-    
-    fetchIntegrations();
   }, []);
+  useEffect(() => { void fetchIntegrations(); }, [fetchIntegrations]);
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'connected': return <Badge variant="success">Bağlı</Badge>;
-      case 'disconnected': return <Badge variant="destructive">Bağlantı Kesildi</Badge>;
-      case 'error': return <Badge variant="destructive">Hata</Badge>;
-      case 'syncing': return <Badge className="bg-blue-500">Senkronize</Badge>;
-      default: return <Badge variant="outline">{status}</Badge>;
-    }
-  };
+  const getStatusBadge = (status: string) => { return <StatusBadge status={status} />; };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -87,16 +83,16 @@ export default function StatusPage() {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Integration Status</h1>
-          <p className="text-muted-foreground">Entegrasyon durumu ve sağlık kontrolü</p>
+          <PageHeading section="integrations" description={<>Entegrasyon durumu ve sağlık kontrolü</>}>Entegrasyon Durumu</PageHeading>
         </div>
-        <Button variant="outline" size="icon">
-          <RefreshCw className="h-4 w-4" />
+        <Button variant="outline" size="icon" aria-label="Yenile" onClick={() => void fetchIntegrations()} disabled={loading}>
+          <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin motion-reduce:animate-none')} />
         </Button>
       </div>
 
+      {error && <div role="alert" className="flex items-start gap-3 rounded-xl border border-[var(--ui-danger-border)] bg-[var(--ui-danger-bg)] p-4 text-sm text-[var(--ui-danger-fg)]"><AlertCircle size={18} className="shrink-0" aria-hidden="true" /><p>{uiError(error)}</p></div>}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-4">
@@ -131,7 +127,7 @@ export default function StatusPage() {
                 <AlertCircle className="h-5 w-5 text-orange-500" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Hata/Sorun</p>
+                <p className="text-sm text-muted-foreground">Bağlı değil</p>
                 <p className="text-2xl font-bold">{integrations.filter(i => i.status === 'error' || i.status === 'disconnected').length}</p>
               </div>
             </div>
@@ -145,7 +141,7 @@ export default function StatusPage() {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Ort. Sağlık</p>
-                <p className="text-2xl font-bold">{Math.round(integrations.reduce((acc, i) => acc + i.healthScore, 0) / integrations.length)}%</p>
+                <p className="text-2xl font-bold">{integrations.length ? Math.round(integrations.reduce((acc, i) => acc + i.healthScore, 0) / integrations.length) : 0}%</p>
               </div>
             </div>
           </CardContent>
@@ -158,26 +154,28 @@ export default function StatusPage() {
             <RefreshCw className="h-8 w-8 animate-spin text-primary" />
           </div>
         ) : (
-          integrations.map((integration) => (
+          integrations.map((integration) => {
+            const unconfigured = integration.id.startsWith('unconfigured-');
+            const target = ({ 'VMware vCenter': '/integrations/vmware', 'FortiGate Firewall': '/integrations/firewall', FortiAnalyzer: '/integrations/fortianalyzer', 'SNMP Monitoring': '/integrations/nms/devices' } as Record<string, string>)[integration.name];
+            return (
             <Card key={integration.id} className={cn(
               "hover:border-primary/50 transition-colors",
               integration.status === 'error' && "border-red-500/50",
-              integration.status === 'disconnected' && "opacity-60"
             )}>
               <CardContent className="p-4">
-                <div className="flex items-center gap-4">
+                <div className="flex flex-wrap items-center gap-4">
                   <div className="shrink-0">
-                    {getStatusIcon(integration.status)}
+                    {unconfigured ? <Settings2 className="h-5 w-5 text-muted-foreground" aria-hidden="true" /> : getStatusIcon(integration.status)}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex flex-wrap items-center gap-2 mb-1">
                       <h3 className="font-semibold">{integration.name}</h3>
                       <Badge variant="outline">{getTypeLabel(integration.type)}</Badge>
-                      {getStatusBadge(integration.status)}
+                      {unconfigured ? <SemanticBadge tone="neutral" icon={Settings2}>Yapılandırılmadı</SemanticBadge> : getStatusBadge(integration.status)}
                     </div>
                     <p className="text-sm text-muted-foreground">{integration.message}</p>
                   </div>
-                  <div className="w-32 shrink-0">
+                  <div className="w-full shrink-0 sm:w-32">
                     <div className="flex items-center justify-between text-xs mb-1">
                       <span className="text-muted-foreground">Sağlık</span>
                       <span className={cn("font-bold", getHealthColor(integration.healthScore))}>
@@ -195,13 +193,11 @@ export default function StatusPage() {
                     <p>Son senkron:</p>
                     <p>{integration.lastSync}</p>
                   </div>
-                  <Button variant="outline" size="sm">
-                    Detaylar
-                  </Button>
+                  {target && <Button variant="outline" size="sm" asChild><Link href={target}>Ayarları aç<ArrowUpRight size={14} aria-hidden="true" /></Link></Button>}
                 </div>
               </CardContent>
             </Card>
-          ))
+          ); })
         )}
       </div>
     </div>

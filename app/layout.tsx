@@ -1,11 +1,16 @@
 import './globals.css';
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
+import localFont from 'next/font/local';
 import { Toaster } from "@/components/ui/toaster";
 import { LayoutShell } from '../components/layout/LayoutShell';
 import { NavigationProgress } from '@/components/ui/navigation-progress';
 
-const inter = Inter({ subsets: ['latin'] });
+const inter = localFont({
+  src: '../public/fonts/inter/InterVariable.woff2',
+  weight: '100 900',
+  style: 'normal',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   title: 'InfraScope - Kurumsal Altyapı Yönetimi',

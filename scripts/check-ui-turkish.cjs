@@ -1,0 +1,57 @@
+// Verify Turkish display boundaries with isolated data; never send requests or mutate records.
+/* eslint-disable @typescript-eslint/no-require-imports, @next/next/no-assign-module-variable */
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
+const ts = require('typescript');
+const root = path.resolve(__dirname, '..');
+const cache = new Map();
+function load(relative) {
+  if (cache.has(relative)) return cache.get(relative).exports;
+  const module = { exports: {} }; cache.set(relative, module);
+  const code = ts.transpileModule(fs.readFileSync(path.join(root, relative), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, esModuleInterop: true } }).outputText;
+  const localRequire = name => name.startsWith('@/') ? load(`${name.slice(2)}.ts`) : require(name);
+  vm.runInThisContext(`(function(require,module,exports){${code}\n})`, { filename: relative })(localRequire, module, module.exports);
+  return module.exports;
+}
+const { uiLabel, uiError, auditActionLabel, auditActionQuery, inputValidationMessage } = load('lib/i18n/tr.ts');
+const source = { id: 'USER-ADMIN-42', type: 'PHYSICAL_SERVER', role: 'ADMIN', status: 'suspended', action: 'user.create', message: 'Failed to create user' };
+const original = JSON.stringify(source);
+assert.equal(uiLabel(source.type), 'Fiziksel sunucu');
+assert.equal(uiLabel(source.role), 'Yönetici');
+assert.equal(uiLabel(source.status), 'Askıda');
+assert.equal(auditActionLabel(source.action), 'Kullanıcı · Oluşturma');
+assert.equal(auditActionLabel('custom.vendor_action'), 'custom.vendor_action');
+assert.equal(auditActionQuery('Silme'), 'delete');
+assert.equal(auditActionQuery('Kullanıcı · Oluşturma'), 'create');
+assert.equal(auditActionQuery('ALARM_INCIDENT_NOTE'), 'ALARM_INCIDENT_NOTE');
+assert.equal(inputValidationMessage({ valueMissing: true }), 'Lütfen bu alanı doldurun.');
+assert.equal(inputValidationMessage({ typeMismatch: true }, 'email'), 'Lütfen geçerli bir e-posta adresi girin.');
+assert.equal(uiLabel('VENDOR_STATUS_42'), 'VENDOR_STATUS_42');
+assert.equal(uiLabel('VMware'), 'VMware');
+assert.equal(uiLabel(0), '0');
+assert.equal(uiError(source.message), 'Kullanıcı oluşturulamadı.');
+assert.equal(uiError('Failed to load license information'), 'Lisans bilgileri yüklenemedi.');
+assert.equal(uiError('VMware vCenter integration not configured'), 'VMware vCenter entegrasyonu yapılandırılmadı.');
+assert.equal(uiError(new Error('Network Error')), 'Ağ bağlantısı kurulamadı. Bağlantınızı kontrol edin.');
+assert.equal(uiError('Error: Invalid email address'), 'Hata: Geçerli bir e-posta adresi girin.');
+assert.equal(uiError('Request failed with status code 403'), 'Sunucu isteği tamamlanamadı (HTTP 403).');
+assert.match(uiError('timeout of 15000ms exceeded'), /zaman aşımı/);
+assert.equal(uiError({ message: 'User not found', code: 'USER_NOT_FOUND' }), 'Kullanıcı bulunamadı.');
+assert.equal(uiError('[{"message":"Password is required","path":["password"]}]'), 'Parola zorunludur.');
+assert.equal(uiError('E_VENDOR_42'), 'E_VENDOR_42');
+assert.equal(uiError('Cihaz A için erişim reddedildi.'), 'Cihaz A için erişim reddedildi.');
+assert.equal(uiError(null), '');
+assert.equal(JSON.stringify(source), original, 'Display localization must not alter codes, identities or payloads');
+const { createUserSchema } = load('lib/validators/users.ts');
+const { validateBody } = load('lib/validators/index.ts');
+const invalid = validateBody({ name: '', email: 'invalid', password: 'short', role: 'INVALID' }, createUserSchema);
+assert.equal(invalid.success, false);
+assert.match(invalid.error, /Ad: Ad zorunludur/);
+assert.match(invalid.error, /E-posta: Geçerli bir e-posta adresi/);
+assert.match(invalid.error, /Parola: Parola en az 8 karakter/);
+assert.doesNotMatch(invalid.error, /Invalid|Too small|expected|received|Name is required/);
+const valid = { name: 'Örnek Kullanıcı', email: 'sample@example.com', password: 'FixtureOnly123!', role: 'ADMIN' };
+assert.deepEqual(validateBody(valid, createUserSchema), { success: true, data: valid });
+console.log('Turkish UI checks passed: display labels, unknown-code preservation, structured/network/API errors, Turkish validation, unchanged payloads and accepted values. No live request or record change.');

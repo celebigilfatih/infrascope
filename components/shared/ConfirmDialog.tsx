@@ -1,6 +1,7 @@
 "use client"
 
 import React from 'react'
+import { CircleHelp, TriangleAlert } from 'lucide-react'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -37,7 +38,7 @@ export function ConfirmDialog({
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>{title}</AlertDialogTitle>
+          <AlertDialogTitle className="flex items-center gap-3">{variant === 'destructive' ? <TriangleAlert aria-hidden="true" className="h-5 w-5 shrink-0 text-destructive" /> : <CircleHelp aria-hidden="true" className="h-5 w-5 shrink-0 text-muted-foreground" />}{title}</AlertDialogTitle>
           <AlertDialogDescription>
             {description}
           </AlertDialogDescription>

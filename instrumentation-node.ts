@@ -6,6 +6,7 @@ import { startFirewallRecoveryScheduler } from '@/lib/firewall/recovery-schedule
 import { initializeAlarmRunner } from '@/lib/alarms/alarm-runner';
 import { startAlarmScheduler } from '@/lib/alarm-scheduler';
 import { startAlarmMonitor } from '@/lib/alarms/alarm-monitor';
+import { startInventorySyncScheduler } from '@/lib/integrations/inventory-scheduler';
 
 export async function registerNodeInstrumentation(): Promise<void> {
   if (isLicenseServerMode()) return;
@@ -17,4 +18,5 @@ export async function registerNodeInstrumentation(): Promise<void> {
   startAlarmMonitor();
   startAlarmRetentionScheduler();
   startFirewallRecoveryScheduler();
+  startInventorySyncScheduler();
 }

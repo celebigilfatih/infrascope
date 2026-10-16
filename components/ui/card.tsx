@@ -1,6 +1,7 @@
 import * as React from "react"
 
 import { cn } from "@/lib/utils"
+import styles from './primitives.module.css'
 
 const Card = React.forwardRef<
   HTMLDivElement,
@@ -10,6 +11,7 @@ const Card = React.forwardRef<
     ref={ref}
     className={cn(
       "rounded-lg border bg-card text-card-foreground shadow-sm",
+      styles.card,
       className
     )}
     {...props}
@@ -36,7 +38,7 @@ const CardTitle = React.forwardRef<
   <h3
     ref={ref}
     className={cn(
-      "text-2xl font-semibold leading-none tracking-tight",
+      "text-lg font-semibold leading-snug tracking-tight [&_svg]:shrink-0",
       className
     )}
     {...props}

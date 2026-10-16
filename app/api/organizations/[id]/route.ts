@@ -24,12 +24,12 @@ export async function PUT(
       data: organization,
       timestamp: new Date(),
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error updating organization:', error);
     return NextResponse.json(
       {
         success: false,
-        error: error.message || 'Failed to update organization',
+        error: (error as Error).message || 'Failed to update organization',
         timestamp: new Date(),
       },
       { status: 500 }
@@ -53,12 +53,12 @@ export async function DELETE(
       message: 'Organization deleted successfully',
       timestamp: new Date(),
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error deleting organization:', error);
     return NextResponse.json(
       {
         success: false,
-        error: error.message || 'Failed to delete organization',
+        error: (error as Error).message || 'Failed to delete organization',
         timestamp: new Date(),
       },
       { status: 500 }

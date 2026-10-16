@@ -7,8 +7,12 @@ import {
   type AlarmCategory,
   type AlarmSeverity2,
 } from '@prisma/client';
-import { prisma } from '@/lib/prisma';
+import { prisma as sharedPrisma } from '@/lib/prisma';
+import { alarmExecutionPrisma } from '@/lib/alarms/execution-prisma';
+const prisma = alarmExecutionPrisma(sharedPrisma);
 import { createLogger } from '@/lib/logger';
+import { buildFortinetOccurrenceIdentity } from './fortinet-occurrence-identity';
+import { incidentAssigneeId, incidentNote, incidentNoteRequestId } from './incident-collaboration';
 
 const log = createLogger('alarm-incident');
 
@@ -38,7 +42,10 @@ export interface RecordAlarmOccurrenceInput {
   entityType?: string;
   entityId?: string;
   conditionKey?: string;
+  /** A true occurrence ID supplied by a source-specific caller, never a Fortinet type-only logid. */
   sourceEventId?: string;
+  /** Stable integration identity; credentials must never be used as scope. */
+  sourceScope?: string;
   sourceOccurredAt?: Date | null;
 }
 
@@ -50,6 +57,7 @@ export type IncidentAction =
   | 'ARCHIVE'
   | 'RESTORE'
   | 'ASSIGN'
+  | 'ADD_NOTE'
   | 'SET_LEGAL_HOLD'
   | 'RELEASE_LEGAL_HOLD';
 
@@ -96,6 +104,7 @@ export function buildOccurrenceIdentity(input: RecordAlarmOccurrenceInput): {
   conditionKey: string;
 } {
   const raw = rawObject(input.rawData);
+  const vmwareScope = input.alarm.source === 'vmware' ? firstString(raw, ['inventorySourceScope']) : undefined;
   const nmsDeviceId = firstString(raw, ['nms_device_id', 'nmsDeviceId']);
   const interfaceIndex = firstString(raw, ['interface_index', 'interfaceIndex']);
   const vmwareId = firstString(raw, ['moRef', 'moref', 'vmMoref', 'vmId', 'hostId', 'datastoreId']);
@@ -126,10 +135,16 @@ export function buildOccurrenceIdentity(input: RecordAlarmOccurrenceInput): {
     ?? firstString(raw, ['cfgpath', 'interface_name', 'snapshotName', 'policyid', 'action'])
     ?? 'default';
   const entityType = input.entityType ?? inferredEntityType;
-  const entityId = input.entityId ?? inferredEntityId;
+  const entityId = vmwareScope ? `${vmwareScope}:${input.entityId ?? inferredEntityId}` : input.entityId ?? inferredEntityId;
   const fingerprint = hash(`${input.alarm.code}|${entityType}|${entityId}|${conditionKey}`);
 
+  const fortinet = input.sourceEventId === undefined
+    ? buildFortinetOccurrenceIdentity(raw, {
+      source: input.alarm.source, sourceScope: input.sourceScope, deviceName: input.deviceName,
+    })
+    : null;
   const externalId = input.sourceEventId
+    ?? fortinet?.id
     ?? firstString(raw, ['logId', 'logid', 'eventId', 'event_id', 'id', 'uuid'])
     ?? hash(stableSerialize({
       alarmCode: input.alarm.code,
@@ -141,11 +156,38 @@ export function buildOccurrenceIdentity(input: RecordAlarmOccurrenceInput): {
 
   return {
     fingerprint,
-    sourceEventId: `${input.alarm.code}:${externalId}`,
+    sourceEventId: `${input.alarm.code}:${vmwareScope ? hash(`${vmwareScope}:${externalId}`) : externalId}`,
     entityType,
     entityId,
     conditionKey,
   };
+}
+
+async function findRecordedOccurrence(
+  client: Pick<Prisma.TransactionClient, 'alarmEvent'>,
+  input: RecordAlarmOccurrenceInput,
+  identity: ReturnType<typeof buildOccurrenceIdentity>,
+) {
+  const duplicate = await client.alarmEvent.findUnique({
+    where: { alarmId_sourceEventId: { alarmId: input.alarm.id, sourceEventId: identity.sourceEventId } },
+    include: { incident: true },
+  });
+  if (duplicate?.incident || input.sourceEventId !== undefined) return duplicate;
+
+  const raw = rawObject(input.rawData);
+  const context = { source: input.alarm.source, sourceScope: input.sourceScope, deviceName: input.deviceName };
+  const current = buildFortinetOccurrenceIdentity(raw, context);
+  if (!current?.legacyEvidence) return null;
+  // Read legacy keys without rewriting historical occurrences or replaying mail.
+  const legacyId = firstString(raw, ['logId', 'logid', 'eventId', 'event_id', 'id', 'uuid']);
+  if (!legacyId) return null;
+  const legacy = await client.alarmEvent.findUnique({
+    where: { alarmId_sourceEventId: { alarmId: input.alarm.id, sourceEventId: `${input.alarm.code}:${legacyId}` } },
+    include: { incident: true },
+  });
+  if (!legacy?.incident) return null;
+  const previous = buildFortinetOccurrenceIdentity(rawObject(legacy.rawData), context);
+  return previous?.legacyEvidence === current.legacyEvidence ? legacy : null;
 }
 
 async function recordInTransaction(input: RecordAlarmOccurrenceInput) {
@@ -154,15 +196,7 @@ async function recordInTransaction(input: RecordAlarmOccurrenceInput) {
   const now = new Date();
 
   return prisma.$transaction(async (tx) => {
-    const duplicate = await tx.alarmEvent.findUnique({
-      where: {
-        alarmId_sourceEventId: {
-          alarmId: input.alarm.id,
-          sourceEventId: identity.sourceEventId,
-        },
-      },
-      include: { incident: true },
-    });
+    const duplicate = await findRecordedOccurrence(tx, input, identity);
     if (duplicate?.incident) {
       return { event: duplicate, incident: duplicate.incident, created: false, reopened: false };
     }
@@ -281,15 +315,7 @@ export async function recordAlarmOccurrence(input: RecordAlarmOccurrenceInput) {
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
       const identity = buildOccurrenceIdentity(input);
-      const event = await prisma.alarmEvent.findUnique({
-        where: {
-          alarmId_sourceEventId: {
-            alarmId: input.alarm.id,
-            sourceEventId: identity.sourceEventId,
-          },
-        },
-        include: { incident: true },
-      });
+      const event = await findRecordedOccurrence(prisma, input, identity);
       if (event?.incident) return { event, incident: event.incident, created: false, reopened: false };
 
       log.info({ fingerprint: identity.fingerprint }, 'Concurrent incident claim detected, retrying');
@@ -308,6 +334,7 @@ function transitionType(action: IncidentAction): AlarmTransitionType {
     ARCHIVE: AlarmTransitionType.ARCHIVED,
     RESTORE: AlarmTransitionType.RESTORED,
     ASSIGN: AlarmTransitionType.ASSIGNED,
+    ADD_NOTE: AlarmTransitionType.NOTE_ADDED,
     SET_LEGAL_HOLD: AlarmTransitionType.LEGAL_HOLD_SET,
     RELEASE_LEGAL_HOLD: AlarmTransitionType.LEGAL_HOLD_RELEASED,
   };
@@ -320,13 +347,30 @@ export async function transitionAlarmIncident(params: {
   actor: IncidentActor;
   reason?: string;
   assigneeId?: string | null;
-  assigneeName?: string | null;
-}) {
+  requestId?: string;
+}, transaction?: Prisma.TransactionClient) {
   const now = new Date();
-  return prisma.$transaction(async (tx) => {
+  const reason = params.action === 'ADD_NOTE' ? incidentNote(params.reason) : params.reason;
+  const requestId = params.action === 'ADD_NOTE' ? incidentNoteRequestId(params.requestId) : undefined;
+  const apply = async (tx: Prisma.TransactionClient) => {
+    if (requestId || ['ACKNOWLEDGE', 'UNACKNOWLEDGE', 'ASSIGN', 'RESOLVE', 'CLOSE', 'ARCHIVE', 'RESTORE', 'SET_LEGAL_HOLD', 'RELEASE_LEGAL_HOLD'].includes(params.action)) {
+      // Read replay-sensitive state only after overlapping changes finish.
+      await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "alarm_incidents" WHERE "id" = ${params.incidentId} FOR UPDATE`);
+    }
     const incident = await tx.alarmIncident.findUniqueOrThrow({ where: { id: params.incidentId } });
+    if (requestId) {
+      const existing = await tx.alarmLifecycleTransition.findUnique({ where: { requestId } });
+      if (existing) {
+        if (existing.type !== 'NOTE_ADDED' || existing.incidentId !== params.incidentId ||
+          existing.actorType !== params.actor.type || existing.actorId !== (params.actor.id ?? null) || existing.reason !== reason) {
+          throw new Error('Bu not istek kimliği farklı bir işlem için kullanılmış.');
+        }
+        return incident;
+      }
+    }
     const data: Prisma.AlarmIncidentUpdateInput = {};
     let toStatus: AlarmIncidentStatus | undefined;
+    let assignment: Prisma.InputJsonObject | undefined;
 
     switch (params.action) {
       case 'ACKNOWLEDGE':
@@ -356,6 +400,7 @@ export async function transitionAlarmIncident(params: {
         });
         break;
       case 'CLOSE':
+        if (incident.status === AlarmIncidentStatus.CLOSED) return incident;
         if (incident.status !== AlarmIncidentStatus.RESOLVED) throw new Error('Only resolved incidents can be closed');
         toStatus = AlarmIncidentStatus.CLOSED;
         Object.assign(data, {
@@ -369,18 +414,35 @@ export async function transitionAlarmIncident(params: {
         break;
       case 'ARCHIVE':
         if (incident.status !== AlarmIncidentStatus.CLOSED) throw new Error('Only closed incidents can be archived');
+        if (incident.archiveState === AlarmArchiveState.ARCHIVED) return incident;
         Object.assign(data, { archiveState: AlarmArchiveState.ARCHIVED, archivedAt: now, archiveReason: params.reason });
         break;
       case 'RESTORE':
+        if (incident.archiveState === AlarmArchiveState.HOT) return incident;
         Object.assign(data, { archiveState: AlarmArchiveState.HOT, archivedAt: null, archiveReason: null });
         break;
-      case 'ASSIGN':
-        Object.assign(data, { assignedToId: params.assigneeId, assignedTo: params.assigneeName, assignedAt: now });
+      case 'ASSIGN': {
+        const assigneeId = incidentAssigneeId(params.assigneeId);
+        const assignee = assigneeId === null ? null : await tx.user.findFirst({
+          where: { id: assigneeId, status: 'ACTIVE', role: { in: ['ADMIN', 'EDITOR'] } },
+          select: { id: true, name: true },
+        });
+        if (assigneeId !== null && !assignee) throw new Error('Sorumlu aktif bir yönetici veya editör olmalıdır.');
+        if (incident.assignedToId === assigneeId) return incident;
+        Object.assign(data, { assignedToId: assigneeId, assignedTo: assignee?.name ?? null, assignedAt: assignee ? now : null });
+        assignment = { previousAssigneeId: incident.assignedToId, previousAssigneeName: incident.assignedTo,
+          assigneeId, assigneeName: assignee?.name ?? null };
+        break;
+      }
+      case 'ADD_NOTE':
+        // Append to the activity stream; notes never alter lifecycle or alarm acknowledgement.
         break;
       case 'SET_LEGAL_HOLD':
+        if (incident.legalHold) return incident;
         Object.assign(data, { legalHold: true });
         break;
       case 'RELEASE_LEGAL_HOLD':
+        if (!incident.legalHold) return incident;
         Object.assign(data, { legalHold: false });
         break;
     }
@@ -397,10 +459,9 @@ export async function transitionAlarmIncident(params: {
             actorType: params.actor.type,
             actorId: params.actor.id,
             actorName: params.actor.name,
-            reason: params.reason,
-            metadata: params.action === 'ASSIGN'
-              ? { assigneeId: params.assigneeId, assigneeName: params.assigneeName }
-              : undefined,
+            reason,
+            metadata: assignment,
+            requestId,
           },
         },
       },
@@ -429,13 +490,15 @@ export async function transitionAlarmIncident(params: {
         details: {
           fromStatus: incident.status,
           toStatus: toStatus ?? incident.status,
-          reason: params.reason,
+          reason,
+          ...(assignment ? { assignment } : {}),
         },
       },
     });
 
     return updated;
-  });
+  };
+  return transaction ? apply(transaction) : prisma.$transaction(apply);
 }
 
 export async function resolveIncidentsForEvents(eventIds: string[], reason: string): Promise<number> {

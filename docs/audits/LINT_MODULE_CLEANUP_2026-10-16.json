@@ -1,0 +1,258 @@
+{
+  "date": "2026-10-16",
+  "baseCommit": "816e6036fea121be4402fcdc81a68aaadda7331e",
+  "scope": "Uncommitted diagnostic snapshot; existing B01-B21 and concurrent work preserved",
+  "baseline": {
+    "errors": 390,
+    "warnings": 9,
+    "diagnosticFiles": 90,
+    "evidence": "B21_LINT_DIAGNOSTICS.json"
+  },
+  "final": {
+    "errors": 0,
+    "warnings": 9,
+    "warningMultisetUnchanged": true
+  },
+  "warningDiagnostics": [
+    {
+      "file": "app/analytics/capacity/page.tsx",
+      "line": 61,
+      "rule": "react-hooks/exhaustive-deps",
+      "message": "React Hook useEffect has a missing dependency: 'fetchTrends'. Either include it or remove the dependency array."
+    },
+    {
+      "file": "app/network/NetworkTopologyContent.tsx",
+      "line": 2097,
+      "rule": "@next/next/no-img-element",
+      "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element"
+    },
+    {
+      "file": "app/network/NetworkTopologyContent.tsx",
+      "line": 2510,
+      "rule": "@next/next/no-img-element",
+      "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element"
+    },
+    {
+      "file": "app/network/NetworkTopologyContent.tsx",
+      "line": 2553,
+      "rule": "@next/next/no-img-element",
+      "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element"
+    },
+    {
+      "file": "app/network/NetworkTopologyContent.tsx",
+      "line": 2701,
+      "rule": "@next/next/no-img-element",
+      "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element"
+    },
+    {
+      "file": "app/services/dependencies/page.tsx",
+      "line": 138,
+      "rule": "react-hooks/exhaustive-deps",
+      "message": "React Hook useEffect has a missing dependency: 'fetchDependencies'. Either include it or remove the dependency array."
+    },
+    {
+      "file": "app/services/page.tsx",
+      "line": 151,
+      "rule": "@next/next/no-img-element",
+      "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element"
+    },
+    {
+      "file": "components/topology/DeviceNode.tsx",
+      "line": 104,
+      "rule": "@next/next/no-img-element",
+      "message": "Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element"
+    },
+    {
+      "file": "components/ui/navigation-progress.tsx",
+      "line": 28,
+      "rule": "react-hooks/exhaustive-deps",
+      "message": "React Hook useEffect has a missing dependency: 'isNavigating'. Either include it or remove the dependency array."
+    }
+  ],
+  "policy": {
+    "ruleDowngrades": false,
+    "newSuppressions": false,
+    "scopeReduction": false,
+    "configurationSha256": {
+      ".eslintrc.json": "29bc706bd967a5d6f5e8a9c332da48390225a15661538fb512d66e7c10992f9c",
+      "tsconfig.json": "89b7fec534d6adfbc8b40764f491ac3f0bc13065de99dfb3e19598ad64a5a52b",
+      "next.config.js": "b29f05fa1d5abc3c737480976b94a50442075d49add3ec701f50987133cef6f4"
+    }
+  },
+  "checks": {
+    "qualityRelease": "PASS",
+    "productBuild": "FAIL: network-isolated Inter font fetch; page collection/prerendering not validated",
+    "typeScript": "PASS",
+    "topologyContracts": "PASS",
+    "topologyExplicitLint": "PASS",
+    "releasePolicyScenarios": 26,
+    "nativeCompilerControls": 4,
+    "offlineNodeSuites": [
+      {
+        "name": "alarm-occurrences",
+        "status": 0
+      },
+      {
+        "name": "alarm-health",
+        "status": 0
+      },
+      {
+        "name": "alarm-ownership",
+        "status": 0
+      },
+      {
+        "name": "alarm-sources",
+        "status": 0
+      },
+      {
+        "name": "alarm-dispatch",
+        "status": 0
+      },
+      {
+        "name": "integration-permissions",
+        "status": 0
+      },
+      {
+        "name": "fortianalyzer-auth",
+        "status": 0
+      },
+      {
+        "name": "fortianalyzer-profile",
+        "status": 0
+      },
+      {
+        "name": "fortianalyzer-profile-ui",
+        "status": 0
+      },
+      {
+        "name": "fortianalyzer-cache",
+        "status": 0
+      },
+      {
+        "name": "fortianalyzer-time",
+        "status": 0
+      },
+      {
+        "name": "vmware-cache",
+        "status": 0
+      },
+      {
+        "name": "vmware-collection",
+        "status": 0
+      },
+      {
+        "name": "vmware-health",
+        "status": 0
+      },
+      {
+        "name": "zabbix-auth",
+        "status": 0
+      },
+      {
+        "name": "credential-storage",
+        "status": 0
+      },
+      {
+        "name": "inventory-sync",
+        "status": 0
+      },
+      {
+        "name": "inventory-scheduling",
+        "status": 0
+      },
+      {
+        "name": "inventory-source-scope",
+        "status": 0
+      },
+      {
+        "name": "fortigate-alarm-targets",
+        "status": 0
+      },
+      {
+        "name": "fortigate-snmp",
+        "status": 0
+      },
+      {
+        "name": "nms-backups",
+        "status": 0
+      },
+      {
+        "name": "nms-device-ids",
+        "status": 0
+      },
+      {
+        "name": "dashboard",
+        "status": 0
+      },
+      {
+        "name": "incident-center",
+        "status": 0
+      },
+      {
+        "name": "incident-detail",
+        "status": 0
+      },
+      {
+        "name": "ui-turkish",
+        "status": 0
+      },
+      {
+        "name": "room-layout",
+        "status": 0
+      },
+      {
+        "name": "rack-workspace",
+        "status": 0
+      },
+      {
+        "name": "device-inventory-ui",
+        "status": 0
+      },
+      {
+        "name": "cluster-workspace",
+        "status": 0
+      },
+      {
+        "name": "host-workspace",
+        "status": 0
+      }
+    ],
+    "python": {
+      "vmware": 18,
+      "pollScheduling": 13,
+      "clusterCollector": 3,
+      "hostWorkspaceCollector": 4
+    },
+    "disposablePostgresSuites": [
+      {
+        "name": "alarm-occurrences",
+        "status": 0
+      },
+      {
+        "name": "alarm-ownership",
+        "status": 0
+      },
+      {
+        "name": "fortianalyzer-cache",
+        "status": 0
+      },
+      {
+        "name": "fortigate-alarm-targets",
+        "status": 0
+      },
+      {
+        "name": "fortigate-snmp",
+        "status": 0
+      },
+      {
+        "name": "incident-collaboration",
+        "status": 0
+      }
+    ]
+  },
+  "limits": [
+    "No browser/E2E or publication workflow dispatched",
+    "No successful product release build claimed",
+    "No installation data changed; DB writes only in disposable PostgreSQL"
+  ]
+}

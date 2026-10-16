@@ -117,7 +117,8 @@ class Config:
         # Jitter (seconds) applied to per-device poll schedule to avoid thundering herd
         self.poll_jitter_max = int(os.getenv("POLL_JITTER_MAX", "10"))
 
-        # Dynamic polling intervals (seconds) by device status
+        # Device seconds are authoritative; SNMP default is a legacy fallback.
+        # SSH-only/unstable values are recovery floors, never faster overrides.
         self.poll_interval_snmp_ok = int(os.getenv("POLL_INTERVAL_SNMP_OK", "60"))
         self.poll_interval_ssh_only = int(os.getenv("POLL_INTERVAL_SSH_ONLY", "300"))
         self.poll_interval_unstable = int(os.getenv("POLL_INTERVAL_UNSTABLE", "600"))

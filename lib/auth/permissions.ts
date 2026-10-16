@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import type { UserRole } from '@prisma/client';
 import {
   DEFAULT_PERMISSIONS,
   type Action,
@@ -32,7 +33,7 @@ export async function canAccess(
  */
 export async function getRolePermissions(role: string) {
   const rolePermissions = await prisma.rolePermission.findMany({
-    where: { roleId: role.toUpperCase() as any },
+    where: { roleId: role.toUpperCase() as UserRole },
     include: { permission: true },
   });
 
@@ -69,7 +70,7 @@ export async function getPermissionMatrix() {
  * Toggle a permission for a role.
  */
 export async function togglePermission(permissionId: string, roleId: string, granted: boolean) {
-  const upperRole = roleId.toUpperCase() as any;
+  const upperRole = roleId.toUpperCase() as UserRole;
 
   if (granted) {
     await prisma.rolePermission.upsert({
@@ -105,9 +106,9 @@ export async function seedPermissions() {
     for (const role of perm.roles) {
       await prisma.rolePermission.upsert({
         where: {
-          roleId_permissionId: { roleId: role as any, permissionId: permission.id },
+          roleId_permissionId: { roleId: role as UserRole, permissionId: permission.id },
         },
-        create: { roleId: role as any, permissionId: permission.id },
+        create: { roleId: role as UserRole, permissionId: permission.id },
         update: {},
       });
     }

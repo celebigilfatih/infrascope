@@ -1,0 +1,82 @@
+{
+  "observedAtUtc": "2026-10-16T11:48:49.468Z",
+  "baseCommit": "816e6036fea121be4402fcdc81a68aaadda7331e",
+  "scope": "Uncommitted product source snapshot; existing changes preserved",
+  "runtime": {
+    "node": "v20.20.2",
+    "next": "14.2.35",
+    "typescript": "5.9.3",
+    "prisma": "5.22.0"
+  },
+  "isolation": {
+    "container": "infrascope-font-checks",
+    "image": "sha256:daf880f6655d0fdb5bd863f8a0407dcb93f57c2f530f3fa89dd573c36f60d3b0",
+    "network": "none",
+    "rootFilesystem": "read-only",
+    "sourceAndDependencies": "read-only",
+    "buildWrites": "tmpfs",
+    "freshNextCache": true,
+    "installationEnvironmentLoaded": false,
+    "liveDatabaseAvailable": false,
+    "dependenciesAlreadyInstalled": true
+  },
+  "build": {
+    "command": "npm run build",
+    "exitCode": 0,
+    "mode": "INFRASCOPE_BUILD=1",
+    "qualityGatePassed": true,
+    "nativeTypeAndLintChecksPresent": true,
+    "nativeChecksSkipped": false,
+    "staticPages": "112/112",
+    "optimizationComplete": true,
+    "tracesCollected": true,
+    "buildId": "gbs8e9AN63e4mgpjkJqGk",
+    "logSha256": "8e98e6893b537b0f6228675f558c727749425f9a2ab3a62a86da85640b7d1aab"
+  },
+  "font": {
+    "version": "Inter 4.1",
+    "upstreamCommit": "e3a3d4c57d5ecc01453a575621882a384c1995a3",
+    "weightRange": [
+      100,
+      900
+    ],
+    "turkishGlyphsVerified": true,
+    "emittedManifest": {
+      "pages": {},
+      "app": {
+        "/work/offline-release/app/layout": [
+          "static/media/0336a89fb4e7fc1d-s.p.woff2"
+        ]
+      },
+      "appUsingSizeAdjust": true,
+      "pagesUsingSizeAdjust": false
+    },
+    "generatedCssSameOrigin": true,
+    "emittedBinaryMatchesSource": true,
+    "renderedLoginFontPreloadVerified": true
+  },
+  "checks": {
+    "sourceFontContract": "PASS",
+    "outputFontContract": "PASS",
+    "focusedESLint": "PASS: 0 messages",
+    "releaseQualityPolicyScenarios": 26
+  },
+  "sourceSha256": {
+    "app/layout.tsx": "bf1d1cc9cc1cfb4b9d97695acbae6754d3ce17511134e73d442813b7102eeec6",
+    "public/fonts/inter/InterVariable.woff2": "693b77d4f32ee9b8bfc995589b5fad5e99adf2832738661f5402f9978429a8e3",
+    "public/fonts/inter/OFL.txt": "262481e844521b326f5ecd053e59b98c8b2da78c8ee1bdbb6e8174305e54935a",
+    "next.config.js": "b29f05fa1d5abc3c737480976b94a50442075d49add3ec701f50987133cef6f4",
+    ".eslintrc.json": "29bc706bd967a5d6f5e8a9c332da48390225a15661538fb512d66e7c10992f9c",
+    "tsconfig.json": "89b7fec534d6adfbc8b40764f491ac3f0bc13065de99dfb3e19598ad64a5a52b"
+  },
+  "remainingWarnings": [
+    "9 unchanged configured Next lint warnings",
+    "Existing jose Edge Runtime compression API warnings",
+    "Existing Browserslist/caniuse-lite age warnings"
+  ],
+  "limits": [
+    "No Docker image build or package installation tested",
+    "No browser visual check or deployment performed",
+    "No application or installation data changed"
+  ]
+}

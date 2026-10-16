@@ -1,5 +1,8 @@
 'use client';
 
+import { uiLabel } from '@/lib/i18n/tr';
+
+import { PageHeading } from '@/components/ui/page-heading';
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -106,24 +109,23 @@ export default function ReportsContent() {
 
   return (
     <div className="container mx-auto py-6 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Reports & Analytics</h1>
-          <p className="text-muted-foreground">Comprehensive infrastructure monitoring reports</p>
+          <PageHeading section="reports" description={<>Altyapı izleme raporlarını ve analizlerini inceleyin</>}>Raporlar ve Analiz</PageHeading>
         </div>
         <Button onClick={fetchReports} variant="outline">
           <RefreshCw className="w-4 h-4 mr-2" />
-          Refresh
+          Yenile
         </Button>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList className="grid grid-cols-5 gap-2">
-          <TabsTrigger value="summary">Summary</TabsTrigger>
-          <TabsTrigger value="inventory">Inventory</TabsTrigger>
-          <TabsTrigger value="capacity">Capacity</TabsTrigger>
+          <TabsTrigger value="summary">Özet</TabsTrigger>
+          <TabsTrigger value="inventory">Envanter</TabsTrigger>
+          <TabsTrigger value="capacity">Kapasite</TabsTrigger>
           <TabsTrigger value="vmware">VMware</TabsTrigger>
-          <TabsTrigger value="alerts">Alerts</TabsTrigger>
+          <TabsTrigger value="alerts">Alarmlar</TabsTrigger>
         </TabsList>
 
         {/* Summary Tab */}
@@ -131,17 +133,17 @@ export default function ReportsContent() {
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Devices</CardTitle>
+                <CardTitle className="text-sm font-medium">Toplam Cihaz</CardTitle>
                 <Server className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{inventory?.totalDevices || 0}</div>
-                <p className="text-xs text-muted-foreground">Across all types</p>
+                <p className="text-xs text-muted-foreground">Tüm türlerde</p>
               </CardContent>
             </Card>
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Rack Utilization</CardTitle>
+                <CardTitle className="text-sm font-medium">Kabinet Kullanımı</CardTitle>
                 <HardDrive className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
@@ -151,23 +153,23 @@ export default function ReportsContent() {
             </Card>
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">VMware VMs</CardTitle>
+                <CardTitle className="text-sm font-medium">VMware Sanal Makineleri</CardTitle>
                 <Activity className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{vmware?.totalVMs || 0}</div>
-                <p className="text-xs text-muted-foreground">Across {vmware?.totalClusters || 0} clusters</p>
+                <p className="text-xs text-muted-foreground">Toplam {vmware?.totalClusters || 0} küme</p>
               </CardContent>
             </Card>
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Active Alerts</CardTitle>
+                <CardTitle className="text-sm font-medium">Aktif Alarmlar</CardTitle>
                 <AlertTriangle className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{alerts?.totalAlerts || 0}</div>
                 <p className="text-xs text-muted-foreground">
-                  {alerts?.criticalAlerts || 0} critical, {alerts?.warningAlerts || 0} warning
+                  {alerts?.criticalAlerts || 0} kritik, {alerts?.warningAlerts || 0} uyarı
                 </p>
               </CardContent>
             </Card>
@@ -176,7 +178,7 @@ export default function ReportsContent() {
           <div className="grid gap-4 md:grid-cols-2">
             <Card>
               <CardHeader>
-                <CardTitle>Device Distribution by Type</CardTitle>
+                <CardTitle>Türe Göre Cihaz Dağılımı</CardTitle>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
@@ -195,7 +197,7 @@ export default function ReportsContent() {
 
             <Card>
               <CardHeader>
-                <CardTitle>Room Capacity Utilization</CardTitle>
+                <CardTitle>Oda Kapasite Kullanımı</CardTitle>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
@@ -217,7 +219,7 @@ export default function ReportsContent() {
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             <Card>
               <CardHeader>
-                <CardTitle>By Device Type</CardTitle>
+                <CardTitle>Cihaz Türüne Göre</CardTitle>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
@@ -234,7 +236,7 @@ export default function ReportsContent() {
 
             <Card>
               <CardHeader>
-                <CardTitle>By Status</CardTitle>
+                <CardTitle>Duruma Göre</CardTitle>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
@@ -253,7 +255,7 @@ export default function ReportsContent() {
 
             <Card>
               <CardHeader>
-                <CardTitle>By Criticality</CardTitle>
+                <CardTitle>Kritikliğe Göre</CardTitle>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
@@ -274,14 +276,14 @@ export default function ReportsContent() {
           {inventory && inventory.recentlyAdded.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle>Recently Added Devices</CardTitle>
+                <CardTitle>Son Eklenen Cihazlar</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
                   {inventory.recentlyAdded.slice(0, 5).map((device) => (
                     <div key={device.id} className="flex items-center justify-between p-2 border rounded">
                       <span>{device.name}</span>
-                      <span className="text-muted-foreground">{device.type}</span>
+                      <span className="text-muted-foreground">{uiLabel(device.type)}</span>
                     </div>
                   ))}
                 </div>
@@ -295,7 +297,7 @@ export default function ReportsContent() {
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Racks</CardTitle>
+                <CardTitle className="text-sm font-medium">Toplam Kabinet</CardTitle>
                 <HardDrive className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
@@ -304,7 +306,7 @@ export default function ReportsContent() {
             </Card>
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Used Rack Units</CardTitle>
+                <CardTitle className="text-sm font-medium">Kullanılan Kabinet Birimleri</CardTitle>
                 <Server className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
@@ -314,7 +316,7 @@ export default function ReportsContent() {
             </Card>
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Power Usage</CardTitle>
+                <CardTitle className="text-sm font-medium">Güç Kullanımı</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{capacity?.powerUtilization.percentage.toFixed(1) || 0}%</div>
@@ -323,7 +325,7 @@ export default function ReportsContent() {
             </Card>
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Cooling Usage</CardTitle>
+                <CardTitle className="text-sm font-medium">Soğutma Kullanımı</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{capacity?.coolingUtilization.percentage.toFixed(1) || 0}%</div>
@@ -334,7 +336,7 @@ export default function ReportsContent() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Room-wise Rack Utilization</CardTitle>
+              <CardTitle>Odaya Göre Kabinet Kullanımı</CardTitle>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={400}>
@@ -357,7 +359,7 @@ export default function ReportsContent() {
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Clusters</CardTitle>
+                <CardTitle className="text-sm font-medium">Kümeler</CardTitle>
                 <Activity className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
@@ -366,7 +368,7 @@ export default function ReportsContent() {
             </Card>
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">ESXi Hosts</CardTitle>
+                <CardTitle className="text-sm font-medium">ESXi Sunucuları</CardTitle>
                 <Server className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
@@ -375,7 +377,7 @@ export default function ReportsContent() {
             </Card>
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Virtual Machines</CardTitle>
+                <CardTitle className="text-sm font-medium">Sanal Makineler</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{vmware?.totalVMs || 0}</div>
@@ -383,7 +385,7 @@ export default function ReportsContent() {
             </Card>
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Datastores</CardTitle>
+                <CardTitle className="text-sm font-medium">Veri Depoları</CardTitle>
                 <HardDrive className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
@@ -395,27 +397,27 @@ export default function ReportsContent() {
           <div className="grid gap-4 md:grid-cols-2">
             <Card>
               <CardHeader>
-                <CardTitle>Host Resource Utilization</CardTitle>
+                <CardTitle>Sunucu Kaynak Kullanımı</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
                   <div>
                     <div className="flex justify-between mb-1">
-                      <span>CPU Usage</span>
+                      <span>CPU Kullanımı</span>
                       <span>{vmware?.hostCpuUsage.toFixed(1) || 0}%</span>
                     </div>
                     <Progress value={vmware?.hostCpuUsage || 0} />
                   </div>
                   <div>
                     <div className="flex justify-between mb-1">
-                      <span>Memory Usage</span>
+                      <span>Bellek Kullanımı</span>
                       <span>{vmware?.hostMemoryUsage.toFixed(1) || 0}%</span>
                     </div>
                     <Progress value={vmware?.hostMemoryUsage || 0} />
                   </div>
                   <div>
                     <div className="flex justify-between mb-1">
-                      <span>Storage Usage</span>
+                      <span>Depolama Kullanımı</span>
                       <span>{vmware?.hostStorageUsage.toFixed(1) || 0}%</span>
                     </div>
                     <Progress value={vmware?.hostStorageUsage || 0} />
@@ -426,7 +428,7 @@ export default function ReportsContent() {
 
             <Card>
               <CardHeader>
-                <CardTitle>VM Distribution by Cluster</CardTitle>
+                <CardTitle>Kümeye Göre Sanal Makine Dağılımı</CardTitle>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
@@ -448,7 +450,7 @@ export default function ReportsContent() {
           <div className="grid gap-4 md:grid-cols-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Alerts</CardTitle>
+                <CardTitle className="text-sm font-medium">Toplam Alarm</CardTitle>
                 <AlertTriangle className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
@@ -457,7 +459,7 @@ export default function ReportsContent() {
             </Card>
             <Card className="border-red-500">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-red-500">Critical</CardTitle>
+                <CardTitle className="text-sm font-medium text-red-500">Kritik</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-red-500">{alerts?.criticalAlerts || 0}</div>
@@ -465,7 +467,7 @@ export default function ReportsContent() {
             </Card>
             <Card className="border-yellow-500">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-yellow-500">Warning</CardTitle>
+                <CardTitle className="text-sm font-medium text-yellow-500">Uyarı</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-yellow-500">{alerts?.warningAlerts || 0}</div>
@@ -473,7 +475,7 @@ export default function ReportsContent() {
             </Card>
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Info</CardTitle>
+                <CardTitle className="text-sm font-medium">Bilgi</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{alerts?.infoAlerts || 0}</div>
@@ -484,7 +486,7 @@ export default function ReportsContent() {
           {alerts && alerts.recentAlerts.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle>Recent Alerts</CardTitle>
+                <CardTitle>Son Alarmlar</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
@@ -506,7 +508,7 @@ export default function ReportsContent() {
                         alert.severity === 'warning' ? 'text-yellow-600' :
                         'text-blue-600'
                       }`}>
-                        {alert.severity.toUpperCase()}
+                        {uiLabel(alert.severity)}
                       </span>
                     </div>
                   ))}

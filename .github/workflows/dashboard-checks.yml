@@ -1,0 +1,32 @@
+name: Dashboard checks
+
+on:
+  workflow_call:
+  pull_request:
+    paths:
+      - 'app/api/dashboard/**'
+      - 'app/dashboard/**'
+      - 'components/dashboard/**'
+      - 'components/layout/**'
+      - 'lib/dashboard/**'
+      - 'lib/api.ts'
+      - 'scripts/check-dashboard.cjs'
+      - 'package*.json'
+      - '.github/workflows/dashboard-checks.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci --legacy-peer-deps
+      - run: npx prisma generate
+      - run: npm run type-check
+      - run: npm run test:dashboard

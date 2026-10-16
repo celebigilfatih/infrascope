@@ -1,5 +1,9 @@
 'use client';
 
+import { uiError, uiLabel } from '@/lib/i18n/tr';
+
+import { PageHeading } from '@/components/ui/page-heading';
+import { SeverityBadge } from '@/components/ui/severity-badge';
 import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -157,7 +161,7 @@ export default function DependenciesPage() {
           variant: 'destructive',
         });
       }
-    } catch (error) {
+    } catch {
       toast({
         title: 'Hata',
         description: 'Bağımlılık oluşturulamadı',
@@ -192,7 +196,7 @@ export default function DependenciesPage() {
           variant: 'destructive',
         });
       }
-    } catch (error) {
+    } catch {
       toast({
         title: 'Hata',
         description: 'Bağımlılık güncellenemedi',
@@ -202,7 +206,7 @@ export default function DependenciesPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Bu bağımlılığı silmek istediğinizden emin misiniz?')) return;
+    if (!confirm(uiError('Bu bağımlılığı silmek istediğinizden emin misiniz?'))) return;
     
     try {
       const response = await fetch(`/api/services/dependencies?id=${id}`, {
@@ -223,7 +227,7 @@ export default function DependenciesPage() {
           variant: 'destructive',
         });
       }
-    } catch (error) {
+    } catch {
       toast({
         title: 'Hata',
         description: 'Bağımlılık silinemedi',
@@ -298,13 +302,12 @@ export default function DependenciesPage() {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Service Dependencies</h1>
-          <p className="text-muted-foreground">Servis bağımlılıkları ve iletişim haritası</p>
+          <PageHeading section="dependencies" description={<>Servis bağımlılıkları ve iletişim haritası</>}>Servis Bağımlılıkları</PageHeading>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={fetchDependencies}><RefreshCw className="h-4 w-4" /></Button>
+          <Button variant="outline" size="icon" onClick={fetchDependencies} aria-label="Yenile"><RefreshCw className="h-4 w-4" /></Button>
           <Button onClick={openCreateDialog}><Plus className="h-4 w-4 mr-2" />Yeni Bağımlılık</Button>
         </div>
       </div>
@@ -351,7 +354,7 @@ export default function DependenciesPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2"><GitBranch className="h-5 w-5" />Service Dependencies<Badge variant="secondary">{filteredDeps.length}</Badge></CardTitle>
+          <CardTitle className="flex items-center gap-2"><GitBranch className="h-5 w-5" />Servis Bağımlılıkları<Badge variant="secondary">{filteredDeps.length}</Badge></CardTitle>
         </CardHeader>
         <CardContent>
           {loading ? (
@@ -377,18 +380,15 @@ export default function DependenciesPage() {
                       <TableRow key={dep.id}>
                         <TableCell className="font-medium">{dep.sourceService.name}</TableCell>
                         <TableCell className="font-medium">{dep.targetDevice.name}</TableCell>
-                        <TableCell><Badge>{dep.type}</Badge></TableCell>
+                        <TableCell><Badge>{uiLabel(dep.type)}</Badge></TableCell>
                         <TableCell>
-                          {dep.criticality === 'CRITICAL' && <Badge>Kritik</Badge>}
-                          {dep.criticality === 'HIGH' && <Badge>Yüksek</Badge>}
-                          {dep.criticality === 'MEDIUM' && <Badge>Orta</Badge>}
-                          {dep.criticality === 'LOW' && <Badge>Düşük</Badge>}
+                          <SeverityBadge severity={dep.criticality} />
                         </TableCell>
                         <TableCell className="text-muted-foreground text-sm">{dep.description || '-'}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-2">
-                            <Button variant="outline" size="icon" onClick={() => openEditDialog(dep)}><Edit className="h-4 w-4" /></Button>
-                            <Button variant="outline" size="icon" onClick={() => handleDelete(dep.id)}><Trash2 className="h-4 w-4" /></Button>
+                            <Button variant="outline" size="icon" onClick={() => openEditDialog(dep)} aria-label="Düzenle"><Edit className="h-4 w-4" /></Button>
+                            <Button variant="outline" size="icon" onClick={() => handleDelete(dep.id)} aria-label="Sil"><Trash2 className="h-4 w-4" /></Button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -400,7 +400,7 @@ export default function DependenciesPage() {
                 <div className="flex items-center justify-between mt-4">
                   <p className="text-sm text-muted-foreground">Sayfa {currentPage} / {totalPages}</p>
                   <div className="flex items-center gap-1">
-                    <Button variant="outline" size="icon" onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1}><ChevronLeft className="h-4 w-4" /></Button>
+                    <Button variant="outline" size="icon" onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} aria-label="Önceki sayfa"><ChevronLeft className="h-4 w-4" /></Button>
                     {getPageNumbers().map((page, idx) => (
                       <React.Fragment key={idx}>
                         {page === 'ellipsis' ? <span className="px-2 text-muted-foreground">...</span> : (
@@ -408,7 +408,7 @@ export default function DependenciesPage() {
                         )}
                       </React.Fragment>
                     ))}
-                    <Button variant="outline" size="icon" onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}><ChevronRight className="h-4 w-4" /></Button>
+                    <Button variant="outline" size="icon" onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} aria-label="Sonraki sayfa"><ChevronRight className="h-4 w-4" /></Button>
                   </div>
                 </div>
               )}
@@ -475,8 +475,8 @@ export default function DependenciesPage() {
                   <SelectItem value="REQUIRES">Gerektirir</SelectItem>
                   <SelectItem value="PROVIDES">Sağlar</SelectItem>
                   <SelectItem value="COMMUNICATES_WITH">İletişim</SelectItem>
-                  <SelectItem value="DEPLOYED_ON">Deploy Edildi</SelectItem>
-                  <SelectItem value="HOSTED_ON">Host Ediliyor</SelectItem>
+                  <SelectItem value="DEPLOYED_ON">Dağıtıldı</SelectItem>
+                  <SelectItem value="HOSTED_ON">Barındırılıyor</SelectItem>
                   <SelectItem value="CONNECTED_TO">Bağlı</SelectItem>
                 </SelectContent>
               </Select>

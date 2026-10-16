@@ -128,3 +128,24 @@ Bu komut **abuse counter**'ı sıfırlamaz. Counter'ı sıfırlamanın bilinen y
 | Tarih | Değişiklik |
 |---|---|
 | 2026-02-17 | İlk sürüm — session pile-up kök nedeni, kod-seviyesi önlemler |
+| 2026-10-15 | B05: credential-owned sessions, account-owned backoff and bounded transient connection tests; see ADR-012. |
+
+## B05 connection tests and authentication ownership
+
+The historical host-only state references above have been replaced by credential-owned sessions in `_fazAuthStateV2`. Shared clients with identical credentials still reuse one session/login result; other accounts or password revisions cannot adopt it. The HTTP connection test uses the centralized transient probe and closes only its own successfully authenticated session. Saving configuration resets only the configured account's backoff, without clearing unrelated sessions or hosts.
+
+A failed probe can activate backoff for the same host/account, including a changed password. This protects the remote account from repeated attempts; it is not evidence that a suppressed request reached the provider. An active collector session remains usable. Different accounts are independent. On failure, check the supplied credentials and actual source account state, wait for backoff, or explicitly save corrected settings before retesting. Tests do not save settings.
+
+Login request/body parsing and account queue waits each have a 60-second deadline; logout is best effort with a 10-second deadline. Cancellation prevents late responses from publishing sessions. Unobserved remote sessions after network cancellation may still need provider-side expiry; the older absolute lockout-prevention claim is not a guarantee.
+
+Run `npm run test:fortianalyzer-auth` with the source/dispatch/health and integration-permission suites. Tests use fake source/ORM I/O and do not contact real accounts. Details and executed results: [ADR-012](../10-architecture/adr/ADR-012-fortianalyzer-credential-session-ownership.md).
+
+## B06 settings changes and cache lifecycle
+
+After a successful FA settings save, an active collector is retired and rebound asynchronously to the newly stored revision. Its recurring timer is cleared and source searches, polling and live query fallbacks use cancellation. Native events are stored/read within their revision; an already issued old DB write may complete only in its old namespace. Failed or denied saves retain the current collector. Source failure after a successful save leaves coverage unavailable; it must not restore old-source freshness.
+
+Inspect `/api/health` event-cache `sourceRevision`, `stopped`, per-logtype freshness and failures. A warmup may remain stale while it runs; matching live source fallback still works. Disabled, deleted, malformed or unverifiable configuration cannot authorize old-source collection. Scheduled cycles detect external changes by re-reading the configuration record. Writers must maintain the model's `updatedAt` contract; legacy plaintext secrets are deliberately excluded from persisted revision digests.
+
+Deploy this lifecycle implementation with one application-process restart to remove timers created by older code that had no stop handle. Subsequent settings changes under this implementation do not require restart. No cache-table migration or incident deletion is needed; unscoped historical FA cache rows are not reused as current data and normal retention removes expired FA rows. Inactive CMDB-diff helpers remain outside the active alarm registry.
+
+Run `npm run test:fortianalyzer-cache` offline. `npm run test:fortianalyzer-cache:db` requires explicit `INFRASCOPE_FA_CACHE_DB_TEST=1` and a local disposable `*_cache_tests` or `*_occurrence_tests` database; never direct it at an installation DB. See [ADR-013](../10-architecture/adr/ADR-013-fortianalyzer-cache-configuration-lifecycle.md) for commands and actual verification limits.

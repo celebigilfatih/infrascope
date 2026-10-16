@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 /**
  * Service Detail Endpoints
  * GET /api/services/[id] - Get service by ID
@@ -307,7 +308,7 @@ export async function PUT(
     }
 
     // Build update data
-    const updateData: any = {};
+    const updateData: Prisma.ServiceUncheckedUpdateInput = {};
     if (name !== undefined) updateData.name = name;
     if (type !== undefined) updateData.type = type;
     if (displayName !== undefined) updateData.displayName = displayName;

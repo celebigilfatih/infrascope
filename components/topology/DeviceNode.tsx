@@ -1,5 +1,7 @@
 'use client';
 
+import { uiError, uiLabel } from '@/lib/i18n/tr';
+
 import React, { memo } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { AlertTriangle, CircleHelp, EthernetPort, Monitor, Network, Router, Server, Shield } from 'lucide-react';
@@ -34,7 +36,7 @@ export const DeviceNode = memo(({ data, selected }: NodeProps<DeviceNodeData>) =
     active: 'bg-emerald-500',
     inactive: 'bg-muted-foreground',
     maintenance: 'bg-amber-500',
-    error: 'bg-red-500',
+    error: uiError('bg-red-500'),
   };
 
   const roleIcons = {
@@ -95,7 +97,7 @@ export const DeviceNode = memo(({ data, selected }: NodeProps<DeviceNodeData>) =
       <div className="mb-3 flex items-center gap-3">
         <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
           <RoleIcon className="h-5 w-5" aria-hidden="true" />
-          <span className={`absolute -bottom-0.5 -right-0.5 rounded-full border-2 border-card ${hasPortDown ? 'bg-red-500' : statusColors[data?.status] || 'bg-muted-foreground'}`} style={{ width: `${iconSize}px`, height: `${iconSize}px` }} title={data.status} />
+          <span className={`absolute -bottom-0.5 -right-0.5 rounded-full border-2 border-card ${hasPortDown ? 'bg-red-500' : statusColors[data?.status] || 'bg-muted-foreground'}`} style={{ width: `${iconSize}px`, height: `${iconSize}px` }} title={uiLabel(data.status?.toUpperCase() || 'UNKNOWN')} />
         </div>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {getVendorLogo(data?.vendor) && (
@@ -115,7 +117,7 @@ export const DeviceNode = memo(({ data, selected }: NodeProps<DeviceNodeData>) =
           <div className="flex items-center justify-between gap-2">
             <div className="flex min-w-0 items-center gap-2">
               <EthernetPort className="h-4 w-4 shrink-0" />
-              <span className="truncate text-xs font-semibold">{data.portDownCount} port down</span>
+              <span className="truncate text-xs font-semibold">{data.portDownCount} kapalı port</span>
             </div>
             <span className="shrink-0 text-xs font-semibold">NMS</span>
           </div>
@@ -134,7 +136,7 @@ export const DeviceNode = memo(({ data, selected }: NodeProps<DeviceNodeData>) =
       <div className="space-y-2" style={{ fontSize: `${subFontSize}px` }}>
         <div className="flex justify-between gap-3 text-muted-foreground">
           <span>Tip</span>
-          <span className="truncate font-medium text-foreground">{data.type}</span>
+          <span className="truncate font-medium text-foreground">{uiLabel(data.type)}</span>
         </div>
         <div className="flex justify-between gap-3 text-muted-foreground">
           <span>IP Adresi</span>

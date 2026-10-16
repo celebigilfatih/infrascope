@@ -1,5 +1,8 @@
 'use client';
 
+import { uiError } from '@/lib/i18n/tr';
+
+import { PageHeading, PageStateFrame } from '@/components/ui/page-heading';
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -49,13 +52,13 @@ export default function VMSprawlPage() {
       const json = await res.json();
       
       if (json.error) {
-        setError(json.error);
+        setError(uiError(json.error));
         return;
       }
       
       setSprawlVMs(json.sprawl || []);
     } catch (err) {
-      setError((err as Error).message);
+      setError(uiError((err as Error).message));
     } finally {
       setLoading(false);
     }
@@ -78,20 +81,20 @@ export default function VMSprawlPage() {
     } else if (score >= 3) {
       return <Badge variant="warning">Orta Risk ({score})</Badge>;
     } else {
-      return <Badge variant="secondary">Dusuk ({score})</Badge>;
+      return <Badge variant="secondary">Düşük ({score})</Badge>;
     }
   };
 
   const getPowerStateBadge = (state: string) => {
     if (state === 'running') {
-      return <Badge className="bg-green-100 text-green-800"><Power className="h-3 w-3 mr-1" />Calisiyor</Badge>;
+      return <Badge variant="success"><Power className="h-3 w-3 mr-1" />Çalışıyor</Badge>;
     } else {
-      return <Badge variant="secondary"><Power className="h-3 w-3 mr-1" />Kapali</Badge>;
+      return <Badge variant="secondary"><Power className="h-3 w-3 mr-1" />Kapalı</Badge>;
     }
   };
 
   const exportCSV = () => {
-    const headers = ['VM Adi', 'Host', 'Durum', 'Snapshot Sayisi', 'En Eski Snapshot (Gun)', 'Sprawl Skor', 'Nedenler', 'Oneri'];
+    const headers = ['VM Adi', 'Host', 'Durum', 'Anlık Görüntü Sayısı', 'En Eski Anlık Görüntü (Gün)', 'Sprawl Skor', 'Nedenler', 'Oneri'];
     const rows = filteredVMs.map(vm => [
       vm.vmName,
       vm.host,
@@ -120,13 +123,13 @@ export default function VMSprawlPage() {
   const totalSnapshots = sprawlVMs.reduce((sum, vm) => sum + vm.snapshotCount, 0);
 
   if (error) {
-    return (
+    return <PageStateFrame section="sprawl" title="Atıl Sanal Makine Analizi">{(
       <div className="p-6">
         <Card className="border-red-200 bg-red-50">
           <CardContent className="pt-6">
             <div className="flex items-center gap-2 text-red-600">
               <AlertTriangle className="h-5 w-5" />
-              <span>Sprawl analizi basarisiz: {error}</span>
+              <span>Atıl kaynak analizi başarısız: {uiError(error)}</span>
             </div>
             <Button onClick={fetchSprawl} className="mt-4" variant="outline">
               <RefreshCw className="h-4 w-4 mr-2" />
@@ -135,18 +138,17 @@ export default function VMSprawlPage() {
           </CardContent>
         </Card>
       </div>
-    );
+    )}</PageStateFrame>;
   }
 
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-4">
         <div>
-          <h1 className="text-2xl font-bold">VM Sprawl Analizi</h1>
-          <p className="text-muted-foreground">
-            Atil, gereksiz veya sahipsiz VM'lerin tespiti
-          </p>
+          <PageHeading section="sprawl" description={<>
+            Atıl, gereksiz veya sahipsiz sanal makineleri tespit edin
+          </>}>Atıl Sanal Makine Analizi</PageHeading>
         </div>
         <div className="flex items-center gap-2">
           <Button onClick={exportCSV} variant="outline" size="sm" disabled={sprawlVMs.length === 0}>
@@ -164,7 +166,7 @@ export default function VMSprawlPage() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Kritik Sprawl</CardTitle>
+            <CardTitle className="text-sm font-medium">Kritik Atıl Kaynaklar</CardTitle>
             <AlertTriangle className="h-4 w-4 text-red-500" />
           </CardHeader>
           <CardContent>
@@ -184,7 +186,7 @@ export default function VMSprawlPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Dusuk Risk</CardTitle>
+            <CardTitle className="text-sm font-medium">Düşük Risk</CardTitle>
             <Server className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -194,12 +196,12 @@ export default function VMSprawlPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Toplam Snapshot</CardTitle>
+            <CardTitle className="text-sm font-medium">Toplam Anlık Görüntü</CardTitle>
             <Camera className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{totalSnapshots}</div>
-            <p className="text-xs text-muted-foreground">Tum VM'lerde</p>
+            <p className="text-xs text-muted-foreground">Tüm Sanal Makinelerde</p>
           </CardContent>
         </Card>
       </div>
@@ -210,7 +212,7 @@ export default function VMSprawlPage() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="VM adi veya host ile ara..."
+              placeholder="Sanal makine veya sunucu adı ile ara…"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
@@ -222,7 +224,7 @@ export default function VMSprawlPage() {
       {/* Sprawl Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Sprawl VM Listesi</CardTitle>
+          <CardTitle>Atıl Sanal Makineler</CardTitle>
           <CardDescription>
             {filteredVMs.length} VM tespit edildi
           </CardDescription>
@@ -236,14 +238,14 @@ export default function VMSprawlPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>VM Adi</TableHead>
-                  <TableHead>Host</TableHead>
+                  <TableHead>Sanal Makine Adı</TableHead>
+                  <TableHead>Sunucu</TableHead>
                   <TableHead>Durum</TableHead>
-                  <TableHead>Snapshot</TableHead>
+                  <TableHead>Anlık Görüntü</TableHead>
                   <TableHead>En Eski</TableHead>
                   <TableHead>Skor</TableHead>
                   <TableHead>Nedenler</TableHead>
-                  <TableHead>Oneri</TableHead>
+                  <TableHead>Öneri</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -277,7 +279,7 @@ export default function VMSprawlPage() {
 
           {filteredVMs.length === 0 && !loading && (
             <p className="text-center text-muted-foreground py-8">
-              {searchTerm ? 'Aramayla eslesensprawl VM bulunamadi' : 'Sprawl VM tespit edilmedi - Tebrikler! 🎉'}
+              {searchTerm ? "Aramayla eşleşen atıl sanal makine bulunamadı" : "Atıl sanal makine tespit edilmedi."}
             </p>
           )}
         </CardContent>

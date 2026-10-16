@@ -1,0 +1,19 @@
+/* Keep the existing shell's scroll container bounded on this route. */
+:global(html):has(.page) { overflow: hidden; }
+:global(main):has(> div > .page) { height: 100dvh; }
+:global(main):has(> div > .page) > div { min-height: 0; }
+
+.page { min-width: 0; }
+.form { display: grid; align-items: start; gap: 1.5rem; }
+.fields { min-width: 0; display: grid; gap: 1rem; border: 0; padding: 0; margin: 0; }
+.section { min-width: 0; border-radius: .75rem; box-shadow: none; scroll-margin-top: 1rem; }
+.summary { min-width: 0; display: grid; gap: .875rem; }
+.changeList { display: grid; gap: .875rem; }
+.fields input[aria-invalid="true"] { border-color: oklch(var(--destructive)); }
+.fields:disabled { opacity: .65; }
+
+@media (min-width: 1280px) {
+  .form { grid-template-columns: minmax(0, 1fr) 320px; }
+  .summary { position: sticky; top: 1.5rem; }
+  .changeList { max-height: 36dvh; overflow-y: auto; padding-right: .25rem; }
+}

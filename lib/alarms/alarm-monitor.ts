@@ -72,7 +72,6 @@ export class AlarmMonitor {
   stop() {
     if (!this.isRunning) {
       log.info('Not running');
-      return;
     }
 
     log.info('Stopping...');
@@ -121,6 +120,7 @@ export class AlarmMonitor {
     try {
       // Look at the most recent alarm_check_log entry (any status)
       const lastLog = await prisma.alarmCheckLog.findFirst({
+        where: { NOT: { status: { startsWith: 'SOURCE_' } } },
         orderBy: { checkTime: 'desc' },
       });
 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
-export async function GET(_request: NextRequest) {
+export async function GET() {
   try {
     const connections = await prisma.connection.findMany({
       include: {
@@ -28,7 +28,7 @@ export async function GET(_request: NextRequest) {
       data: connections,
       timestamp: new Date()
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error fetching network connections:', error);
     return NextResponse.json({
       success: false,
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
       data: connection,
       timestamp: new Date()
     }, { status: 201 });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error creating network connection:', error);
     return NextResponse.json({
       success: false,

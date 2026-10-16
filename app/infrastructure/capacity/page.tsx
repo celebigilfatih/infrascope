@@ -1,5 +1,6 @@
 'use client';
 
+import { PageHeading, PageStateFrame } from '@/components/ui/page-heading';
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -45,26 +46,25 @@ export default function CapacityPage() {
 
   const getCapacityBadge = (percentage: number) => {
     if (percentage >= 90) return <Badge variant="destructive">Kritik</Badge>;
-    if (percentage >= 70) return <Badge className="bg-orange-500">Uyarı</Badge>;
+    if (percentage >= 70) return <Badge variant="warning">Uyarı</Badge>;
     return <Badge variant="success">Normal</Badge>;
   };
 
   if (loading || !capacity) {
-    return (
+    return <PageStateFrame section="power" title="Güç ve Kapasite">{(
       <div className="p-6 flex justify-center">
         <RefreshCw className="h-8 w-8 animate-spin text-primary" />
       </div>
-    );
+    )}</PageStateFrame>;
   }
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Power / Capacity</h1>
-          <p className="text-muted-foreground">Altyapı kapasite planlaması ve izleme</p>
+          <PageHeading section="power" description={<>Altyapı kapasite planlaması ve izleme</>}>Güç ve Kapasite</PageHeading>
         </div>
-        <Button variant="outline" size="icon">
+        <Button variant="outline" size="icon" aria-label="Yenile">
           <RefreshCw className="h-4 w-4" />
         </Button>
       </div>
@@ -162,7 +162,7 @@ export default function CapacityPage() {
           <CardHeader>
             <div className="flex items-center gap-2">
               <Server className="h-5 w-5 text-green-500" />
-              <CardTitle>Compute Kapasitesi</CardTitle>
+              <CardTitle>İşlem Kapasitesi</CardTitle>
             </div>
             <CardDescription>Sunucu kaynakları kullanımı</CardDescription>
           </CardHeader>

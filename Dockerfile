@@ -65,6 +65,15 @@ LABEL description="Enterprise Infrastructure Management Platform"
 # Install runtime dependencies - skip if network unavailable
 RUN apt-get update 2>/dev/null && apt-get install -y netcat-openbsd curl openssl 2>/dev/null && rm -rf /var/lib/apt/lists/* || true
 
+# VMware collection is a required application capability, not an optional build tool.
+COPY scripts/requirements-vmware.txt /tmp/requirements-vmware.txt
+RUN apt-get update && apt-get install -y --no-install-recommends python3 python3-venv ca-certificates \
+    && python3 -m venv /opt/vmware \
+    && /opt/vmware/bin/pip install --no-cache-dir -r /tmp/requirements-vmware.txt \
+    && rm -f /tmp/requirements-vmware.txt \
+    && rm -rf /var/lib/apt/lists/*
+ENV VMWARE_PYTHON_BIN=/opt/vmware/bin/python3
+
 # Security: Create non-root user
 RUN groupadd -g 1001 nodejs && \
     useradd -u 1001 -g nodejs -s /bin/sh -m nextjs
@@ -94,6 +103,7 @@ COPY --chown=nextjs:nodejs .env.example ./
 # Copy startup scripts
 COPY --chown=nextjs:nodejs scripts/wait-for-db.sh ./scripts/
 COPY --chown=nextjs:nodejs scripts/entrypoint.sh ./scripts/
+COPY --chown=nextjs:nodejs scripts/vmware_helper.py scripts/vmware_workspace.py scripts/get-snapshots.py scripts/get-host-details.py scripts/get-cluster-details.py scripts/get-host-workspace.py scripts/get-vm-workspace.py scripts/get-datastore-workspace.py ./scripts/
 
 # Normalize shell scripts for images built from Windows checkouts.
 RUN sed -i 's/\r$//' ./scripts/*.sh && chmod +x ./scripts/*.sh

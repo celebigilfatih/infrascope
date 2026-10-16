@@ -127,6 +127,9 @@ export async function DELETE(request: NextRequest, { params }: RouteContext) {
     if (!current.tlsCaPem) return NextResponse.json({ success: true, data: publicCaStatus(current) });
 
     const { tlsCaPem: _tlsCaPem, tlsCaUpdatedAt: _tlsCaUpdatedAt, ...withoutCa } = current;
+  // Exclude credentials from the serialized response.
+  void _tlsCaPem;
+  void _tlsCaUpdatedAt;
     const protectedConfig = protectIntegrationConfig<Prisma.InputJsonValue>(withoutCa, 'FORTIGATE');
     await prisma.$transaction(async (tx) => {
       await tx.auditLog.create({

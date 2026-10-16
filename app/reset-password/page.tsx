@@ -1,5 +1,7 @@
 'use client';
 
+import { uiError } from '@/lib/i18n/tr';
+
 import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -30,7 +32,7 @@ function ResetPasswordContent() {
   useEffect(() => {
     if (!token) {
       setState('invalid');
-      setErrorMessage('No reset token provided');
+      setErrorMessage(uiError("Parola sıfırlama bağlantısında doğrulama kodu yok."));
       return;
     }
 
@@ -41,12 +43,12 @@ function ResetPasswordContent() {
           setState('valid');
         } else {
           setState('invalid');
-          setErrorMessage(result.error || 'Invalid or expired token');
+          setErrorMessage(uiError(result.error || 'Invalid or expired token'));
         }
       })
       .catch(() => {
         setState('invalid');
-        setErrorMessage('Failed to validate token');
+        setErrorMessage(uiError("Doğrulama kodu doğrulanamadı."));
       });
   }, [token]);
 
@@ -78,11 +80,11 @@ function ResetPasswordContent() {
         setState('success');
       } else {
         setState('error');
-        setErrorMessage(result.error || 'Failed to reset password');
+        setErrorMessage(uiError(result.error || 'Failed to reset password'));
       }
     } catch {
       setState('error');
-      setErrorMessage('An unexpected error occurred');
+      setErrorMessage(uiError("Beklenmeyen bir hata oluştu."));
     }
   };
 
@@ -92,7 +94,7 @@ function ResetPasswordContent() {
         <Card className="w-full max-w-md">
           <CardContent className="p-8 text-center">
             <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
-            <p className="text-muted-foreground">Verifying reset link...</p>
+            <p className="text-muted-foreground">Sıfırlama bağlantısı doğrulanıyor…</p>
           </CardContent>
         </Card>
       </div>
@@ -106,11 +108,11 @@ function ResetPasswordContent() {
           <CardContent className="p-8 text-center">
             <XCircle className="h-12 w-12 mx-auto mb-4 text-red-500" />
             <h2 className="text-xl font-bold mb-2">
-              {state === 'error' ? 'Error' : 'Invalid Link'}
+              {state === 'error' ? "Hata" : "Geçersiz Bağlantı"}
             </h2>
-            <p className="text-muted-foreground mb-6">{errorMessage}</p>
+            <p className="text-muted-foreground mb-6">{uiError(errorMessage)}</p>
             <Button variant="outline" onClick={() => router.push('/dashboard')}>
-              Go to Dashboard
+              Genel bakışa git
             </Button>
           </CardContent>
         </Card>
@@ -124,12 +126,12 @@ function ResetPasswordContent() {
         <Card className="w-full max-w-md">
           <CardContent className="p-8 text-center">
             <CheckCircle2 className="h-12 w-12 mx-auto mb-4 text-green-500" />
-            <h2 className="text-xl font-bold mb-2">Password Reset!</h2>
+            <h2 className="text-xl font-bold mb-2">Parola Sıfırlandı</h2>
             <p className="text-muted-foreground mb-6">
-              Your password has been changed successfully.
+              Parolanız değiştirildi.
             </p>
             <Button onClick={() => router.push('/dashboard')}>
-              Go to Dashboard
+              Genel bakışa git
             </Button>
           </CardContent>
         </Card>
@@ -144,37 +146,37 @@ function ResetPasswordContent() {
           <div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-2">
             <KeyRound className="h-6 w-6 text-primary" />
           </div>
-          <CardTitle className="text-xl">Reset Your Password</CardTitle>
+          <CardTitle className="text-xl">Parolanızı Sıfırlayın</CardTitle>
           <p className="text-sm text-muted-foreground mt-1">
-            Enter your new password below.
+            Yeni parolanızı aşağıya girin.
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-1">New Password</label>
+            <label className="block text-sm font-medium mb-1">Yeni Parola</label>
             <Input
               type="password"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              placeholder="Enter new password"
+              placeholder="Yeni parolayı girin"
             />
             <div className="mt-2 space-y-1">
-              <PasswordCheck pass={passwordChecks.length} label="At least 8 characters" />
-              <PasswordCheck pass={passwordChecks.uppercase} label="One uppercase letter" />
-              <PasswordCheck pass={passwordChecks.number} label="One number" />
-              <PasswordCheck pass={passwordChecks.special} label="One special character" />
+              <PasswordCheck pass={passwordChecks.length} label="En az 8 karakter" />
+              <PasswordCheck pass={passwordChecks.uppercase} label="Bir büyük harf" />
+              <PasswordCheck pass={passwordChecks.number} label="Bir rakam" />
+              <PasswordCheck pass={passwordChecks.special} label="Bir özel karakter" />
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Confirm Password</label>
+            <label className="block text-sm font-medium mb-1">Parolayı Doğrula</label>
             <Input
               type="password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="Confirm new password"
+              placeholder="Yeni parolayı doğrulayın"
             />
             {confirmPassword && !passwordsMatch && (
-              <p className="text-xs text-red-500 mt-1">Passwords do not match</p>
+              <p className="text-xs text-red-500 mt-1">Parolalar eşleşmiyor</p>
             )}
           </div>
           <Button
@@ -185,10 +187,10 @@ function ResetPasswordContent() {
             {state === 'submitting' ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Resetting...
+                Sıfırlanıyor…
               </>
             ) : (
-              'Reset Password'
+              "Parolayı Sıfırla"
             )}
           </Button>
         </CardContent>

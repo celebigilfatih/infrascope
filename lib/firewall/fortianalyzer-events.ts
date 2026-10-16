@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { fortiAnalyzerCacheFilter } from '@/lib/integrations/fortianalyzer-revision';
 import {
   availableFirewallData,
   staleFirewallData,
@@ -213,16 +214,17 @@ export async function readFirewallAnalyzerEvents(params: {
     );
   }
   const query = firewallListQueryFromUrl(params.requestUrl);
+  const analyzer = await resolveFirewallAnalyzerService(params.analyzerConfigId);
   const dbSearchWhere = searchWhere(query.search);
   const eventWindowStart = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const baseWhere: Prisma.CachedEventWhereInput = {
     devid: connector.analyzerDeviceId,
     vdom: connector.vdom.toLowerCase(),
     eventTime: { gte: eventWindowStart },
-    AND: [cacheCategoryWhere(params.category), ...(dbSearchWhere ? [dbSearchWhere] : [])],
+    AND: [fortiAnalyzerCacheFilter(analyzer.revision), cacheCategoryWhere(params.category), ...(dbSearchWhere ? [dbSearchWhere] : [])],
   };
   const health = await prisma.cachedEvent.aggregate({
-    where: { devid: connector.analyzerDeviceId, vdom: connector.vdom.toLowerCase() },
+    where: { devid: connector.analyzerDeviceId, vdom: connector.vdom.toLowerCase(), AND: [fortiAnalyzerCacheFilter(analyzer.revision)] },
     _max: { createdAt: true },
   });
   const cacheCollectedAt = health._max.createdAt;
@@ -276,7 +278,7 @@ export async function readFirewallAnalyzerEvents(params: {
       analyzerDeviceId: connector.analyzerDeviceId,
       vdom: connector.vdom.toLowerCase(),
       category: params.category,
-      analyzerConfigId: params.analyzerConfigId,
+      analyzerConfigId: analyzer.configId,
       fetchLimit: Math.min(Math.max(query.page * query.limit, 100), 500),
     });
     const page = paginateFirewallItems({

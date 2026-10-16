@@ -1,5 +1,9 @@
 'use client';
 
+import { uiError } from '@/lib/i18n/tr';
+
+import { ActionIcon } from '@/components/ui/action-icon';
+import { PageHeading, PageStateFrame } from '@/components/ui/page-heading';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -97,13 +101,13 @@ export default function SnapshotsPage() {
       ]);
       const [vmJson, snapJson] = await Promise.all([vmRes.json(), snapRes.json()]);
 
-      if (vmJson.error) { setError(vmJson.error); return; }
-      if (snapJson.error) { setError(snapJson.error); return; }
+      if (vmJson.error) { setError(uiError(vmJson.error)); return; }
+      if (snapJson.error) { setError(uiError(snapJson.error)); return; }
 
       setVms(vmJson.vms || []);
       setSnapshots(snapJson.snapshots || []);
     } catch (err) {
-      setError((err as Error).message);
+      setError(uiError((err as Error).message));
     } finally {
       setLoading(false);
     }
@@ -159,9 +163,9 @@ export default function SnapshotsPage() {
 
   const getAgeWarning = useCallback((snapId: string) => {
     const days = snapshotAgeMap.get(snapId) ?? 0;
-    if (days > 30) return <Badge className="bg-red-100 text-red-800">{days} gün (Eski!)</Badge>;
-    if (days > 7)  return <Badge className="bg-yellow-100 text-yellow-800">{days} gün</Badge>;
-    return <Badge className="bg-green-100 text-green-800">{days} gün</Badge>;
+    if (days > 30) return <Badge variant="destructive">{days} gün (Eski!)</Badge>;
+    if (days > 7)  return <Badge variant="warning">{days} gün</Badge>;
+    return <Badge variant="success">{days} gün</Badge>;
   }, [snapshotAgeMap]);
 
   // Create snapshot
@@ -189,10 +193,10 @@ export default function SnapshotsPage() {
         setNewSnapshotDesc('');
         setTimeout(fetchSnapshots, 2000);
       } else {
-        alert(`Snapshot olusturulamadi: ${json.error || 'Bilinmeyen hata'}`);
+        alert(uiError(`Snapshot olusturulamadi: ${json.error || 'Bilinmeyen hata'}`));
       }
     } catch (err) {
-      alert(`Hata: ${(err as Error).message}`);
+      alert(uiError(`Hata: ${(err as Error).message}`));
     } finally {
       setCreating(false);
     }
@@ -216,10 +220,10 @@ export default function SnapshotsPage() {
       if (json.success) {
         setTimeout(fetchSnapshots, 2000);
       } else {
-        alert(`Snapshot silinemedi: ${json.error || 'Bilinmeyen hata'}`);
+        alert(uiError(`Snapshot silinemedi: ${json.error || 'Bilinmeyen hata'}`));
       }
     } catch (err) {
-      alert(`Hata: ${(err as Error).message}`);
+      alert(uiError(`Hata: ${(err as Error).message}`));
     } finally {
       setActionLoading(null);
     }
@@ -243,10 +247,10 @@ export default function SnapshotsPage() {
       if (json.success) {
         setTimeout(fetchSnapshots, 2000);
       } else {
-        alert(`Snapshot geri yukleme basarisiz: ${json.error || 'Bilinmeyen hata'}`);
+        alert(uiError(`Snapshot geri yukleme basarisiz: ${json.error || 'Bilinmeyen hata'}`));
       }
     } catch (err) {
-      alert(`Hata: ${(err as Error).message}`);
+      alert(uiError(`Hata: ${(err as Error).message}`));
     } finally {
       setActionLoading(null);
     }
@@ -254,8 +258,8 @@ export default function SnapshotsPage() {
 
   const confirmAction = (action: 'delete' | 'revert', vmId: string, snapshotId: string, snapshotName: string) => {
     const titles = {
-      delete: 'Snapshot Sil',
-      revert: 'Snapshot\'a Geri Don',
+      delete: "Anlık Görüntüyü Sil",
+      revert: "Anlık Görüntüye Dön",
     };
     const descriptions = {
       delete: `"${snapshotName}" snapshot\'ini silmek istediginizden emin misiniz? Bu islem geri alinamaz.`,
@@ -281,13 +285,13 @@ export default function SnapshotsPage() {
   const oldSnapshots = oldSnapshotCount;
 
   if (error) {
-    return (
+    return <PageStateFrame section="snapshots" title="Anlık Görüntü Yönetimi">{(
       <div className="p-6">
         <Card className="border-red-200 bg-red-50">
           <CardContent className="pt-6">
             <div className="flex items-center gap-2 text-red-600">
               <AlertTriangle className="h-5 w-5" />
-              <span>vCenter baglantisi basarisiz: {error}</span>
+              <span>vCenter bağlantısı başarısız: {uiError(error)}</span>
             </div>
             <Button onClick={fetchSnapshots} className="mt-4" variant="outline">
               <RefreshCw className="h-4 w-4 mr-2" />
@@ -296,23 +300,22 @@ export default function SnapshotsPage() {
           </CardContent>
         </Card>
       </div>
-    );
+    )}</PageStateFrame>;
   }
 
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Snapshot Yonetimi</h1>
-          <p className="text-muted-foreground">
-            VM snapshot listesi ve yonetimi
-          </p>
+          <PageHeading section="snapshots" description={<>
+            Sanal makine anlık görüntülerini listeleyin ve yönetin
+          </>}>Anlık Görüntü Yönetimi</PageHeading>
         </div>
         <div className="flex items-center gap-2">
           <Button onClick={() => setCreateDialogOpen(true)} variant="default">
             <Plus className="h-4 w-4 mr-2" />
-            Yeni Snapshot
+            Yeni Anlık Görüntü
           </Button>
           <Button onClick={fetchSnapshots} disabled={loading} variant="outline">
             <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
@@ -325,7 +328,7 @@ export default function SnapshotsPage() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Toplam Snapshot</CardTitle>
+            <CardTitle className="text-sm font-medium">Toplam Anlık Görüntü</CardTitle>
             <Camera className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -343,7 +346,7 @@ export default function SnapshotsPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">VM ile Snapshot</CardTitle>
+            <CardTitle className="text-sm font-medium">Anlık Görüntüsü Olan VM</CardTitle>
             <Camera className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -354,7 +357,7 @@ export default function SnapshotsPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Eski Snapshot (7+ gun)</CardTitle>
+            <CardTitle className="text-sm font-medium">Eski Anlık Görüntü (7+ gün)</CardTitle>
             <Clock className="h-4 w-4 text-yellow-500" />
           </CardHeader>
           <CardContent>
@@ -371,7 +374,7 @@ export default function SnapshotsPage() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Snapshot adi, VM adi veya aciklama ile ara..."
+              placeholder="Anlık görüntü, sanal makine veya açıklama ile ara…"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
@@ -403,12 +406,12 @@ export default function SnapshotsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>VM</TableHead>
-                  <TableHead>Snapshot Adi</TableHead>
-                  <TableHead>Aciklama</TableHead>
-                  <TableHead>Olusturma Tarihi</TableHead>
-                  <TableHead>Yas</TableHead>
+                  <TableHead>Anlık Görüntü Adı</TableHead>
+                  <TableHead>Açıklama</TableHead>
+                  <TableHead>Oluşturulma Tarihi</TableHead>
+                  <TableHead>Yaş</TableHead>
                   <TableHead>Boyut</TableHead>
-                  <TableHead className="text-right">Islemler</TableHead>
+                  <TableHead className="text-right">İşlemler</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -436,8 +439,8 @@ export default function SnapshotsPage() {
                           variant="ghost"
                           onClick={() => confirmAction('revert', snap.vmId, snap.id, snap.name)}
                           disabled={actionLoading === snap.id}
-                          title="Geri Don"
-                        >
+                          title="Geri Dön"
+                         aria-label="Geri Dön">
                           <RotateCcw className="h-4 w-4 text-blue-500" />
                         </Button>
                         <Button
@@ -446,7 +449,7 @@ export default function SnapshotsPage() {
                           onClick={() => confirmAction('delete', snap.vmId, snap.id, snap.name)}
                           disabled={actionLoading === snap.id}
                           title="Sil"
-                        >
+                         aria-label="Sil">
                           <Trash2 className="h-4 w-4 text-red-500" />
                         </Button>
                         {actionLoading === snap.id && (
@@ -462,7 +465,7 @@ export default function SnapshotsPage() {
 
           {filteredSnapshots.length === 0 && !loading && (
             <p className="text-center text-muted-foreground py-8">
-              {searchTerm ? 'Filtrelere uygun snapshot bulunamadi' : 'Snapshot bulunamadi'}
+              {searchTerm ? 'Filtrelere uygun anlık görüntü bulunamadı' : 'Anlık görüntü bulunamadı'}
             </p>
           )}
 
@@ -471,7 +474,7 @@ export default function SnapshotsPage() {
             <div className="flex items-center justify-between mt-4 border-t pt-4">
               <div className="flex items-center gap-2">
                 <span className="text-sm text-muted-foreground">
-                  {startIndex + 1}-{Math.min(endIndex, filteredSnapshots.length)} / {filteredSnapshots.length} kayit
+                  {startIndex + 1}-{Math.min(endIndex, filteredSnapshots.length)} / {filteredSnapshots.length} kayıt
                 </span>
                 <select
                   value={pageSize}
@@ -503,7 +506,7 @@ export default function SnapshotsPage() {
                   onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                   disabled={currentPage === 1}
                 >
-                  Onceki
+                  Önceki
                 </Button>
                 <span className="text-sm px-3">
                   {currentPage} / {totalPages}
@@ -513,7 +516,7 @@ export default function SnapshotsPage() {
                   size="sm"
                   onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                   disabled={currentPage === totalPages}
-                >
+                ><ActionIcon action="next" />
                   Sonraki
                 </Button>
                 <Button
@@ -534,45 +537,45 @@ export default function SnapshotsPage() {
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Yeni Snapshot Olustur</DialogTitle>
+            <DialogTitle>Yeni Anlık Görüntü Oluştur</DialogTitle>
             <DialogDescription>
-              Secili VM icin yeni bir snapshot olusturun.
+              Seçili sanal makine için yeni bir anlık görüntü oluşturun.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label>VM Sec</Label>
+              <Label>Sanal Makine Seç</Label>
               <select
                 className="w-full p-2 border rounded-md"
                 value={selectedVmId}
                 onChange={(e) => setSelectedVmId(e.target.value)}
               >
-                <option value="">-- VM Secin --</option>
+                <option value="">-- Sanal makine seçin --</option>
                 {vms.map(vm => (
                   <option key={vm.id} value={vm.id}>{vm.name}</option>
                 ))}
               </select>
             </div>
             <div className="space-y-2">
-              <Label>Snapshot Adi</Label>
+              <Label>Anlık Görüntü Adı</Label>
               <Input
-                placeholder="Snapshot adi girin"
+                placeholder="Anlık görüntü adı girin"
                 value={newSnapshotName}
                 onChange={(e) => setNewSnapshotName(e.target.value)}
               />
             </div>
             <div className="space-y-2">
-              <Label>Aciklama (Opsiyonel)</Label>
+              <Label>Açıklama (isteğe bağlı)</Label>
               <Input
-                placeholder="Snapshot aciklamasi"
+                placeholder="Anlık görüntü açıklaması"
                 value={newSnapshotDesc}
                 onChange={(e) => setNewSnapshotDesc(e.target.value)}
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
-              Iptal
+            <Button variant="outline" onClick={() => setCreateDialogOpen(false)}><ActionIcon action="cancel" />
+              Vazgeç
             </Button>
             <Button 
               onClick={handleCreateSnapshot} 
@@ -581,12 +584,12 @@ export default function SnapshotsPage() {
               {creating ? (
                 <>
                   <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                  Olusturuluyor...
+                  Oluşturuluyor…
                 </>
               ) : (
                 <>
                   <Plus className="h-4 w-4 mr-2" />
-                  Olustur
+                  Oluştur
                 </>
               )}
             </Button>

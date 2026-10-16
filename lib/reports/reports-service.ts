@@ -73,6 +73,7 @@ export class ReportsService {
    * Generate comprehensive inventory report
    */
   async getInventoryReport(_options: ReportOptions = {}): Promise<InventoryReport> {
+    void _options; // Retain the existing caller contract; this path does not use this argument.
     // Get all devices with aggregation using raw query
     const devices = await this.prisma.$queryRaw`
       SELECT id, name, type, vendor, model, status, criticality, "createdAt" 
@@ -235,13 +236,13 @@ export class ReportsService {
     const hosts = await this.prisma.$queryRaw`
       SELECT id, name, metadata FROM "devices" 
       WHERE "vmwareMoref" IS NOT NULL AND type = 'VIRTUAL_HOST'
-    ` as Array<{ id: string; name: string; metadata: any }>;
+    ` as Array<{ id: string; name: string; metadata: { clusterName?: string; cpuUsagePercent?: number; memoryUsagePercent?: number } | null }>;
     
     // Get VMs
     const vms = await this.prisma.$queryRaw`
       SELECT id, name, "vmHostId", metadata FROM "devices" 
       WHERE type = 'VIRTUAL_MACHINE'
-    ` as Array<{ id: string; name: string; vmHostId: string | null; metadata: any }>;
+    ` as Array<{ id: string; name: string; vmHostId: string | null; metadata: { clusterName?: string; cpuUsagePercent?: number; memoryUsagePercent?: number } | null }>;
     
     // Get datastores
     const datastores = await this.prisma.$queryRaw`

@@ -1,5 +1,6 @@
 'use client';
 
+import { PageHeading } from '@/components/ui/page-heading';
 import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -169,25 +170,24 @@ export default function SSLVPNPage() {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-4">
         <div>
-          <h1 className="text-2xl font-bold">SSL-VPN Kullanıcıları</h1>
-          <p className="text-muted-foreground">
+          <PageHeading section="vpn" description={<>
             Aktif FortiGate SSL-VPN bağlantıları
             {lastUpdate && (
               <span className="ml-2 text-xs">
                 (Son güncelleme: {lastUpdate.toLocaleTimeString('tr-TR')})
               </span>
             )}
-          </p>
+          </>}>SSL-VPN Kullanıcıları</PageHeading>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={fetchData} disabled={loading}>
+          <Button variant="outline" size="icon" onClick={fetchData} disabled={loading} aria-label="Yenile">
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </Button>
           <Button variant="outline" onClick={exportToCSV} disabled={filteredUsers.length === 0}>
             <Download className="h-4 w-4 mr-2" />
-            CSV Export
+            CSV İndir
           </Button>
         </div>
       </div>
@@ -243,7 +243,7 @@ export default function SSLVPNPage() {
                 <Shield className="h-5 w-5 text-orange-500" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Toplam Egress</p>
+                <p className="text-sm text-muted-foreground">Toplam Giden Trafik</p>
                 <p className="text-2xl font-bold">{formatBytes(summary?.total_out_bytes || sslUsers.reduce((s, u) => s + u.out_bytes, 0))}</p>
               </div>
             </div>
@@ -288,12 +288,12 @@ export default function SSLVPNPage() {
                     <TableHead>Kullanıcı</TableHead>
                     <TableHead>Uzak Host</TableHead>
                     <TableHead>Kaynak IP</TableHead>
-                    <TableHead>Interface</TableHead>
+                    <TableHead>Arayüz</TableHead>
                     <TableHead>Giriş Zamanı</TableHead>
                     <TableHead>Süre</TableHead>
                     <TableHead>2FA</TableHead>
                     <TableHead>İngress</TableHead>
-                    <TableHead>Egress</TableHead>
+                    <TableHead>Giden Trafik</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -349,7 +349,7 @@ export default function SSLVPNPage() {
                       size="icon"
                       onClick={() => setPage((p) => Math.max(1, p - 1))}
                       disabled={page === 1}
-                    >
+                     aria-label="Önceki sayfa">
                       <ChevronLeft className="h-4 w-4" />
                     </Button>
                     {getPageNumbers(page, totalPages).map((p, idx) => (
@@ -373,7 +373,7 @@ export default function SSLVPNPage() {
                       size="icon"
                       onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                       disabled={page === totalPages}
-                    >
+                     aria-label="Sonraki sayfa">
                       <ChevronRight className="h-4 w-4" />
                     </Button>
                   </div>

@@ -1,3 +1,5 @@
+
+import { uiLabel } from '@/lib/i18n/tr';
 import Link from 'next/link';
 import { AlertTriangle, ArrowUpRight, CheckCircle2, CircleOff, Clock3, Database, HardDrive, Network, Server, ShieldBan, Wifi } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -31,7 +33,7 @@ export function InfrastructureOperations({ data }: { data: DashboardSummary['ope
           {data.problemHosts.map((host) => (
             <li key={host.id} className="flex items-center gap-3 py-3">
               <Server className="h-4 w-4 shrink-0 text-rose-500" aria-hidden="true" />
-              <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{host.name}</p><p className="text-xs text-muted-foreground">Host erişilebilir değil · {host.status}</p></div>
+              <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{host.name}</p><p className="text-xs text-muted-foreground">Host erişilebilir değil · {uiLabel(host.status)}</p></div>
               <span className="text-xs font-medium text-rose-600 dark:text-rose-300">Kontrol et</span>
             </li>
           ))}

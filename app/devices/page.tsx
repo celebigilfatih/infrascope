@@ -1,706 +1,175 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { apiGet, apiDelete, apiPost, apiPut } from '../../lib/api';
-import { Device, ApiResponse, DeviceType } from '../../types';
-import { getVendorLogo } from '../../lib/formatting';
-import { useToast } from '@/components/ui/use-toast';
-import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import { AlertTriangle, ChevronLeft, ChevronRight, Database, Info, Layers3, MapPin, Pencil, Plus, RefreshCw, Search, Server, Trash2, Unplug, X } from 'lucide-react';
+import { PageHeading } from '@/components/ui/page-heading';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { SeverityBadge } from '@/components/ui/severity-badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent } from '@/components/ui/card';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Search, Plus, Edit, Trash2, RefreshCcw, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useToast } from '@/components/ui/use-toast';
+import { DeviceEditor } from '@/components/devices/DeviceEditor';
+import type { DeviceFormValues, InventoryDevice } from '@/components/devices/types';
+import { INVENTORY_TYPES } from '@/components/devices/types';
+import type { RackRecord } from '@/components/racks/types';
+import { apiGet, apiDelete, apiPost, apiPut } from '@/lib/api';
+import { uiError, uiLabel } from '@/lib/i18n/tr';
+import { deviceUnitHeight, placementIssue } from '@/lib/racks/device-placement';
+import { matchesInventoryFilters } from '@/lib/devices/inventory-view';
+import { DEVICE_INVENTORY_CHANGED_EVENT, DEVICE_INVENTORY_CHANGED_STORAGE_KEY, notifyDeviceInventoryChanged } from '@/lib/device-inventory-events';
 import { cn } from '@/lib/utils';
-import {
-  DEVICE_INVENTORY_CHANGED_EVENT,
-  DEVICE_INVENTORY_CHANGED_STORAGE_KEY,
-  notifyDeviceInventoryChanged,
-} from '@/lib/device-inventory-events';
+import styles from './page.module.css';
 
-const MANUAL_DEVICE_TYPES: DeviceType[] = [
-  'PHYSICAL_SERVER', 'VIRTUAL_HOST', 'VIRTUAL_MACHINE', 'FIREWALL',
-  'SWITCH', 'ROUTER', 'COMPUTER', 'LAPTOP', 'STORAGE', 'PDU',
-  'PATCH_PANEL', 'PRINTER', 'CAMERA', 'OTHER',
-];
-
-const DEVICE_TYPE_OPTIONS: Array<{ value: DeviceType; label: string }> = [
-  { value: 'PHYSICAL_SERVER', label: 'Fiziksel Sunucu' },
-  { value: 'VIRTUAL_HOST', label: 'Sanal Host' },
-  { value: 'VIRTUAL_MACHINE', label: 'Sanal Makine' },
-  { value: 'SWITCH', label: 'Switch' },
-  { value: 'ROUTER', label: 'Router' },
-  { value: 'FIREWALL', label: 'Güvenlik Duvarı' },
-  { value: 'COMPUTER', label: 'Bilgisayar' },
-  { value: 'LAPTOP', label: 'Dizüstü' },
-  { value: 'STORAGE', label: 'Depolama' },
-  { value: 'PDU', label: 'PDU' },
-  { value: 'PATCH_PANEL', label: 'Patch Panel' },
-  { value: 'PRINTER', label: 'Yazıcı' },
-  { value: 'CAMERA', label: 'Kamera' },
-  { value: 'OTHER', label: 'Diğer' },
-];
-
-function deviceMatchesView(device: Device, filterType: string, search: string) {
-  const matchesType =
-    filterType === 'all' ||
-    (filterType === 'manual' && MANUAL_DEVICE_TYPES.includes(device.type)) ||
-    device.type === filterType;
-
-  if (!matchesType) return false;
-
-  const normalizedSearch = search.trim().toLowerCase();
-  if (!normalizedSearch) return true;
-
-  return [device.name, device.serialNumber, device.vendor, device.model]
-    .filter(Boolean)
-    .some((value) => value!.toLowerCase().includes(normalizedSearch));
-}
+interface InventoryResponse { success: boolean; error?: string; data?: InventoryDevice[]; total?: number; totalPages?: number }
+interface EditorState { device?: InventoryDevice; tab: 'details' | 'placement' }
 
 export default function DevicesPage() {
   const { toast } = useToast();
-  const [devices, setDevices] = useState<Device[]>([]);
-  const [racks, setRacks] = useState<any[]>([]);
+  const [devices, setDevices] = useState<InventoryDevice[]>([]);
+  const [racks, setRacks] = useState<RackRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [racksLoading, setRacksLoading] = useState(true);
+  const [racksError, setRacksError] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [filterType, setFilterType] = useState('manual');
-  
-  // Pagination state
-  const [currentPage, setCurrentPage] = useState(1);
+  const [rackFilter, setRackFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [placementFilter, setPlacementFilter] = useState('all');
+  const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
-  
-  // Modal states
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [editingDevice, setEditingDevice] = useState<Device | null>(null);
+  const [editor, setEditor] = useState<EditorState | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<InventoryDevice | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const deviceRequest = useRef(0);
+  const rackRequest = useRef(0);
 
-  // Delete dialog state
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [deviceToDelete, setDeviceToDelete] = useState<{id: string, name: string} | null>(null);
-
-  // Debounce search input by 400ms
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(searchQuery), 400);
-    return () => clearTimeout(t);
-  }, [searchQuery]);
-
-  const loadDevices = useCallback(async () => {
+  useEffect(() => { const timer = setTimeout(() => { setDebouncedSearch(search); setPage(1); }, 400); return () => clearTimeout(timer); }, [search]);
+  const loadDevices = useCallback(async (silent = false, signal?: AbortSignal) => {
+    const request = ++deviceRequest.current;
+    if (silent) setRefreshing(true); else setLoading(true);
+    setError(null);
     try {
-      setLoading(true);
-      setError(null);
-      const params = new URLSearchParams({
-        page: currentPage.toString(),
-        limit: pageSize.toString(),
-        filterType,
-      });
-      if (debouncedSearch) params.set('search', debouncedSearch);
-      const response: any = await apiGet(`/api/devices?${params}`);
-      if (response.success) {
-        setDevices(response.data || []);
-        setTotal(response.total || 0);
-        setTotalPages(response.totalPages || 0);
-      } else {
-        setError('Cihazlar yüklenemedi');
-      }
-    } catch (err: any) {
-      setError(err.message || 'Cihazlar yüklenirken hata oluştu');
-    } finally {
-      setLoading(false);
-    }
-  }, [currentPage, pageSize, filterType, debouncedSearch]);
-
-  const loadRacks = useCallback(async () => {
+      const params = new URLSearchParams({ page: String(page), limit: String(pageSize), filterType, rackId: rackFilter, status: statusFilter, placement: placementFilter });
+      if (debouncedSearch.trim()) params.set('search', debouncedSearch.trim());
+      const response = await apiGet(`/api/devices?${params}`, undefined, { signal }) as InventoryResponse;
+      if (request !== deviceRequest.current || signal?.aborted) return;
+      if (!response.success) throw new Error(uiError(response.error || 'Cihazlar yüklenemedi.'));
+      setDevices(response.data || []); setTotal(response.total || 0); setTotalPages(response.totalPages || 0);
+      if (page > Math.max(1, response.totalPages || 0)) setPage(Math.max(1, response.totalPages || 0));
+    } catch (loadError) {
+      if (request === deviceRequest.current && !signal?.aborted) setError(uiError(loadError, 'Cihazlar yüklenemedi.'));
+    } finally { if (request === deviceRequest.current && !signal?.aborted) { setLoading(false); setRefreshing(false); } }
+  }, [page, pageSize, filterType, rackFilter, statusFilter, placementFilter, debouncedSearch]);
+  const loadRacks = useCallback(async (): Promise<RackRecord[] | null> => {
+    const request = ++rackRequest.current;
+    setRacksLoading(true); setRacksError(null);
     try {
-      const response: ApiResponse<any[]> = await apiGet('/api/racks');
-      if (response.success) {
-        setRacks(response.data || []);
-      }
-    } catch (err) {
-      console.error('Error loading racks:', err);
-    }
+      const response = await apiGet('/api/racks?fresh=1') as { success: boolean; data?: RackRecord[]; error?: string };
+      if (!response.success) throw new Error(uiError(response.error || 'Kabinet bilgileri alınamadı.'));
+      if (request === rackRequest.current) setRacks(response.data || []);
+      return response.data || [];
+    } catch (rackError) { if (request === rackRequest.current) setRacksError(uiError(rackError, 'Kabinet bilgileri alınamadı.')); return null; }
+    finally { if (request === rackRequest.current) setRacksLoading(false); }
   }, []);
-
+  useEffect(() => { const controller = new AbortController(); loadDevices(false, controller.signal); return () => controller.abort(); }, [loadDevices]);
+  useEffect(() => { loadRacks(); }, [loadRacks]);
   useEffect(() => {
-    loadDevices();
-    loadRacks();
+    const refresh = () => { loadDevices(true); loadRacks(); };
+    const handleChange = (event: Event) => { if ((event as CustomEvent).detail?.source !== 'devices-page') refresh(); };
+    const storage = (event: StorageEvent) => { if (event.key === DEVICE_INVENTORY_CHANGED_STORAGE_KEY) refresh(); };
+    const visibility = () => { if (document.visibilityState === 'visible') refresh(); };
+    window.addEventListener(DEVICE_INVENTORY_CHANGED_EVENT, handleChange); window.addEventListener('storage', storage); window.addEventListener('focus', refresh); document.addEventListener('visibilitychange', visibility);
+    return () => { window.removeEventListener(DEVICE_INVENTORY_CHANGED_EVENT, handleChange); window.removeEventListener('storage', storage); window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', visibility); };
   }, [loadDevices, loadRacks]);
-
-  useEffect(() => {
-    const handleInventoryChanged = () => {
-      loadDevices();
-    };
-
-    const handleStorage = (event: StorageEvent) => {
-      if (event.key === DEVICE_INVENTORY_CHANGED_STORAGE_KEY) {
-        loadDevices();
+  const openEditor = (device?: InventoryDevice, tab: 'details' | 'placement' = 'details') => { setEditor({ device, tab }); loadRacks(); };
+  const filters = { type: filterType, search: debouncedSearch, rack: rackFilter, status: statusFilter, placement: placementFilter };
+  const hasFilters = Boolean(search) || filterType !== 'manual' || rackFilter !== 'all' || statusFilter !== 'all' || placementFilter !== 'all';
+  const clearFilters = () => { setSearch(''); setDebouncedSearch(''); setFilterType('manual'); setRackFilter('all'); setStatusFilter('all'); setPlacementFilter('all'); setPage(1); };
+  const saveDevice = async (values: DeviceFormValues) => {
+    const target = editor?.device;
+    // Recheck current cabinet data before submitting; the API checks again at the write boundary.
+    const freshRacks = await loadRacks();
+    if (values.rackId && !freshRacks) throw new Error('Yerleşim doğrulanamadı. Kabinet bilgilerini tekrar yükleyin.');
+    const targetRack = freshRacks?.find(rack => rack.id === values.rackId) || null;
+    const issue = placementIssue({ rackId: values.rackId, rack: targetRack, start: values.rackUnitPosition, height: values.unitHeight, deviceId: target?.id });
+    if (issue) throw new Error(issue);
+    const payload: Partial<DeviceFormValues> = { ...values };
+    if (target && !INVENTORY_TYPES.includes(values.type) && values.type === target.type) delete payload.type;
+    const response = target ? await apiPut(`/api/devices/${target.id}`, payload) : await apiPost('/api/devices', payload);
+    if (!response.success) throw new Error(uiError(response.error || 'Cihaz kaydedilemedi.'));
+    const saved = response.data as InventoryDevice | undefined;
+    if (saved) {
+      const updated = { ...saved, rack: targetRack };
+      const matches = matchesInventoryFilters(updated, filters);
+      if (target) {
+        setDevices(current => matches ? current.map(device => device.id === target.id ? updated : device) : current.filter(device => device.id !== target.id));
+        if (!matches) setTotal(current => Math.max(0, current - 1));
+      } else if (matches && page === 1) {
+        setDevices(current => [updated, ...current.filter(device => device.id !== updated.id)].slice(0, pageSize)); setTotal(current => current + 1);
       }
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        loadDevices();
-      }
-    };
-
-    window.addEventListener(DEVICE_INVENTORY_CHANGED_EVENT, handleInventoryChanged);
-    window.addEventListener('storage', handleStorage);
-    window.addEventListener('focus', handleInventoryChanged);
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    return () => {
-      window.removeEventListener(DEVICE_INVENTORY_CHANGED_EVENT, handleInventoryChanged);
-      window.removeEventListener('storage', handleStorage);
-      window.removeEventListener('focus', handleInventoryChanged);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [loadDevices]);
-
-  const handleAdd = async (formData: any) => {
+    }
+    setEditor(null);
+    notifyDeviceInventoryChanged({ action: target ? 'update' : 'create', deviceId: saved?.id, source: 'devices-page' });
+    toast({ title: 'Cihaz kaydedildi', description: `${values.name} bilgileri ve kabinet yerleşimi güncellendi.` });
+    if (!target && page !== 1) setPage(1); else await loadDevices(true);
+    await loadRacks();
+  };
+  const removeDevice = async () => {
+    if (!deleteTarget || deleting) return;
+    setDeleting(true); setDeleteError(null);
     try {
-      const response: any = await apiPost('/api/devices', formData);
-      if (response.success) {
-        const createdDevice = response.data as Device | undefined;
-        toast({
-          title: "Başarılı",
-          description: "Cihaz başarıyla eklendi.",
-        });
-        setShowAddModal(false);
-        notifyDeviceInventoryChanged({ action: 'create', deviceId: createdDevice?.id, source: 'devices-page' });
-        if (createdDevice && deviceMatchesView(createdDevice, filterType, debouncedSearch)) {
-          if (currentPage !== 1) setCurrentPage(1);
-          setDevices((current) => [
-            createdDevice,
-            ...current.filter((device) => device.id !== createdDevice.id),
-          ].slice(0, pageSize));
-          setTotal((currentTotal) => {
-            const nextTotal = currentTotal + 1;
-            setTotalPages(Math.ceil(nextTotal / pageSize));
-            return nextTotal;
-          });
-        } else {
-          await loadDevices();
-        }
-      } else {
-        toast({
-          title: "Hata",
-          description: response.error || "Cihaz eklenemedi",
-          variant: "destructive",
-        });
-      }
-    } catch (err: any) {
-      toast({
-        title: "Hata",
-        description: "Bir hata oluştu",
-        variant: "destructive",
-      });
-    }
+      const response = await apiDelete(`/api/devices/${deleteTarget.id}`);
+      if (!response.success) throw new Error(uiError(response.error || 'Cihaz silinemedi.'));
+      setDevices(current => current.filter(device => device.id !== deleteTarget.id)); setTotal(current => Math.max(0, current - 1)); setDeleteTarget(null);
+      notifyDeviceInventoryChanged({ action: 'delete', deviceId: deleteTarget.id, source: 'devices-page' });
+      toast({ title: 'Cihaz silindi', description: `${deleteTarget.name} kaldırıldı.` }); await loadDevices(true); await loadRacks();
+    } catch (removeError) { setDeleteError(uiError(removeError, 'Cihaz silinemedi.')); }
+    finally { setDeleting(false); }
   };
-
-  const handleEdit = async (formData: any) => {
-    if (!editingDevice) return;
-    try {
-      const response: any = await apiPut(`/api/devices/${editingDevice.id}`, formData);
-      if (response.success) {
-        toast({
-          title: "Başarılı",
-          description: "Cihaz güncellendi.",
-        });
-        setShowEditModal(false);
-        setEditingDevice(null);
-        notifyDeviceInventoryChanged({ action: 'update', deviceId: editingDevice.id, source: 'devices-page' });
-        loadDevices();
-      } else {
-        toast({
-          title: "Hata",
-          description: response.error || "Güncelleme başarısız",
-          variant: "destructive",
-        });
-      }
-    } catch (err: any) {
-      toast({
-        title: "Hata",
-        description: "Bir hata oluştu",
-        variant: "destructive",
-      });
-    }
+  const stats = [
+    { label: 'Eşleşen cihaz', value: total, detail: 'Seçili filtrelerin tüm sayfalardaki toplamı', icon: Server },
+    { label: 'Kabinet atanmış', value: devices.filter(device => device.rackId).length, detail: 'Bu sayfadaki cihazlar', icon: Database },
+    { label: 'U konumu bekleyen', value: devices.filter(device => device.rackId && !(Number(device.rackUnitPosition) > 0)).length, detail: 'Bu sayfadaki kabinetli cihazlar', icon: Layers3 },
+    { label: 'Kabinet atanmamış', value: devices.filter(device => !device.rackId).length, detail: 'Bu sayfadaki cihazlar', icon: Unplug },
+  ];
+  const rackFor = (device: InventoryDevice) => racks.find(rack => rack.id === device.rackId) || device.rack;
+  const location = (device: InventoryDevice) => {
+    const rack = rackFor(device);
+    return device.rackId ? <div className={styles.location}><strong><Database size={14} aria-hidden="true" />{rack?.name || 'Kabinet bilgisi alınamadı'}</strong><span><MapPin size={11} aria-hidden="true" />{rack?.room?.name || 'Oda bilgisi yok'}</span></div> : <span className={styles.unassigned}><Unplug size={14} aria-hidden="true" />Kabinet atanmamış</span>;
   };
-
-  const handleDelete = (id: string, name: string) => {
-    setDeviceToDelete({ id, name });
-    setDeleteDialogOpen(true);
+  const placement = (device: InventoryDevice) => {
+    const height = deviceUnitHeight(device.metadata);
+    const start = device.rackUnitPosition;
+    const rack = rackFor(device);
+    const overflow = start != null && rack && start + height - 1 > rack.maxUnits;
+    return <div className={styles.unitCell}>{device.rackId && start && start > 0 ? <strong className={cn(overflow && styles.warnText)}>U {start}{height > 1 ? `–${start + height - 1}` : ''}</strong> : <span>{device.rackId ? 'U konumu atanmamış' : '—'}</span>}<small>{height} U yükseklik{overflow ? ' · Kapasite aşılıyor' : ''}</small></div>;
   };
-
-  const confirmDelete = async () => {
-    if (!deviceToDelete) return;
-    
-    try {
-      const response: any = await apiDelete(`/api/devices/${deviceToDelete.id}`);
-      if (response.success) {
-        toast({
-          title: "Başarılı",
-          description: `${deviceToDelete.name} cihazı silindi.`,
-        });
-        notifyDeviceInventoryChanged({ action: 'delete', deviceId: deviceToDelete.id, source: 'devices-page' });
-        loadDevices();
-      } else {
-        toast({
-          title: "Hata",
-          description: response.error || 'Cihaz silinemedi',
-          variant: "destructive",
-        });
-      }
-    } catch (err: any) {
-      toast({
-        title: "Hata",
-        description: 'Cihaz silinirken hata oluştu',
-        variant: "destructive",
-      });
-    } finally {
-      setDeleteDialogOpen(false);
-      setDeviceToDelete(null);
-    }
-  };
-
-  // Reset to page 1 when search or filter changes
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [debouncedSearch, filterType]);
-
-  // Server-side filtering: devices returned are already filtered
-  const filteredDevices = devices;
-
-  const formatDate = (date: string | Date | undefined) => {
-    if (!date) return '-';
-    return new Date(date).toLocaleDateString('tr-TR');
-  };
-
-  const getStatusVariant = (status: string): "default" | "secondary" | "destructive" | "outline" | "success" | "warning" => {
-    switch (status) {
-      case 'ACTIVE': return 'success';
-      case 'INACTIVE': return 'outline';
-      case 'MAINTENANCE': return 'warning';
-      case 'DECOMMISSIONED': return 'destructive';
-      default: return 'default';
-    }
-  };
-
-  return (
-    <>
-      <main className="w-full px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Cihaz Envanteri</h1>
-            <p className="mt-2 text-muted-foreground">Tüm fiziksel ve sanal varlıkları yönetin ve izleyin</p>
-          </div>
-          <Button 
-            size="lg" 
-            className="font-bold shadow-lg shadow-primary/20"
-            onClick={() => setShowAddModal(true)}
-          >
-            <Plus className="mr-2 h-5 w-5" />
-            Yeni Cihaz Ekle
-          </Button>
-        </div>
-
-        {/* Filters */}
-        <Card className="mb-6">
-          <CardContent className="p-4 flex flex-col md:flex-row gap-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input 
-                placeholder="İsim veya seri no ile ara..." 
-                className="pl-10"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
-            <Select value={filterType} onValueChange={setFilterType}>
-              <SelectTrigger className="w-full md:w-[200px]">
-                <SelectValue placeholder="Cihaz Tipi" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="manual">Manuel Eklenen</SelectItem>
-                <SelectItem value="all">Tüm Cihazlar</SelectItem>
-                <SelectItem value="PHYSICAL_SERVER">Fiziksel Sunucular</SelectItem>
-                <SelectItem value="VIRTUAL_MACHINE">Sanal Makineler</SelectItem>
-                <SelectItem value="VIRTUAL_HOST">Sanal Hostlar</SelectItem>
-                <SelectItem value="SWITCH">Switchler</SelectItem>
-                <SelectItem value="ROUTER">Routerlar</SelectItem>
-                <SelectItem value="FIREWALL">Güvenlik Duvarları</SelectItem>
-                <SelectItem value="STORAGE">Depolama</SelectItem>
-                <SelectItem value="PDU">PDU</SelectItem>
-                <SelectItem value="PATCH_PANEL">Patch Panel</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button variant="outline" size="icon" onClick={loadDevices} title="Yenile">
-              <RefreshCcw className="h-4 w-4" />
-            </Button>
-          </CardContent>
-        </Card>
-
-        {loading ? (
-          <div className="flex justify-center py-12">
-            <RefreshCcw className="h-12 w-12 animate-spin text-primary" />
-          </div>
-        ) : error ? (
-          <Card className="border-destructive bg-destructive/10">
-            <CardContent className="p-6 flex items-center justify-between">
-              <p className="text-destructive font-medium">{error}</p>
-              <Button variant="outline" size="sm" onClick={loadDevices}>Tekrar Dene</Button>
-            </CardContent>
-          </Card>
-        ) : (
-          <Card className="overflow-hidden shadow-xl border-border w-full">
-            <div className="w-full overflow-x-auto">
-              <Table>
-                <TableHeader className="bg-muted/50">
-                  <TableRow>
-                    <TableHead className="w-[250px]">Cihaz Adı</TableHead>
-                    <TableHead>Tip</TableHead>
-                    <TableHead>Durum</TableHead>
-                    <TableHead>Support Tarihi</TableHead>
-                    <TableHead>Kritiklik</TableHead>
-                    <TableHead>Model / Üretici</TableHead>
-                    <TableHead className="text-right">İşlemler</TableHead>
-                  </TableRow>
-                </TableHeader>
-              <TableBody>
-                {filteredDevices.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
-                      Kriterlere uygun cihaz bulunamadı.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredDevices.map((device) => (
-                    <TableRow key={device.id}>
-                      <TableCell className="font-medium">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-bold">{device.name}</span>
-                          {device.nmsDeviceId != null && (
-                            <Badge
-                              variant={device.pollingEnabled ? 'success' : 'secondary'}
-                              className="text-[10px] uppercase"
-                            >
-                              {device.pollingEnabled ? 'NMS aktif' : 'NMS pasif'}
-                            </Badge>
-                          )}
-                        </div>
-                        <div className="text-xs text-muted-foreground font-mono">
-                          {device.managementIp || device.serialNumber || 'Seri No Yok'}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="uppercase text-[10px]">
-                          {device.type.replace(/_/g, ' ')}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={getStatusVariant(device.status)}>
-                          {device.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground whitespace-nowrap">
-                        {formatDate(device.supportDate)}
-                      </TableCell>
-                      <TableCell>
-                        <span className={cn(
-                          "font-bold text-xs uppercase tracking-tight",
-                          device.criticality === 'CRITICAL' ? 'text-destructive' : 
-                          device.criticality === 'HIGH' ? 'text-orange-500' : 
-                          'text-primary'
-                        )}>
-                          {device.criticality}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        <div className="flex items-center gap-2">
-                          {getVendorLogo(device.vendor) && (
-                            <img 
-                              src={getVendorLogo(device.vendor)!} 
-                              alt={device.vendor} 
-                              className="h-12 w-12 object-contain"
-                            />
-                          )}
-                          <span>{device.vendor} {device.model}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-8 w-8 hover:bg-primary/10 group"
-                            onClick={() => {
-                              setEditingDevice(device);
-                              setShowEditModal(true);
-                            }}
-                          >
-                            <Edit className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-8 w-8 hover:bg-destructive/10 group"
-                            onClick={() => handleDelete(device.id, device.name)}
-                          >
-                            <Trash2 className="h-4 w-4 text-muted-foreground group-hover:text-destructive transition-colors" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-              </Table>
-            </div>
-          </Card>
-        )}
-
-          {/* Pagination Controls */}
-          {totalPages > 0 && (
-            <div className="flex items-center justify-between mt-4 px-2">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <span>Sayfa başı:</span>
-                <Select value={pageSize.toString()} onValueChange={(v) => { setPageSize(parseInt(v)); setCurrentPage(1); }}>
-                  <SelectTrigger className="w-[80px] h-8">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="10">10</SelectItem>
-                    <SelectItem value="25">25</SelectItem>
-                    <SelectItem value="50">50</SelectItem>
-                    <SelectItem value="100">100</SelectItem>
-                  </SelectContent>
-                </Select>
-                <span className="ml-4">
-                  {((currentPage - 1) * pageSize) + 1}-{Math.min(currentPage * pageSize, total)} / {total}
-                </span>
-              </div>
-              <div className="flex items-center gap-1">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                  let pageNum = i + 1;
-                  if (totalPages > 5) {
-                    if (currentPage > 3) {
-                      pageNum = currentPage - 3 + i;
-                      if (pageNum > totalPages) pageNum = totalPages - 4 + i;
-                    }
-                  }
-                  return (
-                    <Button
-                      key={pageNum}
-                      variant={currentPage === pageNum ? "default" : "outline"}
-                      size="sm"
-                      className="w-8 h-8 p-0"
-                      onClick={() => setCurrentPage(pageNum)}
-                    >
-                      {pageNum}
-                    </Button>
-                  );
-                })}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                  disabled={currentPage >= totalPages}
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          )}
-
-        <ConfirmDialog
-          open={deleteDialogOpen}
-          onOpenChange={setDeleteDialogOpen}
-          title="Cihazı Sil"
-          description={`${deviceToDelete?.name} cihazını silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.`}
-          onConfirm={confirmDelete}
-          variant="destructive"
-          confirmText="Sil"
-        />
-
-        {showAddModal && (
-          <DeviceModal 
-            racks={racks}
-            onClose={() => setShowAddModal(false)} 
-            onSubmit={handleAdd} 
-          />
-        )}
-
-        {showEditModal && editingDevice && (
-          <DeviceModal 
-            device={editingDevice}
-            racks={racks}
-            onClose={() => {
-              setShowEditModal(false);
-              setEditingDevice(null);
-            }} 
-            onSubmit={handleEdit} 
-          />
-        )}
-      </main>
-    </>
-  );
-}
-
-// Device Modal Component
-function DeviceModal({ device, racks, onClose, onSubmit }: {
-  device?: Device;
-  racks: any[];
-  onClose: () => void;
-  onSubmit: (data: any) => void;
-}) {
-  const [formData, setFormData] = useState<any>(device || {
-    status: 'ACTIVE',
-    criticality: 'MEDIUM',
-    type: 'PHYSICAL_SERVER'
-  });
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSubmit(formData);
-  };
-
-  const inputClass = "w-full px-4 py-2 bg-muted border border-border rounded-lg text-foreground placeholder-muted-foreground focus:ring-2 focus:ring-primary outline-none transition-all";
-  const labelClass = "text-[10px] text-muted-foreground ml-1 font-bold uppercase tracking-wider";
-
-  return (
-    <div className="fixed inset-0 bg-background/80 flex items-center justify-center z-[6000] p-4 backdrop-blur-sm">
-      <div className="bg-card rounded-xl p-6 max-w-md w-full border border-border shadow-2xl overflow-y-auto max-h-[90vh]">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold">{device ? 'Cihazı Düzenle' : 'Yeni Cihaz Ekle'}</h2>
-          <Button variant="ghost" size="icon" onClick={onClose}>
-            <X className="h-5 w-5" />
-          </Button>
-        </div>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-1">
-            <label className={labelClass}>Cihaz Adı</label>
-            <Input 
-              placeholder="Cihaz Adı" 
-              className={inputClass} 
-              value={formData.name || ''} 
-              onChange={e => setFormData({ ...formData, name: e.target.value })} 
-              required 
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label className={labelClass}>Cihaz Tipi</label>
-              <select 
-                className={inputClass} 
-                value={formData.type || ''} 
-                onChange={e => setFormData({ ...formData, type: e.target.value })} 
-                required
-              >
-                {DEVICE_TYPE_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-1">
-              <label className={labelClass}>Durum</label>
-              <select 
-                className={inputClass} 
-                value={formData.status || ''} 
-                onChange={e => setFormData({ ...formData, status: e.target.value })}
-              >
-                <option value="ACTIVE">Aktif</option>
-                <option value="INACTIVE">Pasif</option>
-                <option value="MAINTENANCE">Bakımda</option>
-                <option value="DECOMMISSIONED">Devre Dışı</option>
-              </select>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label className={labelClass}>Üretici</label>
-              <Input 
-                placeholder="Örn: Dell, HP" 
-                className={inputClass} 
-                value={formData.vendor || ''} 
-                onChange={e => setFormData({ ...formData, vendor: e.target.value })} 
-              />
-            </div>
-            <div className="space-y-1">
-              <label className={labelClass}>Model</label>
-              <Input 
-                placeholder="Örn: R740" 
-                className={inputClass} 
-                value={formData.model || ''} 
-                onChange={e => setFormData({ ...formData, model: e.target.value })} 
-              />
-            </div>
-          </div>
-          <div className="space-y-1">
-            <label className={labelClass}>Seri Numarası</label>
-            <Input 
-              placeholder="Seri No" 
-              className={inputClass} 
-              value={formData.serialNumber || ''} 
-              onChange={e => setFormData({ ...formData, serialNumber: e.target.value })} 
-            />
-          </div>
-          <div className="space-y-1">
-            <label className={labelClass}>Support Tarihi</label>
-            <Input 
-              type="date"
-              className={inputClass} 
-              value={formData.supportDate ? new Date(formData.supportDate).toISOString().split('T')[0] : ''} 
-              onChange={e => setFormData({ ...formData, supportDate: e.target.value })} 
-            />
-          </div>
-          <div className="space-y-1">
-            <label className={labelClass}>Kabinet (Opsiyonel)</label>
-            <select 
-              className={inputClass} 
-              value={formData.rackId || ''} 
-              onChange={e => setFormData({ ...formData, rackId: e.target.value })}
-            >
-              <option value="">Seçilmedi</option>
-              {racks.map(rack => (
-                <option key={rack.id} value={rack.id}>
-                  {rack.name} ({rack.room?.name})
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="flex space-x-3 pt-6">
-            <Button type="button" variant="outline" onClick={onClose} className="flex-1">İptal</Button>
-            <Button type="submit" className="flex-1 font-bold shadow-lg">
-              {device ? 'Güncelle' : 'Oluştur'}
-            </Button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
+  const actions = (device: InventoryDevice) => <div className={styles.rowActions}><Button variant="outline" size="sm" onClick={() => openEditor(device, 'placement')} aria-label={`${device.name}: kabinet ve U konumunu düzenle`}><Layers3 size={14} />Yerleşim</Button><Button variant="ghost" size="icon" onClick={() => openEditor(device)} aria-label={`${device.name}: cihazı düzenle`} title="Cihaz bilgilerini düzenle"><Pencil size={15} /></Button><Button variant="ghost" size="icon" onClick={() => { setDeleteTarget(device); setDeleteError(null); }} aria-label={`${device.name}: cihazı sil`} title="Cihazı sil"><Trash2 size={15} /></Button></div>;
+  const identity = (device: InventoryDevice) => <div className={styles.deviceIdentity}><span className={styles.deviceIcon}><Server size={17} aria-hidden="true" /></span><div><strong>{device.name}</strong><span>{uiLabel(device.type)}{device.nmsDeviceId != null && <Badge variant={device.pollingEnabled ? 'success' : 'secondary'}>NMS {device.pollingEnabled ? 'aktif' : 'pasif'}</Badge>}</span><small>{device.managementIp || device.serialNumber || 'IP / seri numarası belirtilmemiş'}</small></div></div>;
+  const formatDate = (date?: string | null) => date && !Number.isNaN(new Date(date).getTime()) ? new Date(date).toLocaleDateString('tr-TR') : 'Belirtilmedi';
+  return <div className={styles.page}>
+    <header className={styles.header}><PageHeading section="devices" description="Cihazları, kabinet atamalarını ve U yerleşimlerini tek ekrandan yönetin.">Cihaz Envanteri</PageHeading><div className={styles.headerActions}><Button variant="outline" onClick={() => { loadDevices(true); loadRacks(); }} disabled={loading || refreshing}><RefreshCw size={16} className={cn(refreshing && 'animate-spin')} />Yenile</Button><Button onClick={() => openEditor()}><Plus size={16} />Cihaz ekle</Button></div></header>
+    <section className={styles.metrics} aria-label="Envanter özeti">{stats.map(({ label, value, detail, icon: Icon }) => <div key={label}><span className={styles.metricIcon}><Icon size={18} aria-hidden="true" /></span><div><p>{label}</p><strong>{loading || error ? '—' : value.toLocaleString('tr-TR')}</strong><small>{detail}</small></div></div>)}</section>
+    <div className={styles.toolbar}><div className={styles.search}><Search size={17} aria-hidden="true" /><Input aria-label="Cihaz, IP veya seri numarası ara" placeholder="Cihaz, IP, seri no veya model ara…" value={search} onChange={event => setSearch(event.target.value)} className="pl-10" /></div><select aria-label="Cihaz tipi filtresi" className={styles.select} value={filterType} onChange={event => { setFilterType(event.target.value); setPage(1); }}><option value="manual">Genel envanter türleri</option><option value="all">Entegrasyonlar dahil tüm türler</option>{INVENTORY_TYPES.map(type => <option key={type} value={type}>{uiLabel(type)}</option>)}</select><select aria-label="Kabinet filtresi" className={styles.select} value={rackFilter} onChange={event => { setRackFilter(event.target.value); setPage(1); }}><option value="all">Tüm kabinetler</option><option value="unassigned">Kabinet atanmamış</option>{racks.map(rack => <option key={rack.id} value={rack.id}>{rack.name} · {rack.room?.name || 'Oda yok'}</option>)}</select><select aria-label="Yerleşim filtresi" className={styles.select} value={placementFilter} onChange={event => { setPlacementFilter(event.target.value); setPage(1); }}><option value="all">Tüm yerleşimler</option><option value="pending">U konumu bekleyen</option><option value="positioned">U konumu atanmış</option></select><select aria-label="Çalışma durumu filtresi" className={styles.select} value={statusFilter} onChange={event => { setStatusFilter(event.target.value); setPage(1); }}><option value="all">Tüm durumlar</option>{['ACTIVE', 'INACTIVE', 'MAINTENANCE', 'DECOMMISSIONED', 'UNKNOWN'].map(status => <option key={status} value={status}>{uiLabel(status)}</option>)}</select>{hasFilters && <Button variant="ghost" size="sm" onClick={clearFilters}><X size={14} />Temizle</Button>}</div>
+    {racksError && <div className={styles.rackError}><AlertTriangle size={17} /><p>Kabinet bilgileri güncellenemedi: {racksError}</p><Button variant="outline" size="sm" onClick={loadRacks}>Tekrar dene</Button></div>}
+    <div className={styles.listHeading}><h2>Cihazlar</h2><p aria-live="polite">{loading ? 'Yükleniyor…' : `${devices.length} cihaz gösteriliyor · Toplam ${total.toLocaleString('tr-TR')}`}{refreshing && ' · Güncelleniyor…'}</p></div>
+    {loading ? <div className={styles.pageState} role="status"><RefreshCw size={27} className="animate-spin text-primary" /><p>Envanter yükleniyor…</p></div> : error ? <div className={styles.pageState} role="alert"><AlertTriangle size={28} className="text-destructive" /><h3>Cihazlar yüklenemedi</h3><p>{error}</p><Button onClick={() => loadDevices()}><RefreshCw size={16} />Tekrar dene</Button></div> : devices.length === 0 ? <div className={styles.pageState}><Server size={34} className="text-primary" /><h3>{hasFilters ? 'Filtrelere uygun cihaz bulunamadı' : 'Henüz cihaz kaydı yok'}</h3><p>{hasFilters ? 'Arama metnini veya filtreleri değiştirerek tekrar deneyin.' : 'Cihaz ekleyip kabinet ve U yerleşimini tanımlayarak başlayın.'}</p>{hasFilters ? <Button variant="outline" onClick={clearFilters}>Filtreleri temizle</Button> : <Button onClick={() => openEditor()}><Plus size={16} />Cihaz ekle</Button>}</div> : <>
+      <div className={styles.desktopTable} aria-busy={refreshing}><Table><TableHeader><TableRow><TableHead>Cihaz</TableHead><TableHead>Durum / kritiklik</TableHead><TableHead>Kabinet / oda</TableHead><TableHead>U yerleşimi</TableHead><TableHead className={styles.optionalColumn}>Üretici / model</TableHead><TableHead className={styles.optionalColumn}>Destek bitişi</TableHead><TableHead className={styles.actionHeader}>İşlemler</TableHead></TableRow></TableHeader><TableBody>{devices.map(device => <TableRow key={device.id}><TableCell>{identity(device)}</TableCell><TableCell><div className={styles.badges}><StatusBadge status={device.status} /><SeverityBadge severity={device.criticality} /></div></TableCell><TableCell>{location(device)}</TableCell><TableCell>{placement(device)}</TableCell><TableCell className={styles.optionalColumn}><div className={styles.vendor}><span>{device.vendor || 'Belirtilmedi'}</span><small>{device.model || '—'}</small></div></TableCell><TableCell className={cn(styles.date, styles.optionalColumn)}>{formatDate(device.supportDate)}</TableCell><TableCell className={styles.actionCell}>{actions(device)}</TableCell></TableRow>)}</TableBody></Table></div>
+      <div className={styles.mobileCards}>{devices.map(device => <article className={styles.mobileCard} key={device.id}>{identity(device)}<div className={styles.mobileBadges}><StatusBadge status={device.status} /><SeverityBadge severity={device.criticality} /></div><div className={styles.mobilePlacement}>{location(device)}{placement(device)}</div><p className={styles.mobileSpecs}>{[device.vendor, device.model].filter(Boolean).join(' · ') || 'Üretici / model belirtilmemiş'}<span>Destek: {formatDate(device.supportDate)}</span></p>{actions(device)}</article>)}</div>
+    </>}
+    {!loading && !error && total > 0 && <nav className={styles.pagination} aria-label="Envanter sayfaları"><div><label htmlFor="device-page-size">Sayfa başına</label><select id="device-page-size" className={styles.select} value={pageSize} onChange={event => { setPageSize(Number(event.target.value)); setPage(1); }}>{[10, 25, 50, 100].map(size => <option key={size} value={size}>{size}</option>)}</select><span>{(page - 1) * pageSize + 1}–{Math.min(page * pageSize, total)} / {total}</span></div><div><Button size="sm" variant="outline" disabled={page <= 1 || refreshing} onClick={() => setPage(current => current - 1)} aria-label="Önceki sayfa"><ChevronLeft size={15} />Önceki</Button><span>Sayfa {page} / {Math.max(1, totalPages)}</span><Button size="sm" variant="outline" disabled={page >= totalPages || refreshing} onClick={() => setPage(current => current + 1)} aria-label="Sonraki sayfa">Sonraki<ChevronRight size={15} /></Button></div></nav>}
+    <p className={styles.pageNote}><Info size={14} /><span>U 1 kabinetin en alt birimidir. Yerleşim düğmesiyle kabinet atamasını, başlangıç U konumunu ve cihaz yüksekliğini düzenleyebilirsiniz. <Link href="/racks">Kabinetleri görüntüle</Link></span></p>
+    {editor && <DeviceEditor device={editor.device} initialTab={editor.tab} racks={racks} racksLoading={racksLoading} racksError={racksError} onRefreshRacks={loadRacks} onClose={() => setEditor(null)} onSave={saveDevice} />}
+    <Dialog open={Boolean(deleteTarget)} onOpenChange={open => { if (!open && !deleting) setDeleteTarget(null); }}><DialogContent className="max-w-md"><DialogHeader><DialogTitle className="flex items-center gap-2"><Trash2 size={19} className="text-destructive" />Cihazı sil</DialogTitle><DialogDescription>{deleteTarget?.name} cihazını silmek istediğinizden emin misiniz? Bu işlem geri alınamaz. Bağlı alt cihaz veya servis varsa silme işlemi engellenir.</DialogDescription></DialogHeader>{deleteError && <p role="alert" className={styles.deleteError}>{deleteError}</p>}<DialogFooter><Button variant="outline" disabled={deleting} onClick={() => setDeleteTarget(null)}>Vazgeç</Button><Button variant="destructive" disabled={deleting} onClick={removeDevice}>{deleting ? <RefreshCw size={16} className="animate-spin" /> : <Trash2 size={16} />}{deleting ? 'Siliniyor…' : 'Cihazı sil'}</Button></DialogFooter></DialogContent></Dialog>
+  </div>;
 }

@@ -44,18 +44,18 @@ export async function getIpsHighSeverityEvents(ctx: AlarmQueryContext): Promise<
           logtype: 'attack',
           level: 'high',
           eventTime: timeWindow(ctx.timeWindowMinutes),
-        }),
+        }, undefined, ctx),
         queryCache({
           logtype: 'attack',
           level: 'critical',
           eventTime: timeWindow(ctx.timeWindowMinutes),
-        }),
+        }, undefined, ctx),
       ]);
       // Flatten and deduplicate by eventtime
       const combined = [...rows[0], ...rows[1]];
       const seen = new Set<unknown>();
       return combined.filter(e => {
-        const key = (e as any).eventtime;
+        const key = e.eventtime;
         if (seen.has(key)) return false;
         seen.add(key);
         return true;
@@ -67,7 +67,7 @@ export async function getIpsHighSeverityEvents(ctx: AlarmQueryContext): Promise<
         'attack',
         'level == high or level == critical',
         ctx.timeWindowMinutes
-      )
+      , undefined, ctx)
   );
 }
 
@@ -85,8 +85,8 @@ export async function getIpsAllEvents(ctx: AlarmQueryContext): Promise<QueryResu
       queryCache({
         logtype: 'attack',
         eventTime: timeWindow(ctx.timeWindowMinutes),
-      }),
-    fa => queryFortiAnalyzerDirect(fa, 'attack', '', ctx.timeWindowMinutes)
+      }, undefined, ctx),
+    fa => queryFortiAnalyzerDirect(fa, 'attack', '', ctx.timeWindowMinutes, undefined, ctx)
   );
 }
 
@@ -114,8 +114,8 @@ export async function getMalwareDetectedEvents(ctx: AlarmQueryContext): Promise<
       queryCache({
         logtype: 'virus',
         eventTime: timeWindow(ctx.timeWindowMinutes),
-      }),
-    fa => queryFortiAnalyzerDirect(fa, 'virus', '', ctx.timeWindowMinutes),
+      }, undefined, ctx),
+    fa => queryFortiAnalyzerDirect(fa, 'virus', '', ctx.timeWindowMinutes, undefined, ctx),
     { softFallback: true }
   );
 }
@@ -143,14 +143,14 @@ export async function getAppCtrlViolationEvents(ctx: AlarmQueryContext): Promise
         logtype: 'app-ctrl',
         action: 'blocked',
         eventTime: timeWindow(ctx.timeWindowMinutes),
-      }),
+      }, undefined, ctx),
     fa =>
       queryFortiAnalyzerDirect(
         fa,
         'app-ctrl',
         'action == blocked',
         ctx.timeWindowMinutes
-      )
+      , undefined, ctx)
   );
 }
 
@@ -173,13 +173,13 @@ export async function getShadowItEvents(ctx: AlarmQueryContext): Promise<QueryRe
         action: 'detected',
         apprisk: 'elevated',
         eventTime: timeWindow(ctx.timeWindowMinutes),
-      });
+      }, undefined, ctx);
       const critical = await queryCache({
         logtype: 'app-ctrl',
         action: 'detected',
         apprisk: 'critical',
         eventTime: timeWindow(ctx.timeWindowMinutes),
-      });
+      }, undefined, ctx);
       return [...elevated, ...critical];
     },
     fa =>
@@ -188,7 +188,7 @@ export async function getShadowItEvents(ctx: AlarmQueryContext): Promise<QueryRe
         'app-ctrl',
         'action == detected and (apprisk == elevated or apprisk == critical)',
         ctx.timeWindowMinutes
-      )
+      , undefined, ctx)
   );
 }
 
@@ -211,14 +211,14 @@ export async function getWebFilterBlockEvents(ctx: AlarmQueryContext): Promise<Q
         logtype: 'webfilter',
         action: 'blocked',
         eventTime: timeWindow(ctx.timeWindowMinutes),
-      }),
+      }, undefined, ctx),
     fa =>
       queryFortiAnalyzerDirect(
         fa,
         'webfilter',
         'action == blocked',
         ctx.timeWindowMinutes
-      )
+      , undefined, ctx)
   );
 }
 
@@ -245,14 +245,14 @@ export async function getIocHitEvents(ctx: AlarmQueryContext): Promise<QueryResu
         logtype: 'attack',
         level: 'critical',
         eventTime: timeWindow(ctx.timeWindowMinutes),
-      }),
+      }, undefined, ctx),
     fa =>
       queryFortiAnalyzerDirect(
         fa,
         'attack',
         'level == critical',
         ctx.timeWindowMinutes
-      ),
+      , undefined, ctx),
     { softFallback: true }
   );
 }
@@ -279,13 +279,13 @@ export async function getHighOutboundTrafficEvents(ctx: AlarmQueryContext): Prom
         logtype: 'traffic',
         action: 'accept',
         eventTime: timeWindow(ctx.timeWindowMinutes),
-      }),
+      }, undefined, ctx),
     fa =>
       queryFortiAnalyzerDirect(
         fa,
         'traffic',
         'action == accept',
         ctx.timeWindowMinutes
-      )
+      , undefined, ctx)
   );
 }

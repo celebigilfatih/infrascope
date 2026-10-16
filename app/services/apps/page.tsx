@@ -1,5 +1,9 @@
 'use client';
 
+import { uiLabel } from '@/lib/i18n/tr';
+
+import { StatusBadge } from '@/components/ui/status-badge';
+import { PageHeading } from '@/components/ui/page-heading';
 import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -38,14 +42,14 @@ export default function AppsPage() {
   useEffect(() => {
     setTimeout(() => {
       setApps([
-        { id: '1', name: 'API Gateway', type: 'Gateway', status: 'running', instances: 3, cpuUsage: 45, memoryUsage: 62, lastUpdated: '2024-01-15 10:30', version: '2.1.0' },
-        { id: '2', name: 'Auth Service', type: 'Microservice', status: 'running', instances: 2, cpuUsage: 28, memoryUsage: 45, lastUpdated: '2024-01-15 10:28', version: '1.8.5' },
-        { id: '3', name: 'User Database', type: 'Database', status: 'running', instances: 1, cpuUsage: 72, memoryUsage: 85, lastUpdated: '2024-01-15 10:30', version: '5.7.0' },
-        { id: '4', name: 'Cache Redis', type: 'Cache', status: 'running', instances: 2, cpuUsage: 15, memoryUsage: 42, lastUpdated: '2024-01-15 10:29', version: '7.0.0' },
-        { id: '5', name: 'Message Queue', type: 'Queue', status: 'warning', instances: 2, cpuUsage: 55, memoryUsage: 68, lastUpdated: '2024-01-15 10:25', version: '3.8.0' },
-        { id: '6', name: 'Search Engine', type: 'Search', status: 'running', instances: 1, cpuUsage: 62, memoryUsage: 74, lastUpdated: '2024-01-15 10:30', version: '8.0.0' },
-        { id: '7', name: 'Notification Service', type: 'Microservice', status: 'stopped', instances: 0, cpuUsage: 0, memoryUsage: 0, lastUpdated: '2024-01-14 18:45', version: '1.2.0' },
-        { id: '8', name: 'Analytics Engine', type: 'Processing', status: 'error', instances: 1, cpuUsage: 95, memoryUsage: 92, lastUpdated: '2024-01-15 09:15', version: '3.0.0' },
+        { id: '1', name: 'API Ağ Geçidi', type: 'Gateway', status: 'running', instances: 3, cpuUsage: 45, memoryUsage: 62, lastUpdated: '2024-01-15 10:30', version: '2.1.0' },
+        { id: '2', name: 'Kimlik Doğrulama Servisi', type: 'Microservice', status: 'running', instances: 2, cpuUsage: 28, memoryUsage: 45, lastUpdated: '2024-01-15 10:28', version: '1.8.5' },
+        { id: '3', name: 'Kullanıcı Veritabanı', type: 'Database', status: 'running', instances: 1, cpuUsage: 72, memoryUsage: 85, lastUpdated: '2024-01-15 10:30', version: '5.7.0' },
+        { id: '4', name: 'Redis Önbelleği', type: 'Cache', status: 'running', instances: 2, cpuUsage: 15, memoryUsage: 42, lastUpdated: '2024-01-15 10:29', version: '7.0.0' },
+        { id: '5', name: 'Mesaj Kuyruğu', type: 'Queue', status: 'warning', instances: 2, cpuUsage: 55, memoryUsage: 68, lastUpdated: '2024-01-15 10:25', version: '3.8.0' },
+        { id: '6', name: 'Arama Motoru', type: 'Search', status: 'running', instances: 1, cpuUsage: 62, memoryUsage: 74, lastUpdated: '2024-01-15 10:30', version: '8.0.0' },
+        { id: '7', name: 'Bildirim Servisi', type: 'Microservice', status: 'stopped', instances: 0, cpuUsage: 0, memoryUsage: 0, lastUpdated: '2024-01-14 18:45', version: '1.2.0' },
+        { id: '8', name: 'Analiz Motoru', type: 'Processing', status: 'error', instances: 1, cpuUsage: 95, memoryUsage: 92, lastUpdated: '2024-01-15 09:15', version: '3.0.0' },
         { id: '9', name: 'File Storage', type: 'Storage', status: 'running', instances: 2, cpuUsage: 22, memoryUsage: 55, lastUpdated: '2024-01-15 10:30', version: '4.2.0' },
         { id: '10', name: 'ML Pipeline', type: 'Processing', status: 'running', instances: 1, cpuUsage: 88, memoryUsage: 78, lastUpdated: '2024-01-15 10:20', version: '2.5.0' },
       ]);
@@ -67,23 +71,7 @@ export default function AppsPage() {
 
   useEffect(() => { if (currentPage > totalPages && totalPages > 0) setCurrentPage(1); }, [totalPages, currentPage]);
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'running': return 'bg-green-500';
-      case 'warning': return 'bg-orange-500';
-      case 'error': return 'bg-red-500';
-      default: return 'bg-gray-500';
-    }
-  };
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'running': return <Badge className="bg-green-500">Running</Badge>;
-      case 'warning': return <Badge className="bg-orange-500">Warning</Badge>;
-      case 'error': return <Badge variant="destructive">Error</Badge>;
-      default: return <Badge variant="secondary">Stopped</Badge>;
-    }
-  };
+  const getStatusBadge = (status: string) => { return <StatusBadge status={['running', 'warning', 'error'].includes(status) ? status : 'STOPPED'} />; };
 
   const getTypeIcon = (type: string) => {
     switch (type.toLowerCase()) {
@@ -116,13 +104,12 @@ export default function AppsPage() {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Service Applications</h1>
-          <p className="text-muted-foreground">Uygulama ve servis yönetimi</p>
+          <PageHeading section="applications" description={<>Uygulama ve servis yönetimi</>}>Uygulamalar</PageHeading>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon"><RefreshCw className="h-4 w-4" /></Button>
+          <Button variant="outline" size="icon" aria-label="Yenile"><RefreshCw className="h-4 w-4" /></Button>
           <Button><Box className="h-4 w-4 mr-2" />Yenile</Button>
         </div>
       </div>
@@ -156,7 +143,7 @@ export default function AppsPage() {
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-full bg-purple-500/20"><Cpu className="h-5 w-5 text-purple-500" /></div>
-              <div><p className="text-sm text-muted-foreground">Toplam Instance</p><p className="text-2xl font-bold">{totalInstances}</p></div>
+              <div><p className="text-sm text-muted-foreground">Toplam Örnek</p><p className="text-2xl font-bold">{totalInstances}</p></div>
             </div>
           </CardContent>
         </Card>
@@ -169,7 +156,7 @@ export default function AppsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2"><Box className="h-5 w-5" />Service Applications<Badge variant="secondary">{filteredApps.length}</Badge></CardTitle>
+          <CardTitle className="flex items-center gap-2"><Box className="h-5 w-5" />Uygulamalar<Badge variant="secondary">{filteredApps.length}</Badge></CardTitle>
         </CardHeader>
         <CardContent>
           {loading ? (
@@ -182,7 +169,7 @@ export default function AppsPage() {
                     <TableHead>Uygulama</TableHead>
                     <TableHead>Tip</TableHead>
                     <TableHead>Durum</TableHead>
-                    <TableHead className="text-center">Instance</TableHead>
+                    <TableHead className="text-center">Örnek</TableHead>
                     <TableHead className="text-center">CPU</TableHead>
                     <TableHead className="text-center">RAM</TableHead>
                     <TableHead>Versiyon</TableHead>
@@ -196,8 +183,8 @@ export default function AppsPage() {
                     paginatedApps.map((app) => (
                       <TableRow key={app.id}>
                         <TableCell className="font-medium">{app.name}</TableCell>
-                        <TableCell><div className="flex items-center gap-2">{getTypeIcon(app.type)}{app.type}</div></TableCell>
-                        <TableCell><div className="flex items-center gap-2"><span className={`h-2 w-2 rounded-full ${getStatusColor(app.status)}`}></span>{getStatusBadge(app.status)}</div></TableCell>
+                        <TableCell><div className="flex items-center gap-2">{getTypeIcon(app.type)}{uiLabel(app.type)}</div></TableCell>
+                        <TableCell>{getStatusBadge(app.status)}</TableCell>
                         <TableCell className="text-center font-mono">{app.instances}</TableCell>
                         <TableCell className="text-center">
                           <div className="flex items-center justify-center gap-2">
@@ -222,7 +209,7 @@ export default function AppsPage() {
                 <div className="flex items-center justify-between mt-4">
                   <p className="text-sm text-muted-foreground">Sayfa {currentPage} / {totalPages}</p>
                   <div className="flex items-center gap-1">
-                    <Button variant="outline" size="icon" onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1}><ChevronLeft className="h-4 w-4" /></Button>
+                    <Button variant="outline" size="icon" onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} aria-label="Önceki sayfa"><ChevronLeft className="h-4 w-4" /></Button>
                     {getPageNumbers().map((page, idx) => (
                       <React.Fragment key={idx}>
                         {page === 'ellipsis' ? <span className="px-2 text-muted-foreground">...</span> : (
@@ -230,7 +217,7 @@ export default function AppsPage() {
                         )}
                       </React.Fragment>
                     ))}
-                    <Button variant="outline" size="icon" onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}><ChevronRight className="h-4 w-4" /></Button>
+                    <Button variant="outline" size="icon" onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} aria-label="Sonraki sayfa"><ChevronRight className="h-4 w-4" /></Button>
                   </div>
                 </div>
               )}

@@ -1,7 +1,7 @@
-import { AlarmArchiveState, AlarmIncidentStatus } from '@prisma/client';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getRequestActor } from '@/lib/auth/request-actor';
+import { incidentListFilters, incidentListOrdering } from '@/lib/alarms/incident-list';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,19 +17,13 @@ export async function GET(request: NextRequest) {
     if (!auth) return NextResponse.json({ success: false, error: 'Authentication required' }, { status: 401 });
 
     const params = request.nextUrl.searchParams;
-    const archiveState = params.get('archiveState');
-    const status = params.get('status');
+    let where;
+    try { where = incidentListFilters(params, auth.actor.id); }
+    catch (error) { return NextResponse.json({ success: false, error: (error as Error).message }, { status: 400 }); }
     const rows = await prisma.alarmIncident.findMany({
-      where: {
-        ...(archiveState && Object.values(AlarmArchiveState).includes(archiveState as AlarmArchiveState)
-          ? { archiveState: archiveState as AlarmArchiveState }
-          : {}),
-        ...(status && Object.values(AlarmIncidentStatus).includes(status as AlarmIncidentStatus)
-          ? { status: status as AlarmIncidentStatus }
-          : {}),
-      },
+      where,
       include: { alarm: { select: { code: true } } },
-      orderBy: [{ lastSeenAt: 'desc' }, { id: 'desc' }],
+      orderBy: incidentListOrdering(params).orderBy,
       take: 10_000,
     });
 

@@ -55,11 +55,13 @@
 - Chain analysis
 
 ### Dashboard & Reporting
-- Key metrics overview
-- Recent activity feed
-- Device and service statistics
-- Health indicators
-- Quick action links
+- Mint overview with real monitoring coverage and priority incidents
+- Device-specific CPU/memory history, time ranges and CSV export
+- Inventory/IP/alarm search and exact incident details
+- Integration freshness, missing-data and error states
+- Responsive navigation and keyboard controls
+
+Dashboard behavior and API contracts: [Dashboard documentation](docs/dashboard.md).
 
 ## 🚀 Quick Start
 
@@ -209,6 +211,9 @@ npm run build            # Build for production
 npm run start            # Start production server
 npm run lint             # Run ESLint
 npm run type-check       # TypeScript type checking
+npm run quality:release  # Mandatory policy, TLS, type and full configured lint gate
+npm run test:release-quality   # Pure release-policy/scanner/workflow regressions
+npm run test:release-compiler  # Actual minimal compiler positive/negative controls
 
 # Database
 npm run db:migrate       # Create database migration
@@ -216,6 +221,8 @@ npm run db:push          # Push schema to database
 npm run db:seed          # Seed database with sample data
 npm run db:studio        # Open Prisma Studio GUI
 ```
+
+Release builds enforce TypeScript and ESLint failures. The 390 lint errors found during B21 have been resolved by module; `quality:release` passes with the same 9 warnings. Inter is bundled locally and the real product `npm run build` completes with network access disabled; see [offline font/build verification](docs/30-runbooks/LOCAL_FONTS.md) and [release quality verification](docs/30-runbooks/RELEASE_QUALITY_GATES.md). Dependencies must already be installed. No release waiver or lint-rule downgrade is used.
 
 ## 💾 Sample Data
 

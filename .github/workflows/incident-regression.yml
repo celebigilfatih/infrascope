@@ -1,0 +1,37 @@
+name: Incident regression
+
+on:
+  workflow_call:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-incident-regression-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  browser-and-database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Run isolated incident regression
+        run: npm run test:incidents:regression
+      - name: Remove disposable containers and database
+        if: always()
+        run: docker compose -f compose.incident-tests.yml down --volumes --remove-orphans
+      - name: Upload browser report, screenshots and failure traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: incident-regression-${{ github.run_attempt }}
+          path: output/incident-regression/
+          if-no-files-found: warn
+          retention-days: 7

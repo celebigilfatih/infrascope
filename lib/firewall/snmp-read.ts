@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma, type NmsInterface } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import {
   availableFirewallData,
@@ -55,8 +55,11 @@ async function loadSnmpContext(connectorId: string) {
       deviceId: true,
       vdom: true,
       monitoringMode: true,
+      managementHost: true,
+      integrationConfig: { select: { enabled: true, type: true } },
       device: {
         select: {
+          managementIp: true,
           nmsDeviceId: true,
           pollingEnabled: true,
           pollingInterval: true,
@@ -72,6 +75,59 @@ async function loadSnmpContext(connectorId: string) {
   });
   if (!connector) throw new FirewallReadTargetError('Firewall connector not found', 404);
   return connector;
+}
+
+function interfaceObservation(row: NmsInterface): FirewallSnmpInterface {
+  return {
+    index: row.interfaceIndex, name: row.interfaceName, description: row.description,
+    adminStatus: row.adminStatus, operStatus: row.operStatus, monitored: row.monitored,
+    speed: row.speed.toString(), inOctets: row.inOctets.toString(), outOctets: row.outOctets.toString(),
+    inErrors: row.inErrors, outErrors: row.outErrors, mtu: row.mtu,
+    lastPolledAt: row.lastPolledAt.toISOString(),
+  };
+}
+
+/** Complete stored-NMS snapshot for inventory writes; UI stale/paginated reads stay separate. */
+export async function readFirewallSnmpInterfaceSnapshot(params: {
+  connectorId: string;
+  deviceId: string;
+  host: string;
+}): Promise<{ target: SnmpTarget; envelope: FirewallDataEnvelope<FirewallSnmpInterface[]> }> {
+  const context = await loadSnmpContext(params.connectorId);
+  const target = targetFromContext(context);
+  const unavailable = (reason: string) => ({ target,
+    envelope: unavailableFirewallData<FirewallSnmpInterface[]>('database', reason, { retryable: true }) });
+  const host = params.host.trim().toLowerCase();
+  if (context.vdom !== 'root' || context.deviceId !== params.deviceId
+    || context.managementHost.trim().toLowerCase() !== host
+    || context.device.managementIp?.trim().toLowerCase() !== host
+    || !context.integrationConfig.enabled || context.integrationConfig.type !== 'FORTIGATE') {
+    return unavailable('NMS inventory target mapping is unavailable or does not match the selected firewall');
+  }
+  const invalid = validateSnmpConfiguration<FirewallSnmpInterface[]>(context);
+  if (invalid) return invalid;
+  if (!Number.isInteger(context.device.nmsDeviceId) || context.device.nmsDeviceId! <= 0) {
+    return unavailable('NMS device identity is invalid');
+  }
+  // One query avoids mixing pages from different polling cycles. Never truncate a successful snapshot.
+  const rows = await prisma.nmsInterface.findMany({
+    where: { nmsDeviceId: context.device.nmsDeviceId! },
+    orderBy: { interfaceIndex: 'asc' },
+    take: 10001,
+  });
+  if (!rows.length) return unavailable('No completed NMS interface observation is available');
+  if (rows.length > 10000) return unavailable('NMS interface snapshot exceeds the supported inventory size');
+  const times = rows.map(row => row.lastPolledAt.getTime());
+  if (times.some(time => !Number.isFinite(time) || time > Date.now() + 30000)) {
+    return unavailable('NMS interface observation time is invalid');
+  }
+  const oldest = new Date(Math.min(...times));
+  const data = rows.map(interfaceObservation);
+  if (collectedStatus(oldest, context.device.pollingInterval) !== 'available') {
+    return { target, envelope: staleFirewallData(data, 'database', oldest.toISOString(),
+      'NMS interface observations are older than the expected polling window') };
+  }
+  return { target, envelope: availableFirewallData(data, 'database', oldest.toISOString()) };
 }
 
 function targetFromContext(context: Awaited<ReturnType<typeof loadSnmpContext>>): SnmpTarget {
@@ -249,21 +305,7 @@ export async function readFirewallSnmpInterfaces(params: {
     }),
   ]);
   const data: FirewallListResult<FirewallSnmpInterface> = {
-    items: rows.map((row) => ({
-      index: row.interfaceIndex,
-      name: row.interfaceName,
-      description: row.description,
-      adminStatus: row.adminStatus,
-      operStatus: row.operStatus,
-      monitored: row.monitored,
-      speed: row.speed.toString(),
-      inOctets: row.inOctets.toString(),
-      outOctets: row.outOctets.toString(),
-      inErrors: row.inErrors,
-      outErrors: row.outErrors,
-      mtu: row.mtu,
-      lastPolledAt: row.lastPolledAt.toISOString(),
-    })),
+    items: rows.map(interfaceObservation),
     pagination: {
       page: params.query.page,
       limit: params.query.limit,

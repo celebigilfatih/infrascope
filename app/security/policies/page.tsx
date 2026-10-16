@@ -1,5 +1,6 @@
 'use client';
 
+import { PageHeading } from '@/components/ui/page-heading';
 import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -85,14 +86,14 @@ export default function FirewallPoliciesPage() {
 
   const getActionBadge = (action: string) => {
     switch (action.toLowerCase()) {
-      case 'accept': return <Badge className="bg-green-600"><CheckCircle className="h-3 w-3 mr-1" />Accept</Badge>;
-      case 'deny': return <Badge variant="destructive"><XCircle className="h-3 w-3 mr-1" />Deny</Badge>;
+      case 'accept': return <Badge variant="success"><CheckCircle className="h-3 w-3 mr-1" />İzin Ver</Badge>;
+      case 'deny': return <Badge variant="destructive"><XCircle className="h-3 w-3 mr-1" />Engelle</Badge>;
       default: return <Badge variant="outline">{action}</Badge>;
     }
   };
 
   const formatAddresses = (addresses: string[] | null) => {
-    if (!addresses || addresses.length === 0) return 'Any';
+    if (!addresses || addresses.length === 0) return "Tümü";
     if (addresses.length <= 2) return addresses.join(', ');
     return `${addresses[0]}, ${addresses[1]} +${addresses.length - 2}`;
   };
@@ -115,13 +116,12 @@ export default function FirewallPoliciesPage() {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Firewall Policies</h1>
-          <p className="text-muted-foreground">FortiGate güvenlik politikaları</p>
+          <PageHeading section="policies" description={<>FortiGate güvenlik politikaları</>}>Güvenlik Politikaları</PageHeading>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={fetchPolicies} disabled={loading}>
+          <Button variant="outline" size="icon" onClick={fetchPolicies} disabled={loading} aria-label="Yenile">
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </Button>
         </div>
@@ -131,37 +131,37 @@ export default function FirewallPoliciesPage() {
         <Card><CardContent className="p-4">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-full bg-blue-500/20"><Shield className="h-5 w-5 text-blue-500" /></div>
-            <div><p className="text-sm text-muted-foreground">Toplam Policy</p><p className="text-2xl font-bold">{policies.length}</p></div>
+            <div><p className="text-sm text-muted-foreground">Toplam Politika</p><p className="text-2xl font-bold">{policies.length}</p></div>
           </div>
         </CardContent></Card>
         <Card><CardContent className="p-4">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-full bg-green-500/20"><CheckCircle className="h-5 w-5 text-green-500" /></div>
-            <div><p className="text-sm text-muted-foreground">Accept</p><p className="text-2xl font-bold">{policies.filter((p) => p.action === 'accept').length}</p></div>
+            <div><p className="text-sm text-muted-foreground">İzin Ver</p><p className="text-2xl font-bold">{policies.filter((p) => p.action === 'accept').length}</p></div>
           </div>
         </CardContent></Card>
         <Card><CardContent className="p-4">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-full bg-red-500/20"><XCircle className="h-5 w-5 text-red-500" /></div>
-            <div><p className="text-sm text-muted-foreground">Deny</p><p className="text-2xl font-bold">{policies.filter((p) => p.action === 'deny').length}</p></div>
+            <div><p className="text-sm text-muted-foreground">Engelle</p><p className="text-2xl font-bold">{policies.filter((p) => p.action === 'deny').length}</p></div>
           </div>
         </CardContent></Card>
         <Card><CardContent className="p-4">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-full bg-orange-500/20"><ArrowRight className="h-5 w-5 text-orange-500" /></div>
-            <div><p className="text-sm text-muted-foreground">Toplam Hit</p><p className="text-2xl font-bold">{policies.reduce((acc, p) => acc + Number(p.hitCount), 0).toLocaleString()}</p></div>
+            <div><p className="text-sm text-muted-foreground">Toplam Eşleşme</p><p className="text-2xl font-bold">{policies.reduce((acc, p) => acc + Number(p.hitCount), 0).toLocaleString('tr-TR')}</p></div>
           </div>
         </CardContent></Card>
       </div>
 
       <div className="relative max-w-md">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input placeholder="Policy ID veya isim ara..." value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }} className="pl-9" />
+        <Input placeholder="Politika kimliği veya ad ile ara…" value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }} className="pl-9" />
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2"><Shield className="h-5 w-5" />Firewall Policies<Badge variant="secondary">{filteredPolicies.length}</Badge></CardTitle>
+          <CardTitle className="flex items-center gap-2"><Shield className="h-5 w-5" />Güvenlik Politikaları<Badge variant="secondary">{filteredPolicies.length}</Badge></CardTitle>
         </CardHeader>
         <CardContent>
           {loading ? (
@@ -177,7 +177,7 @@ export default function FirewallPoliciesPage() {
                     <TableHead>Hedef</TableHead>
                     <TableHead>Servis</TableHead>
                     <TableHead>İşlem</TableHead>
-                    <TableHead className="text-right">Hit Count</TableHead>
+                    <TableHead className="text-right">Eşleşme Sayısı</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -198,7 +198,7 @@ export default function FirewallPoliciesPage() {
                         </TableCell>
                         <TableCell className="text-xs">{formatAddresses(policy.services)}</TableCell>
                         <TableCell>{getActionBadge(policy.action)}</TableCell>
-                        <TableCell className="text-right font-mono">{Number(policy.hitCount).toLocaleString()}</TableCell>
+                        <TableCell className="text-right font-mono">{Number(policy.hitCount).toLocaleString('tr-TR')}</TableCell>
                       </TableRow>
                     ))
                   )}
@@ -208,7 +208,7 @@ export default function FirewallPoliciesPage() {
                 <div className="flex items-center justify-between mt-4">
                   <p className="text-sm text-muted-foreground">Sayfa {currentPage} / {totalPages}</p>
                   <div className="flex items-center gap-1">
-                    <Button variant="outline" size="icon" onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1}><ChevronLeft className="h-4 w-4" /></Button>
+                    <Button variant="outline" size="icon" onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} aria-label="Önceki sayfa"><ChevronLeft className="h-4 w-4" /></Button>
                     {getPageNumbers().map((page, idx) => (
                       <React.Fragment key={idx}>
                         {page === 'ellipsis' ? <span className="px-2 text-muted-foreground">...</span> : (
@@ -216,7 +216,7 @@ export default function FirewallPoliciesPage() {
                         )}
                       </React.Fragment>
                     ))}
-                    <Button variant="outline" size="icon" onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}><ChevronRight className="h-4 w-4" /></Button>
+                    <Button variant="outline" size="icon" onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} aria-label="Sonraki sayfa"><ChevronRight className="h-4 w-4" /></Button>
                   </div>
                 </div>
               )}

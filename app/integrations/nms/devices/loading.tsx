@@ -2,7 +2,8 @@
 
 export default function NmsDevicesLoading() {
   return (
-    <div className="flex-1 overflow-y-auto p-6">
+    <div role="status" aria-label="İzlenen cihazlar yükleniyor" className="mx-auto w-full max-w-[1600px] p-4 sm:p-6 lg:p-8">
+      <span className="sr-only">İzlenen cihazlar yükleniyor…</span>
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="h-8 w-40 bg-muted rounded animate-pulse" />

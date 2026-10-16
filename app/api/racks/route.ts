@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
 // Cache for 30 seconds to prevent database overload
-let cachedRacks: any = null;
+let cachedRacks: unknown = null;
 let cacheTimestamp: number = 0;
 const CACHE_TTL = 30000; // 30 seconds
 
@@ -10,7 +10,7 @@ export async function GET(_request: NextRequest) {
   try {
     // Return cached data if available and not expired
     const now = Date.now();
-    if (cachedRacks && (now - cacheTimestamp) < CACHE_TTL) {
+    if (_request.nextUrl.searchParams.get('fresh') !== '1' && cachedRacks && (now - cacheTimestamp) < CACHE_TTL) {
       return NextResponse.json({
         success: true,
         data: cachedRacks,
@@ -37,7 +37,8 @@ export async function GET(_request: NextRequest) {
             type: true,
             status: true,
             criticality: true,
-            rackUnitPosition: true
+            rackUnitPosition: true,
+            metadata: true
           }
         }
       },
@@ -56,7 +57,7 @@ export async function GET(_request: NextRequest) {
       timestamp: new Date,
       cached: false
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error fetching racks:', error);
     return NextResponse.json({
       success: false,
@@ -110,7 +111,7 @@ export async function POST(request: NextRequest) {
       data: rack,
       timestamp: new Date()
     }, { status: 201 });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error creating rack:', error);
     return NextResponse.json({
       success: false,

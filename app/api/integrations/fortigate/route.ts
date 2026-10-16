@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 /**
  * FortiGate Integration API Routes
  * 
@@ -7,7 +8,11 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { authorizeApiRequest } from '@/lib/auth/api-permission';
 import { prisma } from '@/lib/prisma';
+import { recordInventorySync } from '@/lib/integrations/sync-log';
+import { inventorySyncOutcome } from '@/lib/integrations/sync-outcome';
+import { InventorySyncBusyError, isInventorySyncInterval, withInventorySync } from '@/lib/integrations/sync-coordinator';
 import {
   hasIntegrationCredential,
   protectIntegrationConfig,
@@ -73,14 +78,14 @@ function fortiGateErrorResponse(error: unknown): NextResponse | null {
 // ── Stale-while-revalidate cache for dashboard-facing FortiGate endpoints ──
 // Absorbs FortiGate cold-start latency (first call ~25-30s) so subsequent
 // dashboard loads never wait on upstream.
-type FgCacheEntry = { data: any; timestamp: number };
+type FgCacheEntry = { data: unknown; timestamp: number };
 function fgCache(): Record<string, FgCacheEntry> {
-  const g = globalThis as any;
+  const g = globalThis as typeof globalThis & { __fgCache?: Record<string, FgCacheEntry> };
   if (!g.__fgCache) g.__fgCache = {};
   return g.__fgCache;
 }
 function fgRevalidating(): Set<string> {
-  const g = globalThis as any;
+  const g = globalThis as typeof globalThis & { __fgRevalidating?: Set<string> };
   if (!g.__fgRevalidating) g.__fgRevalidating = new Set<string>();
   return g.__fgRevalidating;
 }
@@ -119,11 +124,13 @@ function fgServeCached(
   }
   return null;
 }
-function fgStore(key: string, data: any) {
+function fgStore(key: string, data: unknown) {
   fgCache()[key] = { data, timestamp: Date.now() };
 }
 
 export async function GET(request: NextRequest) {
+  const access = await authorizeApiRequest(request, 'firewall', 'read');
+  if (!access.allowed) return access.response;
   try {
     // Get query params
     const { searchParams } = new URL(request.url);
@@ -162,7 +169,7 @@ export async function GET(request: NextRequest) {
             hasIntegrationCredential(config.config, 'FORTIGATE', 'password') ||
             hasIntegrationCredential(config.config, 'FORTIGATE', 'accessToken'),
           snmp: fortiConfig.snmp || { community: 'public', version: '2c' },
-          pollingInterval: fortiConfig.pollingInterval || 15,
+          pollingInterval: config.syncInterval || 15,
           syncMode: fortiConfig.syncMode || 'rest',
           enabledModules: fortiConfig.enabledModules || {
             interfaces: true,
@@ -369,6 +376,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const access = await authorizeApiRequest(request, 'firewall', 'write');
+  if (!access.allowed) return access.response;
   try {
     const body = await request.json();
     const { action, config } = body;
@@ -449,37 +458,19 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const { service, integration: fortiConfig, target } = await getFortiGateConnector(selector);
+      const resolved = await resolveFortiGateTarget(selector);
+      return await withInventorySync('FORTIGATE', resolved.integration.id, async () => {
+        const { service, integration: fortiConfig, target } = await getFortiGateConnector({ ...selector, configId: resolved.integration.id });
+        const startedAt = new Date();
+        const collected = await service.syncToInventory(organizationId);
+        const result = { ...collected, ...inventorySyncOutcome(0, 0, collected.interfacesProcessed + collected.vlansProcessed
+          + collected.policiesProcessed + collected.addressesProcessed, collected.errors) };
+        await recordInventorySync(fortiConfig.id, result, startedAt);
 
-      // Perform sync
-      const result = await service.syncToInventory(organizationId);
-
-      // Log the sync
-      await prisma.integrationSyncLog.create({
-        data: {
-          configId: fortiConfig.id,
-          status: result.success ? 'success' : 'failed',
-          message: result.errors.length > 0 ? result.errors.join('; ') : null,
-          itemsProcessed: result.interfacesProcessed + result.vlansProcessed + 
-                          result.policiesProcessed + result.addressesProcessed,
-          itemsCreated: result.interfacesProcessed,
-          itemsUpdated: 0,
-          completedAt: new Date(),
-        },
-      });
-
-      // Update last sync time
-      await prisma.integrationConfig.update({
-        where: { id: fortiConfig.id },
-        data: {
-          lastSyncAt: new Date(),
-          lastSyncStatus: result.success ? 'success' : 'partial',
-        },
-      });
-
-      return NextResponse.json({
-        ...result,
-        target: { configId: target.configId, vdom: target.vdom },
+        return NextResponse.json({
+          ...result,
+          target: { configId: target.configId, vdom: target.vdom },
+        });
       });
     }
 
@@ -508,6 +499,10 @@ export async function POST(request: NextRequest) {
       };
 
       const targetName = body.name || `FortiGate-${config.host}`;
+      if (newConfig.pollingInterval === undefined) newConfig.pollingInterval = 15;
+      if (!isInventorySyncInterval(newConfig.pollingInterval)) {
+        return NextResponse.json({ success: false, error: 'Senkronizasyon aralığı 1–1440 dakika olmalıdır.' }, { status: 400 });
+      }
       const existingRecord = selector.configId
         ? await prisma.integrationConfig.findUnique({ where: { id: selector.configId } })
         : await prisma.integrationConfig.findUnique({
@@ -538,7 +533,7 @@ export async function POST(request: NextRequest) {
             data: {
               name: targetName,
               enabled: true,
-              config: protectedConfig as any,
+              config: protectedConfig as Prisma.InputJsonObject,
               syncInterval: newConfig.pollingInterval,
             },
           })
@@ -547,7 +542,7 @@ export async function POST(request: NextRequest) {
           type: 'FORTIGATE',
           name: targetName,
           enabled: true,
-          config: protectedConfig as any,
+          config: protectedConfig as Prisma.InputJsonObject,
           syncInterval: newConfig.pollingInterval,
           },
         });
@@ -558,6 +553,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
   } catch (error) {
+    if (error instanceof InventorySyncBusyError) {
+      return NextResponse.json({ error: 'Bu kaynak için senkronizasyon zaten çalışıyor.', code: error.code }, { status: 409 });
+    }
     console.error('FortiGate API error:', error);
     const response = fortiGateErrorResponse(error);
     if (response) return response;

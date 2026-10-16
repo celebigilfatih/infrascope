@@ -1,0 +1,44 @@
+.dialog { max-width: 980px; padding: 24px; }
+.form { display: grid; gap: 16px; min-width: 0; }
+.tabs { border: 1px solid oklch(var(--border)); border-radius: 10px; padding: 4px; margin-bottom: 4px; }
+.tabs button { font-size: 12px; padding: 8px 12px; }
+.tabs button[data-state=active] { color: var(--ui-success-fg); background: var(--ui-success-bg); }
+.details { display: grid; gap: 16px; padding-top: 12px; }
+.details[data-state=inactive], .placement[data-state=inactive] { display: none; }
+.sectionHeading { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 650; }
+.sectionHeading svg { color: var(--ui-success-fg); flex-shrink: 0; }
+.twoColumns { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+.form label { min-width: 0; display: block; font-size: 12px; font-weight: 600; }
+.form label > span { color: var(--ui-danger-fg); }
+.form label input, .form select { width: 100%; margin-top: 7px; }
+.form select { min-width: 0; min-height: 40px; border: 1px solid oklch(var(--input)); border-radius: 8px; background: oklch(var(--background)); padding: 0 26px 0 12px; font-size: 12px; color: oklch(var(--foreground)); }
+.form small { display: block; margin-top: 6px; font-size: 10px; color: oklch(var(--muted-foreground)); font-weight: 400; line-height: 1.7; }
+.placement { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 24px; padding-top: 12px; align-items: start; }
+.controls { display: grid; gap: 14px; min-width: 0; }
+.controls > button { justify-self: start; }
+.help { display: flex; align-items: flex-start; gap: 6px; font-size: 11px; line-height: 1.7; color: oklch(var(--muted-foreground)); }
+.help svg { flex-shrink: 0; margin-top: 2px; }
+.ranges { padding: 11px; border: 1px solid oklch(var(--border)); border-radius: 9px; background: oklch(var(--muted) / .3); }
+.ranges > span { display: block; color: oklch(var(--muted-foreground)); font-size: 10px; margin-bottom: 6px; }
+.ranges p { font-size: 11px; line-height: 1.8; overflow-wrap: anywhere; max-height: 70px; overflow-y: auto; }
+.warning, .outcome { display: flex; align-items: flex-start; gap: 8px; padding: 12px; border: 1px solid var(--ui-warning-border); border-radius: 9px; background: var(--ui-warning-bg); color: var(--ui-warning-fg); font-size: 11px; line-height: 1.8; }
+.warning svg, .outcome svg { flex-shrink: 0; margin-top: 2px; }
+.warning button { margin-top: 8px; }
+.outcome { background: var(--ui-success-bg); color: var(--ui-success-fg); border-color: var(--ui-success-border); }
+.remove { color: var(--ui-danger-fg); }
+.preview { min-width: 0; padding: 14px; border: 1px solid oklch(var(--border)); border-radius: 12px; background: oklch(var(--muted) / .15); }
+.previewTitle { display: flex; align-items: center; gap: 7px; margin-bottom: 14px; color: var(--ui-success-fg); }
+.previewTitle h3 { font-size: 13px; font-weight: 600; }
+.previewEmpty { display: flex; align-items: center; flex-direction: column; justify-content: center; gap: 14px; text-align: center; min-height: 300px; padding: 20px; }
+.previewEmpty > svg { color: var(--ui-success-fg); }
+.previewEmpty h4 { font-size: 14px; font-weight: 600; }
+.previewEmpty p { color: oklch(var(--muted-foreground)); font-size: 12px; line-height: 1.8; }
+.nextStep { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 14px; border: 1px solid var(--ui-info-border); border-radius: 10px; background: var(--ui-info-bg); }
+.nextStep > svg { color: var(--ui-info-fg); flex-shrink: 0; }
+.nextStep p { flex: 1; min-width: 160px; font-size: 12px; line-height: 1.7; }
+.error { border: 1px solid var(--ui-danger-border); color: var(--ui-danger-fg); background: var(--ui-danger-bg); border-radius: 9px; padding: 12px; font-size: 12px; line-height: 1.8; }
+.footer { padding-top: 15px; border-top: 1px solid oklch(var(--border)); align-items: center; }
+.footer > span { display: flex; align-items: center; gap: 5px; margin-right: auto; font-size: 10px; color: oklch(var(--muted-foreground)); }
+.form select:focus-visible { outline: 2px solid oklch(var(--ring)); outline-offset: 2px; }
+@media (max-width: 700px) { .placement { grid-template-columns: minmax(0, 1fr); gap: 16px; } .dialog { padding: 20px; } .tabs { width: 100%; } .tabs button { flex: 1; white-space: normal; font-size: 11px; padding: 8px; } .tabs svg { width: 15px; } .footer > span { margin: 6px 0 0; } }
+@media (max-width: 400px) { .twoColumns { grid-template-columns: minmax(0, 1fr); gap: 14px; } }

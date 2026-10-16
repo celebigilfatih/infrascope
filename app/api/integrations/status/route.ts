@@ -1,4 +1,5 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { authorizeApiRequest } from '@/lib/auth/api-permission';
 import { prisma } from '@/lib/prisma';
 
 interface IntegrationStatus {
@@ -11,7 +12,9 @@ interface IntegrationStatus {
   healthScore: number;
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const access = await authorizeApiRequest(request, 'settings', 'read');
+  if (!access.allowed) return access.response;
   try {
     // Fetch all integration configs
     const configs = await prisma.integrationConfig.findMany({
@@ -20,7 +23,7 @@ export async function GET() {
     });
 
     const integrations: IntegrationStatus[] = configs.map((config) => {
-      const configData = config.config as any;
+      const configData = config.config as { host?: string };
       const lastSyncTime = config.lastSyncAt ? new Date(config.lastSyncAt) : null;
       const now = new Date();
       let lastSyncLabel = '-';
@@ -99,6 +102,10 @@ export async function GET() {
         if (diffMins < 5) {
           currentStatus = 'syncing';
         }
+      } else if (config.lastSyncStatus === 'partial') {
+        currentStatus = 'error';
+        healthScore = Math.max(0, healthScore - 25);
+        message = 'Son senkronizasyon kısmen tamamlandı';
       } else if (config.lastSyncStatus === 'failed') {
         currentStatus = 'error';
         healthScore = Math.max(0, healthScore - 50);
@@ -108,7 +115,7 @@ export async function GET() {
       return {
         id: config.id,
         name,
-        type: category as any,
+        type: category as IntegrationStatus['type'],
         status: currentStatus,
         lastSync: lastSyncLabel,
         message,
@@ -154,7 +161,7 @@ export async function GET() {
       return {
         id: `unconfigured-${idx}`,
         name,
-        type: category as any,
+        type: category as IntegrationStatus['type'],
         status: 'disconnected' as const,
         lastSync: '-',
         message: 'Entegrasyon yapılandırılmadı',

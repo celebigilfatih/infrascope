@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getRequestActor } from '@/lib/auth/request-actor';
@@ -214,7 +215,7 @@ export async function POST(request: NextRequest) {
           type: 'FORTIGATE',
           name: `FortiGate:${device.id}:${input.vdom}`,
           description: input.name,
-          config: config as any,
+          config: config as Prisma.InputJsonObject,
           enabled: true,
           syncInterval: 5,
           lastSyncStatus: 'pending-probe',
@@ -248,12 +249,12 @@ export async function POST(request: NextRequest) {
           vdom: input.vdom,
           monitoringMode: 'UNAVAILABLE',
           identityStatus: 'PENDING',
-          capabilities: fallbackCapabilities as any,
+          capabilities: fallbackCapabilities as Prisma.InputJsonArray,
           writeEnabled: false,
         },
       });
       return { device, integration, connector };
-    });
+    }, { isolationLevel: 'ReadCommitted' });
 
     const { connector, device, monitoring, status } = await probeFirewallConnector(
       created.connector.id,

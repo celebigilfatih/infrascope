@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 /**
  * VMware vCenter Integration API Routes
  * 
@@ -6,7 +7,11 @@
  * GET  /api/integrations/vmware?type=vms - Get all VMs from vCenter
  * GET  /api/integrations/vmware?type=hosts - Get all ESXi hosts
  * GET  /api/integrations/vmware?type=clusters - Get all clusters
+ * GET  /api/integrations/vmware?type=cluster-workspace - Cluster membership, health and resources
+ * GET  /api/integrations/vmware?type=host-workspace - ESXi health, membership and usage
+ * GET  /api/integrations/vmware?type=vm-workspace - VM power, runtime host and usage
  * GET  /api/integrations/vmware?type=datastores - Get all datastores
+ * GET  /api/integrations/vmware?type=datastore-workspace - Datastore capacity and ESXi mounts
  * GET  /api/integrations/vmware?type=snapshots&vmId=xxx - Get VM snapshots
  * POST /api/integrations/vmware/sync - Trigger a sync with vCenter
  * POST /api/integrations/vmware/test - Test connection
@@ -15,18 +20,27 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { VMwareService } from '@/lib/integrations/vmware';
+import { authorizeApiRequest, forbiddenApiPermission } from '@/lib/auth/api-permission';
+import { canAccessSync } from '@/lib/auth/permission-policy';
+import { VMwareService, type VMwareHost } from '@/lib/integrations/vmware';
+import { createSavedVMwareSource } from '@/lib/integrations/vmware-source';
+import { getVMwareCacheScope, invalidateVMwareCache, loadVMwareCachedValue, vmwareResourceKey } from '@/lib/integrations/vmware-cache';
 import { prisma } from '@/lib/prisma';
+import { recordInventorySync } from '@/lib/integrations/sync-log';
+import { InventorySyncBusyError, withInventorySync } from '@/lib/integrations/sync-coordinator';
+import { InventorySourceSelectionError, selectInventorySource } from '@/lib/integrations/inventory-source-selection';
+import { protectIntegrationConfig, unprotectIntegrationConfig } from '@/lib/security/integration-credentials';
+import { isVMwarePythonError, vmwareCollectionErrorMessage } from '@/lib/integrations/vmware-python';
 import { validateBody } from '@/lib/validators';
 import { vmwareTestSchema, vmwareSaveConfigSchema } from '@/lib/validators/integrations';
 
 // Helper: Get capacity trends from time series data
-async function getCapacityTrends(days: number) {
+async function getCapacityTrends(days: number, sourceScope: string) {
   const since = new Date();
   since.setDate(since.getDate() - days);
 
   const metrics = await prisma.capacityMetric.findMany({
-    where: { timestamp: { gte: since } },
+    where: { sourceScope, timestamp: { gte: since } },
     orderBy: { timestamp: 'asc' },
   });
 
@@ -73,13 +87,13 @@ async function getCapacityTrends(days: number) {
 }
 
 // Helper: Growth forecast with linear regression
-async function getGrowthForecast() {
+async function getGrowthForecast(sourceScope: string) {
   const days = 30;
   const since = new Date();
   since.setDate(since.getDate() - days);
 
   const metrics = await prisma.capacityMetric.findMany({
-    where: { timestamp: { gte: since } },
+    where: { sourceScope, timestamp: { gte: since } },
     orderBy: { timestamp: 'asc' },
   });
 
@@ -153,61 +167,59 @@ async function getGrowthForecast() {
 }
 
 // Helper to get VMware service instance
-async function getVMwareService(): Promise<VMwareService | null> {
-  const config = await prisma.integrationConfig.findFirst({
-    where: { type: 'VMWARE_VCENTER', enabled: true },
-  });
-
-  if (!config) return null;
-
-  const vmwareConfig = config.config as {
-    host: string;
-    username: string;
-    password: string;
-    thumbprint?: string;
-    pollingInterval: number;
-    enabledModules: {
-      datacenters: boolean;
-      clusters: boolean;
-      hosts: boolean;
-      vms: boolean;
-      datastores: boolean;
-    };
-  };
-
-  return new VMwareService({
-    // Strip any protocol prefix the user may have typed (https:// or http://)
-    host: vmwareConfig.host.replace(/^https?:\/\//i, '').replace(/\/+$/, ''),
-    username: vmwareConfig.username,
-    password: vmwareConfig.password,
-    thumbprint: vmwareConfig.thumbprint,
-    pollingInterval: vmwareConfig.pollingInterval,
-    enabledModules: vmwareConfig.enabledModules,
-  });
+async function getVMwareSource(configId?: unknown) {
+  const integration = await selectInventorySource('VMWARE_VCENTER', configId);
+  return integration ? createSavedVMwareSource(integration) : null;
 }
 
+async function getVMwareService(configId?: unknown): Promise<VMwareService | null> {
+  return (await getVMwareSource(configId))?.service ?? null;
+}
+
+class VMwareSourceResponse extends Error {
+  readonly code = 'VMWARE_SOURCE_RESPONSE';
+  constructor(readonly response: NextResponse) { super('VMware source request failed'); }
+}
+
+function isVMwareSourceResponse(error: unknown): error is VMwareSourceResponse {
+  return typeof error === 'object' && error !== null && 'code' in error &&
+    error.code === 'VMWARE_SOURCE_RESPONSE' && 'response' in error && error.response instanceof NextResponse;
+}
+
+async function readVMwareData(request: NextRequest, service: VMwareService, scope: string, authenticated = false, hosts?: VMwareHost[], isCurrent = () => true): Promise<unknown> {
+  const response = await loadVMwareData(request, service, scope, authenticated, hosts, isCurrent);
+  if (!response.ok) throw new VMwareSourceResponse(response);
+  return response.json();
+}
+
+
 export async function GET(request: NextRequest) {
+  const access = await authorizeApiRequest(request, 'devices', 'read');
+  if (!access.allowed) return access.response;
   try {
     const { searchParams } = new URL(request.url);
     const type = searchParams.get('type');
+    if (['collect-metrics', 'test-events-api', 'test-soap-events'].includes(type || '')) {
+      return NextResponse.json({ success: false, error: 'Bu işlem POST isteği gerektiriyor.' }, { status: 405, headers: { Allow: 'POST' } });
+    }
     const vmId = searchParams.get('vmId');
 
     // ── DB-only routes (no vCenter auth needed) ──────────────────────────────
     // Get configuration — reads from DB only, never touches vCenter
     if (type === 'config') {
       const vmwareConfig = await prisma.integrationConfig.findFirst({
-        where: { type: 'VMWARE_VCENTER' as any },
+        where: { type: 'VMWARE_VCENTER' },
       });
 
       if (vmwareConfig) {
-        const configData = vmwareConfig.config as any;
+        const configData = vmwareConfig.config as Prisma.JsonObject;
         return NextResponse.json({
           config: {
             host: configData.host || '',
             username: configData.username || '',
             password: configData.password ? '********' : '',  // masked — non-empty means password is stored
             thumbprint: configData.thumbprint || '',
-            pollingInterval: configData.pollingInterval || 10,
+            pollingInterval: vmwareConfig.syncInterval || 10,
             enabledModules: configData.enabledModules || {
               datacenters: true,
               clusters: true,
@@ -224,69 +236,41 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ config: null });
     }
 
-    // ── Cache layer (stale-while-revalidate) ──────────────────────────────────
-    // Cache key based on request type
-    const cacheKey = `vmware_${type}_${vmId || ''}`;
-    const cachedData = globalThis as any;
-    if (!cachedData.vmwareCache) cachedData.vmwareCache = {};
-    if (!cachedData.vmwareRevalidating) cachedData.vmwareRevalidating = new Set<string>();
-    
-    const now = Date.now();
-    const cacheEntry = cachedData.vmwareCache[cacheKey];
-    const cacheTTL = ['dashboard', 'summary', 'vms', 'hosts', 'clusters', 'datastores'].includes(type || '')
-      ? 300000  // 5 minutes fresh window
-      : 120000; // 2 minutes fresh window
-    // Serve stale data for up to STALE_WINDOW past expiry while revalidating in background.
-    const STALE_WINDOW = 30 * 60 * 1000; // 30 minutes
-
-    if (cacheEntry) {
-      const age = now - cacheEntry.timestamp;
-      if (age < cacheTTL) {
-        // Fresh hit — return as-is.
-        const res = NextResponse.json(cacheEntry.data);
-        res.headers.set('X-Cache', 'HIT');
-        res.headers.set('X-Cache-Age', String(Math.round(age / 1000)));
-        return res;
-      }
-      if (age < cacheTTL + STALE_WINDOW) {
-        // Stale but usable — serve cached immediately, refresh in background.
-        if (!cachedData.vmwareRevalidating.has(cacheKey)) {
-          cachedData.vmwareRevalidating.add(cacheKey);
-                    const origin = request.nextUrl.origin;
-                    const fullUrl = `${origin}${request.nextUrl.pathname}${request.nextUrl.search}`;
-          // Fire-and-forget background revalidation; bypass our own cache via header.
-          setTimeout(() => {
-            fetch(fullUrl, { headers: { 'x-cache-bypass': '1' } })
-              .catch((e) => console.warn('[VMware API] Background revalidate failed:', e?.message))
-              .finally(() => cachedData.vmwareRevalidating.delete(cacheKey));
-          }, 0);
-        }
-        const res = NextResponse.json(cacheEntry.data);
-        res.headers.set('X-Cache', 'STALE');
-        res.headers.set('X-Cache-Age', String(Math.round(age / 1000)));
-        return res;
-      }
-      // Too old — fall through to fresh fetch.
+    // Resolve the active profile before any cache read. Application authorization remains above.
+    const source = await getVMwareSource(request.nextUrl.searchParams.get('configId') ?? undefined);
+    if (!source) {
+      return NextResponse.json({ connected: false, error: 'VMware vCenter integration not configured' });
     }
+    const cacheable = ['dashboard', 'summary', 'vms', 'vm-workspace', 'hosts', 'host-workspace', 'clusters', 'cluster-workspace', 'datastores', 'datastore-workspace', 'snapshots'].includes(type || '');
+    if (!cacheable) return await loadVMwareData(request, source.service, source.scope);
 
-    // Bypass cache entirely when the background revalidator is calling us.
-        const bypass = request.headers.get('x-cache-bypass') === '1';
-    if (bypass) {
-      // no-op — we just skip any later early returns via cache
+    const ttl = type === 'snapshots' ? 120_000 : 300_000;
+    const result = await loadVMwareCachedValue(
+      source.scope, vmwareResourceKey(type, vmId), ttl,
+      isCurrent => readVMwareData(request, source.service, source.scope, false, undefined, isCurrent),
+      request.headers.get('x-cache-bypass') === '1',
+    );
+    const data = type === 'vm-workspace' ? { ...(result.data as Record<string, unknown>), canPower: canAccessSync(access.auth.role, 'devices', 'write') } : result.data;
+    return NextResponse.json(data, { headers: {
+      'X-Cache': result.cache, 'X-Cache-Age': String(Math.round(result.age / 1000)),
+    } });
+  } catch (error) {
+    if (error instanceof InventorySourceSelectionError) return NextResponse.json({ error: error.message, code: error.code }, { status: 409 });
+    if (isVMwareSourceResponse(error)) return error.response.clone();
+    if (isVMwarePythonError(error)) {
+      return NextResponse.json({ error: vmwareCollectionErrorMessage(error), code: error.code },
+        { status: error.code === 'VMWARE_HELPER_SOURCE_TIMEOUT' ? 504 : 503 });
     }
+    console.error('VMware API error:', error);
+    return NextResponse.json({ error: 'VMware verileri alınamadı.' }, { status: 500 });
+  }
+}
 
-    const service = await getVMwareService();
-    if (!service) {
-      return NextResponse.json({
-        connected: false,
-        error: 'VMware vCenter integration not configured',
-      });
-    }
-
-    // Authenticate first
-    const authenticated = await service.authenticate();
-    if (!authenticated) {
-      return NextResponse.json({ error: 'vCenter authentication failed' }, { status: 401 });
+async function loadVMwareData(request: NextRequest, service: VMwareService, scope: string, authenticated = false, prefetchedHosts?: VMwareHost[], isCurrent = () => true) {
+    const type = request.nextUrl.searchParams.get('type');
+    const vmId = request.nextUrl.searchParams.get('vmId');
+    if (!authenticated && !await service.authenticate()) {
+      return NextResponse.json({ error: 'vCenter kimlik doğrulaması başarısız.' }, { status: 401 });
     }
 
     // Lightweight summary — only VMs + Hosts, no clusters/datastores/snapshots
@@ -312,13 +296,6 @@ export async function GET(request: NextRequest) {
         },
       };
 
-      // Cache with 5-minute TTL (same as dashboard)
-      const cachedData = globalThis as any;
-      if (!cachedData.vmwareCache) cachedData.vmwareCache = {};
-      cachedData.vmwareCache[cacheKey] = {
-        data: summaryData,
-        timestamp: Date.now(),
-      };
 
       return NextResponse.json(summaryData);
     }
@@ -332,14 +309,8 @@ export async function GET(request: NextRequest) {
         service.fetchDatastores(),
       ]);
 
-      // Fetch all snapshots from vCenter
-      let snapshotsRaw: any[] = [];
-      try {
-        snapshotsRaw = await service.fetchAllSnapshots();
-      } catch (err) {
-        console.warn('[VMware API] Failed to fetch snapshots:', err);
-      }
-
+      // Snapshot failure invalidates this aggregate instead of claiming there are no snapshots.
+      const snapshotsRaw = await service.fetchAllSnapshots({ bypassCache: true });
 
       // Calculate VM status counts
       const vmRunning = vms.filter(v => v.summary?.guestState === 'running').length;
@@ -367,17 +338,17 @@ export async function GET(request: NextRequest) {
       // Calculate old snapshots (> 7 days)
       const now = Date.now();
       const oldSnapshots = (snapshotsRaw || [])
-        .filter((s: any) => {
+        .filter((s) => {
           const ageMs = now - new Date(s.createTime).getTime();
           const ageDays = ageMs / (1000 * 60 * 60 * 24);
           return ageDays > 7;
         })
-        .sort((a: any, b: any) => {
+        .sort((a, b) => {
           const ageA = now - new Date(a.createTime).getTime();
           const ageB = now - new Date(b.createTime).getTime();
           return ageB - ageA; // Oldest first
         })
-        .map((s: any) => {
+        .map((s) => {
           const ageMs = now - new Date(s.createTime).getTime();
           const ageDays = Math.floor(ageMs / (1000 * 60 * 60 * 24));
           return {
@@ -430,13 +401,6 @@ export async function GET(request: NextRequest) {
         oldSnapshots,
       };
 
-      // Cache the result
-      const cachedData = globalThis as any;
-      if (!cachedData.vmwareCache) cachedData.vmwareCache = {};
-      cachedData.vmwareCache[cacheKey] = {
-        data: dashboardData,
-        timestamp: Date.now()
-      };
 
       return NextResponse.json(dashboardData);
     }
@@ -468,84 +432,16 @@ export async function GET(request: NextRequest) {
         })),
       };
 
-      // Cache the result
-      const cacheStore = globalThis as any;
-      if (!cacheStore.vmwareCache) cacheStore.vmwareCache = {};
-      cacheStore.vmwareCache[cacheKey] = { data: vmsData, timestamp: Date.now() };
-
-      // Cross-warm: also cache a lightweight hosts snapshot from the already-fetched hosts
-      // This makes the Hosts page instant for users who visit VMs first
-      const hostsLiteKey = 'vmware_hosts_';
-      if (!cacheStore.vmwareCache[hostsLiteKey] || (Date.now() - cacheStore.vmwareCache[hostsLiteKey].timestamp) >= 300000) {
-        const hostsLiteData = {
-          hosts: hosts.map(h => ({
-            id: h.host.value,
-            name: h.name,
-            cluster: 'Standalone', // cluster name enriched when type=hosts is explicitly fetched
-            vendor: h.summary?.vendor || 'Unknown',
-            model: h.summary?.model || 'Unknown',
-            cpuCores: h.summary?.numCpuCores || 0,
-            memoryGB: Math.round((h.summary?.memoryTotal || 0) / 1073741824),
-            version: h.config?.product?.version || 'Unknown',
-            build: h.config?.product?.build || '',
-            status: (h.summary?.connectionState || 'unknown').toLowerCase(),
-            overallStatus: (h.summary?.overallStatus || 'unknown').toLowerCase(),
-          })),
-        };
-        cacheStore.vmwareCache[hostsLiteKey] = { data: hostsLiteData, timestamp: Date.now() };
-      }
-
-      // Background-warm clusters + datastores if their caches are cold
-      const bgWarmTypes = ['clusters', 'datastores'] as const;
-      for (const bgType of bgWarmTypes) {
-        const bgKey = `vmware_${bgType}_`;
-        const bgEntry = cacheStore.vmwareCache[bgKey];
-        if (!bgEntry || (Date.now() - bgEntry.timestamp) >= 300000) {
-          // Fire-and-forget: don't await — let it warm in the background
-          (async () => {
-            try {
-              if (bgType === 'clusters') {
-                const clusters = await service.fetchClusters();
-                cacheStore.vmwareCache[bgKey] = {
-                  data: {
-                    clusters: clusters.map(c => ({
-                      id: c.cluster.value,
-                      name: c.name,
-                      hostCount: c.summary?.numHosts || 0,
-                      effectiveHosts: c.summary?.numEffectiveHosts || 0,
-                      totalCpu: c.summary?.totalCpu || 0,
-                      cpuCores: c.summary?.numCpuCores || 0,
-                      totalMemoryGB: Math.round((c.summary?.totalMemory || 0) / 1073741824),
-                    })),
-                  },
-                  timestamp: Date.now(),
-                };
-              } else if (bgType === 'datastores') {
-                const ds = await service.fetchDatastores();
-                cacheStore.vmwareCache[bgKey] = {
-                  data: {
-                    datastores: ds.map(d => ({
-                      id: d.datastore.value,
-                      name: d.name,
-                      type: d.info?.type || 'Unknown',
-                      capacityGB: Math.round((d.summary?.capacity || 0) / 1073741824),
-                      freeGB: Math.round((d.summary?.freeSpace || 0) / 1073741824),
-                      usedGB: Math.round(((d.summary?.capacity || 0) - (d.summary?.freeSpace || 0)) / 1073741824),
-                      usedPercent: d.summary?.capacity
-                        ? Math.round(((d.summary.capacity - (d.summary.freeSpace || 0)) / d.summary.capacity) * 100)
-                        : 0,
-                      accessible: d.summary?.accessible ?? true,
-                    })),
-                  },
-                  timestamp: Date.now(),
-                };
-              }
-              console.log(`[VMware Cache] ✅ Background warmed: ${bgType}`);
-            } catch (e) {
-              console.warn(`[VMware Cache] ⚠️ Background warm failed for ${bgType}:`, (e as Error).message);
-            }
-          })();
-        }
+      // Warm the same scoped loaders with the authenticated client. Hosts retain full cluster enrichment.
+      for (const warmType of ['hosts', 'clusters', 'datastores']) {
+        if (!isCurrent()) break;
+        const url = new URL(request.url);
+        url.search = '';
+        url.searchParams.set('type', warmType);
+        void loadVMwareCachedValue(
+          scope, vmwareResourceKey(warmType), 300_000,
+          () => readVMwareData(new NextRequest(url), service, scope, true, hosts),
+        ).catch(() => console.warn('[VMware Cache] Background warm failed'));
       }
 
       return NextResponse.json(vmsData);
@@ -554,7 +450,7 @@ export async function GET(request: NextRequest) {
     // Get all hosts
     if (type === 'hosts') {
       const [hosts, clusters] = await Promise.all([
-        service.fetchHosts(),
+        prefetchedHosts ? Promise.resolve(prefetchedHosts) : service.fetchHosts(),
         service.fetchClusters(),
       ]);
 
@@ -577,15 +473,24 @@ export async function GET(request: NextRequest) {
         })),
       };
 
-      // Cache the result
-      const cachedData = globalThis as any;
-      if (!cachedData.vmwareCache) cachedData.vmwareCache = {};
-      cachedData.vmwareCache[cacheKey] = {
-        data: hostsData,
-        timestamp: Date.now()
-      };
 
       return NextResponse.json(hostsData);
+    }
+
+    if (type === 'vm-workspace') {
+      const vms = await service.fetchVMWorkspace();
+      return NextResponse.json({ vms, collectedAt: new Date().toISOString() });
+    }
+
+    if (type === 'host-workspace') {
+      const hosts = await service.fetchHostWorkspace();
+      return NextResponse.json({ hosts, collectedAt: new Date().toISOString() });
+    }
+
+    // Read-only cluster workspace; existing lightweight cluster consumers keep their contract.
+    if (type === 'cluster-workspace') {
+      const clusters = await service.fetchClusterWorkspace();
+      return NextResponse.json({ clusters, collectedAt: new Date().toISOString() });
     }
 
     // Get all clusters
@@ -604,15 +509,13 @@ export async function GET(request: NextRequest) {
         })),
       };
 
-      // Cache the result
-      const cachedData = globalThis as any;
-      if (!cachedData.vmwareCache) cachedData.vmwareCache = {};
-      cachedData.vmwareCache[cacheKey] = {
-        data: clustersData,
-        timestamp: Date.now()
-      };
 
       return NextResponse.json(clustersData);
+    }
+
+    if (type === 'datastore-workspace') {
+      const datastores = await service.fetchDatastoreWorkspace();
+      return NextResponse.json({ datastores, collectedAt: new Date().toISOString() });
     }
 
     // Get all datastores
@@ -634,13 +537,6 @@ export async function GET(request: NextRequest) {
         })),
       };
 
-      // Cache the result
-      const cachedData = globalThis as any;
-      if (!cachedData.vmwareCache) cachedData.vmwareCache = {};
-      cachedData.vmwareCache[cacheKey] = {
-        data: datastoresData,
-        timestamp: Date.now()
-      };
 
       return NextResponse.json(datastoresData);
     }
@@ -649,19 +545,12 @@ export async function GET(request: NextRequest) {
     if (type === 'snapshots') {
       if (vmId) {
         // Get snapshots for a specific VM
-        const snapshots = await service.getSnapshots(vmId);
+        const snapshots = await service.getSnapshots(vmId, { bypassCache: true });
         return NextResponse.json({ snapshots });
       } else {
         // Get all snapshots from all VMs (batch operation) - SLOW, needs caching
-        const snapshots = await service.fetchAllSnapshots();
+        const snapshots = await service.fetchAllSnapshots({ bypassCache: true });
         
-        // Cache the result
-        const cachedData = globalThis as any;
-        if (!cachedData.vmwareCache) cachedData.vmwareCache = {};
-        cachedData.vmwareCache[cacheKey] = {
-          data: { snapshots },
-          timestamp: Date.now()
-        };
         
         return NextResponse.json({ snapshots });
       }
@@ -670,17 +559,17 @@ export async function GET(request: NextRequest) {
     // Get configuration
     if (type === 'config') {
       const vmwareConfig = await prisma.integrationConfig.findFirst({
-        where: { type: 'VMWARE_VCENTER' as any, enabled: true },
+        where: { type: 'VMWARE_VCENTER', enabled: true },
       });
       
       if (vmwareConfig) {
-        const configData = vmwareConfig.config as any;
+        const configData = vmwareConfig.config as Prisma.JsonObject;
         return NextResponse.json({
           config: {
             host: configData.host || '',
             username: configData.username || '',
             thumbprint: configData.thumbprint || '',
-            pollingInterval: configData.pollingInterval || 10,
+            pollingInterval: vmwareConfig.syncInterval || 10,
             enabledModules: configData.enabledModules || {
               datacenters: true,
               clusters: true,
@@ -700,7 +589,7 @@ export async function GET(request: NextRequest) {
     // Check connection status
     if (type === 'status') {
       const vmwareConfig = await prisma.integrationConfig.findFirst({
-        where: { type: 'VMWARE_VCENTER' as any, enabled: true },
+        where: { type: 'VMWARE_VCENTER', enabled: true },
       });
       
       if (!vmwareConfig) {
@@ -725,88 +614,90 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ sprawl: sprawlResults });
     }
 
-    // Collect capacity metrics
-    if (type === 'collect-metrics') {
-      const result = await service.collectCapacityMetrics();
-      return NextResponse.json(result);
-    }
 
     // Get capacity trends
     if (type === 'capacity-trends') {
       const days = parseInt(request.nextUrl.searchParams.get('days') || '30');
-      const trends = await getCapacityTrends(days);
+      const trends = await getCapacityTrends(days, service.getInventoryScope());
       return NextResponse.json({ trends });
     }
 
     // Get growth forecast
     if (type === 'growth-forecast') {
-      const forecast = await getGrowthForecast();
+      const forecast = await getGrowthForecast(service.getInventoryScope());
       return NextResponse.json({ forecast });
     }
 
-    // Test Events API availability
-    if (type === 'test-events-api') {
-      const result = await service.testEventsAPI();
-      return NextResponse.json(result);
-    }
-
-    // Test SOAP Events
-    if (type === 'test-soap-events') {
-      const soapAuth = await service.authenticateSOAP();
-      if (!soapAuth) {
-        return NextResponse.json({ error: 'SOAP authentication failed' }, { status: 401 });
-      }
-      
-      // Get time window from query params (default: 120 minutes for better detection)
-      const timeWindow = parseInt(request.nextUrl.searchParams.get('minutes') || '120');
-      
-      // Query all events to see what's available
-      const allEvents = await service.queryEventsSOAP(timeWindow);
-      
-      // Count by event type
-      const eventTypeCounts: Record<string, number> = {};
-      for (const evt of allEvents) {
-        eventTypeCounts[evt.eventType] = (eventTypeCounts[evt.eventType] || 0) + 1;
-      }
-      
-      // Query lifecycle events
-      const lifecycleEvents = await service.fetchVMLifecycleEvents(timeWindow);
-      
-      // Query snapshot events
-      const snapshotEvents = await service.fetchSnapshotEvents(timeWindow);
-      
-      return NextResponse.json({ 
-        success: true, 
-        timeWindowMinutes: timeWindow,
-        totalEvents: allEvents.length,
-        eventTypes: eventTypeCounts,
-        lifecycleEvents: {
-          count: lifecycleEvents.length,
-          events: lifecycleEvents.slice(0, 10)
-        },
-        snapshotEvents: {
-          count: snapshotEvents.length,
-          events: snapshotEvents.slice(0, 10)
-        }
-      });
-    }
 
     // Default: return status
     const status = await service.getStatus();
     return NextResponse.json(status);
-  } catch (error) {
-    console.error('VMware API error:', error);
-    return NextResponse.json(
-      { error: (error as Error).message },
-      { status: 500 }
-    );
-  }
 }
 
 export async function POST(request: NextRequest) {
+  const access = await authorizeApiRequest(request, 'devices', 'write');
+  if (!access.allowed) return access.response;
   try {
     const body = await request.json();
     const { action, config } = body;
+    const resource = ['test', 'save-config', 'test-events-api', 'test-soap-events'].includes(action) ? 'settings' : 'devices';
+    const operation = action === 'snapshot-delete' ? 'delete' : 'write';
+    if (!canAccessSync(access.auth.role, resource, operation)) return forbiddenApiPermission(resource, operation);
+    if (['collect-metrics', 'test-events-api', 'test-soap-events'].includes(action)) {
+      const service = await getVMwareService(body.configId);
+      if (!service) return NextResponse.json({ error: 'VMware yapılandırılmamış.' }, { status: 400 });
+      if (!await service.authenticate()) {
+        return NextResponse.json({ error: 'vCenter kimlik doğrulaması başarısız.' }, { status: 401 });
+      }
+      if (action === 'collect-metrics') return NextResponse.json(await service.collectCapacityMetrics());
+      // Test Events API availability
+      if (action === 'test-events-api') {
+        const result = await service.testEventsAPI();
+        return NextResponse.json(result);
+      }
+
+      // Test SOAP Events
+      if (action === 'test-soap-events') {
+        const soapAuth = await service.authenticateSOAP();
+        if (!soapAuth) {
+          return NextResponse.json({ error: 'SOAP authentication failed' }, { status: 401 });
+        }
+
+        // Preserve the diagnostic time window in the POST body (default: 120 minutes).
+        const timeWindow = parseInt(String(body.minutes ?? 120), 10);
+
+        // Query all events to see what's available
+        const allEvents = await service.queryEventsSOAP(timeWindow);
+
+        // Count by event type
+        const eventTypeCounts: Record<string, number> = {};
+        for (const evt of allEvents) {
+          eventTypeCounts[evt.eventType] = (eventTypeCounts[evt.eventType] || 0) + 1;
+        }
+
+        // Query lifecycle events
+        const lifecycleEvents = await service.fetchVMLifecycleEvents(timeWindow);
+
+        // Query snapshot events
+        const snapshotEvents = await service.fetchSnapshotEvents(timeWindow);
+
+        return NextResponse.json({
+          success: true,
+          timeWindowMinutes: timeWindow,
+          totalEvents: allEvents.length,
+          eventTypes: eventTypeCounts,
+          lifecycleEvents: {
+            count: lifecycleEvents.length,
+            events: lifecycleEvents.slice(0, 10)
+          },
+          snapshotEvents: {
+            count: snapshotEvents.length,
+            events: snapshotEvents.slice(0, 10)
+          }
+        });
+      }
+
+    }
 
     if (action === 'test') {
       // Test connection without saving
@@ -816,7 +707,7 @@ export async function POST(request: NextRequest) {
       }
       const { host, username, password, thumbprint } = {
         ...parsed.data,
-        thumbprint: (config as any)?.thumbprint as string | undefined,
+        thumbprint: (config as { thumbprint?: string })?.thumbprint,
       };
 
       const service = new VMwareService({
@@ -834,11 +725,13 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      const status = await service.getStatus();
+      const status = await service.testConnection();
       return NextResponse.json(status);
     }
 
     if (action === 'sync') {
+      const vmwareConfig = await selectInventorySource('VMWARE_VCENTER', body.configId);
+      if (!vmwareConfig) return NextResponse.json({ error: 'VMware integration not configured' }, { status: 400 });
       // Get the organization from request or use first one
       // Auto-create a default org if the database has none yet
       let organizationId: string | undefined = body.organizationId || 
@@ -855,68 +748,16 @@ export async function POST(request: NextRequest) {
         organizationId = defaultOrg.id;
       }
 
-      // Get VMware configuration
-      const vmwareConfig = await prisma.integrationConfig.findFirst({
-        where: { type: 'VMWARE_VCENTER', enabled: true },
+      return await withInventorySync('VMWARE_VCENTER', vmwareConfig.id, async () => {
+        const { service } = createSavedVMwareSource(vmwareConfig);
+
+        // Perform sync and atomically record its outcome metadata.
+        const startedAt = new Date();
+        const result = await service.syncToInventory(organizationId);
+        await recordInventorySync(vmwareConfig.id, result, startedAt);
+
+        return NextResponse.json(result);
       });
-
-      if (!vmwareConfig) {
-        return NextResponse.json(
-          { error: 'VMware integration not configured' },
-          { status: 400 }
-        );
-      }
-
-      const configData = vmwareConfig.config as {
-        host: string;
-        username: string;
-        password: string;
-        thumbprint?: string;
-        pollingInterval: number;
-        enabledModules: {
-          datacenters: boolean;
-          clusters: boolean;
-          hosts: boolean;
-          vms: boolean;
-          datastores: boolean;
-        };
-      };
-
-      const service = new VMwareService({
-        host: configData.host.replace(/^https?:\/\//i, '').replace(/\/+$/, ''),
-        username: configData.username,
-        password: configData.password,
-        thumbprint: configData.thumbprint,
-        pollingInterval: configData.pollingInterval,
-        enabledModules: configData.enabledModules,
-      });
-
-      // Perform sync
-      const result = await service.syncToInventory(organizationId);
-
-      // Log the sync
-      await prisma.integrationSyncLog.create({
-        data: {
-          configId: vmwareConfig.id,
-          status: result.success ? 'success' : 'failed',
-          message: result.errors.length > 0 ? result.errors.join('; ') : null,
-          itemsProcessed: result.hostsCreated + result.hostsUpdated + result.vmsCreated + result.vmsUpdated,
-          itemsCreated: result.hostsCreated + result.vmsCreated + result.clustersCreated,
-          itemsUpdated: result.hostsUpdated + result.vmsUpdated + result.clustersUpdated,
-          completedAt: new Date(),
-        },
-      });
-
-      // Update last sync time
-      await prisma.integrationConfig.update({
-        where: { id: vmwareConfig.id },
-        data: {
-          lastSyncAt: new Date(),
-          lastSyncStatus: result.success ? 'success' : 'partial',
-        },
-      });
-
-      return NextResponse.json(result);
     }
 
     if (action === 'save-config') {
@@ -931,19 +772,18 @@ export async function POST(request: NextRequest) {
         host: parsed.data.host.replace(/^https?:\/\//i, '').replace(/\/+$/, ''),
       };
 
-      // If password is empty (page never loads it for security), preserve the existing stored password
-      if (!newConfig.password) {
-        const existing = await prisma.integrationConfig.findFirst({
-          where: { type: 'VMWARE_VCENTER' as any },
-        });
-        if (existing) {
-          const existingConfig = existing.config as any;
-          if (existingConfig?.password) {
-            newConfig.password = existingConfig.password;
-          }
-        }
+      const previous = await prisma.integrationConfig.findFirst({
+        where: { type: 'VMWARE_VCENTER', name: body.name || 'Default vCenter' },
+      });
+      const previousPlain = previous
+        ? unprotectIntegrationConfig<typeof newConfig>(previous.config, 'VMWARE_VCENTER') : null;
+      if (!newConfig.password || newConfig.password === '********') {
+        newConfig.password = previousPlain?.password;
       }
-
+      if (!newConfig.password) {
+        return NextResponse.json({ success: false, error: 'VMware parolası gerekli.' }, { status: 400 });
+      }
+      const protectedConfig = protectIntegrationConfig<typeof newConfig>(newConfig, 'VMWARE_VCENTER');
       await prisma.integrationConfig.upsert({
         where: {
           type_name: {
@@ -955,16 +795,18 @@ export async function POST(request: NextRequest) {
           type: 'VMWARE_VCENTER',
           name: body.name || 'Default vCenter',
           enabled: true,
-          config: newConfig,
+          config: protectedConfig,
           syncInterval: newConfig.pollingInterval,
         },
         update: {
           enabled: true,
-          config: newConfig,
+          config: protectedConfig,
           syncInterval: newConfig.pollingInterval,
         },
       });
 
+      if (previousPlain) invalidateVMwareCache(getVMwareCacheScope({ ...previousPlain, pollingInterval: previous?.syncInterval || 10 }));
+      invalidateVMwareCache(getVMwareCacheScope(newConfig));
       return NextResponse.json({ success: true });
     }
 
@@ -975,7 +817,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'vmId and operation required' }, { status: 400 });
       }
 
-      const service = await getVMwareService();
+      const service = await getVMwareService(body.configId);
       if (!service) {
         return NextResponse.json({ error: 'VMware not configured' }, { status: 400 });
       }
@@ -1013,7 +855,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'vmId and name required' }, { status: 400 });
       }
 
-      const service = await getVMwareService();
+      const service = await getVMwareService(body.configId);
       if (!service) {
         return NextResponse.json({ error: 'VMware not configured' }, { status: 400 });
       }
@@ -1029,7 +871,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'vmId and snapshotId required' }, { status: 400 });
       }
 
-      const service = await getVMwareService();
+      const service = await getVMwareService(body.configId);
       if (!service) {
         return NextResponse.json({ error: 'VMware not configured' }, { status: 400 });
       }
@@ -1045,7 +887,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'vmId and snapshotId required' }, { status: 400 });
       }
 
-      const service = await getVMwareService();
+      const service = await getVMwareService(body.configId);
       if (!service) {
         return NextResponse.json({ error: 'VMware not configured' }, { status: 400 });
       }
@@ -1057,6 +899,10 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
   } catch (error) {
+    if (error instanceof InventorySourceSelectionError) return NextResponse.json({ error: error.message, code: error.code }, { status: 409 });
+    if (error instanceof InventorySyncBusyError) {
+      return NextResponse.json({ error: 'Bu kaynak için senkronizasyon zaten çalışıyor.', code: error.code }, { status: 409 });
+    }
     console.error('VMware API error:', error);
     return NextResponse.json(
       { error: (error as Error).message },

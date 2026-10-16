@@ -9,11 +9,15 @@
  */
 
 import { PrismaClient, DeviceType, DeviceStatus } from '@prisma/client';
+import { SourceQueryError, withSourceDeadline } from './source-query-error';
+import { inventorySyncOutcome, type InventorySyncOutcome } from './sync-outcome';
+import { inventorySourceScope } from './inventory-source-scope';
 
 const prisma = new PrismaClient();
 
 // Zabbix API Types
 export interface ZabbixConfig {
+  integrationId?: string;
   url: string;
   authToken: string;
   pollingInterval: number; // minutes
@@ -74,8 +78,7 @@ export interface ZabbixHostGroup {
   name: string;
 }
 
-export interface SyncResult {
-  success: boolean;
+export interface SyncResult extends InventorySyncOutcome {
   hostsCreated: number;
   hostsUpdated: number;
   interfacesProcessed: number;
@@ -86,63 +89,131 @@ export interface SyncResult {
 
 // Zabbix API Client
 export class ZabbixService {
-  private config: ZabbixConfig;
+  private readonly config: ZabbixConfig;
   private authToken: string | null = null;
+  private authTransport: 'header' | 'body' | null = null;
+  private apiVersion: string | null = null;
+  private requestId = 0;
+  private verification: Promise<boolean> | null = null;
+  private authError: SourceQueryError | null = null;
 
   constructor(config: ZabbixConfig) {
-    this.config = config;
+    this.config = { ...config, enabledModules: { ...config.enabledModules } };
   }
 
-  /**
-   * Make a request to the Zabbix API
-   */
-  private async apiCall<T>(method: string, params: Record<string, unknown> = {}): Promise<T> {
-    const response = await fetch(`${this.config.url}/api_jsonrpc.php`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.authToken}`,
-      },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        method,
-        params,
-        id: Math.floor(Math.random() * 10000),
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Zabbix API error: ${response.statusText}`);
-    }
-
-    const data = await response.json() as { result: T; error?: { message: string } };
-    
-    if (data.error) {
-      throw new Error(`Zabbix API error: ${data.error.message}`);
-    }
-
-    return data.result;
-  }
-
-  /**
-   * Authenticate with Zabbix API
-   */
-  async authenticate(): Promise<boolean> {
+  private endpoint(): string {
     try {
-      this.authToken = await this.apiCall<string>('user.login', {
-        username: this.config.url.split('/')[3]?.split(':')[0], // Extract from URL - not used with token auth
-      }) as string;
-      
-      // For token-based auth, we use the config token directly
-      if (this.config.authToken) {
-        this.authToken = this.config.authToken;
-        return true;
+      const url = new URL(this.config.url);
+      if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) {
+        throw new Error('Invalid API URL');
       }
-      
-      return !!this.authToken;
+      const frontendPath = url.pathname.replace(/\/+$/, '');
+      url.pathname = frontendPath.endsWith('/api_jsonrpc.php') ? frontendPath : `${frontendPath}/api_jsonrpc.php`;
+      return url.toString();
+    } catch { throw new SourceQueryError('ZABBIX_CONFIG_INVALID', 'Zabbix API URL is invalid'); }
+  }
+
+  /** Version discovery is explicitly unauthenticated; protected reads use exactly one transport. */
+  private async apiCall<T>(method: string, params: Record<string, unknown> | unknown[] = {}, authenticated = true): Promise<T> {
+    if (authenticated && (!this.authToken || !this.authTransport)) {
+      throw new SourceQueryError('ZABBIX_NOT_AUTHENTICATED', 'Zabbix token has not been verified');
+    }
+    const endpoint = this.endpoint();
+    const id = ++this.requestId;
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const body: Record<string, unknown> = { jsonrpc: '2.0', method, params, id };
+    if (authenticated) {
+      if (this.authTransport === 'header') headers.Authorization = `Bearer ${this.authToken}`;
+      else body.auth = this.authToken;
+    }
+    try {
+      return await withSourceDeadline(async signal => {
+        const response = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(body), signal });
+        if (!response.ok) {
+          throw new SourceQueryError(response.status === 401 || response.status === 403 ? 'ZABBIX_ACCESS_DENIED' : 'ZABBIX_HTTP_ERROR',
+            'Zabbix API returned an unsuccessful HTTP status');
+        }
+        let data: unknown;
+        try { data = await response.json(); }
+        catch { throw new SourceQueryError('ZABBIX_RESPONSE_INVALID', 'Zabbix API returned invalid JSON'); }
+        if (typeof data !== 'object' || data === null || Array.isArray(data)) {
+          throw new SourceQueryError('ZABBIX_RESPONSE_INVALID', 'Zabbix API returned an invalid envelope');
+        }
+        const envelope = data as Record<string, unknown>;
+        const resultPresent = Object.prototype.hasOwnProperty.call(envelope, 'result');
+        const errorPresent = Object.prototype.hasOwnProperty.call(envelope, 'error');
+        if (envelope.jsonrpc !== '2.0' || envelope.id !== id || resultPresent === errorPresent) {
+          throw new SourceQueryError('ZABBIX_RESPONSE_INVALID', 'Zabbix API returned an invalid envelope');
+        }
+        // Never include remote messages/data: they can echo credentials.
+        if (errorPresent) throw new SourceQueryError('ZABBIX_RPC_ERROR', 'Zabbix API rejected the request');
+        return envelope.result as T;
+      }, 30_000);
     } catch (error) {
-      console.error('Zabbix authentication failed:', error);
+      if (error instanceof SourceQueryError) {
+        if (error.code === 'SOURCE_TIMEOUT') throw new SourceQueryError('ZABBIX_TIMEOUT', 'Zabbix API request timed out');
+        throw error;
+      }
+      throw new SourceQueryError('ZABBIX_NETWORK_ERROR', 'Zabbix API request failed');
+    }
+  }
+
+  /** No password session exists in this configuration; verify the operator-owned API token. */
+  async authenticate(): Promise<boolean> {
+    if (this.verification) return this.verification;
+    const attempt = this.verifyToken();
+    this.verification = attempt;
+    try { return await attempt; }
+    finally { if (this.verification === attempt) this.verification = null; }
+  }
+
+  private async verifyToken(): Promise<boolean> {
+    this.authToken = null;
+    this.authTransport = null;
+    this.apiVersion = null;
+    this.authError = null;
+    try {
+      const token = typeof this.config.authToken === 'string' ? this.config.authToken.trim() : '';
+      if (!token) throw new SourceQueryError('ZABBIX_TOKEN_REQUIRED', 'A Zabbix API token is required');
+      if (/[\r\n]/.test(token)) throw new SourceQueryError('ZABBIX_CONFIG_INVALID', 'Zabbix API token contains invalid control characters');
+
+      const version = await this.apiCall<unknown>('apiinfo.version', [], false);
+      const parts = typeof version === 'string' ? /^(\d+)\.(\d+)\.(\d+)[a-zA-Z0-9.+-]*$/.exec(version) : null;
+      if (!parts) throw new SourceQueryError('ZABBIX_RESPONSE_INVALID', 'Zabbix API version is invalid');
+      const major = Number(parts[1]), minor = Number(parts[2]);
+      if (major < 5 || (major === 5 && minor < 4)) {
+        throw new SourceQueryError('ZABBIX_VERSION_UNSUPPORTED', 'This Zabbix version does not support configured API tokens');
+      }
+      this.authTransport = major > 6 || (major === 6 && minor >= 4) ? 'header' : 'body';
+      this.authToken = token;
+      const probe = await this.apiCall<unknown>('host.get', { output: ['hostid'], limit: 1 });
+      if (!Array.isArray(probe) || !probe.every(host => typeof host === 'object' && host !== null &&
+          typeof host.hostid === 'string' && host.hostid.length > 0)) {
+        throw new SourceQueryError('ZABBIX_RESPONSE_INVALID', 'Zabbix token probe returned invalid host data');
+      }
+      this.apiVersion = version as string;
+      return true;
+    } catch (error) {
+      this.authToken = null;
+      this.authTransport = null;
+      this.apiVersion = null;
+      this.authError = error instanceof SourceQueryError ? error :
+        new SourceQueryError('ZABBIX_AUTH_FAILED', 'Zabbix token verification failed');
+      console.warn('Zabbix token verification failed', { code: this.authError.code });
       return false;
+    }
+  }
+
+  private authenticationMessage(): string {
+    switch (this.authError?.code) {
+      case 'ZABBIX_TOKEN_REQUIRED': return 'Zabbix API tokenı gerekli.';
+      case 'ZABBIX_CONFIG_INVALID': return 'Zabbix API adresi veya token ayarı geçersiz.';
+      case 'ZABBIX_VERSION_UNSUPPORTED': return 'Bu Zabbix sürümü API tokenı ile bağlantıyı desteklemiyor.';
+      case 'ZABBIX_RPC_ERROR':
+      case 'ZABBIX_ACCESS_DENIED': return 'Zabbix tokenı doğrulanamadı; tokenın geçerliliğini, süresini ve API okuma yetkisini kontrol edin.';
+      case 'ZABBIX_TIMEOUT': return 'Zabbix bağlantı süresi aşıldı.';
+      case 'ZABBIX_RESPONSE_INVALID': return 'Zabbix API yanıtı geçersiz veya eksik.';
+      default: return 'Zabbix bağlantısı doğrulanamadı; kaynak adresini ve ağ erişimini kontrol edin.';
     }
   }
 
@@ -152,8 +223,7 @@ export class ZabbixService {
   async fetchHosts(): Promise<ZabbixHost[]> {
     return this.apiCall<ZabbixHost[]>('host.get', {
       output: ['hostid', 'host', 'name', 'status', 'inventory_mode'],
-      selectInventory: true,
-      selectHosts: true,
+      selectInventory: 'extend',
     });
   }
 
@@ -253,9 +323,11 @@ export class ZabbixService {
    * Sync Zabbix data to our database
    */
   async syncToInventory(_organizationId: string): Promise<SyncResult> {
+    void _organizationId; // Retain the existing caller contract; this path does not use this argument.
     const startTime = Date.now();
     const result: SyncResult = {
       success: false,
+      status: 'failed', itemsProcessed: 0, itemsCreated: 0, itemsUpdated: 0, errorCount: 0,
       hostsCreated: 0,
       hostsUpdated: 0,
       interfacesProcessed: 0,
@@ -265,10 +337,11 @@ export class ZabbixService {
     };
 
     try {
+      const sourceScope = inventorySourceScope('ZABBIX', this.config.integrationId, this.config.url);
       // Authenticate
       const authenticated = await this.authenticate();
       if (!authenticated) {
-        result.errors.push('Failed to authenticate with Zabbix');
+        result.errors.push(this.authError?.message || 'Zabbix token verification failed');
         return result;
       }
 
@@ -292,10 +365,11 @@ export class ZabbixService {
         try {
           // Check if host already exists
           const existingDevice = await prisma.device.findFirst({
-            where: { zabbixHostId: host.hostid },
+            where: { zabbixSourceScope: sourceScope, zabbixHostId: host.hostid },
           });
 
           const deviceData = {
+            zabbixSourceScope: sourceScope,
             name: host.name || host.host,
             type: this.mapDeviceType(host),
             vendor: host.inventory?.vendor || null,
@@ -330,7 +404,7 @@ export class ZabbixService {
           const hostInterfaces = interfacesByHost.get(host.hostid) || [];
           for (const iface of hostInterfaces) {
             const device = await prisma.device.findFirst({
-              where: { zabbixHostId: host.hostid },
+              where: { zabbixSourceScope: sourceScope, zabbixHostId: host.hostid },
             });
 
             if (device) {
@@ -372,14 +446,14 @@ export class ZabbixService {
           for (const trigger of triggers) {
             for (const host of trigger.hosts) {
               const device = await prisma.device.findFirst({
-                where: { zabbixHostId: host.hostid },
+                where: { zabbixSourceScope: sourceScope, zabbixHostId: host.hostid },
               });
 
               if (device) {
                 await prisma.zabbixTrigger.upsert({
-                  where: { id: trigger.triggerid },
+                  where: { sourceScope_triggerId_hostId: { sourceScope, triggerId: trigger.triggerid, hostId: host.hostid } },
                   create: {
-                    id: trigger.triggerid,
+                    sourceScope,
                     triggerId: trigger.triggerid,
                     hostId: host.hostid,
                     description: trigger.description,
@@ -406,31 +480,25 @@ export class ZabbixService {
         }
       }
 
-      result.success = true;
     } catch (error) {
       result.errors.push(`Sync failed: ${(error as Error).message}`);
+    } finally {
+      Object.assign(result, inventorySyncOutcome(result.hostsCreated, result.hostsUpdated,
+        result.interfacesProcessed + result.triggersProcessed, result.errors));
+      result.duration = Date.now() - startTime;
     }
 
-    result.duration = Date.now() - startTime;
     return result;
   }
 
   /**
    * Get connection status
    */
-  async getStatus(): Promise<{ connected: boolean; version?: string; error?: string }> {
-    try {
-      const authenticated = await this.authenticate();
-      if (!authenticated) {
-        return { connected: false, error: 'Authentication failed' };
-      }
-
-      // Get Zabbix version
-      const version = await this.apiCall<string>('apiinfo.version');
-      return { connected: true, version };
-    } catch (error) {
-      return { connected: false, error: (error as Error).message };
+  async getStatus(): Promise<{ connected: boolean; version?: string; error?: string; code?: string }> {
+    if (!await this.authenticate()) {
+      return { connected: false, error: this.authenticationMessage(), code: this.authError?.code };
     }
+    return { connected: true, version: this.apiVersion ?? undefined };
   }
 }
 

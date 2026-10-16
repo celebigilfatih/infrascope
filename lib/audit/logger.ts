@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import type { Prisma } from '@prisma/client';
 
 export interface AuditLogParams {
   userId?: string;
@@ -22,7 +23,7 @@ export async function logAudit(params: AuditLogParams): Promise<void> {
         action: params.action,
         resource: params.resource,
         resourceId: params.resourceId,
-        details: params.details ? (params.details as any) : undefined,
+        details: params.details ? (params.details as Prisma.InputJsonObject) : undefined,
         userId: params.userId || undefined,
         ipAddress: params.ipAddress || undefined,
         userAgent: params.userAgent || undefined,

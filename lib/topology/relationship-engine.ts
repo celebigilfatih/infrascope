@@ -1,3 +1,16 @@
+interface DiscoveryNeighbor {
+  deviceId: string;
+  ipAddress?: string;
+  localInterface: string;
+  remoteInterface: string;
+}
+
+interface DiscoveryMetadata {
+  cdpNeighbors?: DiscoveryNeighbor[];
+  lldpNeighbors?: DiscoveryNeighbor[];
+}
+type PositionedMetadata = { position?: { x?: number; y?: number } } | null;
+
 import { PrismaClient, Prisma } from '@prisma/client';
 
 export interface CorrelationResult {
@@ -92,8 +105,10 @@ export class TopologyRelationshipEngine {
 
     try {
       const vms = await this.prisma.$queryRaw`
-        SELECT id, "vmHostId", name FROM "devices" 
-        WHERE type = 'VIRTUAL_MACHINE' AND "vmHostId" IS NOT NULL
+        SELECT vm.id, vm."vmHostId", vm.name FROM "devices" vm
+        JOIN "devices" host ON host.id = vm."vmHostId"
+          AND host."vmwareSourceScope" = vm."vmwareSourceScope"
+        WHERE vm.type = 'VIRTUAL_MACHINE' AND vm."vmwareSourceScope" IS NOT NULL
       ` as Array<{ id: string; vmHostId: string; name: string }>;
 
       for (const vm of vms) {
@@ -149,21 +164,25 @@ export class TopologyRelationshipEngine {
 
     try {
       const clusters = await this.prisma.$queryRaw`
-        SELECT vc.id, vc.moref, vc.name, 
+        SELECT vc.id, vc."vcenterId", vc."sourceScope", vc.name,
                json_agg(json_build_object('id', d.id, 'name', d.name)) as hosts
         FROM "vmware_clusters" vc
-        LEFT JOIN "devices" d ON d."vmwareClusterId" = vc.id
-        GROUP BY vc.id, vc.moref, vc.name
-      ` as Array<{ id: string; moref: string; name: string; hosts: Array<{ id: string; name: string }> }>;
+        LEFT JOIN "devices" d ON d."vmwareClusterId" = vc.id AND d."vmwareSourceScope" = vc."sourceScope"
+          AND d.type = 'VIRTUAL_HOST'
+        WHERE vc."sourceScope" IS NOT NULL
+        GROUP BY vc.id, vc."vcenterId", vc."sourceScope", vc.name
+      ` as Array<{ id: string; vcenterId: string; sourceScope: string; name: string; hosts: Array<{ id: string; name: string }> }>;
 
       for (const cluster of clusters) {
         const clusterDevice = await this.prisma.$queryRaw`
-          SELECT id FROM "devices" WHERE "vmwareMoref" = ${cluster.moref} LIMIT 1
+          SELECT id FROM "devices" WHERE "vmwareMoref" = ${cluster.vcenterId}
+            AND "vmwareSourceScope" = ${cluster.sourceScope} LIMIT 1
         ` as Array<{ id: string }>;
 
         if (!clusterDevice[0]) continue;
 
         for (const host of cluster.hosts || []) {
+          if (!host.id) continue;
           const existing = await this.prisma.relationship.findFirst({
             where: {
               sourceDeviceId: clusterDevice[0].id,
@@ -225,7 +244,7 @@ export class TopologyRelationshipEngine {
           const created = await this.prisma.device.create({
             data: {
               name: `VLAN-${vlan.vlanId}`,
-              type: 'VLAN' as any,
+              type: 'VLAN',
               metadata: { vlanId: vlan.vlanId, name: vlan.name }
             }
           });
@@ -283,7 +302,7 @@ export class TopologyRelationshipEngine {
       });
 
       for (const device of devices) {
-        const metadata = (device.metadata as Record<string, any>) || {};
+        const metadata = (device.metadata as DiscoveryMetadata) || {};
         const neighbors = this.extractNeighbors(metadata);
 
         for (const neighbor of neighbors) {
@@ -333,7 +352,7 @@ export class TopologyRelationshipEngine {
     }
   }
 
-  private extractNeighbors(metadata: Record<string, any>): NeighborInfo[] {
+  private extractNeighbors(metadata: DiscoveryMetadata): NeighborInfo[] {
     const neighbors: NeighborInfo[] = [];
 
     if (metadata?.cdpNeighbors && Array.isArray(metadata.cdpNeighbors)) {
@@ -399,17 +418,17 @@ export class TopologyRelationshipEngine {
         relationshipType: string;
         confidence: number;
         source: string;
-        properties: any;
+        properties: Prisma.JsonValue;
         sd_id: string;
         sd_name: string;
         sd_type: string;
         sd_status: string;
-        sd_metadata: any;
+        sd_metadata: PositionedMetadata;
         td_id: string;
         td_name: string;
         td_type: string;
         td_status: string;
-        td_metadata: any;
+        td_metadata: PositionedMetadata;
       };
 
       const sql = organizationId
@@ -485,7 +504,7 @@ export class TopologyRelationshipEngine {
     }
   }
 
-  private getNodePosition(device: any): { x: number; y: number } {
+  private getNodePosition(device: { id?: string; metadata?: PositionedMetadata }): { x: number; y: number } {
     const pos = device?.metadata?.position;
     if (pos) return { x: pos.x || 0, y: pos.y || 0 };
     const hash = this.hashString(device?.id || '');

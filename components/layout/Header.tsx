@@ -1,14 +1,20 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Bell, CheckCircle2, Clock, ExternalLink, Menu } from 'lucide-react';
+import { Bell, CheckCircle2, Clock, ArrowUpRight, MailCheck, MailX, Menu } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { SeverityBadge } from '@/components/ui/severity-badge';
+import { cn } from '@/lib/utils';
+import styles from './navigation.module.css';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Separator } from '@/components/ui/separator';
 import { UserProfile } from './UserProfile';
 import { TopbarBreadcrumb } from './TopbarBreadcrumb';
+import { usePathname } from 'next/navigation';
+import { DashboardSearch } from '@/components/dashboard/DashboardSearch';
+import { incidentLabel } from '@/lib/dashboard/presentation';
 
 interface AlarmNotification {
   id: string;
@@ -23,40 +29,27 @@ interface AlarmNotification {
   };
 }
 
-const SEVERITY_LABELS: Record<string, string> = {
-  ALARM_CRITICAL: 'Kritik',
-  ALARM_HIGH: 'Yuksek',
-  ALARM_MEDIUM: 'Orta',
-  ALARM_LOW: 'Dusuk',
-  ALARM_INFO: 'Bilgi',
-};
-
-const SEVERITY_BADGES: Record<string, 'destructive' | 'warning' | 'secondary' | 'outline'> = {
-  ALARM_CRITICAL: 'destructive',
-  ALARM_HIGH: 'warning',
-  ALARM_MEDIUM: 'secondary',
-  ALARM_LOW: 'outline',
-  ALARM_INFO: 'outline',
-};
-
 function formatRelativeTime(value: string) {
   const diffMs = Date.now() - new Date(value).getTime();
   const mins = Math.max(0, Math.floor(diffMs / 60000));
-  if (mins < 1) return 'Simdi';
-  if (mins < 60) return `${mins} dk once`;
+  if (mins < 1) return 'Şimdi';
+  if (mins < 60) return `${mins} dk önce`;
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours} sa once`;
-  return `${Math.floor(hours / 24)} gun once`;
+  if (hours < 24) return `${hours} sa önce`;
+  return `${Math.floor(hours / 24)} gün önce`;
 }
 
 interface HeaderProps {
   onMobileMenuOpen?: () => void;
+  mobileMenuOpen?: boolean;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onMobileMenuOpen }) => {
+export const Header: React.FC<HeaderProps> = ({ onMobileMenuOpen, mobileMenuOpen = false }) => {
+  const isDashboard = usePathname() === '/dashboard';
   const [notificationCount, setNotificationCount] = useState(0);
   const [notifications, setNotifications] = useState<AlarmNotification[]>([]);
   const [loading, setLoading] = useState(false);
+  const notificationHeading = useRef<HTMLHeadingElement>(null);
   const [acknowledgingId, setAcknowledgingId] = useState<string | null>(null);
   const [licenseServerMode, setLicenseServerMode] = useState<boolean | null>(null);
 
@@ -133,58 +126,62 @@ export const Header: React.FC<HeaderProps> = ({ onMobileMenuOpen }) => {
   };
 
   return (
-    <header className="bg-card/80 backdrop-blur-md border-b border-border sticky top-0 z-[1000]">
-      <div className="px-4 sm:px-6 lg:px-8">
-        <div className="flex h-16 items-center justify-between">
-          <div className="flex min-w-0 flex-1 items-center gap-2">
+    <header className={styles.header}>
+      <div className={styles.headerInner}>
+          <div className={styles.headerLeft}>
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              className="h-10 w-10 shrink-0 md:hidden"
+              className={cn(styles.headerIconButton, styles.menuButton)}
+              aria-controls="application-navigation"
+              data-mobile-menu-trigger
+              aria-expanded={mobileMenuOpen}
               aria-label="Gezinme menüsünü aç"
               onClick={onMobileMenuOpen}
             >
               <Menu className="h-5 w-5" aria-hidden="true" />
             </Button>
-            <TopbarBreadcrumb />
+            {isDashboard ? <DashboardSearch /> : <TopbarBreadcrumb />}
           </div>
 
-          <div className="flex shrink-0 items-center gap-3">
+          <div className={styles.headerActions}>
             {licenseServerMode === false && (
               <Popover onOpenChange={(open) => { if (open) loadNotifications(); }}>
                 <PopoverTrigger asChild>
-                  <Button variant="ghost" size="icon" className="relative h-10 w-10" aria-label="Bildirimler">
-                    <Bell className="h-5 w-5" />
+                  <Button variant="ghost" size="icon" className={cn(styles.headerIconButton, styles.notificationButton)} aria-label={`Bildirimler, ${notificationCount} bekleyen alarm`}>
+                    <Bell aria-hidden="true" className="h-5 w-5" />
                     {notificationCount > 0 && (
                       <Badge
+                        icon={null}
                         variant="destructive"
-                        className="absolute -top-1 -right-1 h-5 min-w-5 flex items-center justify-center p-0 px-1 text-xs"
+                        className={styles.notificationCount}
                       >
                         {notificationCount > 99 ? '99+' : notificationCount}
                       </Badge>
                     )}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent side="bottom" align="end" className="w-96 p-0">
+                <PopoverContent side="bottom" align="end" className={styles.notificationPopover} aria-label="Bildirimler" onOpenAutoFocus={event => { event.preventDefault(); notificationHeading.current?.focus(); }}>
                   <div className="p-4">
                     <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <h3 className="font-semibold text-sm">Bildirimler</h3>
+                      <div className={styles.notificationHeading}>
+                        <span><Bell size={17} aria-hidden="true" /></span><div>
+                        <h3 ref={notificationHeading} tabIndex={-1} className="font-semibold text-sm outline-none">Bildirimler</h3>
                         <p className="text-xs text-muted-foreground">{notificationCount} bekleyen alarm</p>
-                      </div>
+                      </div></div>
                       <Button variant="ghost" size="sm" asChild className="h-8 gap-1">
                         <Link href="/dashboard/alerts?filter=unacknowledged">
-                          Tumu
-                          <ExternalLink className="h-3.5 w-3.5" />
+                          Tümünü gör
+                          <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
                         </Link>
                       </Button>
                     </div>
                   </div>
                   <Separator />
-                  <div className="max-h-96 overflow-y-auto p-2">
+                  <div className={styles.notificationList}>
                     {loading && notifications.length === 0 ? (
-                      <p className="text-xs text-muted-foreground text-center py-6">Bildirimler yukleniyor...</p>
+                      <p className="text-xs text-muted-foreground text-center py-6">Bildirimler yükleniyor…</p>
                     ) : notifications.length === 0 ? (
                       <p className="text-xs text-muted-foreground text-center py-6">Bekleyen bildirim yok</p>
                     ) : (
@@ -194,18 +191,16 @@ export const Header: React.FC<HeaderProps> = ({ onMobileMenuOpen }) => {
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0 space-y-1">
                                 <div className="flex flex-wrap items-center gap-2">
-                                  <Badge variant={SEVERITY_BADGES[item.severity] || 'outline'} className="text-[10px]">
-                                    {SEVERITY_LABELS[item.severity] || item.severity}
-                                  </Badge>
+                                  <SeverityBadge severity={item.severity} />
                                   {item.notifiedAt ? (
-                                    <Badge variant="success" className="text-[10px]">Email</Badge>
+                                    <Badge icon={MailCheck} variant="success" className="text-[10px]">E-posta gönderildi</Badge>
                                   ) : (
-                                    <Badge variant="outline" className="text-[10px]">Email yok</Badge>
+                                    <Badge icon={MailX} variant="outline" className="text-[10px]">E-posta gönderilmedi</Badge>
                                   )}
                                 </div>
-                                <p className="line-clamp-2 text-sm font-medium">{item.title}</p>
+                                <p className="line-clamp-2 text-sm font-medium">{incidentLabel(item.alarm?.code || '', item.title)}</p>
                                 <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                                  <Clock className="h-3 w-3" />
+                                  <Clock aria-hidden="true" className="h-3 w-3" />
                                   {formatRelativeTime(item.createdAt)}
                                   {item.alarm?.code ? ` · ${item.alarm.code}` : ''}
                                 </p>
@@ -214,11 +209,12 @@ export const Header: React.FC<HeaderProps> = ({ onMobileMenuOpen }) => {
                                 variant="ghost"
                                 size="icon"
                                 className="h-8 w-8 shrink-0 text-muted-foreground hover:text-primary"
-                                title="Okundu / Onaylandi"
+                                title="Alarmı onayla"
+                                aria-label={`${item.title} alarmını onayla`}
                                 onClick={() => acknowledgeAlarm(item.id)}
                                 disabled={acknowledgingId === item.id}
                               >
-                                <CheckCircle2 className="h-4 w-4" />
+                                <CheckCircle2 aria-hidden="true" className="h-4 w-4" />
                               </Button>
                             </div>
                           </div>
@@ -232,7 +228,6 @@ export const Header: React.FC<HeaderProps> = ({ onMobileMenuOpen }) => {
 
             <UserProfile compact />
           </div>
-        </div>
       </div>
     </header>
   );

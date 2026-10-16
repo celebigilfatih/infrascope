@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import type { LegacyAlarmGlobal } from '@/lib/alarms/queries/types';
 
 /**
  * GET /api/alarms/suppression
@@ -6,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
  */
 export async function GET() {
   try {
-    const engine = (globalThis as any).__detectionEngine;
+    const engine = (globalThis as LegacyAlarmGlobal).__detectionEngine;
     if (!engine) {
       return NextResponse.json({ 
         success: false, 
@@ -41,7 +42,7 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    const engine = (globalThis as any).__detectionEngine;
+    const engine = (globalThis as LegacyAlarmGlobal).__detectionEngine;
     if (!engine) {
       return NextResponse.json({ 
         success: false, 

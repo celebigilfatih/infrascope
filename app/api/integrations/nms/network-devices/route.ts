@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { authorizeApiRequest } from '@/lib/auth/api-permission';
 import { prisma } from '@/lib/prisma';
 
 /**
@@ -13,12 +14,14 @@ import { prisma } from '@/lib/prisma';
  *   - unknown  : never polled
  */
 export async function GET(req: NextRequest) {
+  const access = await authorizeApiRequest(req, 'devices', 'read');
+  if (!access.allowed) return access.response;
   try {
     const { searchParams } = new URL(req.url);
     const vendorFilter = searchParams.get('vendor');
     const statusFilter = searchParams.get('status');
 
-    const devices = await (prisma as any).device.findMany({
+    const devices = await prisma.device.findMany({
       where: {
         nmsDeviceId: { not: null },
         pollingEnabled: true,
@@ -38,7 +41,7 @@ export async function GET(req: NextRequest) {
     const FIVE_MIN = 5 * 60 * 1000;
     const now = Date.now();
 
-    const data = devices.map((d: any) => {
+    const data = devices.map((d) => {
       const last = d.lastPolledAt ? new Date(d.lastPolledAt).getTime() : 0;
       const age = last ? now - last : Infinity;
       let connection_status: 'online' | 'offline' | 'unknown' = 'unknown';
@@ -54,14 +57,14 @@ export async function GET(req: NextRequest) {
     });
 
     const filtered = statusFilter
-      ? data.filter((d: any) => d.connection_status === statusFilter)
+      ? data.filter((d) => d.connection_status === statusFilter)
       : data;
 
     return NextResponse.json({ data: filtered, total: filtered.length });
-  } catch (error: any) {
-    console.error('[NMS network-devices] GET error:', error.message);
+  } catch (error) {
+    console.error('[NMS network-devices] GET error:', (error as Error).message);
     return NextResponse.json(
-      { error: 'Failed to load NMS devices', details: error.message },
+      { error: 'Failed to load NMS devices', details: (error as Error).message },
       { status: 500 }
     );
   }

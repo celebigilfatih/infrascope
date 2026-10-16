@@ -5,7 +5,7 @@
  * with license validation and feature gating.
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { initLicense, getLicenseState, type LicenseState } from './client';
 import { isFeatureAvailable, type LicenseTier } from './features';
 

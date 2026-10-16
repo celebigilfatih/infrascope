@@ -1,5 +1,8 @@
 'use client';
 
+import { uiError } from '@/lib/i18n/tr';
+
+import { PageHeading, PageStateFrame } from '@/components/ui/page-heading';
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -39,13 +42,13 @@ export default function CapacityPage() {
       const json = await res.json();
       
       if (json.error) {
-        setError(json.error);
+        setError(uiError(json.error));
         return;
       }
       
       setTrends(json.trends || []);
     } catch (err) {
-      setError((err as Error).message);
+      setError(uiError((err as Error).message));
     } finally {
       setLoading(false);
     }
@@ -59,8 +62,20 @@ export default function CapacityPage() {
 
   const collectMetrics = async () => {
     setLoading(true);
-    await fetch('/api/integrations/vmware?type=collect-metrics');
-    setTimeout(fetchTrends, 2000);
+    try {
+      const response = await fetch('/api/integrations/vmware', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'collect-metrics' }),
+      });
+      if (!response.ok) {
+        const result = await response.json();
+        throw new Error(uiError(result.error || 'Metrikler toplanamadı.'));
+      }
+      setTimeout(fetchTrends, 2000);
+    } catch (err) {
+      setError(uiError(err instanceof Error ? err.message : 'Metrikler toplanamadı.'));
+      setLoading(false);
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -68,9 +83,9 @@ export default function CapacityPage() {
       case 'critical':
         return <Badge variant="destructive"><AlertTriangle className="h-3 w-3 mr-1" />Kritik</Badge>;
       case 'warning':
-        return <Badge className="bg-yellow-100 text-yellow-800"><AlertTriangle className="h-3 w-3 mr-1" />Uyari</Badge>;
+        return <Badge variant="warning"><AlertTriangle className="h-3 w-3 mr-1" />Uyarı</Badge>;
       default:
-        return <Badge className="bg-green-100 text-green-800">Normal</Badge>;
+        return <Badge variant="success">Normal</Badge>;
     }
   };
 
@@ -97,13 +112,13 @@ export default function CapacityPage() {
   const avgDisk = trends.filter(t => t.metricType === 'disk').reduce((sum, t) => sum + parseFloat(t.currentValue), 0) / Math.max(trends.filter(t => t.metricType === 'disk').length, 1);
 
   if (error) {
-    return (
+    return <PageStateFrame section="capacity" title="Kapasite Eğilimleri">{(
       <div className="p-6">
         <Card className="border-red-200 bg-red-50">
           <CardContent className="pt-6">
             <div className="flex items-center gap-2 text-red-600">
               <AlertTriangle className="h-5 w-5" />
-              <span>Kapasite verileri alinamadi: {error}</span>
+              <span>Kapasite verileri alınamadı: {uiError(error)}</span>
             </div>
             <Button onClick={fetchTrends} className="mt-4" variant="outline">
               <RefreshCw className="h-4 w-4 mr-2" />
@@ -112,15 +127,14 @@ export default function CapacityPage() {
           </CardContent>
         </Card>
       </div>
-    );
+    )}</PageStateFrame>;
   }
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Kapasite Trendleri</h1>
-          <p className="text-muted-foreground">CPU, RAM ve Disk kullanim egilimlerinin analizi</p>
+          <PageHeading section="capacity" description={<>CPU, RAM ve disk kullanım eğilimlerini analiz edin</>}>Kapasite Eğilimleri</PageHeading>
         </div>
         <div className="flex items-center gap-2">
           <select
@@ -128,9 +142,9 @@ export default function CapacityPage() {
             onChange={(e) => setDays(parseInt(e.target.value))}
             className="px-3 py-2 border rounded-md"
           >
-            <option value="1">Son 1 Gun</option>
-            <option value="7">Son 7 Gun</option>
-            <option value="30">Son 30 Gun</option>
+            <option value="1">Son 1 Gün</option>
+            <option value="7">Son 7 Gün</option>
+            <option value="30">Son 30 Gün</option>
           </select>
           <Button onClick={collectMetrics} variant="outline" size="sm">
             <RefreshCw className="h-4 w-4 mr-2" />
@@ -152,17 +166,17 @@ export default function CapacityPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{avgCpu.toFixed(1)}%</div>
-            <p className="text-xs text-muted-foreground">Cluster ortalamasi</p>
+            <p className="text-xs text-muted-foreground">Küme ortalaması</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Ortalama Memory</CardTitle>
+            <CardTitle className="text-sm font-medium">Ortalama Bellek</CardTitle>
             <MemoryStick className="h-4 w-4 text-purple-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{avgMemory.toFixed(1)}%</div>
-            <p className="text-xs text-muted-foreground">Cluster ortalamasi</p>
+            <p className="text-xs text-muted-foreground">Küme ortalaması</p>
           </CardContent>
         </Card>
         <Card>
@@ -172,17 +186,17 @@ export default function CapacityPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{avgDisk.toFixed(1)}%</div>
-            <p className="text-xs text-muted-foreground">Datastore ortalamasi</p>
+            <p className="text-xs text-muted-foreground">Veri deposu ortalaması</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Uyarilar</CardTitle>
+            <CardTitle className="text-sm font-medium">Uyarılar</CardTitle>
             <AlertTriangle className="h-4 w-4 text-red-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-red-600">{criticalCount}</div>
-            <p className="text-xs text-muted-foreground">{warningCount} uyari</p>
+            <p className="text-xs text-muted-foreground">{warningCount} uyarı</p>
           </CardContent>
         </Card>
       </div>
@@ -207,7 +221,7 @@ export default function CapacityPage() {
                   <TableHead>Kaynak</TableHead>
                   <TableHead>Tip</TableHead>
                   <TableHead>Metrik</TableHead>
-                  <TableHead>Guncel Deger</TableHead>
+                  <TableHead>Güncel Değer</TableHead>
                   <TableHead>Trend</TableHead>
                   <TableHead>Durum</TableHead>
                   <TableHead>Veri Sayisi</TableHead>
@@ -243,10 +257,10 @@ export default function CapacityPage() {
 
           {trends.length === 0 && !loading && (
             <div className="text-center py-8">
-              <p className="text-muted-foreground mb-4">Henuz metrik verisi yok</p>
+              <p className="text-muted-foreground mb-4">Henüz metrik verisi yok</p>
               <Button onClick={collectMetrics} variant="outline">
                 <RefreshCw className="h-4 w-4 mr-2" />
-                Metrik Toplamaya Basla
+                Metrik Toplamayı Başlat
               </Button>
             </div>
           )}

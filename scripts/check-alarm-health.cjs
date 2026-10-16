@@ -5,7 +5,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ts = require('typescript');
 const root = path.resolve(__dirname, '..');
-delete process.env.VMWARE_HOST;
+const { attachAlarmLease } = require('./helpers/alarm-run-fixture.cjs');
 const quiet = new Proxy({}, { get: () => () => {} });
 let state;
 const cleanResult = () => ({ alarmCode: 'NMS_BACKUP_FAILED', triggered: false, matchCount: 0, events: [] });
@@ -38,21 +38,28 @@ const prisma = {
   systemConfig: { findUnique: async () => null },
   $queryRaw: async () => [],
 };
+attachAlarmLease(prisma, () => state);
 const overrides = {
+  // VMware source/profile behavior is exercised by check-vmware-health.cjs.
+  '@/lib/integrations/vmware-health': { checkSavedVMwareHealth: async () => ({ status: 'unknown' }) },
   '@/lib/prisma': { prisma },
   '@/lib/logger': { createLogger: () => quiet },
   '@/lib/license/client': { initLicense: async () => {}, isLicenseValid: () => state.license },
   '@/lib/security/integration-credentials': { unprotectIntegrationConfig: value => value },
   '@/lib/integrations/fortianalyzer': {
-    initSharedFortiAnalyzerService: () => ({}), getSharedFortiAnalyzerService: () => null,
+    initSharedFortiAnalyzerService: () => ({ verifyAccess: async () => true, getLoginHealth: () => ({ consecutiveFailures: 0 }) }), getSharedFortiAnalyzerService: () => null,
     getFortiAnalyzerLoginHealth: () => { state.alertChecks++; return { consecutiveFailures: 0 }; },
   },
   '@/lib/firewall/connector-factory': { getFortiGateConnector: async () => ({ service: null }) },
   '@/lib/alarms/detection-engine': {
     getEventCacheStatus: () => null,
     AlarmDetectionEngine: class {
+      constructor(service) { this.service = service; }
       async evaluateNmsAlarms() { if (state.nmsError) throw new Error(state.nmsError); return state.nmsResults; }
       async evaluateAllAlarms(options) {
+        // Unconfigured FA no longer prevents dispatching the engine for other sources.
+        // This fixture has no VMware/FG rules; their real dispatch is tested separately.
+        if (!this.service) return [];
         assert.equal(options.includeNms, false); state.faCalls++;
         if (state.faError) throw new Error(state.faError);
         return state.faResults;
@@ -78,10 +85,11 @@ function loader() {
     const localRequire = name => {
       if (overrides[name]) return overrides[name];
       if (name.startsWith('@/')) return load(name.slice(2) + '.ts');
+      if (name.startsWith('.')) return load(path.relative(root, path.resolve(path.dirname(filename), name)) + '.ts');
       return require(name);
     };
     vm.runInNewContext(`(function(require,module,exports){${compiled}\n})`, {
-      console, process, Date, AbortSignal, setTimeout: () => 0,
+      console, process, Date, AbortController, AbortSignal, clearTimeout: () => {}, setTimeout: () => 0,
       fetch: async () => ({ ok: true, json: async () => ({ poller_alive: true, registered_devices: 1 }) }),
     }, { filename })(localRequire, module, module.exports);
     return module.exports;
@@ -114,12 +122,12 @@ async function main() {
   result = await run(); assert.equal(result.errors[0].code, 'FORTIANALYZER_SOURCE');
   assert.equal(result.summary.total, 1); assert.equal(state.logs[0].errorCount, 1);
 
-  reset(); state.config = { enabled: true, config: { host: 'fixture.invalid', password: 'fixture' } };
+  reset(); state.config = { enabled: true, config: { host: 'fixture.invalid', username: 'fixture', password: 'fixture' } };
   state.faError = 'FortiAnalyzer login failed';
-  result = await run(); assert.equal(result.errors[0].code, 'FORTIANALYZER_SOURCE');
+  result = await run(); assert.equal(result.errors[0].code, 'ALARM_ENGINE');
   assert.equal(result.summary.total, 1); assert.equal(state.logs[0].status, 'PARTIAL');
 
-  reset(); state.config = { enabled: true, config: { host: 'fixture.invalid', password: 'fixture' } };
+  reset(); state.config = { enabled: true, config: { host: 'fixture.invalid', username: 'fixture', password: 'fixture' } };
   state.faResults = [{ ...cleanResult(), alarmCode: 'FA_FIXTURE' }];
   result = await run(); assert.equal(result.summary.errors, 0); assert.equal(result.summary.total, 2);
   assert.equal(state.faCalls, 1); assert.equal(state.logs[0].status, 'SUCCESS');
@@ -149,8 +157,14 @@ async function main() {
   state.logs.push({ checkTime: new Date(), status: 'RUNNING', errorCount: 0 });
   status = await health(); assert.equal(status.status, 'degraded', 'An unfinished check cannot clear failures');
 
+  // A source-specific manual success cannot prove global recovery.
+  reset(); state.logs = failures(7);
+  await loader()('lib/alarms/alarm-runner.ts').runAlarmCheck({ sources: ['vmware'], requireConfiguredSources: true });
+  status = await health(); assert.equal(status.status, 'degraded'); assert.equal(status.alarms.unresolvedErrorChecks, 7);
+
   reset(); state.logs = failures(7, 70);
   status = await health(); assert.equal(status.alarms.recentErrors, 0); assert.equal(status.status, 'healthy');
   console.log('Alarm runner and health regressions passed: optional sources, real failures, recovery, preserved history and renewed degradation.');
 }
-main().catch(error => { console.error(error); process.exitCode = 1; });
+module.exports = { reset, run, health, getState: () => state };
+if (require.main === module) main().catch(error => { console.error(error); process.exitCode = 1; });

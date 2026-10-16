@@ -140,7 +140,7 @@ export async function GET() {
       },
       timestamp: new Date(),
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('[Network Topology Status] GET error:', error);
     return NextResponse.json({
       success: false,

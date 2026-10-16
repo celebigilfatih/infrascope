@@ -5,10 +5,16 @@
  */
 
 import { prisma } from '@/lib/prisma';
+import type { CachedEvent, Prisma } from '@prisma/client';
 import FortiAnalyzerService from '@/lib/integrations/fortianalyzer';
 import { createLogger } from '@/lib/logger';
+import { startFortiAnalyzerSearch, waitForFortiAnalyzerResults } from './queries/fortianalyzer-search';
+import { FA_REVISION_FIELD, FA_TIME_VERSION_FIELD, fortiAnalyzerCacheFilter, nativeFortiAnalyzerLog } from '@/lib/integrations/fortianalyzer-revision';
+import { FA_EVENT_TIME_VERSION, filterFortiAnalyzerTimeWindow, requireFortiAnalyzerEventTime } from './fortianalyzer-event-time';
+import { SourceQueryError, withSourceDeadline } from '@/lib/integrations/source-query-error';
 
 const log = createLogger('event-cache');
+const SYNC_LOGTYPES = ['event', 'dns', 'traffic', 'webfilter', 'app-ctrl', 'attack', 'virus'];
 
 export interface CachedEventFilters {
   logtype: string;
@@ -26,11 +32,33 @@ export class EventCacheService {
   // FRESH_THRESHOLD > BASE_SYNC_INTERVAL gives a 3-min buffer so alarm checks never
   // see a stale cache just because both timers fired at the same moment.
   private lastSyncTime: Date | null = null;
+  private readonly lastSyncByLogtype = new Map<string, Date>();
+  private readonly failedLogtypes = new Set<string>();
   private syncInProgress = false;
   private consecutiveSyncFailures = 0;
+  private stopped = false;
+  private timer: ReturnType<typeof setTimeout> | undefined;
+  private readonly cancellation = new AbortController();
+  private startPromise: Promise<number> | null = null;
 
-  constructor(faService: FortiAnalyzerService) {
+  constructor(faService: FortiAnalyzerService, private readonly source: { revision?: string; beforeSync?: () => Promise<boolean> } = {}) {
     this.faService = faService;
+  }
+
+  assertActive(): void {
+    if (this.stopped) throw new SourceQueryError('SOURCE_CONFIG_CHANGED', 'Event cache collector was retired');
+  }
+
+  getSourceFilter() { return fortiAnalyzerCacheFilter(this.source.revision); }
+  getAbortSignal() { return this.cancellation.signal; }
+
+  stop(): void {
+    this.stopped = true;
+    if (this.timer !== undefined) clearTimeout(this.timer);
+    this.timer = undefined;
+    this.cancellation.abort();
+    this.lastSyncTime = null;
+    this.lastSyncByLogtype.clear();
   }
 
   /**
@@ -52,6 +80,11 @@ export class EventCacheService {
    * can await the first sync before evaluating alarms against the cache.
    */
   async startBackgroundSync(): Promise<number> {
+    if (this.stopped) return 0;
+    return this.startPromise ??= this.start();
+  }
+
+  private async start(): Promise<number> {
     log.info('Starting background sync job (base interval: 5 minutes, with backoff)...');
 
     // Initial sync — await it so callers can wait for a warm cache
@@ -60,7 +93,7 @@ export class EventCacheService {
       initialSuccessCount = await this.syncAllEventTypes();
       if (initialSuccessCount > 0) {
         this.lastSyncTime = new Date();
-        this.consecutiveSyncFailures = 0;
+        this.consecutiveSyncFailures = this.getCacheStatus().isFresh ? 0 : this.consecutiveSyncFailures + 1;
         log.info({ successCount: initialSuccessCount, totalLogtypes: 7 }, 'Initial sync completed');
       } else {
         this.consecutiveSyncFailures++;
@@ -82,11 +115,14 @@ export class EventCacheService {
    * Called recursively after each sync completes.
    */
   private scheduleNextSync() {
+    if (this.stopped) return;
     const delayMs = this.nextSyncDelayMs();
     const delayMin = Math.round(delayMs / 60000);
     log.info({ delayMin, consecutiveFailures: this.consecutiveSyncFailures }, 'Next sync scheduled');
 
-    setTimeout(async () => {
+    this.timer = setTimeout(async () => {
+      this.timer = undefined;
+      if (this.stopped) return;
       if (this.syncInProgress) {
         log.warn('Previous sync still running, skipping this cycle');
         this.consecutiveSyncFailures++;
@@ -98,12 +134,11 @@ export class EventCacheService {
         const successCount = await this.syncAllEventTypes();
         if (successCount > 0) {
           this.lastSyncTime = new Date();
-          this.consecutiveSyncFailures = 0;
-          log.info({ successCount, totalLogtypes: 7 }, 'Sync completed — failure counter reset');
+          this.consecutiveSyncFailures = this.getCacheStatus().isFresh ? 0 : this.consecutiveSyncFailures + 1;
+          log.info({ successCount, failedLogtypes: [...this.failedLogtypes] }, 'Sync cycle completed');
         } else {
           // All logtypes failed — do NOT update lastSyncTime.
-          // The cache will become stale after FRESH_THRESHOLD_MS, forcing alarm checks
-          // to use live FA queries (which will correctly fail and be reported as FAILED).
+          // Failed logtypes are immediately unavailable, forcing live queries.
           this.consecutiveSyncFailures++;
           log.error({ consecutiveFailures: this.consecutiveSyncFailures }, 'All logtypes failed, backing off');
         }
@@ -119,26 +154,19 @@ export class EventCacheService {
   /**
    * Sync all event types used by alarms.
    * Returns the number of logtypes that synced successfully.
-   * Caller must only update lastSyncTime when successCount > 0,
-   * otherwise the cache would appear fresh despite having stale/empty data.
+   * Per-logtype coverage is established only after completed searches and writes;
+   * targeted event failures invalidate event coverage even if the general scan succeeded.
    *
    * Pre-flight: attempts login ONCE before the loop. If login fails, aborts
    * immediately (avoids N separate login attempts, each resetting FA's block timer).
    */
   private async syncAllEventTypes(): Promise<number> {
+    if (this.stopped) return 0;
     this.syncInProgress = true;
     const syncStart = Date.now();
     let successCount = 0;
     
-    const logtypes = [
-      'event',
-      'dns',
-      'traffic',
-      'webfilter',
-      'app-ctrl',
-      'attack',
-      'virus',
-    ];
+    const logtypes = SYNC_LOGTYPES;
     
     // Targeted filters for high-priority alarm types that may get crowded out in general sync
     // NOTE: FA API ignores 'subtype == user' filter (returns 0 TID) — use 'action == auth-logon' directly
@@ -158,12 +186,16 @@ export class EventCacheService {
     log.info({ logtypeCount: logtypes.length }, 'Starting sync: last 24 hours');
 
     try {
+      if (this.source.beforeSync && !await this.source.beforeSync()) return 0;
+      this.assertActive();
       // Pre-flight login check — one attempt before touching any logtype.
       // If FA is blocked/unreachable, abort the entire sync immediately instead of
       // making N separate login calls (each of which resets FA's block timer).
       log.info('Pre-flight login check');
-      const canLogin = await this.faService.login();
+      const canLogin = await withSourceDeadline(() => this.faService.login(), 60_000, this.cancellation.signal);
+      this.assertActive();
       if (!canLogin) {
+        logtypes.forEach(type => this.failedLogtypes.add(type));
         const elapsedS = Math.round((Date.now() - syncStart) / 1000);
         log.error({ elapsedS }, 'Pre-flight login failed — aborting sync. FA may be rate-limiting logins');
         return 0;
@@ -171,12 +203,17 @@ export class EventCacheService {
       log.info('Pre-flight login OK — starting logtype sync');
 
       for (const logtype of logtypes) {
+        this.assertActive();
         try {
           const logtypeStart = Date.now();
           await this.syncLogType(logtype, startTime, now);
+          this.assertActive();
+          this.lastSyncByLogtype.set(logtype, new Date());
+          this.failedLogtypes.delete(logtype);
           log.info({ logtype, durationMs: Date.now() - logtypeStart }, 'Sync completed for logtype');
           successCount++;
         } catch (error) {
+          this.failedLogtypes.add(logtype);
           log.error({ err: error, logtype }, 'Failed to sync logtype');
         }
       }
@@ -184,20 +221,23 @@ export class EventCacheService {
       // Sync targeted event filters for high-priority alarms (auth-logon, etc.)
       // These events may get crowded out by high-volume event types in the general sync
       for (const filter of targetedEventFilters) {
+        this.assertActive();
         try {
           const filterStart = Date.now();
           await this.syncLogTypeWithFilter('event', filter, startTime, now);
           log.info({ logtype: 'event', filter, durationMs: Date.now() - filterStart }, 'Targeted sync completed');
         } catch (error) {
+          this.failedLogtypes.add('event');
           log.error({ err: error, logtype: 'event', filter }, 'Failed to sync event with filter');
         }
       }
 
       // Cleanup: remove events older than 24 hours to keep DB size manageable
       try {
+        this.assertActive();
         const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
         const deleted = await prisma.cachedEvent.deleteMany({
-          where: { eventTime: { lt: cutoff } },
+          where: { logtype: { in: SYNC_LOGTYPES }, eventTime: { lt: cutoff } },
         });
         if (deleted.count > 0) {
           log.info({ count: deleted.count }, 'Cleaned up expired events');
@@ -208,6 +248,9 @@ export class EventCacheService {
 
       log.info({ durationS: Math.round((Date.now() - syncStart) / 1000), successCount, totalLogtypes: logtypes.length }, 'Full sync completed');
       return successCount;
+    } catch (error) {
+      logtypes.forEach(type => this.failedLogtypes.add(type));
+      throw error;
     } finally {
       // CRITICAL: always release the lock, even if an unexpected error escapes all inner catches.
       // Without finally, any uncaught exception leaves syncInProgress=true forever,
@@ -221,44 +264,23 @@ export class EventCacheService {
    * Sync a single log type
    */
   private async syncLogType(logtype: string, startTime: Date, endTime: Date) {
+    this.assertActive();
     log.info({ logtype }, 'Syncing logtype');
 
     // Login to FortiAnalyzer
-    const loggedIn = await this.faService.login();
+    const loggedIn = await withSourceDeadline(() => this.faService.login(), 60_000, this.cancellation.signal);
+    this.assertActive();
     if (!loggedIn) {
       throw new Error('FortiAnalyzer login failed');
     }
 
     // Start log search (limit: 5000 events per logtype)
-    const tid = await this.faService.startLogSearch(logtype, 5000, '');
-    if (!tid) {
-      log.warn({ logtype }, 'No results for logtype, skipping');
-      return;
-    }
-
-    // CRITICAL: Poll for results - FortiAnalyzer processes searches asynchronously
-    // Must wait for FA to finish indexing before fetching results
-    let initialLogs: Array<Record<string, unknown>> | null = null;
-    for (let attempt = 0; attempt < 8; attempt++) {
-      await new Promise(resolve => setTimeout(resolve, 5000)); // wait 5s between polls
-      initialLogs = await this.faService.fetchLogResults(tid, 0, 1000);
-      if (initialLogs && initialLogs.length > 0) {
-        log.info({ logtype, polls: attempt + 1 }, 'Got results after polling');
-        break;
-      }
-      log.info({ logtype, poll: attempt + 1, maxPolls: 8 }, 'Waiting for FA results');
-    }
-
-    if (!initialLogs || initialLogs.length === 0) {
-      log.info({ logtype }, 'No results after polling, skipping');
-      return;
-    }
+    const tid = await startFortiAnalyzerSearch(this.faService, logtype, 5000, '', this.cancellation.signal);
+    const pollOptions = { attempts: 8, intervalMs: 5000, timeoutMs: 60_000, signal: this.cancellation.signal };
+    const initialLogs = await waitForFortiAnalyzerResults(this.faService, tid, 1000, pollOptions);
 
     // Process first batch
-    const recentLogsFirst = initialLogs.filter(log => {
-      const eventTime = this.parseEventTime(log);
-      return eventTime && eventTime >= startTime && eventTime <= endTime;
-    });
+    const recentLogsFirst = filterFortiAnalyzerTimeWindow(initialLogs, startTime, endTime);
     if (recentLogsFirst.length > 0) {
       await this.saveEvents(logtype, recentLogsFirst);
       log.info({ logtype, count: recentLogsFirst.length }, 'Saved events');
@@ -271,18 +293,15 @@ export class EventCacheService {
       let offset = 1000;
       const limit = 1000;
 
-      while (totalFetched < 5000) {
-        const logs = await this.faService.fetchLogResults(tid, offset, limit);
+      while (offset < 5000) {
+        const logs = await waitForFortiAnalyzerResults(this.faService, tid, limit, { ...pollOptions, offset });
 
-        if (!logs || logs.length === 0) {
+        if (logs.length === 0) {
           break;
         }
 
         // Filter by time range and save to DB
-        const recentLogs = logs.filter(log => {
-          const eventTime = this.parseEventTime(log);
-          return eventTime && eventTime >= startTime && eventTime <= endTime;
-        });
+        const recentLogs = filterFortiAnalyzerTimeWindow(logs, startTime, endTime);
 
         if (recentLogs.length > 0) {
           await this.saveEvents(logtype, recentLogs);
@@ -305,43 +324,24 @@ export class EventCacheService {
    * Sync a single log type with a specific filter (targeted sync for high-priority events)
    */
   private async syncLogTypeWithFilter(logtype: string, filter: string, startTime: Date, endTime: Date) {
+    this.assertActive();
     log.info({ logtype, filter }, 'Syncing logtype with filter');
 
     // Login to FortiAnalyzer
-    const loggedIn = await this.faService.login();
+    const loggedIn = await withSourceDeadline(() => this.faService.login(), 60_000, this.cancellation.signal);
+    this.assertActive();
     if (!loggedIn) {
       throw new Error('FortiAnalyzer login failed');
     }
 
     // Start log search with filter (limit: 1000 events - FortiAnalyzer max)
-    const tid = await this.faService.startLogSearch(logtype, 1000, filter);
-    if (!tid) {
-      log.warn({ logtype, filter }, 'No results for logtype with filter, skipping');
-      return;
-    }
-
-    // Poll for results
-    let logs: Array<Record<string, unknown>> | null = null;
-    for (let attempt = 0; attempt < 6; attempt++) {
-      await new Promise(resolve => setTimeout(resolve, 3000)); // wait 3s between polls
-      logs = await this.faService.fetchLogResults(tid, 0, 1000);
-      if (logs && logs.length > 0) {
-        log.info({ logtype, filter, resultCount: logs.length, polls: attempt + 1 }, 'Got results after polling');
-        break;
-      }
-      log.info({ logtype, filter, poll: attempt + 1, maxPolls: 6 }, 'Waiting for FA results');
-    }
-
-    if (!logs || logs.length === 0) {
-      log.info({ logtype, filter }, 'No results after polling, skipping');
-      return;
-    }
+    const tid = await startFortiAnalyzerSearch(this.faService, logtype, 1000, filter, this.cancellation.signal);
+    const logs = await waitForFortiAnalyzerResults(this.faService, tid, 1000, {
+      attempts: 6, intervalMs: 3000, timeoutMs: 40_000, signal: this.cancellation.signal,
+    });
 
     // Filter by time range and save
-    let recentLogs = logs.filter(log => {
-      const eventTime = this.parseEventTime(log);
-      return eventTime && eventTime >= startTime && eventTime <= endTime;
-    });
+    let recentLogs = filterFortiAnalyzerTimeWindow(logs, startTime, endTime);
 
     // For login events, also filter for failed attempts in-memory
     // (FortiAnalyzer filter syntax may not support msg ~ failed)
@@ -364,12 +364,13 @@ export class EventCacheService {
    * Save events to database
    */
   private async saveEvents(logtype: string, logs: Array<Record<string, unknown>>) {
+    this.assertActive();
     const eventsToSave = logs.map(log => ({
       logtype,
       // IMPORTANT: FortiGate uses static logid per event TYPE (e.g. all auth-logon = '0102043039')
       // We must combine logid + eventtime (nanosecond) to get a unique key per event instance
-      logId: String(log.logid || '') + '-' + String(log.eventtime || log.itime_t || ''),
-      eventTime: this.parseEventTime(log) || new Date(),
+      logId: (this.source.revision ? this.source.revision + ':' : '') + String(log.logid || '') + '-' + String(log.eventtime ?? log.itime_t ?? JSON.stringify([log.itime, log.date, log.time, log.tz])),
+      eventTime: requireFortiAnalyzerEventTime(log),
       srcIp: String(log.srcip || ''),
       dstIp: String(log.dstip || ''),
       srcPort: Number(log.srcport) || undefined,
@@ -390,73 +391,34 @@ export class EventCacheService {
       srccountry: String(log.srccountry || ''),
       dstcountry: String(log.dstcountry || ''),
       msg: String(log.msg || '').includes('%') ? decodeURIComponent(String(log.msg || '')) : String(log.msg || ''),
-      rawLog: log as any,
+      rawLog: { ...log, [FA_TIME_VERSION_FIELD]: FA_EVENT_TIME_VERSION,
+          ...(this.source.revision ? { [FA_REVISION_FIELD]: this.source.revision } : {}) } as Prisma.InputJsonObject,
     }));
 
     // Bulk insert with upsert (avoid duplicates)
     for (const event of eventsToSave) {
-      await prisma.cachedEvent.upsert({
-        where: {
-          logtype_logId: {
-            logtype: event.logtype,
-            logId: event.logId,
+      const persist = () => {
+        this.assertActive();
+        return prisma.cachedEvent.upsert({
+          where: {
+            logtype_logId: {
+              logtype: event.logtype,
+              logId: event.logId,
+            },
           },
-        },
-        update: event,
-        create: event,
-      }).catch(() => {
-        // Ignore duplicate errors (race conditions)
-      });
-    }
-  }
-
-  /**
-   * Parse event time from log
-   * Priority order: itime_t (seconds) → itime (string) → eventtime (nanoseconds)
-   * itime_t is most reliable as Unix timestamp; eventtime needs TZ adjustment
-   */
-  private parseEventTime(log: Record<string, unknown>): Date | null {
-    // FIRST: Try itime_t (Unix timestamp in seconds - most reliable)
-    const itime_t = log.itime_t;
-    if (itime_t) {
-      const ts = typeof itime_t === 'number' ? itime_t : Number(itime_t);
-      if (ts > 1e9) return new Date(ts * 1000); // Convert seconds to ms
-    }
-
-    // SECOND: Try itime field (ISO string "YYYY-MM-DD HH:MM:SS" or Unix timestamp)
-    const itime = log.itime as string | number | undefined;
-    if (itime) {
-      if (typeof itime === 'number') {
-        if (itime > 1e9) return new Date(itime * 1000);
-      } else {
-        // itime is typically "2026-04-07 10:31:45"
-        // FortiAnalyzer returns local time, but we parse as UTC+3 from tz field if present
-        const tzStr = log.tz as string | undefined;
-        const dateStr = itime.replace(' ', 'T') + 'Z'; // Treat as UTC for now
-        const dt = new Date(dateStr);
-        if (!isNaN(dt.getTime())) return dt;
+          update: event,
+          create: event,
+        });
+      };
+      try {
+        await persist();
+      } catch (error) {
+        // A concurrent upsert may race on the unique key. Retry once so that
+        // even this case proves persistence; all other write failures propagate.
+        if (!error || typeof error !== 'object' || !('code' in error) || error.code !== 'P2002') throw error;
+        await persist();
       }
     }
-
-    // THIRD: Fallback to eventtime (nanoseconds from FortiAnalyzer)
-    const eventTime = log.eventtime;
-    if (!eventTime) return null;
-
-    const raw = typeof eventTime === 'number' ? eventTime : Number(eventTime);
-    let ms: number;
-
-    if (raw > 1e15) {
-      // Nanoseconds → milliseconds
-      ms = raw / 1e6;
-    } else if (raw > 1e12) {
-      // Already milliseconds
-      ms = raw;
-    } else {
-      // Seconds → milliseconds
-      ms = raw * 1000;
-    }
-
-    return new Date(ms);
   }
 
   /**
@@ -468,9 +430,9 @@ export class EventCacheService {
    *   - NOT LIKE:  msg not like %attribute%   → { msg: { not: { contains: 'attribute' } } }
    * Only fields mapped to DB columns are pushed; others are left for client-side filtering.
    */
-  private extractDbFilters(filter: string): Record<string, any> {
+  private extractDbFilters(filter: string): Record<string, unknown> {
     const COLUMN_FIELDS = new Set(['action', 'subtype', 'user', 'vdom', 'level', 'devname', 'msg', 'service', 'app', 'apprisk', 'srccountry', 'dstcountry']);
-    const dbFilters: Record<string, any> = {};
+    const dbFilters: Record<string, unknown> = {};
 
     const conditions = filter.split(/&&|\band\b/i).map(c => c.trim());
     for (const cond of conditions) {
@@ -509,6 +471,7 @@ export class EventCacheService {
    * Query cached events (replacement for live API calls)
    */
   async queryCachedEvents(filters: CachedEventFilters): Promise<Array<Record<string, unknown>>> {
+    this.assertActive();
     const { logtype, filter, startTime, endTime, limit = 1000 } = filters;
     // For cache queries, fetch up to 5000 events — the DB is fast enough to handle this.
     // The caller's limit was designed for live FA API calls (slow); for the local DB cache
@@ -531,12 +494,15 @@ export class EventCacheService {
             lte: endTime,
           },
           ...dbColumnFilters,
+          AND: [this.getSourceFilter()],
         },
         orderBy: {
           eventTime: 'desc',
         },
         take: dbLimit,
       });
+
+      this.assertActive();
 
       log.info({ logtype, count: events.length, dbFilters: Object.keys(dbColumnFilters).length ? dbColumnFilters : undefined }, 'Found cached events');
 
@@ -547,10 +513,10 @@ export class EventCacheService {
         return filtered;
       }
 
-      return events.map((e: any) => e.rawLog);
+      return events.map(e => nativeFortiAnalyzerLog(e.rawLog));
     } catch (error) {
       log.error({ err: error }, 'Query failed');
-      return [];
+      throw error;
     }
   }
 
@@ -558,9 +524,9 @@ export class EventCacheService {
    * Apply FortiAnalyzer-style filter to cached events
    */
   private applyFilter(
-    events: Array<any>,
+    events: Array<Pick<CachedEvent, 'rawLog'>>,
     filter: string
-  ): Array<any> {
+  ): Array<Record<string, unknown>> {
     // Filter parser — supports: ==, =, !=, <>, <, <=, >, >=, like, not like
     // AND can be written as "&&" or "and", OR as "or"
     // LIKE wildcards: %value% (contains), value% (startsWith), %value (endsWith)
@@ -568,7 +534,7 @@ export class EventCacheService {
     // Example: "cfgpath like %firewall.policy% and action != delete"
 
     return events.filter(event => {
-      const rawLog = event.rawLog;
+      const rawLog = event.rawLog as Prisma.JsonObject;
 
       // Split into AND-clauses
       const conditions = filter.split(/&&|\band\b/i).map(c => c.trim());
@@ -615,20 +581,22 @@ export class EventCacheService {
         });
       });
     // Return rawLog objects (not Prisma model objects) — consistent with the no-filter path
-    }).map((e: any) => e.rawLog);
+    }).map(e => nativeFortiAnalyzerLog(e.rawLog));
   }
 
   /**
    * Force an immediate sync if the cache is stale.
    * - If a sync is already running: wait for it to finish (max 3 min) then return.
-   * - Otherwise: trigger a full sync now and await it (max 3 min timeout).
-   * Non-throwing: logs warnings but never propagates errors to the caller.
+   * - Otherwise: trigger a full sync now and await its bounded source requests.
+   * Non-throwing: records failed coverage and logs warnings. Callers must inspect
+   * freshness and use the live source when coverage is unavailable.
    */
   async forceSync(): Promise<void> {
+    this.assertActive();
     if (this.syncInProgress) {
       log.info('forceSync: sync already in progress — waiting for completion (max 3 min)');
       const deadline = Date.now() + 3 * 60 * 1000;
-      while (this.syncInProgress && Date.now() < deadline) {
+      while (!this.stopped && this.syncInProgress && Date.now() < deadline) {
         await new Promise(resolve => setTimeout(resolve, 2000));
       }
       if (this.syncInProgress) {
@@ -644,7 +612,7 @@ export class EventCacheService {
       const successCount = await this.syncAllEventTypes();
       if (successCount > 0) {
         this.lastSyncTime = new Date();
-        this.consecutiveSyncFailures = 0;
+        this.consecutiveSyncFailures = this.getCacheStatus().isFresh ? 0 : this.consecutiveSyncFailures + 1;
         log.info({ successCount, totalLogtypes: 7 }, 'forceSync completed');
       } else {
         this.consecutiveSyncFailures++;
@@ -659,13 +627,18 @@ export class EventCacheService {
   /**
    * Get cache status
    */
-  getCacheStatus() {
+  getCacheStatus(logtype?: string) {
     const nextDelayMs = this.nextSyncDelayMs();
+    const isTypeFresh = (type: string) => {
+      const lastSync = this.lastSyncByLogtype.get(type);
+      return Boolean(lastSync && !this.failedLogtypes.has(type) && Date.now() - lastSync.getTime() < this.FRESH_THRESHOLD_MS);
+    };
     return {
-      lastSyncTime: this.lastSyncTime,
-      isFresh: this.lastSyncTime 
-        ? Date.now() - this.lastSyncTime.getTime() < this.FRESH_THRESHOLD_MS
-        : false,
+      lastSyncTime: logtype ? this.lastSyncByLogtype.get(logtype) ?? null : this.lastSyncTime,
+      isFresh: !this.stopped && (logtype ? isTypeFresh(logtype) : SYNC_LOGTYPES.every(isTypeFresh)),
+      stopped: this.stopped,
+      sourceRevision: this.source.revision ?? null,
+      failedLogtypes: [...this.failedLogtypes],
       syncInProgress: this.syncInProgress,
       consecutiveSyncFailures: this.consecutiveSyncFailures,
       nextSyncDelayMin: Math.round(nextDelayMs / 60000),
