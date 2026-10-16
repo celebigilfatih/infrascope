@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+- **Topology inspection and source coverage** — Add layered device placement, selectable status-labelled connection edges, a searchable keyboard-accessible connection list and responsive device/connection inspectors. Map each switch port to its joined peer interface without attributing legacy unjoined IDs to another device. Preserve unknown states and unavailable source counts, distinguish NMS port evidence from inventory/link status, and retain dragged positions. Add model and isolated browser regressions; migrate topology images to Next.js Image while preserving direct loading for uploaded/exported images.
+
+- **Incident unassignment recovery** — Extend assignment session/permission regressions to removing an existing owner. Keep the pending unassigned selection and unsaved note after denied requests, show a removal-specific Turkish permission message, and verify canonical actor metadata, cleared assignment timestamps and one history/audit entry after authorized retries. No schema or dependency change is required.
+
 - **Snapshot workspace UI** — Replace the legacy snapshot screen with a responsive inventory, VM links, elapsed-age filters, TSİ dates and filtered CSV export. Distinguish unknown/partial associated-file sizes from zero, confirm destructive actions with both VM and snapshot identity, and block writes on stale/failed reads or missing capabilities. Add browser coverage with intercepted VMware I/O, alongside model and Python collector checks in the isolated regression runner.
 
 - **Incident assignment recovery** — Preserve the chosen owner, unsaved operation note and incident selection when assignment receives 401/403, including non-JSON responses. Show a Turkish assignment-specific warning and place the new-tab login link beside the assignment controls. Add real-session browser and rollback-only database regressions for denied writes, recovery, history/audit integrity and duplicate retries.

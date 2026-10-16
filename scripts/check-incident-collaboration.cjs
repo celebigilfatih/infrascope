@@ -81,9 +81,29 @@ async function main() {
       for (const assigneeId of [undefined, '', 'missing-user', users.viewer.id, users.inactive.id, users.suspended.id, 42]) {
         assert.equal((await patch({ action: 'ASSIGN', assigneeId })).status, 400);
       }
+      const beforeDeniedRemoval = await tx.alarmIncident.findUniqueOrThrow({ where: { id: incident.id }, include: { transitions: { orderBy: { id: 'asc' } } } });
+      const auditsBeforeDeniedRemoval = await tx.auditLog.findMany({ where: { entityId: incident.id }, orderBy: { id: 'asc' } });
+      assert.equal(beforeDeniedRemoval.assignedToId, users.editor.id);
+      for (const deniedAuth of [{ role: 'VIEWER', actor: { type: 'USER', id: users.viewer.id, name: users.viewer.name } }, null]) {
+        auth = deniedAuth;
+        for (let attempt = 0; attempt < 2; attempt++) {
+          const response = await patch({ action: 'ASSIGN', assigneeId: null });
+          assert.equal(response.status, auth ? 403 : 401); assert(!Object.hasOwn(await response.json(), 'data'));
+        }
+        assert.deepEqual(await tx.alarmIncident.findUniqueOrThrow({ where: { id: incident.id }, include: { transitions: { orderBy: { id: 'asc' } } } }), beforeDeniedRemoval, 'Denied removal must preserve the existing owner, assignment time and history');
+        assert.deepEqual(await tx.auditLog.findMany({ where: { entityId: incident.id }, orderBy: { id: 'asc' } }), auditsBeforeDeniedRemoval, 'Denied removal cannot add an audit');
+      }
+      auth = { role: 'ADMIN', actor: { type: 'USER', id: users.admin.id, name: users.admin.name } };
       assert.equal((await patch({ action: 'ASSIGN', assigneeId: null })).status, 200);
       stored = await tx.alarmIncident.findUniqueOrThrow({ where: { id: incident.id } });
       assert.equal(stored.assignedTo, null); assert.equal(stored.assignedToId, null); assert.equal(stored.assignedAt, null);
+      const afterUnassignment = await tx.alarmIncident.findUniqueOrThrow({ where: { id: incident.id }, include: { transitions: { orderBy: { id: 'asc' } } } });
+      const auditsAfterUnassignment = await tx.auditLog.findMany({ where: { entityId: incident.id }, orderBy: { id: 'asc' } });
+      assert.equal(afterUnassignment.transitions.length, beforeDeniedRemoval.transitions.length + 1);
+      assert.equal(auditsAfterUnassignment.length, auditsBeforeDeniedRemoval.length + 1);
+      assert.equal((await patch({ action: 'ASSIGN', assigneeId: null })).status, 200);
+      assert.deepEqual(await tx.alarmIncident.findUniqueOrThrow({ where: { id: incident.id }, include: { transitions: { orderBy: { id: 'asc' } } } }), afterUnassignment, 'Authorized removal retry must not change timestamps or duplicate history');
+      assert.deepEqual(await tx.auditLog.findMany({ where: { entityId: incident.id }, orderBy: { id: 'asc' } }), auditsAfterUnassignment);
 
       const noteText = '  Kontrol tamamlandı.\nİkinci adım: bellek takibi.  ';
       assert.equal((await patch({ action: 'ADD_NOTE', reason: noteText, actorName: 'Untrusted' })).status, 200);

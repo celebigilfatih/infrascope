@@ -31,4 +31,11 @@ services:
     volumes:
       - .:/workspace:ro
       - ./output/incident-regression:/artifacts
-    entrypoint: ["bash", "/workspace/scripts/run-incident-regression.sh"]
+    # Keep Bash's input stable if another workspace edit changes the runner mid-test.
+    entrypoint:
+      - bash
+      - -c
+      - |
+        set -e
+        cp /workspace/scripts/run-incident-regression.sh /tmp/infrascope-incident-regression.sh
+        exec bash /tmp/infrascope-incident-regression.sh

@@ -76,6 +76,7 @@
     "test:alarm-occurrences:db": "node scripts/check-alarm-occurrences-db.cjs",
     "test:dashboard": "node scripts/check-dashboard.cjs",
     "test:topology-contracts": "node scripts/check-topology-contracts.mjs",
+    "test:topology-workspace": "node scripts/check-topology-workspace.cjs",
     "test:incident-center": "node scripts/check-incident-center.cjs",
     "test:incident-detail": "node scripts/check-incident-detail.cjs",
     "test:ui-turkish": "node scripts/check-ui-turkish.cjs",

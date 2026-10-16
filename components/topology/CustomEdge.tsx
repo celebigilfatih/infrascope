@@ -1,7 +1,8 @@
 'use client';
 
 import React from 'react';
-import { EdgeProps, getStraightPath, EdgeLabelRenderer } from 'reactflow';
+import { BaseEdge, EdgeProps, getBezierPath, getStraightPath, EdgeLabelRenderer } from 'reactflow';
+import { connectionState } from '@/lib/topology/workspace';
 
 // Regular custom edge for device connections
 export const CustomEdge = ({
@@ -10,48 +11,47 @@ export const CustomEdge = ({
   sourceY,
   targetX,
   targetY,
+  sourcePosition,
+  targetPosition,
   style = {},
   data,
   markerEnd,
+  selected,
 }: EdgeProps) => {
-  const [edgePath, labelX, labelY] = getStraightPath({
+  const [edgePath, labelX, labelY] = getBezierPath({
     sourceX,
     sourceY,
     targetX,
     targetY,
+    sourcePosition,
+    targetPosition,
   });
 
-  const connectionTypeStyles: Record<string, React.CSSProperties> = {
-    fiber: { stroke: '#DC2626', strokeWidth: 3 },
-    copper: { stroke: '#16A34A', strokeWidth: 2 },
-    wireless: { stroke: '#2563EB', strokeWidth: 2, strokeDasharray: '5,5' },
-    vpn: { stroke: '#9333EA', strokeWidth: 2, strokeDasharray: '10,5' },
-    building: { stroke: '#7C3AED', strokeWidth: 4 },
-  };
-
+  const state = connectionState(data?.status);
   const currentStyle = {
     ...style,
-    ...(data?.connectionType ? connectionTypeStyles[data.connectionType] : {}),
+    stroke: state.color, strokeDasharray: state.dash, strokeWidth: selected ? 4 : 2,
   };
 
   return (
     <>
-      <path
+      <BaseEdge
         id={id}
         style={currentStyle}
-        className="react-flow__edge-path"
-        d={edgePath}
+        path={edgePath}
+        interactionWidth={28}
         markerEnd={markerEnd}
       />
       {data?.label && (
         <EdgeLabelRenderer>
           <div
-            className="rounded border border-border bg-card px-2 py-1 text-xs font-medium text-foreground shadow-sm"
+            className="rounded-md border bg-card px-2 py-1 text-xs font-medium text-foreground shadow-sm"
             style={{
               position: 'absolute',
               transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
               pointerEvents: 'none',
               whiteSpace: 'nowrap',
+              borderColor: state.color,
             }}
           >
             {data.label}
@@ -70,6 +70,7 @@ export const BuildingConnectionEdge = ({
   targetX,
   targetY,
   data,
+  selected,
 }: EdgeProps) => {
   const [edgePath, labelX, labelY] = getStraightPath({
     sourceX,
@@ -83,16 +84,16 @@ export const BuildingConnectionEdge = ({
 
   return (
     <>
-      <path
+      <BaseEdge
         id={id}
         style={{
           stroke: strokeColor,
-          strokeWidth: data?.strokeWidth || 2,
+          strokeWidth: selected ? 5 : data?.strokeWidth || 2,
           strokeDasharray: data?.strokeDasharray || '0',
           opacity: 0.85,
         }}
-        className="react-flow__edge-path"
-        d={edgePath}
+        path={edgePath}
+        interactionWidth={28}
       />
       {data?.label && (
         <EdgeLabelRenderer>

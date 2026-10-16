@@ -489,6 +489,11 @@ async function main() {
     assert.match(rejectedAssignment.notice.text, status === 401 ? /Oturumunuzun/ : /Sorumlu değiştirme yetkiniz yok/);
     assert.equal(rejectedAssignment.revision, 0); assert.equal(rejectedAssignment.refreshes, 0); assert.equal(rejectedAssignment.busy.size, 0);
     assert.deepEqual(rejectedAssignment.selected, event); assert.equal(rejectedAssignment.request.assigneeId, 'chosen-operator');
+    const rejectedRemoval = await runAction({ ok: false, status, nonJson: true }, false, 'ASSIGN', { assigneeId: null });
+    assert.equal(rejectedRemoval.result, false); assert.equal(rejectedRemoval.notice.authStatus, status); assert.equal(rejectedRemoval.notice.authAction, 'ASSIGN');
+    assert.match(rejectedRemoval.notice.text, status === 401 ? /Oturumunuzun/ : /Sorumlu atamasını kaldırma yetkiniz yok/);
+    assert.equal(rejectedRemoval.revision, 0); assert.equal(rejectedRemoval.refreshes, 0); assert.equal(rejectedRemoval.busy.size, 0);
+    assert.deepEqual(rejectedRemoval.selected, event); assert.equal(rejectedRemoval.request.assigneeId, null);
     const rejectedNote = await runAction({ ok: false, status, nonJson: true }, false, 'ADD_NOTE', { reason: 'Keep this draft', requestId: '00000000-0000-4000-8000-000000000001' });
     assert.equal(rejectedNote.result, false); assert.equal(rejectedNote.notice.authStatus, status);
     assert.match(rejectedNote.notice.text, status === 401 ? /Oturumunuzun/ : /notu ekleme yetkiniz yok/);

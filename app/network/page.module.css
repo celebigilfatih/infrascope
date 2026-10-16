@@ -27,6 +27,7 @@
 .statusLine > span:last-child { margin-left: auto; }
 .content { display: flex; flex: 1; min-width: 0; min-height: 0; border-radius: .75rem; }
 .workspace { position: relative; display: flex; flex: 1; min-height: 0; min-width: 0; overflow: hidden; border: 1px solid oklch(var(--border)); border-radius: .75rem; }
+.workspaceExpanded { position: fixed; inset: 1rem; z-index: 1005; background: oklch(var(--card)); box-shadow: 0 0 0 2rem oklch(var(--background) / .94); min-height: 0 !important; }
 .canvas { position: relative; display: flex; flex-direction: column; min-height: 0; min-width: 0; flex: 1; background: oklch(var(--card)); }
 .canvas:focus { outline: none; }
 .canvas:focus-visible { box-shadow: inset 0 0 0 2px oklch(var(--ring)); }
@@ -43,8 +44,9 @@
 .emptyState > button { height: 2rem; margin-top: .75rem; }
 .mapHeading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; flex-shrink: 0; gap: .25rem .75rem; padding: .625rem 1rem; border-bottom: 1px solid oklch(var(--border)); background: oklch(var(--card)); }
 .mapControls { display: flex; align-items: center; overflow: hidden; border: 1px solid oklch(var(--border)); border-radius: .5rem; background: oklch(var(--card)); box-shadow: 0 2px 8px #00000008; }
-.detailsContainer { position: relative; flex-shrink: 0; width: 340px; display: flex; min-height: 0; }
+.detailsContainer { position: relative; flex-shrink: 0; width: 370px; display: flex; min-height: 0; }
 .details { display: flex; flex: 1; flex-direction: column; min-width: 0; background: oklch(var(--card)); border-left: 1px solid oklch(var(--border)); }
+.details:focus { outline: none; }
 .details > div:last-child { min-height: 0; }
 .detailsHidden { display: none; }
 .detailsBar { display: flex; flex-shrink: 0; align-items: center; justify-content: space-between; padding: .5rem .875rem; border-bottom: 1px solid oklch(var(--border)); }
@@ -70,6 +72,17 @@
 .modal :global(.bg-primary\/10) { background: oklch(var(--primary) / .04); }
 .modal :global(.shadow-lg) { box-shadow: none; }
 .managementBody { display: flex; flex: 1; min-height: 0; overflow: hidden; }
+.sourceWarning { display: flex; align-items: flex-start; gap: .5rem; padding: .75rem; border: 1px solid var(--ui-warning-border); border-radius: .5rem; background: var(--ui-warning-bg); color: var(--ui-warning-fg); font-size: .75rem; line-height: 1.6; }
+.sourceWarning svg { flex-shrink: 0; margin-top: .125rem; }
+.connectionList { display: flex; flex-direction: column; gap: .625rem; overflow-y: auto; max-height: 55dvh; }
+.connectionList > button { display: flex; flex-direction: column; align-items: flex-start; gap: .5rem; padding: .875rem; border: 1px solid oklch(var(--border)); border-radius: .625rem; text-align: left; }
+.connectionList > button:hover { background: oklch(var(--primary) / .04); border-color: oklch(var(--primary) / .5); }
+.connectionList > button:focus-visible { outline: 2px solid oklch(var(--ring)); outline-offset: -2px; }
+.connectionList > button > span:first-child { display: flex; gap: .5rem; align-items: flex-start; font-size: .8125rem; }
+.connectionList > button > span:first-child > svg { flex-shrink: 0; color: oklch(var(--primary)); margin-top: .125rem; }
+.connectionList strong { overflow-wrap: anywhere; }
+.connectionList small { font-family: monospace; color: oklch(var(--muted-foreground)); overflow-wrap: anywhere; }
+.listEmpty { padding: 1rem; border: 1px dashed oklch(var(--border)); border-radius: .5rem; color: oklch(var(--muted-foreground)); font-size: .8125rem; line-height: 1.6; }
 @media (min-width: 768px) and (max-height: 800px) { .page { gap: .75rem; padding-top: 1rem; padding-bottom: 1rem; } .header { padding-bottom: .875rem; } .stat { padding: .625rem .875rem; } .stat > p:last-child { display: none; } }
 @media (max-width: 1199px) { .detailsContainer { position: absolute; right: 0; top: 0; bottom: 0; z-index: 6; width: 340px; box-shadow: -4px 0 20px #00000012; } .search { max-width: none; } }
 @media (max-width: 1023px) { .page { padding: 1.25rem; } .stat { padding: .75rem; } .viewTabs { width: 100%; } .tools { flex-basis: 100%; } }
@@ -87,7 +100,7 @@
   .mapHeading { padding: .625rem .75rem; }
   .mapHeading > span { flex-wrap: wrap; }
   .mapHeading > span > span { width: 100%; margin-left: 1.375rem; }
-  .detailsContainer { top: auto; height: 78%; width: 100%; border-top: 1px solid oklch(var(--border)); }
+  .detailsContainer { position: fixed; left: 0; right: 0; bottom: 0; top: auto; height: 72dvh; max-height: 680px; width: 100%; z-index: 47; overflow: hidden; border-top: 1px solid oklch(var(--border)); border-radius: .875rem .875rem 0 0; box-shadow: 0 -8px 28px #00000016; }
   .details { border-left: 0; }
   .exploration { min-height: 420px; padding: 1rem; }
   .exploration :global(.p-8) { padding: .5rem; }

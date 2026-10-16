@@ -1,6 +1,9 @@
 'use client';
 
-import { uiError, uiLabel } from '@/lib/i18n/tr';
+import Image from 'next/image';
+
+import { uiLabel } from '@/lib/i18n/tr';
+import { StatusBadge } from '@/components/ui/status-badge';
 
 import React, { memo } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
@@ -20,7 +23,7 @@ interface DeviceNodeData {
   type: string;
   vendor?: string;
   role: string;
-  status: 'active' | 'inactive' | 'maintenance' | 'error';
+  status: string;
   ipAddress?: string;
   ports?: number;
   activeConnections?: number;
@@ -36,7 +39,7 @@ export const DeviceNode = memo(({ data, selected }: NodeProps<DeviceNodeData>) =
     active: 'bg-emerald-500',
     inactive: 'bg-muted-foreground',
     maintenance: 'bg-amber-500',
-    error: uiError('bg-red-500'),
+    error: 'bg-red-500',
   };
 
   const roleIcons = {
@@ -48,7 +51,8 @@ export const DeviceNode = memo(({ data, selected }: NodeProps<DeviceNodeData>) =
     firewall: Shield,
     unknown: CircleHelp,
   };
-  const RoleIcon = roleIcons[data?.role as keyof typeof roleIcons] || roleIcons.unknown;
+  const typeIcons = { SERVER: Server, SWITCH: Network, ROUTER: Router, FIREWALL: Shield, WORKSTATION: Monitor };
+  const RoleIcon = typeIcons[data.type as keyof typeof typeIcons] || roleIcons[data?.role as keyof typeof roleIcons] || roleIcons.unknown;
 
   const zoom = data.zoom || 1;
   const scale = Math.max(0.7, Math.min(2.0, zoom));
@@ -87,7 +91,7 @@ export const DeviceNode = memo(({ data, selected }: NodeProps<DeviceNodeData>) =
       {hasPortDown && (
         <div
           className="absolute -right-3 -top-3 z-20 flex min-h-6 items-center gap-1 rounded-full border border-red-300 bg-red-600 px-2.5 text-xs font-semibold text-white shadow-sm"
-          title={`${data.portDownCount} izlenen port down`}
+          title={`${data.portDownCount} kapalı port kaydı`}
         >
           <AlertTriangle className="h-3.5 w-3.5" />
           {data.portDownCount}
@@ -97,13 +101,13 @@ export const DeviceNode = memo(({ data, selected }: NodeProps<DeviceNodeData>) =
       <div className="mb-3 flex items-center gap-3">
         <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
           <RoleIcon className="h-5 w-5" aria-hidden="true" />
-          <span className={`absolute -bottom-0.5 -right-0.5 rounded-full border-2 border-card ${hasPortDown ? 'bg-red-500' : statusColors[data?.status] || 'bg-muted-foreground'}`} style={{ width: `${iconSize}px`, height: `${iconSize}px` }} title={uiLabel(data.status?.toUpperCase() || 'UNKNOWN')} />
+          <span className={`absolute -bottom-0.5 -right-0.5 rounded-full border-2 border-card ${hasPortDown ? 'bg-red-500' : statusColors[data?.status as keyof typeof statusColors] || 'bg-muted-foreground'}`} style={{ width: `${iconSize}px`, height: `${iconSize}px` }} title={uiLabel(data.status?.toUpperCase() || 'UNKNOWN')} />
         </div>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {getVendorLogo(data?.vendor) && (
-            <img 
+            <Image width={28} height={28}
               src={getVendorLogo(data?.vendor)!} 
-              alt={data?.vendor} 
+              alt={data.vendor || 'Üretici'}
               className="h-7 w-7 object-contain"
               title={data?.vendor}
             />
@@ -111,6 +115,8 @@ export const DeviceNode = memo(({ data, selected }: NodeProps<DeviceNodeData>) =
           <h3 className="min-w-0 flex-1 truncate font-semibold" style={{ fontSize: `${fontSize}px` }}>{data?.name || 'Bilinmeyen Cihaz'}</h3>
         </div>
       </div>
+
+      <div className="mb-3"><StatusBadge status={data.status || 'UNKNOWN'} /></div>
 
       {hasPortDown && (
         <div className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
@@ -140,7 +146,7 @@ export const DeviceNode = memo(({ data, selected }: NodeProps<DeviceNodeData>) =
         </div>
         <div className="flex justify-between gap-3 text-muted-foreground">
           <span>IP Adresi</span>
-          <span className="font-mono font-medium text-foreground">{data.ipAddress || 'Yok'}</span>
+          <span className="font-mono font-medium text-foreground">{data.ipAddress || 'Belirtilmemiş'}</span>
         </div>
         <div className="flex justify-between gap-3 text-muted-foreground">
           <span>Konum</span>
@@ -153,9 +159,9 @@ export const DeviceNode = memo(({ data, selected }: NodeProps<DeviceNodeData>) =
           className="mt-3 flex items-center justify-between border-t border-border pt-3 font-medium text-muted-foreground"
           style={{ fontSize: `${Math.max(12, 11 * scale)}px` }}
         >
-          <span>{data.ports} Port</span>
+          <span>{data.ports} arayüz</span>
           <span className={hasPortDown ? 'text-red-600 dark:text-red-400' : 'text-foreground'}>
-            {hasPortDown ? `${data.portDownCount} Down` : `${data.activeConnections || 0} Aktif`}
+            {hasPortDown ? `${data.portDownCount} kapalı port` : data.activeConnections == null ? 'Bağlantı verisi yok' : `${data.activeConnections} açık bağlantı`}
           </span>
         </div>
       )}
