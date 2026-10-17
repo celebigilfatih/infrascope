@@ -29,6 +29,13 @@ npm run test:vmware-workspace
 npm run test:vmware-cache
 npm run test:vmware-health
 npm run test:integration-permissions
+npx eslint app/integrations/fortianalyzer/page.tsx lib/integrations/fortianalyzer-workspace.ts app/api/integrations/fortianalyzer/workspace/route.ts scripts/check-fortianalyzer-workspace.cjs scripts/check-fortianalyzer-profile-ui.cjs tests/incident-e2e/fortianalyzer-workspace.spec.ts --max-warnings=0
+npm run test:fortianalyzer-workspace
+npm run test:fortianalyzer-auth
+npm run test:fortianalyzer-profile
+npm run test:fortianalyzer-cache
+TZ=UTC npm run test:fortianalyzer-time
+TZ=Europe/Istanbul npm run test:fortianalyzer-time
 npm run test:ui-turkish
 npx eslint app/settings/alerts/page.tsx components/alarms/*.tsx lib/alarms/rule-workspace.ts lib/validators/alarms.ts app/api/alarms/definitions/route.ts app/api/alarms/notification/route.ts scripts/check-rule-workspace.cjs tests/incident-e2e/rule-workspace.spec.ts tests/incident-e2e/fixtures.ts --max-warnings=0
 npm run test:rule-workspace

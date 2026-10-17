@@ -1,289 +1,105 @@
 'use client';
-
-import { uiError } from '@/lib/i18n/tr';
-
+import { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import { Activity, ArrowRight, Clock3, Database, Eye, EyeOff, Info, KeyRound, Layers3, Link2, Play, RefreshCw, Save, Server, ShieldCheck, TriangleAlert, Undo2 } from 'lucide-react';
 import { PageHeading } from '@/components/ui/page-heading';
-import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { SemanticBadge } from '@/components/ui/semantic-badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import {
-  Activity,
-  RefreshCw,
-  CheckCircle,
-  XCircle,
-  AlertCircle,
-  Save,
-  Loader2,
-  User,
-  Lock,
-  Server,
-} from 'lucide-react';
+import { parseActor, requestUsersJson, userDate, type WorkspaceActor } from '@/lib/users/workspace';
+import { canAccessSync } from '@/lib/auth/permission-policy';
+import { analyzerChanges, analyzerDraft, analyzerLogtypes, analyzerUncertain, parseAnalyzerWorkspace, requestAnalyzerWorkspace, validateAnalyzerDraft, type AnalyzerDraft, type AnalyzerProfile } from '@/lib/integrations/fortianalyzer-workspace';
+import common from '@/components/users/users-workspace.module.css';
+import styles from './page.module.css';
+type TestResult = { connected: boolean | null; at: string; scope: 'saved' | 'draft'; host: string; adom: string; error: string };
 
 export default function FortiAnalyzerIntegrationPage() {
-  const [host, setHost] = useState('');
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [adom, setAdom] = useState('root');
-  const [authMode, setAuthMode] = useState<'session' | 'api-key'>('session');
-  const [apiKey, setApiKey] = useState('');
-  const [secretSet, setSecretSet] = useState(false);
-
-  const [loadingConfig, setLoadingConfig] = useState(true);
-  const [testing, setTesting] = useState(false);
-  const [saving, setSaving] = useState(false);
-
-  const [testResult, setTestResult] = useState<{ connected: boolean; error?: string } | null>(null);
-  const [saveResult, setSaveResult] = useState<{ success: boolean; error?: string } | null>(null);
-
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const res = await fetch('/api/integrations/fortianalyzer?type=config');
-        const data = await res.json();
-        if (data.config) {
-          setHost(data.config.host || '');
-          setUsername(data.config.username || '');
-          setAdom(data.config.adom ?? 'root');
-          setAuthMode(data.config.authMode ?? 'session');
-          setSecretSet(data.config.authMode === 'api-key' ? data.config.apiKeySet : data.config.passwordSet);
-        }
-      } catch (e) {
-        console.error('Failed to load FortiAnalyzer config:', e);
-      } finally {
-        setLoadingConfig(false);
-      }
-    };
-    load();
+  const [profiles, setProfiles] = useState<AnalyzerProfile[] | null>(null), [selectedId, setSelectedId] = useState(''), [draft, setDraft] = useState<AnalyzerDraft>(analyzerDraft(null));
+  const [actor, setActor] = useState<WorkspaceActor | null>(null), [loading, setLoading] = useState(true), [errors, setErrors] = useState<string[]>([]), [readAt, setReadAt] = useState<string | null>(null);
+  const [busy, setBusy] = useState<'save' | 'saved-test' | 'draft-test' | null>(null), [uncertain, setUncertain] = useState(false), [formError, setFormError] = useState(''), [notice, setNotice] = useState(''), [test, setTest] = useState<TestResult | null>(null), [showSecret, setShowSecret] = useState(false);
+  const active = useRef<AbortController | null>(null), sequence = useRef(0), guard = useRef(false), choice = useRef('');
+  const profile = profiles?.find(item => item.id === selectedId) || null, changes = analyzerChanges(draft, profile), dirty = changes.length > 0;
+  const load = useCallback(async (preferred?: string) => {
+    const seq = ++sequence.current; active.current?.abort(); const controller = new AbortController(); active.current = controller; setLoading(true);
+    const results = await Promise.allSettled([requestAnalyzerWorkspace(undefined, controller.signal).then(parseAnalyzerWorkspace), requestUsersJson('/api/auth/me', 'İşlem yetkisi doğrulanamadı.', { signal: controller.signal }).then(parseActor)]);
+    if (seq !== sequence.current || controller.signal.aborted) return;
+    const nextErrors: string[] = [];
+    if (results[0].status === 'fulfilled') {
+      const next = results[0].value, target = next.find(item => item.id === (preferred || choice.current)) || (next.length === 1 ? next[0] : null);
+      setProfiles(next); setSelectedId(target?.id || ''); choice.current = target?.id || ''; setReadAt(new Date().toISOString()); setUncertain(false);
+      setDraft(analyzerDraft(target)); setShowSecret(false); setTest(null); setFormError('');
+    } else nextErrors.push(results[0].reason instanceof Error ? results[0].reason.message : 'FortiAnalyzer bilgileri alınamadı.');
+    if (results[1].status === 'fulfilled') setActor(results[1].value); else { setActor(null); nextErrors.push('İşlem yetkisi doğrulanamadı. Salt okunur görünüm kullanılıyor.'); }
+    setErrors(nextErrors); setLoading(false);
   }, []);
-
-  const testConnection = async () => {
-    if (!host || !adom || (authMode === 'session' && !username)) {
-      setTestResult({ connected: false, error: 'Sunucu, ADOM ve seçilen yöntemin gerekli alanlarını doldurun.' });
-      return;
-    }
-    setTesting(true);
-    setTestResult(null);
+  useEffect(() => { void load(); return () => active.current?.abort(); }, [load]);
+  const ready = Boolean(profiles && !loading && !errors.length && !busy && !uncertain && (!profiles.length || profile)), canWrite = Boolean(ready && actor && canAccessSync(actor.role, 'settings', 'write'));
+  const savedReady = Boolean(profile?.host && profile.adom && (profile.authMode === 'api-key' ? profile.apiKeySet : profile.username && profile.passwordSet));
+  const collector = profile?.collector, collectionLabel = !collector ? 'Durum bilgisi yok' : collector.stopped ? 'Toplayıcı durdurulmuş' : collector.syncInProgress ? 'Veriler alınıyor' : collector.isFresh ? 'Veriler güncel' : collector.failedLogtypes.length ? 'Eksik veri alımı' : 'Güncellik doğrulanamadı';
+  function update<K extends keyof AnalyzerDraft>(key: K, value: AnalyzerDraft[K]) { setDraft(previous => key === 'authMode' ? { ...previous, authMode: value as AnalyzerDraft['authMode'], password: '', apiKey: '' } : { ...previous, [key]: value }); setFormError(''); setNotice(''); if (test?.scope === 'draft') setTest(null); }
+  function select(id: string) { const next = profiles?.find(item => item.id === id) || null; choice.current = id; setSelectedId(id); setDraft(analyzerDraft(next)); setShowSecret(false); setTest(null); setFormError(''); setNotice(''); }
+  async function run(action: 'save' | 'saved-test' | 'draft-test') {
+    if (guard.current || !canWrite || (action === 'saved-test' && !savedReady)) return;
+    if (action !== 'saved-test') { const invalid = validateAnalyzerDraft(draft, profile, action === 'draft-test'); if (invalid) { setFormError(invalid); return; } }
+    guard.current = true; setBusy(action); setFormError(''); setNotice(''); if (action !== 'save') setTest(null);
+    const scope = action === 'saved-test' ? 'saved' : 'draft', target = action === 'saved-test' ? profile! : draft;
     try {
-      const res = await fetch('/api/integrations/fortianalyzer', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'test', config: { host, adom, authMode, ...(authMode === 'session' ? { username, password } : { apiKey }) } }),
-      });
-      const data = await res.json();
-      setTestResult({ connected: data.connected, error: uiError(data.error) });
-    } catch (e) {
-      setTestResult({ connected: false, error: uiError((e as Error).message) });
-    } finally {
-      setTesting(false);
-    }
-  };
-
-  const saveConfig = async () => {
-    if (!host || !adom || (authMode === 'session' && !username)) {
-      setSaveResult({ success: false, error: 'Sunucu, ADOM ve seçilen yöntemin gerekli alanlarını doldurun.' });
-      return;
-    }
-    setSaving(true);
-    setSaveResult(null);
-    try {
-      const res = await fetch('/api/integrations/fortianalyzer', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'save-config', config: { host, adom, authMode, ...(authMode === 'session' ? { username, password } : { apiKey }) } }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setSaveResult({ success: true });
-        setPassword(''); // clear password field after save
-        setApiKey('');
-        setSecretSet(true);
+      const value = await requestAnalyzerWorkspace({ action: action === 'saved-test' ? 'test-saved' : action === 'draft-test' ? 'test-draft' : 'save', ...(profile ? { configId: profile.id, ...(action === 'save' ? { expectedUpdatedAt: profile.updatedAt } : {}) } : {}), ...(action !== 'saved-test' ? { draft } : {}) });
+      if (action === 'save') {
+        if (typeof value.configId !== 'string' || !value.configId || (profile && value.configId !== profile.id)) throw Error(analyzerUncertain);
+        setDraft(previous => ({ ...previous, password: '', apiKey: '' })); setShowSecret(false); setTest(null); setNotice('FortiAnalyzer ayarları kaydedildi. Kaydetme işlemi bağlantı testi değildir. Kaydedilen ayarlar, bu profil kaynak olarak kullanıldığında geçerli olur.'); await load(value.configId);
       } else {
-        setSaveResult({ success: false, error: uiError(data.error) });
+        if (typeof value.connected !== 'boolean' || value.host !== target.host.trim().toLowerCase() || value.adom !== target.adom.trim() || (profile && value.configId !== profile.id) || typeof value.testedAt !== 'string' || !Number.isFinite(Date.parse(value.testedAt))) throw Error('Bağlantı testi sonucu doğrulanamadı.');
+        setTest({ connected: value.connected, at: value.testedAt, scope, host: value.host as string, adom: value.adom as string, error: value.connected ? '' : 'Sunucu erişimi, kimlik doğrulaması veya ADOM yetkisi doğrulanamadı. Adresi, bilgileri ve hesap kilidini kontrol edin; bekleme süresi varsa dolmasını bekleyin.' });
       }
-    } catch (e) {
-      setSaveResult({ success: false, error: uiError((e as Error).message) });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-4">
-        <div className="flex items-center gap-4">
-          <div className="p-3 rounded-lg bg-orange-500/20">
-            <Activity className="h-6 w-6 text-orange-500" />
-          </div>
-          <div>
-            <PageHeading section="fortianalyzer" description={<>
-              FortiAnalyzer kimlik bilgilerini ve bağlantı ayarlarını yönetin
-            </>}>FortiAnalyzer Entegrasyonu</PageHeading>
-          </div>
-        </div>
-        {testResult && (
-          testResult.connected ? (
-            <Badge variant="success" className="gap-1">
-              <CheckCircle className="h-3 w-3" />
-              Bağlı
-            </Badge>
-          ) : (
-            <Badge variant="destructive" className="gap-1">
-              <XCircle className="h-3 w-3" />
-              Bağlı değil
-            </Badge>
-          )
-        )}
-      </div>
-
-      {/* Credentials Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Bağlantı Kimlik Bilgileri</CardTitle>
-          <CardDescription>
-            Sunucuyu, ADOM’u ve kimlik doğrulama yöntemini seçin. Aynı sunucu ve hesap için mevcut gizli değeri korumak üzere ilgili alanı boş bırakabilirsiniz.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          {loadingConfig ? (
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Mevcut yapılandırma yükleniyor…
-            </div>
-          ) : (
-            <>
-              <div className="space-y-2">
-                <Label htmlFor="fa-host" className="flex items-center gap-2">
-                  <Server className="h-4 w-4 text-muted-foreground" />
-                  FortiAnalyzer Sunucusu
-                </Label>
-                <Input
-                  id="fa-host"
-                  disabled={testing || saving}
-                  placeholder="Ör. 10.0.0.5"
-                  value={host}
-                  onChange={(e) => { setHost(e.target.value); setTestResult(null); }}
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="fa-adom">ADOM</Label>
-                  <Input id="fa-adom" disabled={testing || saving} value={adom} onChange={e => { setAdom(e.target.value); setTestResult(null); }} placeholder="root" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="fa-auth-mode">Kimlik doğrulama</Label>
-                  <select id="fa-auth-mode" disabled={testing || saving} className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={authMode}
-                    onChange={e => { setAuthMode(e.target.value as 'session' | 'api-key'); setPassword(''); setApiKey(''); setSecretSet(false); setTestResult(null); }}>
-                    <option value="session">Kullanıcı adı ve parola</option>
-                    <option value="api-key">API anahtarı (Bearer)</option>
-                  </select>
-                </div>
-              </div>
-
-              {authMode === 'session' ? <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="fa-username" className="flex items-center gap-2">
-                    <User className="h-4 w-4 text-muted-foreground" />
-                    Kullanıcı Adı
-                  </Label>
-                  <Input
-                    id="fa-username"
-                    disabled={testing || saving}
-                    placeholder="infrascope"
-                    value={username}
-                    onChange={(e) => { setUsername(e.target.value); setTestResult(null); }}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="fa-password" className="flex items-center gap-2">
-                    <Lock className="h-4 w-4 text-muted-foreground" />
-                    Parola
-                    <span className="text-xs text-muted-foreground font-normal">(mevcut değeri korumak için boş bırakın)</span>
-                  </Label>
-                  <Input
-                    id="fa-password"
-                    disabled={testing || saving}
-                    type="password"
-                    placeholder="Yeni parolayı girin"
-                    value={password}
-                    onChange={(e) => { setPassword(e.target.value); setTestResult(null); }}
-                  />
-                </div>
-              </div> : <div className="space-y-2">
-                <Label htmlFor="fa-api-key">API anahtarı</Label>
-                <Input id="fa-api-key" disabled={testing || saving} type="password" autoComplete="new-password" value={apiKey}
-                  onChange={e => { setApiKey(e.target.value); setTestResult(null); }} placeholder={secretSet ? 'Kayıtlı anahtarı korumak için boş bırakın' : 'API anahtarını girin'} />
-                <p className="text-xs text-muted-foreground">FortiAnalyzer REST API anahtarı kullanılır. FortiCloud OAuth erişim token’ı bu alanla aynı yöntem değildir.</p>
-              </div>}
-
-              <div className="flex flex-wrap gap-3 pt-2">
-                <Button variant="outline" onClick={testConnection} disabled={testing || saving}>
-                  {testing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RefreshCw className="h-4 w-4 mr-2" />}
-                  Bağlantıyı Test Et
-                </Button>
-                <Button onClick={saveConfig} disabled={saving || testing}>
-                  {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-                  Kaydet ve Uygula
-                </Button>
-              </div>
-
-              {/* Test result */}
-              {testResult && !testResult.connected && testResult.error && (
-                <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
-                  <AlertCircle className="h-4 w-4 shrink-0" />
-                  {uiError(testResult.error)}
-                </div>
-              )}
-              {testResult?.connected && (
-                <div className="flex items-center gap-2 p-3 rounded-lg bg-green-500/10 text-green-600 text-sm">
-                  <CheckCircle className="h-4 w-4 shrink-0" />
-                  Seçilen ADOM’da kimlik doğrulama ve sınırlı cihaz okuması başarılı.
-                </div>
-              )}
-
-              {/* Save result */}
-              {saveResult && (
-                saveResult.success ? (
-                  <div className="flex items-center gap-2 p-3 rounded-lg bg-green-500/10 text-green-600 text-sm">
-                    <CheckCircle className="h-4 w-4 shrink-0" />
-                    Yapılandırma kaydedildi. Alarm motoru bir sonraki kontrolde yeni kimlik bilgilerini kullanacak.
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
-                    <AlertCircle className="h-4 w-4 shrink-0" />
-                    {saveResult.error || 'Yapılandırma kaydedilemedi.'}
-                  </div>
-                )
-              )}
-            </>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Info Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm font-medium">Kimlik Bilgilerinin Kullanımı</CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm text-muted-foreground space-y-2">
-          <p>
-            FortiAnalyzer kimlik bilgileri veritabanında saklanır. Alarm motoru bu bilgileri şu işlemler için kullanır:
-          </p>
-          <ul className="list-disc list-inside space-y-1 ml-2">
-            <li>Olay günlüklerini alma (trafik, kimlik doğrulama ve sistem olayları)</li>
-            <li>Güvenlik olaylarını tespit etme (mesai dışı giriş, IPS, IoC, MITRE ATT&CK)</li>
-            <li>FortiView verilerini sorgulama (web analizi ve öne çıkan kullanıcılar)</li>
-            <li>Yapılandırma değişikliği günlüklerini alma</li>
-          </ul>
-          <p className="mt-3">
-            Kaydettikten sonra giriş bekleme süresi sıfırlanır. Sistem, en geç 10 dakika içindeki bir sonraki alarm kontrolünde yeni kimlik bilgileriyle tekrar dener.
-          </p>
-        </CardContent>
-      </Card>
+    } catch (failure) {
+      const message = failure instanceof Error ? failure.message : 'FortiAnalyzer işlemi tamamlanamadı.';
+      if (action === 'save') { setFormError(message); if (message === analyzerUncertain) setUncertain(true); }
+      else setTest({ connected: null, at: new Date().toISOString(), scope, host: target.host.trim(), adom: target.adom.trim(), error: message });
+    } finally { guard.current = false; setBusy(null); }
+  }
+  return <div className={common.page}><div className={common.workspace}>
+    <header className={common.header}><PageHeading section="fortianalyzer" description="Sunucu ve ADOM bağlantısını yapılandırın, erişimi test edin ve alarm verilerinin güncelliğini takip edin.">FortiAnalyzer Entegrasyonu</PageHeading><div className={common.headerActions}><Button variant="outline" disabled={loading || Boolean(busy) || (dirty && !uncertain)} onClick={() => void load()}><RefreshCw size={16} aria-hidden="true" className={loading ? 'animate-spin' : ''} />{loading ? 'Yükleniyor…' : uncertain ? 'Kayıtlı bilgileri yeniden oku' : 'Bilgileri yenile'}</Button></div></header>
+    <div className={common.serviceBar}><SemanticBadge tone={errors.length || uncertain ? 'warning' : 'info'} icon={Info}>{errors.length ? 'Bilgiler güncel olmayabilir' : uncertain ? 'Kayıt sonucu belirsiz' : 'Kayıtlı bilgiler'}</SemanticBadge><span>{readAt ? `Son okuma: ${userDate(readAt)} · TSİ` : 'Kayıtlı bilgiler okunuyor…'}</span><span>Bu ekran açıldığında bağlantı testi başlatılmaz.</span></div>
+    {errors.length > 0 && <div className={common.error} role="alert"><TriangleAlert size={18} aria-hidden="true" /><div>{errors.map(error => <p key={error}>{error}</p>)}{profiles && <p>Son alınan bilgiler korunuyor. İşlemler için bilgileri yeniden okuyun.</p>}</div></div>}
+    {notice && <div className={common.notice} role="status"><ShieldCheck size={18} aria-hidden="true" /><p>{notice}</p></div>}
+    {uncertain && <div className={common.error} role="alert"><TriangleAlert size={18} aria-hidden="true" /><p>{analyzerUncertain} Yenileme, formu kayıtlı değerlerle değiştirir.</p></div>}
+    {actor && !canAccessSync(actor.role, 'settings', 'write') && <div className={common.info}><Info size={18} aria-hidden="true" /><p>Salt okunur erişim. Ayarları değiştirmek ve bağlantı testi yapmak için yönetici yetkisi gerekir.</p></div>}
+    {profiles && profiles.length > 1 && <div className={styles.panel}><div className={styles.body}><label htmlFor="analyzer-profile">Kayıtlı FortiAnalyzer profili</label><select id="analyzer-profile" className={styles.select} value={selectedId} disabled={Boolean(busy) || loading || dirty || uncertain} onChange={event => select(event.target.value)}><option value="">İşlem yapılacak profili seçin</option>{profiles.map(item => <option key={item.id} value={item.id}>{item.name} · {item.host} · {item.adom}</option>)}</select><p className={styles.hint}>Birden fazla profil var. Arka plan toplayıcısı tek bir etkin profil kullanır; işlem yapmak istediğiniz profili seçin. Durum yalnızca toplayıcının kullandığı profil için gösterilir.</p></div></div>}
+    <div className={`${common.stats} ${styles.summary}`}>
+      {[{ icon: Link2, label: 'Bağlantı doğrulaması', value: test ? test.connected === true ? 'Son test başarılı' : test.connected === false ? 'Son test başarısız' : 'Sonuç alınamadı' : 'Henüz test edilmedi', help: 'Bu sayfa oturumundaki son test' }, { icon: Server, label: 'Kayıtlı sunucu', value: profile?.host || (profiles === null ? loading ? 'Yükleniyor…' : 'Bilgi alınamadı' : profiles.length ? 'Profil seçin' : 'Henüz yapılandırılmadı'), help: profile ? profile.enabled ? 'Profil etkin' : 'Profil devre dışı' : 'Ayarları aşağıdan tanımlayın' }, { icon: Layers3, label: 'Kayıtlı ADOM', value: profile?.adom || 'Bilgi yok', help: 'Verilerin okunacağı yönetim alanı' }, { icon: Database, label: 'Alarm verilerinin durumu', value: collectionLabel, help: 'Arka plan veri toplama durumu' }].map(item => <div className={common.stat} key={item.label}><div><h2>{item.label}</h2><span className={common.icon}><item.icon size={20} aria-hidden="true" /></span></div><strong>{item.value}</strong><p>{item.help}</p></div>)}
     </div>
-  );
+    {loading && profiles === null ? <div className={common.empty} role="status"><RefreshCw size={26} className="animate-spin" aria-hidden="true" /><h2>FortiAnalyzer bilgileri yükleniyor</h2></div> : <>
+    <div className={styles.layout}>
+      <section className={styles.panel} aria-labelledby="analyzer-settings"><header><span className={common.icon}><Server size={20} aria-hidden="true" /></span><div><h2 id="analyzer-settings">Sunucu ve ADOM ayarları</h2><p>FortiAnalyzer adresini, veri kapsamını ve kimlik doğrulama yöntemini belirleyin.</p></div></header><div className={styles.body}>
+        <form className={common.userForm} noValidate onSubmit={event => { event.preventDefault(); void run('save'); }}>
+          <fieldset disabled={!canWrite} className="contents"><div className={common.formGrid}>
+            <div><label htmlFor="analyzer-host">Sunucu adresi <span aria-hidden="true">*</span></label><Input id="analyzer-host" required autoComplete="off" value={draft.host} placeholder="faz.ornek.com veya 10.0.0.10" onChange={e => update('host', e.target.value)} aria-describedby="analyzer-host-help" /><p className={styles.hint} id="analyzer-host-help">Sunucu adı veya IP adresi. https:// ve /jsonrpc yolu eklemeyin.</p></div>
+            <div><label htmlFor="analyzer-adom">ADOM adı <span aria-hidden="true">*</span></label><Input id="analyzer-adom" required maxLength={128} value={draft.adom} onChange={e => update('adom', e.target.value)} aria-describedby="analyzer-adom-help" /><p className={styles.hint} id="analyzer-adom-help">ADOM, cihaz ve kayıtların gruplandığı yönetim alanıdır. FortiAnalyzer üzerindeki tam adı yazın; varsayılan alan root olur.</p></div>
+          </div><div><label htmlFor="analyzer-auth">Kimlik doğrulama yöntemi</label><select id="analyzer-auth" className={styles.select} value={draft.authMode} onChange={e => { update('authMode', e.target.value as AnalyzerDraft['authMode']); setShowSecret(false); }}><option value="session">Kullanıcı adı ve parola</option><option value="api-key">API anahtarı</option></select><p className={styles.hint}>Hesabın seçili ADOM içindeki verileri okuma yetkisi olmalıdır. Yöntem değişince formdaki gizli bilgiler temizlenir.</p></div>
+          {draft.authMode === 'session' && <div><label htmlFor="analyzer-user">Kullanıcı adı <span aria-hidden="true">*</span></label><Input id="analyzer-user" required autoComplete="off" value={draft.username} onChange={e => update('username', e.target.value)} /></div>}
+          <div><label htmlFor="analyzer-secret">{draft.authMode === 'session' ? 'Parola' : 'API anahtarı'}</label><div className={styles.secret}><Input id="analyzer-secret" type={showSecret ? 'text' : 'password'} autoComplete="new-password" value={draft.authMode === 'session' ? draft.password : draft.apiKey} onChange={e => update(draft.authMode === 'session' ? 'password' : 'apiKey', e.target.value)} aria-describedby="analyzer-secret-help" placeholder={savedReady ? 'Kayıtlı bilgiyi korumak için boş bırakın' : 'Kimlik doğrulama bilgisini girin'} /><Button type="button" variant="outline" size="icon" aria-label={showSecret ? 'Gizli bilgiyi gizle' : 'Gizli bilgiyi göster'} aria-pressed={showSecret} onClick={() => setShowSecret(v => !v)}>{showSecret ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}</Button></div><p id="analyzer-secret-help" className={styles.hint}>Kaydetmede boş değer, aynı sunucu ve aynı hesap/yöntem için kayıtlı bilgiyi korur. Sunucu, kullanıcı veya yöntem değişirse yeni bilgi gerekir. ADOM değişikliği aynı hesabı kullanabilir.</p></div>
+          </fieldset>
+          {dirty && <div className={common.review}><Info size={17} aria-hidden="true" /><div className={styles.review}><strong>Kaydedilmemiş değişiklikler</strong><p>{changes.join(' · ')}</p><p>{draft.host.trim()} · ADOM: {draft.adom.trim()} · {draft.authMode === 'session' ? 'Kullanıcı adı ve parola' : 'API anahtarı'}</p><p>Kaydetme, alarm toplayıcısının kullanacağı bağlantı ayarlarını değiştirir.</p></div></div>}
+          {formError && !uncertain && <div className={common.formError} role="alert"><TriangleAlert size={17} aria-hidden="true" /><p>{formError}</p></div>}
+          <div className={styles.actions}><Button type="submit" disabled={!canWrite || !dirty}><Save size={16} aria-hidden="true" />{busy === 'save' ? 'Kaydediliyor…' : 'Ayarları kaydet'}</Button><Button type="button" variant="outline" disabled={!dirty || Boolean(busy) || uncertain} onClick={() => { setDraft(analyzerDraft(profile)); setShowSecret(false); setFormError(''); if (test?.scope === 'draft') setTest(null); }}><Undo2 size={16} aria-hidden="true" />Değişiklikleri geri al</Button></div>
+        </form>
+      </div></section>
+      <aside className={styles.aside}>
+        <section className={styles.panel}><header><span className={common.icon}><ShieldCheck size={20} aria-hidden="true" /></span><div><h2>Bağlantı testi</h2><p>Sunucuya erişimi, kimlik doğrulamayı ve seçili ADOM yetkisini kontrol edin.</p></div></header><div className={styles.body}>
+          <div className={styles.result} aria-live="polite"><SemanticBadge icon={Link2} tone={test?.connected === true ? 'success' : test?.connected === false ? 'danger' : 'neutral'}>{test ? test.connected === null ? 'Test sonucu alınamadı' : test.connected ? 'Son test başarılı' : 'Son test başarısız' : 'Henüz test edilmedi'}</SemanticBadge><p>{test ? test.connected ? 'Sunucu ve ADOM erişimi test sırasında doğrulandı.' : test.error : 'Ayarların kayıtlı olması bağlantının çalıştığını doğrulamaz.'}</p>{test && <><p>{test.scope === 'saved' ? 'Kayıtlı profil' : 'Formdaki bilgiler'} · {test.host} · ADOM: {test.adom}</p><small>{userDate(test.at)} · TSİ. Sonuç test anına aittir; sürekli bağlantı izleme durumu değildir.</small></>}</div>
+          {busy?.endsWith('test') && <div className={common.info} role="status"><RefreshCw size={18} className="animate-spin" aria-hidden="true" /><p>Kimlik doğrulama ve ADOM erişimi kontrol ediliyor…</p></div>}
+          <div className={styles.actions}><Button variant="outline" disabled={!canWrite || !savedReady} onClick={() => void run('saved-test')}><ShieldCheck size={16} aria-hidden="true" />Kayıtlı bağlantıyı test et</Button><Button variant="outline" disabled={!canWrite} onClick={() => void run('draft-test')}><Play size={16} aria-hidden="true" />Formdaki bilgilerle test et</Button></div><p className={styles.hint}>Kayıtlı test, sunucuda saklanan parolayı veya anahtarı kullanır. Form testi için gizli bilgiyi yeniden girin; bu test ayarları kaydetmez. Test ADOM cihaz listesini sınırlı olarak okur, alarm kayıtlarını senkronize etmez. Başarısız denemeler hesap bekleme süresini etkileyebilir.</p>
+        </div></section>
+        <section className={styles.panel}><header><span className={common.icon}><KeyRound size={20} aria-hidden="true" /></span><div><h2>Kayıtlı profil özeti</h2><p>Formdaki değişikliklerden bağımsızdır.</p></div></header><div className={styles.body}><dl className={styles.meta}><div><dt>Profil</dt><dd>{profile?.name || 'Kayıt yok / profil seçilmedi'}</dd></div><div><dt>Profil kullanımı</dt><dd><SemanticBadge tone={profile?.enabled ? 'info' : 'neutral'}>{profile ? profile.enabled ? 'Etkin' : 'Devre dışı' : 'Bilgi yok'}</SemanticBadge></dd></div><div><dt>Kimlik doğrulama</dt><dd>{profile ? profile.authMode === 'session' ? 'Kullanıcı adı ve parola' : 'API anahtarı' : 'Bilgi yok'}</dd></div><div><dt>Gizli bilgi</dt><dd>{profile ? (profile.authMode === 'session' ? profile.passwordSet : profile.apiKeySet) ? 'Sunucuda kayıtlı' : 'Kayıtlı bilgi yok' : 'Bilgi yok'}</dd></div><div><dt>Son ayar değişikliği · TSİ</dt><dd>{userDate(profile?.updatedAt)}</dd></div></dl></div></section>
+      </aside>
+    </div>
+    <section className={styles.panel} aria-labelledby="analyzer-sync"><header><span className={common.icon}><RefreshCw size={20} aria-hidden="true" /></span><div><h2 id="analyzer-sync">Alarm verilerinin senkronizasyonu</h2><p>FortiAnalyzer olay kayıtları alarm kontrolleri için arka planda alınır.</p></div></header><div className={styles.body}>
+      <div className={styles.result}><SemanticBadge icon={Activity} tone={collector?.isFresh ? 'success' : collector?.failedLogtypes.length ? 'warning' : 'neutral'}>{collectionLabel}</SemanticBadge><p>{collector?.lastSyncTime ? `En az bir kayıt türünün başarılı alındığı son döngü: ${userDate(collector.lastSyncTime)} · TSİ` : 'Bu profil için son başarılı veri alım zamanı bilinmiyor.'}</p><small>Bu tarih tüm kayıt türlerinin başarıyla alındığı anlamına gelmez. Durum, bu sunucu sürecindeki toplayıcıya ve kaydedilmiş aynı profil sürümüne aittir; yeniden başlatma veya ayar değişikliğinde geçmiş bilgi gösterilemeyebilir.</small></div>
+      <dl className={styles.meta}><div><dt>Veri alımı</dt><dd>{collector ? collector.syncInProgress ? 'Devam ediyor' : collector.stopped ? 'Durduruldu' : 'Şu anda işlem yok' : 'Durum bilgisi yok'}</dd></div><div><dt>Ardışık eksik / başarısız döngü</dt><dd>{collector ? collector.consecutiveSyncFailures.toLocaleString('tr-TR') : 'Bilgi yok'}</dd></div><div><dt>Planlama bekleme aralığı</dt><dd>{collector ? `${collector.nextSyncDelayMin.toLocaleString('tr-TR')} dakika` : 'Bilgi yok'}</dd></div><div><dt>Kapsam</dt><dd>{profile ? `7 kayıt türü · ${profile.adom}` : 'Profil seçilmedi / kayıt yok'}</dd></div></dl>
+      <div><p className={styles.hint}>Son döngüde alınamayan kayıt türleri</p><div className={styles.tags}>{collector ? collector.failedLogtypes.length ? collector.failedLogtypes.map(type => <SemanticBadge tone="warning" key={type} icon={TriangleAlert}>{analyzerLogtypes[type] || 'Diğer kayıt türü'}</SemanticBadge>) : <SemanticBadge tone="neutral">Başarısız tür bildirilmedi</SemanticBadge> : <SemanticBadge tone="neutral">Durum bilgisi yok</SemanticBadge>}</div></div>
+      <div className={common.info}><Clock3 size={18} aria-hidden="true" /><div><p>Normal veri alım aralığı 5 dakikadır; eksik veya başarısız döngülerde bekleme 60 dakikaya kadar uzar. Gösterilen aralık geri sayım değildir. Güncel durumu görmek için bilgileri yenileyin.</p><p>Bu ekran toplayıcıyı başlatmaz. Durum görünmüyorsa henüz başlamamış, başka süreçte çalışıyor veya farklı bir profil kullanıyor olabilir.</p></div></div>
+      <div className={styles.links}><Link href="/settings/alerts"><Activity size={16} aria-hidden="true" />Alarm kuralları<ArrowRight size={14} aria-hidden="true" /></Link><Link href="/dashboard/alerts"><TriangleAlert size={16} aria-hidden="true" />Olay Merkezi<ArrowRight size={14} aria-hidden="true" /></Link></div>
+    </div></section></>}
+  </div></div>;
 }
