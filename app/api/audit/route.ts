@@ -1,19 +1,17 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
 import { getAuditLogs } from '@/lib/audit/logger';
+import { AuditQueryError, parseAuditQuery } from '@/lib/audit/query';
+import { authorizeApiRequest } from '@/lib/auth/api-permission';
 
-export async function GET(request: Request) {
+export const dynamic = 'force-dynamic';
+
+export async function GET(request: NextRequest) {
   try {
+    const permission = await authorizeApiRequest(request, 'audit', 'read');
+    if (!permission.allowed) return permission.response;
     const { searchParams } = new URL(request.url);
 
-    const params = {
-      userId: searchParams.get('userId') || undefined,
-      action: searchParams.get('action') || undefined,
-      resource: searchParams.get('resource') || undefined,
-      startDate: searchParams.get('startDate') || undefined,
-      endDate: searchParams.get('endDate') || undefined,
-      page: parseInt(searchParams.get('page') || '1'),
-      pageSize: parseInt(searchParams.get('pageSize') || '50'),
-    };
+    const params = parseAuditQuery(searchParams);
 
     const result = await getAuditLogs(params);
 
@@ -26,7 +24,7 @@ export async function GET(request: Request) {
         resourceId: log.resourceId,
         details: log.details,
         userId: log.userId,
-        userName: log.user?.name || 'System',
+        userName: log.user?.name || (log.userId ? 'Silinmiş kullanıcı' : 'Sistem'),
         userEmail: log.user?.email || null,
         userRole: log.user?.role?.toLowerCase() || null,
         ipAddress: log.ipAddress,
@@ -39,11 +37,12 @@ export async function GET(request: Request) {
         total: result.total,
         totalPages: result.totalPages,
       },
-    });
+    }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
+    if (error instanceof AuditQueryError) return NextResponse.json({ success: false, error: error.message }, { status: 400 });
     console.error('Error fetching audit logs:', error);
     return NextResponse.json(
-      { success: false, error: (error as Error).message },
+      { success: false, error: 'Denetim kayıtları yüklenemedi. Tekrar deneyin.' },
       { status: 500 }
     );
   }
@@ -52,21 +51,21 @@ export async function GET(request: Request) {
 // Audit logs are immutable - no POST, PATCH, or DELETE
 export async function POST() {
   return NextResponse.json(
-    { success: false, error: 'Audit logs are immutable' },
+    { success: false, error: 'Denetim kayıtları değiştirilemez.' },
     { status: 405 }
   );
 }
 
 export async function PATCH() {
   return NextResponse.json(
-    { success: false, error: 'Audit logs are immutable' },
+    { success: false, error: 'Denetim kayıtları değiştirilemez.' },
     { status: 405 }
   );
 }
 
 export async function DELETE() {
   return NextResponse.json(
-    { success: false, error: 'Audit logs are immutable' },
+    { success: false, error: 'Denetim kayıtları değiştirilemez.' },
     { status: 405 }
   );
 }

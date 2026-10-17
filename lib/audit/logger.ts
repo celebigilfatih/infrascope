@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import type { Prisma } from '@prisma/client';
+import { auditWhere, type AuditQuery } from './query';
 
 export interface AuditLogParams {
   userId?: string;
@@ -38,34 +39,14 @@ export async function logAudit(params: AuditLogParams): Promise<void> {
 /**
  * Get audit logs with filtering and pagination.
  */
-export async function getAuditLogs(params: {
-  userId?: string;
-  action?: string;
-  resource?: string;
-  startDate?: string;
-  endDate?: string;
-  page?: number;
-  pageSize?: number;
-}) {
-  const { userId, action, resource, startDate, endDate, page = 1, pageSize = 50 } = params;
-
-  const where: Record<string, unknown> = {};
-
-  if (userId) where.userId = userId;
-  if (action) where.action = { contains: action, mode: 'insensitive' };
-  if (resource) where.resource = resource;
-
-  if (startDate || endDate) {
-    const timestampFilter: Record<string, Date> = {};
-    if (startDate) timestampFilter.gte = new Date(startDate);
-    if (endDate) timestampFilter.lte = new Date(endDate);
-    where.timestamp = timestampFilter;
-  }
+export async function getAuditLogs(params: AuditQuery) {
+  const { page = 1, pageSize = 50 } = params;
+  const where = auditWhere(params);
 
   const [logs, total] = await Promise.all([
     prisma.auditLog.findMany({
       where,
-      orderBy: { timestamp: 'desc' },
+      orderBy: [{ timestamp: 'desc' }, { id: 'desc' }],
       skip: (page - 1) * pageSize,
       take: pageSize,
       include: {

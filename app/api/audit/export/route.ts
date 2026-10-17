@@ -1,5 +1,9 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { AuditQueryError, auditWhere, parseAuditQuery } from '@/lib/audit/query';
+import { authorizeApiRequest } from '@/lib/auth/api-permission';
+
+export const dynamic = 'force-dynamic';
 
 /**
  * Escape a value for safe CSV output.
@@ -14,32 +18,18 @@ function escapeCsv(value: unknown): string {
   return `"${sanitized.replace(/"/g, '""')}"`;
 }
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
+    const permission = await authorizeApiRequest(request, 'audit', 'read');
+    if (!permission.allowed) return permission.response;
     const { searchParams } = new URL(request.url);
 
-    const where: Record<string, unknown> = {};
-    const userId = searchParams.get('userId');
-    const action = searchParams.get('action');
-    const resource = searchParams.get('resource');
-    const startDate = searchParams.get('startDate');
-    const endDate = searchParams.get('endDate');
-
-    if (userId) where.userId = userId;
-    if (action) where.action = { contains: action, mode: 'insensitive' };
-    if (resource) where.resource = resource;
-
-    if (startDate || endDate) {
-      const timestampFilter: Record<string, Date> = {};
-      if (startDate) timestampFilter.gte = new Date(startDate);
-      if (endDate) timestampFilter.lte = new Date(endDate);
-      where.timestamp = timestampFilter;
-    }
+    const where = auditWhere(parseAuditQuery(searchParams));
 
     const logs = await prisma.auditLog.findMany({
       where,
-      orderBy: { timestamp: 'desc' },
-      take: 10000,
+      orderBy: [{ timestamp: 'desc' }, { id: 'desc' }],
+      take: 10001,
       include: {
         user: {
           select: { name: true, email: true, role: true },
@@ -48,13 +38,13 @@ export async function GET(request: Request) {
     });
 
     // Build CSV with proper escaping on ALL fields
-    const headers = ['Timestamp', 'Action', 'Resource', 'Resource ID', 'User', 'Email', 'Role', 'IP Address', 'Details'];
-    const rows = logs.map((log) => [
+    const headers = ['Tarih ve saat (UTC)', 'İşlem kodu', 'Kaynak', 'Kaynak kimliği', 'Kullanıcı', 'E-posta', 'Rol', 'IP adresi', 'Ayrıntılar'];
+    const rows = logs.slice(0, 10000).map((log) => [
       escapeCsv(new Date(log.timestamp).toISOString()),
       escapeCsv(log.action),
       escapeCsv(log.resource),
       escapeCsv(log.resourceId),
-      escapeCsv(log.user?.name || 'System'),
+      escapeCsv(log.user?.name || (log.userId ? 'Silinmiş kullanıcı' : 'Sistem')),
       escapeCsv(log.user?.email),
       escapeCsv(log.user?.role),
       escapeCsv(log.ipAddress),
@@ -66,17 +56,20 @@ export async function GET(request: Request) {
       ...rows.map((row) => row.join(',')),
     ].join('\n');
 
-    return new NextResponse(csvContent, {
+    return new NextResponse(`\uFEFF${csvContent}`, {
       status: 200,
       headers: {
-        'Content-Type': 'text/csv',
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Cache-Control': 'private, no-store',
+        'X-Audit-Export-Truncated': String(logs.length > 10000),
         'Content-Disposition': `attachment; filename="audit-log-${new Date().toISOString().split('T')[0]}.csv"`,
       },
     });
   } catch (error) {
+    if (error instanceof AuditQueryError) return NextResponse.json({ success: false, error: error.message }, { status: 400 });
     console.error('Error exporting audit logs:', error);
     return NextResponse.json(
-      { success: false, error: (error as Error).message },
+      { success: false, error: 'Denetim kayıtları dışa aktarılamadı. Tekrar deneyin.' },
       { status: 500 }
     );
   }

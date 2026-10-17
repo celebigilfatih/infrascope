@@ -14,6 +14,9 @@ npx prisma generate
 npx prisma migrate deploy
 npx eslint app/dashboard/alerts/page.tsx components/dashboard/IncidentDetailWorkspace.tsx app/api/alarm-incidents/route.ts tests/incident-e2e/alerts-operation-note-access.spec.ts tests/incident-e2e/alerts-assignment-access.spec.ts tests/incident-e2e/alerts-lifecycle-access.spec.ts tests/incident-e2e/alerts-acknowledge-access.spec.ts tests/incident-e2e/alerts-unacknowledge-access.spec.ts tests/incident-e2e/alerts-archive-access.spec.ts tests/incident-e2e/alerts-legal-hold-access.spec.ts app/api/alarm-incidents/assignees/route.ts components/dashboard/IncidentExclusions.tsx app/api/alarms/whitelist/route.ts tests/incident-e2e/detail-exclusion-removal.spec.ts tests/incident-e2e/alerts-exclusion-loading.spec.ts tests/incident-e2e/alerts-exclusion-access.spec.ts tests/incident-e2e/exclusion-fixtures.ts tests/incident-e2e/alerts-exclusion-create-access.spec.ts tests/incident-e2e/session-fixtures.ts --max-warnings=0
 npm run type-check -- --incremental false
+npx eslint app/settings/audit/page.tsx components/audit/*.tsx lib/audit/*.ts app/api/audit/route.ts app/api/audit/export/route.ts scripts/check-audit-workspace.cjs tests/incident-e2e/audit-workspace.spec.ts --max-warnings=0
+npm run test:audit-workspace
+npm run test:ui-turkish
 npx eslint app/settings/alerts/page.tsx components/alarms/*.tsx lib/alarms/rule-workspace.ts lib/validators/alarms.ts app/api/alarms/definitions/route.ts app/api/alarms/notification/route.ts scripts/check-rule-workspace.cjs tests/incident-e2e/rule-workspace.spec.ts tests/incident-e2e/fixtures.ts --max-warnings=0
 npm run test:rule-workspace
 npm run test:credential-storage

@@ -1,0 +1,25 @@
+.actorIcon { display:grid; place-items:center; width:2rem; height:2rem; flex-shrink:0; border-radius:.5rem; color:oklch(var(--primary)); background:oklch(var(--primary)/.08); }
+.actionBadge { white-space:normal; justify-content:flex-start; text-align:left; }
+.summary { display:flex; flex-wrap:wrap; gap:.75rem; align-items:center; padding:1rem; border:1px solid oklch(var(--border)); border-radius:.75rem; background:oklch(var(--muted)/.15); }
+.summary time { font-size:.75rem; margin-left:auto; }
+.summary > p { width:100%; }
+.context { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; }
+.context section { min-width:0; border:1px solid oklch(var(--border)); padding:1rem; border-radius:.75rem; }
+.context h3,.section > h3 { display:flex; align-items:center; gap:.5rem; margin-bottom:1rem; font-size:.8125rem; font-weight:600; }
+.context h3 svg,.section h3 svg { color:oklch(var(--primary)); flex-shrink:0; }
+.identifier { margin-top:.75rem; font-size:.6875rem; line-height:1.6; color:oklch(var(--muted-foreground)); overflow-wrap:anywhere; }
+.fields { display:grid; gap:.625rem; font-size:.75rem; min-width:0; }
+.fields > div { display:grid; grid-template-columns:minmax(6rem,30%) minmax(0,1fr); gap:.75rem; padding:.75rem; border:1px solid oklch(var(--border)); border-radius:.5rem; }
+.fields dt { color:oklch(var(--muted-foreground)); overflow-wrap:anywhere; }
+.fields dd { min-width:0; overflow-wrap:anywhere; }
+.fields .fields > div { grid-template-columns:minmax(4rem,30%) minmax(0,1fr); padding:.5rem; }
+.fields > .group,.fields .fields > .group { grid-template-columns:minmax(0,1fr); }
+.fields > .group > dt { font-weight:500; color:oklch(var(--foreground)); }
+.raw { font-size:.6875rem; white-space:pre-wrap; overflow-wrap:anywhere; }
+.technical { border:1px solid oklch(var(--border)); border-radius:.625rem; padding:1rem; }
+.technical summary { display:flex; align-items:center; gap:.5rem; cursor:pointer; font-size:.75rem; font-weight:500; }
+.technical summary::after { content:'+'; margin-left:auto; }
+.technical[open] summary::after { content:'−'; }
+.technical[open] summary { margin-bottom:1rem; }
+.technical summary:focus-visible { outline:2px solid oklch(var(--ring)); outline-offset:4px; }
+@media(max-width:639px) { .context { grid-template-columns:1fr; } .summary time { width:100%; margin-left:0; } .fields > div,.fields .fields > div { grid-template-columns:1fr; gap:.375rem; } }
