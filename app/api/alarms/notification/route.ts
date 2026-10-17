@@ -10,6 +10,9 @@ import { protectIntegrationConfig } from '@/lib/security/integration-credentials
 import { sendTestEmail } from '@/lib/notifications/email';
 import { validateBody } from '@/lib/validators';
 import { notificationConfigSchema } from '@/lib/validators/alarms';
+import { authorizeApiRequest } from '@/lib/auth/api-permission';
+
+export const dynamic = 'force-dynamic';
 
 const MASKED_PASSWORD = '********';
 
@@ -24,8 +27,10 @@ function maskEmailConfig(config: Record<string, unknown>) {
   };
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const permission = await authorizeApiRequest(request, 'alarms', 'read');
+    if (!permission.allowed) return permission.response;
     const config = await prisma.notificationConfig.findUnique({
       where: { channel: 'email' },
     });
@@ -69,6 +74,8 @@ export async function GET() {
 
 export async function PUT(request: NextRequest) {
   try {
+    const permission = await authorizeApiRequest(request, 'alarms', 'write');
+    if (!permission.allowed) return permission.response;
     const rawBody = await request.json();
     const parsed = validateBody(rawBody, notificationConfigSchema);
     if (!parsed.success) {
@@ -113,8 +120,10 @@ export async function PUT(request: NextRequest) {
   }
 }
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   try {
+    const permission = await authorizeApiRequest(request, 'alarms', 'write');
+    if (!permission.allowed) return permission.response;
     const config = await prisma.notificationConfig.findUnique({ where: { channel: 'email' } });
     if (!config) {
       return NextResponse.json({ success: false, error: 'Email notification config is not saved yet' }, { status: 400 });

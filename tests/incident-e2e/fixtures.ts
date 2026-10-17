@@ -7,6 +7,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
 
 interface Manifest {
+  alarmId: string;
   prefix: string;
   reasons: { resolve: string; close: string };
   rows: Array<{ id: string; title: string; group: 'resolve' | 'close'; initialStatus: string }>;

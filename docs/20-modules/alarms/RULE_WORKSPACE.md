@@ -1,0 +1,15 @@
+# Alarm kuralları çalışma alanı
+
+`/settings/alerts`, kuralları kategori, durum, öncelik, ad/kod/kaynak aramasıyla listeler. Türkçe karakterli aramalar, katalogdaki ASCII yazımları da bulur. Bilinmeyen kategorilerdeki kurallar da gösterilir. Etkinlik veri kaynağının sağlığı, bildirim ayarının uygunluğu da teslim doğrulaması anlamına gelmez.
+
+Kural ayrıntısında durum, tekrar beklemesi ve e-posta tercihi kaydetmeden önce düzenlenir. İstek yalnızca değişen alanları gönderir; eşik/filtre JSON'u gönderilmez. Tetikleme mantığı katalog yönetimindedir ve katalog eşitlemesinde yenilenebilir. API tekrar beklemesini 0–525.600 tam dakika olarak doğrular. Başarısız veya doğrulanamayan kaydetme olumlu sonuç gibi gösterilmez.
+
+Eşik açıklamaları yürütme yoluna göre ayrılır: NMS CPU/bellek için yüzde, sıcaklık için °C; bunlarda son 5 dakikadaki en güncel ölçüm kullanılır. Port kesintisi en az 5 dakika; erişilememe en az 30 dakika veya 3 sorgu aralığından uzundur. Yedek gecikmesi cihaz politikasından gelir. Diğer kayıt kuralları kaynak filtresi ve ek denetimlerden sonra eşleşme sayısı/zaman penceresiyle gösterilir. Katalog değerleri teknik bölümde ayrıca korunur.
+
+Ortak e-posta kanalının kayıtlı durumu ile formdaki taslak ayrılır. Boş parola alanı mevcut şifreli parolayı korur. Alıcılar doğrulanır, yinelenen adresler engellenir. Sekme değişimi taslağı korur; kaydedilmemiş form varken üstten yenileme engellenir. Test yalnızca kayıtlı, açık ve tamamlanmış kanalda açılır; gönderimden önce kayıtlı alıcıları gösterir. Kayıt veya okuma işlemi test e-postasını otomatik göndermez.
+
+Yetki `/api/auth/me` rolü ve mevcut alarm yazma politikasıyla arayüzde sınırlandırılır. Tanım ve e-posta API'leri ayrıca ortak `authorizeApiRequest` üzerinden veritabanındaki güncel ACTIVE kullanıcıyı denetler; eski JWT rolü, rol iptalini veya hesabın kapatılmasını aşamaz. Denetim JSON ayrıştırma, veritabanı okuma/yazma ve SMTP gönderiminden önce yapılır; kimlik kaynağı hatasında 503 döner. Kısmi okuma hatalarında önceki veri tutulur, kaynak güncelliği açıklanır ve ilgili düzenlemeler kapatılır.
+
+`npm run test:rule-workspace`, kaynak bazlı eşik/kanal yorumlarını, yalnız değişen alanların yazılmasını, API doğrulamasını, olumsuz yanıtları, zaman aşımını ve parola korumayı sahte I/O ile sınar. Görsel QA; mobil/koyu tema, salt okunur rol, boş/kısmi kaynak hatası, başarısız/başarılı kayıt, sekmelerde taslak korunması ve örnek test iletisi onayını kapsar. Gerçek cihaz kuralı veya SMTP ayarı değiştirilmeden ve gerçek e-posta gönderilmeden çalıştırılabilir.
+
+`tests/incident-e2e/rule-workspace.spec.ts` izole PostgreSQL ve gerçek imzalı oturumlarla tanım kaydını, reddedilen girişimleri, eski ADMIN JWT'si arkasındaki VIEWER/INACTIVE kullanıcıyı, süresi dolmuş oturumu ve değişmeyen kayıtları sınar. E-posta formu testlerinde yalnızca `.invalid` adresleri ve engellenmiş HTTP taşıması kullanılır; başarılı SMTP test isteği de yakalanır, gerçek ileti gönderilmez. Ortak regresyon runner'ı bu testleri, ilgili lint kurallarını ve kimlik bilgisi testlerini çalıştırır.

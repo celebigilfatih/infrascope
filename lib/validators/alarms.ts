@@ -5,6 +5,14 @@ export const acknowledgeAlarmsSchema = z.object({
   acknowledged: z.boolean(),
 });
 
+export const alarmDefinitionUpdateSchema = z.object({
+  id: z.string().min(1, 'Kural kimliği zorunludur.'),
+  enabled: z.boolean().optional(),
+  notifyEmail: z.boolean().optional(),
+  cooldownMinutes: z.number().int().min(0).max(525600).optional(),
+  detectionLogic: z.record(z.string(), z.unknown()).optional(),
+}).strict().refine(value => Object.keys(value).some(key => key !== 'id'), 'Kaydedilecek bir değişiklik seçin.');
+
 export const notificationConfigSchema = z.object({
   enabled: z.boolean().optional(),
   smtpHost: z.string().min(1, "SMTP sunucusu zorunludur."),
