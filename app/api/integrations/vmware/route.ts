@@ -1,4 +1,5 @@
 import type { Prisma } from '@prisma/client';
+import { normalizeVMwareSettingsIdentity, parseVMwareSettingsConfig, readVMwareSettings, testSavedVMwareSettings, updateVMwareSettings } from '@/lib/integrations/vmware-settings';
 /**
  * VMware vCenter Integration API Routes
  * 
@@ -33,7 +34,9 @@ import { InventorySourceSelectionError, selectInventorySource } from '@/lib/inte
 import { protectIntegrationConfig, unprotectIntegrationConfig } from '@/lib/security/integration-credentials';
 import { isVMwarePythonError, vmwareCollectionErrorMessage } from '@/lib/integrations/vmware-python';
 import { validateBody } from '@/lib/validators';
-import { vmwareTestSchema, vmwareSaveConfigSchema } from '@/lib/validators/integrations';
+import { vmwareTestSchema } from '@/lib/validators/integrations';
+
+export const dynamic = 'force-dynamic';
 
 // Helper: Get capacity trends from time series data
 async function getCapacityTrends(days: number, sourceScope: string) {
@@ -207,6 +210,7 @@ export async function GET(request: NextRequest) {
 
     // ── DB-only routes (no vCenter auth needed) ──────────────────────────────
     // Get configuration — reads from DB only, never touches vCenter
+    if (type === 'workspace') return await readVMwareSettings();
     if (type === 'config') {
       const vmwareConfig = await prisma.integrationConfig.findFirst({
         where: { type: 'VMWARE_VCENTER' },
@@ -265,7 +269,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: vmwareCollectionErrorMessage(error), code: error.code },
         { status: error.code === 'VMWARE_HELPER_SOURCE_TIMEOUT' ? 504 : 503 });
     }
-    console.error('VMware API error:', error);
+    console.error('[VMware] Read failed', error instanceof Error ? error.name : 'UnknownError');
     return NextResponse.json({ error: 'VMware verileri alınamadı.' }, { status: 500 });
   }
 }
@@ -648,8 +652,9 @@ export async function POST(request: NextRequest) {
   if (!access.allowed) return access.response;
   try {
     const body = await request.json();
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return NextResponse.json({ error: 'İstek bilgileri geçersiz.' }, { status: 400 });
     const { action, config } = body;
-    const resource = ['test', 'save-config', 'test-events-api', 'test-soap-events'].includes(action) ? 'settings' : 'devices';
+    const resource = ['test', 'test-saved', 'save-config', 'test-events-api', 'test-soap-events'].includes(action) ? 'settings' : 'devices';
     const operation = action === 'snapshot-delete' ? 'delete' : 'write';
     if (!canAccessSync(access.auth.role, resource, operation)) return forbiddenApiPermission(resource, operation);
     if (['collect-metrics', 'test-events-api', 'test-soap-events'].includes(action)) {
@@ -708,6 +713,7 @@ export async function POST(request: NextRequest) {
 
     }
 
+    if (action === 'test-saved') return await testSavedVMwareSettings(body.configId);
     if (action === 'test') {
       // Test connection without saving
       const parsed = validateBody(config || {}, vmwareTestSchema);
@@ -719,9 +725,11 @@ export async function POST(request: NextRequest) {
         thumbprint: (config as { thumbprint?: string })?.thumbprint,
       };
 
+      const identity = normalizeVMwareSettingsIdentity(host, username);
+      if (!identity) return NextResponse.json({ error: 'Bağlantı ayarlarını kontrol edin.', code: 'INVALID_SETTINGS' }, { status: 400 });
+
       const service = new VMwareService({
-        host: host.replace(/^https?:\/\//i, '').replace(/\/+$/, ''),
-        username,
+        ...identity,
         password,
         thumbprint,
         pollingInterval: 10,
@@ -765,16 +773,18 @@ export async function POST(request: NextRequest) {
         const result = await service.syncToInventory(organizationId);
         await recordInventorySync(vmwareConfig.id, result, startedAt);
 
-        return NextResponse.json(result);
+        return NextResponse.json({ ...result, configId: vmwareConfig.id });
       });
     }
 
     if (action === 'save-config') {
+      if (body.configId !== undefined) return await updateVMwareSettings(body);
       // Validate config with Zod
-      const parsed = validateBody(config || {}, vmwareSaveConfigSchema);
+      const parsed = parseVMwareSettingsConfig(config || {});
       if (!parsed.success) {
         return NextResponse.json({ success: false, error: parsed.error }, { status: 400 });
       }
+      if (body.enabled !== undefined && typeof body.enabled !== 'boolean') return NextResponse.json({ error: 'Senkronizasyon durumu geçersiz.', code: 'INVALID_SETTINGS' }, { status: 400 });
       // Sanitize host: strip protocol prefix and trailing slashes before saving
       const newConfig = {
         ...parsed.data,
@@ -784,6 +794,13 @@ export async function POST(request: NextRequest) {
       const previous = await prisma.integrationConfig.findFirst({
         where: { type: 'VMWARE_VCENTER', name: body.name || 'Default vCenter' },
       });
+      // The workspace creates a new profile; never turn that intent into an update.
+      if (body.createOnly === true) {
+        if (previous || !newConfig.password || newConfig.password === '********') return NextResponse.json({ error: 'Profil veya parola bilgilerini yenileyin.', code: previous ? 'SETTINGS_CHANGED' : 'PASSWORD_REQUIRED' }, { status: previous ? 409 : 400 });
+        const saved = await prisma.integrationConfig.create({ data: { type: 'VMWARE_VCENTER', name: body.name || 'Default vCenter', enabled: body.enabled ?? true, config: protectIntegrationConfig(newConfig, 'VMWARE_VCENTER'), syncInterval: newConfig.pollingInterval } });
+        invalidateVMwareCache(getVMwareCacheScope(newConfig));
+        return NextResponse.json({ success: true, configId: saved.id });
+      }
       const previousPlain = previous
         ? unprotectIntegrationConfig<typeof newConfig>(previous.config, 'VMWARE_VCENTER') : null;
       if (!newConfig.password || newConfig.password === '********') {
@@ -793,7 +810,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ success: false, error: 'VMware parolası gerekli.' }, { status: 400 });
       }
       const protectedConfig = protectIntegrationConfig<typeof newConfig>(newConfig, 'VMWARE_VCENTER');
-      await prisma.integrationConfig.upsert({
+      const saved = await prisma.integrationConfig.upsert({
         where: {
           type_name: {
             type: 'VMWARE_VCENTER',
@@ -803,20 +820,20 @@ export async function POST(request: NextRequest) {
         create: {
           type: 'VMWARE_VCENTER',
           name: body.name || 'Default vCenter',
-          enabled: true,
+          enabled: typeof body.enabled === 'boolean' ? body.enabled : true,
           config: protectedConfig,
           syncInterval: newConfig.pollingInterval,
         },
         update: {
-          enabled: true,
+          enabled: typeof body.enabled === 'boolean' ? body.enabled : true,
           config: protectedConfig,
           syncInterval: newConfig.pollingInterval,
         },
       });
 
-      if (previousPlain) invalidateVMwareCache(getVMwareCacheScope({ ...previousPlain, pollingInterval: previous?.syncInterval || 10 }));
+      if (previousPlain && typeof previousPlain.host === 'string' && typeof previousPlain.username === 'string') invalidateVMwareCache(getVMwareCacheScope({ ...previousPlain, pollingInterval: previous?.syncInterval || 10 }));
       invalidateVMwareCache(getVMwareCacheScope(newConfig));
-      return NextResponse.json({ success: true });
+      return NextResponse.json({ success: true, configId: saved.id });
     }
 
     // VM Power Control
@@ -912,9 +929,11 @@ export async function POST(request: NextRequest) {
     if (error instanceof InventorySyncBusyError) {
       return NextResponse.json({ error: 'Bu kaynak için senkronizasyon zaten çalışıyor.', code: error.code }, { status: 409 });
     }
-    console.error('VMware API error:', error);
+    if (isVMwarePythonError(error)) return NextResponse.json({ error: vmwareCollectionErrorMessage(error), code: error.code }, { status: error.code === 'VMWARE_HELPER_SOURCE_TIMEOUT' ? 504 : 503 });
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'P2002') return NextResponse.json({ error: 'Profil başka bir işlemde oluşturuldu.', code: 'SETTINGS_CHANGED' }, { status: 409 });
+    console.error('[VMware] Operation failed', error instanceof Error ? error.name : 'UnknownError');
     return NextResponse.json(
-      { error: (error as Error).message },
+      { error: 'VMware işlemi tamamlanamadı.' },
       { status: 500 }
     );
   }

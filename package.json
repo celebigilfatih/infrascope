@@ -61,6 +61,7 @@
     "test:fortianalyzer-cache:db": "node scripts/check-fortianalyzer-cache-db.cjs",
     "test:fortianalyzer-time": "node scripts/check-fortianalyzer-time.cjs",
     "test:fortianalyzer-time:db": "node scripts/check-fortianalyzer-time-db.cjs",
+    "test:vmware-workspace": "node scripts/check-vmware-workspace.cjs",
     "test:vmware-cache": "node scripts/check-vmware-cache.cjs",
     "test:vmware-collection": "node scripts/check-vmware-collection.cjs",
     "test:snapshot-contracts": "node scripts/check-snapshot-contracts.mjs",

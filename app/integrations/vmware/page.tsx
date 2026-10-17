@@ -1,571 +1,112 @@
 'use client';
-
-import { uiError } from '@/lib/i18n/tr';
-
+import { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import { Activity, ArrowRight, Clock3, Database, FileClock, Info, KeyRound, Layers3, Link2, Play, RefreshCw, Save, Server, Settings2, ShieldCheck, SquareStack, TriangleAlert, Undo2, X } from 'lucide-react';
 import { PageHeading } from '@/components/ui/page-heading';
-import React, { useState, useEffect } from 'react';
-import type { SyncResult } from '@/lib/integrations/vmware';
-import { inventorySyncLabel } from '@/lib/integrations/sync-outcome';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { SemanticBadge } from '@/components/ui/semantic-badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { 
-  Server, 
-  RefreshCw, 
-  CheckCircle, 
-  XCircle, 
-  AlertCircle, 
-  Settings, 
-  Save,
-  Loader2,
-  Database,
-  HardDrive,
-  Cpu
-} from 'lucide-react';
-
-interface VMwareConfig {
-  host: string;
-  username: string;
-  password: string;
-  thumbprint: string;
-  pollingInterval: number;
-  enabledModules: {
-    datacenters: boolean;
-    clusters: boolean;
-    hosts: boolean;
-    vms: boolean;
-    datastores: boolean;
-  };
-}
+import { parseActor, requestUsersJson, userDate, type WorkspaceActor } from '@/lib/users/workspace';
+import { canAccessSync } from '@/lib/auth/permission-policy';
+import { moduleLabels, parseVMwareProfiles, parseVMwareSync, requestVMwareWorkspace, syncLabels, validateVMwareDraft, vmwareChanges, vmwareConfigPayload, vmwareDraft, vmwareTestError, vmwareUncertain, type VMwareDraft, type VMwareProfile, type VMwareSync } from '@/lib/integrations/vmware-workspace';
+import common from '@/components/users/users-workspace.module.css';
+import styles from './page.module.css';
+const moduleOptions = [{ key: 'clusters', icon: Layers3, help: 'Küme kimliği, üyelik ve kaynak kapasitesi.' }, { key: 'hosts', icon: Server, help: 'ESXi sunucu envanteri ve donanım bilgileri.' }, { key: 'vms', icon: SquareStack, help: 'Sanal makine envanteri ve yapılandırma bilgileri.' }, { key: 'datastores', icon: Database, help: 'Veri deposu envanteri ve kapasite bilgileri.' }] as const;
+const display = (value: number | null) => value === null ? 'Bilgi yok' : value.toLocaleString('tr-TR');
+const tone = (status: VMwareSync['status']) => status === 'success' ? 'success' as const : status === 'partial' ? 'warning' as const : status === 'failed' ? 'danger' as const : 'neutral' as const;
+interface TestResult { connected: boolean | null; at: string; scope: 'saved' | 'draft'; host: string; version: string; error: string }
 
 export default function VMwareIntegrationPage() {
-  const [config, setConfig] = useState<VMwareConfig>({
-    host: '',
-    username: '',
-    password: '',
-    thumbprint: '',
-    pollingInterval: 10,
-    enabledModules: {
-      datacenters: true,
-      clusters: true,
-      hosts: true,
-      vms: true,
-      datastores: true,
-    },
-  });
-  
-  const [status, setStatus] = useState<{ connected: boolean; version?: string; error?: string } | null>(null);
-  const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [syncing, setSyncing] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState('config');
-
-  // Load config and status on mount
-  useEffect(() => {
-    const loadConfig = async () => {
-      setLoading(true);
-      try {
-        // Fetch saved config
-        const configRes = await fetch('/api/integrations/vmware?type=config');
-        const configData = await configRes.json();
-        if (configData.config) {
-          setConfig({
-            host: configData.config.host || '',
-            username: configData.config.username || '',
-            password: '',
-            thumbprint: configData.config.thumbprint || '',
-            pollingInterval: configData.config.pollingInterval || 10,
-            enabledModules: configData.config.enabledModules || {
-              datacenters: true,
-              clusters: true,
-              hosts: true,
-              vms: true,
-              datastores: true,
-            },
-          });
-        }
-        
-        // Check connection status from config (without auth)
-        setStatus({
-          connected: !!configData.config?.host,
-          version: configData.config?.host ? 'Configured' : undefined,
-          error: uiError(configData.config?.host ? undefined : "Yapılandırılmadı. vCenter bilgilerini girip kaydedin.")
-        });
-
-        // Warn if saved config has no password (was accidentally overwritten)
-        if (configData.config?.host && !configData.config?.password) {
-          setStatus(prev => ({
-            connected: prev?.connected ?? false,
-            version: prev?.version,
-            error: uiError("Kayıtlı yapılandırmada parola yok. Parolayı yeniden girip kaydedin."),
-          }));
-        }
-
-        // Fetch dashboard data for sync tab (requires live vCenter auth)
-        try {
-          const dashRes = await fetch('/api/integrations/vmware?type=dashboard');
-          if (dashRes.ok) {
-            const dashData = await dashRes.json();
-            if (dashData.summary) {
-              // vCenter is reachable
-              if (configData.config?.host) {
-                setStatus({ connected: true, version: "Bağlı" });
-              }
-            }
-          }
-          // 401 = auth failed, 200 not configured = just skip, status already set above
-        } catch (e) {
-          console.error('Failed to load dashboard:', e);
-        }
-      } catch (error) {
-        console.error('Failed to load config:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    loadConfig();
+  const [profiles, setProfiles] = useState<VMwareProfile[] | null>(null), [selectedId, setSelectedId] = useState(''), [draft, setDraft] = useState<VMwareDraft>(vmwareDraft(null)), [actor, setActor] = useState<WorkspaceActor | null>(null);
+  const [loading, setLoading] = useState(true), [errors, setErrors] = useState<string[]>([]), [readAt, setReadAt] = useState<string | null>(null), [busy, setBusy] = useState<'save' | 'sync' | 'saved-test' | 'draft-test' | null>(null), [uncertain, setUncertain] = useState(false);
+  const [test, setTest] = useState<TestResult | null>(null), [manual, setManual] = useState<{ id: string; result: VMwareSync; at: string } | null>(null), [formError, setFormError] = useState(''), [operationError, setOperationError] = useState(''), [notice, setNotice] = useState('');
+  const active = useRef<AbortController | null>(null), sequence = useRef(0), guard = useRef(false), choice = useRef('');
+  const profile = profiles?.find(item => item.id === selectedId) || null, changes = vmwareChanges(draft, profile), dirty = changes.length > 0;
+  const load = useCallback(async (preferred?: string, preserveDraft = false) => {
+    const id = ++sequence.current; active.current?.abort(); const controller = new AbortController(); active.current = controller; setLoading(true);
+    const results = await Promise.allSettled([requestVMwareWorkspace(undefined, controller.signal).then(parseVMwareProfiles), requestUsersJson('/api/auth/me', 'İşlem yetkisi doğrulanamadı.', { signal: controller.signal }).then(parseActor)]);
+    if (id !== sequence.current || controller.signal.aborted) return;
+    const nextErrors: string[] = [];
+    if (results[0].status === 'fulfilled') {
+      const next = results[0].value, target = next.find(item => item.id === (preferred || choice.current)) || (next.length === 1 ? next[0] : null);
+      setFormError(''); setOperationError(''); setTest(null); setProfiles(next); setReadAt(new Date().toISOString()); setUncertain(false); setSelectedId(target?.id || ''); choice.current = target?.id || '';
+      if (!preserveDraft) setDraft(vmwareDraft(target));
+    } else nextErrors.push(results[0].reason instanceof Error ? results[0].reason.message : 'Kayıtlı VMware bilgileri alınamadı.');
+    if (results[1].status === 'fulfilled') setActor(results[1].value); else { setActor(null); nextErrors.push('İşlem yetkisi doğrulanamadı. Salt okunur görünüm kullanılıyor.'); }
+    setErrors(nextErrors); setLoading(false);
   }, []);
-
-  const testConnection = async () => {
-    setLoading(true);
+  useEffect(() => { void load(); return () => active.current?.abort(); }, [load]);
+  const ready = Boolean(profiles && !loading && !errors.length && !busy && !uncertain), canSettings = Boolean(ready && actor && canAccessSync(actor.role, 'settings', 'write')), canSync = Boolean(ready && actor && canAccessSync(actor.role, 'devices', 'write'));
+  const savedReady = Boolean(profile && profile.host && profile.username && profile.hasPassword), activeModules = profile ? moduleOptions.filter(item => profile.modules[item.key]).length : null;
+  function update<K extends keyof VMwareDraft>(key: K, value: VMwareDraft[K]) { setDraft(previous => ({ ...previous, [key]: value })); setFormError(''); if (test?.scope === 'draft') setTest(null); }
+  function selectProfile(id: string) { const next = profiles?.find(item => item.id === id) || null; choice.current = id; setSelectedId(id); setDraft(vmwareDraft(next)); setTest(null); setManual(null); setFormError(''); setOperationError(''); setNotice(''); }
+  async function run(action: 'save' | 'sync' | 'saved-test' | 'draft-test') {
+    if (guard.current || !ready || (action === 'sync' ? !canSync : !canSettings)) return;
+    if (action === 'sync' && (!savedReady || dirty || !profile?.enabled || !activeModules || profile.interval === null)) return;
+    if (action === 'saved-test' && !savedReady) return;
+    if (action === 'save' || action === 'draft-test') { const invalid = validateVMwareDraft(draft, profile, action === 'draft-test'); if (invalid) { setFormError(invalid); return; } }
+    if (action.endsWith('test')) setTest(null);
+    guard.current = true; setBusy(action); setFormError(''); setOperationError(''); setNotice('');
     try {
-      const response = await fetch('/api/integrations/vmware', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'test', config }),
-      });
-      const data = await response.json();
-      setStatus(data);
-    } catch (error) {
-      setStatus({ connected: false, error: uiError((error as Error).message) });
-    }
-    setLoading(false);
-  };
-
-  const saveConfig = async () => {
-    setSaving(true);
-    try {
-      const response = await fetch('/api/integrations/vmware', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'save-config', name: 'VMware vCenter', config }),
-      });
-      if (!response.ok) {
-        const result = await response.json();
-        setStatus({ connected: false, error: uiError(result.error || 'Bağlantı ayarları kaydedilemedi.') });
-      }
-    } catch (error) {
-      console.error('Failed to save config:', error);
-    }
-    setSaving(false);
-  };
-
-  const runSync = async () => {
-    if (!config.host || !config.username) {
-      setStatus({ connected: false, error: uiError("Eşitlemeden önce vCenter sunucusunu ve kullanıcı adını girin.") });
-      return;
-    }
-    setSyncing(true);
-    try {
-      // Sync uses persisted configuration; settings changes require an explicit save.
-
-      const response = await fetch('/api/integrations/vmware', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'sync' }),
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        setStatus({ connected: false, error: uiError(data.error || 'Sync failed') });
-        setActiveTab('config');
+      if (action === 'save') {
+        const value = await requestVMwareWorkspace({ action: 'save-config', ...(profile ? { configId: profile.id, ...(profile.updatedAt ? { expectedUpdatedAt: profile.updatedAt } : {}) } : { name: 'VMware vCenter', createOnly: true }), enabled: draft.enabled, config: vmwareConfigPayload(draft) });
+        setTest(null); setManual(null); setNotice('Bağlantı ayarları ve senkronizasyon kapsamı kaydedildi. Kaydetme işlemi bağlantının çalıştığını doğrulamaz.'); await load(value.configId as string);
+      } else if (action === 'sync') {
+        const value = await requestVMwareWorkspace({ action: 'sync', configId: profile!.id }), result = parseVMwareSync(value, true);
+        setManual({ id: profile!.id, result, at: new Date().toISOString() }); setNotice(`Manuel senkronizasyon: ${result.status ? syncLabels[result.status].toLocaleLowerCase('tr-TR') : 'sonuç alındı'}. Ayrıntıları aşağıda inceleyin.`); await load(profile!.id);
       } else {
-        setSyncResult(data);
-        setActiveTab('sync');
+        const value = await requestVMwareWorkspace(action === 'saved-test' ? { action: 'test-saved', configId: profile!.id } : { action: 'test', config: { host: draft.host.trim(), username: draft.username.trim(), password: draft.password, thumbprint: draft.thumbprint.trim() } });
+        if (typeof value.connected !== 'boolean' || (action === 'saved-test' && value.configId !== profile!.id)) throw new Error('Bağlantı testi sonucu beklenen biçimde alınamadı.');
+        setTest({ connected: value.connected, at: new Date().toISOString(), scope: action === 'saved-test' ? 'saved' : 'draft', host: action === 'saved-test' ? profile!.host : draft.host.trim(), version: typeof value.version === 'string' ? value.version : '', error: value.connected ? '' : vmwareTestError(value) });
       }
-    } catch (error) {
-      console.error('Sync failed:', error);
-      setStatus({ connected: false, error: uiError((error as Error).message) });
-    }
-    setSyncing(false);
-  };
-
-  return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-4">
-        <div className="flex items-center gap-4">
-          <div className="p-3 rounded-lg bg-blue-500/20">
-            <Server className="h-6 w-6 text-blue-500" />
-          </div>
-          <div>
-            <PageHeading section="vmware" description={<>
-              VMware vCenter bağlantısını yapılandırın ve sanallaştırma envanterini eşitleyin
-            </>}>VMware vCenter Entegrasyonu</PageHeading>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {status?.connected ? (
-            <Badge variant="success" className="gap-1">
-              <CheckCircle className="h-3 w-3" />
-              Bağlı {status.version && `(${status.version})`}
-            </Badge>
-          ) : status ? (
-            <Badge variant="destructive" className="gap-1">
-              <XCircle className="h-3 w-3" />
-              Bağlantı kesildi
-            </Badge>
-          ) : null}
-        </div>
-      </div>
-
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
-          <TabsTrigger value="config" className="gap-2">
-            <Settings className="h-4 w-4" />
-            Yapılandırma
-          </TabsTrigger>
-          <TabsTrigger value="sync" className="gap-2">
-            <RefreshCw className="h-4 w-4" />
-            Eşitleme Durumu
-          </TabsTrigger>
-          <TabsTrigger value="modules" className="gap-2">
-            <Database className="h-4 w-4" />
-            Modüller
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="config" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>vCenter Bağlantı Ayarları</CardTitle>
-              <CardDescription>
-                VMware vCenter sunucunuza bağlantıyı yapılandırın
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="host">vCenter Sunucusu</Label>
-                  <Input
-                    id="host"
-                    placeholder="10.5.56.10 (https:// öneki olmadan)"
-                    value={config.host}
-                    onChange={(e) => setConfig({ ...config, host: e.target.value.replace(/^https?:\/\//i, '').replace(/\/+$/, '') })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="thumbprint">Sertifika Parmak İzi (isteğe bağlı)</Label>
-                  <Input
-                    id="thumbprint"
-                    placeholder="SHA-1 sertifika parmak izi"
-                    value={config.thumbprint}
-                    onChange={(e) => setConfig({ ...config, thumbprint: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="username">Kullanıcı Adı</Label>
-                  <Input
-                    id="username"
-                    placeholder="administrator@vsphere.local"
-                    value={config.username}
-                    onChange={(e) => setConfig({ ...config, username: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password">Parola</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    placeholder="Parolayı girin"
-                    value={config.password}
-                    onChange={(e) => setConfig({ ...config, password: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="polling">Envanter senkronizasyon aralığı (dakika)</Label>
-                <Input
-                  id="polling"
-                  type="number"
-                  min={1}
-                  max={1440}
-                  value={config.pollingInterval}
-                  onChange={(e) => setConfig({ ...config, pollingInterval: parseInt(e.target.value) })}
-                />
-                <p className="text-xs text-muted-foreground">Kaydedilen aralık otomatik envanter senkronizasyonunu belirler. Alarm ve grafik yenileme aralıkları ayrıdır.</p>
-              </div>
-
-              <div className="flex gap-4 pt-4">
-                <Button onClick={testConnection} disabled={loading} variant="outline">
-                  {loading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Server className="h-4 w-4" />
-                  )}
-                  <span className="ml-2">Bağlantıyı Test Et</span>
-                </Button>
-                <Button onClick={saveConfig} disabled={saving}>
-                  {saving ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Save className="h-4 w-4" />
-                  )}
-                  <span className="ml-2">Yapılandırmayı Kaydet</span>
-                </Button>
-              </div>
-
-              {status && status.error && (
-                <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 text-destructive">
-                  <AlertCircle className="h-4 w-4" />
-                  <span>{uiError(status.error)}</span>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Manuel senkronizasyon</CardTitle>
-              <CardDescription>
-                Senkronizasyon kayıtlı bağlantı ayarlarını kullanır. Ayar değişikliklerini önce kaydedin.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button onClick={runSync} disabled={syncing} className="gap-2">
-                {syncing ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <RefreshCw className="h-4 w-4" />
-                )}
-                <span className="ml-2">Kayıtlı ayarlarla senkronize et</span>
-              </Button>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="sync" className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-full bg-green-500/20">
-                    <Cpu className="h-5 w-5 text-green-500" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Kümeler</p>
-                    <p className="text-2xl font-bold">
-                      {syncResult ? syncResult.clustersCreated + syncResult.clustersUpdated : '—'}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-full bg-blue-500/20">
-                    <Server className="h-5 w-5 text-blue-500" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">ESXi Sunucuları</p>
-                    <p className="text-2xl font-bold">
-                      {syncResult ? syncResult.hostsCreated + syncResult.hostsUpdated : '—'}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-full bg-purple-500/20">
-                    <HardDrive className="h-5 w-5 text-purple-500" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Sanal Makineler</p>
-                    <p className="text-2xl font-bold">
-                      {syncResult ? syncResult.vmsCreated + syncResult.vmsUpdated : '—'}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-full bg-orange-500/20">
-                    <Database className="h-5 w-5 text-orange-500" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Veri Depoları</p>
-                    <p className="text-2xl font-bold">{syncResult?.datastoresProcessed ?? '—'}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-full bg-cyan-500/20">
-                    <RefreshCw className="h-5 w-5 text-cyan-500" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Süre</p>
-                    <p className="text-2xl font-bold">{syncResult ? `${syncResult.duration}ms` : '—'}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {syncResult && (
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    {syncResult.status === 'success' ? (
-                      <CheckCircle className="h-5 w-5 text-green-500" />
-                    ) : syncResult.status === 'failed' ? (
-                      <XCircle className="h-5 w-5 text-destructive" />
-                    ) : (
-                      <AlertCircle className="h-5 w-5 text-yellow-500" />
-                    )}
-                    <div>
-                      <p className="font-semibold">
-                        {inventorySyncLabel(syncResult.status)}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {syncResult.itemsProcessed} öğe işlendi · {syncResult.errorCount} hata
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                {syncResult.errors && syncResult.errors.length > 0 && (
-                  <div className="mt-4 p-3 rounded-lg bg-destructive/10">
-                    <p className="text-sm font-medium mb-2">Hatalar:</p>
-                    <ul className="text-sm text-destructive space-y-1">
-                      {syncResult.errors.map((error, i) => (
-                        <li key={i}>• {uiError(error)}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
-
-        <TabsContent value="modules" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Veri Modülleri</CardTitle>
-              <CardDescription>
-                Eşitlenecek VMware verilerini seçin
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between p-3 rounded-lg border">
-                <div className="flex items-center gap-3">
-                  <Database className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <p className="font-medium">Veri Merkezleri</p>
-                    <p className="text-sm text-muted-foreground">
-                      Veri merkezi hiyerarşisini içe aktar
-                    </p>
-                  </div>
-                </div>
-                <Switch
-                  checked={config.enabledModules.datacenters}
-                  onCheckedChange={(checked) => 
-                    setConfig({ ...config, enabledModules: { ...config.enabledModules, datacenters: checked } })
-                  }
-                />
-              </div>
-
-              <div className="flex items-center justify-between p-3 rounded-lg border">
-                <div className="flex items-center gap-3">
-                  <Cpu className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <p className="font-medium">Kümeler</p>
-                    <p className="text-sm text-muted-foreground">
-                      Küme ve kaynak havuzu bilgilerini içe aktar
-                    </p>
-                  </div>
-                </div>
-                <Switch
-                  checked={config.enabledModules.clusters}
-                  onCheckedChange={(checked) => 
-                    setConfig({ ...config, enabledModules: { ...config.enabledModules, clusters: checked } })
-                  }
-                />
-              </div>
-
-              <div className="flex items-center justify-between p-3 rounded-lg border">
-                <div className="flex items-center gap-3">
-                  <Server className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <p className="font-medium">ESXi Sunucuları</p>
-                    <p className="text-sm text-muted-foreground">
-                      ESXi sunucu envanterini ve durumunu içe aktar
-                    </p>
-                  </div>
-                </div>
-                <Switch
-                  checked={config.enabledModules.hosts}
-                  onCheckedChange={(checked) => 
-                    setConfig({ ...config, enabledModules: { ...config.enabledModules, hosts: checked } })
-                  }
-                />
-              </div>
-
-              <div className="flex items-center justify-between p-3 rounded-lg border">
-                <div className="flex items-center gap-3">
-                  <HardDrive className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <p className="font-medium">Sanal Makineler</p>
-                    <p className="text-sm text-muted-foreground">
-                      Sanal makine envanterini ve yapılandırmalarını içe aktar
-                    </p>
-                  </div>
-                </div>
-                <Switch
-                  checked={config.enabledModules.vms}
-                  onCheckedChange={(checked) => 
-                    setConfig({ ...config, enabledModules: { ...config.enabledModules, vms: checked } })
-                  }
-                />
-              </div>
-
-              <div className="flex items-center justify-between p-3 rounded-lg border">
-                <div className="flex items-center gap-3">
-                  <Database className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <p className="font-medium">Veri Depoları</p>
-                    <p className="text-sm text-muted-foreground">
-                      Veri deposu ve depolama bilgilerini içe aktar
-                    </p>
-                  </div>
-                </div>
-                <Switch
-                  checked={config.enabledModules.datastores}
-                  onCheckedChange={(checked) => 
-                    setConfig({ ...config, enabledModules: { ...config.enabledModules, datastores: checked } })
-                  }
-                />
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-    </div>
-  );
+    } catch (failure) { const message = failure instanceof Error ? failure.message : 'VMware işlemi tamamlanamadı.'; (action === 'save' || action === 'draft-test' ? setFormError : setOperationError)(message); if (action.endsWith('test')) setTest({ connected: null, at: new Date().toISOString(), scope: action === 'saved-test' ? 'saved' : 'draft', host: action === 'saved-test' ? profile?.host || '' : draft.host.trim(), version: '', error: message }); if (message === vmwareUncertain) setUncertain(true); }
+    finally { guard.current = false; setBusy(null); }
+  }
+  const latest = profile?.lastSync || null, shownManual = manual?.id === profile?.id ? manual : null;
+  return <div className={common.page}><div className={common.workspace}>
+    <header className={common.header}><PageHeading section="vmware" description="vCenter bağlantısını yapılandırın, bağlantıyı doğrulayın ve envanter senkronizasyonunu takip edin.">VMware Entegrasyonu</PageHeading><div className={common.headerActions}><Button variant="outline" disabled={loading || Boolean(busy) || (dirty && !uncertain)} onClick={() => { setOperationError(''); void load(); }}><RefreshCw size={16} aria-hidden="true" className={loading ? 'animate-spin' : ''} />{loading ? 'Yükleniyor…' : uncertain ? 'Kayıtlı bilgileri yeniden oku' : 'Bilgileri yenile'}</Button></div></header>
+    <div className={common.serviceBar}><SemanticBadge tone={errors.length || uncertain ? 'warning' : 'info'} icon={FileClock}>{uncertain ? 'İşlem sonucu belirsiz' : errors.length ? profiles ? 'Önceki bilgiler gösteriliyor' : 'Bilgiler alınamadı' : loading ? 'Ayarlar okunuyor' : 'Kayıtlı bağlantı bilgileri'}</SemanticBadge><span>{readAt ? `Son okuma: ${userDate(readAt)} · TSİ` : 'Henüz başarılı okuma yok'}</span></div>
+    {errors.map(error => <div key={error} className={common.error} role="alert"><TriangleAlert size={18} aria-hidden="true" /><p>{error}{profiles && ' Son başarılı okumadaki bilgiler korunuyor.'}</p></div>)}
+    {uncertain && <div className={common.error} role="alert"><TriangleAlert size={18} aria-hidden="true" /><p>{vmwareUncertain} Yenileme, formdaki değişiklikleri kayıtlı değerlerle değiştirir.</p></div>}
+    {notice && <div className={shownManual && shownManual.result.status !== 'success' ? `${common.info} ${styles.warning}` : common.notice} role="status"><Info size={18} aria-hidden="true" /><p>{notice}</p><Button variant="ghost" size="icon" aria-label="İşlem bildirimini kapat" onClick={() => setNotice('')}><X size={16} aria-hidden="true" /></Button></div>}
+    {profiles && profiles.length > 1 && <div className={styles.profile}><div><label htmlFor="vmware-profile">İşlem yapılacak vCenter profili</label><select id="vmware-profile" value={selectedId} disabled={Boolean(busy) || loading || dirty || uncertain} onChange={event => selectProfile(event.target.value)}><option value="">Profil seçin</option>{profiles.map(item => <option key={item.id} value={item.id}>{item.name} · {item.host || 'Sunucu belirtilmemiş'}{!item.enabled && ' · Devre dışı'}</option>)}</select></div><p className={styles.hint}>Test, kayıt ve senkronizasyon seçili profile uygulanır. Profil değiştirmeden önce değişiklikleri kaydedin veya geri alın.</p></div>}
+    <section className={`${common.stats} ${styles.summary}`} aria-label="VMware bağlantı özeti">{[
+      { title: 'Bağlantı kontrolü', icon: Link2, value: test ? test.connected === null ? 'Sonuç alınamadı' : test.connected ? 'Son test başarılı' : 'Son test başarısız' : 'Doğrulanmadı', hint: test ? `${test.scope === 'saved' ? 'Kayıtlı profil' : 'Formdaki bilgiler'} · ${userDate(test.at)} · TSİ` : 'Bu kayıtlı ayarlar için güncel test sonucu yok' },
+      { title: 'Kayıtlı vCenter', icon: Server, value: profile?.host || (profiles?.length === 0 ? 'Yapılandırılmadı' : '—'), hint: profile?.name || (profiles && profiles.length > 1 ? 'İşlem için profil seçin' : 'Sunucu ve kullanıcı bilgilerini tanımlayın') },
+      { title: 'Otomatik senkronizasyon', icon: Clock3, value: profile ? profile.enabled ? profile.interval === null ? 'Aralık bilgisi yok' : `${profile.interval} dakikada bir` : 'Devre dışı' : '—', hint: profile ? `${activeModules} / 4 envanter modülü seçili · kayıtlı ayarlar` : 'Planlama, kayıtlı ayarlara göre çalışır' },
+      { title: 'Son senkronizasyon', icon: Activity, value: profile?.lastSyncStatus ? syncLabels[profile.lastSyncStatus] : profile?.lastSyncAt ? 'Sonuç bilgisi yok' : profile ? 'Kayıt yok' : '—', hint: profile?.lastSyncAt ? `${userDate(profile.lastSyncAt)} · TSİ · son deneme` : 'Başarılı, kısmi ve başarısız sonuçlar ayrılır' },
+    ].map(item => <article key={item.title} className={common.stat}><div><h2>{item.title}</h2><span className={common.icon}><item.icon size={18} aria-hidden="true" /></span></div><strong className="break-words text-base">{item.value}</strong><p>{item.hint}</p></article>)}</section>
+    {actor && !canAccessSync(actor.role, 'settings', 'write') && <div className={common.info}><Info size={18} aria-hidden="true" /><p>Bağlantı ayarlarını değiştirmek ve bağlantı testi yapmak yönetici rolü gerektirir.{canAccessSync(actor.role, 'devices', 'write') ? ' Kayıtlı etkin profille manuel senkronizasyon yapabilirsiniz.' : ' Bu görünüm salt okunurdur.'}</p></div>}
+    {profiles && profiles.length > 1 && !profile ? <div className={`${common.empty} ${styles.panel}`}><Server size={28} aria-hidden="true" /><h3>vCenter profilini seçin</h3><p>Birden fazla kayıtlı bağlantı var. İşlemlerin hedefini yukarıdan seçin.</p></div> : !profiles ? <div className={`${common.empty} ${styles.panel}`}><Info size={28} aria-hidden="true" /><h3>{loading ? 'VMware ayarları yükleniyor…' : 'VMware ayarları alınamadı'}</h3><p>Bilgiler yüklendiğinde bağlantı ayarları ve senkronizasyon kaydı gösterilir.</p></div> : <>
+    <div className={styles.layout}><section className={styles.panel} aria-labelledby="vmware-settings-title"><header><span className={common.icon}><Settings2 size={20} aria-hidden="true" /></span><div><h2 id="vmware-settings-title">vCenter bağlantı ayarları</h2><p>{profile ? `${profile.name} profilinin kayıtlı ayarlarını düzenleyin.` : 'İlk vCenter bağlantısını tanımlayın. Kaydettiğiniz profil envanter senkronizasyonunda kullanılır.'}</p></div></header>
+    <form noValidate className={`${styles.body} ${common.userForm}`} onSubmit={event => { event.preventDefault(); void run('save'); }}>
+      {formError && !uncertain && <div className={common.formError} role="alert"><TriangleAlert size={18} aria-hidden="true" /><p>{formError}</p></div>}
+      <fieldset disabled={!canSettings}>
+        <div><label htmlFor="vmware-host">vCenter sunucusu *</label><Input id="vmware-host" value={draft.host} onChange={event => update('host', event.target.value)} placeholder="vcenter.firma.local veya 10.0.0.10" autoComplete="off" aria-describedby="vmware-host-hint" /><p id="vmware-host-hint" className={styles.hint}>Sunucu adı veya IP adresi. https:// ve /sdk gibi yollar eklemeyin.</p></div>
+        <div><label htmlFor="vmware-username">Kullanıcı adı *</label><Input id="vmware-username" value={draft.username} onChange={event => update('username', event.target.value)} placeholder="envanter@vsphere.local" autoComplete="off" /></div>
+        <div><label htmlFor="vmware-password">{profile?.hasPassword ? 'Yeni parola' : 'Parola *'}</label><Input id="vmware-password" type="password" value={draft.password} onChange={event => update('password', event.target.value)} autoComplete="new-password" aria-describedby="vmware-password-hint" placeholder={profile?.hasPassword ? 'Kayıtlı parolayı korumak için boş bırakın' : 'vCenter hesabının parolası'} /><p id="vmware-password-hint" className={styles.hint}>{profile?.hasPassword ? 'Parola kayıtlı; güvenlik nedeniyle gösterilmez. Sunucu veya kullanıcı değişirse yeniden girin.' : 'Bu profil için kayıtlı parola yok. Test ve ilk kayıt için parola gerekir.'}</p></div>
+        <div className={common.formGrid}><div><label htmlFor="vmware-interval">Senkronizasyon aralığı (dakika) *</label><Input id="vmware-interval" type="number" min="1" max="1440" step="1" value={draft.interval} onChange={event => update('interval', event.target.value)} /><p className={styles.hint}>1–1440 dakika. Alarm ve grafik yenileme aralıkları ayrıdır.</p></div><div className={styles.toggle}><input id="vmware-enabled" type="checkbox" checked={draft.enabled} onChange={event => update('enabled', event.target.checked)} /><div><label htmlFor="vmware-enabled">Otomatik senkronizasyon açık</label><p className={styles.hint}>Kaydedildiğinde zamanlayıcı bu profilin seçili envanter modüllerini işler.</p></div></div></div>
+        <div><h3 className="text-sm font-semibold mb-3">Senkronizasyon kapsamı</h3><div className={styles.modules}>{moduleOptions.map(item => <div className={styles.module} key={item.key}><item.icon size={18} aria-hidden="true" /><div><label htmlFor={`vmware-module-${item.key}`}>{moduleLabels[item.key]}</label><p>{item.help}</p></div><input id={`vmware-module-${item.key}`} type="checkbox" checked={draft.modules[item.key]} onChange={event => update('modules', { ...draft.modules, [item.key]: event.target.checked })} /></div>)}</div><p className={styles.hint}>Bu seçimler envanter aktarımına aittir; canlı ekranlar ve bağlantı testinin veri okuma kapsamını sınırlamaz.</p></div>
+        <details className={common.disclosure}><summary><ShieldCheck size={17} aria-hidden="true" />Gelişmiş bağlantı bilgileri</summary><div className={styles.disclosureBody}><label htmlFor="vmware-thumbprint">Sertifika parmak izi (bilgi amaçlı)</label><Input id="vmware-thumbprint" value={draft.thumbprint} onChange={event => update('thumbprint', event.target.value)} /><p className={styles.hint}>Bu alan saklanır; bu sürümde sertifikayı doğrulamak için kullanılmaz. Sertifika doğrulaması sunucunun TLS güven ayarlarına bağlıdır.</p><p className={styles.hint}>Veri merkezleri seçeneği bu sürümde bağımsız envanter aktarımını değiştirmediği için burada düzenlenmez. Mevcut kayıtlı değer korunur.</p></div></details>
+      </fieldset>
+      {dirty && <div className={common.review}><h3>Kaydedilmemiş değişiklikler</h3><ul className={styles.reviewList}>{changes.map(change => <li key={change}>{change}</li>)}</ul><p className="mt-2">Senkronizasyon için önce kaydedin. Yenileme ve profil değiştirme, değişiklikleri geri aldığınızda açılır.</p></div>}
+      <div className={styles.actions}><Button type="button" variant="outline" disabled={Boolean(busy) || loading || !dirty || uncertain} onClick={() => { setDraft(vmwareDraft(profile)); setFormError(''); if (test?.scope === 'draft') setTest(null); }}><Undo2 size={16} aria-hidden="true" />Değişiklikleri geri al</Button><Button type="submit" disabled={!canSettings || (!dirty && Boolean(profile))}><Save size={16} aria-hidden="true" />{busy === 'save' ? 'Kaydediliyor…' : 'Ayarları kaydet'}</Button></div>
+    </form></section>
+    <aside className={styles.aside}><section className={styles.panel} aria-labelledby="vmware-test-title"><header><span className={common.icon}><Link2 size={20} aria-hidden="true" /></span><div><h2 id="vmware-test-title">Bağlantı testi</h2><p>Kaydetme ve senkronizasyondan bağımsız kontrol.</p></div></header><div className={styles.body}>
+      <div className={styles.testResult}><SemanticBadge tone={test ? test.connected === null ? 'neutral' : test.connected ? 'success' : 'danger' : 'neutral'}>{test ? test.connected === null ? 'Test sonucu alınamadı' : test.connected ? 'Son test başarılı' : 'Son test başarısız' : 'Test sonucu yok'}</SemanticBadge><p>{test ? test.connected ? `${test.host} bağlantısı test sırasında doğrulandı.${test.version ? ` Sürüm: ${test.version}` : ''}` : test.error : 'Ayarların kayıtlı olması bağlantının çalıştığı anlamına gelmez.'}</p>{test && <small>{test.scope === 'saved' ? 'Kayıtlı profil' : 'Formdaki bilgiler'} · {userDate(test.at)} · TSİ. Bu sonuç test anına aittir; sürekli bağlantı izleme durumu değildir.</small>}</div>
+      {busy?.endsWith('test') && <div className={common.info} role="status"><RefreshCw size={18} className="animate-spin" aria-hidden="true" /><p>Kimlik doğrulama ve gerekli VMware veri toplama yolları kontrol ediliyor. Bu işlem biraz sürebilir.</p></div>}
+      <div className={styles.actions}><Button variant="outline" disabled={!canSettings || !savedReady} onClick={() => void run('saved-test')}><ShieldCheck size={16} aria-hidden="true" />Kayıtlı bağlantıyı test et</Button><Button variant="outline" disabled={!canSettings} onClick={() => void run('draft-test')}><Play size={16} aria-hidden="true" />Formdaki bilgilerle test et</Button></div><p className={styles.hint}>Kayıtlı test, sunucuda saklanan parolayı kullanır. Form testi girilen parolayı kullanır ve ayarları kaydetmez. Test vCenter oturumu açar, ESXi ve anlık görüntü verilerini okur; envantere aktarmaz.</p>
+    </div></section>
+    <section className={styles.panel}><header><span className={common.icon}><KeyRound size={20} aria-hidden="true" /></span><div><h2>Kayıtlı profil özeti</h2><p>Formdaki değişikliklerden bağımsızdır.</p></div></header><div className={styles.body}><dl className={styles.meta}><div><dt>Profil</dt><dd>{profile?.name || 'Henüz kaydedilmedi'}</dd></div><div><dt>Otomatik senkronizasyon</dt><dd><SemanticBadge tone={profile ? profile.enabled ? 'info' : 'neutral' : 'neutral'}>{profile ? profile.enabled ? 'Açık' : 'Devre dışı' : 'Kayıt yok'}</SemanticBadge></dd></div><div><dt>Kullanıcı adı</dt><dd>{profile?.username || 'Belirtilmemiş'}</dd></div><div><dt>Parola bilgisi</dt><dd>{profile ? profile.hasPassword ? 'Kayıtlı' : 'Parola yok' : 'Kayıt yok'}</dd></div><div><dt>Son ayar değişikliği · TSİ</dt><dd>{userDate(profile?.updatedAt)}</dd></div></dl></div></section></aside></div>
+    <section className={styles.panel} aria-labelledby="vmware-sync-title"><header><span className={common.icon}><RefreshCw size={20} aria-hidden="true" /></span><div><h2 id="vmware-sync-title">Envanter senkronizasyonu</h2><p>Kayıtlı etkin profil kullanılır. Bu işlem InfraScope envanterine kayıt ekleyebilir ve mevcut kayıtları güncelleyebilir.</p></div></header><div className={styles.body}>
+      {operationError && !uncertain && <div className={common.error} role="alert"><TriangleAlert size={18} aria-hidden="true" /><p>{operationError}</p></div>}
+      <div className={styles.actions}><Button disabled={!canSync || !savedReady || dirty || !profile?.enabled || !activeModules || profile.interval === null} onClick={() => void run('sync')}><RefreshCw size={16} aria-hidden="true" className={busy === 'sync' ? 'animate-spin' : ''} />{busy === 'sync' ? 'Senkronizasyon sürüyor…' : 'Kayıtlı ayarlarla senkronize et'}</Button></div>
+      <p className={styles.hint}>{dirty ? 'Kaydedilmemiş değişiklikler var. Önce kaydedin veya geri alın.' : !profile ? 'Önce vCenter bağlantısını kaydedin.' : !profile.enabled ? 'Bu profil devre dışı. Otomatik senkronizasyonu açıp kaydederek etkinleştirin.' : !activeModules ? 'En az bir envanter modülü seçip kaydedin.' : 'İşlem seçili profilin kayıtlı sunucu, kullanıcı, parola ve modül seçimleriyle çalışır.'}</p>
+      <div className={styles.testResult}><SemanticBadge tone={tone(profile?.lastSyncStatus || null)} icon={FileClock}>{profile?.lastSyncStatus ? `Son kayıtlı deneme: ${syncLabels[profile.lastSyncStatus]}` : 'Senkronizasyon kaydı yok / sonuç bilgisi eksik'}</SemanticBadge><p>{profile?.lastSyncAt ? `Tamamlanma: ${userDate(profile.lastSyncAt)} · TSİ` : 'Bu profil için kayıtlı son senkronizasyon zamanı yok.'}</p><small>Bu bilgi son başarılı işlem anlamına gelmez; kısmi veya başarısız deneme de burada gösterilir. Profilin geçmişi, sonradan değiştirilen bağlantı ayarlarını doğrulamaz.</small></div>
+      {latest ? <><dl className={styles.meta}><div><dt>Son günlük kaydının başlangıcı · TSİ</dt><dd>{userDate(latest.startedAt)}</dd></div><div><dt>Tamamlanma · TSİ</dt><dd>{userDate(latest.completedAt)}</dd></div><div><dt>Günlük sonucu</dt><dd><SemanticBadge tone={tone(latest.status)}>{latest.status ? syncLabels[latest.status] : 'Bilgi yok'}</SemanticBadge></dd></div><div><dt>Süre</dt><dd>{latest.duration === null ? 'Bilgi yok' : `${(latest.duration / 1000).toLocaleString('tr-TR', { maximumFractionDigits: 1 })} saniye`}</dd></div></dl><SyncCounts result={latest} /><p className={styles.hint}>Sayılar son günlükte işlenen kayıtları gösterir; toplam VMware envanteri değildir. Veri depoları “işlenen” sayısına dahildir, eklenen/güncellenen ayrımı tutulmaz.</p></> : <p className={styles.hint}>Ayrıntılı son senkronizasyon günlüğü bulunamadı. Sayılar ve süre uydurulmadan boş bırakılır.</p>}
+      {shownManual && <details className={common.disclosure}><summary><Activity size={17} aria-hidden="true" />Bu oturumdaki manuel işlem sonucu</summary><div className={styles.disclosureBody}><p className={styles.hint}>Yanıt alındı: {userDate(shownManual.at)} · TSİ · {shownManual.result.status ? syncLabels[shownManual.result.status] : 'Bilgi yok'}</p><SyncCounts result={shownManual.result} /></div></details>}
+      <div className={styles.links}><Link href="/virtualization/clusters"><Layers3 size={16} aria-hidden="true" />Kümeler<ArrowRight size={14} aria-hidden="true" /></Link><Link href="/virtualization/hosts"><Server size={16} aria-hidden="true" />ESXi sunucuları<ArrowRight size={14} aria-hidden="true" /></Link><Link href="/virtualization/vms"><SquareStack size={16} aria-hidden="true" />Sanal makineler<ArrowRight size={14} aria-hidden="true" /></Link><Link href="/virtualization/datastores"><Database size={16} aria-hidden="true" />Veri depoları<ArrowRight size={14} aria-hidden="true" /></Link></div>
+    </div></section></>}
+  </div></div>;
 }
+function SyncCounts({ result }: { result: VMwareSync }) { return <dl className={styles.counterGrid}>{[{ label: 'İşlenen kayıt', value: result.processed }, { label: 'Eklenen kayıt', value: result.created }, { label: 'Güncellenen kayıt', value: result.updated }, { label: 'Hata', value: result.errors }].map(item => <div key={item.label}><dt>{item.label}</dt><dd>{display(item.value)}</dd></div>)}</dl>; }

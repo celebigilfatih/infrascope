@@ -44,10 +44,8 @@ const nextConfig = {
         headers: [{ key: 'Cache-Control', value: 'public, s-maxage=30, stale-while-revalidate=120' }],
       },
       // Dashboard API caching — reduce load on integrations
-      {
-        source: '/api/integrations/vmware',
-        headers: [{ key: 'Cache-Control', value: 'public, s-maxage=60, stale-while-revalidate=300' }],
-      },
+      // VMware responses are authenticated and control their own cache policy.
+      // Inventory freshness is handled by the source-scoped server cache.
       {
         source: '/api/integrations/fortigate',
         headers: [{ key: 'Cache-Control', value: 'public, s-maxage=30, stale-while-revalidate=120' }],

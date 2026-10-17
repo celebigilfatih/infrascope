@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- CommonJS regression harness with synchronous VM dependency adapters. */
 // Actual VMware/cache/route code with deterministic time and synthetic I/O.
 const assert = require('node:assert/strict');
 const { NextRequest, NextResponse } = require('next/server');
@@ -76,6 +77,7 @@ function routeFixture(realService = false) {
         if (state.saveFail) throw new Error('Synthetic save failure');
         state.config = structuredClone(update.config);
         state.enabled = true;
+        return { id: 'fixture-config', config: structuredClone(state.config) };
       },
     } } },
     '@/lib/integrations/vmware': realService ? undefined : { VMwareService: Service },

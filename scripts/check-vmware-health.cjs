@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- CommonJS regression harness with synchronous VM dependency adapters. */
 // Real health route, saved-source resolution and VMware REST client; synthetic ORM/transport only.
 const assert = require('node:assert/strict');
 const { NextRequest, NextResponse } = require('next/server');
@@ -20,8 +21,8 @@ function fixture() {
     integrationConfig: { findMany: async ({ where }) => structuredClone(state.records.filter(r => r.type === where.type && r.enabled && (!where.id || r.id === where.id))),
       findFirst: async ({ where, orderBy }) => {
       state.queries.push({ where, orderBy });
-      if (state.dbGate) await state.dbGate;
-      if (state.dbError) throw new Error('Synthetic storage failure containing synthetic-password');
+      if (state.dbGate && where.type === 'VMWARE_VCENTER') await state.dbGate;
+      if (state.dbError && where.type === 'VMWARE_VCENTER') throw new Error('Synthetic storage failure containing synthetic-password');
       return structuredClone(state.records.filter(r => r.type === where.type && (where.enabled === undefined || r.enabled === where.enabled))
         .sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id))[0] || null);
     } },
@@ -131,7 +132,7 @@ test('selection is deterministic and skips an older disabled profile', async f =
   f.state.records = [record('saved-z'), record('saved-a'), { ...record('disabled'), enabled: false, createdAt: new Date('2025-01-01') }];
   const status = await f.health(); assert.equal(status.datasources.vmware.target.configId, 'saved-a');
   assert.ok(f.state.calls.every(c => c.host === 'saved-a.invalid'));
-  assert.deepEqual(JSON.parse(JSON.stringify(f.state.queries[0].orderBy)), [{ createdAt: 'asc' }, { id: 'asc' }]);
+  assert.deepEqual(JSON.parse(JSON.stringify(f.state.queries.find(query => query.where.type === 'VMWARE_VCENTER').orderBy)), [{ createdAt: 'asc' }, { id: 'asc' }]);
 });
 test('health and the operational API use the same saved target and no ENV credentials', async f => {
   f.state.env.VMWARE_HOST = 'old.invalid'; await f.health(); const status = await f.apiStatus();
@@ -253,7 +254,12 @@ test('a configured source with no prior sync retains explicit null metadata', as
 async function main() {
   let failed = 0;
   for (const [name, fn] of tests) {
-    try { await fn(fixture()); console.log(`PASS ${name}`); }
+    try {
+      let timer;
+      try { await Promise.race([fn(fixture()), new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Health fixture did not settle within five seconds')), 5000); })]); }
+      finally { clearTimeout(timer); }
+      console.log(`PASS ${name}`);
+    }
     catch (error) { failed++; console.error(`FAIL ${name}\n${error.stack}`); }
   }
   assert.equal(failed, 0, `${failed} VMware health regressions failed`);

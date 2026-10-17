@@ -24,6 +24,11 @@ npx eslint app/settings/organizations/page.tsx app/settings/organizations/worksp
 npm run test:organizations-workspace
 npx eslint app/settings/license/page.tsx lib/license/workspace.ts app/api/license/status/route.ts scripts/check-license-workspace.cjs tests/incident-e2e/license-workspace.spec.ts --max-warnings=0
 npm run test:license-workspace
+npx eslint app/integrations/vmware/page.tsx lib/integrations/vmware-settings.ts lib/integrations/vmware-workspace.ts app/api/integrations/vmware/route.ts scripts/check-vmware-workspace.cjs scripts/check-vmware-cache.cjs scripts/check-vmware-health.cjs scripts/check-integration-permissions.cjs tests/incident-e2e/vmware-settings-workspace.spec.ts --max-warnings=0
+npm run test:vmware-workspace
+npm run test:vmware-cache
+npm run test:vmware-health
+npm run test:integration-permissions
 npm run test:ui-turkish
 npx eslint app/settings/alerts/page.tsx components/alarms/*.tsx lib/alarms/rule-workspace.ts lib/validators/alarms.ts app/api/alarms/definitions/route.ts app/api/alarms/notification/route.ts scripts/check-rule-workspace.cjs tests/incident-e2e/rule-workspace.spec.ts tests/incident-e2e/fixtures.ts --max-warnings=0
 npm run test:rule-workspace

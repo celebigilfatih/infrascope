@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- CommonJS regression harness with synchronous VM dependency adapters. */
 // Exercise real authorization boundaries with fake session/identity and external I/O.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -227,8 +228,12 @@ test('UI collection uses POST and VMware sync no longer requires a settings writ
   const capacity = fs.readFileSync('app/analytics/capacity/page.tsx', 'utf8');
   assert.doesNotMatch(capacity, /vmware\?type=collect-metrics/); assert.match(capacity, /action: 'collect-metrics'/);
   const page = fs.readFileSync('app/integrations/vmware/page.tsx', 'utf8');
-  const sync = page.slice(page.indexOf('const runSync'), page.indexOf('const runSync') + 1500);
+  const start = page.indexOf("} else if (action === 'sync')");
+  assert.ok(start >= 0, 'The manual sync branch must exist');
+  const sync = page.slice(start, page.indexOf('} else {', start));
   assert.doesNotMatch(sync, /action: 'save-config'/); assert.match(sync, /action: 'sync'/);
+  const transport = fs.readFileSync('lib/integrations/vmware-workspace.ts', 'utf8');
+  assert.match(transport, /method: body \? 'POST' : 'GET'/);
 });
 (async () => {
   for (const [name, fn] of tests) { await fn(); console.log(`PASS ${name}`); }
