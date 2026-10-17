@@ -1,487 +1,87 @@
 'use client';
 
-import { uiError, uiLabel } from '@/lib/i18n/tr';
-
-import { PageHeading, PageStateFrame } from '@/components/ui/page-heading';
-import React, { useState, useEffect, useCallback } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { BadgeCheck, CalendarClock, Check, ChevronDown, Clock3, Gauge, Info, KeyRound, Layers, RefreshCw, Server, ShieldCheck, TriangleAlert, UsersRound, X } from 'lucide-react';
+import { PageHeading } from '@/components/ui/page-heading';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Progress } from '@/components/ui/progress';
-import {
-  RefreshCw,
-  Key,
-  CheckCircle2,
-  XCircle,
-  AlertTriangle,
-  Clock,
-  Server,
-  Users,
-  Calendar,
-  Shield,
-  Cpu,
-  Info,
-} from 'lucide-react';
+import { SemanticBadge } from '@/components/ui/semantic-badge';
+import { licenseCapacity, licenseDate, licenseStatus, planFeatures, remainingDays, requestLicenseSnapshot, tierLabels, type LicenseSnapshot } from '@/lib/license/workspace';
+import type { LicenseTier } from '@/lib/license/features';
+import styles from './page.module.css';
 
-interface LicenseInfo {
-  valid: boolean;
-  tier: 'TRIAL' | 'STANDARD' | 'ENTERPRISE';
-  maxDevices: number;
-  maxUsers: number;
-  daysRemaining: number;
-  graceMode: boolean;
-  validUntil: string;
-  lastValidated?: string;
-  licenseKey?: string;
-  machineId?: string;
-  error?: string;
-  warnings?: string[];
+const tiers: LicenseTier[] = ['TRIAL', 'STANDARD', 'ENTERPRISE'];
+const number = (value: number | null | undefined) => value === null || value === undefined ? '—' : value.toLocaleString('tr-TR');
+
+function CapacityCard({ title, used, limit, kind }: { title: string; used: number | null; limit: number | null; kind: 'devices' | 'users' }) {
+  const state = licenseCapacity(used, limit), Icon = kind === 'devices' ? Server : UsersRound;
+  const percentage = state.percent === null ? null : new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 1 }).format(state.percent);
+  return <article className={styles.capacity}>
+    <div className={styles.capacityHeader}><h3><span className={styles.icon}><Icon size={19} aria-hidden="true" /></span>{title}</h3><SemanticBadge tone={state.tone}>{state.label}</SemanticBadge></div>
+    <div className={styles.capacityValues}><p><strong>{number(used)}</strong><span> / {number(limit)}</span></p><span>{percentage === null ? 'Oran hesaplanamıyor' : `%${percentage} dolu`}</span></div>
+    <div className={styles.track} role={state.bar === null ? undefined : 'progressbar'} aria-label={`${title} kapasite kullanımı`} aria-valuemin={state.bar === null ? undefined : 0} aria-valuemax={state.bar === null ? undefined : 100} aria-valuenow={state.bar ?? undefined} aria-valuetext={state.bar === null ? undefined : `${number(used)} / ${number(limit)}; yüzde ${percentage}. ${state.detail}`}>
+      {state.bar !== null && <span className={styles[state.tone]} style={{ width: `${state.bar}%` }} />}
+    </div>
+    <div className={styles.capacityLabels}><span>Kullanılan / lisans limiti</span><span>{state.detail}</span></div>
+    <p className={styles.capacityNote}>{kind === 'devices' ? 'Envanterdeki tüm cihaz kayıtları sayılır; yalnızca izlenen cihazlarla sınırlı değildir.' : 'Kayıtlı tüm kullanıcılar sayılır; yalnızca aktif oturumlar veya etkin hesaplarla sınırlı değildir.'}</p>
+  </article>;
 }
-
-interface UsageStats {
-  deviceCount: number;
-  userCount: number;
-}
-
-const FEATURE_MATRIX = {
-  TRIAL: {
-    label: "Deneme",
-    color: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400',
-    features: {
-      'Dashboard': true,
-      'Device Management': true,
-      'Basic Monitoring': true,
-      'VMware Integration': false,
-      'Fortinet Integration': false,
-      'Advanced Reports': false,
-      'External API': false,
-      'SLA Monitoring': false,
-    },
-  },
-  STANDARD: {
-    label: "Standart",
-    color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
-    features: {
-      'Dashboard': true,
-      'Device Management': true,
-      'Basic Monitoring': true,
-      'VMware Integration': true,
-      'Fortinet Integration': true,
-      'Advanced Reports': false,
-      'External API': false,
-      'SLA Monitoring': true,
-    },
-  },
-  ENTERPRISE: {
-    label: "Kurumsal",
-    color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400',
-    features: {
-      'Dashboard': true,
-      'Device Management': true,
-      'Basic Monitoring': true,
-      'VMware Integration': true,
-      'Fortinet Integration': true,
-      'Advanced Reports': true,
-      'External API': true,
-      'SLA Monitoring': true,
-    },
-  },
-};
 
 export default function LicensePage() {
-  const [license, setLicense] = useState<LicenseInfo | null>(null);
-  const [usage, setUsage] = useState<UsageStats>({ deviceCount: 0, userCount: 0 });
-  const [loading, setLoading] = useState(true);
-  const [licenseKey, setLicenseKey] = useState('');
-  const [activating, setActivating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-
-  const fetchLicense = useCallback(async () => {
-    setLoading(true);
+  const [snapshot, setSnapshot] = useState<LicenseSnapshot | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState('');
+  const [readAt, setReadAt] = useState<number | null>(null), [now, setNow] = useState(Date.now());
+  const sequence = useRef(0), active = useRef<AbortController | null>(null);
+  const load = useCallback(async () => {
+    const id = ++sequence.current; active.current?.abort(); const controller = new AbortController(); active.current = controller;
+    setLoading(true); setError('');
     try {
-      const response = await fetch('/api/license/status');
-      const data = await response.json();
-      setLicense(data.license);
-      setUsage(data.usage || { deviceCount: 0, userCount: 0 });
-    } catch (err) {
-      console.error('Failed to fetch license:', err);
-      setError(uiError("Lisans bilgileri yüklenemedi."));
-    } finally {
-      setLoading(false);
-    }
+      const result = await requestLicenseSnapshot(controller.signal);
+      if (id !== sequence.current || controller.signal.aborted) return;
+      setSnapshot(result); setReadAt(Date.now()); setNow(Date.now());
+    } catch (failure) {
+      if (id === sequence.current && !controller.signal.aborted) setError(failure instanceof Error ? failure.message : 'Lisans bilgileri alınamadı.');
+    } finally { if (id === sequence.current && !controller.signal.aborted) setLoading(false); }
   }, []);
-
-  useEffect(() => {
-    fetchLicense();
-  }, [fetchLicense]);
-
-  const handleActivate = async () => {
-    if (!licenseKey.trim()) {
-      setError(uiError("Lütfen lisans anahtarını girin."));
-      return;
-    }
-
-    setActivating(true);
-    setError(null);
-    setSuccess(null);
-
-    try {
-      const response = await fetch('/api/license/activate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ licenseKey: licenseKey.trim() }),
-      });
-      const data = await response.json();
-
-      if (data.success) {
-        setSuccess('License activated successfully!');
-        setLicenseKey('');
-        await fetchLicense();
-      } else {
-        setError(uiError(data.error || 'Failed to activate license'));
-      }
-    } catch (err) {
-      console.error('Activation error:', err);
-      setError(uiError("Lisans etkinleştirilemedi. Lütfen yeniden deneyin."));
-    } finally {
-      setActivating(false);
-    }
-  };
-
-  const handleValidate = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch('/api/license/validate', { method: 'POST' });
-      const data = await response.json();
-      if (data.success) {
-        setSuccess('License validated successfully!');
-        await fetchLicense();
-      } else {
-        setError(uiError(data.error || 'Validation failed'));
-      }
-    } catch {
-      setError(uiError("Lisans doğrulanamadı."));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const getTierBadge = (tier: string) => {
-    const tierInfo = FEATURE_MATRIX[tier as keyof typeof FEATURE_MATRIX];
-    if (!tierInfo) return <Badge variant="outline">{tier}</Badge>;
-    return <Badge className={tierInfo.color}>{tierInfo.label}</Badge>;
-  };
-
-  const getStatusBadge = () => {
-    if (!license) return null;
-    if (!license.valid) {
-      return (
-        <Badge variant="destructive">
-          <XCircle className="h-3 w-3 mr-1" />
-          Geçersiz
-        </Badge>
-      );
-    }
-    if (license.graceMode) {
-      return (
-        <Badge variant="warning">
-          <AlertTriangle className="h-3 w-3 mr-1" />
-          Ek Süre
-        </Badge>
-      );
-    }
-    if (license.daysRemaining <= 30) {
-      return (
-        <Badge variant="warning">
-          <Clock className="h-3 w-3 mr-1" />
-          Yakında Sona Erecek
-        </Badge>
-      );
-    }
-    return (
-      <Badge variant="success">
-        <CheckCircle2 className="h-3 w-3 mr-1" />
-        Aktif
-      </Badge>
-    );
-  };
-
-  if (loading && !license) {
-    return <PageStateFrame section="license" title="Lisans Yönetimi">{(
-      <div className="p-6">
-        <div className="flex items-center justify-center h-64">
-          <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
-      </div>
-    )}</PageStateFrame>;
-  }
-
-  return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-4">
-        <div>
-          <PageHeading section="license" description={<>InfraScope lisansınızı ve aboneliğinizi yönetin</>}>
-
-            Lisans Yönetimi
-          </PageHeading>
-        </div>
-        <Button variant="outline" size="icon" onClick={fetchLicense} disabled={loading} aria-label="Yenile">
-          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-        </Button>
-      </div>
-
-      {/* Error/Success Messages */}
-      {error && (
-        <div className="p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
-          <div className="flex items-center gap-2 text-red-700 dark:text-red-400">
-            <XCircle className="h-5 w-5" />
-            <span>{uiError(error)}</span>
-          </div>
-        </div>
-      )}
-      {success && (
-        <div className="p-4 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
-          <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
-            <CheckCircle2 className="h-5 w-5" />
-            <span>{success}</span>
-          </div>
-        </div>
-      )}
-
-      {/* License Status Card */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <Shield className="h-5 w-5" />
-                Lisans Durumu
-              </CardTitle>
-              <CardDescription>Mevcut abonelik bilgileri</CardDescription>
-            </div>
-            <div className="flex items-center gap-2">
-              {getStatusBadge()}
-              {license && getTierBadge(license.tier)}
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {/* License Details Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground flex items-center gap-1.5">
-                <Calendar className="h-3.5 w-3.5" />
-                Geçerlilik Tarihi
-              </p>
-              <p className="font-medium">
-                {license?.validUntil
-                  ? new Date(license.validUntil).toLocaleDateString('tr-TR')
-                  : '—'}
-              </p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground flex items-center gap-1.5">
-                <Clock className="h-3.5 w-3.5" />
-                Kalan Gün
-              </p>
-              <p className="font-medium">
-                {license?.daysRemaining !== undefined ? (
-                  <span className={license.daysRemaining <= 30 ? 'text-orange-600' : ''}>
-                    {license.daysRemaining} gün
-                  </span>
-                ) : (
-                  '—'
-                )}
-              </p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground flex items-center gap-1.5">
-                <Server className="h-3.5 w-3.5" />
-                Cihaz Limiti
-              </p>
-              <p className="font-medium">{license?.maxDevices || 0}</p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground flex items-center gap-1.5">
-                <Users className="h-3.5 w-3.5" />
-                Kullanıcı Limiti
-              </p>
-              <p className="font-medium">{license?.maxUsers || 0}</p>
-            </div>
-          </div>
-
-          {/* Usage Progress */}
-          {license && (
-            <div className="space-y-4 pt-4 border-t">
-              <h4 className="text-sm font-medium">Mevcut Kullanım</h4>
-              <div className="space-y-3">
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Cihazlar</span>
-                    <span className="font-medium">
-                      {usage.deviceCount} / {license.maxDevices}
-                    </span>
-                  </div>
-                  <Progress
-                    value={license.maxDevices > 0 ? (usage.deviceCount / license.maxDevices) * 100 : 0}
-                    className={
-                      usage.deviceCount / license.maxDevices > 0.9
-                        ? '[&>div]:bg-orange-500'
-                        : ''
-                    }
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Kullanıcılar</span>
-                    <span className="font-medium">
-                      {usage.userCount} / {license.maxUsers}
-                    </span>
-                  </div>
-                  <Progress
-                    value={license.maxUsers > 0 ? (usage.userCount / license.maxUsers) * 100 : 0}
-                    className={
-                      usage.userCount / license.maxUsers > 0.9 ? '[&>div]:bg-orange-500' : ''
-                    }
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Warnings */}
-          {license?.warnings && license.warnings.length > 0 && (
-            <div className="pt-4 border-t">
-              <h4 className="text-sm font-medium mb-2 flex items-center gap-1.5">
-                <AlertTriangle className="h-4 w-4 text-yellow-500" />
-                Uyarılar
-              </h4>
-              <ul className="space-y-1">
-                {license.warnings.map((warning, idx) => (
-                  <li key={idx} className="text-sm text-yellow-700 dark:text-yellow-400">
-                    {warning}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {/* Technical Details */}
-          {license?.licenseKey && (
-            <div className="pt-4 border-t">
-              <h4 className="text-sm font-medium mb-2 flex items-center gap-1.5">
-                <Info className="h-4 w-4 text-muted-foreground" />
-                Teknik Detaylar
-              </h4>
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <span className="text-muted-foreground">Lisans Anahtarı:</span>{' '}
-                  <code className="bg-muted px-1.5 py-0.5 rounded">{license.licenseKey}</code>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Makine Kimliği:</span>{' '}
-                  <code className="bg-muted px-1.5 py-0.5 rounded">
-                    {license.machineId?.slice(0, 12)}...
-                  </code>
-                </div>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Activate License Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Key className="h-5 w-5" />
-            Lisansı Etkinleştir
-          </CardTitle>
-          <CardDescription>
-            Aboneliğinizi etkinleştirmek veya yükseltmek için lisans anahtarınızı girin
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-3">
-            <div className="flex-1">
-              <Label htmlFor="license-key" className="sr-only">
-                Lisans Anahtarı
-              </Label>
-              <Input
-                id="license-key"
-                placeholder="IS-2026-XXXX-XXXX"
-                value={licenseKey}
-                onChange={(e) => setLicenseKey(e.target.value.toUpperCase())}
-                disabled={activating}
-              />
-            </div>
-            <Button onClick={handleActivate} disabled={activating || !licenseKey.trim()}>
-              {activating ? (
-                <>
-                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                  Etkinleştiriliyor…
-                </>
-              ) : (
-                "Etkinleştir"
-              )}
-            </Button>
-            <Button variant="outline" onClick={handleValidate} disabled={loading}>
-              Doğrula
-            </Button>
-          </div>
-          <p className="text-xs text-muted-foreground mt-2">
-            Lisans anahtarı için sales@infrascope.com adresiyle iletişime geçin
-          </p>
-        </CardContent>
-      </Card>
-
-      {/* Feature Matrix Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Cpu className="h-5 w-5" />
-            Özellik Karşılaştırması
-          </CardTitle>
-          <CardDescription>Her lisans planında kullanılabilen özellikler</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-left py-3 px-4 text-sm font-medium">Özellik</th>
-                  {Object.entries(FEATURE_MATRIX).map(([tier, info]) => (
-                    <th key={tier} className="text-center py-3 px-4 text-sm font-medium">
-                      <span className="inline-block">{info.label}</span>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {Object.keys(FEATURE_MATRIX.TRIAL.features).map((feature) => (
-                  <tr key={feature} className="border-b last:border-b-0 hover:bg-muted/50">
-                    <td className="py-3 px-4 text-sm">{uiLabel(feature)}</td>
-                    {Object.entries(FEATURE_MATRIX).map(([tier, info]) => (
-                      <td key={tier} className="py-3 px-4 text-center">
-                        {info.features[feature as keyof typeof info.features] ? (
-                          <CheckCircle2 className="h-4 w-4 text-green-500 mx-auto" />
-                        ) : (
-                          <XCircle className="h-4 w-4 text-gray-300 dark:text-gray-600 mx-auto" />
-                        )}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+  useEffect(() => { void load(); const timer = setInterval(() => setNow(Date.now()), 60000); return () => { clearInterval(timer); sequence.current += 1; active.current?.abort(); }; }, [load]);
+  const license = snapshot?.license ?? null;
+  const effectiveNow = snapshot?.observedAt && readAt ? Date.parse(snapshot.observedAt) + Math.max(0, now - readAt) : now;
+  const state = licenseStatus(license, effectiveNow), days = license ? remainingDays(license, effectiveNow) : null;
+  const currentTier = license?.tier;
+  const expiryPassed = Boolean(license?.validUntil && Date.parse(license.validUntil) <= effectiveNow);
+  return <div className={styles.page}><div className={styles.workspace}>
+    <header className={styles.header}>
+      <PageHeading section="license" description="Lisans durumunu, geçerlilik süresini ve kayıt kapasitenizi takip edin.">Lisans Yönetimi</PageHeading>
+      <Button variant="outline" onClick={() => void load()} disabled={loading}><RefreshCw size={16} aria-hidden="true" className={loading ? 'animate-spin' : ''} />{loading ? 'Yükleniyor…' : 'Bilgileri yenile'}</Button>
+    </header>
+    <div className={styles.serviceBar}><SemanticBadge tone={error ? 'warning' : 'info'} icon={Clock3}>{error ? snapshot ? 'Önceki bilgiler gösteriliyor' : 'Bilgi alınamadı' : loading ? 'Bilgiler alınıyor' : 'Uygulamanın bildirdiği durum'}</SemanticBadge><span>{readAt ? `Son okuma: ${licenseDate(new Date(readAt).toISOString())} · TSİ` : 'Henüz başarılı okuma yok'}</span></div>
+    {error && <div role="alert" className={styles.error}><TriangleAlert size={19} aria-hidden="true" /><div><strong>{error}</strong>{snapshot && <p>Aşağıdaki bilgiler son başarılı okumaya aittir. Güncel durum doğrulanamadı.</p>}</div></div>}
+    <div aria-live="polite" className="sr-only">{loading ? 'Lisans bilgileri yükleniyor.' : error || 'Lisans bilgileri güncellendi.'}</div>
+    <div aria-busy={loading} className={styles.content}>
+      <section aria-label="Lisans özeti" className={styles.stats}>
+        <article className={styles.stat}><div><h2>Lisans durumu</h2><span className={styles.icon}><ShieldCheck size={18} aria-hidden="true" /></span></div><div className={styles.statValue}><SemanticBadge tone={state.tone}>{state.label}</SemanticBadge></div><p>{license?.graceMode ? 'Doğrulama bilgilerini kontrol edin' : 'Uygulamanın bildirdiği geçerlilik'}</p></article>
+        <article className={styles.stat}><div><h2>Lisans planı</h2><span className={styles.icon}><Layers size={18} aria-hidden="true" /></span></div><strong>{currentTier ? tierLabels[currentTier] : 'Bilgi yok'}</strong><p>{license?.hasKey ? 'Lisans anahtarı tanımlı' : license?.hasKey === false ? 'Tanımlı anahtar bilgisi yok' : 'Anahtar bilgisi alınamadı'}</p></article>
+        <article className={styles.stat}><div><h2>Geçerlilik sonu</h2><span className={styles.icon}><CalendarClock size={18} aria-hidden="true" /></span></div><strong>{licenseDate(license?.validUntil ?? null, false)}</strong><p>{license?.validUntil ? `${licenseDate(license.validUntil).split(' ').slice(-1).join(' ')} · Türkiye saati` : 'Bitiş tarihi bildirilmedi'}</p></article>
+        <article className={styles.stat}><div><h2>Kalan lisans süresi</h2><span className={styles.icon}><Clock3 size={18} aria-hidden="true" /></span></div><strong>{days === null ? 'Bilgi yok' : expiryPassed ? 'Süre doldu' : `${number(days)} gün`}</strong><p>{days === null ? 'Geçerlilik tarihi gerekli' : 'Bitiş tarihinden hesaplanır'}</p></article>
+      </section>
+      {license && <div className={`${styles.statusNote} ${styles[state.tone]}`}><Info size={18} aria-hidden="true" /><p>{state.description}</p></div>}
+      <section className={styles.panel} aria-labelledby="capacity-title">
+        <div className={styles.sectionHeader}><span className={styles.icon}><Gauge size={20} aria-hidden="true" /></span><div><h2 id="capacity-title">Kapasite kullanımı</h2><p>Kullanılan kayıt, lisans limiti ve kalan kapasite</p></div></div>
+        <div className={styles.capacities}><CapacityCard title="Cihaz kapasitesi" kind="devices" used={snapshot?.usage.deviceCount ?? null} limit={license?.maxDevices ?? null} /><CapacityCard title="Kullanıcı kapasitesi" kind="users" used={snapshot?.usage.userCount ?? null} limit={license?.maxUsers ?? null} /></div>
+        <p className={styles.panelFoot}>Eksik bilgi sıfır kabul edilmez. Limit 0 ise yüzde hesaplanmaz; aşım varsa ayrıca belirtilir.</p>
+      </section>
+      <section className={styles.panel} aria-labelledby="validation-title">
+        <div className={styles.sectionHeader}><span className={styles.icon}><BadgeCheck size={20} aria-hidden="true" /></span><div><h2 id="validation-title">Doğrulama bilgileri</h2><p>Lisans bilgisi ile sayfanın yenilenme zamanı farklıdır</p></div></div>
+        <dl className={styles.details}>
+          <div><dt>{license?.tier === 'TRIAL' && license.hasKey === false ? 'Yerel deneme durum zamanı' : 'Son başarılı lisans doğrulaması'}</dt><dd>{licenseDate(license?.lastValidated ?? null)}{license?.lastValidated && <small>Türkiye saati (TSİ)</small>}</dd></div>
+          <div><dt>Doğrulama yöntemi</dt><dd>{!license || license.graceMode === null ? 'Bilgi yok' : license.graceMode ? 'Önbellekteki lisans bilgisi' : license.tier === 'TRIAL' && license.hasKey === false ? 'Yerel deneme modu' : 'Kaydedilmiş doğrulama sonucu'}<small>Bilgileri yenile, uygulamanın mevcut durumunu okur.</small></dd></div>
+        </dl>
+        <details className={styles.technical}><summary><KeyRound size={16} aria-hidden="true" />Lisans ve kurulum kimliği<ChevronDown size={16} aria-hidden="true" /></summary><dl className={styles.details}><div><dt>Maskelenmiş lisans anahtarı</dt><dd><code>{license?.maskedKey || (license?.hasKey === false ? 'Tanımlı anahtar bilgisi yok' : 'Anahtar bilgisi alınamadı')}</code></dd></div><div><dt>Kurulum kimliği</dt><dd><code>{license?.machineId || 'Bilgi yok'}</code></dd></div></dl></details>
+      </section>
     </div>
-  );
+    <details className={styles.panel}>
+      <summary className={styles.planSummary}><span className={styles.icon}><Layers size={19} aria-hidden="true" /></span><span>Plan kapsamını karşılaştır<span className={styles.planSubtitle}>Deneme, Standart ve Kurumsal plan hakları</span></span><ChevronDown size={18} aria-hidden="true" /></summary>
+      <div className={styles.planNote}><Info size={17} aria-hidden="true" /><p>Tablo plan haklarını gösterir. Özelliğin bu sürümde bulunduğunu, yapılandırıldığını veya etkin olduğunu doğrulamaz.</p></div>
+      <div className={styles.tableWrap}><table className={styles.table}><caption className="sr-only">Lisans planlarının özellik kapsamı</caption><thead><tr><th scope="col">Özellik</th>{tiers.map(tier => <th key={tier} scope="col" className={tier === currentTier ? styles.current : undefined}>{tierLabels[tier]}{tier === currentTier && <span>Mevcut plan</span>}</th>)}</tr></thead><tbody>{planFeatures.map(feature => <tr key={feature.code}><th scope="row">{feature.label}</th>{tiers.map(tier => <td key={tier} className={tier === currentTier ? styles.current : undefined}>{feature.tiers[tier] ? <Check size={17} aria-hidden="true" className={styles.included} /> : <X size={16} aria-hidden="true" className={styles.excluded} />}<span className="sr-only">{feature.tiers[tier] ? 'Plan kapsamında' : 'Plan kapsamında değil'}</span></td>)}</tr>)}</tbody></table></div>
+    </details>
+    <section className={styles.changeNote} aria-labelledby="license-change-title"><span className={styles.icon}><KeyRound size={19} aria-hidden="true" /></span><div><h2 id="license-change-title">Lisans yenileme veya değiştirme</h2><p>Bu ekrandan lisans anahtarı etkinleştirme desteklenmiyor. Lisans yenileme ve plan değişikliği için kurulumunuzu yöneten kişiyle iletişime geçin.</p></div></section>
+  </div></div>;
 }
