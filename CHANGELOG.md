@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+- **API-key capability boundary** — Replace fabricated application keys, dates and usage times with explicit unavailable/unknown states. Disable creation with an associated explanation, remove unsupported refresh/copy/revoke actions and distinguish integration credentials from application keys. Add responsive light/dark presentation and a native keyboard-accessible information guide; no key store, authentication or lifecycle backend is introduced.
+
 - **Audit inspection and export** — Add a responsive read-only audit workspace with explicit applied filters, actor search, immutable detail inspection and stale/error states. Share validated Istanbul calendar-day filters and deterministic timestamp/id ordering between pagination and bounded UTF-8 CSV exports, retaining formula escaping and signalling truncation. Recheck the current ACTIVE administrator before list/export access, reject malformed rows and preserve scalar JSON details including false/zero. Add isolated database/browser and synthetic-I/O coverage without reading customer audit data.
 
 - **Alarm rule management** — Add searchable, responsive rule inspection with source-specific condition descriptions and explicit state/cooldown/email edits. Preserve drafts after failed or unverified saves, distinguish stale reads and saved email-channel state, keep masked SMTP credentials and require confirmation before test mail. Validate definition patches and recheck the current ACTIVE database identity before definition/channel reads, writes or test delivery; render the channel API dynamically. Add isolated browser and synthetic-I/O regressions without contacting customer devices or SMTP recipients.

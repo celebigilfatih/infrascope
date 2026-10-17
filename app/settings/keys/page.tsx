@@ -1,82 +1,66 @@
-'use client';
-
+import { BookOpen, ChevronDown, Clock3, Info, KeyRound, Plus, ShieldCheck, Unplug } from 'lucide-react';
 import { PageHeading } from '@/components/ui/page-heading';
-import React, { useState } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
+import { SemanticBadge } from '@/components/ui/semantic-badge';
 import { Button } from '@/components/ui/button';
-import { RefreshCw, Plus, Key, Copy, Trash2 } from 'lucide-react';
+import styles from './page.module.css';
 
-interface ApiKey {
-  id: string;
-  name: string;
-  key: string;
-  createdAt: string;
-  lastUsed: string;
-}
-
+// This installation has no application API-key store, authentication or usage log.
+// Integration credentials belong to their respective integration settings.
 export default function KeysPage() {
-  const [keys] = useState<ApiKey[]>([
-    { 
-      id: '1', 
-      name: 'Üretim API Anahtarı',
-      key: 'sk_live_...7f8a9b', 
-      createdAt: '2024-01-15',
-      lastUsed: '2 saat önce'
-    },
-    { 
-      id: '2', 
-      name: 'Geliştirme Anahtarı',
-      key: 'sk_dev_...3c4d5e', 
-      createdAt: '2024-01-10',
-      lastUsed: '1 gün önce'
-    },
-  ]);
+  return <div className={styles.page}>
+    <div className={styles.workspace}>
+      <header className={styles.header}>
+        <PageHeading section="keys" description="Uygulama API anahtarlarının durumu, erişim yetkileri ve kullanım bilgileri.">API Anahtarları</PageHeading>
+        <Button disabled aria-describedby="key-availability"><Plus size={16} aria-hidden="true" className="mr-2" />Yeni anahtar</Button>
+      </header>
 
-  return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-4">
-        <div>
-          <PageHeading section="keys" description={<>API erişim anahtarları yönetimi</>}>API Anahtarları</PageHeading>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" aria-label="Yenile">
-            <RefreshCw className="h-4 w-4" />
-          </Button>
-          <Button>
-            <Plus className="h-4 w-4 mr-2" />
-            Yeni Anahtar
-          </Button>
-        </div>
+      <div className={styles.availability}>
+        <SemanticBadge tone="neutral" icon={Unplug}>Henüz kullanılamıyor</SemanticBadge>
+        <p id="key-availability">Bu sürümde API anahtarı oluşturma ve yönetme desteği bulunmuyor.</p>
       </div>
 
-      <div className="grid grid-cols-1 gap-4">
-        {keys.map((apiKey) => (
-          <Card key={apiKey.id}>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Key className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <p className="font-medium">{apiKey.name}</p>
-                    <p className="text-sm text-muted-foreground">{apiKey.key}</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Oluşturulma: {apiKey.createdAt} | Son kullanım: {apiKey.lastUsed}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button variant="ghost" size="icon" aria-label="Kopyala">
-                    <Copy className="h-4 w-4" />
-                  </Button>
-                  <Button variant="ghost" size="icon" className="text-destructive" aria-label="Sil">
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <section aria-label="API anahtarlarına genel bakış" className={styles.stats}>
+        <article className={styles.stat}>
+          <div><h2>Anahtar durumu</h2><span className={styles.icon}><KeyRound size={18} aria-hidden="true" /></span></div>
+          <p className={styles.value}>Bilinmiyor</p>
+          <p>Etkin, süresi dolmuş veya iptal edilmiş anahtar bilgisi alınamıyor.</p>
+        </article>
+        <article className={styles.stat}>
+          <div><h2>Erişim yetkileri</h2><span className={styles.icon}><ShieldCheck size={18} aria-hidden="true" /></span></div>
+          <p className={styles.value}>Tanımlanamıyor</p>
+          <p>Anahtar bazında okuma ve yazma yetkileri bu sürümde yönetilemiyor.</p>
+        </article>
+        <article className={styles.stat}>
+          <div><h2>Son kullanım</h2><span className={styles.icon}><Clock3 size={18} aria-hidden="true" /></span></div>
+          <p className={styles.value}>Veri yok</p>
+          <p>Kullanım kaydı bulunmaması, bir anahtarın hiç kullanılmadığı anlamına gelmez.</p>
+        </article>
+      </section>
+
+      <section aria-labelledby="key-list-title" className={styles.collection}>
+        <div className={styles.sectionHeader}>
+          <span className={styles.icon}><KeyRound size={20} aria-hidden="true" /></span>
+          <div><h2 id="key-list-title">Anahtar kayıtları</h2><p>Durum, yetkiler ve kullanım bilgileri</p></div>
+        </div>
+        <div className={styles.empty}>
+          <span className={styles.emptyIcon}><Unplug size={28} aria-hidden="true" /></span>
+          <h3>Anahtar yönetimi henüz kullanıma açık değil</h3>
+          <p>Anahtar listesi ve kullanım geçmişi bu sürümde sunulmuyor. Bu nedenle anahtar oluşturma, kopyalama ve iptal etme işlemleri kullanılamıyor.</p>
+        </div>
+        <div className={styles.note}><Info size={17} aria-hidden="true" /><p>Entegrasyonlarda kullandığınız erişim anahtarlarını ilgili entegrasyonun ayarlarından yönetebilirsiniz.</p></div>
+      </section>
+
+      <details className={styles.guide}>
+        <summary><span className={styles.icon}><BookOpen size={18} aria-hidden="true" /></span><span>Durum, yetki ve kullanım bilgileri ne anlama gelir?</span><ChevronDown size={18} aria-hidden="true" className={styles.chevron} /></summary>
+        <div className={styles.guideBody}>
+          <p className={styles.guideIntro}>Aşağıdaki açıklamalar bilgi amaçlıdır; mevcut anahtar veya atanmış yetki göstermez.</p>
+          <dl>
+            <div><dt><KeyRound size={16} aria-hidden="true" />Anahtar durumu</dt><dd>Etkinlik, son geçerlilik tarihi ve iptal bilgisi birlikte değerlendirilir. Durumu bilinmeyen bir anahtar etkin kabul edilmez.</dd></div>
+            <div><dt><ShieldCheck size={16} aria-hidden="true" />Erişim yetkileri</dt><dd>Yetki kapsamı, hangi kaynakların okunabildiğini ve hangi işlemlerin yapılabildiğini belirtir. Okuma izni, yazma veya silme izni anlamına gelmez.</dd></div>
+            <div><dt><Clock3 size={16} aria-hidden="true" />Son kullanım</dt><dd>Kaydedilmiş son kullanımın tarih ve saatidir. Veri yoksa kullanım zamanı ve kullanım sıklığı hakkında çıkarım yapılamaz.</dd></div>
+          </dl>
+        </div>
+      </details>
     </div>
-  );
+  </div>;
 }
