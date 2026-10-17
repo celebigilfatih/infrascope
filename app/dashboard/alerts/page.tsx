@@ -367,7 +367,7 @@ export default function AlertsDashboardPage() {
   const [archiveFilter, setArchiveFilter] = useState<IncidentArchiveFilter>('HOT');
   const [statusStats, setStatusStats] = useState<Record<string, number>>({});
   const [fetchError, setFetchError] = useState<string | null>(null);
-  const [message, setMessage] = useState<{ text: string; type: 'success' | 'error'; incidentId?: string; authStatus?: 401 | 403; authAction?: 'ADD_NOTE' | 'ASSIGN' | 'RESOLVE' | 'CLOSE' | 'ARCHIVE' | 'RESTORE' | 'SET_LEGAL_HOLD' | 'RELEASE_LEGAL_HOLD' } | null>(null);
+  const [message, setMessage] = useState<{ text: string; type: 'success' | 'error'; incidentId?: string; authStatus?: 401 | 403; authAction?: 'ACKNOWLEDGE' | 'UNACKNOWLEDGE' | 'ADD_NOTE' | 'ASSIGN' | 'RESOLVE' | 'CLOSE' | 'ARCHIVE' | 'RESTORE' | 'SET_LEGAL_HOLD' | 'RELEASE_LEGAL_HOLD' } | null>(null);
   const [rawLogExpanded, setRawLogExpanded] = useState(false);
   const [nmsPipeline, setNmsPipeline] = useState<NmsPipelineHealth | null>(null);
 
@@ -717,9 +717,13 @@ export default function AlertsDashboardPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids: [incidentId], action, ...payload }),
       });
-      if ((action === 'ADD_NOTE' || action === 'ASSIGN' || action === 'RESOLVE' || action === 'CLOSE' || action === 'ARCHIVE' || action === 'RESTORE' || action === 'SET_LEGAL_HOLD' || action === 'RELEASE_LEGAL_HOLD') && (res.status === 401 || res.status === 403)) {
+      if ((action === 'ACKNOWLEDGE' || action === 'UNACKNOWLEDGE' || action === 'ADD_NOTE' || action === 'ASSIGN' || action === 'RESOLVE' || action === 'CLOSE' || action === 'ARCHIVE' || action === 'RESTORE' || action === 'SET_LEGAL_HOLD' || action === 'RELEASE_LEGAL_HOLD') && (res.status === 401 || res.status === 403)) {
         let text: string;
-        if (action === 'SET_LEGAL_HOLD' || action === 'RELEASE_LEGAL_HOLD') {
+        if (action === 'ACKNOWLEDGE' || action === 'UNACKNOWLEDGE') {
+          text = res.status === 401
+            ? 'Oturumunuzun süresi doldu veya oturumunuz geçersiz. Tekrar giriş yapın. Onay durumu ve taslaklarınız bu pencerede korunuyor.'
+            : action === 'ACKNOWLEDGE' ? 'Bu olayı onaylama yetkiniz yok. Onay durumu değiştirilmedi.' : 'Bu olayın onayını geri alma yetkiniz yok. Onay durumu değiştirilmedi.';
+        } else if (action === 'SET_LEGAL_HOLD' || action === 'RELEASE_LEGAL_HOLD') {
           text = res.status === 401
             ? 'Oturumunuzun süresi doldu veya oturumunuz geçersiz. Tekrar giriş yapın. Saklama koruması ve taslaklarınız bu pencerede korunuyor.'
             : action === 'SET_LEGAL_HOLD' ? 'Bu olayda saklama korumasını etkinleştirme yetkiniz yok. Koruma durumu değiştirilmedi.' : 'Bu olayda saklama korumasını kaldırma yetkiniz yok. Koruma durumu değiştirilmedi.';

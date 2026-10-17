@@ -179,7 +179,7 @@ for (const { action, operation, group, targetStatus, transitionType, submitLabel
       await page.getByRole('button', { name: row.title, exact: true }).click(); expect(await (await people).json()).toMatchObject({ canManage: false });
       const detail = page.getByRole('dialog'); const operations = detail.getByRole('region', { name: 'Durum işlemleri', exact: true });
       const submit = operations.getByRole('button', { name: submitLabel, exact: true });
-      await expect(submit).toBeDisabled(); await expect(operations).toContainText('Çözme ve kapatma için yönetici veya editör yetkisi gerekiyor.');
+      await expect(submit).toBeDisabled(); await expect(operations).toContainText('Onaylama, çözme ve kapatma için yönetici veya editör yetkisi gerekiyor.');
       await submit.click({ force: true }); expect(requests).toBe(0);
       const denied = await page.request.patch('/api/alarm-incidents', { data: { ids: [row.id], action } });
       expect(denied.status()).toBe(403); expect(await denied.json()).not.toHaveProperty('data');

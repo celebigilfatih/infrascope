@@ -281,6 +281,17 @@ async function main() {
       } });
       const readAcknowledgement = () => tx.alarmIncident.findUniqueOrThrow({ where: { id: ackOnly.id }, include: { transitions: { orderBy: { id: 'asc' } }, occurrences: { orderBy: { id: 'asc' } } } });
       const beforeAcknowledgement = await readAcknowledgement();
+      const readAcknowledgementAudits = () => tx.auditLog.findMany({ where: { entityId: ackOnly.id }, orderBy: { id: 'asc' } });
+      const beforeAcknowledgementAudits = await readAcknowledgementAudits();
+      for (const role of ['VIEWER', null]) {
+        auth = role ? { role, actor: { type: 'USER', id: users.viewer.id, name: users.viewer.name } } : null;
+        for (let attempt = 0; attempt < 2; attempt++) {
+          const denied = await patch({ ids: [ackOnly.id], action: 'ACKNOWLEDGE', actorName: 'Untrusted' });
+          assert.equal(denied.status, role ? 403 : 401); assert(!Object.hasOwn(await denied.json(), 'data'));
+          assert.deepEqual(await readAcknowledgement(), beforeAcknowledgement, 'Unauthorized acknowledgement preserves incident, occurrence approval and all history');
+          assert.deepEqual(await readAcknowledgementAudits(), beforeAcknowledgementAudits, 'Unauthorized acknowledgement cannot add audit');
+        }
+      }
       auth = { role: 'EDITOR', actor: { type: 'USER', id: users.editor.id, name: users.editor.name } };
       assert.equal((await patch({ ids: [ackOnly.id], action: 'ACKNOWLEDGE', reason: 'First acknowledgement reason' })).status, 200);
       const acknowledged = await readAcknowledgement();
@@ -309,6 +320,15 @@ async function main() {
       assert.equal((await patch({ ids: terminalIds, action: 'ACKNOWLEDGE' })).status, 200);
       assert.deepEqual(await tx.alarmIncident.findMany({ where: { id: { in: terminalIds } }, orderBy: { id: 'asc' }, include: { transitions: { orderBy: { id: 'asc' } }, occurrences: { orderBy: { id: 'asc' } } } }), terminalRows, 'Acknowledging RESOLVED/CLOSED incidents remains a no-op');
       assert.deepEqual(await tx.auditLog.findMany({ where: { entityId: { in: terminalIds } }, orderBy: { id: 'asc' } }), terminalAudits);
+      for (const role of ['VIEWER', null]) {
+        auth = role ? { role, actor: { type: 'USER', id: users.viewer.id, name: users.viewer.name } } : null;
+        for (let attempt = 0; attempt < 2; attempt++) {
+          const denied = await patch({ ids: [ackOnly.id], action: 'UNACKNOWLEDGE', actorName: 'Untrusted' });
+          assert.equal(denied.status, role ? 403 : 401); assert(!Object.hasOwn(await denied.json(), 'data'));
+          assert.deepEqual(await readAcknowledgement(), acknowledged, 'Unauthorized withdrawal preserves original acknowledgement actor/time, occurrence approval and history');
+          assert.deepEqual(await readAcknowledgementAudits(), acknowledgementAudits, 'Unauthorized withdrawal cannot add audit');
+        }
+      }
       auth = { role: 'EDITOR', actor: { type: 'USER', id: users.editor.id, name: users.editor.name } };
       assert.equal((await patch({ ids: [ackOnly.id], action: 'UNACKNOWLEDGE', reason: 'First withdrawal reason' })).status, 200);
       const withdrawn = await readAcknowledgement();
