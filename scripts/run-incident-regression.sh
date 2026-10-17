@@ -16,6 +16,8 @@ npx eslint app/dashboard/alerts/page.tsx components/dashboard/IncidentDetailWork
 npm run type-check -- --incremental false
 npx eslint app/settings/audit/page.tsx components/audit/*.tsx lib/audit/*.ts app/api/audit/route.ts app/api/audit/export/route.ts scripts/check-audit-workspace.cjs tests/incident-e2e/audit-workspace.spec.ts --max-warnings=0
 npm run test:audit-workspace
+npx eslint app/settings/users/page.tsx components/users/*.tsx lib/users/*.ts app/api/users/route.ts app/api/users/activities/route.ts app/api/users/password/route.ts scripts/check-users-workspace.cjs tests/incident-e2e/users-workspace.spec.ts --max-warnings=0
+npm run test:users-workspace
 npm run test:ui-turkish
 npx eslint app/settings/alerts/page.tsx components/alarms/*.tsx lib/alarms/rule-workspace.ts lib/validators/alarms.ts app/api/alarms/definitions/route.ts app/api/alarms/notification/route.ts scripts/check-rule-workspace.cjs tests/incident-e2e/rule-workspace.spec.ts tests/incident-e2e/fixtures.ts --max-warnings=0
 npm run test:rule-workspace

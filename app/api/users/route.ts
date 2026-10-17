@@ -1,4 +1,5 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
+import { authorizeApiRequest } from '@/lib/auth/api-permission';
 import { UserRole, UserStatus } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logAudit } from '@/lib/audit/logger';
@@ -7,10 +8,15 @@ import { createUserSchema, updateUserSchema } from '@/lib/validators/users';
 import { checkUserLimit } from '@/lib/license/middleware';
 import { hashPassword, validatePasswordStrength } from '@/lib/auth/password';
 
-export async function GET() {
+export const dynamic = 'force-dynamic';
+
+export async function GET(request: NextRequest) {
   try {
+    const permission = await authorizeApiRequest(request, 'users', 'read');
+    if (!permission.allowed) return permission.response;
     const users = await prisma.user.findMany({
       orderBy: { createdAt: 'desc' },
+      select: { id: true, name: true, email: true, role: true, status: true, lastLoginAt: true, createdAt: true },
     });
 
     const formattedUsers = users.map((user) => ({
@@ -20,6 +26,8 @@ export async function GET() {
       role: user.role.toLowerCase(),
       status: user.status.toLowerCase(),
       lastLogin: user.lastLoginAt ? formatTimeAgo(user.lastLoginAt) : 'Henüz giriş yapılmadı',
+      lastLoginAt: user.lastLoginAt?.toISOString() ?? null,
+      createdAt: user.createdAt.toISOString(),
     }));
 
     // Calculate stats
@@ -34,12 +42,12 @@ export async function GET() {
       success: true,
       data: formattedUsers,
       stats,
-    });
+    }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     console.error('Error fetching users:', error);
     return NextResponse.json(
-      { success: false, error: (error as Error).message, data: [] },
-      { status: 500 }
+      { success: false, error: 'Kullanıcı bilgileri alınamadı.' },
+      { status: 500, headers: { 'Cache-Control': 'private, no-store' } }
     );
   }
 }
@@ -58,8 +66,10 @@ function formatTimeAgo(date: Date): string {
   return new Date(date).toLocaleDateString('tr-TR');
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const permission = await authorizeApiRequest(request, 'users', 'write');
+    if (!permission.allowed) return permission.response;
     const currentUserCount = await prisma.user.count();
     const licenseError = await checkUserLimit(currentUserCount);
     if (licenseError) return licenseError;
@@ -121,7 +131,7 @@ export async function POST(request: Request) {
 
     // Audit log
     await logAudit({
-      userId: user.id,
+      userId: permission.auth.actor.id,
       action: 'user.create',
       resource: 'user',
       resourceId: user.id,
@@ -141,14 +151,16 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('Error creating user:', error);
     return NextResponse.json(
-      { success: false, error: (error as Error).message },
+      { success: false, error: 'Kullanıcı işlemi tamamlanamadı.' },
       { status: 500 }
     );
   }
 }
 
-export async function PATCH(request: Request) {
+export async function PATCH(request: NextRequest) {
   try {
+    const permission = await authorizeApiRequest(request, 'users', 'write');
+    if (!permission.allowed) return permission.response;
     const rawBody = await request.json();
     const parsed = validateBody(rawBody, updateUserSchema);
     if (!parsed.success) {
@@ -181,7 +193,7 @@ export async function PATCH(request: Request) {
 
     // Audit log
     await logAudit({
-      userId: user.id,
+      userId: permission.auth.actor.id,
       action: 'user.update',
       resource: 'user',
       resourceId: user.id,
@@ -201,14 +213,16 @@ export async function PATCH(request: Request) {
   } catch (error) {
     console.error('Error updating user:', error);
     return NextResponse.json(
-      { success: false, error: (error as Error).message },
+      { success: false, error: 'Kullanıcı işlemi tamamlanamadı.' },
       { status: 500 }
     );
   }
 }
 
-export async function DELETE(request: Request) {
+export async function DELETE(request: NextRequest) {
   try {
+    const permission = await authorizeApiRequest(request, 'users', 'delete');
+    if (!permission.allowed) return permission.response;
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 
@@ -246,20 +260,20 @@ export async function DELETE(request: Request) {
       where: { id },
     });
 
-    // Audit log — userId is null since user is deleted
-    // Audit log — userId is null since the user is being deleted
+    // Preserve the acting identity separately from the deleted target.
     await logAudit({
+      userId: user.id === permission.auth.actor.id ? undefined : permission.auth.actor.id,
       action: 'user.delete',
       resource: 'user',
       resourceId: id,
-      details: { name: user.name, email: user.email, role: user.role },
+      details: { name: user.name, email: user.email, role: user.role, actorId: permission.auth.actor.id },
     });
 
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error deleting user:', error);
     return NextResponse.json(
-      { success: false, error: (error as Error).message },
+      { success: false, error: 'Kullanıcı işlemi tamamlanamadı.' },
       { status: 500 }
     );
   }

@@ -1,4 +1,5 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
+import { authorizeApiRequest } from '@/lib/auth/api-permission';
 import { prisma } from '@/lib/prisma';
 import { verifyPassword, hashPassword, validatePasswordStrength } from '@/lib/auth/password';
 import { logAudit } from '@/lib/audit/logger';
@@ -11,8 +12,12 @@ import { changePasswordSchema } from '@/lib/validators/users';
  * If the user has no password set (invited but not yet verified),
  * the currentPassword field is still required but not verified.
  */
-export async function PATCH(request: Request) {
+export const dynamic = 'force-dynamic';
+
+export async function PATCH(request: NextRequest) {
   try {
+    const permission = await authorizeApiRequest(request, 'users', 'write');
+    if (!permission.allowed) return permission.response;
     const rawBody = await request.json();
     const parsed = validateBody(rawBody, changePasswordSchema);
     if (!parsed.success) {
@@ -84,7 +89,7 @@ export async function PATCH(request: Request) {
 
     // Audit log
     await logAudit({
-      userId,
+      userId: permission.auth.actor.id,
       action: user.password ? 'user.password_change' : 'user.password_set',
       resource: 'user',
       resourceId: userId,
@@ -94,7 +99,7 @@ export async function PATCH(request: Request) {
   } catch (error) {
     console.error('Error changing password:', error);
     return NextResponse.json(
-      { success: false, error: (error as Error).message },
+      { success: false, error: 'Parola değiştirilemedi.' },
       { status: 500 }
     );
   }

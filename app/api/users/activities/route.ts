@@ -1,11 +1,19 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
+import { authorizeApiRequest } from '@/lib/auth/api-permission';
 import { prisma } from '@/lib/prisma';
 
-export async function GET(request: Request) {
+export const dynamic = 'force-dynamic';
+
+export async function GET(request: NextRequest) {
   try {
+    const permission = await authorizeApiRequest(request, 'users', 'read');
+    if (!permission.allowed) return permission.response;
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
-    const limit = parseInt(searchParams.get('limit') || '5');
+    const limit = Number(searchParams.get('limit') || '5');
+    if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+      return NextResponse.json({ success: false, error: 'Kayıt sınırı 1–100 arasında bir tam sayı olmalıdır.' }, { status: 400 });
+    }
 
     if (!userId) {
       return NextResponse.json(
@@ -25,13 +33,14 @@ export async function GET(request: Request) {
       action: a.action,
       details: a.details,
       createdAt: formatTimeAgo(a.createdAt),
+      occurredAt: a.createdAt.toISOString(),
     }));
 
-    return NextResponse.json({ success: true, data: formatted });
+    return NextResponse.json({ success: true, data: formatted }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     console.error('Error fetching user activities:', error);
     return NextResponse.json(
-      { success: false, error: (error as Error).message },
+      { success: false, error: 'Hesap kayıtları alınamadı.' },
       { status: 500 }
     );
   }
