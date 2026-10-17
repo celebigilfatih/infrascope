@@ -20,6 +20,8 @@ npx eslint app/settings/users/page.tsx components/users/*.tsx lib/users/*.ts app
 npm run test:users-workspace
 npx eslint app/settings/users/invitations/page.tsx components/invitations/*.tsx lib/invitations/*.ts app/api/users/invite/route.ts 'app/api/users/invite/[id]/resend/route.ts' app/api/users/verify/route.ts app/verify/page.tsx lib/email/sendInvitation.ts lib/rate-limit.ts middleware.ts scripts/check-invitations-workspace.cjs tests/incident-e2e/invitations-workspace.spec.ts --max-warnings=0
 npm run test:invitations-workspace
+npx eslint app/settings/organizations/page.tsx app/settings/organizations/workspace-dialog.tsx lib/organizations/*.ts app/api/organizations/route.ts 'app/api/organizations/[id]/route.ts' scripts/check-organizations-workspace.cjs tests/incident-e2e/organizations-workspace.spec.ts --max-warnings=0
+npm run test:organizations-workspace
 npm run test:ui-turkish
 npx eslint app/settings/alerts/page.tsx components/alarms/*.tsx lib/alarms/rule-workspace.ts lib/validators/alarms.ts app/api/alarms/definitions/route.ts app/api/alarms/notification/route.ts scripts/check-rule-workspace.cjs tests/incident-e2e/rule-workspace.spec.ts tests/incident-e2e/fixtures.ts --max-warnings=0
 npm run test:rule-workspace

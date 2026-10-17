@@ -1,416 +1,53 @@
 'use client';
-
-import { uiLabel } from '@/lib/i18n/tr';
-
-import { ActionIcon } from '@/components/ui/action-icon';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import { Building2, CheckCircle2, Clock3, DoorOpen, Eye, Hash, Info, MapPin, Pencil, Plus, RefreshCw, Search, Server, Trash2, TriangleAlert, X } from 'lucide-react';
 import { PageHeading } from '@/components/ui/page-heading';
-import React, { useState, useEffect, useCallback } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
+import { SemanticBadge } from '@/components/ui/semantic-badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { RefreshCw, Plus, Building2, Users, Edit, Trash2, Eye } from 'lucide-react';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { useToast } from '@/components/ui/use-toast';
-import { apiGet, apiPost, apiPut, apiDelete } from '@/lib/api';
-
-interface Organization {
-  id: string;
-  name: string;
-  description: string;
-  userCount?: number;
-  status: 'active' | 'inactive';
-  createdAt: string;
-  contactEmail?: string;
-  address?: string;
-  code?: string;
-}
+import { parseActor, requestUsersJson, userDate, userSearch, type WorkspaceActor } from '@/lib/users/workspace';
+import { canAccessSync } from '@/lib/auth/permission-policy';
+import { locationTotals, parseOrganizations, requestOrganizations, uncertainOrganization, type OrganizationRow } from '@/lib/organizations/workspace';
+import { OrganizationDialog, Capacity, displayCount, type OrganizationMode } from './workspace-dialog';
+import common from '@/components/users/users-workspace.module.css';
+import styles from './page.module.css';
 
 export default function OrganizationsPage() {
-  const { toast } = useToast();
-  const [orgs, setOrgs] = useState<Organization[]>([]);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [selectedOrg, setSelectedOrg] = useState<Organization | null>(null);
-  const [formData, setFormData] = useState<{
-    name: string;
-    description: string;
-    contactEmail: string;
-    address: string;
-    status: 'active' | 'inactive';
-    code: string;
-  }>({
-    name: '',
-    description: '',
-    contactEmail: '',
-    address: '',
-    status: 'active',
-    code: '',
-  });
-  const [searchTerm, setSearchTerm] = useState('');
-
-  // Fetch organizations from API
-  const fetchOrganizations = useCallback(async () => {
-    try {
-      const response = await apiGet('/api/organizations');
-      if (response.success && response.data) {
-        // Transform Prisma data to our interface
-        const transformedOrgs = response.data.map((org: Organization & { _count?: { users?: number } }) => ({
-          id: org.id,
-          name: org.name,
-          description: org.description || '',
-          userCount: org._count?.users || org.userCount || 0,
-          status: org.status || 'active',
-          createdAt: org.createdAt ? new Date(org.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-          contactEmail: org.contactEmail || '',
-          address: org.address || '',
-          code: org.code || '',
-        }));
-        setOrgs(transformedOrgs);
-      }
-    } catch (error) {
-      console.error('Error fetching organizations:', error);
-      toast({ title: 'Hata', description: 'Organizasyonlar yüklenemedi', variant: 'destructive' });
-    }
-  }, [toast]);
-
-  useEffect(() => {
-    fetchOrganizations();
-  }, [fetchOrganizations]);
-
-  const filteredOrgs = orgs.filter(org =>
-    org.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    org.description.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const openAddModal = () => {
-    setSelectedOrg(null);
-    setFormData({ name: '', description: '', contactEmail: '', address: '', status: 'active', code: '' });
-    setIsModalOpen(true);
-  };
-
-  const openEditModal = (org: Organization) => {
-    setSelectedOrg(org);
-    setFormData({
-      name: org.name,
-      description: org.description || '',
-      contactEmail: org.contactEmail || '',
-      address: org.address || '',
-      status: org.status,
-      code: org.code || '',
-    });
-    setIsModalOpen(true);
-  };
-
-  const openViewModal = (org: Organization) => {
-    setSelectedOrg(org);
-    setIsViewModalOpen(true);
-  };
-
-  const openDeleteModal = (org: Organization) => {
-    setSelectedOrg(org);
-    setIsDeleteModalOpen(true);
-  };
-
-  const handleSave = async () => {
-    if (!formData.name.trim()) {
-      toast({ title: 'Hata', description: 'Organizasyon adı zorunludur', variant: 'destructive' });
-      return;
-    }
-
-    if (selectedOrg) {
-      // Edit existing - call API
-      const response = await apiPut(`/api/organizations/${selectedOrg.id}`, {
-        name: formData.name,
-        description: formData.description,
-        status: formData.status,
-        contactEmail: formData.contactEmail,
-        address: formData.address,
-      });
-      
-      if (response.success) {
-        toast({ title: 'Başarılı', description: `${formData.name} organizasyonu güncellendi`, variant: 'default' });
-        fetchOrganizations(); // Refresh from API
-      } else {
-        toast({ title: 'Hata', description: response.error || 'Güncelleme başarısız', variant: 'destructive' });
-      }
-    } else {
-      // Add new - call API
-      const response = await apiPost('/api/organizations', {
-        name: formData.name,
-        code: formData.code || formData.name.substring(0, 10).toUpperCase().replace(/\s/g, ''),
-        description: formData.description,
-        status: formData.status,
-        contactEmail: formData.contactEmail,
-        address: formData.address,
-      });
-      
-      if (response.success) {
-        toast({ title: 'Başarılı', description: `${formData.name} organizasyonu oluşturuldu`, variant: 'default' });
-        fetchOrganizations(); // Refresh from API
-      } else {
-        toast({ title: 'Hata', description: response.error || 'Oluşturma başarısız', variant: 'destructive' });
-      }
-    }
-    setIsModalOpen(false);
-  };
-
-  const handleDelete = async () => {
-    if (selectedOrg) {
-      const response = await apiDelete(`/api/organizations/${selectedOrg.id}`);
-      
-      if (response.success) {
-        toast({ title: 'Başarılı', description: `${selectedOrg.name} organizasyonu silindi`, variant: 'default' });
-        fetchOrganizations(); // Refresh from API
-      } else {
-        toast({ title: 'Hata', description: response.error || 'Silme başarısız', variant: 'destructive' });
-      }
-    }
-    setIsDeleteModalOpen(false);
-  };
-
-  const handleStatusToggle = async (org: Organization) => {
-    const newStatus = org.status === 'active' ? 'inactive' : 'active';
-    
-    // Call API to update status
-    const response = await apiPut(`/api/organizations/${org.id}`, {
-      status: newStatus,
-    });
-    
-    if (response.success) {
-      toast({ title: 'Başarılı', description: `${org.name} durumu ${newStatus} olarak güncellendi`, variant: 'default' });
-      fetchOrganizations(); // Refresh from API
-    } else {
-      toast({ title: 'Hata', description: response.error || 'Durum güncelleme başarısız', variant: 'destructive' });
-    }
-  };
-
-  return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-4">
-        <div>
-          <PageHeading section="organizations" description={<>Organizasyon yönetimi</>}>Organizasyonlar</PageHeading>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={() => {
-            setOrgs(orgs);
-            toast({ title: 'Yenilendi', description: 'Organizasyon listesi yenilendi', variant: 'default' });
-          }} aria-label="Yenile">
-            <RefreshCw className="h-4 w-4" />
-          </Button>
-          <Button onClick={openAddModal}>
-            <Plus className="h-4 w-4 mr-2" />
-            Yeni Organizasyon
-          </Button>
-        </div>
-      </div>
-
-      <div className="relative max-w-md">
-        <Input 
-          placeholder="Organizasyon ara..." 
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-9"
-        />
-      </div>
-
-      <div className="grid grid-cols-1 gap-4">
-        {filteredOrgs.length === 0 ? (
-          <Card>
-            <CardContent className="p-6 text-center text-muted-foreground">
-              Organizasyon bulunamadı
-            </CardContent>
-          </Card>
-        ) : (
-          filteredOrgs.map((org) => (
-            <Card key={org.id} className="hover:shadow-md transition-shadow">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Building2 className="h-5 w-5 text-muted-foreground" />
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium">{org.name}</p>
-                        <Badge 
-                          variant={org.status === 'active' ? 'success' : 'secondary'}
-                          className="cursor-pointer"
-                          onClick={() => handleStatusToggle(org)}
-                        >
-                          {uiLabel(org.status)}
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-muted-foreground">{org.description}</p>
-                      <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
-                        <div className="flex items-center gap-1">
-                          <Users className="h-3 w-3" />
-                          {org.userCount} kullanıcı
-                        </div>
-                        <span>•</span>
-                        <span>{org.createdAt}</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="icon" onClick={() => openViewModal(org)} title="Görüntüle" aria-label="Görüntüle">
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={() => openEditModal(org)} title="Düzenle" aria-label="Düzenle">
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={() => openDeleteModal(org)} title="Sil" className="text-red-500 hover:text-red-600 hover:bg-red-50" aria-label="Sil">
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))
-        )}
-      </div>
-
-      {/* Add/Edit Modal */}
-      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>{selectedOrg ? 'Organizasyon Düzenle' : 'Yeni Organizasyon'}</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="name">Organizasyon Adı *</Label>
-              <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="Organizasyon adını girin"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="description">Açıklama</Label>
-              <Input
-                id="description"
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder="Kısa açıklama girin"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="email">İletişim E-posta</Label>
-              <Input
-                id="email"
-                type="email"
-                value={formData.contactEmail}
-                onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })}
-                placeholder="email@organizasyon.com"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="address">Adres</Label>
-              <Input
-                id="address"
-                value={formData.address}
-                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                placeholder="Organizasyon adresi"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label>Durum</Label>
-              <div className="flex gap-2">
-                <Button
-                  variant={formData.status === 'active' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setFormData({ ...formData, status: 'active' })}
-                >
-                  Aktif
-                </Button>
-                <Button
-                  variant={formData.status === 'inactive' ? 'destructive' : 'outline'}
-                  size="sm"
-                  onClick={() => setFormData({ ...formData, status: 'inactive' })}
-                >
-                  Pasif
-                </Button>
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsModalOpen(false)}>İptal</Button>
-            <Button onClick={handleSave}>{selectedOrg ? 'Güncelle' : 'Oluştur'}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* View Modal */}
-      <Dialog open={isViewModalOpen} onOpenChange={setIsViewModalOpen}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Building2 className="h-5 w-5" />
-              {selectedOrg?.name}
-            </DialogTitle>
-          </DialogHeader>
-          {selectedOrg && (
-            <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-3 gap-4 py-2">
-                <span className="text-sm text-muted-foreground">Durum:</span>
-                <Badge variant={selectedOrg.status === 'active' ? 'success' : 'secondary'} className="col-span-2 w-fit">
-                  {uiLabel(selectedOrg.status)}
-                </Badge>
-              </div>
-              <div className="grid grid-cols-3 gap-4 py-2">
-                <span className="text-sm text-muted-foreground">Açıklama:</span>
-                <span className="col-span-2">{selectedOrg.description}</span>
-              </div>
-              <div className="grid grid-cols-3 gap-4 py-2">
-                <span className="text-sm text-muted-foreground">Kullanıcı Sayısı:</span>
-                <span className="col-span-2">{selectedOrg.userCount}</span>
-              </div>
-              <div className="grid grid-cols-3 gap-4 py-2">
-                <span className="text-sm text-muted-foreground">E-posta:</span>
-                <span className="col-span-2">{selectedOrg.contactEmail || '-'}</span>
-              </div>
-              <div className="grid grid-cols-3 gap-4 py-2">
-                <span className="text-sm text-muted-foreground">Adres:</span>
-                <span className="col-span-2">{selectedOrg.address || '-'}</span>
-              </div>
-              <div className="grid grid-cols-3 gap-4 py-2">
-                <span className="text-sm text-muted-foreground">Oluşturulma:</span>
-                <span className="col-span-2">{selectedOrg.createdAt}</span>
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsViewModalOpen(false)}><ActionIcon action="cancel" />Kapat</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Confirmation Modal */}
-      <Dialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
-        <DialogContent className="sm:max-w-[400px]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-red-500">
-              <Trash2 className="h-5 w-5" />
-              Organizasyon Sil
-            </DialogTitle>
-          </DialogHeader>
-          <div className="py-4">
-            <p>{selectedOrg?.name} organizasyonunu silmek istediğinizden emin misiniz?</p>
-            <p className="text-sm text-muted-foreground mt-2">Bu işlem geri alınamaz ve organizasyona bağlı tüm veriler silinecektir.</p>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDeleteModalOpen(false)}>İptal</Button>
-            <Button variant="destructive" onClick={handleDelete}><ActionIcon action="delete" />Sil</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
+  const [rows, setRows] = useState<OrganizationRow[] | null>(null), [actor, setActor] = useState<WorkspaceActor | null>(null), [loading, setLoading] = useState(true), [errors, setErrors] = useState<string[]>([]), [readAt, setReadAt] = useState<string | null>(null);
+  const [search, setSearch] = useState(''), [locationFilter, setLocationFilter] = useState('all'), [mode, setMode] = useState<OrganizationMode | null>(null), [selected, setSelected] = useState<OrganizationRow | null>(null);
+  const [busy, setBusy] = useState(false), [uncertain, setUncertain] = useState(false), [notice, setNotice] = useState('');
+  const sequence = useRef(0), active = useRef<AbortController | null>(null);
+  const load = useCallback(async () => {
+    const id = ++sequence.current; active.current?.abort(); const controller = new AbortController(); active.current = controller; setLoading(true);
+    const results = await Promise.allSettled([requestOrganizations('/api/organizations?fresh=1', { signal: controller.signal }).then(parseOrganizations), requestUsersJson('/api/auth/me', 'İşlem yetkisi doğrulanamadı.', { signal: controller.signal }).then(parseActor)]);
+    if (id !== sequence.current || controller.signal.aborted) return;
+    const nextErrors: string[] = [];
+    if (results[0].status === 'fulfilled') { setRows(results[0].value); setReadAt(new Date().toISOString()); setUncertain(false); } else nextErrors.push(results[0].reason instanceof Error ? results[0].reason.message : 'Organizasyon listesi alınamadı.');
+    if (results[1].status === 'fulfilled') setActor(results[1].value); else { setActor(null); nextErrors.push('İşlem yetkisi doğrulanamadı. Salt okunur görünüm kullanılıyor.'); }
+    setErrors(nextErrors); setLoading(false);
+  }, []);
+  useEffect(() => { void load(); return () => { active.current?.abort(); }; }, [load]);
+  const writable = Boolean(actor && canAccessSync(actor.role, 'organizations', 'write') && !loading && !errors.length && rows && !uncertain);
+  const deletable = writable && Boolean(actor && canAccessSync(actor.role, 'organizations', 'delete'));
+  const term = userSearch(search.trim()), filtered = (rows || []).filter(row => (!term || userSearch(`${row.name} ${row.code} ${row.description} ${(row.buildings || []).map(building => `${building.name} ${building.city}`).join(' ')}`).includes(term)) && (locationFilter === 'all' || (locationFilter === 'linked' ? Boolean(row.buildings?.length) : locationFilter === 'empty' ? row.buildings?.length === 0 : row.buildings === null)));
+  const clear = () => { setSearch(''); setLocationFilter('all'); }, hasFilters = Boolean(search || locationFilter !== 'all');
+  const sum = (key: 'buildings' | 'rooms' | 'racks') => !rows || rows.some(row => locationTotals(row)[key] === null) ? null : rows.reduce((total, row) => total + locationTotals(row)[key]!, 0);
+  const stats = [{ label: 'Organizasyon', value: rows?.length ?? null, icon: Building2, help: 'Tüm kayıtlı organizasyonlar' }, { label: 'Bağlı bina', value: sum('buildings'), icon: MapPin, help: 'Organizasyonlara atanmış binalar' }, { label: 'Oda', value: sum('rooms'), icon: DoorOpen, help: 'Bina ve katlar içindeki odalar' }, { label: 'Kabinet', value: sum('racks'), icon: Server, help: 'Odalara yerleştirilmiş kabinetler' }];
+  const open = (next: OrganizationMode, row: OrganizationRow | null = null) => { setSelected(row); setMode(next); };
+  return <div className={common.page}><div className={common.workspace}>
+    <header className={common.header}><PageHeading section="organizations" description="Organizasyon bilgilerini ve bağlı fiziksel konumları tek yerden inceleyin.">Organizasyonlar</PageHeading><div className={common.headerActions}><Button variant="outline" asChild><Link href="/locations"><MapPin size={16} aria-hidden="true" />Konum yönetimi</Link></Button><Button variant="outline" disabled={loading || busy || mode !== null} onClick={() => void load()}><RefreshCw size={16} aria-hidden="true" className={loading ? 'animate-spin' : ''} />{loading ? 'Yükleniyor…' : 'Bilgileri yenile'}</Button><Button disabled={!writable || busy} onClick={() => open('create')}><Plus size={16} aria-hidden="true" />Yeni organizasyon</Button></div></header>
+    <div className={common.serviceBar}><SemanticBadge tone={errors.length || uncertain ? 'warning' : 'info'} icon={Clock3}>{uncertain ? 'İşlem sonucu belirsiz' : loading ? 'Bilgiler alınıyor' : errors.length ? rows ? 'Önceki bilgiler gösteriliyor' : 'Bilgiler alınamadı' : 'Kayıtlı organizasyonlar'}</SemanticBadge><span>{readAt ? `Son okuma: ${userDate(readAt)} · TSİ` : 'Henüz başarılı okuma yok'}</span></div>
+    {errors.map(error => <div key={error} className={common.error} role="alert"><TriangleAlert size={18} aria-hidden="true" /><p>{error}{rows && ' Son başarılı okumadaki kayıtlar korunuyor; güncel durum doğrulanamadı.'}</p></div>)}
+    {uncertain && <div className={common.error} role="alert"><TriangleAlert size={18} aria-hidden="true" /><p>{uncertainOrganization}</p></div>}
+    {notice && <div className={common.notice} role="status"><CheckCircle2 size={18} aria-hidden="true" /><p>{notice}</p><Button variant="ghost" size="icon" aria-label="İşlem bildirimini kapat" onClick={() => setNotice('')}><X size={16} aria-hidden="true" /></Button></div>}
+    <section className={common.stats} aria-label="Organizasyon ve konum özeti">{stats.map(stat => <article className={common.stat} key={stat.label}><div><h2>{stat.label}</h2><span className={common.icon}><stat.icon size={18} aria-hidden="true" /></span></div><strong>{rows ? displayCount(stat.value) : '—'}</strong><p>{stat.help}</p></article>)}</section>
+    {actor && !canAccessSync(actor.role, 'organizations', 'write') && <div className={common.info}><Info size={18} aria-hidden="true" /><p>Organizasyonları ve bağlı konumları görüntüleyebilirsiniz. Ekleme, düzenleme ve silme işlemleri yönetici rolü gerektirir.</p></div>}
+    <div className={common.filters}><div className={common.search}><Search size={16} aria-hidden="true" /><Input aria-label="Organizasyon ara" placeholder="Ad, kod, açıklama, bina veya şehir ile ara…" value={search} onChange={event => setSearch(event.target.value)} /></div><div><label className="sr-only" htmlFor="organization-locations">Konum bağlantısı</label><select id="organization-locations" value={locationFilter} onChange={event => setLocationFilter(event.target.value)}><option value="all">Tüm konum bağlantıları</option><option value="linked">Bina bağlı</option><option value="empty">Henüz bina bağlanmamış</option><option value="unknown">Konum bilgisi eksik</option></select></div>{hasFilters && <Button variant="outline" onClick={clear}><X size={16} aria-hidden="true" />Temizle</Button>}</div>
+    <section aria-labelledby="organization-list-title" aria-busy={loading}><div className={styles.listTitle}><h2 id="organization-list-title"><Building2 size={19} aria-hidden="true" />Organizasyon listesi</h2><p aria-live="polite">{rows ? `${filtered.length} / ${rows.length} organizasyon gösteriliyor` : loading ? 'Liste yükleniyor…' : 'Liste alınamadı'}</p></div>
+      {!rows || !filtered.length ? <div className={`${common.empty} ${styles.organization}`}><Building2 size={28} aria-hidden="true" /><h3>{!rows ? loading ? 'Organizasyonlar yükleniyor…' : 'Organizasyon listesi alınamadı' : hasFilters ? 'Filtrelerle eşleşen organizasyon yok' : 'Henüz organizasyon yok'}</h3><p>{!rows ? 'Bilgiler ve işlem yetkileri kontrol ediliyor. Yenileme ile tekrar deneyebilirsiniz.' : hasFilters ? 'Aramayı veya konum filtresini değiştirin.' : 'Önce organizasyonu oluşturun; ardından Konum yönetiminden bina ve odaları ekleyin.'}</p>{hasFilters && <Button variant="outline" onClick={clear}>Filtreleri temizle</Button>}{rows && !hasFilters && writable && <Button onClick={() => open('create')}><Plus size={16} aria-hidden="true" />Organizasyon ekle</Button>}</div> : <div className={styles.list}>{filtered.map(row => <article className={styles.organization} key={row.id}><header><div className={styles.identity}><span className={common.icon}><Building2 size={20} aria-hidden="true" /></span><div><h3>{row.name}</h3><SemanticBadge tone="neutral" icon={Hash}>{row.code || 'Kod belirtilmemiş'}</SemanticBadge><p>{row.description || 'Açıklama eklenmemiş.'}</p></div></div><div className={styles.actions}><Button variant="outline" size="sm" aria-label={`${row.name} organizasyonunu incele`} onClick={() => open('detail', row)}><Eye size={15} aria-hidden="true" />İncele</Button><Button variant="outline" size="sm" disabled={!writable || busy} aria-label={`${row.name} organizasyonunu düzenle`} onClick={() => open('edit', row)}><Pencil size={15} aria-hidden="true" />Düzenle</Button><Button variant="ghost" size="icon" disabled={!deletable || busy} aria-label={`${row.name} organizasyonunu sil`} onClick={() => open('delete', row)}><Trash2 size={16} aria-hidden="true" /></Button></div></header><Capacity row={row} /><div className={styles.locationPreview}><MapPin size={15} aria-hidden="true" />{row.buildings === null ? 'Bağlı bina bilgisi alınamadı.' : row.buildings.length ? <>{row.buildings.slice(0, 3).map(building => <span key={building.id}>{building.name}{building.city && ` · ${building.city}`}</span>)}{row.buildings.length > 3 && <span>+{row.buildings.length - 3} bina</span>}</> : 'Henüz bina bağlanmamış. Konum yönetiminden bu organizasyona bina ekleyebilirsiniz.'}</div></article>)}</div>}
+      <p className={`${common.muted} mt-4`}>Özet sayılar tüm organizasyonlara aittir. Konum bağlantısı, izleme veya cihaz sağlığı durumu değildir.</p>
+    </section>
+    <OrganizationDialog key={`${mode}-${selected?.id || 'new'}`} mode={mode} row={selected} allowed={mode === 'delete' ? deletable : writable} uncertain={uncertain} onClose={() => { if (!busy) { setMode(null); setSelected(null); } }} onEdit={() => setMode('edit')} onBusy={setBusy} onUncertain={() => setUncertain(true)} onDone={message => { setNotice(message); setMode(null); setSelected(null); void load(); }} />
+  </div></div>;
 }

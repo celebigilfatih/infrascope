@@ -1,0 +1,38 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- Offline regression runner; no real database or network. */
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),ts=require('typescript');
+const root=path.resolve(__dirname,'..'),cache=new Map();let network=async()=>{throw Error('Real network prohibited')},role='admin',failure=null,dbCalls=0,lastUpdate=null;
+let stored={id:'test-org',name:'TEST Organizasyon',code:'TEST',description:'Sentetik',createdAt:new Date('2026-10-01T12:00:00Z'),updatedAt:new Date('2026-10-17T12:00:00Z'),buildings:[],_count:{vlans:0,subnets:0,vmwareClusters:0,vmwareDatastores:0}};
+const prisma={organization:{findMany:async()=>{dbCalls++;return [stored]},create:async({data})=>{dbCalls++;if(failure)throw failure;stored={...stored,...data};return stored},update:async({where,data})=>{dbCalls++;if(failure)throw failure;lastUpdate={where,data};stored={...stored,...data};return stored},delete:async()=>{dbCalls++;if(failure)throw failure;return stored}}};
+function load(relative){const file=path.resolve(root,relative.endsWith('.ts')?relative:relative+'.ts');if(cache.has(file))return cache.get(file).exports;const mod={exports:{}};cache.set(file,mod);const req=name=>name==='@/lib/prisma'?{prisma}:name==='@/lib/auth/api-permission'?{authorizeApiRequest:async(_req,resource,action)=>{const policy=load('lib/auth/permission-policy');return role&&policy.canAccessSync(role,resource,action)?{allowed:true}:{allowed:false,response:Response.json({success:false},{status:role?403:401})}}}:name.startsWith('@/')?load(name.slice(2)):require(name);const code=ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020,esModuleInterop:true}}).outputText;vm.runInThisContext(`(function(require,module,exports,fetch){${code}\n})`,{filename:file})(req,mod,mod.exports,(...args)=>network(...args));return mod.exports;}
+const {NextRequest}=require('next/server');const request=(method='GET',body)=>new NextRequest('http://example.invalid/api/organizations',{method,body:body===undefined?undefined:JSON.stringify(body),headers:body===undefined?{}:{'Content-Type':'application/json'}}),params={params:Promise.resolve({id:'test-org'})};
+async function main(){
+ const view=load('lib/organizations/workspace'),list=load('app/api/organizations/route'),item=load('app/api/organizations/[id]/route');
+ assert.equal(list.dynamic,'force-dynamic');
+ const parse=(row)=>view.parseOrganizations({success:true,data:[row]})[0];
+ assert.deepEqual(view.locationTotals(parse({...stored,createdAt:null})),{buildings:0,floors:0,rooms:0,racks:0});
+ assert.deepEqual(view.locationTotals(parse({...stored,buildings:undefined})),{buildings:null,floors:null,rooms:null,racks:null});
+ const nested={...stored,buildings:[{id:'b',name:'Bina',floors:[{id:'f',name:'Kat',rooms:[{id:'r',name:'Oda',racks:[{}]},{id:'r2',name:'Boş oda',racks:[]}]}]}]};
+ assert.deepEqual(view.locationTotals(parse(nested)),{buildings:1,floors:1,rooms:2,racks:1});
+ assert.deepEqual(view.locationTotals(parse({...stored,buildings:[{id:'b',name:'Bina'}]})),{buildings:1,floors:null,rooms:null,racks:null});
+ assert.equal(parse({...stored,createdAt:undefined}).createdAt,null);assert.equal(parse({...stored,status:'active',userCount:99}).status,undefined);assert.throws(()=>view.parseOrganizations({success:false,data:[]}));
+ assert.deepEqual(view.organizationPayload({name:' TEST ',code:' KOD ',description:' ',status:'inactive'}),{name:'TEST',code:'KOD',description:''});
+ assert.deepEqual(view.organizationPayload({description:null},true),{description:''});
+ for(const input of [{name:' ',code:'A'},{name:'A',code:' '},{name:9,code:'A'},{name:'a'.repeat(161),code:'A'},{name:'A',code:'a'.repeat(65)},{name:'A',code:'A',description:'a'.repeat(2001)}])assert.throws(()=>view.organizationPayload(input));
+ assert.throws(()=>view.organizationPayload({status:'inactive'},true));assert.deepEqual(view.organizationChanges(stored,{...stored,code:'NEW'}),[{field:'code',label:'Organizasyon kodu',before:'TEST',after:'NEW'}]);
+ let response=await list.GET(request()),data=await response.json();assert.equal(response.headers.get('cache-control'),'private, no-store');assert.equal(data.data[0].code,'TEST');assert.equal(data.cached,false);
+ response=await list.POST(request('POST',{name:' Yeni ',code:' NEW ',description:' Açıklama ',status:'active',contactEmail:'not-stored'}));assert.equal(response.status,201);data=await response.json();assert.equal(data.data.name,'Yeni');assert.equal(data.data.code,'NEW');assert.equal(data.data.contactEmail,undefined);
+ response=await item.PUT(request('PUT',{code:'EDIT',status:'inactive'}),params);assert.equal(response.status,200);assert.deepEqual(lastUpdate.data,{code:'EDIT'});
+ response=await list.GET(request());assert.equal((await response.json()).data[0].code,'EDIT');
+ assert.equal((await list.POST(request('POST',{name:'A'}))).status,400);assert.equal((await item.PUT(request('PUT',{status:'active'}),params)).status,400);
+ for(const [code,status,publicCode] of [['P2002',409,'DUPLICATE'],['P2025',404,'NOT_FOUND'],['P2003',409,'RELATED'],['PRIVATE',500,'FAILED']]){failure={code,message:'private database detail'};response=await item.PUT(request('PUT',{name:'Valid'}),params);assert.equal(response.status,status);data=await response.json();assert.equal(data.code,publicCode);assert.equal(JSON.stringify(data).includes('private'),false)}failure=null;
+ for(const nextRole of ['editor','viewer',null]){role=nextRole;const before=dbCalls;for(const [route,method] of [[list,'POST'],[item,'PUT'],[item,'DELETE']])assert.equal((await route[method](request(method,{name:'Denied',code:'DENIED'}),params)).status,role?403:401);assert.equal(dbCalls,before)}role='admin';
+ response=await item.DELETE(request('DELETE'),params);assert.equal(response.status,200);assert.equal((await response.json()).data.id,'test-org');
+ network=async()=>Response.json({success:true,data:stored});view.verifyOrganizationWrite(await view.requestOrganizations('/api/organizations',{method:'POST',body:{name:stored.name}}),{fields:{name:stored.name}});
+ assert.throws(()=>view.verifyOrganizationWrite({success:true},{}),/sonucu doğrulanamadı/);assert.throws(()=>view.verifyOrganizationWrite({data:stored},{id:'wrong'}),/sonucu doğrulanamadı/);assert.throws(()=>view.verifyOrganizationWrite({data:stored},{fields:{code:'wrong'}}),/sonucu doğrulanamadı/);
+ for(const status of [401,403]){network=async()=>new Response('not JSON',{status});await assert.rejects(view.requestOrganizations('/api/organizations',{method:'POST'}),status===401?/Oturumunuz/:/yetkiniz/)}
+ network=async()=>Response.json({success:true},{status:500});await assert.rejects(view.requestOrganizations('/api/organizations',{method:'PUT'}),/sonucu doğrulanamadı/);
+ network=async()=>Response.json({success:false,code:'DUPLICATE',error:'private detail'},{status:409});await assert.rejects(view.requestOrganizations('/api/organizations',{method:'POST'}),/ad veya kod/);
+ network=async()=>{throw Error('private network detail')};await assert.rejects(view.requestOrganizations('/api/organizations'),error=>error.message==='Organizasyon listesi alınamadı.');await assert.rejects(view.requestOrganizations('/api/organizations',{method:'POST'}),/sonucu doğrulanamadı/);
+ console.log('Organizations workspace passed: hierarchy totals, zero vs unknown, real fields, changed-field edits, validation, fresh reads, current-role gates, Turkish conflicts and uncertain outcomes. Synthetic database/transport only; no real writes.');
+}
+main().catch(error=>{console.error(error);process.exitCode=1});

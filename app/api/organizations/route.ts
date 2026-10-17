@@ -1,29 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { authorizeApiRequest } from '@/lib/auth/api-permission';
+import { organizationPayload } from '@/lib/organizations/workspace';
+import { organizationFailure } from '@/lib/organizations/api';
 
-// Cache for 60 seconds to prevent database overload
-let cachedOrganizations: unknown = null;
-let cacheTimestamp: number = 0;
-const CACHE_TTL = 60000; // 60 seconds
+// The response depends on the current database identity and mutable location tree.
+export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
+  const authorization = await authorizeApiRequest(request, 'organizations', 'read');
+  if (!authorization.allowed) return authorization.response;
   try {
-    const now = Date.now();
-    const fresh = request.nextUrl.searchParams.get('fresh');
-
-    // Return cached data if available, not expired, and not explicitly bypassed
-    if (!fresh && cachedOrganizations && (now - cacheTimestamp) < CACHE_TTL) {
-      return NextResponse.json({
-        success: true,
-        data: cachedOrganizations,
-        timestamp: new Date(),
-        cached: true
-      });
-    }
-
-    // Optimized query: use select and _count to avoid loading all nested data
+    // Keep the shared locations tree contract; settings also uses related-resource counts.
     const organizations = await prisma.organization.findMany({
       include: {
+        _count: { select: { vlans: true, subnets: true, vmwareClusters: true, vmwareDatastores: true } },
         buildings: {
           include: {
             floors: {
@@ -65,66 +56,18 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    // Update cache
-    cachedOrganizations = organizations;
-    cacheTimestamp = now;
-
-    return NextResponse.json({
-      success: true,
-      data: organizations,
-      timestamp: new Date(),
-      cached: false
-    });
-  } catch (error) {
-    console.error('Error fetching organizations details:', {
-      message: (error as Error & { code?: string }).message,
-      stack: (error as Error & { code?: string }).stack,
-      code: (error as Error & { code?: string }).code
-    });
-    return NextResponse.json({
-      success: false,
-      error: 'Failed to fetch organizations',
-      timestamp: new Date()
-    }, { status: 500 });
-  }
+    return NextResponse.json({ success: true, data: organizations, timestamp: new Date(), cached: false }, { headers: { 'Cache-Control': 'private, no-store' } });
+  } catch (error) { return organizationFailure(error); }
 }
 
 export async function POST(request: NextRequest) {
+  const authorization = await authorizeApiRequest(request, 'organizations', 'write');
+  if (!authorization.allowed) return authorization.response;
+  let data;
+  try { data = organizationPayload(await request.json()); }
+  catch { return NextResponse.json({ success: false, code: 'INVALID', error: 'Ad, kod ve açıklama bilgilerini kontrol edin.' }, { status: 400 }); }
   try {
-    const body = await request.json();
-    const { name, code, description } = body;
-
-    if (!name || !code) {
-      return NextResponse.json({
-        success: false,
-        error: 'Name and code are required',
-        timestamp: new Date()
-      }, { status: 400 });
-    }
-
-    const organization = await prisma.organization.create({
-      data: {
-        name,
-        code,
-        description
-      }
-    });
-
-    // Invalidate cache after mutation
-    cachedOrganizations = null;
-    cacheTimestamp = 0;
-
-    return NextResponse.json({
-      success: true,
-      data: organization,
-      timestamp: new Date()
-    }, { status: 201 });
-  } catch (error) {
-    console.error('Error creating organization:', error);
-    return NextResponse.json({
-      success: false,
-      error: 'Failed to create organization',
-      timestamp: new Date()
-    }, { status: 500 });
-  }
+    const organization = await prisma.organization.create({ data: { name: data.name!, code: data.code!, description: data.description } });
+    return NextResponse.json({ success: true, data: organization, timestamp: new Date() }, { status: 201 });
+  } catch (error) { return organizationFailure(error); }
 }
