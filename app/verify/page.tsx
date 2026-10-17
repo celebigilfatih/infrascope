@@ -1,15 +1,16 @@
 'use client';
 
-import { uiError } from '@/lib/i18n/tr';
+import { acceptInvitationToken, readInvitationToken, VerificationError, type VerificationData } from '@/lib/invitations/acceptance';
+import { uiError, uiLabel } from '@/lib/i18n/tr';
 
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { CheckCircle2, XCircle, Loader2, Mail, Shield } from 'lucide-react';
 
-type PageState = 'loading' | 'valid' | 'invalid' | 'submitting' | 'success' | 'error';
+type PageState = 'loading' | 'valid' | 'invalid' | 'unavailable' | 'submitting' | 'success' | 'error';
 
 function VerifyPageContent() {
   const router = useRouter();
@@ -18,11 +19,9 @@ function VerifyPageContent() {
 
   const [state, setState] = useState<PageState>('loading');
   const [errorMessage, setErrorMessage] = useState('');
-  const [invitationData, setInvitationData] = useState<{
-    email: string;
-    role: string;
-    invitedBy: string;
-  } | null>(null);
+  const [invitationData, setInvitationData] = useState<VerificationData | null>(null);
+  const [readAttempt, setReadAttempt] = useState(0);
+  const sequence = useRef(0);
 
   // Form state
   const [name, setName] = useState('');
@@ -38,34 +37,21 @@ function VerifyPageContent() {
   });
 
   useEffect(() => {
-    if (!token) {
-      setState('invalid');
-      setErrorMessage(uiError("Davet bağlantısında doğrulama kodu yok."));
-      return;
-    }
-
-    // Validate token
-    fetch(`/api/users/verify?token=${token}`)
-      .then((res) => res.json())
-      .then((result) => {
-        if (result.success && result.valid) {
-          setInvitationData(result.data);
-          setState('valid');
-        } else {
-          setState('invalid');
-          setErrorMessage(uiError(result.error || 'Invalid invitation'));
-        }
-      })
-      .catch(() => {
-        setState('invalid');
-        setErrorMessage(uiError("Davet doğrulanamadı."));
-      });
-  }, [token]);
+    sequence.current += 1;
+    const controller = new AbortController();
+    setState('loading'); setInvitationData(null); setErrorMessage(''); setName(''); setPassword(''); setConfirmPassword('');
+    void readInvitationToken(token || '', controller.signal).then(result => {
+      if (!controller.signal.aborted) { setInvitationData(result); setState('valid'); }
+    }).catch(error => {
+      if (!controller.signal.aborted) { setState(error instanceof VerificationError && error.invalid ? 'invalid' : 'unavailable'); setErrorMessage(error instanceof Error ? error.message : 'Davet doğrulanamadı.'); }
+    });
+    return () => { sequence.current += 1; controller.abort(); };
+  }, [token, readAttempt]);
 
   // Password strength checker
   useEffect(() => {
     setPasswordChecks({
-      length: password.length >= 8,
+      length: password.length >= 8 && password.length <= 72,
       uppercase: /[A-Z]/.test(password),
       number: /[0-9]/.test(password),
       special: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password),
@@ -76,26 +62,17 @@ function VerifyPageContent() {
   const passwordsMatch = password === confirmPassword && password.length > 0;
 
   const handleSubmit = async () => {
-    if (!name || !password || !passwordsMatch || !allChecksPass || !token) return;
-
-    setState('submitting');
+    if (state !== 'valid' || !name.trim() || name.trim().length > 100 || !passwordsMatch || !allChecksPass || !token || !invitationData) return;
+    const id = sequence.current;
+    setState('submitting'); setErrorMessage('');
     try {
-      const response = await fetch('/api/users/verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, name, password }),
-      });
-
-      const result = await response.json();
-      if (result.success) {
-        setState('success');
-      } else {
-        setState('error');
-        setErrorMessage(uiError(result.error || 'Failed to create account'));
-      }
-    } catch {
-      setState('error');
-      setErrorMessage(uiError("Beklenmeyen bir hata oluştu."));
+      await acceptInvitationToken(token, name, password, invitationData);
+      if (id !== sequence.current) return;
+      setPassword(''); setConfirmPassword(''); setState('success');
+    } catch (error) {
+      if (id !== sequence.current) return;
+      setState(error instanceof VerificationError && error.uncertain ? 'error' : 'valid');
+      setErrorMessage(error instanceof Error ? error.message : 'Hesap oluşturulamadı.');
     }
   };
 
@@ -114,16 +91,17 @@ function VerifyPageContent() {
     );
   }
 
-  if (state === 'invalid') {
+  if (state === 'invalid' || state === 'unavailable') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
         <Card className="w-full max-w-md">
           <CardContent className="p-8 text-center">
             <XCircle className="h-12 w-12 mx-auto mb-4 text-red-500" />
-            <h2 className="text-xl font-bold mb-2">Geçersiz Davet</h2>
+            <h2 className="text-xl font-bold mb-2">{state === 'invalid' ? 'Geçersiz Davet' : 'Davet doğrulanamadı'}</h2>
             <p className="text-muted-foreground mb-6">{uiError(errorMessage)}</p>
-            <Button variant="outline" onClick={() => router.push('/dashboard')}>
-              Genel bakışa git
+            {state === 'unavailable' && <Button className="mb-3 w-full" onClick={() => setReadAttempt(previous => previous + 1)}>Yeniden doğrula</Button>}
+            <Button variant="outline" onClick={() => router.push('/login')}>
+              Giriş ekranına git
             </Button>
           </CardContent>
         </Card>
@@ -141,8 +119,8 @@ function VerifyPageContent() {
             <p className="text-muted-foreground mb-6">
               Hesabınız oluşturuldu. Şimdi giriş yapabilirsiniz.
             </p>
-            <Button onClick={() => router.push('/dashboard')}>
-              Genel bakışa git
+            <Button onClick={() => router.push('/login')}>
+              Giriş ekranına git
             </Button>
           </CardContent>
         </Card>
@@ -158,8 +136,8 @@ function VerifyPageContent() {
             <XCircle className="h-12 w-12 mx-auto mb-4 text-red-500" />
             <h2 className="text-xl font-bold mb-2">Hata</h2>
             <p className="text-muted-foreground mb-6">{uiError(errorMessage)}</p>
-            <Button variant="outline" onClick={() => router.push('/dashboard')}>
-              Genel bakışa git
+            <Button variant="outline" onClick={() => router.push('/login')}>
+              Giriş ekranına git
             </Button>
           </CardContent>
         </Card>
@@ -181,37 +159,41 @@ function VerifyPageContent() {
             {invitationData?.email}
           </p>
           <p className="text-xs text-muted-foreground">
-            Davet Edilen Rol <span className="capitalize font-medium">{invitationData?.role}</span>
+            Davet Edilen Rol <span className="font-medium">{uiLabel(invitationData?.role || 'UNKNOWN')}</span>
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
+          {errorMessage && <p role="alert" className="text-sm text-red-500">{errorMessage}</p>}
           <div>
-            <label className="block text-sm font-medium mb-1">Ad Soyad</label>
+            <label htmlFor="verify-name" className="block text-sm font-medium mb-1">Ad Soyad</label>
             <Input
+              id="verify-name" maxLength={100} disabled={state === 'submitting'} autoComplete="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Adınızı ve soyadınızı girin"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Parola</label>
+            <label htmlFor="verify-password" className="block text-sm font-medium mb-1">Parola</label>
             <Input
               type="password"
+              id="verify-password" maxLength={72} disabled={state === 'submitting'} autoComplete="new-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Parola oluşturun"
             />
             <div className="mt-2 space-y-1">
-              <PasswordCheck pass={passwordChecks.length} label="En az 8 karakter" />
+              <PasswordCheck pass={passwordChecks.length} label="8–72 karakter" />
               <PasswordCheck pass={passwordChecks.uppercase} label="Bir büyük harf" />
               <PasswordCheck pass={passwordChecks.number} label="Bir rakam" />
               <PasswordCheck pass={passwordChecks.special} label="Bir özel karakter" />
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Parolayı Doğrula</label>
+            <label htmlFor="verify-confirm" className="block text-sm font-medium mb-1">Parolayı Doğrula</label>
             <Input
               type="password"
+              id="verify-confirm" maxLength={72} disabled={state === 'submitting'} autoComplete="new-password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               placeholder="Parolanızı doğrulayın"
@@ -223,7 +205,7 @@ function VerifyPageContent() {
           <Button
             className="w-full"
             onClick={handleSubmit}
-            disabled={!name || !allChecksPass || !passwordsMatch || state === 'submitting'}
+            disabled={!name.trim() || name.trim().length > 100 || !allChecksPass || !passwordsMatch || state === 'submitting'}
           >
             {state === 'submitting' ? (
               <>

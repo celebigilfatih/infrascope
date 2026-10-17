@@ -102,6 +102,7 @@
     "test:switch-alarms": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/check-switch-alarm-logic.ts",
     "test:nms-backups": "node scripts/check-nms-backups.cjs",
     "test:nms-backup-view": "node scripts/check-nms-backup-view.cjs",
+    "test:invitations-workspace": "node scripts/check-invitations-workspace.cjs",
     "test:users-workspace": "node scripts/check-users-workspace.cjs",
     "test:audit-workspace": "node scripts/check-audit-workspace.cjs",
     "test:rule-workspace": "node scripts/check-rule-workspace.cjs",

@@ -29,17 +29,17 @@ interface InvitationEmailParams {
 
 /**
  * Send an invitation email with a verification link.
- * In development mode, logs the link instead of sending.
+ * In development mode, reports simulation without logging the bearer link.
  */
 export async function sendInvitationEmail(params: InvitationEmailParams): Promise<boolean> {
   const { to, token, invitedBy, role } = params;
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:8170';
   const verificationUrl = `${baseUrl}/verify?token=${token}`;
+  const roleName = ({ admin: 'Yönetici', editor: 'Editör', viewer: 'İzleyici' } as Record<string, string>)[role.toLowerCase()] || 'Tanımlı rol';
 
   const isDev = process.env.NODE_ENV === 'development';
 
   if (isDev) {
-    log.info({ verificationUrl }, 'DEV MODE - Verification URL');
     log.info({ to, role, invitedBy }, 'DEV MODE - Invitation email details');
     return true;
   }
@@ -48,6 +48,9 @@ export async function sendInvitationEmail(params: InvitationEmailParams): Promis
     const config = await getEmailConfig();
 
     const transporter = nodemailer.createTransport({
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 15000,
       host: config.smtpHost,
       port: config.smtpPort,
       secure: config.smtpSecure || false,
@@ -61,26 +64,26 @@ export async function sendInvitationEmail(params: InvitationEmailParams): Promis
     await transporter.sendMail({
       from: `"InfraScope" <${config.smtpUser}>`,
       to,
-      subject: 'You are invited to join InfraScope',
+      subject: 'InfraScope kullanıcı daveti',
       html: `
         <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background: #f9fafb; border-radius: 12px;">
           <div style="background: white; border-radius: 8px; padding: 32px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <h1 style="font-size: 24px; font-weight: 700; color: #111827; margin: 0 0 16px;">You're Invited!</h1>
+            <h1 style="font-size: 24px; font-weight: 700; color: #111827; margin: 0 0 16px;">InfraScope daveti</h1>
             <p style="font-size: 16px; color: #4b5563; margin: 0 0 8px;">
-              <strong>${escapeHtml(invitedBy)}</strong> has invited you to join InfraScope as a <strong style="text-transform: capitalize;">${escapeHtml(role)}</strong>.
+              <strong>${escapeHtml(invitedBy)}</strong> sizi InfraScope uygulamasına <strong>${escapeHtml(roleName)}</strong> rolüyle davet ediyor.
             </p>
             <p style="font-size: 14px; color: #6b7280; margin: 0 0 24px;">
-              Click the button below to set your password and activate your account.
+              Parolanızı oluşturmak ve hesabınızı etkinleştirmek için aşağıdaki bağlantıyı kullanın.
             </p>
-            <a href="${verificationUrl}" style="display: inline-block; background: #2563eb; color: white; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 16px;">
-              Accept Invitation
+            <a href="${verificationUrl}" style="display: inline-block; background: #008653; color: white; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 16px;">
+              Daveti kabul et
             </a>
             <p style="font-size: 12px; color: #9ca3af; margin: 24px 0 0;">
-              This invitation expires in 7 days. If you did not expect this email, you can ignore it.
+              Bu davet 7 gün boyunca geçerlidir. Davet beklemiyorsanız bu e-postayı dikkate almayabilirsiniz.
             </p>
             <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
             <p style="font-size: 12px; color: #9ca3af; margin: 0;">
-              If the button above doesn't work, copy and paste this link into your browser:<br/>
+              Düğme çalışmıyorsa aşağıdaki bağlantıyı tarayıcınıza kopyalayın:<br/>
               <a href="${verificationUrl}" style="color: #2563eb; word-break: break-all;">${verificationUrl}</a>
             </p>
           </div>

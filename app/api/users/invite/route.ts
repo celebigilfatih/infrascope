@@ -1,150 +1,35 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { sendInvitationEmail } from '@/lib/email/sendInvitation';
-import { logAudit } from '@/lib/audit/logger';
+import { authorizeApiRequest } from '@/lib/auth/api-permission';
 import { validateBody } from '@/lib/validators';
 import { inviteUserSchema } from '@/lib/validators/users';
 import { checkUserLimit } from '@/lib/license/middleware';
-import crypto from 'crypto';
-
-export async function POST(request: Request) {
+import { createWorkspaceInvitation, InvitationOperationError, publicInvitation } from '@/lib/invitations/service';
+export const dynamic = 'force-dynamic';
+const headers = { 'Cache-Control': 'private, no-store' };
+export async function POST(request: NextRequest) {
+  const authorization = await authorizeApiRequest(request, 'users', 'write'); if (!authorization.allowed) return authorization.response;
   try {
-    const currentUserCount = await prisma.user.count();
-    const licenseError = await checkUserLimit(currentUserCount);
-    if (licenseError) return licenseError;
-
-    const rawBody = await request.json();
-    const parsed = validateBody(rawBody, inviteUserSchema);
-    if (!parsed.success) {
-      return NextResponse.json(
-        { success: false, error: parsed.error },
-        { status: 400 }
-      );
-    }
-    const { email, role } = parsed.data;
-
-    // Determine the inviter from server-side context.
-    // TODO: Replace with real session-based user lookup when auth is implemented.
-    // For now, find the first admin user as the default inviter.
-    const adminUser = await prisma.user.findFirst({
-      where: { role: 'ADMIN', status: 'ACTIVE' },
-      select: { id: true, name: true },
-    });
-    const invitedBy = adminUser?.name || 'System';
-    const invitedByUserId = adminUser?.id || undefined;
-
-    // Check if user already exists
-    const existingUser = await prisma.user.findUnique({ where: { email } });
-    if (existingUser) {
-      return NextResponse.json(
-        { success: false, error: 'A user with this email already exists' },
-        { status: 400 }
-      );
-    }
-
-    // Check for existing pending invitation
-    const existingInvitation = await prisma.invitation.findUnique({ where: { email } });
-    if (existingInvitation && existingInvitation.status === 'PENDING') {
-      if (new Date() < existingInvitation.expiresAt) {
-        return NextResponse.json(
-          { success: false, error: 'A pending invitation already exists for this email' },
-          { status: 400 }
-        );
-      }
-      await prisma.invitation.delete({ where: { id: existingInvitation.id } });
-    }
-
-    // Generate secure token
-    const token = crypto.randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
-
-    const invitation = await prisma.invitation.create({
-      data: {
-        email,
-        role: (role?.toUpperCase() || 'VIEWER') as 'ADMIN' | 'EDITOR' | 'VIEWER',
-        token,
-        invitedBy,
-        status: 'PENDING',
-        expiresAt,
-      },
-    });
-
-    // Send invitation email
-    const emailSent = await sendInvitationEmail({
-      to: email,
-      token,
-      invitedBy,
-      role: invitation.role.toLowerCase(),
-    });
-
-    // Audit log — use the actual admin user ID if available
-    await logAudit({
-      userId: invitedByUserId,
-      action: 'invitation.create',
-      resource: 'invitation',
-      resourceId: invitation.id,
-      details: { email, role: invitation.role, emailSent, invitedBy },
-    });
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        id: invitation.id,
-        email: invitation.email,
-        role: invitation.role.toLowerCase(),
-        status: invitation.status.toLowerCase(),
-        expiresAt: invitation.expiresAt,
-        emailSent,
-      },
-    });
+    const body = await request.json().catch(() => null), parsed = validateBody(body, inviteUserSchema);
+    if (!parsed.success) return NextResponse.json({ success: false, code: 'INVALID_INPUT', error: 'Geçerli bir e-posta adresi ve rol seçin.' }, { status: 400, headers });
+    const limit = await checkUserLimit(await prisma.user.count()); if (limit) return limit;
+    return NextResponse.json(await createWorkspaceInvitation(parsed.data.email, (parsed.data.role?.toUpperCase() || 'VIEWER') as 'ADMIN' | 'EDITOR' | 'VIEWER', authorization.auth.actor), { headers });
   } catch (error) {
-    console.error('Error creating invitation:', error);
-    return NextResponse.json(
-      { success: false, error: (error as Error).message },
-      { status: 500 }
-    );
+    if (error instanceof InvitationOperationError) return NextResponse.json({ success: false, code: error.code, error: error.message }, { status: error.status, headers });
+    if ((error as { code?: string })?.code === 'P2002') return NextResponse.json({ success: false, code: 'INVITE_EXISTS', error: 'Bu adrese ait davet zaten var. Listeyi yenileyin.' }, { status: 409, headers });
+    console.error('[Invitation] Create failed', error instanceof Error ? error.name : 'UnknownError');
+    return NextResponse.json({ success: false, error: 'Davet işleminin sonucu doğrulanamadı. Listeyi yenileyin.' }, { status: 500, headers });
   }
 }
-
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const authorization = await authorizeApiRequest(request, 'users', 'read'); if (!authorization.allowed) return authorization.response;
   try {
-    // Auto-expire old pending invitations
-    await prisma.invitation.updateMany({
-      where: {
-        status: 'PENDING',
-        expiresAt: { lt: new Date() },
-      },
-      data: { status: 'EXPIRED' },
-    });
-
-    const invitations = await prisma.invitation.findMany({
-      orderBy: { createdAt: 'desc' },
-    });
-
-    const formatted = invitations.map((inv) => ({
-      id: inv.id,
-      email: inv.email,
-      role: inv.role.toLowerCase(),
-      status: inv.status.toLowerCase(),
-      invitedBy: inv.invitedBy,
-      expiresAt: inv.expiresAt,
-      acceptedAt: inv.acceptedAt,
-      createdAt: inv.createdAt,
-    }));
-
-    const stats = {
-      total: invitations.length,
-      pending: invitations.filter((i) => i.status === 'PENDING').length,
-      accepted: invitations.filter((i) => i.status === 'ACCEPTED').length,
-      expired: invitations.filter((i) => i.status === 'EXPIRED').length,
-    };
-
-    return NextResponse.json({ success: true, data: formatted, stats });
+    const invitations = await prisma.invitation.findMany({ orderBy: { createdAt: 'desc' } });
+    const now = Date.now(), data = invitations.map(invitation => publicInvitation(invitation, now));
+    const stats = { total: data.length, pending: data.filter(row => row.status === 'pending').length, accepted: data.filter(row => row.status === 'accepted').length, expired: data.filter(row => row.status === 'expired').length };
+    return NextResponse.json({ success: true, data, stats, observedAt: new Date(now).toISOString(), deliveryMode: process.env.NODE_ENV === 'development' ? 'development' : 'smtp' }, { headers });
   } catch (error) {
-    console.error('Error fetching invitations:', error);
-    return NextResponse.json(
-      { success: false, error: (error as Error).message },
-      { status: 500 }
-    );
+    console.error('[Invitation] Read failed', error instanceof Error ? error.name : 'UnknownError');
+    return NextResponse.json({ success: false, error: 'Davet listesi alınamadı.' }, { status: 500, headers });
   }
 }

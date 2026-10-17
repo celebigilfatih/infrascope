@@ -1,337 +1,65 @@
 'use client';
-
-import { uiError, uiLabel } from '@/lib/i18n/tr';
-
-import { ActionIcon } from '@/components/ui/action-icon';
-import { PageHeading } from '@/components/ui/page-heading';
-import React, { useState, useEffect, useCallback } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { RefreshCw, Mail, Clock, CheckCircle2, XCircle, Send, ArrowLeft } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { ArrowLeft, CheckCircle2, Clock3, Filter, Info, Mail, RefreshCw, RotateCw, Search, Send, TriangleAlert, X } from 'lucide-react';
+import { PageHeading } from '@/components/ui/page-heading';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { SemanticBadge } from '@/components/ui/semantic-badge';
+import { UserRoleBadge } from '@/components/users/UserVisuals';
+import { InvitationDialog, attemptLabels, type InvitationDialogMode } from '@/components/invitations/InvitationDialog';
+import { canAccessSync } from '@/lib/auth/permission-policy';
+import { parseActor, requestUsersJson, roleLabels, userDate, userRoles, userSearch, type WorkspaceActor } from '@/lib/users/workspace';
+import { canResendInvitation, deliveryMessage, invitationRemaining, invitationState, parseInvitationRead, requestInvitationJson, type DeliveryStatus, type InvitationRead, type InvitationRow } from '@/lib/invitations/workspace';
+import common from '@/components/users/users-workspace.module.css';
+import styles from '@/components/invitations/invitations.module.css';
 
-interface InvitationType {
-  id: string;
-  email: string;
-  role: string;
-  status: string;
-  invitedBy: string;
-  expiresAt: string;
-  acceptedAt: string | null;
-  createdAt: string;
-}
-
-interface InvitationStats {
-  total: number;
-  pending: number;
-  accepted: number;
-  expired: number;
-}
-
-function getStatusBadge(status: string) {
-  switch (status) {
-    case 'pending':
-      return (
-        <Badge variant="warning">
-          <Clock className="h-3 w-3 mr-1" />
-          Bekliyor
-        </Badge>
-      );
-    case 'accepted':
-      return (
-        <Badge variant="success">
-          <CheckCircle2 className="h-3 w-3 mr-1" />
-          Kabul Edildi
-        </Badge>
-      );
-    case 'expired':
-      return (
-        <Badge variant="secondary">
-          <XCircle className="h-3 w-3 mr-1" />
-          Süresi Doldu
-        </Badge>
-      );
-    default:
-      return <Badge variant="outline">{uiLabel(status)}</Badge>;
-  }
-}
-
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('tr-TR', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
+function Deadline({ row, now }: { row: InvitationRow; now: number }) { const near = invitationState(row, now).state === 'pending' && row.expiresAt && Date.parse(row.expiresAt) - now <= 86400000; return <span className={styles.date}>{userDate(row.expiresAt)}<small className={near ? styles.near : undefined}>{invitationRemaining(row, now)}</small></span>; }
 export default function InvitationsPage() {
-  const [invitations, setInvitations] = useState<InvitationType[]>([]);
-  const [stats, setStats] = useState<InvitationStats>({ total: 0, pending: 0, accepted: 0, expired: 0 });
-  const [loading, setLoading] = useState(true);
-  const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Invite form state
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<string>('viewer');
-
-  const fetchInvitations = useCallback(async () => {
-    setLoading(true);
-    try {
-      const response = await fetch('/api/users/invite');
-      const result = await response.json();
-      if (result.success) {
-        setInvitations(result.data);
-        setStats(result.stats || { total: 0, pending: 0, accepted: 0, expired: 0 });
-      }
-    } catch (error) {
-      console.error('Error fetching invitations:', error);
-    } finally {
-      setLoading(false);
-    }
+  const [snapshot, setSnapshot] = useState<InvitationRead | null>(null), [actor, setActor] = useState<WorkspaceActor | null>(null), [loading, setLoading] = useState(true), [errors, setErrors] = useState<Record<string, string>>({});
+  const [readAt, setReadAt] = useState<number | null>(null), [now, setNow] = useState(Date.now());
+  const [search, setSearch] = useState(''), [role, setRole] = useState('all'), [stateFilter, setStateFilter] = useState('all');
+  const [mode, setMode] = useState<InvitationDialogMode | null>(null), [selected, setSelected] = useState<InvitationRow | null>(null), [busy, setBusy] = useState(false), [uncertain, setUncertain] = useState(false);
+  const [notice, setNotice] = useState<{ text: string; tone: 'info' | 'warning' | 'success' } | null>(null), [attempts, setAttempts] = useState<Record<string, DeliveryStatus>>({});
+  const sequence = useRef(0), active = useRef<AbortController | null>(null);
+  const load = useCallback(async () => {
+    const id = ++sequence.current; active.current?.abort(); const controller = new AbortController(); active.current = controller; setLoading(true);
+    const results = await Promise.allSettled([requestInvitationJson('/api/users/invite', { signal: controller.signal }).then(parseInvitationRead), requestUsersJson('/api/auth/me', 'İşlem yetkisi doğrulanamadı.', { signal: controller.signal }).then(parseActor)]);
+    if (id !== sequence.current || controller.signal.aborted) return;
+    const nextErrors: Record<string, string> = {};
+    if (results[0].status === 'fulfilled') { setSnapshot(results[0].value); setReadAt(Date.now()); setNow(Date.now()); setUncertain(false); } else nextErrors.list = results[0].reason instanceof Error ? results[0].reason.message : 'Davet listesi alınamadı.';
+    if (results[1].status === 'fulfilled') setActor(results[1].value); else { setActor(null); nextErrors.actor = 'Davet gönderme yetkisi doğrulanamadı. Salt okunur görünüm kullanılıyor.'; }
+    setErrors(nextErrors); setLoading(false);
   }, []);
-
-  useEffect(() => {
-    fetchInvitations();
-  }, [fetchInvitations]);
-
-  const handleSendInvitation = async () => {
-    if (!inviteEmail) {
-      alert(uiError("E-posta adresi zorunludur."));
-      return;
-    }
-    setIsSubmitting(true);
-    try {
-      const response = await fetch('/api/users/invite', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: inviteEmail,
-          role: inviteRole,
-        }),
-      });
-      const result = await response.json();
-      if (result.success) {
-        await fetchInvitations();
-        setIsInviteDialogOpen(false);
-        setInviteEmail('');
-        setInviteRole('viewer');
-      } else {
-        alert(uiError(`Error: ${result.error}`));
-      }
-    } catch (error) {
-      console.error('Error sending invitation:', error);
-      alert(uiError("Davet gönderilemedi."));
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-4">
-        <div className="flex items-center gap-4">
-          <Link href="/settings/users">
-            <Button variant="ghost" size="icon" aria-label="Geri dön">
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-          </Link>
-          <div>
-            <PageHeading section="invitations" description={<>Kullanıcı davetlerini ve doğrulama süreçlerini yönetin</>}>
-
-              Davetler
-            </PageHeading>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={fetchInvitations} disabled={loading} aria-label="Yenile">
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          </Button>
-          <Button onClick={() => setIsInviteDialogOpen(true)}>
-            <Send className="h-4 w-4 mr-2" />
-            Kullanıcı Davet Et
-          </Button>
-        </div>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30">
-              <Mail className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Toplam</p>
-              <p className="text-2xl font-bold">{stats.total}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-yellow-100 dark:bg-yellow-900/30">
-              <Clock className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Bekliyor</p>
-              <p className="text-2xl font-bold">{stats.pending}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-green-100 dark:bg-green-900/30">
-              <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Kabul Edildi</p>
-              <p className="text-2xl font-bold">{stats.accepted}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-gray-100 dark:bg-gray-900/30">
-              <XCircle className="h-5 w-5 text-gray-600 dark:text-gray-400" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Süresi Doldu</p>
-              <p className="text-2xl font-bold">{stats.expired}</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Invitations Table */}
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>E-posta</TableHead>
-                <TableHead>Rol</TableHead>
-                <TableHead>Durum</TableHead>
-                <TableHead>Davet Eden</TableHead>
-                <TableHead>Bitiş Tarihi</TableHead>
-                <TableHead>Kabul Edildi</TableHead>
-                <TableHead>Oluşturulma</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                    Davetler yükleniyor…
-                  </TableCell>
-                </TableRow>
-              ) : invitations.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                    Henüz davet yok. Göndermek için Kullanıcı Davet Et düğmesini seçin.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                invitations.map((inv) => (
-                  <TableRow key={inv.id}>
-                    <TableCell className="font-medium">{inv.email}</TableCell>
-                    <TableCell className="capitalize">{uiLabel(inv.role)}</TableCell>
-                    <TableCell>{getStatusBadge(inv.status)}</TableCell>
-                    <TableCell className="text-muted-foreground">{inv.invitedBy}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {formatDate(inv.expiresAt)}
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {inv.acceptedAt ? formatDate(inv.acceptedAt) : '-'}
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {formatDate(inv.createdAt)}
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      {/* Invite User Dialog */}
-      <Dialog open={isInviteDialogOpen} onOpenChange={setIsInviteDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Send className="h-5 w-5" />
-              Yeni Kullanıcı Davet Et
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">E-posta Adresi</label>
-              <Input
-                type="email"
-                value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
-                placeholder="colleague@company.com"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Bu adrese doğrulama bağlantısı içeren bir davet e-postası gönderilir.
-              </p>
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Rol</label>
-              <Select value={inviteRole} onValueChange={setInviteRole}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Rol seçin" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="admin">Yönetici</SelectItem>
-                  <SelectItem value="editor">Editör</SelectItem>
-                  <SelectItem value="viewer">İzleyici</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsInviteDialogOpen(false)}><ActionIcon action="cancel" />
-              Vazgeç
-            </Button>
-            <Button onClick={handleSendInvitation} disabled={isSubmitting}>
-              {isSubmitting ? "Gönderiliyor…" : (
-                <>
-                  <Send className="h-4 w-4 mr-2" />
-                  Davet Gönder
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
+  useEffect(() => { void load(); const timer = setInterval(() => setNow(Date.now()), 30000); return () => { clearInterval(timer); sequence.current += 1; active.current?.abort(); }; }, [load]);
+  const effectiveNow = snapshot?.observedAt && readAt ? Date.parse(snapshot.observedAt) + Math.max(0, now - readAt) : now;
+  const all = snapshot?.rows || [], term = userSearch(search.trim());
+  const filtered = all.filter(row => (!term || userSearch(`${row.email} ${row.invitedBy}`).includes(term)) && (role === 'all' || (role === 'unknown' ? row.role === null : row.role === role)) && (stateFilter === 'all' || invitationState(row, effectiveNow).state === stateFilter));
+  const canWrite = Boolean(actor && canAccessSync(actor.role, 'users', 'write') && !loading && !Object.keys(errors).length && snapshot && !uncertain);
+  const stats = [{ icon: Mail, label: 'Toplam davet', count: all.length, help: 'Tüm kayıtlı davetler' }, { icon: Clock3, label: 'Kabul bekliyor', count: all.filter(row => invitationState(row, effectiveNow).state === 'pending').length, help: 'Bağlantısı hâlâ geçerli' }, { icon: CheckCircle2, label: 'Kabul edildi', count: all.filter(row => invitationState(row, effectiveNow).state === 'accepted').length, help: 'Hesap oluşturma tamamlanmış' }, { icon: RotateCw, label: 'Süresi doldu', count: all.filter(row => invitationState(row, effectiveNow).state === 'expired').length, help: 'Yeniden gönderme ile yenilenebilir' }];
+  const hasFilters = Boolean(search || role !== 'all' || stateFilter !== 'all');
+  const clear = () => { setSearch(''); setRole('all'); setStateFilter('all'); };
+  const open = (row: InvitationRow, nextMode: InvitationDialogMode) => { setSelected(row); setMode(nextMode); };
+  function action(row: InvitationRow) { const eligible = canResendInvitation(row, effectiveNow); return <><Button variant="outline" size="sm" onClick={() => open(row, 'resend')} disabled={!canWrite || !eligible || busy} aria-label={`${row.email} davetini yeniden gönder`}><RotateCw size={15} aria-hidden="true" />Yeniden gönder</Button>{!eligible && <small className={styles.reason}>{invitationState(row, effectiveNow).state === 'accepted' ? 'Kabul edilmiş davet yenilenmez' : 'Rol veya süre bilgisi eksik'}</small>}</>; }
+  function identity(row: InvitationRow) { return <button type="button" className={styles.identityButton} onClick={() => open(row, 'detail')} aria-label={`${row.email} davetini incele`}><strong>{row.email}</strong><small>Ayrıntıları incele</small></button>; }
+  return <div className={common.page}><div className={common.workspace}>
+    <header className={common.header}><PageHeading section="invitations" description="Davetlerin kabul durumunu, atanacak rolü ve kalan geçerlilik süresini takip edin.">Davetler</PageHeading><div className={common.headerActions}><Button variant="outline" asChild><Link href="/settings/users"><ArrowLeft size={16} aria-hidden="true" />Kullanıcılar</Link></Button><Button variant="outline" onClick={() => void load()} disabled={loading || busy || mode !== null}><RefreshCw size={16} aria-hidden="true" className={loading ? 'animate-spin' : ''} />{loading ? 'Yükleniyor…' : 'Bilgileri yenile'}</Button><Button disabled={!canWrite || busy} onClick={() => { setSelected(null); setMode('create'); }}><Send size={16} aria-hidden="true" />Yeni davet</Button></div></header>
+    <div className={common.serviceBar}><SemanticBadge tone={errors.list || uncertain ? 'warning' : 'info'} icon={Clock3}>{uncertain ? 'İşlem sonucu belirsiz' : errors.list ? snapshot ? 'Önceki liste gösteriliyor' : 'Liste alınamadı' : loading ? 'Bilgiler alınıyor' : 'Kayıtlı davetler'}</SemanticBadge><span>{readAt ? `Son okuma: ${userDate(new Date(readAt).toISOString())} · TSİ` : 'Henüz başarılı okuma yok'}</span></div>
+    {Object.values(errors).map(error => <div key={error} className={common.error} role="alert"><TriangleAlert size={18} aria-hidden="true" /><p>{error}{errors.list === error && snapshot && ' Son başarılı okumadaki bilgiler korunuyor; güncel durum doğrulanamadı.'}</p></div>)}
+    {uncertain && <div className={common.error} role="alert"><TriangleAlert size={18} aria-hidden="true" /><p>Gönderim işleminin sonucu doğrulanamadı. Tekrar denemeden önce pencereyi kapatıp listeyi yenileyin.</p></div>}
+    {notice && <div role="status" className={notice.tone === 'success' ? common.notice : `${common.info} ${notice.tone === 'warning' ? styles.noticeWarning : ''}`}><Info size={18} aria-hidden="true" /><p>{notice.text}</p><Button variant="ghost" size="icon" aria-label="İşlem bildirimini kapat" onClick={() => setNotice(null)}><X size={16} aria-hidden="true" /></Button></div>}
+    <section className={common.stats} aria-label="Davet özeti">{stats.map(item => <article className={common.stat} key={item.label}><div><h2>{item.label}</h2><span className={common.icon}><item.icon size={18} aria-hidden="true" /></span></div><strong>{snapshot ? item.count.toLocaleString('tr-TR') : '—'}</strong><p>{item.help}</p></article>)}</section>
+    <div className={common.info}><Mail size={18} aria-hidden="true" /><p>Davet durumu kabul sürecini gösterir; e-postanın alıcıya teslim edildiğini doğrulamaz.{snapshot?.deliveryMode === 'development' && ' Bu kurulum geliştirme modunda: gerçek e-posta gönderilmez.'}</p></div>
+    {actor && !canAccessSync(actor.role, 'users', 'write') && <p className={common.muted}>Rolünüz davetleri görüntüleyebilir; yeni davet ve yeniden gönderme işlemleri kapalıdır.</p>}
+    <div className={common.filters}><div className={common.search}><Search size={16} aria-hidden="true" /><Input aria-label="Davet ara" placeholder="E-posta veya davet eden ile ara…" value={search} onChange={event => setSearch(event.target.value)} /></div><div><label className="sr-only" htmlFor="invitation-role-filter">Atanacak rol filtresi</label><select id="invitation-role-filter" value={role} onChange={event => setRole(event.target.value)}><option value="all">Tüm roller</option>{userRoles.map(item => <option key={item} value={item}>{roleLabels[item]}</option>)}<option value="unknown">Rol bilgisi eksik</option></select></div><div><label className="sr-only" htmlFor="invitation-status-filter">Davet durumu filtresi</label><select id="invitation-status-filter" value={stateFilter} onChange={event => setStateFilter(event.target.value)}><option value="all">Tüm davet durumları</option><option value="pending">Kabul bekliyor</option><option value="accepted">Kabul edildi</option><option value="expired">Süresi doldu</option><option value="unknown">Bilgi eksik</option></select></div>{hasFilters && <Button variant="outline" onClick={clear}><X size={16} aria-hidden="true" />Temizle</Button>}</div>
+    <section className={`${common.collection} ${styles.collection}`} aria-labelledby="invitations-list-title" aria-busy={loading}>
+      <div className={common.sectionHeader}><div><h2 id="invitations-list-title"><Mail size={19} aria-hidden="true" />Davet listesi</h2><p>Alıcı, atanacak rol, kabul durumu ve geçerlilik sonu</p></div><span aria-live="polite">{snapshot ? `${filtered.length} / ${all.length} davet gösteriliyor` : loading ? 'Liste yükleniyor…' : 'Liste alınamadı'}</span></div>
+      {!snapshot ? <div className={common.empty}><Info size={26} aria-hidden="true" /><h3>{loading ? 'Davetler yükleniyor…' : 'Davet listesi alınamadı'}</h3><p>{loading ? 'Davetler ve işlem yetkileri kontrol ediliyor.' : 'Bilgileri yenileyerek tekrar deneyebilirsiniz.'}</p></div> : !filtered.length ? <div className={common.empty}><Filter size={26} aria-hidden="true" /><h3>{hasFilters ? 'Filtrelerle eşleşen davet yok' : 'Henüz davet kaydı yok'}</h3><p>{hasFilters ? 'Arama, rol veya durum filtresini değiştirin.' : canWrite ? 'Yeni davet ile alıcıyı ve atanacak rolü seçebilirsiniz.' : 'Kayıtlı davet olduğunda bu alanda gösterilir.'}</p>{hasFilters && <Button variant="outline" onClick={clear}>Filtreleri temizle</Button>}</div> : <>
+        <div className={common.tableWrap}><table className={`${common.userTable} ${styles.table}`}><thead><tr><th scope="col">Davet edilen</th><th scope="col">Atanacak rol</th><th scope="col">Davet durumu</th><th scope="col">Geçerlilik sonu · TSİ</th><th scope="col">İşlem</th></tr></thead><tbody>{filtered.map(row => { const state = invitationState(row, effectiveNow); return <tr key={row.id}><td>{identity(row)}{attempts[row.id] && <p className={styles.delivery}>{attemptLabels[attempts[row.id]]}</p>}</td><td><UserRoleBadge role={row.role} /></td><td><SemanticBadge tone={state.tone}>{state.label}</SemanticBadge></td><td><Deadline row={row} now={effectiveNow} /></td><td>{action(row)}</td></tr>; })}</tbody></table></div>
+        <div className={common.mobileList}>{filtered.map(row => { const state = invitationState(row, effectiveNow); return <article key={row.id} className={common.userCard}>{identity(row)}<div className={common.cardBadges}><SemanticBadge tone={state.tone}>{state.label}</SemanticBadge><UserRoleBadge role={row.role} /></div><dl className={styles.cardMeta}><div><dt>Geçerlilik sonu · TSİ</dt><dd><Deadline row={row} now={effectiveNow} /></dd></div><div><dt>Kayıtlı davet eden</dt><dd>{row.invitedBy}</dd></div></dl>{attempts[row.id] && <p className={styles.delivery}>{attemptLabels[attempts[row.id]]}</p>}{action(row)}</article>; })}</div>
+      </>}
+      <p className={common.collectionFoot}>Üstteki sayılar tüm kayıtlı davetlere aittir. Kabul edilmiş davetler yeniden gönderilmez. Tarihler Türkiye saatine (TSİ) göredir.</p>
+    </section>
+    <InvitationDialog mode={mode} invitation={selected} now={effectiveNow} allowed={canWrite} deliveryMode={snapshot?.deliveryMode || 'unknown'} attempt={selected ? attempts[selected.id] : undefined} onClose={() => { setMode(null); setSelected(null); }} onResend={() => setMode('resend')} onDone={(row, delivery, resend) => { setAttempts(previous => ({ ...previous, [row.id]: delivery })); setNotice(deliveryMessage(delivery, resend)); setMode(null); setSelected(null); void load(); }} onUncertain={() => { setUncertain(true); if (selected) setAttempts(previous => ({ ...previous, [selected.id]: 'unknown' })); }} onBusy={setBusy} />
+  </div></div>;
 }

@@ -128,9 +128,11 @@ export async function middleware(request: NextRequest) {
   // Skip public API routes (no session required, but rate limiting already applied above)
   const publicApiPrefixes = ['/api/auth/', '/api/health', '/api/setup/', '/api/license-admin/'];
   const publicApiRoutes = ['/api/license/activate', '/api/license/validate', '/api/license/heartbeat'];
+  // First-time recipients authenticate this exact endpoint with their invitation token.
+  const invitationVerification = pathname === '/api/users/verify' && (request.method === 'GET' || request.method === 'POST');
   if (
     publicApiPrefixes.some((route) => pathname.startsWith(route)) ||
-    publicApiRoutes.includes(pathname)
+    publicApiRoutes.includes(pathname) || invitationVerification
   ) {
     return NextResponse.next();
   }

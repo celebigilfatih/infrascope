@@ -1,0 +1,31 @@
+.collection .table th:first-child { width:30%; }
+.collection .table th:nth-child(2) { width:14%; }
+.collection .table th:nth-child(3) { width:18%; }
+.collection .table th:last-child { width:175px; }
+.identityButton { display:flex; flex-direction:column; text-align:left; gap:.375rem; min-width:0; max-width:100%; border-radius:.375rem; }
+.identityButton strong { font-size:.8125rem; font-weight:500; overflow-wrap:anywhere; word-break:break-word; }
+.identityButton small { color:oklch(var(--primary)); font-size:.625rem; }
+.identityButton:focus-visible { outline:2px solid oklch(var(--ring)); outline-offset:4px; }
+.date { display:block; color:oklch(var(--muted-foreground)); font-size:.6875rem; line-height:1.7; }
+.date small { display:block; font-size:.625rem; margin-top:.25rem; }
+.near { color:var(--ui-warning-fg); }
+.reason { display:block; color:oklch(var(--muted-foreground)); font-size:.625rem; line-height:1.6; margin-top:.5rem; }
+.cardMeta { display:grid; grid-template-columns:1fr; gap:.75rem; font-size:.75rem; margin-top:1rem; }
+.cardMeta dt { font-size:.625rem; color:oklch(var(--muted-foreground)); margin-bottom:.25rem; }
+.cardMeta dd { overflow-wrap:anywhere; }
+.review { display:grid; grid-template-columns:1fr; gap:.875rem; border:1px solid oklch(var(--border)); border-radius:.75rem; padding:1rem; background:oklch(var(--muted)/.2); }
+.review dt { font-size:.6875rem; color:oklch(var(--muted-foreground)); margin-bottom:.375rem; }
+.review dd { font-size:.8125rem; line-height:1.7; overflow-wrap:anywhere; }
+.review small { display:block; color:oklch(var(--muted-foreground)); font-size:.6875rem; }
+.review strong { font-weight:600; }
+.detailMeta { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1.25rem; }
+.detailMeta dt { font-size:.6875rem; color:oklch(var(--muted-foreground)); margin-bottom:.375rem; }
+.detailMeta dd { font-size:.8125rem; line-height:1.75; overflow-wrap:anywhere; }
+.detailMeta small { display:block; font-size:.625rem; color:oklch(var(--muted-foreground)); }
+.recordHeader { display:flex; flex-wrap:wrap; align-items:center; gap:.625rem; }
+.recordEmail { font-size:.9375rem; font-weight:600; overflow-wrap:anywhere; }
+.delivery { font-size:.6875rem; line-height:1.7; color:oklch(var(--muted-foreground)); }
+.delivery strong { font-weight:500; }
+.noticeWarning[role=status] { color:var(--ui-warning-fg); background:var(--ui-warning-bg); border-color:var(--ui-warning-border); }
+.collection .identityButton { margin-top:0; }
+@media(max-width:639px) { .detailMeta { grid-template-columns:1fr; } }

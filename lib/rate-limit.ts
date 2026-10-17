@@ -142,7 +142,7 @@ export function getClientIp(request: { headers: { get: (name: string) => string 
  */
 export function getRateLimitConfig(pathname: string): RateLimitConfig {
   // Session reads are ordinary API traffic, not credential attempts.
-  if (pathname.startsWith('/api/auth/') && pathname !== '/api/auth/me') {
+  if ((pathname.startsWith('/api/auth/') && pathname !== '/api/auth/me') || pathname === '/api/users/verify') {
     return AUTH_RATE_LIMIT;
   }
   return GENERAL_RATE_LIMIT;
