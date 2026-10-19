@@ -1,255 +1,84 @@
 'use client';
-
-import { uiError } from '@/lib/i18n/tr';
-
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import Link from 'next/link';
+import { ArrowRight, ArrowRightLeft, ChevronLeft, ChevronRight, Clock3, Eye, Globe, Info, Network, RefreshCw, Search, Server, Settings2, ShieldCheck, TriangleAlert } from 'lucide-react';
 import { PageHeading } from '@/components/ui/page-heading';
-import React, { useState, useEffect, useMemo } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { SemanticBadge } from '@/components/ui/semantic-badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import {
-  Globe,
-  Search,
-  RefreshCw,
-  AlertCircle,
-  ArrowRightLeft,
-  Shield,
-  ChevronLeft,
-  ChevronRight,
-  ExternalLink,
-  Wifi,
-} from 'lucide-react';
-
-interface VirtualIP {
-  name: string;
-  id: number;
-  comment: string;
-  type: string;
-  extip: string;
-  extintf: string;
-  mappedip: Array<{ range: string }>;
-  extport: string;
-  mappedport: string;
-  protocol: string;
-  portforward: string;
-  status: string;
-  color: number;
-  'src-filter': Array<{ range: string }>;
-  'ssl-mode': string;
-  'ssl-certificate': string;
-  'arp-reply': string;
-  'nat-source-vip': string;
-  'portmapping-type': string;
-}
-
-const ITEMS_PER_PAGE = 15;
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { useFirewallOverviewResource } from '@/components/firewall/useFirewallOverviewResource';
+import type { FirewallListItem } from '@/components/firewall/types';
+import { parseOverviewTargets, requestOverviewJson, firewallSourceLabels } from '@/lib/firewall/overview';
+import { firewallErrorMessage } from '@/lib/firewall/workspace';
+import { parseVipWorkspace, vipTypeLabel, vipUsageLabel, type VirtualIp } from '@/lib/firewall/virtual-ips';
+import { userDate } from '@/lib/users/workspace';
+import common from '@/components/users/users-workspace.module.css';
+import styles from './page.module.css';
 
 export default function VirtualIPsPage() {
-  const [vips, setVips] = useState<VirtualIP[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-
-  useEffect(() => {
-    fetchVIPs();
-    const interval = setInterval(fetchVIPs, 5 * 60 * 1000);
-    return () => clearInterval(interval);
+  const [targets, setTargets] = useState<FirewallListItem[] | null>(null), [choice, setChoice] = useState(''), [loading, setLoading] = useState(true), [error, setError] = useState(''), [at, setAt] = useState<string | null>(null), [revision, setRevision] = useState(0);
+  const active = useRef<AbortController | null>(null), sequence = useRef(0);
+  const load = useCallback(async () => {
+    const seq = ++sequence.current; active.current?.abort(); const controller = new AbortController(); active.current = controller; setLoading(true); setError('');
+    try { const rows = parseOverviewTargets(await requestOverviewJson('/api/firewalls', controller.signal)); if (controller.signal.aborted || seq !== sequence.current) return; setTargets(rows); setAt(new Date().toISOString()); setRevision(v => v + 1); }
+    catch (failure) { if (!controller.signal.aborted && seq === sequence.current) setError(failure instanceof Error ? failure.message : 'Cihaz listesi okunamadı.'); }
+    finally { if (!controller.signal.aborted && seq === sequence.current) setLoading(false); }
   }, []);
-
-  const fetchVIPs = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const response = await fetch('/api/integrations/fortigate?vpn=vip');
-      const result = await response.json();
-      if (result.success && Array.isArray(result.data)) {
-        setVips(result.data);
-      } else {
-        setError(uiError(result.error || 'Virtual IP verileri yüklenemedi'));
-      }
-    } catch (err) {
-      setError(uiError('Virtual IP listesi alınamadı'));
-      console.error('Failed to fetch VIPs:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const filteredVips = useMemo(() => {
-    if (!searchTerm) return vips;
-    const term = searchTerm.toLowerCase();
-    return vips.filter((vip: VirtualIP) =>
-      (vip.name || '').toLowerCase().includes(term) ||
-      (vip.extip || '').toLowerCase().includes(term) ||
-      (vip.comment || '').toLowerCase().includes(term) ||
-      (vip.extintf || '').toLowerCase().includes(term) ||
-      (vip.mappedip || []).some((m: { range: string }) => (m.range || '').toLowerCase().includes(term))
-    );
-  }, [vips, searchTerm]);
-
-  const totalPages = Math.ceil(filteredVips.length / ITEMS_PER_PAGE);
-  const paginatedVips = useMemo(() => {
-    const start = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filteredVips.slice(start, start + ITEMS_PER_PAGE);
-  }, [filteredVips, currentPage]);
-
-  const enabledCount = useMemo(() => vips.filter((v: VirtualIP) => v.status === 'enable').length, [vips]);
-  const portForwardCount = useMemo(() => vips.filter((v: VirtualIP) => v.portforward === 'enable').length, [vips]);
-  const uniqueInterfaces = useMemo(() => [...new Set(vips.map((v: VirtualIP) => v.extintf).filter(Boolean))], [vips]);
-
-  const getMappedIPs = (vip: VirtualIP) => {
-    if (!vip.mappedip || !Array.isArray(vip.mappedip)) return '-';
-    return vip.mappedip.map((m: { range: string }) => m.range).join(', ') || '-';
-  };
-
-  const getStatusBadge = (status?: string) => {
-    if (status === 'enable') return <Badge variant="success">Aktif</Badge>;
-    return <Badge variant="secondary">Pasif</Badge>;
-  };
-
-  const getTypeBadge = (type?: string) => {
-    switch (type) {
-      case 'static-nat': return <Badge variant="info">Statik NAT</Badge>;
-      case 'server-load-balance': return <Badge className="bg-purple-600 text-white">Yük Dengeleme</Badge>;
-      case 'dns-translation': return <Badge className="bg-teal-600 text-white">DNS Çeviri</Badge>;
-      case 'fqdn': return <Badge className="bg-indigo-600 text-white">FQDN</Badge>;
-      default: return <Badge variant="secondary">{type || 'Statik NAT'}</Badge>;
-    }
-  };
-
-  const getPortForwardBadge = (pf?: string) => {
-    if (pf === 'enable') return <Badge variant="warning">Evet</Badge>;
-    return <Badge variant="outline">Hayır</Badge>;
-  };
-
-  return (
-    <div className="p-6 space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <PageHeading section="virtualIps" description={<>
-            FortiGate üzerindeki sanal IP (DNAT) kuralları
-          </>}>Sanal IP (VIP) Listesi</PageHeading>
-        </div>
-        <Button onClick={fetchVIPs} variant="outline" disabled={loading}>
-          <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-          Yenile
-        </Button>
-      </div>
-
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card><CardContent className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-full bg-blue-500/20"><Globe className="h-5 w-5 text-blue-500" /></div>
-            <div><p className="text-sm text-muted-foreground">Toplam VIP</p><p className="text-2xl font-bold">{vips.length}</p></div>
-          </div>
-        </CardContent></Card>
-        <Card><CardContent className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-full bg-green-500/20"><Shield className="h-5 w-5 text-green-500" /></div>
-            <div><p className="text-sm text-muted-foreground">Aktif</p><p className="text-2xl font-bold">{enabledCount}</p></div>
-          </div>
-        </CardContent></Card>
-        <Card><CardContent className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-full bg-amber-500/20"><ArrowRightLeft className="h-5 w-5 text-amber-500" /></div>
-            <div><p className="text-sm text-muted-foreground">Port Yönlendirme</p><p className="text-2xl font-bold">{portForwardCount}</p></div>
-          </div>
-        </CardContent></Card>
-        <Card><CardContent className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-full bg-purple-500/20"><Wifi className="h-5 w-5 text-purple-500" /></div>
-            <div><p className="text-sm text-muted-foreground">Arayüz</p><p className="text-2xl font-bold">{uniqueInterfaces.length}</p></div>
-          </div>
-        </CardContent></Card>
-      </div>
-
-      {/* Search */}
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input placeholder="VIP adı, IP, interface veya açıklama ara..." value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }} className="pl-9" />
-      </div>
-
-      {/* VIP Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <ExternalLink className="h-5 w-5" />
-            Sanal IP Kuralları
-            <Badge variant="secondary">{filteredVips.length}</Badge>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="flex justify-center py-12"><RefreshCw className="h-8 w-8 animate-spin text-primary" /></div>
-          ) : error ? (
-            <div className="flex items-center gap-2 p-4 bg-destructive/10 rounded-lg">
-              <AlertCircle className="h-5 w-5 text-destructive" />
-              <span className="text-destructive">{uiError(error)}</span>
-            </div>
-          ) : (
-            <>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Durum</TableHead>
-                    <TableHead>Ad</TableHead>
-                    <TableHead>Tür</TableHead>
-                    <TableHead>Harici IP</TableHead>
-                    <TableHead>Harici Port</TableHead>
-                    <TableHead>Dahili IP</TableHead>
-                    <TableHead>Dahili Port</TableHead>
-                    <TableHead>Arayüz</TableHead>
-                    <TableHead>Port Yönlendirme</TableHead>
-                    <TableHead>Açıklama</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {paginatedVips.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Virtual IP bulunamadı</TableCell>
-                    </TableRow>
-                  ) : (
-                    paginatedVips.map((vip: VirtualIP, idx: number) => (
-                      <TableRow key={vip.name || idx}>
-                        <TableCell>{getStatusBadge(vip.status)}</TableCell>
-                        <TableCell className="font-medium">{vip.name || '-'}</TableCell>
-                        <TableCell>{getTypeBadge(vip.type)}</TableCell>
-                        <TableCell className="font-mono text-xs">{vip.extip || '-'}</TableCell>
-                        <TableCell className="font-mono text-xs">{vip.extport || '-'}</TableCell>
-                        <TableCell className="font-mono text-xs">{getMappedIPs(vip)}</TableCell>
-                        <TableCell className="font-mono text-xs">{vip.mappedport || '-'}</TableCell>
-                        <TableCell className="text-xs">{vip.extintf || 'any'}</TableCell>
-                        <TableCell>{getPortForwardBadge(vip.portforward)}</TableCell>
-                        <TableCell className="max-w-xs text-xs text-muted-foreground truncate" title={vip.comment}>{vip.comment || '-'}</TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between mt-4">
-                  <p className="text-sm text-muted-foreground">Sayfa {currentPage} / {totalPages} ({filteredVips.length} kayıt)</p>
-                  <div className="flex items-center gap-1">
-                    <Button variant="outline" size="icon" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} aria-label="Önceki sayfa"><ChevronLeft className="h-4 w-4" /></Button>
-                    <Button variant="outline" size="icon" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} aria-label="Sonraki sayfa"><ChevronRight className="h-4 w-4" /></Button>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </CardContent>
-      </Card>
-    </div>
-  );
+  useEffect(() => { void load(); return () => active.current?.abort(); }, [load]);
+  const linked = targets?.filter(row => row.id && row.device) || [], target = linked.find(row => row.id === choice) || (!choice && linked.length === 1 ? linked[0] : null);
+  return <div className={common.page}><div className={common.workspace}>
+    <header className={common.header}><PageHeading section="virtualIps" description="Dış IP’den iç IP’ye yönlendirmeleri, port eşlemelerini ve politika bağlantılarını cihaz bazında inceleyin.">Sanal IP Adresleri</PageHeading><div className={common.headerActions}><Button asChild variant="outline"><Link href="/integrations/firewall"><Settings2 size={16} aria-hidden="true" />Bağlantıları yönet</Link></Button><Button variant="outline" disabled={loading} onClick={() => void load()}><RefreshCw size={16} aria-hidden="true" className={loading ? 'animate-spin motion-reduce:animate-none' : ''} />{loading ? 'Okunuyor…' : 'Verileri yenile'}</Button></div></header>
+    <div className={common.serviceBar}><SemanticBadge tone="info" icon={Globe}>Cihaz ve VDOM kapsamı</SemanticBadge><span>{at ? `Cihaz listesi okundu: ${userDate(at)} · TSİ` : 'Cihaz listesi okunuyor…'}</span></div>
+    {error && <Notice error>{error}{targets && ' Önceki cihaz listesi korunuyor; güncel olmayabilir.'}</Notice>}
+    {loading && !targets ? <Empty icon={RefreshCw} title="Cihaz listesi yükleniyor" /> : targets && !linked.length ? <Empty icon={Globe} title={targets.length ? 'Cihaz eşleştirmesi gerekiyor' : 'Henüz güvenlik duvarı eklenmemiş'}><p>{targets.length ? 'Kayıtlı FortiGate bağlantısını envanter cihazıyla eşleştirin.' : 'Sanal IP eşlemelerini görmek için bir FortiGate bağlantısı ekleyin.'}</p><Button asChild><Link href="/integrations/firewall"><Settings2 size={16} aria-hidden="true" />Bağlantıları yönet</Link></Button></Empty> : targets && <>
+      <section className={styles.target}><label htmlFor="vip-target"><Server size={16} aria-hidden="true" />Bağlı güvenlik duvarı ve VDOM</label><select id="vip-target" value={target?.id || ''} disabled={loading} onChange={e => setChoice(e.target.value)}><option value="">Cihaz ve VDOM seçin</option>{linked.map(row => <option key={row.id} value={row.id!}>{row.device?.name || row.name} · {row.host} · VDOM: {row.vdom}{row.enabled ? '' : ' · Devre dışı'}</option>)}</select><p>Listelenen eşlemeler yalnızca seçili güvenlik duvarı ve VDOM’a aittir.</p></section>
+      {target ? <VipDevice key={`${target.id}:${target.configId}:${target.device?.id}:${target.vdom}:${target.enabled}`} target={target} revision={revision} /> : <Notice>Eşlemeleri görmek için bir cihaz ve VDOM seçin.</Notice>}
+    </>}
+  </div></div>;
 }
+
+function VipDevice({ target, revision }: { target: FirewallListItem; revision: number }) {
+  const [search, setSearch] = useState(''), [settledSearch, setSettled] = useState(''), [status, setStatus] = useState(''), [portForward, setPortForward] = useState(''), [usage, setUsage] = useState(''), [page, setPage] = useState(1), [detailName, setDetail] = useState<string | null>(null);
+  useEffect(() => { const timer = setTimeout(() => setSettled(search.trim()), 300); return () => clearTimeout(timer); }, [search]);
+  const params = new URLSearchParams({ limit: '10', page: String(page), search: settledSearch, status, portforward: portForward, usage });
+  const resource = useFirewallOverviewResource(target.enabled ? `/api/firewalls/${encodeURIComponent(target.id!)}/virtual-ips?${params}` : null, target, parseVipWorkspace, revision);
+  const data = resource.value?.data, pendingSearch = search.trim() !== settledSearch, busy = resource.loading || pendingSearch, historical = resource.value?.status === 'stale' || !!resource.error;
+  const detail = data?.items.find(row => row.name === detailName) || null;
+  const pages = Math.max(1, Math.ceil((data?.pagination.total || 0) / 10));
+  useEffect(() => { if (data && page > pages && !resource.loading) setPage(pages); }, [data, pages, page, resource.loading]);
+  function clearFilters() { setSearch(''); setSettled(''); setStatus(''); setPortForward(''); setUsage(''); setPage(1); setDetail(null); }
+  const filtered = !!(search || status || portForward || usage);
+  const timestamp = resource.value?.at ? `${userDate(resource.value.at)} · TSİ` : 'Zaman bilgisi yok';
+  return <>
+    {!target.enabled && <Notice>Seçili bağlantı devre dışı. Cihazdan yeni sanal IP veya politika verisi istenmez.</Notice>}
+    {target.identity?.status === 'CONFLICT' && <Notice error>Cihaz kimliği başka bir kayıtla çakışıyor. Bağlantı ayrıntılarında seri numarası ve VDOM eşleşmesini kontrol edin.</Notice>}
+    <section className={common.stats} aria-label="Sanal IP özeti">{[
+      { label: 'Sanal IP tanımı', value: data?.summary.total, icon: Globe, note: 'Seçili cihaz ve VDOM’daki tüm tanımlar' },
+      { label: 'Port çevrimi açık', value: data?.summary.portForward, icon: ArrowRightLeft, note: 'Port yönlendirmesi açık olduğu bildirilen tanımlar' },
+      { label: 'Politikada eşleşen', value: data?.summary.referenced, icon: ShieldCheck, note: 'Adı doğrudan en az bir hedef adresinde geçen tanımlar' },
+      { label: 'Durumu bilinmeyen', value: data?.summary.unknownState, icon: Info, note: 'Kaynakta etkin / kapalı bilgisi bulunmayan tanımlar' },
+    ].map(item => <article key={item.label} className={common.stat}><div><h2>{item.label}</h2><span className={common.icon}><item.icon size={18} aria-hidden="true" /></span></div><strong>{item.value === null || item.value === undefined ? busy ? 'Okunuyor…' : 'Bilgi yok' : item.value.toLocaleString('tr-TR')}</strong><p>{item.note}</p></article>)}</section>
+    <Notice>Politika eşleşmesi tanımın kullanıldığı kuralı gösterir; trafik geçtiğini doğrulamaz. VIP grupları üzerinden dolaylı kullanım bu eşleşmeye dahil değildir.</Notice>
+    {resource.error && <Notice error>{resource.error}{data && ' Önceki eşlemeler gösteriliyor; güncel olmayabilir.'}</Notice>}
+    {resource.value?.error && <Notice error={resource.value.status === 'unavailable'}>{resource.value.error}</Notice>}
+    {data && !data.usageAvailable && <Notice>Politika eşleşmeleri okunamadı; kullanım bilgisi bilinmiyor. {data.usageErrorCode === 'UNSUPPORTED_OPERATION' ? 'Bu profilde politika okuması kapalı veya desteklenmiyor.' : firewallErrorMessage(data.usageErrorCode)}</Notice>}
+    <div className={common.filters} role="search" aria-label="Sanal IP filtreleri"><div className={`${styles.field} ${styles.search}`}><label htmlFor="vip-search"><Search size={14} aria-hidden="true" />Eşlemelerde ara</label><Input id="vip-search" type="search" maxLength={120} placeholder="Ad, dış/iç IP, port veya arabirim" value={search} onChange={e => { setSearch(e.target.value); setPage(1); setDetail(null); }} disabled={!target.enabled} /></div><div className={styles.field}><label htmlFor="vip-status">Tanım durumu</label><select id="vip-status" disabled={!target.enabled} value={status} onChange={e => { setStatus(e.target.value); setPage(1); setDetail(null); }}><option value="">Tüm durumlar</option><option value="enable">Etkin</option><option value="disable">Kapalı</option><option value="unknown">Bilgi yok</option></select></div><div className={styles.field}><label htmlFor="vip-port-forward">Port çevrimi</label><select id="vip-port-forward" disabled={!target.enabled} value={portForward} onChange={e => { setPortForward(e.target.value); setPage(1); setDetail(null); }}><option value="">Tümü</option><option value="enable">Açık</option><option value="disable">Kapalı</option><option value="unknown">Bilgi yok</option></select></div><div className={styles.field}><label htmlFor="vip-usage">Politika eşleşmesi</label><select id="vip-usage" disabled={!target.enabled} value={usage} onChange={e => { setUsage(e.target.value); setPage(1); setDetail(null); }}><option value="">Tümü</option><option value="referenced">Politikada eşleşiyor</option><option value="no-direct-reference">Doğrudan eşleşme yok</option><option value="unknown">Kullanım bilgisi yok</option></select></div>{filtered && <Button variant="ghost" onClick={clearFilters}>Filtreleri temizle</Button>}</div>
+    <section className={common.collection} aria-label="Sanal IP eşlemeleri" aria-busy={busy}><header className={common.sectionHeader}><div><h2><Globe size={18} aria-hidden="true" />Sanal IP eşlemeleri</h2><p>{target.device?.name || target.name} · VDOM: {target.vdom} · {timestamp}</p></div><SemanticBadge tone={historical ? 'warning' : data ? 'info' : 'neutral'} icon={ClockIcon}>{busy ? 'Okunuyor…' : historical ? 'Önceki veri' : data ? firewallSourceLabels[resource.value!.source] : 'Veri yok'}</SemanticBadge></header>
+    {busy && !data ? <Empty icon={RefreshCw} title="Eşlemeler okunuyor" /> : !data ? <Empty icon={Info} title={target.enabled ? 'Sanal IP bilgisi alınamadı' : 'Bağlantı devre dışı'}><p>{target.enabled ? 'Kaynak erişimini ve sanal IP okuma ayarlarını kontrol edip verileri yenileyin.' : 'Kayıtları okumak için bağlantıyı yönetim ekranından etkinleştirin.'}</p></Empty> : !data.items.length ? <Empty icon={filtered ? Search : Globe} title={filtered ? 'Filtrelere uygun eşleme yok' : 'Bu cihaz ve VDOM’da sanal IP tanımı yok'}>{filtered && <Button variant="outline" onClick={clearFilters}>Filtreleri temizle</Button>}</Empty> : <>
+      <div className={styles.tableWrap}><table className={styles.table}><caption className="sr-only">Seçili güvenlik duvarının dış IP, iç IP ve port eşlemeleri</caption><thead><tr><th scope="col">Tanım / bağlı cihaz</th><th scope="col">Dış → iç IP ve port eşlemesi</th><th scope="col">Arabirim / tür</th><th scope="col">Durum / kullanım</th><th scope="col">Ayrıntılar</th></tr></thead><tbody>{data.items.map(row => <tr key={row.name}><td><strong>{row.name}</strong><small>{target.device?.name || target.name}</small>{row.comment && <p className={styles.comment}>{row.comment}</p>}</td><td><Mapping row={row} /></td><td><span className={styles.interface}><Network size={14} aria-hidden="true" />{interfaceLabel(row.interface)}</span><small>{vipTypeLabel(row.type)}</small></td><td><div className={styles.badges}><DefinitionState row={row} /><Usage row={row} /></div>{row.policies.length > 0 && <small>{row.policies.length} doğrudan politika eşleşmesi</small>}</td><td><Button variant="outline" size="sm" aria-label={`${row.name}: eşleme ayrıntıları`} onClick={() => setDetail(row.name)}><Eye size={14} aria-hidden="true" />İncele</Button></td></tr>)}</tbody></table></div>
+      <div className={styles.mobile}>{data.items.map(row => <article key={row.name} className={styles.record}><div className={styles.recordHead}><strong>{row.name}</strong><DefinitionState row={row} /></div><p className={styles.hint}>{target.device?.name || target.name} · VDOM: {target.vdom}</p><Mapping row={row} /><dl className={styles.meta}><Meta label="Dış arabirim" value={interfaceLabel(row.interface)} /><Meta label="Eşleme türü" value={vipTypeLabel(row.type)} /></dl><div className={styles.badges}><Usage row={row} /></div>{row.comment && <p className={styles.comment}>{row.comment}</p>}<Button variant="outline" onClick={() => setDetail(row.name)}><Eye size={16} aria-hidden="true" />Eşleme ayrıntıları</Button></article>)}</div>
+    </>}
+    {data && <div className={styles.pagination}><p role="status">{busy ? 'Filtre sonucu okunuyor…' : `${data.pagination.total.toLocaleString('tr-TR')} eşleme · Sayfa ${page} / ${pages}`}</p><div><Button variant="outline" size="sm" disabled={busy || page <= 1} aria-label="Eşlemeler: önceki sayfa" onClick={() => { setPage(page - 1); setDetail(null); }}><ChevronLeft size={16} aria-hidden="true" />Önceki</Button><Button variant="outline" size="sm" disabled={busy || !data.pagination.hasMore} aria-label="Eşlemeler: sonraki sayfa" onClick={() => { setPage(page + 1); setDetail(null); }}>Sonraki<ChevronRight size={16} aria-hidden="true" /></Button></div></div>}
+    </section>
+    <Dialog open={!!detail} onOpenChange={open => { if (!open) setDetail(null); }}><DialogContent className={`${common.modal} ${styles.modal}`}><DialogHeader><DialogTitle className={styles.dialogTitle}><Globe size={20} aria-hidden="true" />{detail?.name || 'Eşleme ayrıntıları'}</DialogTitle><DialogDescription>{target.device?.name || target.name} · {target.host} · VDOM: {target.vdom}</DialogDescription></DialogHeader>{detail && <><div className={styles.badges}><DefinitionState row={detail} /><Usage row={detail} />{historical && <SemanticBadge tone="warning">Önceki veri</SemanticBadge>}</div><Mapping row={detail} /><dl className={styles.meta}><Meta label="Bağlı güvenlik duvarı" value={target.device?.name || target.name} /><Meta label="Veri zamanı" value={timestamp} /><Meta label="Dış arabirim" value={interfaceLabel(detail.interface)} /><Meta label="Eşleme türü" value={vipTypeLabel(detail.type)} /><Meta label="Port çevrimi" value={detail.portForward === true ? 'Açık' : detail.portForward === false ? 'Kapalı' : 'Bilgi yok'} /><Meta label="Protokol" value={detail.portForward === false ? 'Port çevrimi kapalı' : detail.protocol?.toUpperCase()} /></dl>{detail.comment && <section className={styles.note}><h3>Açıklama</h3><p>{detail.comment}</p></section>}<section className={styles.note}><h3><ShieldCheck size={16} aria-hidden="true" />Doğrudan politika eşleşmeleri</h3><p>VIP adı, politikanın hedef adresinde birebir aranır. Grup üyeliği, zamanlama veya canlı trafik bu sonucu doğrulamaz.</p>{data?.usageAt && <p>Politika okuma zamanı: {userDate(data.usageAt)} · TSİ</p>}{detail.policies.length ? <ul className={styles.policies}>{detail.policies.map((policy, index) => <li key={`${policy.id}:${index}`}><div><strong>{policy.name || 'Adı belirtilmemiş politika'}</strong><small>Politika no: {policy.id ?? 'Bilgi yok'} · {policy.action === 'accept' ? 'İzin ver' : policy.action === 'deny' ? 'Engelle' : 'İşlem bilgisi yok'}</small></div><SemanticBadge tone={policy.enabled === true ? 'info' : 'neutral'}>{policy.enabled === true ? 'Kural etkin' : policy.enabled === false ? 'Kural kapalı' : 'Kural durumu bilinmiyor'}</SemanticBadge></li>)}</ul> : <p>{detail.usage === 'unknown' ? 'Politika bilgisi alınamadı.' : 'VIP adına doğrudan başvuran politika bulunmadı. Bu sonuç, tanımın kullanılmadığını göstermez.'}</p>}</section><div className={common.dialogActions}><Button asChild variant="outline"><Link href={`/integrations/firewall/${encodeURIComponent(target.id!)}`}><Server size={16} aria-hidden="true" />Bağlı cihaz</Link></Button><Button onClick={() => setDetail(null)}>Kapat</Button></div></>}</DialogContent></Dialog>
+  </>;
+}
+const ClockIcon = Clock3;
+function interfaceLabel(value: string | null) { return value === 'any' ? 'Tüm arabirimler' : value || 'Arabirim bilgisi yok'; }
+function DefinitionState({ row }: { row: VirtualIp }) { return <SemanticBadge tone={row.enabled === true ? 'success' : 'neutral'}>{row.enabled === true ? 'Tanım etkin' : row.enabled === false ? 'Tanım kapalı' : 'Durum bilgisi yok'}</SemanticBadge>; }
+function Usage({ row }: { row: VirtualIp }) { return <SemanticBadge tone={row.usage === 'referenced' ? 'info' : 'neutral'} icon={row.usage === 'referenced' ? ShieldCheck : Info}>{vipUsageLabel(row.usage)}</SemanticBadge>; }
+function Mapping({ row }: { row: VirtualIp }) { return <div className={styles.mapping}><div className={styles.address}><span><Globe size={13} aria-hidden="true" />Dış IP</span><code>{row.external || 'IP bilgisi yok'}</code>{row.portForward === true && <small>Port: {row.externalPort || 'Bilgi yok'}</small>}</div><ArrowRight className={styles.arrow} size={18} aria-label="şu adrese yönlendirilir" /><div className={styles.address}><span><Server size={13} aria-hidden="true" />İç IP</span>{row.internal.length ? row.internal.map(ip => <code key={ip}>{ip}</code>) : <code>IP bilgisi yok</code>}{row.portForward === true && <small>Port: {row.internalPort || 'Bilgi yok'}</small>}</div><div className={styles.portNote}>{row.portForward === true ? `${row.protocol?.toUpperCase() || 'Protokol bilgisi yok'} · Port çevrimi açık` : row.portForward === false ? 'Port çevrimi kapalı · Port değiştirilmez' : 'Port çevrimi bilgisi yok'}</div></div>; }
+function Meta({ label, value }: { label: string; value: string | null | undefined }) { return <div><dt>{label}</dt><dd>{value || 'Bilgi yok'}</dd></div>; }
+function Notice({ children, error = false }: { children: ReactNode; error?: boolean }) { const Icon = error ? TriangleAlert : Info; return <div className={error ? common.error : common.info} role={error ? 'alert' : undefined}><Icon size={18} aria-hidden="true" /><p>{children}</p></div>; }
+function Empty({ icon: Icon, title, children }: { icon: typeof Info; title: string; children?: ReactNode }) { return <div className={common.empty}><Icon size={28} aria-hidden="true" /><h3>{title}</h3>{children}</div>; }

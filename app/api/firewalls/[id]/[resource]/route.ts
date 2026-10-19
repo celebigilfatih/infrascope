@@ -1,3 +1,4 @@
+import { authorizeApiRequest } from '@/lib/auth/api-permission';
 import { NextRequest, NextResponse } from 'next/server';
 import { FirewallIntegrationError } from '@/lib/firewall/errors';
 import {
@@ -10,6 +11,9 @@ import {
   type FirewallListQuery,
 } from '@/lib/firewall/read-query';
 import { prisma } from '@/lib/prisma';
+import { readVipWorkspace } from '@/lib/firewall/virtual-ips';
+
+export const dynamic = 'force-dynamic';
 
 type RouteContext = { params: { id: string; resource: string } };
 type FirewallPolicyReadModel = {
@@ -63,6 +67,7 @@ function statusSnapshot(metadata: unknown, field?: 'ha') {
 }
 
 export async function GET(request: NextRequest, { params }: RouteContext) {
+  const access = await authorizeApiRequest(request, 'firewall', 'read'); if (!access.allowed) return access.response;
   try {
     const allowedFilters = params.resource === 'policies'
       ? ['action', 'enabled']
@@ -70,12 +75,14 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
         ? ['type']
         : params.resource === 'interfaces'
           ? ['link']
+          : params.resource === 'virtual-ips'
+            ? ['status', 'portforward', 'usage', 'interface']
           : params.resource === 'vips'
             ? ['status']
             : [];
     const query = firewallListQueryFromUrl(request.url, allowedFilters);
     const result = await readResource(params.id, params.resource, query);
-    return NextResponse.json({ success: true, target: result.target, ...result.envelope });
+    return NextResponse.json({ success: true, target: result.target, ...result.envelope }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     if (error instanceof FirewallReadTargetError) {
       return NextResponse.json({ success: false, error: error.message }, { status: error.status });
@@ -283,6 +290,9 @@ function readResource(connectorId: string, resource: string, query: FirewallList
         } : null;
       },
     });
+  }
+  if (resource === 'virtual-ips') {
+    return executeFirewallRestRead({ connectorId, read: service => readVipWorkspace(service, query) });
   }
   if (resource === 'vips') {
     return executeFirewallRestRead({

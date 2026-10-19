@@ -1,691 +1,77 @@
 'use client';
-
-import { uiLabel } from '@/lib/i18n/tr';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import { Activity, ArrowRight, ChevronLeft, ChevronRight, Cpu, FileCheck2, Info, Link2, MemoryStick, Network, RefreshCw, Search, Server, Settings2, Shield, ShieldCheck, TriangleAlert, Users } from 'lucide-react';
 import { PageHeading } from '@/components/ui/page-heading';
-import React, { useState, useEffect, useMemo } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { SemanticBadge } from '@/components/ui/semantic-badge';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Progress } from '@/components/ui/progress';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import {
-  ChevronLeft,
-  ChevronRight,
-  RefreshCw,
-  Search,
-  Shield,
-  Cpu,
-  MemoryStick,
-  Network,
-  Activity,
-  Server,
-  Users,
-  AlertTriangle,
-} from 'lucide-react';
-
-interface FortiGateStatus {
-  hostname: string;
-  version: string;
-  serial: string;
-  model: string;
-  cpu: number;
-  memory: number;
-  session: {
-    current: number;
-    percent: number;
-  };
-  ha: {
-    enabled: boolean;
-    role: string;
-    serial: string;
-  };
-  sdwan: {
-    interfaces: Array<{
-      name: string;
-      link: string;
-      session: number;
-      tx_bandwidth: number;
-      rx_bandwidth: number;
-    }>;
-  };
-  license: {
-    status: string;
-    support: string;
-    expires: string;
-  };
-}
-
-interface SSLVPNUser {
-  user_name: string;
-  remote_host: string;
-  last_login_timestamp: number;
-  two_factor_auth: boolean;
-  interface: string;
-  duration: number;
-  aip: string;
-  in_bytes: number;
-  out_bytes: number;
-}
-
-interface InterfaceStats {
-  id: string;
-  name: string;
-  alias: string;
-  mac: string;
-  ip: string;
-  link: boolean;
-  speed: number;
-  tx_packets: number;
-  rx_packets: number;
-  tx_bytes: number;
-  rx_bytes: number;
-  tx_errors: number;
-  rx_errors: number;
-}
-
-const ITEMS_PER_PAGE = 10;
+import { FirewallModeBadge } from '@/components/firewall/FirewallModeBadge';
+import { FirewallSourceMatrix } from '@/components/firewall/FirewallSourceMatrix';
+import { useFirewallOverviewResource, type OverviewResource } from '@/components/firewall/useFirewallOverviewResource';
+import type { FirewallListItem } from '@/components/firewall/types';
+import { userDate } from '@/lib/users/workspace';
+import { firewallSourceLabels, overviewBytes, overviewDuration, overviewMetric, overviewNumberLabel, overviewRecordedSources, parseOverviewInterfaces, parseOverviewPolicyCount, parseOverviewSnmp, parseOverviewSystem, parseOverviewTargets, parseOverviewVpn, requestOverviewJson, type OverviewInterface, type OverviewPage, type OverviewVpn } from '@/lib/firewall/overview';
+import common from '@/components/users/users-workspace.module.css';
+import styles from './page.module.css';
+const number = overviewNumberLabel;
+function useDebounced(value: string) { const [settled, setSettled] = useState(value); useEffect(() => { const timer = setTimeout(() => setSettled(value), 300); return () => clearTimeout(timer); }, [value]); return settled; }
 
 export default function FirewallPage() {
-  const [status, setStatus] = useState<FortiGateStatus | null>(null);
-  const [sslUsers, setSslUsers] = useState<SSLVPNUser[]>([]);
-  const [interfaceStats, setInterfaceStats] = useState<InterfaceStats[]>([]);
-  const [fortiAnalyzerStatus, setFortiAnalyzerStatus] = useState<Record<string, unknown> | null>(null);
-  const [fortiAnalyzerAdoms, setFortiAnalyzerAdoms] = useState<Array<Record<string, unknown>>>([]);
-  const [loading, setLoading] = useState(true);
-
-  // Search and pagination states
-  const [sslSearch, setSslSearch] = useState('');
-  const [sslPage, setSslPage] = useState(1);
-  const [interfaceSearch, setInterfaceSearch] = useState('');
-  const [interfacePage, setInterfacePage] = useState(1);
-
-  const fetchFortiGateData = async () => {
-    setLoading(true);
-    try {
-      const [statusRes, sslRes, interfaceRes] = await Promise.all([
-        fetch('/api/integrations/fortigate'),
-        fetch('/api/integrations/fortigate?vpn=ssl'),
-        fetch('/api/integrations/fortigate?vpn=interfaces'),
-      ]);
-
-      const statusData = await statusRes.json();
-      const sslData = await sslRes.json();
-      const interfaceData = await interfaceRes.json();
-
-      if (statusData.connected) {
-        setStatus({
-          hostname: statusData.hostname || 'BUSKI_MASTER',
-          version: statusData.version || 'v7.2.11',
-          serial: statusData.serial || 'FG4H0FT922903115',
-          model: statusData.model || 'FortiGate 400F',
-          cpu: statusData.cpu || 0,
-          memory: statusData.memory || 0,
-          session: statusData.session || { current: 0, percent: 0 },
-          ha: statusData.ha || { enabled: false, role: 'Unknown', serial: '' },
-          sdwan: statusData.sdwan || { interfaces: [] },
-          license: statusData.license || { status: 'Unknown', support: 'Unknown', expires: '' },
-        });
-      }
-
-      if (sslData.success) {
-        setSslUsers(sslData.data);
-      }
-
-      if (interfaceData.success) {
-        setInterfaceStats(interfaceData.data);
-      }
-    } catch (error) {
-      console.error('Failed to fetch FortiGate data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchFortiAnalyzerData = async () => {
-    try {
-      const [faStatusRes, faAdomsRes] = await Promise.all([
-        fetch('/api/integrations/fortianalyzer?type=status'),
-        fetch('/api/integrations/fortianalyzer?type=adoms'),
-      ]);
-
-      const faStatusData = await faStatusRes.json();
-      const faAdomsData = await faAdomsRes.json();
-
-      if (faStatusData.success) {
-        setFortiAnalyzerStatus(faStatusData.data);
-      }
-
-      if (faAdomsData.success) {
-        setFortiAnalyzerAdoms(faAdomsData.data || []);
-      }
-    } catch (error) {
-      console.error('Failed to fetch FortiAnalyzer data:', error);
-    }
-  };
-
-  useEffect(() => {
-    fetchFortiGateData();
-    fetchFortiAnalyzerData();
-    
-    // FortiGate: 5 dakika
-    const fortigateInterval = setInterval(fetchFortiGateData, 300000);
-    // FortiAnalyzer: 15 dakika
-    const fortianalyzerInterval = setInterval(fetchFortiAnalyzerData, 900000);
-    
-    return () => {
-      clearInterval(fortigateInterval);
-      clearInterval(fortianalyzerInterval);
-    };
+  const [targets, setTargets] = useState<FirewallListItem[] | null>(null), [selectedId, setSelectedId] = useState(''), [loading, setLoading] = useState(true), [error, setError] = useState(''), [readAt, setReadAt] = useState<string | null>(null), [revision, setRevision] = useState(0);
+  const [interfaceSearch, setInterfaceSearch] = useState(''), [interfacePage, setInterfacePage] = useState(1), [vpnSearch, setVpnSearch] = useState(''), [vpnPage, setVpnPage] = useState(1);
+  const active = useRef<AbortController | null>(null), sequence = useRef(0), choice = useRef('');
+  const load = useCallback(async () => {
+    const seq = ++sequence.current; active.current?.abort(); const controller = new AbortController(); active.current = controller; setLoading(true); setError('');
+    try { const next = parseOverviewTargets(await requestOverviewJson('/api/firewalls', controller.signal)); if (controller.signal.aborted || seq !== sequence.current) return; const linked = next.filter(row => row.id), selected = linked.find(row => row.id === choice.current) || (linked.length === 1 ? linked[0] : null); setTargets(next); setSelectedId(selected?.id || ''); choice.current = selected?.id || ''; setReadAt(new Date().toISOString()); setRevision(value => value + 1); }
+    catch (failure) { if (!controller.signal.aborted && seq === sequence.current) setError(failure instanceof Error ? failure.message : 'Güvenlik duvarları okunamadı.'); }
+    finally { if (!controller.signal.aborted && seq === sequence.current) setLoading(false); }
   }, []);
-
-  // Filter and paginate SSL users
-  const filteredSslUsers = useMemo(() => {
-    if (!sslSearch) return sslUsers;
-    const term = sslSearch.toLowerCase();
-    return sslUsers.filter(
-      (u: SSLVPNUser) =>
-        u.user_name.toLowerCase().includes(term) ||
-        u.remote_host.includes(term) ||
-        u.aip.includes(term) ||
-        u.interface.toLowerCase().includes(term)
-    );
-  }, [sslUsers, sslSearch]);
-
-  const sslTotalPages = Math.ceil(filteredSslUsers.length / ITEMS_PER_PAGE);
-  const paginatedSslUsers = useMemo(() => {
-    const start = (sslPage - 1) * ITEMS_PER_PAGE;
-    return filteredSslUsers.slice(start, start + ITEMS_PER_PAGE);
-  }, [filteredSslUsers, sslPage]);
-
-  // Interface filter and pagination
-  const filteredInterfaces = useMemo(() => {
-    return interfaceStats.filter((iface: InterfaceStats) => {
-      const searchLower = interfaceSearch.toLowerCase();
-      return (
-        iface.name.toLowerCase().includes(searchLower) ||
-        (iface.alias && iface.alias.toLowerCase().includes(searchLower)) ||
-        iface.ip.toLowerCase().includes(searchLower)
-      );
-    });
-  }, [interfaceStats, interfaceSearch]);
-
-  const interfaceTotalPages = Math.ceil(filteredInterfaces.length / ITEMS_PER_PAGE);
-
-  const paginatedInterfaces = useMemo(() => {
-    const start = (interfacePage - 1) * ITEMS_PER_PAGE;
-    return filteredInterfaces.slice(start, start + ITEMS_PER_PAGE);
-  }, [filteredInterfaces, interfacePage]);
-
-  const formatBandwidth = (bytes: number) => {
-    if (bytes > 1000000000) return `${(bytes / 1000000000).toFixed(2)} GB`;
-    if (bytes > 1000000) return `${(bytes / 1000000).toFixed(2)} MB`;
-    if (bytes > 1000) return `${(bytes / 1000).toFixed(2)} KB`;
-    return `${bytes} B`;
-  };
-
-  const formatDuration = (seconds: number) => {
-    const hours = Math.floor(seconds / 3600);
-    const mins = Math.floor((seconds % 3600) / 60);
-    return `${hours}h ${mins}m`;
-  };
-
-
-
-  const getPageNumbers = (currentPage: number, totalPages: number) => {
-    const pages: (number | 'ellipsis')[] = [];
-    const maxVisible = 5;
-    if (totalPages <= maxVisible) {
-      for (let i = 1; i <= totalPages; i++) pages.push(i);
-    } else {
-      pages.push(1);
-      if (currentPage > 3) pages.push('ellipsis');
-      const start = Math.max(2, currentPage - 1);
-      const end = Math.min(totalPages - 1, currentPage + 1);
-      for (let i = start; i <= end; i++) pages.push(i);
-      if (currentPage < totalPages - 2) pages.push('ellipsis');
-      pages.push(totalPages);
-    }
-    return pages;
-  };
-
-  return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-4">
-        <div>
-          <PageHeading section="firewall" description={<>{status?.hostname} ({status?.serial})</>}>FortiGate Güvenlik Duvarı</PageHeading>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={() => { fetchFortiGateData(); fetchFortiAnalyzerData(); }} disabled={loading} aria-label="Yenile">
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          </Button>
-        </div>
-      </div>
-
-      {/* System Status Cards */}
-      {status && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-full bg-blue-500/20">
-                  <Server className="h-5 w-5 text-blue-500" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Versiyon</p>
-                  <p className="text-lg font-bold">{status.version}</p>
-                  <p className="text-xs text-muted-foreground">{status.model}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-full bg-green-500/20">
-                  <Cpu className="h-5 w-5 text-green-500" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm text-muted-foreground">CPU Kullanımı</p>
-                  <p className="text-lg font-bold">{status.cpu}%</p>
-                  <Progress value={status.cpu} className="h-2 mt-1" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-full bg-orange-500/20">
-                  <MemoryStick className="h-5 w-5 text-orange-500" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm text-muted-foreground">Memory Kullanımı</p>
-                  <p className="text-lg font-bold">{status.memory}%</p>
-                  <Progress value={status.memory} className="h-2 mt-1" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-full bg-purple-500/20">
-                  <Network className="h-5 w-5 text-purple-500" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Aktif Oturum</p>
-                  <p className="text-lg font-bold">{status.session.current.toLocaleString('tr-TR')}</p>
-                  <p className="text-xs text-muted-foreground">%{status.session.percent} kullanımda</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* HA & SD-WAN Status */}
-      {status && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Shield className="h-4 w-4" /> HA Durumu
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm">Rol</span>
-                  <Badge variant={status.ha.role === 'Master' ? 'default' : 'secondary'}>
-                    {uiLabel(status.ha.role)}
-                  </Badge>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm">Birincil Seri No</span>
-                  <span className="font-mono text-xs">{status.serial}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm">İkincil Seri No</span>
-                  <span className="font-mono text-xs">{status.ha.serial}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm">Lisans</span>
-                  <Badge variant="success">{uiLabel(status.license.support)}</Badge>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Activity className="h-4 w-4" /> SD-WAN Arayüzleri
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {status.sdwan.interfaces.map((iface) => (
-                  <div key={iface.name} className="flex justify-between items-center p-2 bg-muted rounded">
-                    <div>
-                      <span className="font-medium">{iface.name}</span>
-                      <Badge variant={iface.link === 'up' ? 'success' : 'destructive'} className="ml-2 text-xs">
-                        {iface.link}
-                      </Badge>
-                    </div>
-                    <div className="text-right text-xs">
-                      <div>↓ {(iface.rx_bandwidth / 1000000).toFixed(2)} Mbps</div>
-                      <div>↑ {(iface.tx_bandwidth / 1000000).toFixed(2)} Mbps</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* Interface Statistics */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Network className="h-5 w-5" />
-            Arayüz İstatistikleri
-            <Badge variant="secondary">{filteredInterfaces.length}</Badge>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {/* Search */}
-          <div className="flex items-center gap-4 mb-4">
-            <div className="relative flex-1 max-w-sm">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Arayüz ara…"
-                value={interfaceSearch}
-                onChange={(e) => {
-                  setInterfaceSearch(e.target.value);
-                  setInterfacePage(1);
-                }}
-                className="pl-10"
-              />
-            </div>
-          </div>
-
-          {loading ? (
-            <div className="flex justify-center py-12">
-              <RefreshCw className="h-8 w-8 animate-spin text-primary" />
-            </div>
-          ) : (
-            <>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>İsim</TableHead>
-                    <TableHead>Durum</TableHead>
-                    <TableHead>IP</TableHead>
-                    <TableHead>Hız</TableHead>
-                    <TableHead>RX/TX (GB)</TableHead>
-                    <TableHead>Paketler</TableHead>
-                    <TableHead>Hatalar</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {paginatedInterfaces.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                        Interface bulunamadı
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    paginatedInterfaces.map((iface: InterfaceStats) => (
-                      <TableRow key={iface.id}>
-                        <TableCell>
-                          <div>
-                            <p className="font-medium">{iface.name}</p>
-                            {iface.alias && (
-                              <p className="text-xs text-muted-foreground">{iface.alias}</p>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={iface.link ? 'success' : 'secondary'}>
-                            {iface.link ? 'Bağlı' : 'Kapalı'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="font-mono text-xs">{iface.ip || '-'}</TableCell>
-                        <TableCell>{iface.speed > 0 ? `${iface.speed} Mbps` : '-'}</TableCell>
-                        <TableCell>
-                          {(iface.rx_bytes / 1000000000).toFixed(2)} / {(iface.tx_bytes / 1000000000).toFixed(2)}
-                        </TableCell>
-                        <TableCell className="text-xs">
-                          {iface.rx_packets.toLocaleString('tr-TR')} / {iface.tx_packets.toLocaleString('tr-TR')}
-                        </TableCell>
-                        <TableCell>
-                          {(iface.rx_errors + iface.tx_errors) > 0 ? (
-                            <span className="text-red-600 font-medium">
-                              {iface.rx_errors + iface.tx_errors}
-                            </span>
-                          ) : (
-                            '-'
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-
-              {/* Pagination */}
-              {interfaceTotalPages > 1 && (
-                <div className="flex items-center justify-center gap-4 mt-4">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setInterfacePage(p => Math.max(1, p - 1))}
-                    disabled={interfacePage === 1}
-                   aria-label="Önceki sayfa">
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <span className="text-sm">
-                    Sayfa {interfacePage} / {interfaceTotalPages}
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setInterfacePage(p => Math.min(interfaceTotalPages, p + 1))}
-                    disabled={interfacePage === interfaceTotalPages}
-                   aria-label="Sonraki sayfa">
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                </div>
-              )}
-            </>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* FortiAnalyzer Status */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Server className="h-5 w-5" />
-            FortiAnalyzer Durumu
-            {fortiAnalyzerStatus && (
-              <Badge variant="success">Bağlı</Badge>
-            )}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="flex justify-center py-12">
-              <RefreshCw className="h-8 w-8 animate-spin text-primary" />
-            </div>
-          ) : !fortiAnalyzerStatus ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <AlertTriangle className="h-8 w-8 mx-auto mb-2 opacity-50" />
-              <p>FortiAnalyzer bağlantısı kurulamadı</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="p-3 bg-muted rounded-lg">
-                  <p className="text-xs text-muted-foreground">Sunucu Adı</p>
-                  <p className="font-medium">{fortiAnalyzerStatus.Hostname as string}</p>
-                </div>
-                <div className="p-3 bg-muted rounded-lg">
-                  <p className="text-xs text-muted-foreground">Sürüm</p>
-                  <p className="font-medium">{fortiAnalyzerStatus.Version as string}</p>
-                </div>
-                <div className="p-3 bg-muted rounded-lg">
-                  <p className="text-xs text-muted-foreground">Platform</p>
-                  <p className="font-medium">{fortiAnalyzerStatus["Platform Adı"] as string}</p>
-                </div>
-                <div className="p-3 bg-muted rounded-lg">
-                  <p className="text-xs text-muted-foreground">Seri No</p>
-                  <p className="font-medium">{fortiAnalyzerStatus["Seri Numarası"] as string}</p>
-                </div>
-              </div>
-              
-              <div className="p-3 bg-muted rounded-lg">
-                <p className="text-xs text-muted-foreground mb-2">Disk Kullanımı</p>
-                <p className="text-sm">{fortiAnalyzerStatus["Disk Kullanımı"] as string}</p>
-              </div>
-
-              {fortiAnalyzerAdoms.length > 0 && (
-                <div>
-                  <p className="text-xs text-muted-foreground mb-2">ADOM&apos;lar ({fortiAnalyzerAdoms.length})</p>
-                  <div className="flex flex-wrap gap-2">
-                    {fortiAnalyzerAdoms.slice(0, 8).map((adom: Record<string, unknown>, idx: number) => (
-                      <Badge key={idx} variant="outline" className="text-xs">
-                        {adom.name as string}
-                      </Badge>
-                    ))}
-                    {fortiAnalyzerAdoms.length > 8 && (
-                      <Badge variant="secondary" className="text-xs">+{fortiAnalyzerAdoms.length - 8}</Badge>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* SSL-VPN Users Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Users className="h-5 w-5" />
-              SSL-VPN Kullanıcıları
-              <Badge variant="secondary">{filteredSslUsers.length}</Badge>
-            </div>
-            <div className="relative w-64">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Kullanıcı ara..."
-                value={sslSearch}
-                onChange={(e) => { setSslSearch(e.target.value); setSslPage(1); }}
-                className="pl-9"
-              />
-            </div>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="flex justify-center py-12">
-              <RefreshCw className="h-8 w-8 animate-spin text-primary" />
-            </div>
-          ) : (
-            <>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Kullanıcı</TableHead>
-                    <TableHead>IP Adresi</TableHead>
-                    <TableHead>VPN IP</TableHead>
-                    <TableHead>Arayüz</TableHead>
-                    <TableHead>Süre</TableHead>
-                    <TableHead>2FA</TableHead>
-                    <TableHead className="text-right">Trafik</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {paginatedSslUsers.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                        Kullanıcı bulunamadı
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    paginatedSslUsers.map((user, idx) => (
-                      <TableRow key={idx}>
-                        <TableCell className="font-medium">{user.user_name}</TableCell>
-                        <TableCell className="font-mono text-xs">{user.remote_host}</TableCell>
-                        <TableCell className="font-mono text-xs">{user.aip}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="text-xs">{user.interface}</Badge>
-                        </TableCell>
-                        <TableCell className="text-sm">{formatDuration(user.duration)}</TableCell>
-                        <TableCell>
-                          {user.two_factor_auth ? (
-                            <Badge variant="success" className="text-xs">Aktif</Badge>
-                          ) : (
-                            <Badge variant="destructive" className="text-xs">Pasif</Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right text-xs">
-                          <div>↓ {formatBandwidth(user.in_bytes)}</div>
-                          <div>↑ {formatBandwidth(user.out_bytes)}</div>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-              {sslTotalPages > 1 && (
-                <div className="flex items-center justify-between mt-4">
-                  <p className="text-sm text-muted-foreground">Sayfa {sslPage} / {sslTotalPages}</p>
-                  <div className="flex items-center gap-1">
-                    <Button variant="outline" size="icon" onClick={() => setSslPage((p) => Math.max(1, p - 1))} disabled={sslPage === 1} aria-label="Önceki sayfa">
-                      <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    {getPageNumbers(sslPage, sslTotalPages).map((page, idx) => (
-                      <React.Fragment key={idx}>
-                        {page === 'ellipsis' ? (
-                          <span className="px-2 text-muted-foreground">...</span>
-                        ) : (
-                          <Button
-                            variant={sslPage === page ? 'default' : 'outline'}
-                            size="sm"
-                            onClick={() => setSslPage(page)}
-                            className="w-9"
-                          >
-                            {page}
-                          </Button>
-                        )}
-                      </React.Fragment>
-                    ))}
-                    <Button variant="outline" size="icon" onClick={() => setSslPage((p) => Math.min(sslTotalPages, p + 1))} disabled={sslPage === sslTotalPages} aria-label="Sonraki sayfa">
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </CardContent>
-      </Card>
+  useEffect(() => { void load(); return () => active.current?.abort(); }, [load]);
+  const selected = targets?.find(row => row.id === selectedId && row.id) || null, linked = targets?.filter(row => row.id) || [], legacy = targets?.filter(row => !row.id) || [];
+  const base = selected?.enabled && selected.id ? `/api/firewalls/${encodeURIComponent(selected.id)}` : null;
+  const interfaceQuery = useDebounced(interfaceSearch.trim()), vpnQuery = useDebounced(vpnSearch.trim());
+  const system = useFirewallOverviewResource(base ? `${base}/status` : null, selected, parseOverviewSystem, revision);
+  const snmp = useFirewallOverviewResource(base && selected?.device?.nmsDeviceId && selected.device.pollingEnabled ? `${base}/snmp/health` : null, selected, parseOverviewSnmp, revision);
+  const policies = useFirewallOverviewResource(base ? `${base}/policies?limit=1` : null, selected, parseOverviewPolicyCount, revision);
+  const interfaces = useFirewallOverviewResource(base ? `${base}/interfaces?limit=10&page=${interfacePage}&search=${encodeURIComponent(interfaceQuery)}` : null, selected, parseOverviewInterfaces, revision);
+  const vpn = useFirewallOverviewResource(base ? `${base}/vpn/ssl-sessions?limit=10&page=${vpnPage}&search=${encodeURIComponent(vpnQuery)}` : null, selected, parseOverviewVpn, revision);
+  const busy = [system, snmp, policies, interfaces, vpn].some(resource => resource.loading), status = system.value?.data || null, cpu = overviewMetric(system.value, snmp.value, 'cpu'), memory = overviewMetric(system.value, snmp.value, 'memory');
+  function select(id: string) { choice.current = id; setSelectedId(id); setInterfaceSearch(''); setVpnSearch(''); setInterfacePage(1); setVpnPage(1); }
+  return <div className={common.page}><div className={common.workspace}>
+    <header className={common.header}><PageHeading section="firewall" description="Seçili cihazın sağlığını, izleme kaynaklarını ve güvenlik verilerini kaynak ve ölçüm zamanıyla birlikte takip edin.">Güvenlik Duvarı</PageHeading><div className={common.headerActions}><Button asChild variant="outline"><Link href="/integrations/firewall"><Settings2 size={16} aria-hidden="true" />Bağlantıları yönet</Link></Button><Button variant="outline" disabled={loading || busy} onClick={() => void load()}><RefreshCw size={16} aria-hidden="true" className={loading || busy ? 'animate-spin motion-reduce:animate-none' : ''} />{loading || busy ? 'Veriler okunuyor…' : 'Verileri yenile'}</Button></div></header>
+    <div className={common.serviceBar}><SemanticBadge tone={error ? 'warning' : 'info'} icon={Info}>{error ? 'Önceki bilgiler gösteriliyor' : 'Cihaz ve VDOM kapsamı'}</SemanticBadge><span>{readAt ? `Bağlantı listesi okundu: ${userDate(readAt)} · TSİ` : 'Bağlantı listesi okunuyor…'}</span><span>Yenileme, seçili cihazın durum ve güvenlik verilerini okur.</span></div>
+    {error && <div className={common.error} role="alert"><TriangleAlert size={18} aria-hidden="true" /><p>{error}{targets && ' Önceki liste korunuyor; güncel olmayabilir.'}</p></div>}
+    {loading && !targets ? <div className={common.empty} role="status"><RefreshCw size={28} aria-hidden="true" className="animate-spin" /><h2>Güvenlik duvarları yükleniyor</h2></div> : targets && !linked.length ? <div className={common.empty}><Shield size={32} aria-hidden="true" /><h2>{legacy.length ? 'Cihazın envanter eşleştirmesi gerekiyor' : 'Henüz güvenlik duvarı eklenmemiş'}</h2><p>{legacy.length ? `${legacy.length} kayıtlı FortiGate profili envanter cihazına bağlı değil. Bağlantıları yönet ekranından eşleştirin.` : 'FortiGate bağlantısı ekleyerek cihaz sağlığını ve güvenlik verilerini burada izleyebilirsiniz.'}</p><Button asChild><Link href="/integrations/firewall"><Settings2 size={16} aria-hidden="true" />Bağlantıları yönet</Link></Button></div> : targets && <>
+    <div className={styles.profile}><label htmlFor="firewall-target">Görüntülenecek cihaz ve VDOM</label><select id="firewall-target" value={selectedId} disabled={loading} onChange={event => select(event.target.value)}><option value="">Cihaz ve VDOM seçin</option>{linked.map(row => <option key={row.id} value={row.id!}>{row.device?.name || row.name} · {row.host} · VDOM: {row.vdom}{!row.enabled ? ' · Devre dışı' : ''}</option>)}</select><p className={styles.hint}>Politika, arabirim ve VPN verileri bu seçime aittir.{legacy.length > 0 && ` Envantere bağlanmayı bekleyen ${legacy.length} ek profil var.`}</p></div>
+    {!selected ? <div className={common.info}><Info size={18} aria-hidden="true" /><p>Birden fazla bağlantı var. Sağlık ve güvenlik verilerini görmek için cihaz ve VDOM seçin.</p></div> : <>
+    {!selected.enabled && <div className={common.info}><Info size={18} aria-hidden="true" /><p>Seçili profil devre dışı. Kaynaklardan yeni veri istenmez; kayıtlı cihaz ve izleme bilgileri gösterilir.</p></div>}
+    {selected.identity?.status === 'CONFLICT' && <div className={`${common.info} ${styles.warning}`}><TriangleAlert size={18} aria-hidden="true" /><p>Cihaz kimliği başka bir kayıtla çakışıyor. Cihaz ayrıntılarında seri numarası ve VDOM eşleşmesini inceleyin.</p></div>}
+    <section className={`${common.stats} ${styles.summary}`} aria-label="Cihaz sağlığı özeti">{[{ label: 'CPU kullanımı', icon: Cpu, metric: cpu, value: number(cpu.value, '%') }, { label: 'Bellek kullanımı', icon: MemoryStick, metric: memory, value: number(memory.value, '%') }].map(item => <article key={item.label} className={common.stat}><div><h2>{item.label}</h2><span className={common.icon}><item.icon size={18} aria-hidden="true" /></span></div><strong>{item.value}</strong>{item.metric.value !== null && <div className={styles.bar} role="meter" aria-label={item.label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={item.metric.value}><span style={{ width: `${item.metric.value}%` }} /></div>}<MetricStamp metric={item.metric} /></article>)}<article className={common.stat}><div><h2>Aktif oturum</h2><span className={common.icon}><Users size={18} aria-hidden="true" /></span></div><strong>{number(status?.sessions)}</strong><p>{status?.sessionPercent === null || status?.sessionPercent === undefined ? 'Oturum kapasitesi bilgisi yok' : `${number(status.sessionPercent, '%')} kapasite kullanımı`}</p><SourceStamp resource={system} /></article><article className={common.stat}><div><h2>REST erişimi</h2><span className={common.icon}><Link2 size={18} aria-hidden="true" /></span></div><strong>{system.value?.status === 'available' ? 'Veri alındı' : system.value?.status === 'stale' ? 'Önceki kayıt' : system.value?.status === 'unavailable' ? 'Veri alınamıyor' : system.loading ? 'Okunuyor…' : 'Bilgi yok'}</strong><SourceStamp resource={system} /></article></section>
+    <div className={styles.layout}>
+      <section className={styles.panel}><header><span className={common.icon}><Server size={20} aria-hidden="true" /></span><div><h2>Cihaz bilgileri ve yedeklilik</h2><p>Kaynakta bulunmayan bilgiler “Bilgi yok” olarak gösterilir.</p></div></header><div className={styles.body}><ResourceNote resource={system} /><dl className={styles.meta}>{[['Envanter adı', selected.device?.name], ['Kaynak cihaz adı', status?.hostname], ['Model', status?.model || selected.device?.model], ['Seri numarası', status?.serial || selected.device?.serialNumber], ['FortiOS sürümü', status?.version || selected.device?.firmwareVersion], ['VDOM', selected.vdom], ['HA / yedeklilik', status?.haEnabled === true ? 'Yedekli yapı' : status?.haEnabled === false ? 'Tek cihaz' : null], ['HA rolü', status?.haRole === 'Master' ? 'Birincil' : status?.haRole === 'Slave' ? 'İkincil' : null], ['Diğer cihazın seri numarası', status?.peerSerial]].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value || 'Bilgi yok'}</dd></div>)}</dl><p className={styles.hint}>Kaynakta eksik model, seri numarası ve sürüm için kayıtlı envanter bilgisi kullanılır.</p><dl className={styles.meta}><div><dt>SNMP çalışma süresi</dt><dd>{overviewDuration(snmp.value?.data?.uptime ?? null)}</dd></div><div><dt>SNMP sıcaklık ölçümü</dt><dd>{number(snmp.value?.data?.temperature, ' °C')}</dd></div></dl><SourceStamp resource={snmp} /><p className={styles.hint}>SNMP ölçümleri cihaz düzeyindedir; VDOM&apos;a özel kaynak kullanımı değildir.</p>{snmp.error && <ResourceNote resource={snmp} />}</div></section>
+      <section className={styles.panel}><header><span className={common.icon}><ShieldCheck size={20} aria-hidden="true" /></span><div><h2>Güvenlik özeti</h2><p>Politika ve VPN okumalarının kapsamı seçili cihaz / VDOM&apos;dur.</p></div></header><div className={styles.body}><div className={styles.security}><div><h3><FileCheck2 size={16} aria-hidden="true" />Politika sayısı</h3><strong>{number(policies.value?.data)}</strong><SourceStamp resource={policies} /></div><div><h3><Users size={16} aria-hidden="true" />SSL-VPN kullanıcıları</h3><strong>{vpnQuery ? 'Filtre uygulanıyor' : number(vpn.value?.data?.total)}</strong><SourceStamp resource={vpn} /></div></div><ResourceNote resource={policies} /><p className={styles.hint}>Politika sayısı bir güvenlik risk puanı değildir. FortiAnalyzer olay kaynağının durumu aşağıdaki izleme kaynaklarında gösterilir.</p><dl className={styles.meta}><div><dt>FortiCare kayıt durumu</dt><dd>{licenseLabel(status?.license.status)}</dd></div><div><dt>Destek seviyesi</dt><dd>{licenseLabel(status?.license.support)}</dd></div><div><dt>Destek bitiş tarihi</dt><dd>{status?.license.expires ? new Intl.DateTimeFormat('tr-TR', { timeZone: 'Europe/Istanbul', dateStyle: 'short' }).format(new Date(status.license.expires)) : 'Bilgi yok'}</dd></div></dl><p className={styles.hint}>Destek bilgisinin alınması lisansın geçerliliğini tek başına doğrulamaz.</p><div className={styles.links}><Link href={`/integrations/firewall/${encodeURIComponent(selected.id!)}`}><Shield size={16} aria-hidden="true" />Seçili cihazın ayrıntıları<ArrowRight size={14} aria-hidden="true" /></Link></div></div></section>
     </div>
-  );
+    <section className={styles.panel}><header><span className={common.icon}><RadioIcon /></span><div><h2>İzleme kaynakları</h2><p>Kayıtlı son kaynak kontrolleri. Her bölümdeki veri etiketi, o okumanın gerçek kaynağını ayrıca gösterir.</p></div></header><div className={styles.body}><div className={styles.stamp}><FirewallModeBadge mode={selected.monitoring?.mode} /><span>Son kayıtlı kontrol: {userDate(selected.monitoring?.lastProbeAt)} · TSİ</span></div><FirewallSourceMatrix capabilities={overviewRecordedSources(selected)} /></div></section>
+    <section className={styles.panel}><header><span className={common.icon}><Activity size={20} aria-hidden="true" /></span><div><h2>SD-WAN bağlantıları</h2><p>Kaynak sistemden alınan hat durumları ve bant genişliği.</p></div></header><div className={styles.body}><SourceStamp resource={system} />{status?.sdwan ? status.sdwan.length ? <div className={styles.sdwan}>{status.sdwan.map((row, index) => <div key={`${row.name}:${index}`}><strong>{row.name}</strong><LinkBadge up={row.link} /><span>Alınan: {number(row.rx === null ? null : row.rx / 1_000_000, ' Mbps')} · Gönderilen: {number(row.tx === null ? null : row.tx / 1_000_000, ' Mbps')}</span></div>)}</div> : <p className={styles.hint}>Bu okumada SD-WAN bağlantısı dönmedi.</p> : <p className={styles.hint}>SD-WAN bilgisi alınamadı; bu durum SD-WAN&apos;ın kapalı olduğunu göstermez.</p>}</div></section>
+    <ListPanel title="Arabirimler ve trafik" icon={Network} resource={interfaces} query={interfaceSearch} onQuery={value => { setInterfaceSearch(value); setInterfacePage(1); }} page={interfacePage} onPage={setInterfacePage} searchId="firewall-interface-search" columns={['Arabirim', 'Bağlantı', 'IP adresi', 'Hız', 'Alınan / gönderilen', 'Hata sayısı']} renderRow={(row: OverviewInterface) => <><td><strong>{row.name}</strong><small>{row.alias}</small></td><td><LinkBadge up={row.link} /></td><td>{row.ip || 'Bilgi yok'}</td><td>{row.speed === null ? 'Bilgi yok' : number(row.speed, ' Mbps')}</td><td>{overviewBytes(row.rx)} / {overviewBytes(row.tx)}</td><td>{number(row.errors)}</td></>} renderCard={(row: OverviewInterface) => <><h3>{row.name}{row.alias ? ` · ${row.alias}` : ''}</h3><dl className={styles.meta}><div><dt>Bağlantı</dt><dd><LinkBadge up={row.link} /></dd></div><div><dt>IP adresi</dt><dd>{row.ip || 'Bilgi yok'}</dd></div><div><dt>Hız</dt><dd>{row.speed === null ? 'Bilgi yok' : number(row.speed, ' Mbps')}</dd></div><div><dt>Alınan / gönderilen</dt><dd>{overviewBytes(row.rx)} / {overviewBytes(row.tx)}</dd></div><div><dt>Hata sayısı</dt><dd>{number(row.errors)}</dd></div></dl></>} />
+    <ListPanel title="SSL-VPN kullanıcıları" icon={Users} resource={vpn} query={vpnSearch} onQuery={value => { setVpnSearch(value); setVpnPage(1); }} page={vpnPage} onPage={setVpnPage} searchId="firewall-vpn-search" columns={['Kullanıcı', 'Uzak IP / VPN IP', 'Arabirim', 'Bağlantı süresi', 'İki aşamalı doğrulama', 'Alınan / gönderilen']} renderRow={(row: OverviewVpn) => <><td><strong>{row.name}</strong></td><td>{row.remote || 'Bilgi yok'}<small>{row.ip || 'Bilgi yok'}</small></td><td>{row.interface || 'Bilgi yok'}</td><td>{overviewDuration(row.seconds)}</td><td><FactorBadge value={row.twoFactor} /></td><td>{overviewBytes(row.rx)} / {overviewBytes(row.tx)}</td></>} renderCard={(row: OverviewVpn) => <><h3>{row.name}</h3><dl className={styles.meta}><div><dt>Uzak IP / VPN IP</dt><dd>{row.remote || 'Bilgi yok'} / {row.ip || 'Bilgi yok'}</dd></div><div><dt>Arabirim</dt><dd>{row.interface || 'Bilgi yok'}</dd></div><div><dt>Süre</dt><dd>{overviewDuration(row.seconds)}</dd></div><div><dt>İki aşamalı doğrulama</dt><dd><FactorBadge value={row.twoFactor} /></dd></div><div><dt>Alınan / gönderilen</dt><dd>{overviewBytes(row.rx)} / {overviewBytes(row.tx)}</dd></div></dl></>} />
+    </>}
+    </>}
+  </div></div>;
+}
+function RadioIcon() { return <Network size={20} aria-hidden="true" />; }
+function LinkBadge({ up }: { up: boolean | null }) { return <SemanticBadge tone={up === true ? 'success' : up === false ? 'warning' : 'neutral'}>{up === true ? 'Bağlı' : up === false ? 'Bağlantı yok' : 'Durum bilgisi yok'}</SemanticBadge>; }
+function FactorBadge({ value }: { value: boolean | null }) { return <SemanticBadge tone={value === true ? 'success' : value === false ? 'warning' : 'neutral'}>{value === true ? 'Etkin' : value === false ? 'Etkin değil' : 'Bilgi yok'}</SemanticBadge>; }
+function licenseLabel(value: string | null | undefined) { if (!value) return 'Bilgi yok'; return ({ registered: 'Kayıtlı', unregistered: 'Kayıtlı değil', valid: 'Geçerli', expired: 'Süresi dolmuş', active: 'Etkin', enhanced: 'Gelişmiş destek', standard: 'Standart destek' } as Record<string, string>)[value.toLowerCase()] || value; }
+function SourceStamp({ resource }: { resource: OverviewResource<unknown> }) { const value = resource.value; return <div className={styles.stamp}><SemanticBadge tone={resource.loading ? 'info' : value?.status === 'available' ? 'success' : value?.status === 'stale' ? 'warning' : value?.status === 'unavailable' || resource.error ? 'danger' : 'neutral'}>{resource.loading ? 'Okunuyor…' : value?.status === 'available' ? 'Güncel okuma' : value?.status === 'stale' ? 'Önceki veri' : value?.status === 'unavailable' || resource.error ? 'Veri alınamadı' : 'Veri yok'}</SemanticBadge>{value && <span>{firewallSourceLabels[value.source]} · {userDate(value.at)}{value.at ? ' · TSİ' : ''}</span>}</div>; }
+function MetricStamp({ metric }: { metric: ReturnType<typeof overviewMetric> }) { return <div className={styles.stamp}>{metric.source ? <><SemanticBadge tone={metric.status === 'available' ? 'success' : 'warning'}>{firewallSourceLabels[metric.source]} · {metric.status === 'available' ? 'Ölçüm' : 'Önceki ölçüm'}</SemanticBadge><span>{userDate(metric.at)} · TSİ</span></> : <span>Doğrulanmış ölçüm yok</span>}</div>; }
+function ResourceNote({ resource }: { resource: OverviewResource<unknown> }) { const message = resource.error || resource.value?.error; return message ? <div className={`${common.info} ${styles.warning}`} role="alert"><TriangleAlert size={17} aria-hidden="true" /><p>{message}</p></div> : null; }
+function ListPanel<T>({ title, icon: Icon, resource, query, onQuery, page, onPage, searchId, columns, renderRow, renderCard }: { title: string; icon: typeof Network; resource: OverviewResource<OverviewPage<T>>; query: string; onQuery: (value: string) => void; page: number; onPage: (value: number) => void; searchId: string; columns: string[]; renderRow: (row: T) => React.ReactNode; renderCard: (row: T) => React.ReactNode }) {
+  const data = resource.value?.data, maximum = data ? Math.max(1, Math.ceil(data.total / 10)) : 1;
+  useEffect(() => { if (data && page > maximum) onPage(maximum); }, [data, page, maximum, onPage]);
+  return <section className={styles.panel} aria-label={title}><header><span className={common.icon}><Icon size={20} aria-hidden="true" /></span><div><h2>{title}</h2><p>Arama ve sayfalama seçili cihazın kaynak verisinde uygulanır.</p></div></header><div className={styles.body}><div className={styles.search}><label htmlFor={searchId}>{title} içinde ara</label><div><Search size={16} aria-hidden="true" /><Input type="search" id={searchId} value={query} onChange={event => onQuery(event.target.value)} placeholder="Ad, IP adresi veya arabirim ara…" /></div></div><SourceStamp resource={resource} /><ResourceNote resource={resource} />{resource.value?.source === 'database' && <p className={styles.hint}>Kayıtlı envanterden gelen arabirimlerde güncel bağlantı ve trafik sayaçları doğrulanamadığı için boş gösterilir.</p>}</div>
+    {!data || !data.items.length ? <div className={styles.empty} role="status">{resource.loading ? 'Veriler okunuyor…' : !data ? 'Kaynak verisi alınamadı; kayıt sayısı bilinmiyor.' : query ? 'Aramaya uygun kayıt bulunamadı.' : 'Bu okumada kayıt bulunmuyor.'}</div> : <><div className={styles.desktop}><table className={styles.table}><caption className="sr-only">{title} · Seçili cihaz ve VDOM</caption><thead><tr>{columns.map(column => <th scope="col" key={column}>{column}</th>)}</tr></thead><tbody>{data.items.map((row, index) => <tr key={index}>{renderRow(row)}</tr>)}</tbody></table></div><div className={styles.mobile}>{data.items.map((row, index) => <article key={index}>{renderCard(row)}</article>)}</div></>}
+    {data && <div className={styles.pager}><span role="status">{number(data.total)} kayıt · Sayfa {page} / {maximum}{query ? ' · Arama sonucu' : ''}</span><div><Button variant="outline" size="sm" aria-label={`${title}: önceki sayfa`} disabled={resource.loading || page <= 1} onClick={() => onPage(page - 1)}><ChevronLeft size={16} aria-hidden="true" />Önceki</Button><Button variant="outline" size="sm" aria-label={`${title}: sonraki sayfa`} disabled={resource.loading || !data.hasMore} onClick={() => onPage(page + 1)}>Sonraki<ChevronRight size={16} aria-hidden="true" /></Button></div></div>}
+  </section>;
 }

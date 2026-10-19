@@ -58,6 +58,7 @@ export type FirewallListItem = {
   device: FirewallInventoryDevice | null;
   lastSyncAt: string | null;
   lastSyncStatus: string | null;
+  lastInventorySync?: { status: string; startedAt: string | null; completedAt: string | null } | null;
   requiresInventoryLink: boolean;
 };
 

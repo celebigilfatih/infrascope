@@ -1,3 +1,4 @@
+import { authorizeApiRequest } from '@/lib/auth/api-permission';
 import { NextRequest, NextResponse } from 'next/server';
 import {
   executeFirewallRestRead,
@@ -5,9 +6,12 @@ import {
 } from '@/lib/firewall/read-service';
 import { firewallListQueryFromUrl, paginateFirewallItems } from '@/lib/firewall/read-query';
 
+export const dynamic = 'force-dynamic';
+
 type RouteContext = { params: { id: string; kind: string } };
 
 export async function GET(request: NextRequest, { params }: RouteContext) {
+  const access = await authorizeApiRequest(request, 'firewall', 'read'); if (!access.allowed) return access.response;
   try {
     const query = firewallListQueryFromUrl(request.url, params.kind === 'ipsec' ? ['status'] : []);
     const result = params.kind === 'ssl-sessions'
@@ -33,7 +37,7 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
     if (!result) {
       return NextResponse.json({ success: false, error: 'Firewall VPN resource not found' }, { status: 404 });
     }
-    return NextResponse.json({ success: true, target: result.target, ...result.envelope });
+    return NextResponse.json({ success: true, target: result.target, ...result.envelope }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     if (error instanceof FirewallReadTargetError) {
       return NextResponse.json({ success: false, error: error.message }, { status: error.status });

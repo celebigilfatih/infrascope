@@ -489,8 +489,11 @@ export class FortiGateService {
   /**
    * Fetch firewall policies
    */
-  async fetchFirewallPolicies(): Promise<FortiGatePolicy[]> {
-    if (!this.config.enabledModules.policies) return [];
+  async fetchFirewallPolicies(options?: { requireEnabled?: boolean }): Promise<FortiGatePolicy[]> {
+    if (!this.config.enabledModules.policies) {
+      if (options?.requireEnabled) throw new FirewallIntegrationError('UNSUPPORTED_OPERATION', 'Policy reading is disabled for this profile', false, 409);
+      return [];
+    }
 
     try {
       const data = await this.apiRequest<{ results: Array<{
@@ -508,6 +511,7 @@ export class FortiGateService {
         status: 'enable' | 'disable';
       }>}>('/cmdb/firewall/policy');
 
+      if (options?.requireEnabled && (!Array.isArray(data.results) || data.results.some(policy => !policy || !Array.isArray(policy.dstaddr) || !policy.dstaddr.every(address => address && typeof address.name === 'string')))) throw new FirewallIntegrationError('INVALID_RESPONSE', 'Policy references could not be verified', false, 502);
       return data.results.map(policy => ({
         policyid: policy.policyid,
         name: policy.name,
@@ -561,11 +565,15 @@ export class FortiGateService {
   /**
    * Fetch VIPs (Virtual IPs)
    */
-  async fetchVIPs(): Promise<FortiGateVIP[]> {
-    if (!this.config.enabledModules.vips) return [];
+  async fetchVIPs(options?: { requireEnabled?: boolean }): Promise<FortiGateVIP[]> {
+    if (!this.config.enabledModules.vips) {
+      if (options?.requireEnabled) throw new FirewallIntegrationError('UNSUPPORTED_OPERATION', 'Virtual IP reading is disabled for this profile', false, 409);
+      return [];
+    }
 
     try {
       const data = await this.apiRequest<{ results: FortiGateVIP[] }>('/cmdb/firewall/vip');
+      if (options?.requireEnabled && !Array.isArray(data.results)) throw new FirewallIntegrationError('INVALID_RESPONSE', 'Virtual IP list could not be verified', false, 502);
       return data.results || [];
     } catch (error) {
       log.error({ err: error }, 'Failed to fetch VIPs');

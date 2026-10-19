@@ -2,8 +2,11 @@
 
 import { uiError } from '@/lib/i18n/tr';
 
-import { useState } from 'react';
-import { Eye, EyeOff, Loader2, ShieldCheck } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { firewallUncertain, object, requestFirewall } from '@/lib/firewall/workspace';
+import common from '@/components/users/users-workspace.module.css';
+import styles from './firewall-workspace.module.css';
+import { Eye, EyeOff, Loader2, ShieldCheck, Server, KeyRound, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -22,12 +25,14 @@ type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onCreated: (connectorId: string) => void;
+  onUncertain?: () => void;
 };
 
 const selectClass = 'h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
 
-export function FirewallOnboardingDialog({ open, onOpenChange, onCreated }: Props) {
-  const [submitting, setSubmitting] = useState(false);
+export function FirewallOnboardingDialog({ open, onOpenChange, onCreated, onUncertain }: Props) {
+  const [submitting, setSubmitting] = useState(false), [uncertain, setUncertain] = useState(false);
+  const guard = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [authMode, setAuthMode] = useState<'password' | 'token'>('password');
   const [showSecrets, setShowSecrets] = useState(false);
@@ -38,8 +43,13 @@ export function FirewallOnboardingDialog({ open, onOpenChange, onCreated }: Prop
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setSubmitting(true);
+    if (guard.current || uncertain) return;
     setError(null);
+    const missing = Array.from(event.currentTarget.querySelectorAll<HTMLInputElement>('input[required]')).find(field => !field.value.trim());
+    if (missing) { setError(`${event.currentTarget.querySelector(`label[for="${missing.id}"]`)?.textContent || 'Zorunlu alan'} bilgisini girin.`); missing.focus(); return; }
+    const invalidNumber = Array.from(event.currentTarget.querySelectorAll<HTMLInputElement>('input[type="number"]')).find(field => !Number.isInteger(Number(field.value)) || Number(field.value) < Number(field.min) || Number(field.value) > Number(field.max));
+    if (invalidNumber) { setError(`${event.currentTarget.querySelector(`label[for="${invalidNumber.id}"]`)?.textContent || 'Sayısal alan'} için belirtilen aralıkta tam sayı girin.`); invalidNumber.focus(); return; }
+    guard.current = true; setSubmitting(true);
     const form = new FormData(event.currentTarget);
     const snmp = snmpEnabled
       ? snmpVersion === '3'
@@ -69,10 +79,7 @@ export function FirewallOnboardingDialog({ open, onOpenChange, onCreated }: Prop
         }
       : undefined;
     try {
-      const response = await fetch('/api/firewalls', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const data = await requestFirewall('/api/firewalls', { method: 'POST', kind: 'write', body: {
           name: form.get('name'),
           model: form.get('model'),
           host: form.get('host'),
@@ -82,37 +89,35 @@ export function FirewallOnboardingDialog({ open, onOpenChange, onCreated }: Prop
           accessToken: authMode === 'token' ? form.get('accessToken') : undefined,
           snmp,
           ssh,
-        }),
-      });
-      const data = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(uiError(data?.error || 'Firewall kaydedilemedi.'));
+        } });
+      if (!object(data.data) || !object(data.data.connector) || typeof data.data.connector.id !== 'string') throw Error(firewallUncertain);
       onOpenChange(false);
       onCreated(data.data.connector.id);
     } catch (submitError) {
-      setError(uiError(submitError instanceof Error ? submitError.message : "Güvenlik duvarı kaydedilemedi."));
+      const message = submitError instanceof Error ? submitError.message : "Güvenlik duvarı kaydedilemedi."; setError(message); if (message === firewallUncertain) { setUncertain(true); onUncertain?.(); }
     } finally {
-      setSubmitting(false);
+      guard.current = false; setSubmitting(false);
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92vh] max-w-3xl overflow-y-auto p-0">
-        <form onSubmit={submit}>
+    <Dialog open={open} onOpenChange={value => { if (!submitting) onOpenChange(value); }}>
+      <DialogContent className={`${common.modal} ${styles.onboardingModal}`} onEscapeKeyDown={event => { if (submitting) event.preventDefault(); }} onInteractOutside={event => { if (submitting) event.preventDefault(); }}>
+        <form noValidate onSubmit={submit}>
           <DialogHeader className="border-b px-6 py-5 pr-12">
-            <DialogTitle>FortiGate ekle</DialogTitle>
+            <DialogTitle className="flex items-center gap-2"><Plus size={20} aria-hidden="true" />FortiGate ekle</DialogTitle>
             <DialogDescription>
-              REST kullanılamasa bile cihaz kaydedilir. SNMP veya SSH hazırsa kısıtlı izleme devam eder.
+              Kayıt, envanter cihazını oluşturur ve ilk REST kontrolünü başlatır. REST erişimi başarısız olsa da kayıt korunur; alternatif kaynaklar ayrıca değerlendirilir.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-7 px-6 py-6">
+          <fieldset disabled={submitting || uncertain} className="space-y-7 px-6 py-6">
             <section aria-labelledby="firewall-identity-title">
-              <h2 id="firewall-identity-title" className="text-sm font-semibold">Cihaz ve yönetim adresi</h2>
+              <h2 id="firewall-identity-title" className="flex items-center gap-2 text-sm font-semibold"><Server size={17} className="text-primary" aria-hidden="true" />Cihaz ve yönetim adresi</h2>
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
                 <Field label="Cihaz adı" name="name" placeholder="Merkez FortiGate" required />
                 <Field label="Model" name="model" placeholder="FortiGate 100F" />
-                <Field label="Yönetim IP / hostname" name="host" placeholder="10.10.10.1" required />
+                <Field label="Yönetim IP adresi / sunucu adı" name="host" placeholder="10.10.10.1" required />
                 <Field label="VDOM" name="vdom" defaultValue="root" required />
               </div>
             </section>
@@ -120,8 +125,8 @@ export function FirewallOnboardingDialog({ open, onOpenChange, onCreated }: Prop
             <section aria-labelledby="firewall-rest-title" className="border-t pt-6">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <h2 id="firewall-rest-title" className="text-sm font-semibold">FortiGate REST erişimi</h2>
-                  <p className="mt-1 text-xs text-muted-foreground">Salt okunur yönetici veya API token kullanın.</p>
+                  <h2 id="firewall-rest-title" className="flex items-center gap-2 text-sm font-semibold"><KeyRound size={17} className="text-primary" aria-hidden="true" />FortiGate REST erişimi</h2>
+                  <p className="mt-1 text-xs text-muted-foreground">Salt okunur hesap veya API erişim anahtarı kullanın.</p>
                 </div>
                 <div className="inline-flex rounded-md bg-muted p-1" aria-label="REST kimlik doğrulama yöntemi">
                   {(['password', 'token'] as const).map((mode) => (
@@ -166,10 +171,10 @@ export function FirewallOnboardingDialog({ open, onOpenChange, onCreated }: Prop
                   </select>
                 </div>
                 <Field label="SNMP portu" name="snmpPort" type="number" defaultValue="161" min="1" max="65535" required />
-                <Field label="Polling aralığı (sn)" name="pollingInterval" type="number" defaultValue="300" min="10" max="86400" required />
+                <Field label="SNMP ölçüm aralığı (saniye)" name="pollingInterval" type="number" defaultValue="300" min="10" max="86400" required />
               </div>
               {snmpVersion === '2c' ? (
-                <SecretField label="Topluluk Adı" name="snmpCommunity" visible={showSecrets} required />
+                <SecretField label="Topluluk adı" name="snmpCommunity" visible={showSecrets} required />
               ) : (
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Field label="SNMPv3 kullanıcı adı" name="snmpV3Username" required />
@@ -199,7 +204,7 @@ export function FirewallOnboardingDialog({ open, onOpenChange, onCreated }: Prop
 
             <FallbackSection
               title="SSH yedek kaynağı"
-              description="Salt okunur durum ve konfigürasyon yedeği için kullanılır. Host key ayrıca onaylanır."
+              description="Salt okunur durum ve yapılandırma yedeği için kullanılır. Sunucu anahtarının güvenilirliği ayrıca onaylanır."
               checked={sshEnabled}
               onCheckedChange={setSshEnabled}
             >
@@ -210,7 +215,7 @@ export function FirewallOnboardingDialog({ open, onOpenChange, onCreated }: Prop
               </div>
             </FallbackSection>
 
-            <button type="button" onClick={() => setShowSecrets((value) => !value)} className="inline-flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <button type="button" aria-pressed={showSecrets} onClick={() => setShowSecrets((value) => !value)} className="inline-flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
               {showSecrets ? <EyeOff className="h-4 w-4" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
               {showSecrets ? 'Gizli alanları maskele' : 'Gizli alanları göster'}
             </button>
@@ -219,15 +224,15 @@ export function FirewallOnboardingDialog({ open, onOpenChange, onCreated }: Prop
 
             <div className="flex gap-3 rounded-md border border-emerald-500/25 bg-emerald-500/5 p-4 text-sm">
               <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" aria-hidden="true" />
-              <p><span className="font-semibold">Güvenli başlangıç:</span> TLS doğrulaması kapatılmaz, tüm credential alanları şifreli saklanır ve write yeteneği kapalıdır.</p>
+              <p><span className="font-semibold">Güvenli başlangıç:</span> TLS doğrulaması kapatılmaz, erişim bilgileri şifreli saklanır ve cihaz üzerinde değişiklik yapma yeteneği kapalıdır.</p>
             </div>
-          </div>
+          </fieldset>
 
           <DialogFooter className="border-t px-6 py-4">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>Vazgeç</Button>
-            <Button type="submit" disabled={submitting}>
+            <Button type="submit" disabled={submitting || uncertain}>
               {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />}
-              Güvenlik Duvarı Ekle
+              Kaydet ve ilk kontrolü yap
             </Button>
           </DialogFooter>
         </form>
@@ -263,7 +268,7 @@ function FallbackSection({ title, description, checked, onCheckedChange, childre
           <h2 className="text-sm font-semibold">{title}</h2>
           <p className="mt-1 text-xs text-muted-foreground">{description}</p>
         </div>
-        <Switch checked={checked} onCheckedChange={onCheckedChange} aria-label={`${title} ${checked ? 'aktif' : 'pasif'}`} />
+        <Switch aria-label={`${title} etkin`} checked={checked} onCheckedChange={onCheckedChange} />
       </div>
       {checked && <div className="mt-5 space-y-4">{children}</div>}
     </section>

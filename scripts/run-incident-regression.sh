@@ -36,6 +36,25 @@ npm run test:fortianalyzer-profile
 npm run test:fortianalyzer-cache
 TZ=UTC npm run test:fortianalyzer-time
 TZ=Europe/Istanbul npm run test:fortianalyzer-time
+npx eslint app/api/firewalls/route.ts 'app/api/firewalls/[id]/[resource]/route.ts' 'app/api/firewalls/[id]/events/route.ts' 'app/api/firewalls/[id]/snmp/health/route.ts' 'app/api/firewalls/[id]/vpn/[kind]/route.ts' app/api/firewalls/workspace/route.ts app/integrations/firewall/page.tsx app/network/firewall/page.tsx app/network/config-revisions/page.tsx app/security/virtual-ips/page.tsx components/firewall/*.tsx components/firewall/useFirewallOverviewResource.ts components/firewall/types.ts lib/firewall/workspace-settings.ts lib/firewall/workspace.ts lib/firewall/overview.ts lib/firewall/config-history.ts lib/firewall/virtual-ips.ts lib/integrations/fortigate.ts scripts/check-firewall-workspace.cjs scripts/check-firewall-overview.cjs scripts/check-config-history.cjs scripts/check-virtual-ips.cjs tests/incident-e2e/fortigate-workspace.spec.ts --max-warnings=0
+npm run test:firewall-workspace
+npm run test:firewall-overview
+npm run test:config-history
+npm run test:virtual-ips
+npm run security:firewall-write-check
+npm run security:fortigate-connector-check
+npm run security:firewall-error-check
+npm run security:firewall-write-audit-check
+npm run security:firewall-capability-check
+npm run security:firewall-onboarding-check
+npm run security:firewall-removal-check
+npm run security:firewall-tls-ca-check
+npm run security:firewall-identity-check
+npm run security:firewall-read-check
+npm run security:firewall-read-query-check
+npm run security:firewall-recovery-check
+npm run test:fortigate-alarm-targets
+npm run test:fortigate-snmp
 npm run test:ui-turkish
 npx eslint app/settings/alerts/page.tsx components/alarms/*.tsx lib/alarms/rule-workspace.ts lib/validators/alarms.ts app/api/alarms/definitions/route.ts app/api/alarms/notification/route.ts scripts/check-rule-workspace.cjs tests/incident-e2e/rule-workspace.spec.ts tests/incident-e2e/fixtures.ts --max-warnings=0
 npm run test:rule-workspace

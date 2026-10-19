@@ -1,3 +1,4 @@
+import { authorizeApiRequest } from '@/lib/auth/api-permission';
 import { NextRequest, NextResponse } from 'next/server';
 import {
   readFirewallAnalyzerEvents,
@@ -5,10 +6,13 @@ import {
 } from '@/lib/firewall/fortianalyzer-events';
 import { FirewallAnalyzerCorrelationError } from '@/lib/firewall/fortianalyzer-correlation';
 
+export const dynamic = 'force-dynamic';
+
 type RouteContext = { params: { id: string } };
 const CATEGORIES = new Set<FirewallEventCategory>(['auth', 'security', 'config']);
 
 export async function GET(request: NextRequest, { params }: RouteContext) {
+  const access = await authorizeApiRequest(request, 'firewall', 'read'); if (!access.allowed) return access.response;
   try {
     const categoryValue = new URL(request.url).searchParams.get('category') || 'auth';
     if (!CATEGORIES.has(categoryValue as FirewallEventCategory)) {
@@ -21,7 +25,7 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
       requestUrl: request.url,
       analyzerConfigId,
     });
-    return NextResponse.json({ success: true, target: result.target, ...result.envelope });
+    return NextResponse.json({ success: true, target: result.target, ...result.envelope }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
     if (error instanceof FirewallAnalyzerCorrelationError) {
       return NextResponse.json(

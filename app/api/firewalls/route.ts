@@ -1,3 +1,4 @@
+import { authorizeApiRequest } from '@/lib/auth/api-permission';
 import type { Prisma } from '@prisma/client';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
@@ -19,12 +20,13 @@ import type { FortiGateConfig } from '@/lib/integrations/fortigate';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const access = await authorizeApiRequest(request, 'firewall', 'read'); if (!access.allowed) return access.response;
   try {
     const [connectors, unlinkedIntegrations] = await Promise.all([
       prisma.firewallConnector.findMany({
         include: {
-          integrationConfig: true,
+          integrationConfig: { include: { syncLogs: { orderBy: [{ startedAt: 'desc' }, { id: 'desc' }], take: 1, select: { status: true, completedAt: true, startedAt: true } } } },
           device: {
             select: {
               id: true,
@@ -52,6 +54,7 @@ export async function GET() {
       }),
       prisma.integrationConfig.findMany({
         where: { type: 'FORTIGATE', firewallConnectors: { none: {} } },
+        include: { syncLogs: { orderBy: [{ startedAt: 'desc' }, { id: 'desc' }], take: 1, select: { status: true, completedAt: true, startedAt: true } } },
         orderBy: { createdAt: 'asc' },
       }),
     ]);
@@ -86,6 +89,7 @@ export async function GET() {
         device: connector.device,
         lastSyncAt: integration.lastSyncAt,
         lastSyncStatus: integration.lastSyncStatus,
+        lastInventorySync: integration.syncLogs[0] ? { status: integration.syncLogs[0].status, startedAt: integration.syncLogs[0].startedAt, completedAt: integration.syncLogs[0].completedAt } : null,
         requiresInventoryLink: false,
       };
     });
@@ -106,20 +110,22 @@ export async function GET() {
         device: null,
         lastSyncAt: integration.lastSyncAt,
         lastSyncStatus: integration.lastSyncStatus,
+        lastInventorySync: integration.syncLogs[0] ? { status: integration.syncLogs[0].status, startedAt: integration.syncLogs[0].startedAt, completedAt: integration.syncLogs[0].completedAt } : null,
         requiresInventoryLink: true,
       };
     });
     const data = [...linked, ...unlinked];
-    return NextResponse.json({ success: true, data, total: data.length });
+    return NextResponse.json({ success: true, data, total: data.length }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (error) {
-    console.error('Firewall list failed:', error);
+    console.error('[Firewall] List failed', error instanceof Error ? error.name : 'UnknownError');
     return NextResponse.json({ success: false, error: 'Failed to load firewalls' }, { status: 500 });
   }
 }
 
 export async function POST(request: NextRequest) {
+  const access = await authorizeApiRequest(request, 'firewall', 'write'); if (!access.allowed) return access.response;
   try {
-    const input = normalizeFirewallOnboardingInput(await request.json());
+    const input = normalizeFirewallOnboardingInput(await request.json().catch(() => null));
     const existing = await prisma.integrationConfig.findMany({
       where: { type: 'FORTIGATE' },
       select: { id: true, config: true },
@@ -283,7 +289,7 @@ export async function POST(request: NextRequest) {
         { status: error.status }
       );
     }
-    console.error('Firewall onboarding failed:', error);
+    console.error('[Firewall] Onboarding failed', error instanceof Error ? error.name : 'UnknownError');
     return NextResponse.json({ success: false, error: 'Failed to register firewall' }, { status: 500 });
   }
 }
