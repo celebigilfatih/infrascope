@@ -1,262 +1,85 @@
 'use client';
-
-import { PageHeading } from '@/components/ui/page-heading';
-import React, { useState, useEffect, useMemo } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { ChevronLeft, ChevronRight, RefreshCw, Search, Network, Activity, Lock, Globe, ArrowLeft } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
-
-interface IPsecTunnel {
-  name: string;
-  comments: string;
-  status: string;
-  username: string;
-  rgwy: string;
-  incoming_bytes: number;
-  outgoing_bytes: number;
-  connection_count: number;
-}
-
-const ITEMS_PER_PAGE = 10;
+import { Activity, ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Cable, ChevronLeft, ChevronRight, CircleHelp, Clock3, Eye, Info, Link2, Link2Off, ListFilter, Network, RefreshCw, Search, Server, Settings2, TriangleAlert } from 'lucide-react';
+import { apiGet } from '@/lib/api';
+import { PageHeading } from '@/components/ui/page-heading';
+import { SemanticBadge } from '@/components/ui/semantic-badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import type { FirewallListItem } from '@/components/firewall/types';
+import { parseOverviewTargets } from '@/lib/firewall/overview';
+import { parseIpsecSnapshot, ipsecBytes, ipsecCountLabel, ipsecStateLabel, type IpsecSnapshot, type IpsecTunnel, type IpsecState } from '@/lib/security/ipsec';
+import { userDate, userSearch } from '@/lib/users/workspace';
+import common from '@/components/users/users-workspace.module.css';
+import styles from './page.module.css';
 
 export default function IPsecPage() {
-  const [tunnels, setTunnels] = useState<IPsecTunnel[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [page, setPage] = useState(1);
-
-  const fetchTunnels = async () => {
-    setLoading(true);
-    try {
-      const response = await fetch('/api/integrations/fortigate?vpn=ipsec');
-      const data = await response.json();
-      if (data.success) {
-        setTunnels(data.data);
-      }
-    } catch (error) {
-      console.error('Failed to fetch IPsec tunnels:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchTunnels();
+  const [targets, setTargets] = useState<FirewallListItem[] | null>(null), [choice, setChoice] = useState(''), [loading, setLoading] = useState(true), [error, setError] = useState(''), [revision, setRevision] = useState(0);
+  const active = useRef<AbortController | null>(null), sequence = useRef(0);
+  const load = useCallback(async () => {
+    const seq = ++sequence.current; active.current?.abort(); const controller = new AbortController(); active.current = controller; setLoading(true); setError('');
+    try { const json: unknown = await apiGet('/api/firewalls', undefined, { signal: controller.signal, timeout: 60000 }); const rows = parseOverviewTargets(json); if (controller.signal.aborted || seq !== sequence.current) return; setTargets(rows); setRevision(v => v + 1); }
+    catch { if (!controller.signal.aborted && seq === sequence.current) setError('Güvenlik duvarı listesi alınamadı. Yetkinizi ve bağlantıyı kontrol edip yeniden deneyin.'); }
+    finally { if (!controller.signal.aborted && seq === sequence.current) setLoading(false); }
   }, []);
-
-  // Filter and pagination
-  const filteredTunnels = useMemo(() => {
-    return tunnels.filter((tunnel: IPsecTunnel) => {
-      const searchLower = search.toLowerCase();
-      return (
-        tunnel.name.toLowerCase().includes(searchLower) ||
-        tunnel.comments.toLowerCase().includes(searchLower) ||
-        tunnel.rgwy.toLowerCase().includes(searchLower) ||
-        tunnel.username.toLowerCase().includes(searchLower)
-      );
-    });
-  }, [tunnels, search]);
-
-  const totalPages = Math.ceil(filteredTunnels.length / ITEMS_PER_PAGE);
-  const paginatedTunnels = filteredTunnels.slice(
-    (page - 1) * ITEMS_PER_PAGE,
-    page * ITEMS_PER_PAGE
-  );
-
-  const formatBytes = (bytes: number) => {
-    if (bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
-
-  return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-4">
-        <div className="flex items-center gap-4">
-          <Link href="/network/firewall">
-            <Button variant="outline" size="icon" aria-label="Geri dön">
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-          </Link>
-          <div>
-            <PageHeading section="ipsec" description={<>
-              FortiGate IPsec VPN tunnel durumları ve istatistikleri
-            </>}>
-
-              IPsec Tünelleri
-            </PageHeading>
-          </div>
-        </div>
-        <Button onClick={fetchTunnels} disabled={loading}>
-          <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-          Yenile
-        </Button>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Network className="h-4 w-4" /> Toplam Tünel
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{tunnels.length}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Activity className="h-4 w-4" /> Aktif
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              {tunnels.filter((t: IPsecTunnel) => t.status === 'up').length}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Lock className="h-4 w-4" /> Pasif
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">
-              {tunnels.filter((t: IPsecTunnel) => t.status !== 'up').length}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Globe className="h-4 w-4" /> Toplam Bağlantı
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {tunnels.reduce((sum: number, t: IPsecTunnel) => sum + t.connection_count, 0)}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Search */}
-      <div className="flex items-center gap-4">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Tünel ara…"
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
-            className="pl-10"
-          />
-        </div>
-        <Badge variant="secondary">
-          {filteredTunnels.length} sonuç
-        </Badge>
-      </div>
-
-      {/* Tunnels Table */}
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Tunnel Adı</TableHead>
-                <TableHead>Durum</TableHead>
-                <TableHead>Uzak Ağ Geçidi</TableHead>
-                <TableHead>Kullanıcı</TableHead>
-                <TableHead>Gelen Veri</TableHead>
-                <TableHead>Giden Veri</TableHead>
-                <TableHead>Bağlantı</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8">
-                    <RefreshCw className="h-8 w-8 animate-spin mx-auto" />
-                  </TableCell>
-                </TableRow>
-              ) : paginatedTunnels.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                    Tunnel bulunamadı
-                  </TableCell>
-                </TableRow>
-              ) : (
-                paginatedTunnels.map((tunnel: IPsecTunnel, idx: number) => (
-                  <TableRow key={idx}>
-                    <TableCell>
-                      <div>
-                        <p className="font-medium">{tunnel.name}</p>
-                        {tunnel.comments && (
-                          <p className="text-xs text-muted-foreground">{tunnel.comments}</p>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={tunnel.status === 'up' ? 'success' : 'destructive'}>
-                        {tunnel.status === 'up' ? 'Aktif' : 'Pasif'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="font-mono text-xs">{tunnel.rgwy}</TableCell>
-                    <TableCell>{tunnel.username || '-'}</TableCell>
-                    <TableCell>{formatBytes(tunnel.incoming_bytes)}</TableCell>
-                    <TableCell>{formatBytes(tunnel.outgoing_bytes)}</TableCell>
-                    <TableCell>{tunnel.connection_count}</TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-4">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setPage(p => Math.max(1, p - 1))}
-            disabled={page === 1}
-           aria-label="Önceki sayfa">
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <span className="text-sm">
-            Sayfa {page} / {totalPages}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-            disabled={page === totalPages}
-           aria-label="Sonraki sayfa">
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
-      )}
-    </div>
-  );
+  useEffect(() => { void load(); return () => active.current?.abort(); }, [load]);
+  const target = targets?.find(row => JSON.stringify([row.configId, row.vdom]) === choice) || (!choice && targets?.length === 1 ? targets[0] : null);
+  return <div className={common.page}><div className={common.workspace}>
+    <header className={common.header}><PageHeading section="ipsec" description="Tünel durumunu, yerel ve uzak uçları ve taşınan veri miktarını cihaz bazında inceleyin.">IPsec Tünelleri</PageHeading><div className={common.headerActions}><Button asChild variant="outline"><Link href="/integrations/firewall"><Settings2 size={16} aria-hidden="true" />Bağlantıları yönet</Link></Button><Button variant="outline" disabled={loading} onClick={() => void load()}><RefreshCw size={16} aria-hidden="true" className={loading ? 'animate-spin motion-reduce:animate-none' : ''} />{loading ? 'Okunuyor…' : 'Verileri yenile'}</Button></div></header>
+    <div className={common.serviceBar}><SemanticBadge tone="info" icon={Server}>Cihaz ve VDOM kapsamı</SemanticBadge><span>Kaynak: FortiGate REST · IPsec izleme listesi · Salt okunur</span></div>
+    {error && <Notice error>{error}{targets && ' Önceki cihaz listesi korunuyor; güncel olmayabilir.'}</Notice>}
+    {loading && !targets ? <Empty icon={RefreshCw} title="Cihaz listesi yükleniyor" /> : targets && !targets.length ? <Empty icon={Server} title="Henüz güvenlik duvarı eklenmemiş"><p>IPsec bağlantılarını görmek için bir FortiGate bağlantısı ekleyin.</p><Button asChild><Link href="/integrations/firewall"><Settings2 size={16} aria-hidden="true" />Bağlantı ekle</Link></Button></Empty> : targets && <>
+      <section className={styles.target}><label htmlFor="ipsec-target"><Server size={16} aria-hidden="true" />Güvenlik duvarı ve sanal alan (VDOM)</label><select id="ipsec-target" value={target ? JSON.stringify([target.configId, target.vdom]) : ''} disabled={loading} onChange={e => setChoice(e.target.value)}><option value="">Cihaz ve VDOM seçin</option>{targets.map(row => <option key={JSON.stringify([row.configId, row.vdom])} value={JSON.stringify([row.configId, row.vdom])}>{row.device?.name || row.name} · {row.host} · VDOM: {row.vdom}{row.enabled ? '' : ' · Devre dışı'}</option>)}</select><p>Tüneller yalnızca seçili bağlantı ve VDOM kapsamında okunur.</p></section>
+      {target ? <IpsecDevice key={`${target.configId}:${target.vdom}:${target.host}:${target.enabled}`} target={target} revision={revision} parentStale={!!error} /> : <Notice>Tünelleri görmek için bir cihaz ve VDOM seçin.</Notice>}
+    </>}
+  </div></div>;
 }
+function IpsecDevice({ target, revision, parentStale }: { target: FirewallListItem; revision: number; parentStale: boolean }) {
+  const [data, setData] = useState<IpsecSnapshot | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState(''), [search, setSearch] = useState(''), [state, setState] = useState(''), [page, setPage] = useState(1), [detailId, setDetail] = useState<string | null>(null);
+  const active = useRef<AbortController | null>(null), sequence = useRef(0);
+  const load = useCallback(async () => {
+    const seq = ++sequence.current; active.current?.abort(); const controller = new AbortController(); active.current = controller; setLoading(true); setError(''); setDetail(null);
+    if (!target.enabled) { setLoading(false); return; }
+    try { const json: unknown = await apiGet('/api/integrations/fortigate/ipsec/workspace', { configId: target.configId, vdom: target.vdom, expectedHost: target.host }, { signal: controller.signal, timeout: 60000 }); if (controller.signal.aborted || seq !== sequence.current) return; setData(parseIpsecSnapshot(json, target)); }
+    catch { if (!controller.signal.aborted && seq === sequence.current) setError('IPsec izleme listesi okunamadı veya seçili cihaz için doğrulanamadı. REST erişimini ve okuma yetkisini kontrol edip yenileyin.'); }
+    finally { if (!controller.signal.aborted && seq === sequence.current) setLoading(false); }
+  }, [target]);
+  useEffect(() => { void load(); return () => active.current?.abort(); }, [load, revision]);
+  const rows = data?.rows;
+  const filtered = useMemo(() => (rows || []).filter(row => (!state || row.state === state) && (!search.trim() || userSearch([row.name, row.comment, row.parent, row.username, row.remoteGateway, row.local?.interface, ...(row.local?.gateways || []), ...(row.phases?.map(p => p.name) || []), ipsecStateLabel(row.state)].join(' ')).includes(userSearch(search.trim())))), [rows, state, search]);
+  const pages = Math.max(1, Math.ceil(filtered.length / 10)), safePage = Math.min(page, pages), visible = filtered.slice((safePage - 1) * 10, safePage * 10), detail = rows?.find(row => row.id === detailId), filters = !!(search || state), historical = !!error || parentStale;
+  function clear() { setSearch(''); setState(''); setPage(1); }
+  const timestamp = data ? `${userDate(data.monitorAt)} · TSİ` : 'Henüz okunmadı';
+  return <>
+    {!target.enabled && <Notice>Seçili bağlantı devre dışı. Bu cihazdan IPsec verisi istenmez.</Notice>}
+    <section className={`${common.stats} ${styles.stats}`} aria-label="IPsec özeti">{[
+      { label: 'İzleme kaydı', count: rows?.length, icon: Cable, note: 'Seçili cihaz ve VDOM’dan dönen tüneller' },
+      { label: 'Bağlı', count: rows?.filter(row => row.state === 'up').length, icon: Link2, note: 'Bildirilen tüm alt bağlantılar açık' },
+      { label: 'Kısmen bağlı', count: rows?.filter(row => row.state === 'partial').length, icon: Activity, note: 'Açık ve kapalı alt bağlantılar birlikte var' },
+      { label: 'Bağlı değil', count: rows?.filter(row => row.state === 'down').length, icon: Link2Off, note: 'Bildirilen tüm alt bağlantılar kapalı' },
+      { label: 'Durum bilgisi yok', count: rows?.filter(row => row.state === 'unknown').length, icon: CircleHelp, note: 'Alt bağlantı durumu eksik veya belirsiz' },
+    ].map(stat => <article key={stat.label} className={common.stat}><div><h2>{stat.label}</h2><span className={common.icon}><stat.icon size={18} aria-hidden="true" /></span></div><strong>{stat.count === undefined ? loading && target.enabled ? 'Okunuyor…' : 'Bilgi yok' : stat.count.toLocaleString('tr-TR')}</strong><p>{stat.note}</p></article>)}</section>
+    {error && <Notice error>{error}{data && ' Önceki izleme listesi gösteriliyor; güncel olmayabilir.'}</Notice>}
+    {data?.configErrorCode && <Notice>Yerel uç yapılandırması okunamadı. Tünel durumları ve trafik sayaçları izleme kaynağından gösterilmeye devam ediyor; yerel IP ve arabirim bilgisi eksik olabilir.</Notice>}
+    <Notice>Liste, izleme kaynağının döndürdüğü tünelleri gösterir; tüm yapılandırılmış VPN’lerin envanteri değildir. Trafik değerleri cihazın birikimli veri sayaçlarıdır; anlık hız veya seçilmiş bir dönemin trafiği olarak yorumlanmamalıdır.</Notice>
+    <div className={common.filters} role="search" aria-label="IPsec filtreleri"><div className={`${styles.field} ${styles.search}`}><label htmlFor="ipsec-search"><Search size={14} aria-hidden="true" />Tünellerde ara</label><Input id="ipsec-search" type="search" maxLength={120} placeholder="Tünel, yerel/uzak IP, arabirim veya eş kimliği" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} /></div><div className={styles.field}><label htmlFor="ipsec-state">Tünel durumu</label><select id="ipsec-state" value={state} onChange={e => { setState(e.target.value); setPage(1); }}><option value="">Tüm durumlar</option><option value="up">Bağlı</option><option value="partial">Kısmen bağlı</option><option value="down">Bağlı değil</option><option value="unknown">Durum bilgisi yok</option></select></div>{filters && <Button variant="ghost" onClick={clear}><ListFilter size={16} aria-hidden="true" />Filtreleri temizle</Button>}</div>
+    <section className={common.collection} aria-label="IPsec tünelleri" aria-busy={loading}><header className={common.sectionHeader}><div><h2><Cable size={18} aria-hidden="true" />IPsec bağlantıları</h2><p>{target.device?.name || target.name} · VDOM: {target.vdom} · İzleme okuması: {timestamp}</p></div><SemanticBadge tone={historical ? 'warning' : data ? 'info' : 'neutral'} icon={Clock3}>{loading ? 'Okunuyor…' : historical ? 'Önceki veri' : data ? 'FortiGate REST' : 'Veri yok'}</SemanticBadge></header>
+    {!data ? <Empty icon={loading && target.enabled ? RefreshCw : Info} title={loading && target.enabled ? 'IPsec bağlantıları okunuyor' : target.enabled ? 'IPsec bilgisi alınamadı' : 'Bağlantı devre dışı'} /> : !visible.length ? <Empty icon={filters ? Search : Cable} title={filters ? 'Filtrelere uygun tünel yok' : 'İzleme kaynağı tünel döndürmedi'}>{filters ? <Button variant="outline" onClick={clear}>Filtreleri temizle</Button> : <p>Son başarılı okumada izleme listesi boş geldi.</p>}</Empty> : <>
+      <div className={styles.tableWrap}><table className={styles.table}><caption className="sr-only">Tünel durumu, yerel ve uzak uçlar, alınan/gönderilen veri ve bağlantı ayrıntıları</caption><thead><tr><th scope="col">Tünel / durum</th><th scope="col">Yerel ↔ uzak uç</th><th scope="col">Taşınan veri</th><th scope="col">Bağlantı bilgisi</th><th scope="col">Ayrıntılar</th></tr></thead><tbody>{visible.map(row => <tr key={row.id}><td><strong>{row.name}</strong><div className={styles.badges}><StateBadge state={row.state} /></div><small>{phaseSummary(row)}</small>{row.comment && <p className={styles.comment}>{row.comment}</p>}</td><td><Endpoints row={row} target={target} /></td><td><Traffic row={row} /></td><td><span className={styles.count}>{ipsecCountLabel(row.connections)}</span><small>Kaynağın bildirdiği bağlantı sayısı</small>{row.username && <small className={styles.peer}>{row.username}</small>}</td><td><Button variant="outline" size="sm" aria-label={`${row.name}: bağlantı ayrıntıları`} onClick={() => setDetail(row.id)}><Eye size={14} aria-hidden="true" />İncele</Button></td></tr>)}</tbody></table></div>
+      <div className={styles.mobile}>{visible.map(row => <article key={row.id} className={styles.record}><div className={styles.recordHead}><h3>{row.name}</h3><StateBadge state={row.state} /></div><p className={styles.hint}>{phaseSummary(row)}</p><Endpoints row={row} target={target} /><Traffic row={row} /><p className={styles.hint}>Bağlantı sayısı: {ipsecCountLabel(row.connections)}</p><Button variant="outline" onClick={() => setDetail(row.id)}><Eye size={16} aria-hidden="true" />Bağlantı ayrıntıları</Button></article>)}</div>
+    </>}
+    {data && <footer className={styles.pagination}><p role="status">{filtered.length.toLocaleString('tr-TR')} / {data.rows.length.toLocaleString('tr-TR')} kayıt · Sayfa {safePage} / {pages}</p><div><Button variant="outline" size="sm" aria-label="Önceki sayfa" disabled={safePage <= 1} onClick={() => setPage(safePage - 1)}><ChevronLeft size={16} aria-hidden="true" />Önceki</Button><Button variant="outline" size="sm" aria-label="Sonraki sayfa" disabled={safePage >= pages} onClick={() => setPage(safePage + 1)}>Sonraki<ChevronRight size={16} aria-hidden="true" /></Button></div></footer>}
+    </section>
+    <Dialog open={!!detail} onOpenChange={open => { if (!open) setDetail(null); }}><DialogContent className={`${common.modal} ${styles.modal}`}><DialogHeader><DialogTitle className={styles.dialogTitle}><Cable size={20} aria-hidden="true" />{detail?.name || 'IPsec bağlantı ayrıntıları'}</DialogTitle><DialogDescription>{target.device?.name || target.name} · {target.host} · VDOM: {target.vdom}</DialogDescription></DialogHeader>{detail && <><div className={styles.badges}><StateBadge state={detail.state} />{historical && <SemanticBadge tone="warning">Önceki veri</SemanticBadge>}</div>{detail.comment && <section className={styles.note}><h3>Açıklama</h3><p>{detail.comment}</p></section>}<Endpoints row={detail} target={target} /><section className={styles.note}><h3><Activity size={16} aria-hidden="true" />Trafik sayaçları</h3><Traffic row={detail} /><dl className={styles.meta}><Meta label="Alınan veri (tam bayt)" value={ipsecCountLabel(detail.incoming)} /><Meta label="Gönderilen veri (tam bayt)" value={ipsecCountLabel(detail.outgoing)} /></dl><p>Sayaçların başlangıç veya sıfırlanma zamanı bildirilmemiştir. Sıfır değer, tünelin kapalı olduğu anlamına gelmez.</p></section><dl className={styles.meta}><Meta label="Bağlantı sayısı" value={ipsecCountLabel(detail.connections)} /><Meta label="Eş kimliği / kullanıcı" value={detail.username} /><Meta label="Üst tünel" value={detail.parent} /><Meta label="Eşleşen yerel tanım" value={detail.local?.configName} /><Meta label="IKE sürümü (tanım)" value={detail.local?.ikeVersion ? `IKEv${detail.local.ikeVersion}` : null} /><Meta label="Tünel türü (tanım)" value={typeLabel(detail.local?.type)} /><Meta label="Kaynak tünel kimliği (IPv4)" value={detail.tunnelId} /><Meta label="Kaynak tünel kimliği (IPv6)" value={detail.tunnelId6} /><Meta label="İzleme okuması (TSİ)" value={data ? userDate(data.monitorAt) : null} /><Meta label="Yerel tanım okuması (TSİ)" value={data?.configAt ? userDate(data.configAt) : null} /></dl><section className={styles.note}><h3><Network size={16} aria-hidden="true" />Alt bağlantılar (Phase 2)</h3><p>{phaseSummary(detail)}. Durum, bildirilen tüm alt bağlantılardan hesaplanır.</p>{detail.phases?.length ? <ul className={styles.phases}>{detail.phases.map((phase, index) => <li key={index}><span>{phase.name || `Alt bağlantı ${index + 1}`}</span><StateBadge state={phase.state} /></li>)}</ul> : <p>Alt bağlantı durumları bildirilmemiş.</p>}</section>{!detail.local && <Notice>Bu izleme kaydıyla eşleşen yerel uç tanımı alınamadı. Cihazın yönetim adresi, VPN’in yerel ağ geçidi yerine kullanılmaz.</Notice>}<div className={common.dialogActions}><Button onClick={() => setDetail(null)}>Kapat</Button></div></>}</DialogContent></Dialog>
+  </>;
+}
+function StateBadge({ state }: { state: IpsecState }) { return <SemanticBadge tone={state === 'up' ? 'success' : state === 'down' ? 'danger' : state === 'partial' ? 'warning' : 'neutral'} icon={state === 'up' ? Link2 : state === 'down' ? Link2Off : state === 'partial' ? Activity : CircleHelp}>{ipsecStateLabel(state)}</SemanticBadge>; }
+function phaseSummary(row: IpsecTunnel) { if (!row.phases?.length) return 'Alt bağlantı durumu bildirilmemiş'; const up = row.phases.filter(p => p.state === 'up').length, down = row.phases.filter(p => p.state === 'down').length, unknown = row.phases.length - up - down; return `${up} bağlı · ${down} kapalı${unknown ? ` · ${unknown} bilinmiyor` : ''}`; }
+function Endpoints({ row, target }: { row: IpsecTunnel; target: FirewallListItem }) { return <div className={styles.flow}><div className={styles.endpoint}><h3><Server size={13} aria-hidden="true" />Yerel uç</h3><strong>{target.device?.name || target.name}</strong><span className={styles.subLabel}>Tanımlı yerel ağ geçidi</span>{row.local?.gateways.length ? row.local.gateways.map(ip => <code key={ip}>{ip}</code>) : <span className={styles.hint}>{row.local ? 'Sabit IP bildirilmemiş' : 'IP bilgisi yok'}</span>}<small>Arabirim: {row.local?.interface || 'Bilgi yok'}</small></div><ArrowLeftRight size={16} className={styles.arrow} aria-label="karşılıklı bağlantı" /><div className={styles.endpoint}><h3><Network size={13} aria-hidden="true" />Uzak uç</h3><span className={styles.subLabel}>İzlemede görülen ağ geçidi</span><code>{row.remoteGateway || 'IP bilgisi yok'}</code></div></div>; }
+function Traffic({ row }: { row: IpsecTunnel }) { return <div className={styles.traffic}><div><span><ArrowDownLeft size={14} aria-hidden="true" />Alınan · Uzak → yerel</span><strong>{ipsecBytes(row.incoming)}</strong></div><div><span><ArrowUpRight size={14} aria-hidden="true" />Gönderilen · Yerel → uzak</span><strong>{ipsecBytes(row.outgoing)}</strong></div></div>; }
+function typeLabel(value: string | null | undefined) { return value === 'static' ? 'Sabit uç' : value === 'dynamic' || value === 'dialup' ? 'Dinamik uç' : value === 'ddns' ? 'Dinamik DNS' : value || 'Bilgi yok'; }
+function Meta({ label, value }: { label: string; value?: string | null }) { return <div><dt>{label}</dt><dd>{value || 'Bilgi yok'}</dd></div>; }
+function Notice({ children, error = false }: { children: ReactNode; error?: boolean }) { const Icon = error ? TriangleAlert : Info; return <div className={error ? common.error : common.info} role={error ? 'alert' : undefined}><Icon size={18} aria-hidden="true" /><div>{children}</div></div>; }
+function Empty({ icon: Icon, title, children }: { icon: typeof Info; title: string; children?: ReactNode }) { return <div className={common.empty}><Icon size={28} aria-hidden="true" /><h3>{title}</h3>{children}</div>; }

@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+- **IPsec tunnel workspace** — Add explicit FortiGate/VDOM selection, all-child connected/partial/disconnected/unknown states, separate configured local and observed remote endpoints, directional byte counters and connection details. Keep local-configuration failures independent of monitoring, preserve exact counters and unknown values, project only allowlisted source fields and add scoped read/API and responsive browser regressions.
+
 - **Security policy workspace** — Add explicit FortiGate/VDOM selection, distinct rule state and action, source-to-destination blocks, complete definition details, Turkish filters and responsive records. Preserve returned source order, unknown/empty/zero distinctions and exact counters; use an authorized read-only source endpoint with observed-host guards and safe stale/error states. Cover the real model, source reader, target factory and route with isolated regressions.
 
 - **Quarantine workspace** — Add explicit FortiGate/VDOM selection, visible reasons and source labels, expiry filters, Turkish timestamps and responsive records. Distinguish missing expiry from unlimited duration and expired rows from confirmed removal. Preserve ADMIN/feature/audit gates, contextualize add/remove confirmation, verify outcomes by rereading the selected scope and block blind retries after uncertain writes. Add isolated source/API/audit and browser coverage.

@@ -1,3 +1,4 @@
+import { buildIpsecSnapshot, type IpsecSnapshot } from '@/lib/security/ipsec';
 /**
  * FortiGate Integration Service
  * 
@@ -195,6 +196,7 @@ export class FortiGateService {
   private csrfToken: string | null = null;
   private csrfCookie: string | null = null;
   private sessionExpiry: number = 0;
+  private ipsecWorkspaceInFlight: Promise<IpsecSnapshot> | null = null;
 
   constructor(config: FortiGateConfig) {
     this.config = config;
@@ -1270,6 +1272,31 @@ export class FortiGateService {
   /**
    * Get IPsec VPN tunnels
    */
+  async getIPsecWorkspace(): Promise<IpsecSnapshot> {
+    // Share only a currently running read on this exact target-bound client.
+    if (this.ipsecWorkspaceInFlight) return this.ipsecWorkspaceInFlight;
+    const pending = this.readIPsecWorkspace();
+    this.ipsecWorkspaceInFlight = pending;
+    try { return await pending; }
+    finally { if (this.ipsecWorkspaceInFlight === pending) this.ipsecWorkspaceInFlight = null; }
+  }
+
+  private async readIPsecWorkspace(): Promise<IpsecSnapshot> {
+    if (this.config.syncMode === 'snmp') throw new FirewallIntegrationError('UNSUPPORTED_OPERATION', 'IPsec workspace requires FortiGate REST mode', false, 501);
+    // Establish cookie auth once before parallel reads to avoid concurrent logins.
+    if (this.config.username && this.config.password) await this.getAuthHeaders();
+    const [monitor, config] = await Promise.allSettled([
+      this.apiRequest<{ results?: unknown }>('/monitor/vpn/ipsec').then(value => ({ value, at: new Date().toISOString() })),
+      this.apiRequest<{ results?: unknown }>('/cmdb/vpn.ipsec/phase1-interface').then(value => ({ value, at: new Date().toISOString() })),
+    ]);
+    if (monitor.status === 'rejected') throw classifyFortiGateError(monitor.reason);
+    return buildIpsecSnapshot(monitor.value.value?.results, config.status === 'fulfilled' ? config.value.value?.results : null, {
+      monitorAt: monitor.value.at,
+      configAt: config.status === 'fulfilled' ? config.value.at : null,
+      configErrorCode: config.status === 'rejected' ? classifyFortiGateError(config.reason).code : null,
+    });
+  }
+
   async getIPsecTunnels(): Promise<Array<{
     name: string;
     comments: string;
