@@ -73,8 +73,10 @@ test('topology workspace: unavailable connection counts stay unknown and recover
   const source = await mockTopology(page); source.state.optionalFailure = true;
   await signIn(page, fixtures); await page.goto('/network'); await page.getByRole('tab', { name: 'Cihazlar', exact: true }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'Bazı veriler alınamadı:' })).toBeVisible();
+  await page.getByRole('button', { name: 'Ağ özetini göster', exact: true }).click();
   const metric = page.getByRole('region', { name: 'Ağ özeti', exact: true }).locator('div').filter({ has: page.getByText('Görünen bağlantı', { exact: true }) }).first();
   await expect(metric).toContainText('—');
+  await page.keyboard.press('Escape');
   let list = await openConnections(page); await expect(list).toContainText('Bağlantı sayısı doğrulanamadı.'); await expect(list).toContainText('Bağlantı verileri alınamadı.');
   await list.getByRole('button', { name: 'Bağlantı listesini kapat', exact: true }).click();
   source.state.optionalFailure = false; await page.getByRole('button', { name: 'Yenile', exact: true }).click();
@@ -88,7 +90,9 @@ test('topology workspace: inventory error is retryable and never presented as su
   const source = await mockTopology(page); source.state.inventoryFailure = true;
   await signIn(page, fixtures); await page.goto('/network');
   await expect(page.getByRole('alert').filter({ hasText: 'Topoloji yüklenemedi' })).toBeVisible();
+  await page.getByRole('button', { name: 'Ağ özetini göster', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Ağ özeti', exact: true })).toContainText('—');
+  await page.keyboard.press('Escape');
   await expect(page.getByText('Envanter boş', { exact: true })).toHaveCount(0);
   source.state.inventoryFailure = false; await page.getByRole('button', { name: 'Tekrar Dene', exact: true }).click(); await page.getByRole('tab', { name: 'Cihazlar', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Topoloji haritası', exact: true }).locator('.react-flow__node')).toHaveCount(4);

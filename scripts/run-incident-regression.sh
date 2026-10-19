@@ -83,9 +83,11 @@ npm run test:nms-connection-test
 npx eslint app/integrations/nms/backups/page.tsx app/api/integrations/nms/backup-policies/route.ts components/nms/BackupArtifactDialog.tsx components/nms/BackupCoverage.tsx lib/nms/backup-view.ts scripts/check-nms-backup-view.cjs tests/incident-e2e/nms-backup-workspace.spec.ts --max-warnings=0
 npm run test:nms-backup-view
 npm run test:nms-backups
-npx eslint app/network/NetworkTopologyContent.tsx components/topology/TopologyInspector.tsx components/topology/CustomEdge.tsx components/topology/DeviceNode.tsx lib/topology/workspace.ts scripts/check-topology-workspace.cjs scripts/fixtures/topology-workspace.cjs scripts/check-incident-detail.cjs scripts/check-incident-collaboration.cjs tests/incident-e2e/topology-workspace.spec.ts --max-warnings=0
+npx eslint app/network/NetworkTopologyContent.tsx components/topology/TopologyObjectMenu.tsx components/topology/BuildingDeviceWorkspace.tsx components/topology/BuildingNode.tsx tests/incident-e2e/topology-object-menu.spec.ts components/topology/TopologyInspector.tsx components/topology/CustomEdge.tsx components/topology/DeviceNode.tsx lib/topology/workspace.ts scripts/check-topology-workspace.cjs scripts/fixtures/topology-workspace.cjs scripts/check-incident-detail.cjs scripts/check-incident-collaboration.cjs tests/incident-e2e/topology-workspace.spec.ts --max-warnings=0
 npm run test:topology-workspace
 npm run test:topology-contracts
+npm run test:topology-building
+INFRASCOPE_BUILDING_DB_TEST=1 npm run test:building-devices:db
 npx eslint app/virtualization/snapshots/page.tsx app/virtualization/vms/page.tsx components/virtualization/SnapshotWorkspace.tsx components/virtualization/VMWorkspace.tsx scripts/check-snapshot-workspace.cjs scripts/fixtures/snapshot-workspace.cjs tests/incident-e2e/snapshot-workspace.spec.ts --max-warnings=0
 npm run test:snapshot-workspace
 npm run test:snapshot-workspace-collector

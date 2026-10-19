@@ -21,7 +21,10 @@ function load(relative) {
 const view = load('lib/topology/workspace.ts');
 const original = JSON.stringify(fixture);
 const links = view.normalizeTopologyConnections(fixture.connections);
+const recordedLink = { id: 'recorded', sourceDeviceId: 'server-a', targetDeviceId: 'server-b', sourcePortName: 'eth0', targetPortName: 'eth1', type: 'FIBER', bandwidth: '10 Gbps', status: 'UNKNOWN' };
+assert.deepEqual(view.normalizeTopologyConnections([recordedLink]), [recordedLink], 'Recorded links preserve both arbitrary device endpoints, ports and declared speed');
 assert.equal(links.length, 3);
+assert.deepEqual(view.normalizeTopologyConnections([{ ...recordedLink, recordingSource: 'DRAWIO' }]), [{ ...recordedLink, recordingSource: 'DRAWIO' }], 'Keep explicit import provenance without adding absent optional fields');
 assert.equal(links[0].sourceDeviceId, 'core'); assert.equal(links[0].sourcePortName, 'Gi1/0/1');
 assert.equal(links[0].targetDeviceId, 'access'); assert.equal(links[0].targetInterfaceId, 'access-1');
 assert.equal(links[0].sourceInterfaceId, undefined, 'Peer interface must not be assigned to the source switch');

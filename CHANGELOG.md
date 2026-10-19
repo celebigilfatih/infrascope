@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+- **Topology object actions** — Add object-specific right-click and keyboard/mobile ellipsis menus for buildings, devices and connections. Reuse scoped details, direct links, endpoint navigation, clipboard feedback and authorized edit forms; preserve dialog focus and viewport bounds without source requests on opening. Remove simulated operational actions and add isolated browser regressions.
+- **Building assignment floor regression** — Align assignment fixtures with per-device floor guards; verify same-building preservation, cross-building/unassignment clearing and rollback after partial success, including a separately committed concurrent floor change in disposable PostgreSQL. Include the topology workspace, recorded-link and layout prerequisites required by the object menus.
+
 - **Applications workspace** — Replace static example apps and runtime percentages with a read-only application/service/device relationship snapshot. Add Turkish derived-state badges, clear service and relation counts, full directional details, local filters/search and responsive records. Keep unassigned/unknown/empty states distinct, protect the read with the current ACTIVE actor, omit secrets and retain labelled previous data after failures. Add isolated route/model and browser verification.
 
 - **Risky policy review workspace** — Group all review reasons under their related policy with distinct critical/high/low levels, rule-state badges, Turkish evidence and review suggestions, complete policy details and responsive filters. Reuse the authorized FortiGate/VDOM policy snapshot; preserve unknown/zero/disabled distinctions, expose check coverage and heuristic limits, and retain labelled previous results on refresh failures. Add isolated model/read-route and browser regressions without changing alarm or legacy analyzer contracts.

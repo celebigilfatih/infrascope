@@ -19,11 +19,13 @@ export async function GET(request: NextRequest) {
       id: true, name: true, type: true, vendor: true, model: true,
       serialNumber: true, assetTag: true, status: true, criticality: true,
       supportDate: true, rackUnitPosition: true, createdAt: true, updatedAt: true,
-      rackId: true, nmsDeviceId: true, managementIp: true, pollingEnabled: true,
+      rackId: true, floorId: true, buildingId: true, building: { select: { id: true, name: true } }, nmsDeviceId: true, managementIp: true, pollingEnabled: true,
       pollingInterval: true, lastPolledAt: true,
     };
 
     const includeFull = {
+      floor: { select: { id: true, name: true, floorNumber: true, buildingId: true } },
+      building: { select: { id: true, name: true } },
       rack: {
         include: {
           room: {

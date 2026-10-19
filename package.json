@@ -125,7 +125,9 @@
     "test:nms-device-ids": "node scripts/check-nms-device-ids.cjs",
     "test:nms-device-ids:db": "node scripts/check-nms-device-ids-db.cjs",
     "test:nms-backup-worker": "python3 -m nms_service.tests.run_backups",
-    "test:nms-connection-test": "node scripts/check-nms-connection-test.cjs"
+    "test:nms-connection-test": "node scripts/check-nms-connection-test.cjs",
+    "test:topology-building": "node scripts/check-building-connections.cjs && node scripts/check-building-device-auto-layout.cjs && node scripts/check-building-device-connections.cjs && node scripts/check-building-device-layout-queue.cjs && node scripts/check-building-device-layout.cjs && node scripts/check-building-device-routing.cjs && node scripts/check-building-devices.cjs && node scripts/check-building-graph.cjs && node scripts/check-building-layout.cjs && node scripts/check-building-routing.cjs && node scripts/check-topology-connection-emphasis.cjs && node scripts/check-topology-filter-persistence.cjs && node scripts/check-topology-hover-lifecycle.cjs && node scripts/check-topology-navigation-persistence.cjs && node scripts/check-topology-search.cjs",
+    "test:building-devices:db": "node scripts/check-building-devices-db.cjs"
   },
   "dependencies": {
     "@prisma/client": "^5.0.0",

@@ -1,4 +1,5 @@
 export interface TopologyConnection {
+  recordingSource?: 'DRAWIO';
   id: string;
   sourceDeviceId: string;
   targetDeviceId: string;
@@ -8,14 +9,21 @@ export interface TopologyConnection {
   targetPortName?: string;
   name?: string | null;
   type?: string;
+  bandwidth?: string;
   status: string;
 }
 
 export interface TopologyWireConnection {
+  recordingSource?: 'DRAWIO';
   id: string;
   name?: string | null;
   type?: string;
   status: string;
+  sourceDeviceId?: string;
+  targetDeviceId?: string;
+  sourcePortName?: string;
+  targetPortName?: string;
+  bandwidth?: string;
   sourceInterfaceId?: string | null;
   destInterfaceId?: string | null;
   sourcePort?: {
@@ -30,7 +38,8 @@ export interface TopologyWireConnection {
 // connected interface). destInterfaceId is an unjoined legacy scalar: it must
 // not be used as a different endpoint or attributed to the switch device.
 export function normalizeTopologyConnections(rows: TopologyWireConnection[]): TopologyConnection[] {
-  return rows.flatMap(row => {
+  return rows.flatMap<TopologyConnection>(row => {
+    if (row.sourceDeviceId && row.targetDeviceId && row.sourceDeviceId !== row.targetDeviceId) return [{ id: row.id, sourceDeviceId: row.sourceDeviceId, targetDeviceId: row.targetDeviceId, sourcePortName: row.sourcePortName, targetPortName: row.targetPortName, type: row.type, bandwidth: row.bandwidth, status: row.status, ...(row.recordingSource ? { recordingSource: row.recordingSource } : {}) }];
     const source = row.sourcePort?.switchDevice?.id;
     const peer = row.sourceInterface?.device?.id ? row.sourceInterface : row.sourcePort?.networkInterface;
     const target = peer?.device?.id;

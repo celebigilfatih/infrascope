@@ -120,6 +120,8 @@ export interface Device {
   criticality: DeviceCriticality;
   status: DeviceStatus;
   rackId?: string;
+  buildingId?: string | null;
+  building?: Pick<Building, 'id' | 'name'> | null;
   rack?: Rack;
   rackUnitPosition?: number;
   supportDate?: string | Date;
@@ -232,6 +234,7 @@ export interface BuildingConnection {
   metadata?: any;
   createdAt?: string | Date;
   updatedAt?: string | Date;
+  deviceLink?: import('@/lib/topology/building-connection-options').BuildingLinkedDevices | null;
 }
 
 // ============================================================================

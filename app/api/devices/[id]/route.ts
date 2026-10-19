@@ -353,6 +353,7 @@ export async function PUT(
     if (criticality !== undefined) updateData.criticality = criticality;
     if (status !== undefined) updateData.status = status;
     if (rackId !== undefined) updateData.rackId = effectiveRackId;
+    if (rackId) { updateData.buildingId = null; updateData.floorId = null; }
     if (rackUnitPosition !== undefined || rackId !== undefined && !effectiveRackId) updateData.rackUnitPosition = effectivePosition;
     if (parentDeviceId !== undefined) updateData.parentDeviceId = parentDeviceId;
     if (supportDate !== undefined) updateData.supportDate = supportDate ? new Date(supportDate) : null;

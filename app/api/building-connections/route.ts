@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { buildingConnectionInclude } from '@/lib/topology/building-connection-endpoints';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
     const connections = await prisma.buildingConnection.findMany({
-      include: {
-        sourceBuilding: true,
-        destBuilding: true
-      }
+      include: buildingConnectionInclude,
     });
 
     return NextResponse.json({
@@ -17,7 +17,7 @@ export async function GET() {
         total: connections.length
       },
       timestamp: new Date()
-    });
+    }, { headers: { 'Cache-Control': 'no-store, max-age=0' } });
   } catch (error) {
     console.error('Error fetching building connections:', error);
     return NextResponse.json({

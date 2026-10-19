@@ -132,6 +132,7 @@ model Building {
   sourceConnections BuildingConnection[] @relation("SourceBuildingConnections")
   organization      Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   floors            Floor[]
+  devices           Device[]
 
   @@unique([organizationId, name])
   @@map("buildings")
@@ -147,6 +148,7 @@ model Floor {
   updatedAt   DateTime @updatedAt
   building    Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
   rooms       Room[]
+  devices     Device[]
 
   @@unique([buildingId, floorNumber])
   @@map("floors")
@@ -224,6 +226,8 @@ model Device {
   criticality       DeviceCriticality  @default(MEDIUM)
   status            DeviceStatus       @default(UNKNOWN)
   rackId            String?
+  buildingId        String?            @map("building_id")
+  floorId           String?            @map("floor_id")
   rackUnitPosition  Int?
   parentDeviceId    String?
   supportDate       DateTime?
@@ -269,10 +273,14 @@ model Device {
   parentDevice      Device?            @relation("ChildDevices", fields: [parentDeviceId], references: [id])
   childDevices      Device[]           @relation("ChildDevices")
   rack              Rack?              @relation(fields: [rackId], references: [id])
+  building          Building?          @relation(fields: [buildingId], references: [id], onDelete: SetNull)
+  floor             Floor?             @relation(fields: [floorId], references: [id], onDelete: SetNull)
   networkInterfaces NetworkInterface[]
   rackUnits         RackUnit[]
   services          Service[]
   switchPorts       SwitchPort[]
+  outgoingDeviceLinks DeviceLink[] @relation("DeviceLinkSource")
+  incomingDeviceLinks DeviceLink[] @relation("DeviceLinkTarget")
   
   // VMware relationships
   vmwareCluster     VMwareCluster?     @relation("ClusterHosts", fields: [vmwareClusterId], references: [id])
@@ -296,6 +304,7 @@ model Device {
   nmsBackups         NmsBackup[]
 
   @@index([rackId])
+  @@index([floorId])
   @@index([parentDeviceId])
   @@index([zabbixHostId])
   @@index([vmwareMoref])
@@ -304,6 +313,7 @@ model Device {
   @@index([vmwareClusterId])
   @@index([nmsDeviceId])
   @@map("devices")
+  @@index([buildingId])
 }
 
 /// Network interface on a device
@@ -373,6 +383,46 @@ model Connection {
   @@map("connections")
 }
 
+/// Recorded connection between any two devices and their selected ports
+model DeviceLink {
+  id             String @id @default(cuid())
+  buildingConnectionId String? @unique
+  sourceDeviceId String
+  targetDeviceId String
+  type           ConnectionType @default(ETHERNET)
+  bandwidth      String
+  status         NetworkStatus @default(UNKNOWN)
+  source         String @default("MANUAL")
+  sourceRef      String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  sourceDevice   Device @relation("DeviceLinkSource", fields: [sourceDeviceId], references: [id], onDelete: Cascade)
+  targetDevice   Device @relation("DeviceLinkTarget", fields: [targetDeviceId], references: [id], onDelete: Cascade)
+  endpoints      DeviceLinkEndpoint[]
+  buildingConnection BuildingConnection? @relation(fields: [buildingConnectionId], references: [id], onDelete: Cascade)
+
+  @@index([sourceDeviceId])
+  @@index([targetDeviceId])
+  @@unique([source, sourceRef])
+  @@map("device_links")
+}
+
+// One physical port can belong to only one recorded device link, in either direction.
+model DeviceLinkEndpoint {
+  id         String @id @default(cuid())
+  linkId     String
+  deviceId   String
+  portId     String
+  portKey    String
+  portName   String
+  side       Int
+  link       DeviceLink @relation(fields: [linkId], references: [id], onDelete: Cascade)
+
+  @@unique([deviceId, portKey])
+  @@unique([linkId, side])
+  @@map("device_link_endpoints")
+}
+
 /// Physical connection between two buildings
 model BuildingConnection {
   id               String                   @id @default(cuid())
@@ -395,6 +445,7 @@ model BuildingConnection {
   updatedAt        DateTime                 @updatedAt
   destBuilding     Building                 @relation("DestBuildingConnections", fields: [destBuildingId], references: [id], onDelete: Cascade)
   sourceBuilding   Building                 @relation("SourceBuildingConnections", fields: [sourceBuildingId], references: [id], onDelete: Cascade)
+  deviceLink       DeviceLink?
 
   @@unique([sourceBuildingId, destBuildingId, connectionType])
   @@index([sourceBuildingId])
@@ -588,6 +639,7 @@ enum Duplex {
 }
 
 enum ConnectionType {
+  UNKNOWN
   ETHERNET
   FIBER
   SERIAL
@@ -620,6 +672,7 @@ enum RecordingMethod {
 
 /// Status of the building connection
 enum BuildingConnectionStatus {
+  UNKNOWN
   ACTIVE
   INACTIVE
   MAINTENANCE

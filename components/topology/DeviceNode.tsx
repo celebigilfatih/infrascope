@@ -9,6 +9,7 @@ import React, { memo } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { AlertTriangle, CircleHelp, EthernetPort, Monitor, Network, Router, Server, Shield } from 'lucide-react';
 import { getVendorLogo } from '../../lib/formatting';
+import { TopologyMenuButton } from './TopologyObjectMenu';
 
 interface DownPortSummary {
   id: string;
@@ -32,6 +33,7 @@ interface DeviceNodeData {
   zoom?: number;
   portDownCount?: number;
   downPorts?: DownPortSummary[];
+  onOpenMenu?: (event: React.MouseEvent<HTMLButtonElement>) => void;
 }
 
 export const DeviceNode = memo(({ data, selected }: NodeProps<DeviceNodeData>) => {
@@ -114,6 +116,7 @@ export const DeviceNode = memo(({ data, selected }: NodeProps<DeviceNodeData>) =
           )}
           <h3 className="min-w-0 flex-1 truncate font-semibold" style={{ fontSize: `${fontSize}px` }}>{data?.name || 'Bilinmeyen Cihaz'}</h3>
         </div>
+        {data.onOpenMenu && <TopologyMenuButton name={data.name} onOpen={data.onOpenMenu} />}
       </div>
 
       <div className="mb-3"><StatusBadge status={data.status || 'UNKNOWN'} /></div>

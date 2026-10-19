@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { deviceLinkSelect, normalizeDeviceLinks } from '@/lib/topology/device-links';
 
 export async function GET() {
   try {
@@ -25,7 +26,7 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
-      data: connections,
+      data: [...connections, ...normalizeDeviceLinks(await prisma.deviceLink.findMany({ select: deviceLinkSelect }))],
       timestamp: new Date()
     });
   } catch (error) {

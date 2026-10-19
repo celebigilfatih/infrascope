@@ -1,0 +1,5 @@
+/* Keep distance markers legible while the icon and its labels are dimmed. */
+.muted > :not([data-hop-distance]) { opacity: .25; }
+.muted:not([data-topology-hover-active]):hover > :not([data-hop-distance]),
+.muted:not([data-topology-hover-active]):focus-within > :not([data-hop-distance]),
+:global(.react-flow__node:focus-visible) .muted:not([data-topology-hover-active]) > :not([data-hop-distance]) { opacity: 1; }

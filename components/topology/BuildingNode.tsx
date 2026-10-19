@@ -2,7 +2,11 @@
 
 import React, { memo } from 'react';
 import { Handle, Position, type NodeProps } from 'reactflow';
-import { AlertTriangle, Building2, MapPin } from 'lucide-react';
+import { AlertTriangle, Building2 } from 'lucide-react';
+import type { ConnectionEmphasis } from '@/lib/topology/connection-emphasis';
+import { HopDistanceBadge } from './HopDistanceBadge';
+import emphasisStyles from './node-emphasis.module.css';
+import { TopologyMenuButton } from './TopologyObjectMenu';
 
 interface BuildingNodeData {
   buildingId: string;
@@ -16,37 +20,46 @@ interface BuildingNodeData {
   accessDevices: number;
   portDownCount?: number;
   isExpanded: boolean;
+  nodeEmphasis?: ConnectionEmphasis;
+  hoverActive?: boolean;
+  tooltipId?: string;
+  hopDistance?: number;
   zoom?: number;
   onExpand?: () => void;
   onDoubleClick?: () => void;
   onShowDetails?: () => void;
+  onOpenMenu?: (event: React.MouseEvent<HTMLButtonElement>) => void;
 }
 
 const statuses = {
-  healthy: { label: 'Sağlıklı', dot: 'bg-emerald-500', border: 'border-border' },
-  degraded: { label: 'Dikkat', dot: 'bg-amber-500', border: 'border-amber-500/40' },
-  down: { label: 'Erişilemiyor', dot: 'bg-red-500', border: 'border-red-500/40' },
-  unknown: { label: 'Durum bilinmiyor', dot: 'bg-muted-foreground', border: 'border-border' },
-  empty: { label: 'Cihaz atanmamış', dot: 'bg-muted-foreground', border: 'border-border' },
-};
+  healthy: { label: 'Sağlıklı', tone: 'success', dot: 'bg-emerald-500', border: 'border-border' },
+  degraded: { label: 'Dikkat', tone: 'warning', dot: 'bg-amber-500', border: 'border-amber-500/40' },
+  down: { label: 'Erişilemiyor', tone: 'danger', dot: 'bg-red-500', border: 'border-red-500/40' },
+  unknown: { label: 'Durum bilinmiyor', tone: 'neutral', dot: 'bg-muted-foreground', border: 'border-border' },
+  empty: { label: 'Cihaz atanmamış', tone: 'neutral', dot: 'bg-muted-foreground', border: 'border-border' },
+} as const;
+export const buildingNodeStatus = (status: string) => statuses[status as keyof typeof statuses] || statuses.unknown;
 const handlePositions = [
   { side: 'top', position: Position.Top }, { side: 'right', position: Position.Right },
   { side: 'bottom', position: Position.Bottom }, { side: 'left', position: Position.Left },
 ];
 
-export const BuildingNode = memo(({ data, selected }: NodeProps<BuildingNodeData>) => {
-  const status = statuses[data.status] || statuses.unknown;
-  return <div className={`relative w-[220px] rounded-xl border bg-card p-4 text-foreground shadow-sm ${status.border} ${selected ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : 'hover:border-primary/50'}`} onClick={data.onExpand} onDoubleClick={data.onDoubleClick}>
-    {handlePositions.flatMap(({ side, position }) => (['source', 'target'] as const).map(type => <Handle key={`${side}-${type}`} type={type} position={position} id={`${side}-${type}`} className="!h-2 !w-2 !border-0 !bg-transparent opacity-0" />))}
-    <div className="flex items-start gap-3">
-      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary"><Building2 className="h-4 w-4" /></span>
-      <div className="min-w-0"><h3 className="break-words text-sm font-semibold leading-snug">{data.name}</h3>{data.city && <p className="mt-1 flex items-start gap-1 text-[11px] leading-relaxed text-muted-foreground"><MapPin className="mt-0.5 h-3 w-3 shrink-0" /><span>{data.city}</span></p>}</div>
+export const BuildingNode = memo(({ data, selected, isConnectable }: NodeProps<BuildingNodeData>) => {
+  const status = buildingNodeStatus(data.status);
+  const portDownCount = data.portDownCount || 0;
+  const description = [data.name, data.city, `${data.deviceCount} cihaz`, status.label, portDownCount > 0 ? `${portDownCount} izlenen port kapalı` : null].filter(Boolean).join(' · ');
+
+  return <div className={`group relative flex w-32 flex-col items-center text-center text-foreground ${data.nodeEmphasis === 'muted' ? emphasisStyles.muted : ''}`} data-node-emphasis={data.nodeEmphasis || 'normal'} data-topology-hover-active={data.hoverActive || undefined} aria-label={description} aria-describedby={data.tooltipId} onClick={data.onExpand} onDoubleClick={data.onDoubleClick}>
+    <HopDistanceBadge distance={data.hopDistance} />
+    <div className={`relative grid h-14 w-14 shrink-0 place-items-center rounded-2xl border bg-card text-primary shadow-sm transition-colors ${status.border} ${data.hoverActive && data.nodeEmphasis === 'highlighted' ? '!border-primary ring-2 ring-primary/50 ring-offset-2 ring-offset-background' : selected ? 'border-primary ring-2 ring-primary/30 ring-offset-2 ring-offset-background' : data.nodeEmphasis === 'highlighted' ? 'ring-1 ring-primary/30 group-hover:border-primary/60' : 'group-hover:border-primary/60 group-hover:bg-primary/5'}`}>
+      {handlePositions.map(({ side, position }) => <Handle key={side} type="source" position={position} id={`${side}-source`} isConnectable={isConnectable} title={isConnectable ? 'Bağlantı oluşturmak için başka bir binanın bağlantı noktasına sürükleyin' : undefined} className={isConnectable ? '!h-3 !w-3 !border-2 !border-card !bg-primary opacity-60 transition-opacity hover:opacity-100 group-hover:opacity-100' : '!h-2 !w-2 !border-0 !bg-transparent opacity-0'} />)}
+      <Building2 className="h-8 w-8" strokeWidth={1.5} aria-hidden="true" />
+      <span className={`absolute -bottom-1 -right-1 h-3 w-3 rounded-full border-2 border-card ${status.dot}`} role="img" aria-label={status.label} />
+      {portDownCount > 0 && <span className="absolute -right-2 -top-2 flex h-5 min-w-[1.25rem] items-center justify-center gap-0.5 rounded-full bg-destructive px-1 text-[10px] font-semibold text-destructive-foreground" aria-label={`${portDownCount} izlenen port kapalı`}><AlertTriangle className="h-2.5 w-2.5" aria-hidden="true" />{portDownCount}</span>}
     </div>
-    <div className="mt-3 flex items-center justify-between gap-2 border-t border-border pt-3 text-[11px]">
-      <span className="flex items-center gap-1.5 text-muted-foreground"><span className={`h-1.5 w-1.5 shrink-0 rounded-full ${status.dot}`} />{status.label}</span>
-      <span className="shrink-0 font-medium">{data.deviceCount} cihaz</span>
-    </div>
-    {(data.portDownCount || 0) > 0 && <p className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-destructive"><AlertTriangle className="h-3.5 w-3.5" />{data.portDownCount} izlenen port kapalı</p>}
+    {data.onOpenMenu && <div className="absolute -right-3 top-0"><TopologyMenuButton name={data.name} onOpen={data.onOpenMenu} /></div>}
+    <h3 className="mt-2 line-clamp-2 max-w-full rounded bg-background/95 px-1 text-xs font-semibold leading-4 [overflow-wrap:anywhere]">{data.name}</h3>
+    <p className="mt-0.5 rounded bg-background/95 px-1 text-[11px] leading-4 text-muted-foreground">{data.deviceCount} cihaz</p>
   </div>;
 });
 BuildingNode.displayName = 'BuildingNode';

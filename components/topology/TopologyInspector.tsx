@@ -10,6 +10,8 @@ import { connectionState, type TopologyConnection } from '@/lib/topology/workspa
 import styles from './TopologyInspector.module.css';
 
 export interface InspectorDevice {
+  building?: { name: string } | null;
+  floor?: { name: string } | null;
   id: string; name: string; type: string; status: string; criticality: string;
   vendor?: string; managementIp?: string | null;
   rack?: { name: string; room?: { name: string; floor?: { name: string; building?: { name: string } } } };
@@ -27,6 +29,7 @@ export function ConnectionInspector({ connection, devices, onSelectDevice }: { c
   return <div className={styles.inspector}>
     <header className={styles.heading}><span className={styles.icon}><Link2 size={20} /></span><div><p>Cihaz bağlantısı</p><h2>{connection.name || 'Bağlantı ayrıntıları'}</h2></div></header>
     <ConnectionStatus status={connection.status} />
+    {connection.recordingSource === 'DRAWIO' && <SemanticBadge tone="info">Kaynak: draw.io çizimi · Canlı doğrulanmadı</SemanticBadge>}
     <p className={styles.note}>Durum, kayıtlı bağlantı bilgisidir. Anlık port ölçümü ve cihazın envanter durumu ayrı değerlendirilir.</p>
     <section className={styles.section} aria-label="Bağlantı uçları"><h3><ArrowDownUp size={16} />Bağlantı uçları</h3>
       {([
@@ -48,7 +51,7 @@ export function DeviceInspector({ device, devices, connections, downPorts, telem
   onSelectConnection: (id: string) => void; onOpenInventory: () => void;
 }) {
   const links = connections.filter(link => link.sourceDeviceId === device.id || link.targetDeviceId === device.id);
-  const location = [device.rack?.room?.floor?.building?.name, device.rack?.room?.floor?.name, device.rack?.room?.name, device.rack?.name].filter(Boolean);
+  const location = [device.rack?.room?.floor?.building?.name || device.building?.name, device.rack?.room?.floor?.name || device.floor?.name, device.rack?.room?.name, device.rack?.name].filter(Boolean);
   return <div className={styles.inspector}>
     <header className={styles.heading}><span className={styles.icon}><Server size={20} /></span><div><p>{uiLabel(device.type)}{device.vendor ? ` · ${device.vendor}` : ''}</p><h2>{device.name}</h2></div></header>
     <div className={styles.badges}><StatusBadge status={device.status || 'UNKNOWN'} /><SeverityBadge severity={device.criticality || 'UNKNOWN'} /></div>
