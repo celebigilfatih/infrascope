@@ -1,7 +1,7 @@
 import { createLogger } from '@/lib/logger';
 import { secureFetch } from '@/lib/security/tls';
 import { createHash } from 'node:crypto';
-import { SourceQueryError, throwIfSourceCancelled, withSourceDeadline } from './source-query-error';
+import { SourceQueryError, throwIfSourceCancelled, waitForSource, withSourceDeadline } from './source-query-error';
 import { FA_PROFILE_VERSION, normalizeFortiAnalyzerProfile, type FortiAnalyzerProfileInput } from './fortianalyzer-profile';
 
 const log = createLogger('fortianalyzer');
@@ -816,18 +816,28 @@ class FortiAnalyzerService {
     limit: number = 50,
     sortBy?: { field: string; order: 'asc' | 'desc' },
     filter?: string,
-    timeRangeMinutes: number = 240
+    timeRangeMinutes: number = 240,
+    options?: { window: { start: string; end: string }; signal: AbortSignal }
   ): Promise<{ data: Array<Record<string, unknown>>; totalCount?: number } | null> {
+    // Validate request-local scope before touching shared authentication state.
+    if (options) {
+      throwIfSourceCancelled(options.signal);
+      const start = Date.parse(options.window.start), end = Date.parse(options.window.end);
+      if (!Number.isFinite(start) || !Number.isFinite(end) || end - start !== timeRangeMinutes * 60_000 || timeRangeMinutes <= 0 || timeRangeMinutes > 1440) throw new SourceQueryError('SOURCE_INVALID_QUERY', 'Invalid explicit FortiView time window');
+    }
     if (!this.session) {
       const loggedIn = await this.login();
       if (!loggedIn) return null;
     }
 
     try {
-      // Calculate time range with +24h buffer for timezone diffs
+      // Preserve legacy callers; the analytics workspace supplies an exact UTC window.
       const now = new Date();
-      const end = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-      const start = new Date(now.getTime() - timeRangeMinutes * 60 * 1000);
+      const end = options ? new Date(options.window.end) : new Date(now.getTime() + 24 * 60 * 60 * 1000);
+      const start = options ? new Date(options.window.start) : new Date(now.getTime() - timeRangeMinutes * 60 * 1000);
+      if (options) {
+        throwIfSourceCancelled(options.signal);
+      }
       const formatDate = (d: Date) => d.toISOString().slice(0, 19).replace('T', ' ');
 
       const params: Record<string, unknown> = {
@@ -850,6 +860,7 @@ class FortiAnalyzerService {
       // Step 1: Start FortiView task
       const addResponse = await this.fetchRpc({
         method: 'POST',
+        ...(options ? { signal: options.signal } : {}),
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           jsonrpc: '2.0',
@@ -864,6 +875,7 @@ class FortiAnalyzerService {
         result?: { tid: number } | Array<{ tid?: number; status?: { code: number; message: string } }>;
         error?: { code: number; message: string };
       };
+      if (options) throwIfSourceCancelled(options.signal);
 
       // Handle both response formats: {result: {tid}} and {result: [{tid, status}]}
       let tid: number | null = null;
@@ -894,7 +906,7 @@ class FortiAnalyzerService {
         tid = addData.result.tid;
       }
 
-      if (!tid) {
+      if (!tid || options && (!Number.isSafeInteger(tid) || tid < 1)) {
         log.error({ viewName }, 'FortiView add: no tid in response');
         return null;
       }
@@ -903,10 +915,12 @@ class FortiAnalyzerService {
 
       // Step 2: Poll for results (max 60 seconds)
       for (let i = 0; i < 12; i++) {
-        await new Promise(resolve => setTimeout(resolve, 5000));
+        if (options) await waitForSource(5000, options.signal);
+        else await new Promise(resolve => setTimeout(resolve, 5000));
 
         const getResponse = await this.fetchRpc({
           method: 'POST',
+          ...(options ? { signal: options.signal } : {}),
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             jsonrpc: '2.0',
@@ -942,6 +956,7 @@ class FortiAnalyzerService {
         }
 
         const result = getData.result;
+        if (options) throwIfSourceCancelled(options.signal);
         // Session expired on FA side — check inner status
         if (result?.status && result.status.code !== 0 &&
             this.isSessionExpiredError(result.status.code, result.status.message)) {
@@ -964,6 +979,12 @@ class FortiAnalyzerService {
       log.warn({ viewName }, 'FortiView timed out');
       return null;
     } catch (error) {
+      if (options) {
+        if (options.signal.aborted) throwIfSourceCancelled(options.signal);
+        if (error instanceof SourceQueryError) throw error;
+        log.error({ viewName }, 'FortiView source request failed');
+        throw new SourceQueryError('SOURCE_FAILED', 'FortiView source request failed');
+      }
       log.error({ err: error, viewName }, 'Failed to get FortiView');
       return null;
     }

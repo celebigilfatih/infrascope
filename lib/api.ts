@@ -13,8 +13,11 @@ export const apiGet = async (url: string, params?: Record<string, unknown>, opti
     const response = await api.get(url, { params, timeout: options?.timeout, signal: options?.signal });
     return response.data;
   } catch (error) {
+    const response = (error as { response?: { data?: { code?: unknown }; status?: number } }).response;
     return {
       success: false,
+      code: typeof response?.data?.code === 'string' ? response.data.code : undefined,
+      status: response?.status,
       error: (error as Error & { response?: { data?: { error?: string }; status?: number } }).response?.data?.error || (error as Error & { response?: { data?: { error?: string }; status?: number } }).message || 'API request failed',
     };
   }

@@ -31,6 +31,8 @@ npm run test:vmware-health
 npm run test:integration-permissions
 npx eslint app/integrations/fortianalyzer/page.tsx lib/integrations/fortianalyzer-workspace.ts app/api/integrations/fortianalyzer/workspace/route.ts scripts/check-fortianalyzer-workspace.cjs scripts/check-fortianalyzer-profile-ui.cjs tests/incident-e2e/fortianalyzer-workspace.spec.ts --max-warnings=0
 npm run test:fortianalyzer-workspace
+npx eslint app/security/web-analytics/page.tsx app/api/integrations/fortianalyzer/analytics/route.ts lib/security/web-analytics.ts lib/integrations/fortianalyzer.ts lib/api.ts scripts/check-web-analytics.cjs tests/incident-e2e/web-analytics-workspace.spec.ts --max-warnings=0
+npm run test:web-analytics
 npm run test:fortianalyzer-auth
 npm run test:fortianalyzer-profile
 npm run test:fortianalyzer-cache

@@ -1,756 +1,104 @@
 'use client';
-
-import { uiError } from '@/lib/i18n/tr';
-
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import Link from 'next/link';
+import { ArrowDownUp, BarChart3, ChevronLeft, ChevronRight, Clock3, Cloud, Eye, FileCheck2, Globe, Info, Layers, RefreshCw, Search, Settings2, ShieldAlert, TriangleAlert, Users } from 'lucide-react';
+import { apiGet } from '@/lib/api';
 import { PageHeading } from '@/components/ui/page-heading';
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { SemanticBadge } from '@/components/ui/semantic-badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import {
-  Globe,
-  Search,
-  RefreshCw,
-  AlertCircle,
-  Users,
-  BarChart3,
-  ArrowUpDown,
-  TrendingUp,
-  Shield,
-  ShieldAlert,
-  Monitor,
-  Clock,
-  FileCheck,
-  Cloud,
-} from 'lucide-react';
-
-interface WebsiteCategory {
-  catdesc?: string;
-  domain?: string;
-  bandwidth?: string;
-  browsetime?: string;
-  sessions?: string;
-  traffic_in?: string;
-  traffic_out?: string;
-  threatweight?: string;
-  threat_block?: string;
-  threat_pass?: string;
-  session_block?: string;
-  session_pass?: string;
-  fortigate?: string;
-  agg_webcat?: string;
-  [key: string]: unknown;
-}
-
-interface BrowsingUser {
-  f_user?: string;
-  srcip?: string;
-  bandwidth?: string;
-  browsetime?: string;
-  sessions?: string;
-  traffic_in?: string;
-  traffic_out?: string;
-  threatweight?: string;
-  threat_block?: string;
-  session_block?: string;
-  session_pass?: string;
-  fortigate?: string;
-  [key: string]: unknown;
-}
-
-interface PolicyHit {
-  policy?: string;
-  policyid?: string;
-  agg_policyid?: string;
-  policytype?: string;
-  bandwidth?: string;
-  counts?: string;
-  count_block?: string;
-  count_pass?: string;
-  traffic_in?: string;
-  traffic_out?: string;
-  srcintf?: string;
-  dstintf?: string;
-  fortigate?: string;
-  devid?: string;
-  vd?: string;
-  time_stamp?: string;
-  [key: string]: unknown;
-}
-
-interface CloudApp {
-  app_group?: string;
-  appcat?: string;
-  bandwidth?: string;
-  risk?: string;
-  d_risk?: string;
-  sessions?: string;
-  session_block?: string;
-  session_pass?: string;
-  traffic_in?: string;
-  traffic_out?: string;
-  num_users?: string;
-  fortigate?: string;
-  [key: string]: unknown;
-}
-
-function formatBytes(bytesStr?: string): string {
-  if (!bytesStr) return '0 B';
-  const bytes = parseFloat(bytesStr);
-  if (isNaN(bytes) || bytes === 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-}
-
-function formatDuration(secondsStr?: string): string {
-  if (!secondsStr) return '0s';
-  const s = parseInt(secondsStr, 10);
-  if (isNaN(s) || s === 0) return '0s';
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  if (h > 0) return `${h}s ${m}dk`;
-  if (m > 0) return `${m}dk`;
-  return `${s}sn`;
-}
-
-function formatNumber(numStr?: string): string {
-  if (!numStr) return '0';
-  const n = parseInt(numStr, 10);
-  if (isNaN(n)) return '0';
-  return n.toLocaleString('tr-TR');
-}
-
-const TIME_RANGES = [
-  { label: '15 dk', value: 15 },
-  { label: '1 saat', value: 60 },
-];
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { parseAnalyzerWorkspace, type AnalyzerProfile } from '@/lib/integrations/fortianalyzer-workspace';
+import { analyticsBytes as bytes, analyticsCategories, analyticsCount as count, analyticsDuration as duration, analyticsError, analyticsRanges, analyticsSum, analyticsWindow, parseAnalyticsResult, type AnalyticsResult, type AnalyticsScope, type AnalyticsView } from '@/lib/security/web-analytics';
+import { userDate } from '@/lib/users/workspace';
+import common from '@/components/users/users-workspace.module.css';
+import styles from './page.module.css';
 
 export default function WebAnalyticsPage() {
-  const [websiteData, setWebsiteData] = useState<WebsiteCategory[]>([]);
-  const [userData, setUserData] = useState<BrowsingUser[]>([]);
-  const [policyData, setPolicyData] = useState<PolicyHit[]>([]);
-  const [cloudData, setCloudData] = useState<CloudApp[]>([]);
-  const [loadingWebsites, setLoadingWebsites] = useState(true);
-  const [loadingUsers, setLoadingUsers] = useState(true);
-  const [loadingPolicies, setLoadingPolicies] = useState(true);
-  const [loadingCloud, setLoadingCloud] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [websiteSearch, setWebsiteSearch] = useState('');
-  const [userSearch, setUserSearch] = useState('');
-  const [policySearch, setPolicySearch] = useState('');
-  const [cloudSearch, setCloudSearch] = useState('');
-  const [activeTab, setActiveTab] = useState('categories');
-  const [timeRange, setTimeRange] = useState(60);
-
-  // Fetch all FortiView data in a SINGLE batch API call (single FA login)
-  const fetchAllData = useCallback(async (range: number) => {
-    setError(null);
-    setLoadingWebsites(true);
-    setLoadingUsers(true);
-    setLoadingPolicies(true);
-    setLoadingCloud(true);
-  
-    try {
-      const response = await fetch(
-        `/api/integrations/fortianalyzer?type=fortiview-batch&views=top-websites,top-browsing-users,policy-hits,top-applications&limit=100&sort=bandwidth&range=${range}`
-      );
-      const result = await response.json();
-  
-      if (!result.success) {
-        setError(uiError(result.error || 'FortiView verileri y\u00fcklenemedi'));
-        return;
-      }
-  
-      const r = result.results || {};
-  
-      // Top Websites
-      if (r['top-websites'] && Array.isArray(r['top-websites'].data)) {
-        setWebsiteData(r['top-websites'].data);
-      }
-      // Top Browsing Users
-      if (r['top-browsing-users'] && Array.isArray(r['top-browsing-users'].data)) {
-        setUserData(r['top-browsing-users'].data);
-      }
-      // Policy Hits
-      if (r['policy-hits'] && Array.isArray(r['policy-hits'].data)) {
-        setPolicyData(r['policy-hits'].data);
-      }
-      // Top Applications (Cloud Apps)
-      if (r['top-applications'] && Array.isArray(r['top-applications'].data)) {
-        setCloudData(r['top-applications'].data);
-      }
-    } catch (err) {
-      console.error('Failed to fetch FortiView batch data:', err);
-      setError(uiError('FortiView verileri al\u0131namad\u0131'));
-    } finally {
-      setLoadingWebsites(false);
-      setLoadingUsers(false);
-      setLoadingPolicies(false);
-      setLoadingCloud(false);
-    }
+  const [profiles, setProfiles] = useState<AnalyzerProfile[] | null>(null), [choice, setChoice] = useState(''), [loading, setLoading] = useState(true), [error, setError] = useState('');
+  const [minutes, setMinutes] = useState(60), [end, setEnd] = useState(() => new Date().toISOString()), [refresh, setRefresh] = useState(0);
+  const request = useRef<AbortController | null>(null), sequence = useRef(0);
+  const load = useCallback(async () => {
+    const seq = ++sequence.current; request.current?.abort(); const controller = new AbortController(); request.current = controller; setLoading(true); setError('');
+    try { const value = await apiGet('/api/integrations/fortianalyzer/workspace', undefined, { signal: controller.signal, timeout: 20000 }); const next = parseAnalyzerWorkspace(value); if (!controller.signal.aborted && seq === sequence.current) setProfiles(next); }
+    catch { if (!controller.signal.aborted && seq === sequence.current) setError('FortiAnalyzer kaynak listesi okunamadı. Oturumunuzu ve erişim yetkinizi kontrol edip yeniden deneyin.'); }
+    finally { if (!controller.signal.aborted && seq === sequence.current) setLoading(false); }
   }, []);
-
-  useEffect(() => {
-    fetchAllData(timeRange);
-    const interval = setInterval(() => {
-      fetchAllData(timeRange);
-    }, 5 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, [fetchAllData, timeRange]);
-
-  const refreshAll = () => {
-    fetchAllData(timeRange);
-  };
-
-  const handleTimeRangeChange = (range: number) => {
-    setTimeRange(range);
-    fetchAllData(range);
-  };
-
-  const filteredWebsites = websiteData.filter((w: WebsiteCategory) => {
-    if (!websiteSearch) return true;
-    const term = websiteSearch.toLowerCase();
-    return (
-      (w.catdesc || '').toLowerCase().includes(term) ||
-      (w.domain || '').toLowerCase().includes(term) ||
-      (w.fortigate || '').toLowerCase().includes(term)
-    );
-  });
-
-  const filteredUsers = userData
-    .slice(0, 20)
-    .filter((u: BrowsingUser) => {
-    if (!userSearch) return true;
-    const term = userSearch.toLowerCase();
-    return (
-      (u.f_user || '').toLowerCase().includes(term) ||
-      (u.srcip || '').toLowerCase().includes(term) ||
-      (u.fortigate || '').toLowerCase().includes(term)
-    );
-  });
-
-  const filteredPolicies = policyData.filter((p: PolicyHit) => {
-    if (!policySearch) return true;
-    const term = policySearch.toLowerCase();
-    return (
-      (p.policy || '').toLowerCase().includes(term) ||
-      (p.policyid || p.agg_policyid || '').toLowerCase().includes(term) ||
-      (p.srcintf || '').toLowerCase().includes(term) ||
-      (p.dstintf || '').toLowerCase().includes(term) ||
-      (p.fortigate || '').toLowerCase().includes(term)
-    );
-  });
-
-  const filteredCloud = cloudData.filter((c: CloudApp) => {
-    if (!cloudSearch) return true;
-    const term = cloudSearch.toLowerCase();
-    return (
-      (c.app_group || '').toLowerCase().includes(term) ||
-      (c.appcat || '').toLowerCase().includes(term) ||
-      (c.fortigate || '').toLowerCase().includes(term)
-    );
-  });
-
-  const totalBandwidth = websiteData.reduce((sum: number, w: WebsiteCategory) => sum + (parseFloat(w.bandwidth || '0') || 0), 0);
-
-  const totalThreats = websiteData.reduce((sum: number, w: WebsiteCategory) => sum + (parseInt(w.threat_block || '0', 10) || 0), 0);
-  const loading = loadingWebsites || loadingUsers || loadingPolicies || loadingCloud;
-
-  // Top 20 sites by threat score (threatweight > 0, sorted desc)
-  const topThreatSites = useMemo(() =>
-    websiteData
-      .filter((w: WebsiteCategory) => parseInt(w.threatweight || '0', 10) > 0)
-      .sort((a, b) => parseInt(b.threatweight || '0', 10) - parseInt(a.threatweight || '0', 10))
-      .slice(0, 20),
-  [websiteData]);
-
-  return (
-    <div className="p-6 space-y-6 max-w-full">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <PageHeading section="webAnalytics" description={<>
-            FortiAnalyzer FortiView: öne çıkan web kategorileri ve kullanıcı etkinliği
-          </>}>Web Analizi</PageHeading>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
-            {TIME_RANGES.map((tr) => (
-              <Button
-                key={tr.value}
-                variant={timeRange === tr.value ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => handleTimeRangeChange(tr.value)}
-                disabled={loading}
-                className="text-xs h-8"
-              >
-                <Clock className="h-3 w-3 mr-1" />
-                {tr.label}
-              </Button>
-            ))}
-          </div>
-          <Button onClick={refreshAll} variant="outline" disabled={loading}>
-            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            Yenile
-          </Button>
-        </div>
-      </div>
-
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card><CardContent className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-full bg-blue-500/20"><Globe className="h-5 w-5 text-blue-500" /></div>
-            <div><p className="text-sm text-muted-foreground">Web Kategorisi</p><p className="text-2xl font-bold">{websiteData.length}</p></div>
-          </div>
-        </CardContent></Card>
-        <Card><CardContent className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-full bg-green-500/20"><Users className="h-5 w-5 text-green-500" /></div>
-            <div><p className="text-sm text-muted-foreground">Aktif Kullanıcı</p><p className="text-2xl font-bold">{userData.length}</p></div>
-          </div>
-        </CardContent></Card>
-        <Card><CardContent className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-full bg-purple-500/20"><TrendingUp className="h-5 w-5 text-purple-500" /></div>
-            <div><p className="text-sm text-muted-foreground">Toplam Bant Genişliği</p><p className="text-2xl font-bold">{formatBytes(String(totalBandwidth))}</p></div>
-          </div>
-        </CardContent></Card>
-        <Card><CardContent className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-full bg-red-500/20"><Shield className="h-5 w-5 text-red-500" /></div>
-            <div><p className="text-sm text-muted-foreground">Engellenen Tehdit</p><p className="text-2xl font-bold">{formatNumber(String(totalThreats))}</p></div>
-          </div>
-        </CardContent></Card>
-      </div>
-
-      {error && (
-        <div className="flex items-center gap-2 p-4 bg-destructive/10 rounded-lg">
-          <AlertCircle className="h-5 w-5 text-destructive" />
-          <span className="text-destructive">{uiError(error)}</span>
-        </div>
-      )}
-
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
-          <TabsTrigger value="categories">
-            <Globe className="h-4 w-4 mr-2" />
-            Öne Çıkan Web Siteleri
-          </TabsTrigger>
-          <TabsTrigger value="threats">
-            <ShieldAlert className="h-4 w-4 mr-2" />
-            Yüksek Tehdit
-            {topThreatSites.length > 0 && (
-              <Badge variant="destructive" className="ml-2 text-xs">{topThreatSites.length}</Badge>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="users">
-            <Users className="h-4 w-4 mr-2" />
-            Top Kullanıcılar
-          </TabsTrigger>
-          <TabsTrigger value="policies">
-            <FileCheck className="h-4 w-4 mr-2" />
-            Politika Eşleşmeleri
-          </TabsTrigger>
-          <TabsTrigger value="cloud">
-            <Cloud className="h-4 w-4 mr-2" />
-            Cloud Uygulamaları
-          </TabsTrigger>
-        </TabsList>
-
-        {/* Top Website Categories */}
-        <TabsContent value="categories" className="space-y-4">
-          <div className="relative max-w-md">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input placeholder="Kategori, alan adı veya cihaz ara…" value={websiteSearch} onChange={(e) => setWebsiteSearch(e.target.value)} className="pl-9" />
-          </div>
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <BarChart3 className="h-5 w-5" />
-                Öne Çıkan Web Kategorileri
-                <Badge variant="secondary">{filteredWebsites.length}</Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              {loadingWebsites ? (
-                <div className="flex justify-center py-12"><RefreshCw className="h-8 w-8 animate-spin text-primary" /></div>
-              ) : (
-                <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-10">#</TableHead>
-                      <TableHead>Kategori / Alan Adı</TableHead>
-                      <TableHead><div className="flex items-center gap-1"><ArrowUpDown className="h-3 w-3" />Bant Genişliği</div></TableHead>
-                      <TableHead>Oturum</TableHead>
-                      <TableHead>Gelen Trafik</TableHead>
-                      <TableHead>Giden Trafik</TableHead>
-                      <TableHead>Tehdit Skoru</TableHead>
-                      <TableHead>Engellenen</TableHead>
-                      <TableHead>Cihaz</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredWebsites.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Veri bulunamadı</TableCell>
-                      </TableRow>
-                    ) : (
-                      filteredWebsites.map((w: WebsiteCategory, idx: number) => (
-                        <TableRow key={idx}>
-                          <TableCell className="text-muted-foreground">{idx + 1}</TableCell>
-                          <TableCell>
-                            <div className="font-medium">{w.catdesc || w.domain || w.agg_webcat || '-'}</div>
-                            {w.domain && w.catdesc && <div className="text-xs text-muted-foreground">{w.domain}</div>}
-                          </TableCell>
-                          <TableCell className="font-mono text-sm font-semibold">{formatBytes(w.bandwidth)}</TableCell>
-                          <TableCell className="font-mono text-sm">{formatNumber(w.sessions)}</TableCell>
-                          <TableCell className="font-mono text-xs text-green-600">{formatBytes(w.traffic_in)}</TableCell>
-                          <TableCell className="font-mono text-xs text-blue-600">{formatBytes(w.traffic_out)}</TableCell>
-                          <TableCell>
-                            {parseInt(w.threatweight || '0', 10) > 0 ? (
-                              <Badge variant="destructive">{formatNumber(w.threatweight)}</Badge>
-                            ) : (
-                              <span className="text-muted-foreground">0</span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {parseInt(w.threat_block || '0', 10) > 0 ? (
-                              <Badge variant="destructive">{formatNumber(w.threat_block)}</Badge>
-                            ) : (
-                              <span className="text-muted-foreground">0</span>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-xs">{w.fortigate || '-'}</TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* High Threat Sites — Top 20 by threatweight */}
-        <TabsContent value="threats" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <ShieldAlert className="h-5 w-5 text-red-500" />
-                Tehdit Skoru En Yüksek 20 Web Sitesi
-                <Badge variant="destructive">{topThreatSites.length}</Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              {loadingWebsites ? (
-                <div className="flex justify-center py-12"><RefreshCw className="h-8 w-8 animate-spin text-primary" /></div>
-              ) : topThreatSites.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground">
-                  <ShieldAlert className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                  <p>Seçilen zaman aralığında tehdit skoru olan site bulunamadı</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <Table className="w-full" style={{ tableLayout: 'auto' }}>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-10">#</TableHead>
-                        <TableHead className="whitespace-nowrap">Kategori / Alan Adı</TableHead>
-                        <TableHead className="whitespace-nowrap">
-                          <div className="flex items-center gap-1 text-red-600 font-semibold">
-                            <ShieldAlert className="h-3 w-3" />Tehdit Skoru
-                          </div>
-                        </TableHead>
-                        <TableHead className="whitespace-nowrap">Engellenen</TableHead>
-                        <TableHead className="whitespace-nowrap">Geçen</TableHead>
-                        <TableHead className="whitespace-nowrap">Oturum</TableHead>
-                        <TableHead className="whitespace-nowrap">Bant Genişliği</TableHead>
-                        <TableHead className="whitespace-nowrap">Gelen Trafik</TableHead>
-                        <TableHead className="whitespace-nowrap">Giden Trafik</TableHead>
-                        <TableHead className="whitespace-nowrap">Gezinti Süresi</TableHead>
-                        <TableHead className="whitespace-nowrap">Cihaz</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {topThreatSites.map((w: WebsiteCategory, idx: number) => {
-                        const score = parseInt(w.threatweight || '0', 10);
-                        const blocked = parseInt(w.threat_block || '0', 10);
-                        const scoreColor =
-                          score >= 50000 ? 'bg-red-700 text-white' :
-                          score >= 10000 ? 'bg-red-500 text-white' :
-                          score >= 1000  ? 'bg-orange-500 text-white' :
-                                          'bg-yellow-500 text-white';
-                        return (
-                          <TableRow key={idx} className={blocked > 0 ? 'bg-red-50/30' : ''}>
-                            <TableCell className="text-muted-foreground whitespace-nowrap font-semibold">{idx + 1}</TableCell>
-                            <TableCell className="whitespace-nowrap">
-                              <div className="font-semibold">{w.catdesc || w.domain || w.agg_webcat || '-'}</div>
-                              {w.domain && w.catdesc && <div className="text-xs text-muted-foreground">{w.domain}</div>}
-                            </TableCell>
-                            <TableCell className="whitespace-nowrap">
-                              <Badge className={scoreColor}>{score.toLocaleString('tr-TR')}</Badge>
-                            </TableCell>
-                            <TableCell className="whitespace-nowrap">
-                              {blocked > 0 ? (
-                                <Badge variant="destructive">{blocked.toLocaleString('tr-TR')}</Badge>
-                              ) : (
-                                <span className="text-muted-foreground">0</span>
-                              )}
-                            </TableCell>
-                            <TableCell className="font-mono text-sm whitespace-nowrap">
-                              {parseInt(w.threat_pass || '0', 10).toLocaleString('tr-TR')}
-                            </TableCell>
-                            <TableCell className="font-mono text-sm whitespace-nowrap">{formatNumber(w.sessions)}</TableCell>
-                            <TableCell className="font-mono text-sm font-semibold whitespace-nowrap">{formatBytes(w.bandwidth)}</TableCell>
-                            <TableCell className="font-mono text-xs text-green-600 whitespace-nowrap">{formatBytes(w.traffic_in)}</TableCell>
-                            <TableCell className="font-mono text-xs text-blue-600 whitespace-nowrap">{formatBytes(w.traffic_out)}</TableCell>
-                            <TableCell className="text-sm whitespace-nowrap">{formatDuration(w.browsetime)}</TableCell>
-                            <TableCell className="text-xs whitespace-nowrap">{w.fortigate || '-'}</TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Top Browsing Users */}
-        <TabsContent value="users" className="space-y-4">
-          <div className="relative max-w-md">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input placeholder="Kullanıcı, IP veya cihaz ara..." value={userSearch} onChange={(e) => setUserSearch(e.target.value)} className="pl-9" />
-          </div>
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Monitor className="h-5 w-5" />
-                Öne Çıkan Web Kullanıcıları
-                <Badge variant="secondary">{filteredUsers.length}</Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              {loadingUsers ? (
-                <div className="flex justify-center py-12"><RefreshCw className="h-8 w-8 animate-spin text-primary" /></div>
-              ) : (
-                <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-10">#</TableHead>
-                      <TableHead>Kullanıcı</TableHead>
-                      <TableHead>Kaynak IP</TableHead>
-                      <TableHead><div className="flex items-center gap-1"><ArrowUpDown className="h-3 w-3" />Bant Genişliği</div></TableHead>
-                      <TableHead>Oturum</TableHead>
-                      <TableHead>Gezinti Süresi</TableHead>
-                      <TableHead>Gelen Trafik</TableHead>
-                      <TableHead>Giden Trafik</TableHead>
-                      <TableHead>Tehdit</TableHead>
-                      <TableHead>Cihaz</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredUsers.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Veri bulunamadı</TableCell>
-                      </TableRow>
-                    ) : (
-                      filteredUsers.map((u: BrowsingUser, idx: number) => (
-                        <TableRow key={idx}>
-                          <TableCell className="text-muted-foreground">{idx + 1}</TableCell>
-                          <TableCell className="font-medium">{u.f_user || 'Bilinmeyen'}</TableCell>
-                          <TableCell className="font-mono text-xs">{u.srcip || '-'}</TableCell>
-                          <TableCell className="font-mono text-sm font-semibold">{formatBytes(u.bandwidth)}</TableCell>
-                          <TableCell className="font-mono text-sm">{formatNumber(u.sessions)}</TableCell>
-                          <TableCell className="text-sm">{formatDuration(u.browsetime)}</TableCell>
-                          <TableCell className="font-mono text-xs text-green-600">{formatBytes(u.traffic_in)}</TableCell>
-                          <TableCell className="font-mono text-xs text-blue-600">{formatBytes(u.traffic_out)}</TableCell>
-                          <TableCell>
-                            {parseInt(u.threatweight || '0', 10) > 0 ? (
-                              <Badge variant="destructive">{formatNumber(u.threatweight)}</Badge>
-                            ) : (
-                              <span className="text-muted-foreground">0</span>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-xs">{u.fortigate || '-'}</TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Top Policy Hits */}
-        <TabsContent value="policies" className="space-y-4">
-          <div className="relative max-w-md">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input placeholder="Politika kimliği, arayüz veya cihaz ara…" value={policySearch} onChange={(e) => setPolicySearch(e.target.value)} className="pl-9" />
-          </div>
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileCheck className="h-5 w-5" />
-                En Çok Eşleşen Politikalar
-                <Badge variant="secondary">{filteredPolicies.length}</Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              {loadingPolicies ? (
-                <div className="flex justify-center py-12"><RefreshCw className="h-8 w-8 animate-spin text-primary" /></div>
-              ) : (
-                <Table className="w-full" style={{ tableLayout: 'auto' }}>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-10">#</TableHead>
-                      <TableHead className="whitespace-nowrap">Politika</TableHead>
-                      <TableHead className="whitespace-nowrap">Tür</TableHead>
-                      <TableHead className="whitespace-nowrap"><div className="flex items-center gap-1"><ArrowUpDown className="h-3 w-3" />Bant Genişliği</div></TableHead>
-                      <TableHead className="whitespace-nowrap">Hit Sayısı</TableHead>
-                      <TableHead className="whitespace-nowrap">İzin Verilen</TableHead>
-                      <TableHead className="whitespace-nowrap">Engellenen</TableHead>
-                      <TableHead className="whitespace-nowrap">Gelen Trafik</TableHead>
-                      <TableHead className="whitespace-nowrap">Giden Trafik</TableHead>
-                      <TableHead className="whitespace-nowrap">Kaynak Arayüz</TableHead>
-                      <TableHead className="whitespace-nowrap">Hedef Arayüz</TableHead>
-                      <TableHead className="whitespace-nowrap">Cihaz</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredPolicies.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={12} className="text-center py-8 text-muted-foreground">Veri bulunamadı</TableCell>
-                      </TableRow>
-                    ) : (
-                      filteredPolicies.map((p: PolicyHit, idx: number) => (
-                        <TableRow key={idx}>
-                          <TableCell className="text-muted-foreground whitespace-nowrap">{idx + 1}</TableCell>
-                          <TableCell className="font-medium whitespace-nowrap">{p.policy || p.agg_policyid || p.policyid || '-'}</TableCell>
-                          <TableCell className="text-xs whitespace-nowrap">{p.policytype || '-'}</TableCell>
-                          <TableCell className="font-mono text-sm font-semibold whitespace-nowrap">{formatBytes(p.bandwidth)}</TableCell>
-                          <TableCell className="font-mono text-sm whitespace-nowrap">{formatNumber(p.counts)}</TableCell>
-                          <TableCell className="font-mono text-sm text-green-600 whitespace-nowrap">{formatNumber(p.count_pass)}</TableCell>
-                          <TableCell className="whitespace-nowrap">
-                            {parseInt(p.count_block || '0', 10) > 0 ? (
-                              <Badge variant="destructive">{formatNumber(p.count_block)}</Badge>
-                            ) : (
-                              <span className="text-muted-foreground">0</span>
-                            )}
-                          </TableCell>
-                          <TableCell className="font-mono text-xs text-green-600 whitespace-nowrap">{formatBytes(p.traffic_in)}</TableCell>
-                          <TableCell className="font-mono text-xs text-blue-600 whitespace-nowrap">{formatBytes(p.traffic_out)}</TableCell>
-                          <TableCell className="text-xs whitespace-nowrap">{p.srcintf || '-'}</TableCell>
-                          <TableCell className="text-xs whitespace-nowrap">{p.dstintf || '-'}</TableCell>
-                          <TableCell className="text-xs whitespace-nowrap">{p.fortigate || '-'}</TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Cloud Applications */}
-        <TabsContent value="cloud" className="space-y-4">
-          <div className="relative max-w-md">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input placeholder="Uygulama, kategori veya cihaz ara..." value={cloudSearch} onChange={(e) => setCloudSearch(e.target.value)} className="pl-9" />
-          </div>
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Cloud className="h-5 w-5" />
-                Öne Çıkan Bulut Uygulamaları
-                <Badge variant="secondary">{filteredCloud.length}</Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              {loadingCloud ? (
-                <div className="flex justify-center py-12"><RefreshCw className="h-8 w-8 animate-spin text-primary" /></div>
-              ) : (
-                <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-10">#</TableHead>
-                      <TableHead>Uygulama</TableHead>
-                      <TableHead>Kategori</TableHead>
-                      <TableHead>Risk</TableHead>
-                      <TableHead><div className="flex items-center gap-1"><ArrowUpDown className="h-3 w-3" />Bant Genişliği</div></TableHead>
-                      <TableHead>Oturum</TableHead>
-                      <TableHead>İzin Verilen</TableHead>
-                      <TableHead>Engellenen</TableHead>
-                      <TableHead>Gelen Trafik</TableHead>
-                      <TableHead>Giden Trafik</TableHead>
-                      <TableHead>Kullanıcı</TableHead>
-                      <TableHead>Cihaz</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredCloud.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={12} className="text-center py-8 text-muted-foreground">Veri bulunamadı</TableCell>
-                      </TableRow>
-                    ) : (
-                      filteredCloud.map((c: CloudApp, idx: number) => {
-                        const riskLevel = parseInt(c.risk || c.d_risk || '0', 10);
-                        const riskColor = riskLevel >= 4 ? 'bg-red-600' : riskLevel >= 3 ? 'bg-orange-500' : riskLevel >= 2 ? 'bg-yellow-500' : 'bg-green-500';
-                        const riskLabel = riskLevel >= 4 ? 'Kritik' : riskLevel >= 3 ? 'Yüksek' : riskLevel >= 2 ? 'Orta' : 'Düşük';
-                        return (
-                          <TableRow key={idx}>
-                            <TableCell className="text-muted-foreground">{idx + 1}</TableCell>
-                            <TableCell className="font-medium">{c.app_group || '-'}</TableCell>
-                            <TableCell className="text-sm">{c.appcat || '-'}</TableCell>
-                            <TableCell>
-                              <Badge className={`${riskColor} text-white`}>{riskLabel} ({riskLevel})</Badge>
-                            </TableCell>
-                            <TableCell className="font-mono text-sm font-semibold">{formatBytes(c.bandwidth)}</TableCell>
-                            <TableCell className="font-mono text-sm">{formatNumber(c.sessions)}</TableCell>
-                            <TableCell className="font-mono text-sm text-green-600">{formatNumber(c.session_pass)}</TableCell>
-                            <TableCell>
-                              {parseInt(c.session_block || '0', 10) > 0 ? (
-                                <Badge variant="destructive">{formatNumber(c.session_block)}</Badge>
-                              ) : (
-                                <span className="text-muted-foreground">0</span>
-                              )}
-                            </TableCell>
-                            <TableCell className="font-mono text-xs text-green-600">{formatBytes(c.traffic_in)}</TableCell>
-                            <TableCell className="font-mono text-xs text-blue-600">{formatBytes(c.traffic_out)}</TableCell>
-                            <TableCell className="font-mono text-sm">{formatNumber(c.num_users)}</TableCell>
-                            <TableCell className="text-xs">{c.fortigate || '-'}</TableCell>
-                          </TableRow>
-                        );
-                      })
-                    )}
-                  </TableBody>
-                </Table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-    </div>
-  );
+  useEffect(() => { void load(); return () => request.current?.abort(); }, [load]);
+  const profile = profiles?.find(row => row.id === choice) || (!choice && profiles?.length === 1 ? profiles[0] : null), window = analyticsWindow(minutes, end);
+  return <div className={common.page}><div className={common.workspace}>
+    <header className={common.header}><PageHeading section="webAnalytics" description="Web trafiğini, kullanıcı etkinliğini ve kategori dağılımını seçili kaynak ve zaman aralığında inceleyin.">Web Analizi</PageHeading><div className={common.headerActions}><Button asChild variant="outline"><Link href="/integrations/fortianalyzer"><Settings2 size={16} aria-hidden="true" />FortiAnalyzer ayarları</Link></Button><Button variant="outline" disabled={loading} onClick={() => { setEnd(new Date().toISOString()); setRefresh(v => v + 1); void load(); }}><RefreshCw size={16} aria-hidden="true" className={loading ? 'animate-spin motion-reduce:animate-none' : ''} />{loading ? 'Kaynak okunuyor…' : 'Verileri yenile'}</Button></div></header>
+    <div className={common.serviceBar}><SemanticBadge tone="info" icon={Clock3}>Zaman aralığına ait rapor</SemanticBadge><span>Değerler veri miktarıdır; bağlantı hızı veya şu anda bağlı kullanıcı sayısı değildir.</span></div>
+    {error && <Notice error>{error}{profiles && ' Önceki kaynak listesi korunuyor.'}</Notice>}
+    {loading && !profiles ? <Empty title="FortiAnalyzer kaynakları yükleniyor" icon={RefreshCw} /> : profiles && !profiles.length ? <Empty title="FortiAnalyzer bağlantısı bulunmuyor" icon={Globe}><p>Web trafiği ve kullanıcı analizlerini görmek için FortiAnalyzer bağlantısı ekleyin.</p><Button asChild><Link href="/integrations/fortianalyzer"><Settings2 size={16} aria-hidden="true" />Bağlantıyı yapılandır</Link></Button></Empty> : profiles && <>
+      <section className={styles.scope} aria-label="Analiz kapsamı"><div className={styles.scopeFields}><div className={styles.field}><label htmlFor="analytics-source"><Globe size={15} aria-hidden="true" />FortiAnalyzer kaynağı</label><select id="analytics-source" value={profile?.id || ''} disabled={loading} onChange={e => { setChoice(e.target.value); setEnd(new Date().toISOString()); }}><option value="">Kaynak seçin</option>{profiles.map(row => <option key={row.id} value={row.id}>{row.name} · {row.host} · ADOM: {row.adom}{row.enabled ? '' : ' · Devre dışı'}</option>)}</select></div><div className={styles.field}><label htmlFor="analytics-range"><Clock3 size={15} aria-hidden="true" />Zaman aralığı</label><select id="analytics-range" value={minutes} onChange={e => { setMinutes(Number(e.target.value)); setEnd(new Date().toISOString()); }}>{analyticsRanges.map(row => <option key={row.minutes} value={row.minutes}>{row.label}</option>)}</select></div></div><div className={styles.window}><Clock3 size={16} aria-hidden="true" /><span><strong>{userDate(window.start)} → {userDate(window.end)} · TSİ</strong><small>{profile ? `ADOM: ${profile.adom} · Bu ADOM’daki tüm FortiGate cihazları` : 'Önce bir FortiAnalyzer kaynağı seçin.'}</small></span><Button variant="ghost" size="sm" onClick={() => void load()} disabled={loading}>Kaynak listesini yenile</Button></div><p className={styles.hint}>Zaman aralığı seçim veya yenileme anında sabitlenir. Tüm görünümler aynı başlangıç ve bitiş zamanını kullanır.</p></section>
+      {!profile ? <Notice>Analizleri okumak için bir FortiAnalyzer kaynağı seçin.</Notice> : !profile.enabled ? <Empty title="Seçili bağlantı devre dışı" icon={Info}><p>Bu profilden yeni analiz verisi istenmez. Bağlantı ayarlarını kontrol edin.</p></Empty> : !profile.updatedAt ? <Notice error>Kaynağın kayıt sürümü doğrulanamadı. Kaynak listesini yenileyin.</Notice> : <AnalyticsWorkspace key={`${profile.id}:${profile.updatedAt}:${profile.adom}:${minutes}:${window.end}:${refresh}`} scope={{ configId: profile.id, adom: profile.adom, profileUpdatedAt: profile.updatedAt, minutes, ...window }} />}
+    </>}
+  </div></div>;
 }
+
+type ViewState = { result: AnalyticsResult | null; loading: boolean; error: string };
+const emptyView: ViewState = { result: null, loading: false, error: '' };
+function AnalyticsWorkspace({ scope: incomingScope }: { scope: AnalyticsScope }) {
+  // The parent remount key contains every source/window identity field.
+  const scope = useRef(incomingScope).current;
+  const [states, setStates] = useState<Partial<Record<AnalyticsView, ViewState>>>({}), [tab, setTab] = useState('sites');
+  const pending = useRef(new Map<AnalyticsView, AbortController>()), requested = useRef(new Set<AnalyticsView>());
+  const loadView = useCallback(async (view: AnalyticsView, retry = false) => {
+    if (pending.current.has(view) || !retry && requested.current.has(view)) return;
+    requested.current.add(view); const controller = new AbortController(); pending.current.set(view, controller);
+    setStates(old => ({ ...old, [view]: { result: old[view]?.result || null, loading: true, error: '' } }));
+    try { const value = await apiGet('/api/integrations/fortianalyzer/analytics', { configId: scope.configId, profileUpdatedAt: scope.profileUpdatedAt, view, minutes: scope.minutes, end: scope.end }, { signal: controller.signal, timeout: 80000 });
+      if (controller.signal.aborted) return;
+      if (!value?.success) throw Error(analyticsError(value));
+      const result = parseAnalyticsResult(value, scope, view); setStates(old => ({ ...old, [view]: { result, loading: false, error: '' } }));
+    } catch (failure) { if (!controller.signal.aborted) setStates(old => ({ ...old, [view]: { result: old[view]?.result || null, loading: false, error: failure instanceof Error ? failure.message : analyticsError(null) } })); }
+    finally { if (pending.current.get(view) === controller) pending.current.delete(view); }
+  }, [scope]);
+  useEffect(() => { void loadView('top-websites'); void loadView('top-browsing-users'); const controllers = pending.current, requestedViews = requested.current; return () => { controllers.forEach(controller => controller.abort()); controllers.clear(); requestedViews.clear(); }; }, [loadView]);
+  const view: AnalyticsView = tab === 'users' ? 'top-browsing-users' : tab === 'policies' ? 'policy-hits' : tab === 'apps' ? 'top-applications' : 'top-websites';
+  useEffect(() => { void loadView(view); }, [loadView, view]);
+  const websites = states['top-websites'] || emptyView, users = states['top-browsing-users'] || emptyView, state = states[view] || emptyView;
+  const cards = [
+    { label: 'Listelenen web trafiği', icon: ArrowDownUp, value: websites.result ? bytes(analyticsSum(websites.result.rows, 'bytes')) : websites.loading ? 'Okunuyor…' : 'Bilgi yok', note: 'Alınan en fazla 100 web kaydının veri miktarı' },
+    { label: 'Görünen web kategorisi', icon: Layers, value: websites.result ? count(new Set(websites.result.rows.flatMap(row => row.category ? [row.category] : [])).size) : 'Bilgi yok', note: 'Alınan kayıtlarda adı veya kodu bulunan kategoriler' },
+    { label: 'Listelenen kullanıcı / IP', icon: Users, value: users.result ? count(users.result.rows.length) : users.loading ? 'Okunuyor…' : 'Bilgi yok', note: 'Aralıktaki FortiView kullanıcı/IP kayıtları' },
+    { label: 'Engellenen web oturumu', icon: ShieldAlert, value: websites.result ? count(analyticsSum(websites.result.rows, 'blocked')) : 'Bilgi yok', note: 'Alınan web kayıtlarındaki engellenen oturumlar' },
+  ];
+  return <><section className={common.stats} aria-label="Web trafiği özeti">{cards.map(card => <article key={card.label} className={common.stat}><div><h2>{card.label}</h2><span className={common.icon}><card.icon size={18} aria-hidden="true" /></span></div><strong>{card.value}</strong><p>{card.note}</p></article>)}</section>
+    <Notice>FortiView her görünümde veri miktarına göre sıralı en fazla 100 kayıt döndürür. Özetler bu kayıtların kapsamındadır; tüm ağ trafiğinin veya tüm kullanıcıların toplamı değildir. Eksik ölçümler “Bilgi yok” olarak gösterilir.</Notice>
+    {[['Web kayıtları', websites], ['Kullanıcı kayıtları', users]].map(([name, value]) => { const item = value as ViewState; return item.error ? <div key={String(name)} className={common.error} role="alert"><TriangleAlert size={18} aria-hidden="true" /><p>{String(name)}: {item.error}{item.result && ' Önceki sonuç gösteriliyor.'}</p><Button variant="outline" size="sm" onClick={() => void loadView(name === 'Web kayıtları' ? 'top-websites' : 'top-browsing-users', true)} disabled={item.loading}>Yeniden dene</Button></div> : null; })}
+    <Tabs value={tab} onValueChange={setTab} className={styles.tabs}><TabsList className={common.tabs} aria-label="Web analizi görünümleri">{[{ id: 'sites', label: 'Web siteleri', icon: Globe }, { id: 'categories', label: 'Kategoriler', icon: Layers }, { id: 'users', label: 'Kullanıcılar', icon: Users }, { id: 'policies', label: 'Politika eşleşmeleri', icon: FileCheck2 }, { id: 'apps', label: 'Uygulamalar', icon: Cloud }].map(item => <TabsTrigger key={item.id} value={item.id}><item.icon size={16} aria-hidden="true" />{item.label}</TabsTrigger>)}</TabsList>{['sites', 'categories', 'users', 'policies', 'apps'].map(id => <TabsContent key={id} value={id} className={styles.content}>{id === tab && (id === 'categories' ? <CategoryView state={websites} onRetry={() => void loadView('top-websites', true)} /> : <AnalyticsTable key={id} view={view} state={state} onRetry={() => void loadView(view, true)} />)}</TabsContent>)}</Tabs>
+  </>;
+}
+
+const viewLabels: Record<AnalyticsView, string> = { 'top-websites': 'Web siteleri', 'top-browsing-users': 'Kullanıcılar', 'policy-hits': 'Politika eşleşmeleri', 'top-applications': 'Uygulamalar' };
+function AnalyticsTable({ view, state, onRetry }: { view: AnalyticsView; state: ViewState; onRetry: () => void }) {
+  const [search, setSearch] = useState(''), [device, setDevice] = useState(''), [scored, setScored] = useState(false), [order, setOrder] = useState('bytes'), [page, setPage] = useState(1), [detailKey, setDetail] = useState<string | null>(null);
+  const rows = useMemo(() => state.result?.rows || [], [state.result]), detail = rows.find(row => row.key === detailKey) || null;
+  const filtered = useMemo(() => rows.filter(row => (!device || row.device === device) && (!scored || row.score !== null && row.score > 0) && [row.name, row.category, row.ip, row.device, row.policyId, row.sourceInterface, row.destinationInterface].some(value => value?.toLocaleLowerCase('tr-TR').includes(search.trim().toLocaleLowerCase('tr-TR')))).sort((a, b) => order === 'name' ? a.name.localeCompare(b.name, 'tr-TR') : ((order === 'sessions' ? b.sessions : b.bytes) ?? -1) - ((order === 'sessions' ? a.sessions : a.bytes) ?? -1)), [rows, device, scored, search, order]);
+  const pages = Math.max(1, Math.ceil(filtered.length / 10)), safePage = Math.min(page, pages), slice = filtered.slice((safePage - 1) * 10, safePage * 10), devices = [...new Set(rows.flatMap(row => row.device ? [row.device] : []))].sort();
+  const change = () => { setPage(1); setDetail(null); }, clear = () => { setSearch(''); setDevice(''); setScored(false); setPage(1); };
+  return <><div className={common.filters} role="search" aria-label={`${viewLabels[view]} filtreleri`}><div className={`${styles.field} ${styles.search}`}><label htmlFor="web-search"><Search size={14} aria-hidden="true" />{viewLabels[view]} içinde ara</label><Input id="web-search" type="search" value={search} onChange={e => { setSearch(e.target.value); change(); }} placeholder="Ad, kategori, IP veya kaynak cihaz" /></div><div className={styles.field}><label htmlFor="web-device">Kaynak cihaz</label><select id="web-device" value={device} onChange={e => { setDevice(e.target.value); change(); }}><option value="">Alınan tüm cihazlar</option>{devices.map(name => <option key={name}>{name}</option>)}</select></div><div className={styles.field}><label htmlFor="web-order">Sıralama</label><select id="web-order" value={order} onChange={e => { setOrder(e.target.value); change(); }}><option value="bytes">Veri miktarı · çoktan aza</option><option value="sessions">Oturum / eşleşme · çoktan aza</option><option value="name">Ad · A–Z</option></select></div>{['top-websites', 'top-browsing-users'].includes(view) && <label className={styles.checkbox}><input type="checkbox" checked={scored} onChange={e => { setScored(e.target.checked); change(); }} />Tehdit skoru bulunanlar</label>}{(search || device || scored) && <Button variant="ghost" onClick={clear}>Filtreleri temizle</Button>}</div>
+    <section className={common.collection} aria-label={viewLabels[view]} aria-busy={state.loading}><CollectionHeader title={viewLabels[view]} state={state} />
+      {state.error && !['top-websites', 'top-browsing-users'].includes(view) && <Notice error>{state.error}</Notice>}
+      {state.loading && !state.result ? <Empty title="Analiz kayıtları okunuyor" icon={RefreshCw} /> : !state.result ? <Empty title="Bu görünümün verileri alınamadı" icon={Info}><Button variant="outline" onClick={onRetry} disabled={state.loading}>Yeniden dene</Button></Empty> : !slice.length ? <Empty title={rows.length ? 'Filtrelere uygun kayıt yok' : 'Kaynak bu zaman aralığında kayıt döndürmedi'} icon={Search}>{rows.length > 0 && <Button variant="outline" onClick={clear}>Filtreleri temizle</Button>}</Empty> : <>
+      <div className={styles.tableWrap}><table className={styles.table}><caption className="sr-only">{viewLabels[view]} · Seçili kaynak ve zaman aralığı</caption><thead><tr><th scope="col">{view === 'top-browsing-users' ? 'Kullanıcı / kaynak IP' : view === 'policy-hits' ? 'Politika / arabirimler' : view === 'top-applications' ? 'Uygulama / kategori' : 'Alan adı / kategori'}</th><th scope="col">Veri miktarı</th><th scope="col">{view === 'policy-hits' ? 'Eşleşme' : 'Oturum'}</th><th scope="col">Engellenen</th><th scope="col">Kaynak cihaz</th><th scope="col">Ayrıntılar</th></tr></thead><tbody>{slice.map(row => <tr key={row.key}><td><strong>{row.name}</strong><small>{view === 'top-browsing-users' ? row.ip || 'Kaynak IP yok' : view === 'policy-hits' ? `${row.sourceInterface || '?'} → ${row.destinationInterface || '?'}` : row.category || 'Kategori bilgisi yok'}</small></td><td><strong>{bytes(row.bytes)}</strong><small>Alınan {bytes(row.incoming)}<br />Gönderilen {bytes(row.outgoing)}</small></td><td>{count(row.sessions)}</td><td><Blocked value={row.blocked} /></td><td>{row.device || 'Cihaz bilgisi yok'}</td><td><Button variant="outline" size="sm" aria-label={`${row.name}: analiz ayrıntıları`} onClick={() => setDetail(row.key)}><Eye size={14} aria-hidden="true" />İncele</Button></td></tr>)}</tbody></table></div>
+      <div className={styles.mobile}>{slice.map(row => <article key={row.key} className={styles.record}><div className={styles.recordHead}><strong>{row.name}</strong><Blocked value={row.blocked} /></div><p className={styles.hint}>{row.category || row.ip || row.policyId || 'Ek kimlik bilgisi yok'} · {row.device || 'Cihaz bilgisi yok'}</p><dl className={styles.meta}><Meta label="Veri miktarı" value={bytes(row.bytes)} /><Meta label={view === 'policy-hits' ? 'Eşleşme' : 'Oturum'} value={count(row.sessions)} /><Meta label="Alınan veri" value={bytes(row.incoming)} /><Meta label="Gönderilen veri" value={bytes(row.outgoing)} /></dl><Button variant="outline" onClick={() => setDetail(row.key)}><Eye size={16} aria-hidden="true" />Analiz ayrıntıları</Button></article>)}</div></>}
+      {state.result && <><Pagination label={viewLabels[view]} page={safePage} pages={pages} total={filtered.length} onChange={setPage} /><footer className={common.collectionFoot}>Alınan {rows.length} kayıt içinde filtrelenir. {state.result.total === null ? 'Kaynak toplam kayıt sayısını bildirmedi.' : `Kaynağın bildirdiği toplam: ${count(state.result.total)}.`}{state.result.total !== null && state.result.total > rows.length && ' Daha fazla kayıt kaynak sistemde bulunabilir.'}</footer></>}
+    </section>
+    <Dialog open={!!detail} onOpenChange={open => { if (!open) setDetail(null); }}><DialogContent className={`${common.modal} ${styles.modal}`}><DialogHeader><DialogTitle className={styles.dialogTitle}><BarChart3 size={20} aria-hidden="true" />{detail?.name || 'Analiz ayrıntıları'}</DialogTitle><DialogDescription>{viewLabels[view]} · Seçili zaman aralığındaki kaynak kaydı</DialogDescription></DialogHeader>{detail && <><SemanticBadge tone={state.error ? 'warning' : 'info'} icon={Clock3}>{state.error ? 'Önceki sonuç' : 'FortiAnalyzer FortiView'} · {userDate(state.result?.at)} · TSİ</SemanticBadge><dl className={styles.meta}>{[['Kategori', detail.category], ['Kaynak IP', detail.ip], ['Kaynak cihaz', detail.device], ['Politika no', detail.policyId], ['Veri miktarı', bytes(detail.bytes)], ['Alınan veri', bytes(detail.incoming)], ['Gönderilen veri', bytes(detail.outgoing)], ['Oturum / eşleşme', count(detail.sessions)], ['Engellenen oturum / eşleşme', count(detail.blocked)], ['İzin verilen oturum / eşleşme', count(detail.passed)], ['Gezinti süresi', duration(detail.seconds)], ['Engellenen tehdit', count(detail.threatBlocked)], ['Kaynağın tehdit skoru', count(detail.score)], ['Kaynağın uygulama risk puanı', count(detail.risk)], ['Uygulamadaki kullanıcı sayısı', count(detail.users)]].map(([label, value]) => <Meta key={label} label={label!} value={value} />)}</dl><Notice>Ölçümler kaynak kaydından alınır. Eksik değerler sıfır sayılmaz; tehdit ve risk puanları kaynak sistemin puanlarıdır.</Notice><div className={common.dialogActions}><Button onClick={() => setDetail(null)}>Kapat</Button></div></>}</DialogContent></Dialog>
+  </>;
+}
+
+function CategoryView({ state, onRetry }: { state: ViewState; onRetry: () => void }) {
+  const [search, setSearch] = useState(''), groups = analyticsCategories(state.result?.rows || []), total = state.result ? analyticsSum(state.result.rows, 'bytes') : null, filtered = groups.filter(row => row.name.toLocaleLowerCase('tr-TR').includes(search.toLocaleLowerCase('tr-TR')));
+  return <><div className={styles.field}><label htmlFor="category-search"><Search size={14} aria-hidden="true" />Kategorilerde ara</label><Input id="category-search" type="search" placeholder="Kategori adı veya kodu" value={search} onChange={e => setSearch(e.target.value)} /></div><section className={common.collection} aria-label="Kategori dağılımı"><CollectionHeader title="Kategori dağılımı" state={state} />{state.loading && !state.result ? <Empty title="Kategoriler okunuyor" icon={RefreshCw} /> : !state.result ? <Empty title="Kategori verileri alınamadı" icon={Info}><Button variant="outline" onClick={onRetry}>Yeniden dene</Button></Empty> : !filtered.length ? <Empty title={search ? 'Aranan kategori bulunamadı' : 'Kaynakta kategori kaydı yok'} icon={Layers} /> : <div className={styles.categories}>{filtered.map(row => { const percent = row.bytes !== null && total !== null && total > 0 ? Math.min(100, row.bytes / total * 100) : null; return <article key={row.name}><div className={styles.categoryTitle}><span className={common.icon}><Layers size={18} aria-hidden="true" /></span><div><h3>{row.name}</h3><p>{row.records} kaynak kaydı</p></div><strong>{bytes(row.bytes)}</strong></div><div className={styles.bar} aria-hidden="true"><span style={{ width: `${percent || 0}%` }} /></div><p className={styles.hint}>{percent === null ? 'Trafik payı hesaplanamıyor' : `Alınan kayıtlardaki trafik payı: %${percent.toLocaleString('tr-TR', { maximumFractionDigits: 1 })}`}</p><dl className={styles.meta}><Meta label="Oturum" value={count(row.sessions)} /><Meta label="Engellenen oturum" value={count(row.blocked)} /></dl></article>; })}</div>}<footer className={common.collectionFoot}>Kategori dağılımı, alınan en fazla 100 web kaydı birleştirilerek hesaplanır. Tüm ADOM trafiğinin dağılımı değildir.</footer></section></>;
+}
+function CollectionHeader({ title, state }: { title: string; state: ViewState }) { return <header className={common.sectionHeader}><div><h2><BarChart3 size={18} aria-hidden="true" />{title}</h2><p>{state.result ? `Verinin alınma zamanı: ${userDate(state.result.at)} · TSİ` : 'Seçili kaynak ve zaman aralığı'}</p></div><SemanticBadge tone={state.error ? 'warning' : 'info'} icon={Clock3}>{state.loading ? 'Okunuyor…' : state.error ? state.result ? 'Önceki sonuç' : 'Veri alınamadı' : state.result ? 'FortiView sonucu' : 'Henüz okunmadı'}</SemanticBadge></header>; }
+function Blocked({ value }: { value: number | null }) { return <SemanticBadge tone={value !== null && value > 0 ? 'warning' : 'neutral'} icon={value !== null && value > 0 ? ShieldAlert : Info}>{value === null ? 'Bilgi yok' : `${count(value)} engellenen`}</SemanticBadge>; }
+function Meta({ label, value }: { label: string; value: string | null | undefined }) { return <div><dt>{label}</dt><dd>{value || 'Bilgi yok'}</dd></div>; }
+function Notice({ children, error = false }: { children: ReactNode; error?: boolean }) { const Icon = error ? TriangleAlert : Info; return <div className={error ? common.error : common.info} role={error ? 'alert' : undefined}><Icon size={18} aria-hidden="true" /><p>{children}</p></div>; }
+function Empty({ title, icon: Icon, children }: { title: string; icon: typeof Info; children?: ReactNode }) { return <div className={common.empty}><Icon size={28} aria-hidden="true" /><h3>{title}</h3>{children}</div>; }
+function Pagination({ label, page, pages, total, onChange }: { label: string; page: number; pages: number; total: number; onChange: (page: number) => void }) { return <div className={styles.pagination}><p role="status">{total} kayıt · Sayfa {page} / {pages}</p><div><Button variant="outline" size="sm" disabled={page <= 1} aria-label={`${label}: önceki sayfa`} onClick={() => onChange(page - 1)}><ChevronLeft size={16} aria-hidden="true" />Önceki</Button><Button variant="outline" size="sm" disabled={page >= pages} aria-label={`${label}: sonraki sayfa`} onClick={() => onChange(page + 1)}>Sonraki<ChevronRight size={16} aria-hidden="true" /></Button></div></div>; }

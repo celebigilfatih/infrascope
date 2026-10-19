@@ -1,0 +1,23 @@
+# Web analytics workspace
+
+`/security/web-analytics` uses the shared PageHeading, SemanticBadge and responsive workspace style. Turkish labels distinguish byte volumes from bandwidth rates, time-window users from currently connected users, and unknown measurements from genuine zeros.
+
+The DB-only FortiAnalyzer workspace list selects an exact saved profile. Multiple profiles require selection; disabled/unconfigured profiles never trigger analytics reads. Every request includes profile ID, observed updatedAt, an allowed FortiView name, a supported range (15/60/360/1440 minutes) and a fixed UTC end. `/api/integrations/fortianalyzer/analytics` preserves settings/read authorization and rejects stale/disabled profiles before resolving the shared source client. Its scope is all FortiGate devices in the selected profile's ADOM, stated in the UI.
+
+The new optional FortiView window/signal argument removes the legacy future-day buffer only for this workspace. Start/end are UTC seconds and identical across views. The existing reader's default behavior is retained for other consumers. The route bounds the source operation to 75 seconds and propagates cancellation into RPC I/O and poll waits. There is no automatic refresh, source-setting mutation, inventory synchronization or new collector session ownership.
+
+Web and user views initialize once per scope. Policy/application views load on first selection. Each view has independent loading/error/result state; errors cannot become successful empty datasets. Same-scope retries can retain explicitly marked previous results. Changing source, observed profile revision, range or end remounts the workspace and aborts prior reads. StrictMode cleanup resets pending/requested state so aborted initial work can restart.
+
+Each view is limited to the source's top 100 records, ordered by byte volume. Source total counts may be unknown; UI counts, ten-row pagination, search, device filters and sorting refer only to returned rows. All returned user rows are searchable, including rows after the old 20-row cutoff. Aggregate cards never add different FortiView datasets together.
+
+Categories group the returned web records, not all ADOM traffic. Missing numeric operands produce unknown aggregates rather than partial totals. The traffic share denominator is the complete known sum of returned web bytes. Counts, blocked sessions, blocked threats and source risk/score fields retain separate meanings; absent application risk is not labeled low risk. Details expose source measurement time and the recorded fields.
+
+Validation: `node scripts/check-web-analytics.cjs`, TypeScript, scoped ESLint, existing FortiAnalyzer profile/auth/time regressions, and real-component browser checks with isolated synthetic transport. Actual production pages never receive synthetic datasets. No customer appliance or configuration is modified for verification.
+
+## Commit review — 19 October 2026
+
+The shared `apiGet` helper now preserves an HTTP failure's string code and status while retaining its existing success/error contract. Analytics maps only recognized codes to Turkish messages; raw provider errors are not rendered. Explicit-window FortiView requests validate scope/cancellation before shared authentication and recheck cancellation after response parsing. Cancelling a request does not cancel a credential-owned shared login that other consumers may use; no FortiView RPC follows a cancelled login wait. Legacy readers retain their default window and failure behavior.
+
+The immutable commit candidate passed 12 Chromium cases (zero retries), full non-incremental TypeScript, strict scoped ESLint, model/API/RPC checks and the shared regression runner. The production application source also passed an offline release build (102 static pages) and local font checks. The initial new Axios mock had an import-shape error; it was corrected and the final isolated runner passed. All 12 fixture manifests were cleaned. Desktop, mobile light/dark and mobile-detail screenshots were inspected. Browser sessions use signed synthetic cookies; header/local-storage sign-in presentation is outside this check.
+
+Private PostgreSQL exercises metadata and disabled/stale/type/missing-profile/current-session guards. Successful source reads and failures use synthetic transport; live FortiAnalyzer firmware, remote CI, deployment and the entire browser suite were not tested. Four existing unrelated lint warnings and existing dependency diagnostics remain. Evidence: `output/web-analytics-review-20261019/verification.json`, `runner.log`, `build.log` and `final/incident-regression/report/index.html`.

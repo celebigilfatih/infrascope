@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+- **Web analytics workspace** — Add explicit FortiAnalyzer/ADOM and fixed time-window selection, separate traffic volume/user/category views, searchable top-100 results and responsive details. Keep unknown metrics distinct from zero, expose source limits and per-view failures, and use bounded cancellable FortiView queries without the legacy future-day buffer for this screen.
+
 - **Bulk incident recovery and authorization** — Preserve incident selection and assignment/reason drafts after denied operations, classify non-JSON 401/403 responses before parsing, and offer a new-tab login without losing context. Keep failed or unconfirmed acknowledgements retryable with the existing idempotent server transition; share a synchronous operation lock and refresh only confirmed successes. Add actual PostgreSQL, callback and browser regressions for stale sessions, revoked roles, partial response loss and duplicate-safe retries.
 
 - **Integration status evidence** — Replace inferred connection health with recorded probe, inventory-log and NMS activity metadata in a responsive Turkish status workspace. Preserve disabled/unconfigured/unknown distinctions, separate FortiGate VDOMs, redact secrets and provider diagnostics, and retain stale results after refresh errors. Add current-account, database/browser and inventory-outcome regressions with isolated fixtures.
