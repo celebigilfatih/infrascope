@@ -47,9 +47,9 @@ export const apiPut = async (url: string, data: unknown) => {
   }
 };
 
-export const apiDelete = async (url: string) => {
+export const apiDelete = async (url: string, options?: { timeout?: number }) => {
   try {
-    const response = await api.delete(url);
+    const response = await api.delete(url, options);
     return response.data;
   } catch (error) {
     return {

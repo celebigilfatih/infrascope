@@ -54,6 +54,7 @@
     "test:alarm-sources": "node scripts/check-alarm-sources.cjs",
     "test:alarm-dispatch": "node scripts/check-alarm-dispatch.cjs",
     "test:integration-permissions": "node scripts/check-integration-permissions.cjs",
+    "test:quarantine": "node scripts/check-quarantine.cjs",
     "test:web-analytics": "node scripts/check-web-analytics.cjs",
     "test:fortianalyzer-workspace": "node scripts/check-fortianalyzer-workspace.cjs",
     "test:fortianalyzer-auth": "node scripts/check-fortianalyzer-auth.cjs",

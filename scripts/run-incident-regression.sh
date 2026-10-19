@@ -33,6 +33,8 @@ npx eslint app/integrations/fortianalyzer/page.tsx lib/integrations/fortianalyze
 npm run test:fortianalyzer-workspace
 npx eslint app/security/web-analytics/page.tsx app/api/integrations/fortianalyzer/analytics/route.ts lib/security/web-analytics.ts lib/integrations/fortianalyzer.ts lib/api.ts scripts/check-web-analytics.cjs tests/incident-e2e/web-analytics-workspace.spec.ts --max-warnings=0
 npm run test:web-analytics
+npx eslint app/security/quarantine/page.tsx app/api/security/quarantine/route.ts lib/security/quarantine.ts lib/integrations/fortigate.ts lib/api.ts scripts/check-quarantine.cjs tests/incident-e2e/quarantine-workspace.spec.ts --max-warnings=0
+npm run test:quarantine
 npm run test:fortianalyzer-auth
 npm run test:fortianalyzer-profile
 npm run test:fortianalyzer-cache

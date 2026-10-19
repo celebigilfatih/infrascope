@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+- **Quarantine workspace** — Add explicit FortiGate/VDOM selection, visible reasons and source labels, expiry filters, Turkish timestamps and responsive records. Distinguish missing expiry from unlimited duration and expired rows from confirmed removal. Preserve ADMIN/feature/audit gates, contextualize add/remove confirmation, verify outcomes by rereading the selected scope and block blind retries after uncertain writes. Add isolated source/API/audit and browser coverage.
+
 - **Web analytics workspace** — Add explicit FortiAnalyzer/ADOM and fixed time-window selection, separate traffic volume/user/category views, searchable top-100 results and responsive details. Keep unknown metrics distinct from zero, expose source limits and per-view failures, and use bounded cancellable FortiView queries without the legacy future-day buffer for this screen.
 
 - **Bulk incident recovery and authorization** — Preserve incident selection and assignment/reason drafts after denied operations, classify non-JSON 401/403 responses before parsing, and offer a new-tab login without losing context. Keep failed or unconfirmed acknowledgements retryable with the existing idempotent server transition; share a synchronous operation lock and refresh only confirmed successes. Add actual PostgreSQL, callback and browser regressions for stale sessions, revoked roles, partial response loss and duplicate-safe retries.

@@ -1,402 +1,106 @@
 'use client';
-
-import { uiError } from '@/lib/i18n/tr';
-
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import Link from 'next/link';
+import { Ban, CalendarClock, ChevronLeft, ChevronRight, Clock3, Eye, Info, ListFilter, LockKeyhole, MessageSquareText, Plus, RefreshCw, Search, Server, Settings2, ShieldAlert, TriangleAlert, UnlockKeyhole } from 'lucide-react';
+import { apiDelete, apiGet, apiPost } from '@/lib/api';
 import { PageHeading } from '@/components/ui/page-heading';
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { SemanticBadge } from '@/components/ui/semantic-badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table';
-import {
-  Shield,
-  Search,
-  RefreshCw,
-  AlertTriangle,
-  Clock,
-  Plus,
-  AlertCircle,
-  Lock,
-  Unlock,
-  Server,
-  ChevronLeft,
-  ChevronRight,
-} from 'lucide-react';
-
-interface QuarantinedIP {
-  id: string;
-  ip: string;
-  ipv6?: string;
-  created: string | null;
-  expires: string | null;
-  source: string;
-  service: string;
-  comment: string;
-  status: string;
-  vdom: string;
-  interface: string;
-}
-
-const ITEMS_PER_PAGE = 20;
-
-function formatDateTime(iso: string | null): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  return d.toLocaleString('tr-TR', {
-    day: '2-digit', month: '2-digit', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
-  });
-}
-
-function expiryBadge(expires: string | null) {
-  if (!expires) return <Badge variant="outline">Kalıcı</Badge>;
-  const diff = new Date(expires).getTime() - Date.now();
-  const hours = diff / 3600000;
-  if (diff < 0) return <Badge variant="secondary">Süresi Dolmuş</Badge>;
-  if (hours < 1) return <Badge variant="destructive">&lt; 1 saat</Badge>;
-  if (hours < 24) return <Badge variant="warning">{Math.round(hours)}s</Badge>;
-  return <Badge variant="info">{Math.round(hours / 24)}g</Badge>;
-}
-
-function sourceBadge(source: string) {
-  const s = source.toLowerCase();
-  if (s === 'manual') return <Badge variant="secondary">Manuel</Badge>;
-  if (s.includes('ips') || s.includes('intrusion')) return <Badge variant="destructive">IPS</Badge>;
-  if (s.includes('av') || s.includes('virus')) return <Badge className="bg-purple-600 text-white">AV</Badge>;
-  if (s.includes('dos')) return <Badge variant="warning">DoS</Badge>;
-  return <Badge variant="outline">{source}</Badge>;
-}
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import type { FirewallListItem } from '@/components/firewall/types';
+import { parseOverviewTargets } from '@/lib/firewall/overview';
+import { parseQuarantineResult, quarantineExpiry, quarantineFresh, quarantineHasIp, quarantineIpValid, quarantineRemaining, quarantineSource, type QuarantineRecord, type QuarantineResult } from '@/lib/security/quarantine';
+import { userDate, userSearch } from '@/lib/users/workspace';
+import common from '@/components/users/users-workspace.module.css';
+import styles from './page.module.css';
 
 export default function QuarantinePage() {
-  const [data, setData] = useState<QuarantinedIP[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-
-  // Add IP form state
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [newIp, setNewIp] = useState('');
-  const [newExpiry, setNewExpiry] = useState('');
-  const [newComment, setNewComment] = useState('');
-  const [addLoading, setAddLoading] = useState(false);
-  const [actionMsg, setActionMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
-
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch('/api/security/quarantine');
-      const json = await res.json();
-      if (json.success) {
-        setData(json.data || []);
-      } else {
-        setError(uiError(json.error || 'Veri alınamadı'));
-      }
-    } catch {
-      setError(uiError('API bağlantı hatası'));
-    } finally {
-      setLoading(false);
-    }
+  const [targets, setTargets] = useState<FirewallListItem[] | null>(null), [choice, setChoice] = useState(''), [loading, setLoading] = useState(true), [error, setError] = useState(''), [revision, setRevision] = useState(0), [writing, setWriting] = useState(false);
+  const active = useRef<AbortController | null>(null), sequence = useRef(0);
+  const load = useCallback(async () => {
+    const seq = ++sequence.current; active.current?.abort(); const controller = new AbortController(); active.current = controller; setLoading(true); setError('');
+    try { const json: unknown = await apiGet('/api/firewalls', undefined, { signal: controller.signal, timeout: 60000 }); const rows = parseOverviewTargets(json); if (controller.signal.aborted || seq !== sequence.current) return; setTargets(rows); setRevision(v => v + 1); }
+    catch { if (!controller.signal.aborted && seq === sequence.current) setError('Güvenlik duvarı listesi alınamadı. Yetkinizi ve bağlantıyı kontrol edip yeniden deneyin.'); }
+    finally { if (!controller.signal.aborted && seq === sequence.current) setLoading(false); }
   }, []);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  const filtered = useMemo(() => {
-    if (!search) return data;
-    const q = search.toLowerCase();
-    return data.filter(d =>
-      d.ip.includes(q) ||
-      (d.ipv6 || '').toLowerCase().includes(q) ||
-      d.source.toLowerCase().includes(q) ||
-      d.service.toLowerCase().includes(q) ||
-      d.comment.toLowerCase().includes(q) ||
-      d.vdom.toLowerCase().includes(q)
-    );
-  }, [data, search]);
-
-  useEffect(() => { setCurrentPage(1); }, [search]);
-
-  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
-  const paginated = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
-
-  const handleRelease = async (ip: string) => {
-    if (!confirm(uiError(`${ip} adresini karantinadan çıkarmak istediğinize emin misiniz?`))) return;
-    try {
-      const res = await fetch(`/api/security/quarantine?ip=${encodeURIComponent(ip)}`, { method: 'DELETE' });
-      const json = await res.json();
-      setActionMsg({ type: json.success ? 'ok' : 'err', text: json.message || json.error });
-      if (json.success) fetchData();
-    } catch {
-      setActionMsg({ type: 'err', text: 'İstek başarısız' });
-    }
-    setTimeout(() => setActionMsg(null), 4000);
-  };
-
-  const handleAddIP = async () => {
-    if (!newIp.trim()) return;
-    setAddLoading(true);
-    try {
-      const res = await fetch('/api/security/quarantine', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ip: newIp.trim(),
-          expiry_hours: newExpiry ? parseInt(newExpiry, 10) : undefined,
-          comment: newComment.trim() || undefined,
-        }),
-      });
-      const json = await res.json();
-      setActionMsg({ type: json.success ? 'ok' : 'err', text: json.message || json.error });
-      if (json.success) {
-        setNewIp(''); setNewExpiry(''); setNewComment('');
-        setShowAddForm(false);
-        fetchData();
-      }
-    } catch {
-      setActionMsg({ type: 'err', text: 'İstek başarısız' });
-    } finally {
-      setAddLoading(false);
-    }
-    setTimeout(() => setActionMsg(null), 4000);
-  };
-
-  const permanentCount = data.filter(d => !d.expires).length;
-  const expiredCount = data.filter(d => d.expires && new Date(d.expires) < new Date()).length;
-  const autoCount = data.filter(d => d.source.toLowerCase() !== 'manual').length;
-
-  return (
-    <div className="space-y-4 p-4 max-w-full">
-      {/* Header */}
-      <div className="flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-4">
-        <div className="flex items-center gap-3">
-          <Lock className="h-8 w-8 text-red-500" />
-          <div>
-            <PageHeading section="quarantine" description={<>
-              FortiGate tarafından karantinaya alınmış IP adresleri
-            </>}>Güvenlik Duvarı Karantinası</PageHeading>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setShowAddForm(v => !v)}>
-            <Plus className="h-4 w-4 mr-1" />
-            IP Ekle
-          </Button>
-          <Button variant="outline" size="sm" onClick={fetchData} disabled={loading}>
-            <RefreshCw className={`h-4 w-4 mr-1 ${loading ? 'animate-spin' : ''}`} />
-            Yenile
-          </Button>
-        </div>
-      </div>
-
-      {/* Action message */}
-      {actionMsg && (
-        <div className={`flex items-center gap-2 p-3 rounded-md text-sm ${
-          actionMsg.type === 'ok' ? 'bg-green-50 border border-green-200 text-green-700' : 'bg-red-50 border border-red-200 text-red-700'
-        }`}>
-          {actionMsg.type === 'ok' ? <Shield className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
-          {actionMsg.text}
-        </div>
-      )}
-
-      {/* Add form */}
-      {showAddForm && (
-        <Card className="border-blue-200 bg-blue-50/40">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <Plus className="h-4 w-4" />
-              Yeni IP Karantinaya Al
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-2 items-end">
-              <div className="flex flex-col gap-1">
-                <label className="text-xs text-muted-foreground">IP Adresi *</label>
-                <Input placeholder="192.168.1.100" value={newIp} onChange={e => setNewIp(e.target.value)}
-                  className="w-44 h-8 text-sm" />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-xs text-muted-foreground">Süre (saat, boş=kalıcı)</label>
-                <Input placeholder="24" type="number" value={newExpiry} onChange={e => setNewExpiry(e.target.value)}
-                  className="w-28 h-8 text-sm" />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-xs text-muted-foreground">Yorum</label>
-                <Input placeholder="Sebebi..." value={newComment} onChange={e => setNewComment(e.target.value)}
-                  className="w-56 h-8 text-sm" />
-              </div>
-              <Button size="sm" onClick={handleAddIP} disabled={addLoading || !newIp.trim()}
-                className="h-8">
-                {addLoading ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Lock className="h-3 w-3 mr-1" />}
-                Karantinaya Al
-              </Button>
-              <Button size="sm" variant="outline" className="h-8" onClick={() => setShowAddForm(false)}>İptal</Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card><CardContent className="p-3">
-          <div className="flex items-center gap-2">
-            <Lock className="h-5 w-5 text-red-500" />
-            <div><p className="text-xs text-muted-foreground">Toplam Karantina</p>
-              <p className="text-2xl font-bold text-red-600">{data.length}</p></div>
-          </div>
-        </CardContent></Card>
-        <Card><CardContent className="p-3">
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-orange-500" />
-            <div><p className="text-xs text-muted-foreground">Otomatik (IPS/AV)</p>
-              <p className="text-2xl font-bold">{autoCount}</p></div>
-          </div>
-        </CardContent></Card>
-        <Card><CardContent className="p-3">
-          <div className="flex items-center gap-2">
-            <Shield className="h-5 w-5 text-slate-500" />
-            <div><p className="text-xs text-muted-foreground">Manuel</p>
-              <p className="text-2xl font-bold">{data.length - autoCount}</p></div>
-          </div>
-        </CardContent></Card>
-        <Card><CardContent className="p-3">
-          <div className="flex items-center gap-2">
-            <Clock className="h-5 w-5 text-blue-500" />
-            <div><p className="text-xs text-muted-foreground">Kalıcı / Süresi Dolmuş</p>
-              <p className="text-2xl font-bold">{permanentCount} / {expiredCount}</p></div>
-          </div>
-        </CardContent></Card>
-      </div>
-
-      {/* Error */}
-      {error && (
-        <Card className="border-red-200 bg-red-50">
-          <CardContent className="p-3 flex items-center gap-2 text-red-600">
-            <AlertCircle className="h-4 w-4" />
-            <span className="text-sm">{uiError(error)}</span>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Table */}
-      <Card>
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between gap-4">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Lock className="h-4 w-4 text-red-500" />
-              Karantina Listesi
-              <Badge variant="secondary">{filtered.length}</Badge>
-            </CardTitle>
-            <div className="relative w-64">
-              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="IP, kaynak ara..." className="pl-8 h-8 text-sm"
-                value={search} onChange={e => setSearch(e.target.value)} />
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          {loading ? (
-            <div className="flex justify-center py-12">
-              <RefreshCw className="h-8 w-8 animate-spin text-primary" />
-            </div>
-          ) : (
-            <>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="whitespace-nowrap">IP Adresi</TableHead>
-                    <TableHead className="whitespace-nowrap">Kaynak</TableHead>
-                    <TableHead className="whitespace-nowrap">Karantina Tarihi</TableHead>
-                    <TableHead className="whitespace-nowrap">Süre</TableHead>
-                    <TableHead className="whitespace-nowrap">VDOM</TableHead>
-                    <TableHead className="whitespace-nowrap w-24">İşlem</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {paginated.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
-                        {search ? 'Aramayla eşleşen kayıt bulunamadı' : (
-                          <div className="flex flex-col items-center gap-2">
-                            <Unlock className="h-8 w-8 text-green-500" />
-                            <span>Karantinada IP bulunmuyor</span>
-                          </div>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    paginated.map((entry) => (
-                      <TableRow key={entry.id}>
-                        <TableCell className="font-mono font-semibold whitespace-nowrap">
-                          <div className="flex items-center gap-1">
-                            <Lock className="h-3 w-3 text-red-400 shrink-0" />
-                            {entry.ip}
-                          </div>
-                          {entry.ipv6 && <div className="text-xs text-muted-foreground font-mono">{entry.ipv6}</div>}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap">{sourceBadge(entry.source)}</TableCell>
-                        <TableCell className="text-xs whitespace-nowrap font-mono text-muted-foreground">
-                          {formatDateTime(entry.created)}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap">
-                          {expiryBadge(entry.expires)}
-                          {entry.expires && (
-                            <div className="text-xs text-muted-foreground font-mono mt-0.5">
-                              {formatDateTime(entry.expires)}
-                            </div>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-xs whitespace-nowrap">
-                          <div className="flex items-center gap-1">
-                            <Server className="h-3 w-3 text-muted-foreground" />
-                            {entry.vdom}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-7 text-xs border-red-200 hover:bg-red-50 hover:text-red-600"
-                            onClick={() => handleRelease(entry.ip)}
-                          >
-                            <Unlock className="h-3 w-3 mr-1" />
-                            Serbest
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between px-4 py-3 border-t">
-                  <p className="text-sm text-muted-foreground">
-                    Sayfa {currentPage} / {totalPages} ({filtered.length} kayıt)
-                  </p>
-                  <div className="flex items-center gap-1">
-                    <Button variant="outline" size="icon" className="h-8 w-8"
-                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                      disabled={currentPage === 1} aria-label="Önceki sayfa">
-                      <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    <Button variant="outline" size="icon" className="h-8 w-8"
-                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                      disabled={currentPage === totalPages} aria-label="Sonraki sayfa">
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </CardContent>
-      </Card>
-    </div>
-  );
+  useEffect(() => { void load(); return () => active.current?.abort(); }, [load]);
+  const target = targets?.find(row => JSON.stringify([row.configId, row.vdom]) === choice) || (!choice && targets?.length === 1 ? targets[0] : null);
+  return <div className={common.page}><div className={common.workspace}>
+    <header className={common.header}><PageHeading section="quarantine" description="Karantinadaki IP adreslerini, engelleme nedenlerini ve bitiş zamanlarını cihaz bazında inceleyin.">Karantina</PageHeading><div className={common.headerActions}><Button asChild variant="outline"><Link href="/integrations/firewall"><Settings2 size={16} aria-hidden="true" />Bağlantıları yönet</Link></Button><Button variant="outline" disabled={loading || writing} onClick={() => void load()}><RefreshCw size={16} aria-hidden="true" className={loading ? 'animate-spin motion-reduce:animate-none' : ''} />{loading ? 'Okunuyor…' : 'Verileri yenile'}</Button></div></header>
+    <div className={common.serviceBar}><SemanticBadge tone="info" icon={Server}>Cihaz ve VDOM kapsamı</SemanticBadge><span>Kaynak: FortiGate karantina listesi · Tarihler Türkiye saatiyle (TSİ)</span></div>
+    {error && <Notice error>{error}{targets && ' Önceki cihaz listesi korunuyor; güncel olmayabilir.'}</Notice>}
+    {loading && !targets ? <Empty icon={RefreshCw} title="Cihaz listesi yükleniyor" /> : targets && !targets.length ? <Empty icon={Server} title="Henüz güvenlik duvarı eklenmemiş"><p>Karantina kayıtlarını görmek için bir FortiGate bağlantısı ekleyin.</p><Button asChild><Link href="/integrations/firewall"><Plus size={16} aria-hidden="true" />Bağlantı ekle</Link></Button></Empty> : targets && <>
+      <section className={styles.target}><label htmlFor="quarantine-target"><Server size={16} aria-hidden="true" />Güvenlik duvarı ve sanal alan (VDOM)</label><select id="quarantine-target" value={target ? JSON.stringify([target.configId, target.vdom]) : ''} disabled={loading || writing} onChange={e => setChoice(e.target.value)}><option value="">Cihaz ve VDOM seçin</option>{targets.map(row => <option key={JSON.stringify([row.configId, row.vdom])} value={JSON.stringify([row.configId, row.vdom])}>{row.device?.name || row.name} · {row.host} · VDOM: {row.vdom}{row.enabled ? '' : ' · Devre dışı'}</option>)}</select><p>Liste ve tüm işlemler yalnızca seçili bağlantı ve VDOM için geçerlidir.</p></section>
+      {target ? <QuarantineDevice key={`${target.configId}:${target.vdom}:${target.host}:${target.enabled}`} target={target} revision={revision} parentBlocked={loading || !!error} onWriting={setWriting} /> : <Notice>Karantina kayıtlarını görmek için bir cihaz ve VDOM seçin.</Notice>}
+    </>}
+  </div></div>;
 }
+function QuarantineDevice({ target, revision, parentBlocked, onWriting }: { target: FirewallListItem; revision: number; parentBlocked: boolean; onWriting: (busy: boolean) => void }) {
+  const [data, setData] = useState<QuarantineResult | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState(''), [search, setSearch] = useState(''), [source, setSource] = useState(''), [expiry, setExpiry] = useState(''), [page, setPage] = useState(1), [now, setNow] = useState(Date.now());
+  const [detail, setDetail] = useState<QuarantineRecord | null>(null), [release, setRelease] = useState(false), [adding, setAdding] = useState(false), [ip, setIp] = useState(''), [hours, setHours] = useState('24'), [reason, setReason] = useState(''), [formError, setFormError] = useState(''), [busy, setBusy] = useState(false), [uncertain, setUncertain] = useState(false), [message, setMessage] = useState('');
+  const active = useRef<AbortController | null>(null), sequence = useRef(0), mutation = useRef(false);
+  const query = new URLSearchParams({ configId: target.configId, vdom: target.vdom, expectedHost: target.host }), endpoint = `/api/security/quarantine?${query}`;
+  const load = useCallback(async (): Promise<QuarantineResult | null> => {
+    const seq = ++sequence.current; active.current?.abort(); const controller = new AbortController(); active.current = controller; setLoading(true); setError(''); setDetail(null); setRelease(false);
+    if (!target.enabled) { setLoading(false); return null; }
+    try { const json: unknown = await apiGet('/api/security/quarantine', { configId: target.configId, vdom: target.vdom, expectedHost: target.host }, { signal: controller.signal, timeout: 60000 }); if (controller.signal.aborted || seq !== sequence.current) return null; const parsed = parseQuarantineResult(json, target); setData(parsed); setNow(Date.now()); setUncertain(false); return parsed; }
+    catch { if (!controller.signal.aborted && seq === sequence.current) setError('Karantina listesi okunamadı veya seçili cihaz için doğrulanamadı. Bağlantıyı ve okuma yetkisini kontrol edip yenileyin.'); return null; }
+    finally { if (!controller.signal.aborted && seq === sequence.current) setLoading(false); }
+  }, [target]);
+  useEffect(() => { void load(); return () => active.current?.abort(); }, [load, revision]);
+  useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 30000); return () => clearInterval(timer); }, []);
+  const fresh = !!data && quarantineFresh(data.collectedAt, now) && !loading && !error && !parentBlocked;
+  const writable = fresh && data.writeAllowed && target.enabled && !uncertain && target.identity?.status !== 'CONFLICT';
+  const rows = data?.rows;
+  const filtered = useMemo(() => (rows || []).filter(row => (!search.trim() || userSearch([row.ip, row.ipv6, row.comment, row.source, quarantineSource(row.source), row.service, row.interface].join(' ')).includes(userSearch(search.trim()))) && (!source || (source === 'manual' ? row.source.toLowerCase() === 'manual' : source === 'unknown' ? !row.source : row.source.toLowerCase() !== 'manual' && !!row.source)) && (!expiry || quarantineExpiry(row, now) === expiry)), [rows, search, source, expiry, now]);
+  const pages = Math.max(1, Math.ceil(filtered.length / 10)), safePage = Math.min(page, pages), visible = filtered.slice((safePage - 1) * 10, safePage * 10), filters = !!(search || source || expiry);
+  function clear() { setSearch(''); setSource(''); setExpiry(''); setPage(1); }
+  async function write(kind: 'add' | 'remove') {
+    if (mutation.current || !writable) return;
+    if (!data || !quarantineFresh(data.collectedAt)) { setNow(Date.now()); setFormError('Liste güncel değil. İşlem yapmadan önce verileri yenileyin.'); return; }
+    const address = kind === 'add' ? ip.trim() : detail?.ip;
+    if (!quarantineIpValid(address)) { setFormError('Geçerli bir IPv4 veya IPv6 adresi girin.'); return; }
+    if (kind === 'add' && !reason.trim()) { setFormError('Karantina nedenini yazın.'); return; }
+    mutation.current = true; setBusy(true); onWriting(true); setFormError(''); setMessage('');
+    try {
+      const result = kind === 'add' ? await apiPost(endpoint, { ip: address, expiry_hours: hours === 'permanent' ? undefined : Number(hours), comment: reason.trim() }, { timeout: 60000 }) : await apiDelete(`${endpoint}&ip=${encodeURIComponent(address)}`, { timeout: 60000 });
+      if (result?.success !== true) { setUncertain(true); setMessage('İşlem sonucu doğrulanamadı. Cihaza uygulanmış olabilir; yeniden işlem yapmadan önce listeyi yenileyip IP kaydını kontrol edin.'); return; }
+      setAdding(false); setDetail(null); setRelease(false); setIp(''); setReason('');
+      setMessage('Cihaz işlemi kabul etti. Karantina listesi yeniden okunuyor…');
+      const updated = await load();
+      const present = updated ? quarantineHasIp(updated.rows, address) : undefined;
+      setMessage(updated ? kind === 'remove' ? present ? `${address} hâlâ cihaz listesinde görünüyor. Yeniden engellenmiş veya kaldırma henüz yansımamış olabilir.` : `${address} artık seçili cihazın karantina listesinde görünmüyor.` : present ? `${address} seçili cihazın karantina listesinde doğrulandı.` : `${address} henüz cihaz listesinde görünmüyor. İşlem durumunu yeniden kontrol edin.` : 'Cihaz işlemi kabul etti; güncel liste okunamadığı için sonuç doğrulanamadı. Listeyi yenileyin.');
+    } catch { setUncertain(true); setMessage('İşlem sonucu doğrulanamadı. Yeniden işlem yapmadan önce listeyi yenileyip IP kaydını kontrol edin.'); }
+    finally { mutation.current = false; setBusy(false); onWriting(false); }
+  }
+  const timestamp = data ? `${userDate(data.collectedAt)} · TSİ` : 'Henüz okunmadı';
+  return <>
+    {!target.enabled && <Notice>Seçili bağlantı devre dışı. Karantina verisi okunmaz ve değişiklik yapılamaz.</Notice>}
+    {target.identity?.status === 'CONFLICT' && <Notice error>Cihaz kimliği çakışıyor. Bağlantı ayrıntılarındaki eşleştirmeyi kontrol edin; değişiklik işlemleri kapalıdır.</Notice>}
+    <section className={common.stats} aria-label="Karantina özeti">{[
+      { label: 'Karantina kaydı', count: rows?.length, icon: Ban, note: 'Seçili cihaz ve VDOM’un bildirdiği kayıtlar' },
+      { label: '24 saat içinde bitecek', count: rows?.filter(row => quarantineExpiry(row, now) === 'soon').length, icon: CalendarClock, note: 'Gelecek 24 saat için bitiş zamanı bildirilenler' },
+      { label: 'Bitiş zamanı geçmiş', count: rows?.filter(row => quarantineExpiry(row, now) === 'expired').length, icon: Clock3, note: 'Hâlâ kaynak listesinde; kaldırıldığı doğrulanmadı' },
+      { label: 'Süre bilgisi yok', count: rows?.filter(row => quarantineExpiry(row, now) === 'unknown').length, icon: Info, note: 'Bitişi bildirilmeyen kayıtlar süresiz kabul edilmez' },
+    ].map(stat => <article className={common.stat} key={stat.label}><div><h2>{stat.label}</h2><span className={common.icon}><stat.icon size={18} aria-hidden="true" /></span></div><strong>{stat.count === undefined ? loading && target.enabled ? 'Okunuyor…' : 'Bilgi yok' : stat.count.toLocaleString('tr-TR')}</strong><p>{stat.note}</p></article>)}</section>
+    {error && <Notice error>{error}{data && ' Önceki kayıtlar gösteriliyor; güncel olmayabilir.'}</Notice>}
+    {message && <Notice>{message}</Notice>}
+    {data && !data.writeAllowed && <Notice><LockKeyhole size={16} aria-hidden="true" /> {data.writeReason}</Notice>}
+    {data && !fresh && !loading && !error && !parentBlocked && <Notice>Liste iki dakikadan eski. Değişiklik yapmadan önce verileri yenileyin.</Notice>}
+    <div className={common.filters} role="search" aria-label="Karantina filtreleri"><div className={`${styles.field} ${styles.search}`}><label htmlFor="quarantine-search"><Search size={14} aria-hidden="true" />Kayıtlarda ara</label><Input id="quarantine-search" type="search" maxLength={120} value={search} placeholder="IP adresi, karantina nedeni veya hizmet" onChange={e => { setSearch(e.target.value); setPage(1); }} /></div><div className={styles.field}><label htmlFor="quarantine-source">Engelleme kaynağı</label><select id="quarantine-source" value={source} onChange={e => { setSource(e.target.value); setPage(1); }}><option value="">Tüm kaynaklar</option><option value="manual">Elle eklenen</option><option value="other">Diğer bildirilen kaynaklar</option><option value="unknown">Kaynak bilgisi yok</option></select></div><div className={styles.field}><label htmlFor="quarantine-expiry">Geçerlilik süresi</label><select id="quarantine-expiry" value={expiry} onChange={e => { setExpiry(e.target.value); setPage(1); }}><option value="">Tüm süreler</option><option value="soon">24 saat içinde bitecek</option><option value="scheduled">24 saatten fazla</option><option value="expired">Bitiş zamanı geçmiş</option><option value="unknown">Bitiş zamanı bilinmiyor</option></select></div>{filters && <Button variant="ghost" onClick={clear}><ListFilter size={16} aria-hidden="true" />Filtreleri temizle</Button>}</div>
+    <section className={common.collection} aria-label="Karantina kayıtları" aria-busy={loading}><header className={common.sectionHeader}><div><h2><Ban size={18} aria-hidden="true" />Karantinadaki IP adresleri</h2><p>{target.device?.name || target.name} · VDOM: {target.vdom} · Son okuma: {timestamp}</p></div><div className={styles.actions}><SemanticBadge tone={error || data && !fresh ? 'warning' : 'info'} icon={Clock3}>{loading ? 'Okunuyor…' : error || data && !fresh ? 'Önceki veri' : data ? 'FortiGate REST' : 'Veri yok'}</SemanticBadge><Button size="sm" disabled={!writable || busy} onClick={() => { setFormError(''); setHours('24'); setAdding(true); }}><Plus size={16} aria-hidden="true" />IP’yi karantinaya al</Button></div></header>
+    {!data ? <Empty icon={loading && target.enabled ? RefreshCw : Info} title={loading && target.enabled ? 'Karantina kayıtları okunuyor' : target.enabled ? 'Karantina bilgisi alınamadı' : 'Bağlantı devre dışı'} /> : !visible.length ? <Empty icon={filters ? Search : Ban} title={filters ? 'Filtrelere uygun kayıt yok' : 'Bu cihaz ve VDOM’da karantina kaydı yok'}>{filters ? <Button variant="outline" onClick={clear}>Filtreleri temizle</Button> : <p>Son başarılı okumada cihaz boş liste bildirdi.</p>}</Empty> : <>
+      <div className={styles.tableWrap}><table className={styles.table}><caption className="sr-only">Engellenen IP adresi, karantina nedeni, kaynak, geçerlilik süresi ve işlemler</caption><thead><tr><th scope="col">Engellenen IP / arabirim</th><th scope="col">Karantina nedeni / kaynak</th><th scope="col">Geçerlilik süresi</th><th scope="col">İşlemler</th></tr></thead><tbody>{visible.map(row => <tr key={row.id}><td><strong className={styles.ip}><Ban size={14} aria-hidden="true" /><code>{row.ip}</code></strong><small>Arabirim: {row.interface || 'Bilgi yok'}</small></td><td><p className={styles.reason}>{row.comment || 'Karantina nedeni bildirilmemiş'}</p><small>{quarantineSource(row.source)}{row.service && ` · Hizmet: ${row.service}`}</small></td><td><Expiry row={row} now={now} /><small>Bitiş: {row.expires ? `${userDate(row.expires)} · TSİ` : 'Bilgi yok'}</small><small>Eklenme: {userDate(row.created)}{row.created && ' · TSİ'}</small></td><td><div className={styles.rowActions}><Button variant="outline" size="sm" aria-label={`${row.ip}: karantina ayrıntıları`} onClick={() => { setDetail(row); setRelease(false); setFormError(''); }}><Eye size={14} aria-hidden="true" />İncele</Button><Button variant="outline" size="sm" disabled={!writable || busy} aria-label={`${row.ip}: karantinadan çıkar`} onClick={() => { setDetail(row); setRelease(true); setFormError(''); }}><UnlockKeyhole size={14} aria-hidden="true" />Karantinadan çıkar</Button></div></td></tr>)}</tbody></table></div>
+      <div className={styles.mobile}>{visible.map(row => <article key={row.id} className={styles.record}><div className={styles.recordHead}><strong className={styles.ip}><Ban size={16} aria-hidden="true" /><code>{row.ip}</code></strong><Expiry row={row} now={now} /></div><p className={styles.reason}>{row.comment || 'Karantina nedeni bildirilmemiş'}</p><p className={styles.hint}>{quarantineSource(row.source)}{row.service && ` · ${row.service}`}</p><dl className={styles.meta}><Meta label="Bitiş zamanı (TSİ)" value={userDate(row.expires)} /><Meta label="Karantinaya alınma (TSİ)" value={userDate(row.created)} /></dl><div className={styles.rowActions}><Button variant="outline" onClick={() => { setDetail(row); setRelease(false); }}><Eye size={16} aria-hidden="true" />İncele</Button><Button variant="outline" disabled={!writable || busy} onClick={() => { setDetail(row); setRelease(true); }}><UnlockKeyhole size={16} aria-hidden="true" />Karantinadan çıkar</Button></div></article>)}</div>
+    </>}
+    {data && <footer className={styles.pagination}><p role="status">{filtered.length.toLocaleString('tr-TR')} / {data.rows.length.toLocaleString('tr-TR')} kayıt · Sayfa {safePage} / {pages}</p><div><Button variant="outline" size="sm" aria-label="Önceki sayfa" disabled={safePage <= 1} onClick={() => setPage(safePage - 1)}><ChevronLeft size={16} aria-hidden="true" />Önceki</Button><Button variant="outline" size="sm" aria-label="Sonraki sayfa" disabled={safePage >= pages} onClick={() => setPage(safePage + 1)}>Sonraki<ChevronRight size={16} aria-hidden="true" /></Button></div></footer>}
+    </section>
+    <Dialog open={!!detail} onOpenChange={open => { if (!open && !busy) { setDetail(null); setRelease(false); } }}><DialogContent className={`${common.modal} ${styles.modal}`} onEscapeKeyDown={e => { if (busy) e.preventDefault(); }} onInteractOutside={e => { if (busy) e.preventDefault(); }}><DialogHeader><DialogTitle className={styles.dialogTitle}>{release ? <UnlockKeyhole size={20} aria-hidden="true" /> : <ShieldAlert size={20} aria-hidden="true" />}{release ? 'IP adresini karantinadan çıkar' : 'Karantina ayrıntıları'}</DialogTitle><DialogDescription>{target.device?.name || target.name} · {target.host} · VDOM: {target.vdom}</DialogDescription></DialogHeader>{detail && <><div className={styles.address}><span>Engellenen IP adresi</span><code>{detail.ip}</code><Expiry row={detail} now={now} /></div><section className={styles.note}><h3><MessageSquareText size={16} aria-hidden="true" />Karantina nedeni</h3><p>{detail.comment || 'Cihaz bu kayıt için neden bildirmemiş.'}</p></section><dl className={styles.meta}><Meta label="Engelleme kaynağı" value={quarantineSource(detail.source)} /><Meta label="Hizmet / arabirim" value={[detail.service, detail.interface].filter(Boolean).join(' · ')} /><Meta label="Karantinaya alınma (TSİ)" value={userDate(detail.created)} /><Meta label="Bitiş zamanı (TSİ)" value={userDate(detail.expires)} /><Meta label="Cihazın bildirdiği kayıt durumu" value={detail.status === 'banned' ? 'Karantinada' : detail.status} /><Meta label="Son liste okuması (TSİ)" value={data ? userDate(data.collectedAt) : null} /></dl>{release && <Notice>Bu işlem, {detail.ip} adresine ait karantina engelini seçili cihaz ve VDOM’da kaldırır. Aynı IP için birden fazla kayıt varsa hepsi etkilenebilir. Güvenlik kuralları adresi yeniden karantinaya alabilir.</Notice>}{!writable && <Notice>{!fresh ? 'Liste güncel değil. İşlem yapmak için pencereyi kapatıp verileri yenileyin.' : data?.writeReason || 'Bu bağlantıda değişiklik yapılamıyor.'}</Notice>}{uncertain && <Notice error>İşlem sonucu belirsiz. Pencereyi kapatıp listeyi yenileyin.</Notice>}<div className={common.dialogActions}><Button variant="outline" disabled={busy} onClick={() => { setDetail(null); setRelease(false); }}>{release ? 'Vazgeç' : 'Kapat'}</Button>{release ? <Button disabled={!writable || busy} onClick={() => void write('remove')}><UnlockKeyhole size={16} aria-hidden="true" />{busy ? 'İşleniyor…' : 'Karantinadan çıkar'}</Button> : <Button disabled={!writable || busy} onClick={() => setRelease(true)}><UnlockKeyhole size={16} aria-hidden="true" />Karantinadan çıkar</Button>}</div></>}</DialogContent></Dialog>
+    <Dialog open={adding} onOpenChange={open => { if (!busy) setAdding(open); }}><DialogContent className={`${common.modal} ${styles.modal}`} onEscapeKeyDown={e => { if (busy) e.preventDefault(); }} onInteractOutside={e => { if (busy) e.preventDefault(); }}><DialogHeader><DialogTitle className={styles.dialogTitle}><Ban size={20} aria-hidden="true" />IP adresini karantinaya al</DialogTitle><DialogDescription>{target.device?.name || target.name} · {target.host} · VDOM: {target.vdom}</DialogDescription></DialogHeader><form className={styles.form} noValidate onSubmit={e => { e.preventDefault(); void write('add'); }}><div className={styles.field}><label htmlFor="quarantine-ip">IP adresi</label><Input id="quarantine-ip" autoComplete="off" maxLength={45} placeholder="Örn. 192.0.2.10 veya 2001:db8::10" value={ip} disabled={busy} onChange={e => setIp(e.target.value)} required /></div><div className={styles.field}><label htmlFor="quarantine-hours">Karantina süresi</label><select id="quarantine-hours" value={hours} disabled={busy} onChange={e => setHours(e.target.value)}><option value="1">1 saat</option><option value="24">24 saat</option><option value="72">3 gün</option><option value="168">7 gün</option><option value="permanent">Süre sınırı olmadan</option></select><p className={styles.hint}>{hours === 'permanent' ? 'Cihaza süre sınırı gönderilmez. Kaldırmayı ayrıca takip edin.' : 'Süre isteği cihaza gönderilir; uygulanan bitiş zamanını güncel listeden kontrol edin.'}</p></div><div className={styles.field}><label htmlFor="quarantine-reason">Karantina nedeni</label><textarea id="quarantine-reason" rows={3} maxLength={500} placeholder="Bu IP adresinin neden engellendiğini açıklayın." value={reason} disabled={busy} required onChange={e => setReason(e.target.value)} /></div>{formError && <Notice error>{formError}</Notice>}{uncertain && <Notice error>İşlem sonucu doğrulanamadı. Pencereyi kapatıp listeyi yenileyin.</Notice>}<Notice>İşlem yalnızca yukarıda belirtilen güvenlik duvarı ve VDOM’a gönderilir.</Notice><div className={common.dialogActions}><Button type="button" variant="outline" disabled={busy} onClick={() => setAdding(false)}>Vazgeç</Button><Button type="submit" disabled={!writable || busy}><Ban size={16} aria-hidden="true" />{busy ? 'İşleniyor…' : 'Karantinaya al'}</Button></div></form></DialogContent></Dialog>
+  </>;
+}
+function Expiry({ row, now }: { row: QuarantineRecord; now: number }) { const state = quarantineExpiry(row, now); return <SemanticBadge tone={state === 'soon' || state === 'expired' ? 'warning' : state === 'unknown' ? 'neutral' : 'info'} icon={Clock3}>{quarantineRemaining(row, now)}</SemanticBadge>; }
+function Meta({ label, value }: { label: string; value?: string | null }) { return <div><dt>{label}</dt><dd>{value || 'Bilgi yok'}</dd></div>; }
+function Notice({ children, error = false }: { children: ReactNode; error?: boolean }) { const Icon = error ? TriangleAlert : Info; return <div className={error ? common.error : common.info} role={error ? 'alert' : 'status'}><Icon size={18} aria-hidden="true" /><div>{children}</div></div>; }
+function Empty({ icon: Icon, title, children }: { icon: typeof Info; title: string; children?: ReactNode }) { return <div className={common.empty}><Icon size={28} aria-hidden="true" /><h3>{title}</h3>{children}</div>; }

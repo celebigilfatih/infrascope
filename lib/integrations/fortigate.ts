@@ -8,6 +8,7 @@
  */
 
 import { DeviceType, DeviceStatus, DeviceCriticality } from '@prisma/client';
+import { normalizeQuarantine, type QuarantineRecord } from '@/lib/security/quarantine';
 import * as https from 'https';
 import * as querystring from 'querystring';
 import { createLogger } from '@/lib/logger';
@@ -1394,44 +1395,8 @@ export class FortiGateService {
    */
   async fetchQuarantinedIPs(): Promise<FortiGateQuarantinedIP[]> {
     try {
-      const data = await this.apiRequest<{
-        http_method: string;
-        results: Array<{
-          ip_address?: string;
-          ip_v4_address?: string;
-          ip_v6_address?: string;
-          ipv6?: string | number;
-          created?: number;
-          expires?: number;
-          source?: string;
-          service?: string;
-          comment?: string;
-          status?: string;
-          vd?: string;
-          interface?: string;
-        }>;
-        http_status: number;
-        serial: string;
-        vdom: string;
-        path: string;
-        name: string;
-      }>('/monitor/user/banned');
-
-      if (!data.results) return [];
-
-      return data.results.map((entry, idx) => ({
-        id: `quarantine-${idx}`,
-        ip: entry.ip_address || entry.ip_v4_address || entry.ip_v6_address || 'unknown',
-        ipv6: typeof entry.ipv6 === 'string' && entry.ipv6 ? entry.ipv6 : undefined,
-        created: entry.created ? new Date(entry.created * 1000).toISOString() : null,
-        expires: entry.expires ? new Date(entry.expires * 1000).toISOString() : null,
-        source: entry.source || 'manual',
-        service: entry.service || '-',
-        comment: entry.comment || '',
-        status: entry.status || 'banned',
-        vdom: entry.vd || 'root',
-        interface: entry.interface || '-',
-      }));
+      const data = await this.apiRequest<{ results?: unknown }>('/monitor/user/banned');
+      return normalizeQuarantine(data?.results);
     } catch (error) {
       log.error({ err: error }, 'Failed to fetch quarantined IPs');
       throw classifyFortiGateError(error);
@@ -1472,18 +1437,6 @@ export class FortiGateService {
   }
 }
 
-export interface FortiGateQuarantinedIP {
-  id: string;
-  ip: string;
-  ipv6?: string;
-  created: string | null;
-  expires: string | null;
-  source: string;
-  service: string;
-  comment: string;
-  status: string;
-  vdom: string;
-  interface: string;
-}
+export type FortiGateQuarantinedIP = QuarantineRecord;
 
 export default FortiGateService;
