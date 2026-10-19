@@ -107,6 +107,9 @@ export interface FortiGateVlan {
 }
 
 export interface FortiGatePolicy {
+  'srcaddr-negate'?: string;
+  'dstaddr-negate'?: string;
+  'service-negate'?: string;
   policyid: number;
   name: string;
   action: 'accept' | 'deny';
@@ -520,6 +523,9 @@ export class FortiGateService {
         comments?: string;
         nat?: string;
         logtraffic?: string;
+        'srcaddr-negate'?: string;
+        'dstaddr-negate'?: string;
+        'service-negate'?: string;
       }>}>('/cmdb/firewall/policy');
 
       // Definition inspection may display unknown references; VIP usage still requires them.
@@ -540,6 +546,9 @@ export class FortiGateService {
         comments: policy.comments,
         nat: policy.nat,
         logtraffic: policy.logtraffic,
+        'srcaddr-negate': policy['srcaddr-negate'],
+        'dstaddr-negate': policy['dstaddr-negate'],
+        'service-negate': policy['service-negate'],
       }));
     } catch (error) {
       log.error({ err: error }, 'Failed to fetch firewall policies');

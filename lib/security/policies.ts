@@ -5,6 +5,7 @@ export interface SecurityPolicy {
   action: string | null; enabled: boolean | null; nat: boolean | null; logging: string | null;
   sourceInterfaces: string[] | null; destinationInterfaces: string[] | null;
   sourceAddresses: string[] | null; destinationAddresses: string[] | null; services: string[] | null;
+  sourceNegated?: boolean | null; destinationNegated?: boolean | null; serviceNegated?: boolean | null;
   schedule: string | null; hitCount: string | null; lastUsedAt: string | null;
 }
 export type PolicyScope = { configId: string; vdom: string; host: string };
@@ -28,7 +29,7 @@ export function normalizeSecurityPolicies(value: unknown): SecurityPolicy[] {
   if (!Array.isArray(value)) throw new FirewallIntegrationError('INVALID_RESPONSE', 'Policy list missing', false, 502);
   const rows = value.map((row, index) => {
     if (!object(row) || !count(row.policyid)) throw new FirewallIntegrationError('INVALID_RESPONSE', 'Policy identity missing', false, 502);
-    return { policyId: row.policyid, position: index + 1, name: text(row.name), comment: text(row.comments), action: text(row.action), enabled: state(row.status), nat: state(row.nat), logging: text(row.logtraffic), sourceInterfaces: names(row.srcintf), destinationInterfaces: names(row.dstintf), sourceAddresses: names(row.srcaddr), destinationAddresses: names(row.dstaddr), services: names(row.service), schedule: text(row.schedule), hitCount: policyCounter(row.hit_count), lastUsedAt: policyDate(row.last_used) };
+    return { policyId: row.policyid, position: index + 1, name: text(row.name), comment: text(row.comments), action: text(row.action), enabled: state(row.status), nat: state(row.nat), logging: text(row.logtraffic), sourceInterfaces: names(row.srcintf), destinationInterfaces: names(row.dstintf), sourceAddresses: names(row.srcaddr), destinationAddresses: names(row.dstaddr), services: names(row.service), sourceNegated: state(row['srcaddr-negate']), destinationNegated: state(row['dstaddr-negate']), serviceNegated: state(row['service-negate']), schedule: text(row.schedule), hitCount: policyCounter(row.hit_count), lastUsedAt: policyDate(row.last_used) };
   });
   if (new Set(rows.map(row => row.policyId)).size !== rows.length) throw new FirewallIntegrationError('INVALID_RESPONSE', 'Duplicate policy identity', false, 502);
   return rows;
@@ -36,7 +37,7 @@ export function normalizeSecurityPolicies(value: unknown): SecurityPolicy[] {
 export function parsePolicySnapshot(value: unknown, scope: PolicyScope): PolicySnapshot {
   if (!object(value) || value.success !== true || value.source !== 'fortigate-rest' || !object(value.target) || !['configId', 'vdom', 'host'].every(key => value.target && (value.target as Record<string, unknown>)[key] === scope[key as keyof PolicyScope]) || !policyDate(value.collectedAt) || Date.parse(String(value.collectedAt)) > Date.now() + 5000 || !Array.isArray(value.data)) throw Error('Seçili cihaz ve VDOM için politika verisi doğrulanamadı.');
   const rows = value.data.map((row, index) => {
-    if (!object(row) || !count(row.policyId) || row.position !== index + 1 || !['name', 'comment', 'action', 'logging', 'schedule'].every(key => row[key] === null || typeof row[key] === 'string') || !['enabled', 'nat'].every(key => row[key] === null || typeof row[key] === 'boolean') || !['sourceInterfaces', 'destinationInterfaces', 'sourceAddresses', 'destinationAddresses', 'services'].every(key => row[key] === null || Array.isArray(row[key]) && (row[key] as unknown[]).every(item => typeof item === 'string' && item.trim())) || !(row.hitCount === null || typeof row.hitCount === 'string' && policyCounter(row.hitCount) === row.hitCount) || !(row.lastUsedAt === null || policyDate(row.lastUsedAt))) throw Error('Politika kaydı beklenen biçimde alınamadı.');
+    if (!object(row) || !count(row.policyId) || row.position !== index + 1 || !['name', 'comment', 'action', 'logging', 'schedule'].every(key => row[key] === null || typeof row[key] === 'string') || !['sourceNegated', 'destinationNegated', 'serviceNegated'].every(key => row[key] === undefined || row[key] === null || typeof row[key] === 'boolean') || !['enabled', 'nat'].every(key => row[key] === null || typeof row[key] === 'boolean') || !['sourceInterfaces', 'destinationInterfaces', 'sourceAddresses', 'destinationAddresses', 'services'].every(key => row[key] === null || Array.isArray(row[key]) && (row[key] as unknown[]).every(item => typeof item === 'string' && item.trim())) || !(row.hitCount === null || typeof row.hitCount === 'string' && policyCounter(row.hitCount) === row.hitCount) || !(row.lastUsedAt === null || policyDate(row.lastUsedAt))) throw Error('Politika kaydı beklenen biçimde alınamadı.');
     return row as unknown as SecurityPolicy;
   });
   if (new Set(rows.map(row => row.policyId)).size !== rows.length) throw Error('Politika kimlikleri doğrulanamadı.');

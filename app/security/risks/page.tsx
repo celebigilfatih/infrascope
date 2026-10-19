@@ -1,291 +1,109 @@
 'use client';
-
-import { uiLabel } from '@/lib/i18n/tr';
-
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import Link from 'next/link';
+import { ArrowRight, Check, ChevronDown, ChevronLeft, ChevronRight, ClipboardCheck, ClipboardList, Clock3, Eye, Info, Layers3, ListChecks, ListFilter, Network, OctagonAlert, Pause, RefreshCw, ScanSearch, Search, Server, Settings2, ShieldCheck, ShieldX, TriangleAlert } from 'lucide-react';
+import { apiGet } from '@/lib/api';
 import { PageHeading } from '@/components/ui/page-heading';
-import React, { useState, useEffect, useMemo } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { SemanticBadge } from '@/components/ui/semantic-badge';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { ChevronLeft, ChevronRight, RefreshCw, Search, AlertTriangle, Activity, TrendingUp } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import type { FirewallListItem } from '@/components/firewall/types';
+import { parseOverviewTargets } from '@/lib/firewall/overview';
+import { parsePolicySnapshot, policyActionLabel, policyCounterLabel, policyLoggingLabel, policyNameLabel, policyScheduleLabel, type PolicySnapshot, type SecurityPolicy } from '@/lib/security/policies';
+import { filterRiskReviews, reviewRiskyPolicies, riskReviewSummary, riskSeverityLabels, riskCheckDefinitions, riskCheckIds, riskCheckStateLabel, type RiskReview, type RiskSeverity } from '@/lib/security/risky-rules';
+import { userDate } from '@/lib/users/workspace';
+import common from '@/components/users/users-workspace.module.css';
+import styles from './page.module.css';
 
-interface Risk {
-  id: string;
-  title: string;
-  category: string;
-  severity: 'critical' | 'high' | 'medium' | 'low';
-  description: string;
-  affectedAssets: number;
-  owner: string;
-  createdAt: string;
-}
-
-const ITEMS_PER_PAGE = 10;
-
-export default function RisksPage() {
-  const [risks, setRisks] = useState<Risk[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-
-  useEffect(() => {
-    const fetchRisks = async () => {
-      setLoading(true);
-      try {
-        const response = await fetch('/api/security/risky-rules');
-        const result = await response.json();
-        
-        if (result.success && result.data) {
-          setRisks(result.data);
-        }
-      } catch (error) {
-        console.error('Error fetching risky rules:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    fetchRisks();
+export default function RiskyRulesPage() {
+  const [targets, setTargets] = useState<FirewallListItem[] | null>(null), [choice, setChoice] = useState(''), [loading, setLoading] = useState(true), [error, setError] = useState(''), [revision, setRevision] = useState(0);
+  const active = useRef<AbortController | null>(null), sequence = useRef(0);
+  const load = useCallback(async () => {
+    const seq = ++sequence.current; active.current?.abort(); const controller = new AbortController(); active.current = controller; setLoading(true); setError('');
+    try { const json: unknown = await apiGet('/api/firewalls', undefined, { signal: controller.signal, timeout: 60000 }); const rows = parseOverviewTargets(json); if (controller.signal.aborted || seq !== sequence.current) return; setTargets(rows); setRevision(v => v + 1); }
+    catch { if (!controller.signal.aborted && seq === sequence.current) setError('Güvenlik duvarı listesi alınamadı. Yetkinizi ve bağlantıyı kontrol edip yeniden deneyin.'); }
+    finally { if (!controller.signal.aborted && seq === sequence.current) setLoading(false); }
   }, []);
-
-  const filteredRisks = useMemo(() => {
-    // Filter to show only critical and high severity risks
-    const criticalAndHighRisks = risks.filter(r => 
-      r.severity === 'critical' || r.severity === 'high'
-    );
-    
-    if (!searchTerm) return criticalAndHighRisks;
-    const term = searchTerm.toLowerCase();
-    return criticalAndHighRisks.filter(r => 
-      r.title.toLowerCase().includes(term) || 
-      r.category.toLowerCase().includes(term) || 
-      r.owner.toLowerCase().includes(term)
-    );
-  }, [risks, searchTerm]);
-
-  const totalPages = Math.ceil(filteredRisks.length / ITEMS_PER_PAGE);
-  const paginatedRisks = useMemo(() => {
-    const start = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filteredRisks.slice(start, start + ITEMS_PER_PAGE);
-  }, [filteredRisks, currentPage]);
-
-  useEffect(() => { 
-    if (currentPage > totalPages && totalPages > 0) setCurrentPage(1); 
-  }, [totalPages, currentPage]);
-
-  const getSeverityBadge = (severity: string) => {
-    switch (severity) {
-      case 'critical': return <Badge variant="destructive">Kritik</Badge>;
-      case 'high': return <Badge variant="destructive">Yüksek</Badge>;
-      case 'medium': return <Badge variant="warning">Orta</Badge>;
-      case 'low': return <Badge variant="secondary">Düşük</Badge>;
-      default: return <Badge variant="outline">{severity}</Badge>;
-    }
-  };
-
-  const getPageNumbers = () => {
-    const pages: (number | 'ellipsis')[] = [];
-    const maxVisible = 5;
-    if (totalPages <= maxVisible) { 
-      for (let i = 1; i <= totalPages; i++) pages.push(i); 
-    } else {
-      pages.push(1);
-      if (currentPage > 3) pages.push('ellipsis');
-      const start = Math.max(2, currentPage - 1);
-      const end = Math.min(totalPages - 1, currentPage + 1);
-      for (let i = start; i <= end; i++) pages.push(i);
-      if (currentPage < totalPages - 2) pages.push('ellipsis');
-      pages.push(totalPages);
-    }
-    return pages;
-  };
-
-  return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-4">
-        <div>
-          <PageHeading section="risks" description={<>Güvenlik duvarı politikalarını ve güvenlik risklerini analiz edin</>}>Risk Değerlendirmesi</PageHeading>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={() => window.location.reload()} aria-label="Yenile">
-            <RefreshCw className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-red-500/20">
-                <AlertTriangle className="h-5 w-5 text-red-500" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Kritik / Yüksek Riskler</p>
-                <p className="text-2xl font-bold">{filteredRisks.length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-red-500/20">
-                <TrendingUp className="h-5 w-5 text-red-500" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Kritik / Yüksek</p>
-                <p className="text-2xl font-bold">
-                  {risks.filter(r => r.severity === 'critical' || r.severity === 'high').length}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-blue-500/20">
-                <Activity className="h-5 w-5 text-blue-500" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Kategoriler</p>
-                <p className="text-2xl font-bold">
-                  {new Set(risks.map(r => r.category)).size}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-purple-500/20">
-                <AlertTriangle className="h-5 w-5 text-purple-500" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Etkilenen Varlıklar</p>
-                <p className="text-2xl font-bold">
-                  {risks.reduce((sum, r) => sum + r.affectedAssets, 0)}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input 
-          placeholder="Risk ara…"
-          value={searchTerm} 
-          onChange={(e) => { 
-            setSearchTerm(e.target.value); 
-            setCurrentPage(1); 
-          }} 
-          className="pl-9" 
-        />
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5" />
-            Kritik ve Yüksek Öncelikli Riskler
-            <Badge variant="secondary">{filteredRisks.length}</Badge>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="flex justify-center py-12">
-              <RefreshCw className="h-8 w-8 animate-spin text-primary" />
-            </div>
-          ) : paginatedRisks.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              Kritik veya yüksek öncelikli risk tespit edilmedi. Güvenlik duvarı politikaları uygun yapılandırılmış.
-            </div>
-          ) : (
-            <>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Risk Başlığı</TableHead>
-                    <TableHead>Kategori</TableHead>
-                    <TableHead>Önem Seviyesi</TableHead>
-                    <TableHead className="text-center">Etkilenen</TableHead>
-                    <TableHead>Sahip</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {paginatedRisks.map((risk) => (
-                    <TableRow key={risk.id}>
-                      <TableCell className="font-medium">{risk.title}</TableCell>
-                      <TableCell>{uiLabel(risk.category)}</TableCell>
-                      <TableCell>{getSeverityBadge(risk.severity)}</TableCell>
-                      <TableCell className="text-center">{risk.affectedAssets}</TableCell>
-                      <TableCell>{risk.owner}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between mt-4">
-                  <p className="text-sm text-muted-foreground">
-                    Sayfa {currentPage} / {totalPages}
-                  </p>
-                  <div className="flex items-center gap-1">
-                    <Button 
-                      variant="outline" 
-                      size="icon" 
-                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))} 
-                      disabled={currentPage === 1}
-                     aria-label="Önceki sayfa">
-                      <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    {getPageNumbers().map((page, idx) => (
-                      <React.Fragment key={idx}>
-                        {page === 'ellipsis' ? (
-                          <span className="px-2 text-muted-foreground">...</span>
-                        ) : (
-                          <Button 
-                            variant={currentPage === page ? 'default' : 'outline'} 
-                            size="sm" 
-                            onClick={() => setCurrentPage(page)} 
-                            className="w-9"
-                          >
-                            {page}
-                          </Button>
-                        )}
-                      </React.Fragment>
-                    ))}
-                    <Button 
-                      variant="outline" 
-                      size="icon" 
-                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} 
-                      disabled={currentPage === totalPages}
-                     aria-label="Sonraki sayfa">
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </CardContent>
-      </Card>
-    </div>
-  );
+  useEffect(() => { void load(); return () => active.current?.abort(); }, [load]);
+  const target = targets?.find(row => JSON.stringify([row.configId, row.vdom]) === choice) || (!choice && targets?.length === 1 ? targets[0] : null);
+  return <div className={common.page}><div className={common.workspace}>
+    <header className={common.header}><PageHeading section="risks" description="Risk seviyelerini, bulgu nedenlerini ve ilgili güvenlik politikalarını cihaz bazında inceleyin.">Riskli Kurallar</PageHeading><div className={common.headerActions}><Button asChild variant="outline"><Link href="/integrations/firewall"><Settings2 size={16} aria-hidden="true" />Bağlantıları yönet</Link></Button><Button variant="outline" disabled={loading} onClick={() => void load()}><RefreshCw size={16} aria-hidden="true" className={loading ? 'animate-spin motion-reduce:animate-none' : ''} />{loading ? 'Okunuyor…' : 'Verileri yenile'}</Button></div></header>
+    <div className={common.serviceBar}><SemanticBadge tone="info" icon={Server}>Cihaz ve VDOM kapsamı</SemanticBadge><span>Kaynak: FortiGate REST · Politika tanımı incelemesi · Salt okunur</span></div>
+    {error && <Notice error>{error}{targets && ' Önceki cihaz listesi korunuyor; güncel olmayabilir.'}</Notice>}
+    {loading && !targets ? <Empty icon={RefreshCw} title="Cihaz listesi yükleniyor" /> : targets && !targets.length ? <Empty icon={Server} title="Henüz güvenlik duvarı eklenmemiş"><p>Politika tanımlarını incelemek için bir FortiGate bağlantısı ekleyin.</p><Button asChild><Link href="/integrations/firewall"><Settings2 size={16} aria-hidden="true" />Bağlantı ekle</Link></Button></Empty> : targets && <>
+      <section className={styles.target}><label htmlFor="risk-target"><Server size={16} aria-hidden="true" />Güvenlik duvarı ve sanal alan (VDOM)</label><select id="risk-target" value={target ? JSON.stringify([target.configId, target.vdom]) : ''} disabled={loading} onChange={e => setChoice(e.target.value)}><option value="">Cihaz ve VDOM seçin</option>{targets.map(row => <option key={JSON.stringify([row.configId, row.vdom])} value={JSON.stringify([row.configId, row.vdom])}>{row.device?.name || row.name} · {row.host} · VDOM: {row.vdom}{row.enabled ? '' : ' · Devre dışı'}</option>)}</select><p>İnceleme yalnızca seçili bağlantı ve VDOM kapsamındaki politika tanımlarıyla sınırlıdır.</p></section>
+      {target ? <RiskDevice key={`${target.configId}:${target.vdom}:${target.host}:${target.enabled}`} target={target} revision={revision} parentStale={!!error} /> : <Notice>Risk incelemesi için bir cihaz ve VDOM seçin.</Notice>}
+    </>}
+  </div></div>;
 }
+function RiskDevice({ target, revision, parentStale }: { target: FirewallListItem; revision: number; parentStale: boolean }) {
+  const [data, setData] = useState<PolicySnapshot | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState('');
+  const [search, setSearch] = useState(''), [severity, setSeverity] = useState(''), [reason, setReason] = useState(''), [status, setStatus] = useState(''), [page, setPage] = useState(1), [detailId, setDetail] = useState<number | null>(null);
+  const active = useRef<AbortController | null>(null), sequence = useRef(0);
+  const load = useCallback(async () => {
+    const seq = ++sequence.current; active.current?.abort(); const controller = new AbortController(); active.current = controller;
+    setLoading(true); setError(''); setDetail(null);
+    if (!target.enabled) { setLoading(false); return; }
+    try {
+      const json: unknown = await apiGet('/api/firewall-policies/workspace', { configId: target.configId, vdom: target.vdom, expectedHost: target.host }, { signal: controller.signal, timeout: 60000 });
+      if (controller.signal.aborted || seq !== sequence.current) return;
+      setData(parsePolicySnapshot(json, target));
+    } catch { if (!controller.signal.aborted && seq === sequence.current) setError('Risk incelemesi için politika tanımları okunamadı veya seçili cihaz için doğrulanamadı. REST erişimini, politika okuma ayarını ve yetkinizi kontrol edip yenileyin.'); }
+    finally { if (!controller.signal.aborted && seq === sequence.current) setLoading(false); }
+  }, [target]);
+  useEffect(() => { void load(); return () => active.current?.abort(); }, [load, revision]);
+  const reviews = useMemo(() => data ? reviewRiskyPolicies(data.rows) : [], [data]);
+  const summary = data ? riskReviewSummary(reviews) : null;
+  const filtered = useMemo(() => filterRiskReviews(reviews, { search, severity, reason, status }), [reviews, search, severity, reason, status]);
+  const pages = Math.max(1, Math.ceil(filtered.length / 10)), safePage = Math.min(page, pages), visible = filtered.slice((safePage - 1) * 10, safePage * 10);
+  const detail = reviews.find(row => row.policy.policyId === detailId), filters = !!(search || severity || reason || status), historical = !!error || parentStale;
+  const timestamp = data ? `${userDate(data.collectedAt)} · TSİ` : 'Henüz okunmadı';
+  function clear() { setSearch(''); setSeverity(''); setReason(''); setStatus(''); setPage(1); }
+  return <>
+    {!target.enabled && <Notice>Seçili bağlantı devre dışı. Bu cihazdan politika verisi istenmez.</Notice>}
+    <section className={common.stats} aria-label="Risk incelemesi özeti">{[
+      { label: 'İncelenen politika', value: summary?.policies, icon: ClipboardList, note: 'Seçili cihaz ve VDOM’un döndürdüğü tanımlar' },
+      { label: 'Bulgulu politika', value: summary?.flagged, icon: ScanSearch, note: 'Birden fazla nedeni olan politika bir kez sayılır' },
+      { label: 'Kritik seviyeli', value: summary?.critical, icon: OctagonAlert, note: 'En yüksek bulgusu kritik olan politika sayısı' },
+      { label: 'Yüksek seviyeli', value: summary?.high, icon: TriangleAlert, note: 'En yüksek bulgusu yüksek olan politika sayısı' },
+    ].map(stat => <article className={common.stat} key={stat.label}><div><h2>{stat.label}</h2><span className={common.icon}><stat.icon size={18} aria-hidden="true" /></span></div><strong>{stat.value === undefined ? loading && target.enabled ? 'Okunuyor…' : 'Bilgi yok' : stat.value.toLocaleString('tr-TR')}</strong><p>{stat.note}</p></article>)}</section>
+    {error && <Notice error>{error}{data && ' Önceki inceleme gösteriliyor; güncel olmayabilir.'}</Notice>}
+    <Notice>Bulgular, politika tanımındaki inceleme önceliğini gösterir; fiili erişimi doğrulamaz. Kapalı kurallar da listelenir.{summary && summary.incomplete > 0 && <p className={styles.coverage}>{summary.incomplete.toLocaleString('tr-TR')} politikada kontrol verileri veya kural durumu eksik. Eksik bilgi, sıfır sayaç ya da risksiz kural sayılmaz.</p>}</Notice>
+    <details className={styles.guide}><summary><Info size={16} aria-hidden="true" />Kontroller ve risk seviyeleri nasıl belirlenir?<ChevronDown size={16} className={styles.guideArrow} aria-hidden="true" /></summary><div>{riskCheckIds.map(id => <article key={id}><h3><Severity value={riskCheckDefinitions[id].severity} />{riskCheckDefinitions[id].title}</h3><p>{riskCheckDefinitions[id].reason}</p><p>{riskCheckDefinitions[id].limitation}</p></article>)}</div><p>Bu ekran yalnızca bu üç tanım kontrolünü uygular. Adres gruplarının üyeleri, yönlendirme, zaman içinde kullanım ve kural gölgelemesi analiz edilmez.</p></details>
+    <div className={common.filters} role="search" aria-label="Riskli kural filtreleri">
+      <div className={`${styles.field} ${styles.search}`}><label htmlFor="risk-search"><Search size={14} aria-hidden="true" />Politika veya neden ara</label><Input id="risk-search" type="search" maxLength={120} value={search} placeholder="Kural no, ad, adres, hizmet veya risk nedeni" onChange={e => { setSearch(e.target.value); setPage(1); }} /></div>
+      <div className={styles.field}><label htmlFor="risk-level">En yüksek risk seviyesi</label><select id="risk-level" value={severity} onChange={e => { setSeverity(e.target.value); setPage(1); }}><option value="">Tüm seviyeler</option><option value="critical">Kritik</option><option value="high">Yüksek</option><option value="low">Düşük</option></select></div>
+      <div className={styles.field}><label htmlFor="risk-reason">Risk nedeni</label><select id="risk-reason" value={reason} onChange={e => { setReason(e.target.value); setPage(1); }}><option value="">Tüm nedenler</option>{riskCheckIds.map(id => <option key={id} value={id}>{riskCheckDefinitions[id].title}</option>)}</select></div>
+      <div className={styles.field}><label htmlFor="risk-status">Kural durumu</label><select id="risk-status" value={status} onChange={e => { setStatus(e.target.value); setPage(1); }}><option value="">Tüm durumlar</option><option value="enabled">Etkin</option><option value="disabled">Kapalı</option><option value="unknown">Durum bilgisi yok</option></select></div>
+      {filters && <Button variant="ghost" onClick={clear}><ListFilter size={16} aria-hidden="true" />Filtreleri temizle</Button>}
+    </div>
+    <section className={common.collection} aria-label="Risk bulgusu olan politikalar" aria-busy={loading}>
+      <header className={common.sectionHeader}><div><h2><ScanSearch size={18} aria-hidden="true" />İncelenecek güvenlik politikaları</h2><p>{target.device?.name || target.name} · VDOM: {target.vdom} · Son okuma: {timestamp}</p>{summary && <p>{summary.findings.toLocaleString('tr-TR')} bulgu · {summary.low.toLocaleString('tr-TR')} politika yalnızca düşük seviyeli bulgu içeriyor</p>}</div><SemanticBadge tone={historical ? 'warning' : data ? 'info' : 'neutral'} icon={Clock3}>{loading ? 'Okunuyor…' : historical ? 'Önceki veri' : data ? 'FortiGate REST' : 'Veri yok'}</SemanticBadge></header>
+      {!data ? <Empty icon={loading && target.enabled ? RefreshCw : Info} title={loading && target.enabled ? 'Politikalar okunuyor ve inceleniyor' : target.enabled ? 'İnceleme verisi alınamadı' : 'Bağlantı devre dışı'} /> : !visible.length ? <Empty icon={filters ? Search : ClipboardList} title={filters ? 'Filtrelere uygun politika yok' : data.rows.length ? 'Bu kontrollerde eşleşen bulgu yok' : 'Kaynak politika tanımı döndürmedi'}>{filters ? <Button variant="outline" onClick={clear}>Filtreleri temizle</Button> : <p>{data.rows.length ? 'Bu sonuç, eksik kontrol verileri dahil tüm güvenlik risklerinin dışlandığı anlamına gelmez.' : 'Son başarılı okumada seçili cihaz ve VDOM için boş liste alındı.'}</p>}</Empty> : <>
+        <div className={styles.tableWrap}><table className={styles.table}><caption className="sr-only">Politika bazında en yüksek seviye, risk nedenleri ve ilgili kural tanımı</caption><thead><tr><th scope="col">Risk seviyesi</th><th scope="col">İlgili politika</th><th scope="col">Neden incelenmeli?</th><th scope="col">Kaynak → hedef / hizmet</th><th scope="col">Ayrıntılar</th></tr></thead><tbody>{visible.map(row => <tr key={row.policy.policyId}><td><Severity value={row.severity!} /><small>{row.reasons.length} bulgu</small>{row.incomplete && <small><Info size={12} aria-hidden="true" />Bazı bilgiler eksik</small>}</td><td><span className={styles.id}>Kural no: {row.policy.policyId}</span><strong>{row.policy.name || 'Adı belirtilmemiş kural'}</strong><div className={styles.badges}><DefinitionState row={row.policy} /><ActionState row={row.policy} /></div></td><td><Reasons row={row} /></td><td><PolicyFlow row={row.policy} compact /></td><td><Button variant="outline" size="sm" aria-label={`Kural ${row.policy.policyId}: risk ve politika ayrıntıları`} onClick={() => setDetail(row.policy.policyId)}><Eye size={14} aria-hidden="true" />İncele</Button></td></tr>)}</tbody></table></div>
+        <div className={styles.mobile}>{visible.map(row => <article className={styles.record} key={row.policy.policyId}><div className={styles.recordHead}><Severity value={row.severity!} /><span className={styles.id}>Kural no: {row.policy.policyId}</span></div><h3>{row.policy.name || 'Adı belirtilmemiş kural'}</h3><div className={styles.badges}><DefinitionState row={row.policy} /><ActionState row={row.policy} /></div><Reasons row={row} /><PolicyFlow row={row.policy} compact /><Button variant="outline" onClick={() => setDetail(row.policy.policyId)}><Eye size={16} aria-hidden="true" />Risk ve politika ayrıntıları</Button></article>)}</div>
+      </>}
+      {data && <footer className={styles.pagination}><div><p role="status">{filtered.length.toLocaleString('tr-TR')} / {summary!.flagged.toLocaleString('tr-TR')} bulgulu politika · Sayfa {safePage} / {pages}</p><p>En yüksek risk seviyesi, ardından kaynak liste sırası. Kural numarası öncelik sırası değildir.</p></div><div><Button variant="outline" size="sm" aria-label="Önceki sayfa" disabled={safePage <= 1} onClick={() => setPage(safePage - 1)}><ChevronLeft size={16} aria-hidden="true" />Önceki</Button><Button variant="outline" size="sm" aria-label="Sonraki sayfa" disabled={safePage >= pages} onClick={() => setPage(safePage + 1)}>Sonraki<ChevronRight size={16} aria-hidden="true" /></Button></div></footer>}
+    </section>
+    <Dialog open={!!detail} onOpenChange={open => { if (!open) setDetail(null); }}><DialogContent className={`${common.modal} ${styles.modal}`}><DialogHeader><DialogTitle className={styles.dialogTitle}><ScanSearch size={20} aria-hidden="true" />Kural {detail?.policy.policyId}: {detail?.policy.name || 'Risk ve politika ayrıntıları'}</DialogTitle><DialogDescription>{target.device?.name || target.name} · {target.host} · VDOM: {target.vdom}</DialogDescription></DialogHeader>{detail && <>
+      <div className={styles.badges}><Severity value={detail.severity!} /><DefinitionState row={detail.policy} /><ActionState row={detail.policy} />{historical && <SemanticBadge tone="warning">Önceki veri</SemanticBadge>}</div>
+      {detail.policy.enabled !== true && <Notice>{detail.policy.enabled === false ? 'Bu politika kapalı olarak bildirilmiş. Bulgular kayıtlı tanıma aittir; kuralın şu anda trafik geçirdiği sonucu çıkarılmaz.' : 'Kuralın etkinlik durumu bildirilmemiş. Bulgular tanım üzerinden gösterilir.'}</Notice>}
+      <section className={styles.findings} aria-label="Risk nedenleri">{detail.reasons.map(id => <article key={id}><div className={styles.findingTitle}><Severity value={riskCheckDefinitions[id].severity} /><h3>{riskCheckDefinitions[id].title}</h3></div><p>{riskCheckDefinitions[id].reason}</p><p className={styles.limitation}>{riskCheckDefinitions[id].limitation}</p><h4><ClipboardCheck size={14} aria-hidden="true" />İnceleme önerisi</h4><p>{riskCheckDefinitions[id].nextStep}</p></article>)}</section>
+      <section className={styles.note}><h3><ClipboardList size={16} aria-hidden="true" />İlgili politika · Kural {detail.policy.policyId}</h3>{detail.policy.comment && <p>{detail.policy.comment}</p>}<PolicyFlow row={detail.policy} /><dl className={styles.meta}><Meta label="Kaynak adreslerini hariç tut" value={negationLabel(detail.policy.sourceNegated)} /><Meta label="Hedef adreslerini hariç tut" value={negationLabel(detail.policy.destinationNegated)} /><Meta label="Hizmetleri hariç tut" value={negationLabel(detail.policy.serviceNegated)} /><Meta label="Kaynak liste sırası" value={String(detail.policy.position)} /><Meta label="Zamanlama" value={policyScheduleLabel(detail.policy.schedule)} /><Meta label="NAT (adres çevirisi)" value={detail.policy.nat === true ? 'Açık' : detail.policy.nat === false ? 'Kapalı' : 'Bilgi yok'} /><Meta label="Trafik kaydı" value={policyLoggingLabel(detail.policy.logging)} /><Meta label="Eşleşme sayısı" value={policyCounterLabel(detail.policy.hitCount)} /><Meta label="Son eşleşme (TSİ)" value={userDate(detail.policy.lastUsedAt)} /><Meta label="Okuma zamanı (TSİ)" value={data ? userDate(data.collectedAt) : null} /></dl></section>
+      <section className={styles.note}><h3><ListChecks size={16} aria-hidden="true" />Bu politikadaki kontrol sonuçları</h3><ul className={styles.checks}>{detail.checks.map(check => <li key={check.id}><span>{riskCheckDefinitions[check.id].title}</span><SemanticBadge tone={check.state === 'match' ? 'warning' : 'neutral'} icon={check.state === 'unknown' ? Info : check.state === 'match' ? TriangleAlert : Check}>{riskCheckStateLabel(check.state)}</SemanticBadge></li>)}</ul></section>
+      <Notice>Politika ve bulgular aynı okuma anına aittir. Adres/hizmet gruplarının üyeleri açılmaz; sayaçların dönemi bilinmez. Sahip veya etkilenen varlık sayısı bu kaynaktan belirlenemez.</Notice>
+      <div className={common.dialogActions}><Button onClick={() => setDetail(null)}>Kapat</Button></div>
+    </>}</DialogContent></Dialog>
+  </>;
+}
+function Severity({ value }: { value: RiskSeverity }) { return <SemanticBadge tone={value === 'critical' ? 'danger' : value === 'high' ? 'warning' : 'info'} icon={value === 'critical' ? OctagonAlert : value === 'high' ? TriangleAlert : Info}>{riskSeverityLabels[value]}</SemanticBadge>; }
+function DefinitionState({ row }: { row: SecurityPolicy }) { return <SemanticBadge tone={row.enabled === true ? 'success' : 'neutral'} icon={row.enabled === true ? Check : row.enabled === false ? Pause : Info}>{row.enabled === true ? 'Kural etkin' : row.enabled === false ? 'Kural kapalı' : 'Durum bilgisi yok'}</SemanticBadge>; }
+function ActionState({ row }: { row: SecurityPolicy }) { return <SemanticBadge tone="neutral" icon={row.action === 'accept' ? ShieldCheck : row.action === 'deny' ? ShieldX : Info}>{policyActionLabel(row.action)}</SemanticBadge>; }
+function Reasons({ row }: { row: RiskReview }) { return <ul className={styles.reasons}>{row.reasons.map(id => <li key={id}><span className={styles.reasonDot} aria-hidden="true" /><span><strong>{riskCheckDefinitions[id].title}</strong><small>{riskCheckDefinitions[id].evidence}</small></span></li>)}{row.incomplete && <li className={styles.hint}><Info size={13} aria-hidden="true" />Bazı kontrol verileri veya kural durumu eksik</li>}</ul>; }
+function Names({ values, compact = false, kind }: { values: string[] | null; compact?: boolean; kind: 'addresses' | 'interfaces' | 'services' }) { return <div className={styles.names}>{values === null ? <span>Bilgi yok</span> : values.length === 0 ? <span>Kaynak boş liste bildirdi</span> : <>{(compact ? values.slice(0, 2) : values).map((value, index) => <span key={`${value}:${index}`}>{policyNameLabel(value, kind)}</span>)}{compact && values.length > 2 && <small>+{values.length - 2} öğe · Ayrıntılarda tümü</small>}</>}</div>; }
+function PolicyFlow({ row, compact = false }: { row: SecurityPolicy; compact?: boolean }) { return <div className={styles.policyFlow}><div className={styles.flow}><div className={styles.endpoint}><h3><Network size={13} aria-hidden="true" />Kaynak</h3><Names values={row.sourceInterfaces} kind="interfaces" compact={compact} /><div className={styles.addresses}><Names values={row.sourceAddresses} kind="addresses" compact={compact} /></div></div><ArrowRight className={styles.arrow} size={16} aria-label="şu hedefe" /><div className={styles.endpoint}><h3><Server size={13} aria-hidden="true" />Hedef</h3><Names values={row.destinationInterfaces} kind="interfaces" compact={compact} /><div className={styles.addresses}><Names values={row.destinationAddresses} kind="addresses" compact={compact} /></div></div></div><div className={styles.services}><h3><Layers3 size={13} aria-hidden="true" />Hizmetler</h3><Names values={row.services} kind="services" compact={compact} /></div></div>; }
+function negationLabel(value: boolean | null | undefined) { return value === true ? 'Açık' : value === false ? 'Kapalı' : 'Bilgi yok'; }
+function Meta({ label, value }: { label: string; value?: string | null }) { return <div><dt>{label}</dt><dd>{value || 'Bilgi yok'}</dd></div>; }
+function Notice({ children, error = false }: { children: ReactNode; error?: boolean }) { const Icon = error ? TriangleAlert : Info; return <div className={error ? common.error : common.info} role={error ? 'alert' : undefined}><Icon size={18} aria-hidden="true" /><div>{children}</div></div>; }
+function Empty({ icon: Icon, title, children }: { icon: typeof Info; title: string; children?: ReactNode }) { return <div className={common.empty}><Icon size={28} aria-hidden="true" /><h3>{title}</h3>{children}</div>; }

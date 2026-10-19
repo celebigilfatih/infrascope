@@ -4,6 +4,7 @@
 |---|---|
 | `EXPOSED_ASSETS_CONFIGURATION.md` | Exposed assets detection config |
 | `SECURITY_RISKS_CONFIGURATION.md` | Security risks config |
+| `risky-rules-workspace.md` | Scoped risky-policy review, evidence, severity and responsive UI |
 
 ## Related
 

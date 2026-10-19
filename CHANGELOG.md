@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+- **Risky policy review workspace** — Group all review reasons under their related policy with distinct critical/high/low levels, rule-state badges, Turkish evidence and review suggestions, complete policy details and responsive filters. Reuse the authorized FortiGate/VDOM policy snapshot; preserve unknown/zero/disabled distinctions, expose check coverage and heuristic limits, and retain labelled previous results on refresh failures. Add isolated model/read-route and browser regressions without changing alarm or legacy analyzer contracts.
+
 - **SSL-VPN session workspace** — Add explicit FortiGate/VDOM selection, distinct source and tunnel/destination addresses, full session durations, two-factor evidence, all-child byte totals and session details. Preserve multiple sessions per user, exact counters and unknown/zero distinctions; add Turkish filters, responsive records, scoped safe CSV export and optional renewal that pauses during inspection. Cover the real model, shared reader, target factory, authorized read route and browser states while preserving legacy alarm consumers.
 
 - **IPsec tunnel workspace** — Add explicit FortiGate/VDOM selection, all-child connected/partial/disconnected/unknown states, separate configured local and observed remote endpoints, directional byte counters and connection details. Keep local-configuration failures independent of monitoring, preserve exact counters and unknown values, project only allowlisted source fields and add scoped read/API and responsive browser regressions.
