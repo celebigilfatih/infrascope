@@ -32,7 +32,8 @@ const nextConfig = {
         headers: [{ key: 'Cache-Control', value: 'public, s-maxage=30, stale-while-revalidate=120' }],
       },
       {
-        source: '/api/services/:path*',
+        // The authenticated applications snapshot owns its private/no-store policy.
+        source: '/api/services/:path((?!apps/workspace(?:/|$)).*)?',
         headers: [{ key: 'Cache-Control', value: 'public, s-maxage=30, stale-while-revalidate=120' }],
       },
       {

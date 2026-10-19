@@ -1,230 +1,82 @@
 'use client';
-
-import { uiLabel } from '@/lib/i18n/tr';
-
-import { StatusBadge } from '@/components/ui/status-badge';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import Link from 'next/link';
+import { ArrowRight, Boxes, Check, ChevronLeft, ChevronRight, CircleHelp, Clock3, Eye, GitBranch, Info, Layers3, ListFilter, PackageOpen, Pause, RefreshCw, Search, Server, TriangleAlert } from 'lucide-react';
+import { apiGet } from '@/lib/api';
 import { PageHeading } from '@/components/ui/page-heading';
-import React, { useState, useEffect, useMemo } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { SemanticBadge } from '@/components/ui/semantic-badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { ChevronLeft, ChevronRight, RefreshCw, Search, Box, Cpu, HardDrive, Activity } from 'lucide-react';
-
-interface ServiceApp {
-  id: string;
-  name: string;
-  type: string;
-  status: 'running' | 'stopped' | 'warning' | 'error';
-  instances: number;
-  cpuUsage: number;
-  memoryUsage: number;
-  lastUpdated: string;
-  version: string;
-}
-
-const ITEMS_PER_PAGE = 10;
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { applicationState, applicationSummary, appStates, appStateLabels, appRelations, appDeviceCount, criticalityLabel, filterApplications, parseApplicationsSnapshot, relationLabel, servicePortLabel, serviceTypeLabel, type ApplicationsSnapshot, type WorkspaceApplication, type AppState, type AppService } from '@/lib/services/applications';
+import { userDate } from '@/lib/users/workspace';
+import common from '@/components/users/users-workspace.module.css';
+import styles from './page.module.css';
 
 export default function AppsPage() {
-  const [apps, setApps] = useState<ServiceApp[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-
-  useEffect(() => {
-    setTimeout(() => {
-      setApps([
-        { id: '1', name: 'API Ağ Geçidi', type: 'Gateway', status: 'running', instances: 3, cpuUsage: 45, memoryUsage: 62, lastUpdated: '2024-01-15 10:30', version: '2.1.0' },
-        { id: '2', name: 'Kimlik Doğrulama Servisi', type: 'Microservice', status: 'running', instances: 2, cpuUsage: 28, memoryUsage: 45, lastUpdated: '2024-01-15 10:28', version: '1.8.5' },
-        { id: '3', name: 'Kullanıcı Veritabanı', type: 'Database', status: 'running', instances: 1, cpuUsage: 72, memoryUsage: 85, lastUpdated: '2024-01-15 10:30', version: '5.7.0' },
-        { id: '4', name: 'Redis Önbelleği', type: 'Cache', status: 'running', instances: 2, cpuUsage: 15, memoryUsage: 42, lastUpdated: '2024-01-15 10:29', version: '7.0.0' },
-        { id: '5', name: 'Mesaj Kuyruğu', type: 'Queue', status: 'warning', instances: 2, cpuUsage: 55, memoryUsage: 68, lastUpdated: '2024-01-15 10:25', version: '3.8.0' },
-        { id: '6', name: 'Arama Motoru', type: 'Search', status: 'running', instances: 1, cpuUsage: 62, memoryUsage: 74, lastUpdated: '2024-01-15 10:30', version: '8.0.0' },
-        { id: '7', name: 'Bildirim Servisi', type: 'Microservice', status: 'stopped', instances: 0, cpuUsage: 0, memoryUsage: 0, lastUpdated: '2024-01-14 18:45', version: '1.2.0' },
-        { id: '8', name: 'Analiz Motoru', type: 'Processing', status: 'error', instances: 1, cpuUsage: 95, memoryUsage: 92, lastUpdated: '2024-01-15 09:15', version: '3.0.0' },
-        { id: '9', name: 'File Storage', type: 'Storage', status: 'running', instances: 2, cpuUsage: 22, memoryUsage: 55, lastUpdated: '2024-01-15 10:30', version: '4.2.0' },
-        { id: '10', name: 'ML Pipeline', type: 'Processing', status: 'running', instances: 1, cpuUsage: 88, memoryUsage: 78, lastUpdated: '2024-01-15 10:20', version: '2.5.0' },
-      ]);
-      setLoading(false);
-    }, 500);
+  const [data, setData] = useState<ApplicationsSnapshot | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState('');
+  const [search, setSearch] = useState(''), [state, setState] = useState(''), [relation, setRelation] = useState(''), [vendor, setVendor] = useState(''), [page, setPage] = useState(1), [detailId, setDetail] = useState<string | null>(null);
+  const active = useRef<AbortController | null>(null), sequence = useRef(0);
+  const load = useCallback(async () => {
+    const seq = ++sequence.current; active.current?.abort(); const controller = new AbortController(); active.current = controller;
+    setLoading(true); setError(''); setDetail(null);
+    try {
+      const json: unknown = await apiGet('/api/services/apps/workspace', undefined, { signal: controller.signal, timeout: 30000 });
+      if (controller.signal.aborted || seq !== sequence.current) return;
+      setData(parseApplicationsSnapshot(json));
+    } catch { if (!controller.signal.aborted && seq === sequence.current) setError('Uygulama, servis ve ilişki kayıtları alınamadı veya doğrulanamadı. Oturumunuzu ve erişim yetkinizi kontrol edip yeniden deneyin.'); }
+    finally { if (!controller.signal.aborted && seq === sequence.current) setLoading(false); }
   }, []);
-
-  const filteredApps = useMemo(() => {
-    if (!searchTerm) return apps;
-    const term = searchTerm.toLowerCase();
-    return apps.filter(app => app.name.toLowerCase().includes(term) || app.type.toLowerCase().includes(term));
-  }, [apps, searchTerm]);
-
-  const totalPages = Math.ceil(filteredApps.length / ITEMS_PER_PAGE);
-  const paginatedApps = useMemo(() => {
-    const start = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filteredApps.slice(start, start + ITEMS_PER_PAGE);
-  }, [filteredApps, currentPage]);
-
-  useEffect(() => { if (currentPage > totalPages && totalPages > 0) setCurrentPage(1); }, [totalPages, currentPage]);
-
-  const getStatusBadge = (status: string) => { return <StatusBadge status={['running', 'warning', 'error'].includes(status) ? status : 'STOPPED'} />; };
-
-  const getTypeIcon = (type: string) => {
-    switch (type.toLowerCase()) {
-      case 'database': return <HardDrive className="h-4 w-4 text-blue-500" />;
-      case 'cache': return <Activity className="h-4 w-4 text-purple-500" />;
-      case 'microservice': return <Box className="h-4 w-4 text-green-500" />;
-      default: return <Cpu className="h-4 w-4 text-gray-500" />;
-    }
-  };
-
-  const getPageNumbers = () => {
-    const pages: (number | 'ellipsis')[] = [];
-    const maxVisible = 5;
-    if (totalPages <= maxVisible) { for (let i = 1; i <= totalPages; i++) pages.push(i); }
-    else {
-      pages.push(1);
-      if (currentPage > 3) pages.push('ellipsis');
-      const start = Math.max(2, currentPage - 1);
-      const end = Math.min(totalPages - 1, currentPage + 1);
-      for (let i = start; i <= end; i++) pages.push(i);
-      if (currentPage < totalPages - 2) pages.push('ellipsis');
-      pages.push(totalPages);
-    }
-    return pages;
-  };
-
-  const runningCount = apps.filter(a => a.status === 'running').length;
-  const errorCount = apps.filter(a => a.status === 'error').length;
-  const totalInstances = apps.reduce((acc, a) => acc + a.instances, 0);
-
-  return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-4">
-        <div>
-          <PageHeading section="applications" description={<>Uygulama ve servis yönetimi</>}>Uygulamalar</PageHeading>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" aria-label="Yenile"><RefreshCw className="h-4 w-4" /></Button>
-          <Button><Box className="h-4 w-4 mr-2" />Yenile</Button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-blue-500/20"><Box className="h-5 w-5 text-blue-500" /></div>
-              <div><p className="text-sm text-muted-foreground">Toplam Uygulama</p><p className="text-2xl font-bold">{apps.length}</p></div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-green-500/20"><Activity className="h-5 w-5 text-green-500" /></div>
-              <div><p className="text-sm text-muted-foreground">Çalışan</p><p className="text-2xl font-bold">{runningCount}</p></div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-red-500/20"><Activity className="h-5 w-5 text-red-500" /></div>
-              <div><p className="text-sm text-muted-foreground">Hata</p><p className="text-2xl font-bold">{errorCount}</p></div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-purple-500/20"><Cpu className="h-5 w-5 text-purple-500" /></div>
-              <div><p className="text-sm text-muted-foreground">Toplam Örnek</p><p className="text-2xl font-bold">{totalInstances}</p></div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input placeholder="Uygulama ara..." value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }} className="pl-9" />
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2"><Box className="h-5 w-5" />Uygulamalar<Badge variant="secondary">{filteredApps.length}</Badge></CardTitle>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="flex justify-center py-12"><RefreshCw className="h-8 w-8 animate-spin text-primary" /></div>
-          ) : (
-            <>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Uygulama</TableHead>
-                    <TableHead>Tip</TableHead>
-                    <TableHead>Durum</TableHead>
-                    <TableHead className="text-center">Örnek</TableHead>
-                    <TableHead className="text-center">CPU</TableHead>
-                    <TableHead className="text-center">RAM</TableHead>
-                    <TableHead>Versiyon</TableHead>
-                    <TableHead>Son Güncelleme</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {paginatedApps.length === 0 ? (
-                    <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Sonuç bulunamadı</TableCell></TableRow>
-                  ) : (
-                    paginatedApps.map((app) => (
-                      <TableRow key={app.id}>
-                        <TableCell className="font-medium">{app.name}</TableCell>
-                        <TableCell><div className="flex items-center gap-2">{getTypeIcon(app.type)}{uiLabel(app.type)}</div></TableCell>
-                        <TableCell>{getStatusBadge(app.status)}</TableCell>
-                        <TableCell className="text-center font-mono">{app.instances}</TableCell>
-                        <TableCell className="text-center">
-                          <div className="flex items-center justify-center gap-2">
-                            <div className="w-16 h-2 bg-gray-200 rounded-full overflow-hidden"><div className="h-full bg-blue-500" style={{ width: `${app.cpuUsage}%` }}></div></div>
-                            <span className="text-sm">{app.cpuUsage}%</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <div className="flex items-center justify-center gap-2">
-                            <div className="w-16 h-2 bg-gray-200 rounded-full overflow-hidden"><div className="h-full bg-purple-500" style={{ width: `${app.memoryUsage}%` }}></div></div>
-                            <span className="text-sm">{app.memoryUsage}%</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="font-mono text-sm">{app.version}</TableCell>
-                        <TableCell className="text-muted-foreground">{app.lastUpdated}</TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between mt-4">
-                  <p className="text-sm text-muted-foreground">Sayfa {currentPage} / {totalPages}</p>
-                  <div className="flex items-center gap-1">
-                    <Button variant="outline" size="icon" onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} aria-label="Önceki sayfa"><ChevronLeft className="h-4 w-4" /></Button>
-                    {getPageNumbers().map((page, idx) => (
-                      <React.Fragment key={idx}>
-                        {page === 'ellipsis' ? <span className="px-2 text-muted-foreground">...</span> : (
-                          <Button variant={currentPage === page ? 'default' : 'outline'} size="sm" onClick={() => setCurrentPage(page)} className="w-9">{page}</Button>
-                        )}
-                      </React.Fragment>
-                    ))}
-                    <Button variant="outline" size="icon" onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} aria-label="Sonraki sayfa"><ChevronRight className="h-4 w-4" /></Button>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </CardContent>
-      </Card>
+  useEffect(() => { void load(); return () => active.current?.abort(); }, [load]);
+  const rows = data?.rows, summary = data ? applicationSummary(data.rows) : null;
+  const vendors = useMemo(() => [...new Set((rows || []).flatMap(app => app.vendor ? [app.vendor] : []))].sort((a, b) => a.localeCompare(b, 'tr')), [rows]);
+  const filtered = useMemo(() => filterApplications(rows || [], { search, state, relation, vendor }), [rows, search, state, relation, vendor]);
+  const pages = Math.max(1, Math.ceil(filtered.length / 10)), safePage = Math.min(page, pages), visible = filtered.slice((safePage - 1) * 10, safePage * 10);
+  const detail = rows?.find(app => app.id === detailId), filters = !!(search || state || relation || vendor);
+  function clear() { setSearch(''); setState(''); setRelation(''); setVendor(''); setPage(1); }
+  return <div className={common.page}><div className={common.workspace}>
+    <header className={common.header}><PageHeading section="applications" description="Uygulamaları, bağlı servislerin kayıtlı durumlarını ve hedef cihazlarla ilişkilerini birlikte inceleyin.">Uygulamalar</PageHeading><div className={common.headerActions}><Button asChild variant="outline"><Link href="/services"><Layers3 size={16} aria-hidden="true" />Servisler</Link></Button><Button asChild variant="outline"><Link href="/services/dependencies"><GitBranch size={16} aria-hidden="true" />Bağımlılıklar</Link></Button><Button variant="outline" disabled={loading} onClick={() => void load()}><RefreshCw size={16} aria-hidden="true" className={loading ? 'animate-spin motion-reduce:animate-none' : ''} />{loading ? 'Okunuyor…' : 'Verileri yenile'}</Button></div></header>
+    <div className={common.serviceBar}><SemanticBadge tone="info" icon={Server}>Kayıtlı uygulama envanteri</SemanticBadge><span>Kaynak: Veritabanı · Servis ve cihaz ilişkileri · Salt okunur</span></div>
+    <section className={common.stats} aria-label="Uygulama özeti">{[
+      { label: 'Uygulama', value: summary?.applications, icon: Boxes, note: 'Servis atanmamış uygulamalar da dahildir' },
+      { label: 'İnceleme gereken', value: summary?.attention, icon: TriangleAlert, note: 'Başarısız, sorunlu, kısmen çalışan veya durmuş servisleri olanlar' },
+      { label: 'Bağlı servis', value: summary?.services, icon: Layers3, note: 'Uygulama ataması bulunan servis kayıtları' },
+      { label: 'Bağımlılık / ilişki', value: summary?.relations, icon: GitBranch, note: 'Bağlı servislerden hedef cihazlara kayıtlı ilişkiler' },
+    ].map(stat => <article className={common.stat} key={stat.label}><div><h2>{stat.label}</h2><span className={common.icon}><stat.icon size={18} aria-hidden="true" /></span></div><strong>{stat.value === undefined ? loading ? 'Okunuyor…' : 'Bilgi yok' : stat.value.toLocaleString('tr-TR')}</strong><p>{stat.note}</p></article>)}</section>
+    {error && <Notice error>{error}{data && ' Önceki liste korunuyor; güncel olmayabilir.'}</Notice>}
+    <Notice>Uygulama durumu bağlı servislerin kayıtlı durumlarından türetilir; canlı erişilebilirlik testi değildir. İlişkiler servis → hedef cihaz yönündedir; uygulamalar arası veya dolaylı bağımlılık çıkarımı yapılmaz.</Notice>
+    {data && data.unassignedServices > 0 && <Notice>{data.unassignedServices.toLocaleString('tr-TR')} servis henüz bir uygulamaya atanmamış; yukarıdaki bağlı servis toplamına dahil değildir. <Link className={styles.inlineLink} href="/services">Servis kayıtlarını görüntüle<ArrowRight size={13} aria-hidden="true" /></Link></Notice>}
+    <div className={common.filters} role="search" aria-label="Uygulama filtreleri">
+      <div className={`${styles.field} ${styles.search}`}><label htmlFor="app-search"><Search size={14} aria-hidden="true" />Uygulama ve ilişkilerde ara</label><Input id="app-search" type="search" maxLength={120} placeholder="Uygulama, servis, cihaz, IP adresi veya sürüm" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} /></div>
+      <div className={styles.field}><label htmlFor="app-state">Servislerden türetilen durum</label><select id="app-state" value={state} onChange={e => { setState(e.target.value); setPage(1); }}><option value="">Tüm durumlar</option>{appStates.map(value => <option key={value} value={value}>{appStateLabels[value]}</option>)}</select></div>
+      <div className={styles.field}><label htmlFor="app-relations">Bağımlılık / ilişki</label><select id="app-relations" value={relation} onChange={e => { setRelation(e.target.value); setPage(1); }}><option value="">Tümü</option><option value="linked">İlişki kaydı var</option><option value="none">İlişki kaydı yok</option></select></div>
+      <div className={styles.field}><label htmlFor="app-vendor">Üretici</label><select id="app-vendor" value={vendor} onChange={e => { setVendor(e.target.value); setPage(1); }}><option value="">Tüm üreticiler</option>{vendors.map(name => <option key={name} value={JSON.stringify(name)}>{name}</option>)}<option value="null">Üretici bilgisi yok</option></select></div>
+      {filters && <Button variant="ghost" onClick={clear}><ListFilter size={16} aria-hidden="true" />Filtreleri temizle</Button>}
     </div>
-  );
+    <section className={common.collection} aria-label="Uygulama listesi" aria-busy={loading}><header className={common.sectionHeader}><div><h2><Boxes size={18} aria-hidden="true" />Uygulama, servis ve ilişki özeti</h2><p>Son liste okuma: {data ? `${userDate(data.readAt)} · TSİ` : 'Henüz okunmadı'}</p></div><SemanticBadge tone={error ? 'warning' : data ? 'info' : 'neutral'} icon={Clock3}>{loading ? 'Okunuyor…' : error && data ? 'Önceki veri' : data ? 'Kayıtlı envanter' : 'Veri yok'}</SemanticBadge></header>
+      {!data ? <Empty icon={loading ? RefreshCw : Info} title={loading ? 'Uygulama kayıtları yükleniyor' : 'Uygulama kayıtları alınamadı'}>{!loading && <Button variant="outline" onClick={() => void load()}><RefreshCw size={16} aria-hidden="true" />Tekrar dene</Button>}</Empty> : !visible.length ? <Empty icon={filters ? Search : PackageOpen} title={filters ? 'Filtrelere uygun uygulama yok' : 'Henüz uygulama kaydı yok'}>{filters ? <Button variant="outline" onClick={clear}>Filtreleri temizle</Button> : <p>Kayıtlı uygulamalar ve onlara atanmış servisler burada gösterilir.</p>}</Empty> : <>
+        <div className={styles.tableWrap}><table className={styles.table}><caption className="sr-only">Uygulama, servislerden türetilen durum, bağlı servisler ve kayıtlı cihaz ilişkileri</caption><thead><tr><th scope="col">Uygulama / sürüm</th><th scope="col">Kayıtlı durum</th><th scope="col">Bağlı servisler</th><th scope="col">Bağımlılık / ilişki</th><th scope="col">Ayrıntılar</th></tr></thead><tbody>{visible.map(app => <tr key={app.id}><td><div className={styles.identity}><span className={styles.appIcon}><Boxes size={18} aria-hidden="true" /></span><strong>{app.name}</strong></div><small>Üretici: {app.vendor || 'Bilgi yok'}</small><small>Sürüm: {app.version || 'Bilgi yok'}</small></td><td><AppStateBadge state={applicationState(app)} /><p className={styles.hint}><ServiceTally app={app} /></p></td><td><ServicePreview app={app} /></td><td><RelationPreview app={app} /></td><td><Button variant="outline" size="sm" aria-label={`${app.name}: uygulama ayrıntıları`} onClick={() => setDetail(app.id)}><Eye size={14} aria-hidden="true" />İncele</Button></td></tr>)}</tbody></table></div>
+        <div className={styles.mobile}>{visible.map(app => <article className={styles.record} key={app.id}><div className={styles.identity}><span className={styles.appIcon}><Boxes size={18} aria-hidden="true" /></span><h3>{app.name}</h3></div><div className={styles.badges}><AppStateBadge state={applicationState(app)} /></div><p className={styles.hint}><ServiceTally app={app} /></p><dl className={styles.meta}><Meta label="Üretici" value={app.vendor} /><Meta label="Sürüm" value={app.version} /></dl><section><h4><Layers3 size={14} aria-hidden="true" />Bağlı servisler</h4><ServicePreview app={app} /></section><section><h4><GitBranch size={14} aria-hidden="true" />Bağımlılık / ilişki</h4><RelationPreview app={app} /></section><Button variant="outline" onClick={() => setDetail(app.id)}><Eye size={16} aria-hidden="true" />Uygulama ayrıntıları</Button></article>)}</div>
+      </>}
+      {data && <footer className={styles.pagination}><div><p role="status">{filtered.length.toLocaleString('tr-TR')} / {data.rows.length.toLocaleString('tr-TR')} uygulama · Sayfa {safePage} / {pages}</p><p>Arama, ayrıntılardaki tüm servis ve hedef cihaz kayıtlarını kapsar.</p></div><div><Button variant="outline" size="sm" aria-label="Önceki sayfa" disabled={safePage <= 1} onClick={() => setPage(safePage - 1)}><ChevronLeft size={16} aria-hidden="true" />Önceki</Button><Button variant="outline" size="sm" aria-label="Sonraki sayfa" disabled={safePage >= pages} onClick={() => setPage(safePage + 1)}>Sonraki<ChevronRight size={16} aria-hidden="true" /></Button></div></footer>}
+    </section>
+    <Dialog open={!!detail} onOpenChange={open => { if (!open) setDetail(null); }}><DialogContent className={`${common.modal} ${styles.modal}`}><DialogHeader><DialogTitle className={styles.dialogTitle}><Boxes size={20} aria-hidden="true" />{detail?.name || 'Uygulama ayrıntıları'}</DialogTitle><DialogDescription>Bağlı servisler ve servislerden hedef cihazlara kayıtlı ilişkiler</DialogDescription></DialogHeader>{detail && <>
+      <div className={styles.badges}><AppStateBadge state={applicationState(detail)} />{!!error && <SemanticBadge tone="warning">Önceki veri</SemanticBadge>}</div>
+      <Notice><ServiceTally app={detail} /> Durumlar veritabanındaki servis kayıtlarına aittir; kayıt güncelleme zamanı son sağlık kontrolü zamanı değildir.</Notice>
+      <dl className={styles.meta}><Meta label="Üretici" value={detail.vendor} /><Meta label="Sürüm" value={detail.version} /><Meta label="Uygulama kaydı oluşturulma (TSİ)" value={userDate(detail.createdAt)} /><Meta label="Uygulama kaydı güncelleme (TSİ)" value={userDate(detail.updatedAt)} /><Meta label="Servis barındıran cihaz" value={String(appDeviceCount(detail))} /><Meta label="Liste okuma zamanı (TSİ)" value={data ? userDate(data.readAt) : null} /></dl>
+      <Tabs key={detail.id} defaultValue="services"><TabsList className={styles.detailTabs} aria-label="Uygulama ayrıntı bölümleri"><TabsTrigger value="services"><Layers3 size={14} aria-hidden="true" />Servisler ({detail.services.length})</TabsTrigger><TabsTrigger value="relations"><GitBranch size={14} aria-hidden="true" />İlişkiler ({appRelations(detail).length})</TabsTrigger></TabsList><TabsContent value="services"><section className={styles.detailSection}><h3><Layers3 size={17} aria-hidden="true" />Bağlı servisler <span>{detail.services.length}</span></h3>{detail.services.length ? <div className={styles.services}>{detail.services.map(service => <ServiceCard service={service} key={service.id} />)}</div> : <p>Bu uygulamaya atanmış servis kaydı yok. Uygulamanın çalışma durumu belirlenemiyor.</p>}</section></TabsContent>
+      <TabsContent value="relations"><section className={styles.detailSection}><h3><GitBranch size={17} aria-hidden="true" />Bağımlılıklar ve cihaz ilişkileri <span>{appRelations(detail).length}</span></h3><p>Yön: kaynak servis → kayıtlı ilişki türü → hedef cihaz. İlişkiler hedef cihazın güncel erişilebilirliğini veya hedef uygulamayı belirtmez.</p>{appRelations(detail).length ? <div className={styles.relations}>{appRelations(detail).map(({ service, relation }) => <article key={relation.id}><div className={styles.relationHead}><SemanticBadge tone="info" icon={GitBranch}>{relationLabel(relation.type)}</SemanticBadge><SemanticBadge tone={relation.criticality === 'CRITICAL' ? 'danger' : relation.criticality === 'HIGH' ? 'warning' : 'neutral'}>İlişki önemi: {criticalityLabel(relation.criticality)}</SemanticBadge></div><div className={styles.flow}><div><h4>Kaynak servis</h4><strong>{service.displayName || service.name}</strong><small>Barındıran cihaz: {service.device.name}</small></div><ArrowRight size={16} aria-label="şu hedef cihaza" /><div><h4>Hedef cihaz</h4><strong>{relation.targetDevice.name}</strong><code>{relation.targetDevice.managementIp || 'IP bilgisi yok'}</code></div></div>{relation.description && <p>{relation.description}</p>}</article>)}</div> : <p>Bağlı servislerden hedef cihazlara ilişki kaydı yok. Bu, uygulamanın hiç bağımlılığı olmadığı anlamına gelmez.</p>}</section></TabsContent></Tabs>
+      <div className={common.dialogActions}><Button onClick={() => setDetail(null)}>Kapat</Button></div>
+    </>}</DialogContent></Dialog>
+  </div></div>;
 }
+function AppStateBadge({ state }: { state: AppState }) { return <SemanticBadge tone={state === 'failed' ? 'danger' : ['degraded', 'partial', 'stopped'].includes(state) ? 'warning' : state === 'running' ? 'success' : 'neutral'} icon={state === 'running' ? Check : state === 'stopped' ? Pause : state === 'unknown' || state === 'unlinked' ? CircleHelp : TriangleAlert}>{appStateLabels[state]}</SemanticBadge>; }
+function ServiceTally({ app }: { app: WorkspaceApplication }) { if (!app.services.length) return <>Servis ataması olmadığı için durum belirlenemiyor.</>; const known = app.services.filter(s => s.status !== 'UNKNOWN').length, running = app.services.filter(s => s.status === 'RUNNING').length; return <>{running} / {app.services.length} servis çalışıyor{known < app.services.length && ` · ${app.services.length - known} servisin durumu bilinmiyor`}.</>; }
+function ServicePreview({ app }: { app: WorkspaceApplication }) { return <div className={styles.preview}><strong>{app.services.length} servis · {appDeviceCount(app)} cihaz</strong>{app.services.slice(0, 2).map(s => <span key={s.id}><Layers3 size={12} aria-hidden="true" />{s.displayName || s.name}<small>{s.device.name}</small></span>)}{app.services.length > 2 && <small>+{app.services.length - 2} servis · Ayrıntılarda tümü</small>}{!app.services.length && <small>Henüz servis atanmamış</small>}</div>; }
+function RelationPreview({ app }: { app: WorkspaceApplication }) { const relations = appRelations(app), devices = new Map(relations.map(({ relation }) => [relation.targetDevice.id, relation.targetDevice.name])); return <div className={styles.preview}><strong>{relations.length} ilişki · {devices.size} hedef cihaz</strong>{[...devices.entries()].slice(0, 2).map(([id, name]) => <span key={id}><Server size={12} aria-hidden="true" />{name}</span>)}{devices.size > 2 && <small>+{devices.size - 2} hedef · Ayrıntılarda tümü</small>}{!relations.length && <small>Kayıtlı ilişki yok</small>}</div>; }
+function ServiceCard({ service }: { service: AppService }) { return <article><div className={styles.serviceHead}><h4><Layers3 size={15} aria-hidden="true" />{service.displayName || service.name}</h4><StatusBadge status={service.status} /></div><p>{serviceTypeLabel(service.type)} · {servicePortLabel(service)}</p>{service.displayName && service.displayName !== service.name && <p>Kayıt adı: {service.name}</p>}<div className={styles.device}><Server size={14} aria-hidden="true" /><strong>{service.device.name}</strong><code>{service.device.managementIp || 'IP bilgisi yok'}</code></div>{service.description && <p>{service.description}</p>}<p>{service.dependencies.length} ilişki kaydı · Servis kaydı güncelleme (TSİ): {userDate(service.updatedAt)}</p></article>; }
+function Meta({ label, value }: { label: string; value?: string | null }) { return <div><dt>{label}</dt><dd>{value || 'Bilgi yok'}</dd></div>; }
+function Notice({ children, error = false }: { children: ReactNode; error?: boolean }) { const Icon = error ? TriangleAlert : Info; return <div className={error ? common.error : common.info} role={error ? 'alert' : undefined}><Icon size={18} aria-hidden="true" /><div>{children}</div></div>; }
+function Empty({ icon: Icon, title, children }: { icon: typeof Info; title: string; children?: ReactNode }) { return <div className={common.empty}><Icon size={28} aria-hidden="true" /><h3>{title}</h3>{children}</div>; }

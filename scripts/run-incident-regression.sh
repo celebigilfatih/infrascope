@@ -43,6 +43,8 @@ npx eslint app/network/ssl-vpn/page.tsx app/api/integrations/fortigate/ssl-vpn/w
 npm run test:sslvpn-workspace
 npx eslint app/security/risks/page.tsx lib/security/risky-rules.ts lib/security/policies.ts lib/integrations/fortigate.ts scripts/check-risky-rules-workspace.cjs tests/incident-e2e/risky-rules-workspace.spec.ts --max-warnings=0
 npm run test:risky-rules-workspace
+npx eslint app/services/apps/page.tsx app/api/services/apps/workspace/route.ts lib/services/applications.ts scripts/check-applications-workspace.cjs tests/incident-e2e/applications-workspace.spec.ts --max-warnings=0
+npm run test:applications-workspace
 npm run test:fortianalyzer-auth
 npm run test:fortianalyzer-profile
 npm run test:fortianalyzer-cache
