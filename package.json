@@ -70,6 +70,7 @@
     "test:vmware-health": "node scripts/check-vmware-health.cjs",
     "test:vmware-python": "python3 -B scripts/check-vmware-python.py",
     "test:zabbix-auth": "node scripts/check-zabbix-auth.cjs",
+    "test:integration-status-workspace": "node scripts/check-integration-status-workspace.cjs",
     "test:firewall-workspace": "node scripts/check-firewall-workspace.cjs",
     "test:firewall-overview": "node scripts/check-firewall-overview.cjs",
     "test:config-history": "node scripts/check-config-history.cjs",

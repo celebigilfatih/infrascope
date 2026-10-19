@@ -55,6 +55,9 @@ npm run security:firewall-read-query-check
 npm run security:firewall-recovery-check
 npm run test:fortigate-alarm-targets
 npm run test:fortigate-snmp
+npx eslint app/integrations/status/page.tsx app/api/integrations/status/route.ts lib/integrations/status-workspace.ts scripts/check-integration-status-workspace.cjs scripts/check-inventory-sync.cjs scripts/helpers/vmware-page-fixture.cjs tests/incident-e2e/integration-status-workspace.spec.ts --max-warnings=0
+npm run test:integration-status-workspace
+npm run test:inventory-sync
 npm run test:ui-turkish
 npx eslint app/settings/alerts/page.tsx components/alarms/*.tsx lib/alarms/rule-workspace.ts lib/validators/alarms.ts app/api/alarms/definitions/route.ts app/api/alarms/notification/route.ts scripts/check-rule-workspace.cjs tests/incident-e2e/rule-workspace.spec.ts tests/incident-e2e/fixtures.ts --max-warnings=0
 npm run test:rule-workspace

@@ -1,205 +1,62 @@
 'use client';
-
-import { uiError } from '@/lib/i18n/tr';
-
-import { StatusBadge } from '@/components/ui/status-badge';
-import { PageHeading } from '@/components/ui/page-heading';
-import React, { useState, useEffect, useCallback } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { Activity, ArrowUpRight, CheckCircle2, ChevronDown, CircleHelp, Clock3, Cloud, Database, Filter, Info, Layers3, Link2, Network, PlugZap, Radio, RefreshCw, Search, Settings2, Shield, TriangleAlert, X } from 'lucide-react';
+import { PageHeading } from '@/components/ui/page-heading';
 import { SemanticBadge } from '@/components/ui/semantic-badge';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { RefreshCw, CheckCircle, XCircle, AlertCircle, Activity, Settings2, ArrowUpRight } from 'lucide-react';
-import { cn } from '@/lib/utils';
-
-interface IntegrationStatus {
-  id: string;
-  name: string;
-  type: 'monitoring' | 'backup' | 'security' | 'cloud' | 'cmdb';
-  status: 'connected' | 'disconnected' | 'error' | 'syncing';
-  lastSync: string;
-  message: string;
-  healthScore: number;
-}
+import { Input } from '@/components/ui/input';
+import { requestUsersJson, userDate, userSearch } from '@/lib/users/workspace';
+import { connectionLabels, integrationKinds, parseStatusWorkspace, statusErrorLabels, statusFilterLabels, statusMatches, statusNeedsAttention, statusPriority, syncLabels, type IntegrationKind, type IntegrationSnapshot, type StatusFilter } from '@/lib/integrations/status-workspace';
+import common from '@/components/users/users-workspace.module.css';
+import styles from './page.module.css';
+const icons = { VMWARE_VCENTER: Layers3, FORTIGATE: Shield, FORTIANALYZER: Activity, ZABBIX: Activity, SNMP: Network, NMS: Network, AWS: Cloud, AZURE: Cloud, API: PlugZap };
+const connectionTone = (state: IntegrationSnapshot['connection']['state']) => state === 'success' ? 'success' as const : state === 'failed' ? 'danger' as const : state === 'stale' ? 'warning' as const : 'neutral' as const;
 
 export default function StatusPage() {
-  const [integrations, setIntegrations] = useState<IntegrationStatus[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchIntegrations = useCallback(async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const response = await fetch('/api/integrations/status');
-        const result = await response.json();
-        if (!response.ok || !result.success || !Array.isArray(result.data)) throw new Error(uiError(result.error || 'Entegrasyon durumu alınamadı.'));
-        setIntegrations(result.data);
-      } catch (failure) {
-        setError(uiError(failure instanceof Error ? failure.message : 'Entegrasyon durumu alınamadı.'));
-      } finally {
-        setLoading(false);
-      }
+  const [snapshot, setSnapshot] = useState<ReturnType<typeof parseStatusWorkspace> | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState('');
+  const [query, setQuery] = useState(''), [filter, setFilter] = useState<StatusFilter>('all'), [kind, setKind] = useState('all');
+  const active = useRef<AbortController | null>(null), sequence = useRef(0);
+  const load = useCallback(async () => {
+    const seq = ++sequence.current; active.current?.abort(); const controller = new AbortController(); active.current = controller; setLoading(true); setError('');
+    try { const next = parseStatusWorkspace(await requestUsersJson('/api/integrations/status', 'Entegrasyon durumları alınamadı. Yeniden deneyin.', { signal: controller.signal, timeoutMs: 20000 })); if (seq === sequence.current && !controller.signal.aborted) setSnapshot(next); }
+    catch (failure) { if (seq === sequence.current && !controller.signal.aborted) setError(failure instanceof Error ? failure.message : 'Entegrasyon durumları alınamadı.'); }
+    finally { if (seq === sequence.current && !controller.signal.aborted) setLoading(false); }
   }, []);
-  useEffect(() => { void fetchIntegrations(); }, [fetchIntegrations]);
-
-  const getStatusBadge = (status: string) => { return <StatusBadge status={status} />; };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'connected': return <CheckCircle className="h-5 w-5 text-green-500" />;
-      case 'disconnected': return <XCircle className="h-5 w-5 text-red-500" />;
-      case 'error': return <AlertCircle className="h-5 w-5 text-red-500" />;
-      case 'syncing': return <Activity className="h-5 w-5 text-blue-500 animate-pulse" />;
-      default: return <Activity className="h-5 w-5 text-gray-500" />;
-    }
-  };
-
-  const getHealthColor = (score: number) => {
-    if (score >= 90) return 'text-green-500';
-    if (score >= 70) return 'text-yellow-500';
-    if (score >= 50) return 'text-orange-500';
-    return 'text-red-500';
-  };
-
-  const getHealthBarColor = (score: number) => {
-    if (score >= 90) return 'bg-green-500';
-    if (score >= 70) return 'bg-yellow-500';
-    if (score >= 50) return 'bg-orange-500';
-    return 'bg-red-500';
-  };
-
-  const getTypeLabel = (type: string) => {
-    switch (type) {
-      case 'monitoring': return 'İzleme';
-      case 'backup': return 'Yedekleme';
-      case 'security': return 'Güvenlik';
-      case 'cloud': return 'Cloud';
-      case 'cmdb': return 'CMDB';
-      default: return type;
-    }
-  };
-
-  return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-4">
-        <div>
-          <PageHeading section="integrations" description={<>Entegrasyon durumu ve sağlık kontrolü</>}>Entegrasyon Durumu</PageHeading>
-        </div>
-        <Button variant="outline" size="icon" aria-label="Yenile" onClick={() => void fetchIntegrations()} disabled={loading}>
-          <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin motion-reduce:animate-none')} />
-        </Button>
-      </div>
-
-      {error && <div role="alert" className="flex items-start gap-3 rounded-xl border border-[var(--ui-danger-border)] bg-[var(--ui-danger-bg)] p-4 text-sm text-[var(--ui-danger-fg)]"><AlertCircle size={18} className="shrink-0" aria-hidden="true" /><p>{uiError(error)}</p></div>}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-blue-500/20">
-                <Activity className="h-5 w-5 text-blue-500" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Toplam Entegrasyon</p>
-                <p className="text-2xl font-bold">{integrations.length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-green-500/20">
-                <CheckCircle className="h-5 w-5 text-green-500" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Bağlı</p>
-                <p className="text-2xl font-bold">{integrations.filter(i => i.status === 'connected').length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-orange-500/20">
-                <AlertCircle className="h-5 w-5 text-orange-500" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Bağlı değil</p>
-                <p className="text-2xl font-bold">{integrations.filter(i => i.status === 'error' || i.status === 'disconnected').length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-green-500/20">
-                <Activity className="h-5 w-5 text-green-500" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Ort. Sağlık</p>
-                <p className="text-2xl font-bold">{integrations.length ? Math.round(integrations.reduce((acc, i) => acc + i.healthScore, 0) / integrations.length) : 0}%</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="space-y-3">
-        {loading ? (
-          <div className="flex justify-center py-12">
-            <RefreshCw className="h-8 w-8 animate-spin text-primary" />
-          </div>
-        ) : (
-          integrations.map((integration) => {
-            const unconfigured = integration.id.startsWith('unconfigured-');
-            const target = ({ 'VMware vCenter': '/integrations/vmware', 'FortiGate Firewall': '/integrations/firewall', FortiAnalyzer: '/integrations/fortianalyzer', 'SNMP Monitoring': '/integrations/nms/devices' } as Record<string, string>)[integration.name];
-            return (
-            <Card key={integration.id} className={cn(
-              "hover:border-primary/50 transition-colors",
-              integration.status === 'error' && "border-red-500/50",
-            )}>
-              <CardContent className="p-4">
-                <div className="flex flex-wrap items-center gap-4">
-                  <div className="shrink-0">
-                    {unconfigured ? <Settings2 className="h-5 w-5 text-muted-foreground" aria-hidden="true" /> : getStatusIcon(integration.status)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-2 mb-1">
-                      <h3 className="font-semibold">{integration.name}</h3>
-                      <Badge variant="outline">{getTypeLabel(integration.type)}</Badge>
-                      {unconfigured ? <SemanticBadge tone="neutral" icon={Settings2}>Yapılandırılmadı</SemanticBadge> : getStatusBadge(integration.status)}
-                    </div>
-                    <p className="text-sm text-muted-foreground">{integration.message}</p>
-                  </div>
-                  <div className="w-full shrink-0 sm:w-32">
-                    <div className="flex items-center justify-between text-xs mb-1">
-                      <span className="text-muted-foreground">Sağlık</span>
-                      <span className={cn("font-bold", getHealthColor(integration.healthScore))}>
-                        {integration.healthScore}%
-                      </span>
-                    </div>
-                    <div className="h-2 bg-muted rounded-full overflow-hidden">
-                      <div
-                        className={cn("h-full transition-all", getHealthBarColor(integration.healthScore))}
-                        style={{ width: `${integration.healthScore}%` }}
-                      />
-                    </div>
-                  </div>
-                  <div className="text-right text-xs text-muted-foreground shrink-0">
-                    <p>Son senkron:</p>
-                    <p>{integration.lastSync}</p>
-                  </div>
-                  {target && <Button variant="outline" size="sm" asChild><Link href={target}>Ayarları aç<ArrowUpRight size={14} aria-hidden="true" /></Link></Button>}
-                </div>
-              </CardContent>
-            </Card>
-          ); })
-        )}
-      </div>
+  useEffect(() => { void load(); return () => active.current?.abort(); }, [load]);
+  const all = snapshot?.data || [], search = userSearch(query.trim()), shown = all.filter(row => statusMatches(row, filter) && (kind === 'all' || row.kind === kind) && (!search || userSearch([row.name, integrationKinds[row.kind].label, row.host, row.scope, row.connection.errorCode, row.connection.errorCode ? statusErrorLabels[row.connection.errorCode]?.message : ''].filter(Boolean).join(' ')).includes(search))).sort((a, b) => statusPriority(a) - statusPriority(b));
+  const availableKinds = Object.keys(integrationKinds).filter(key => kind === key || all.some(row => row.kind === key)) as IntegrationKind[];
+  const metrics = [{ label: 'Etkin bağlantı / hizmet', value: all.filter(row => row.configured === true && row.enabled === true).length, icon: Radio, help: 'Yapılandırılmış ve etkin kayıtlar' }, { label: 'Son kontrolü başarılı', value: all.filter(row => row.configured === true && row.enabled === true && row.connection.state === 'success').length, icon: CheckCircle2, help: 'Kayıtlı bağlantı kontrolü sonucu' }, { label: 'Dikkat gereken', value: all.filter(statusNeedsAttention).length, icon: TriangleAlert, help: 'Kontrol, aktarım veya bilgi okuma sorunu' }, { label: 'Yapılandırılmamış', value: all.filter(row => row.configured === false).length, icon: Settings2, help: 'Henüz bağlantı / cihaz tanımlanmamış' }];
+  function clear() { setQuery(''); setFilter('all'); setKind('all'); }
+  return <div className={common.page}><div className={common.workspace}>
+    <header className={common.header}><PageHeading section="integrations" description="Bağlantı kontrollerini, son aktarım sonuçlarını ve müdahale gerektiren durumları tek ekrandan takip edin.">Entegrasyon Durumu</PageHeading><div className={common.headerActions}><Button variant="outline" disabled={loading} onClick={() => void load()}><RefreshCw size={16} aria-hidden="true" className={loading ? 'animate-spin motion-reduce:animate-none' : ''} />{loading ? 'Yükleniyor…' : 'Durumları yenile'}</Button></div></header>
+    <div className={common.serviceBar}><SemanticBadge tone={error || snapshot?.warnings.length ? 'warning' : 'info'} icon={Info}>{error ? 'Bilgiler güncel olmayabilir' : 'Kayıtlı kontrol sonuçları'}</SemanticBadge><span>{snapshot ? `Son okuma: ${userDate(snapshot.observedAt)} · TSİ` : loading ? 'Durum bilgileri okunuyor…' : 'Durum bilgisi alınamadı'}</span><span>Yenileme, bağlantı testi veya senkronizasyon başlatmaz.</span></div>
+    {error && <div className={common.error} role="alert"><TriangleAlert size={18} aria-hidden="true" /><div><p>{error}</p>{snapshot && <p>Son alınan sonuçlar korunuyor. Yeniden okuyana kadar güncel olmayabilir.</p>}</div></div>}
+    {snapshot?.warnings.map(warning => <div key={warning} className={`${common.info} ${styles.warning}`} role="alert"><TriangleAlert size={18} aria-hidden="true" /><p>{warning}</p></div>)}
+    <div className={common.stats}>{metrics.map(item => <div className={common.stat} key={item.label}><div><h2>{item.label}</h2><span className={common.icon}><item.icon size={20} aria-hidden="true" /></span></div><strong>{snapshot ? item.value.toLocaleString('tr-TR') : '—'}</strong><p>{item.help}</p></div>)}</div>
+    <div className={common.info}><Info size={18} aria-hidden="true" /><p>Son kontrol sonucu, kontrolün yapıldığı ana aittir. Kontrol kaydı olmayan bir bağlantı “bağlı değil” sayılmaz. Senkronizasyon sonucu ve NMS ölçümleri ayrıca gösterilir.</p></div>
+    <div className={`${common.filters} ${styles.filters}`} role="search" aria-label="Entegrasyon filtreleri"><div className={styles.filterSearch}><label htmlFor="integration-search">Entegrasyon ara</label><div><Search size={16} aria-hidden="true" /><Input id="integration-search" type="search" placeholder="Ad, sunucu, ADOM, VDOM veya hata ara…" value={query} onChange={event => setQuery(event.target.value)} /></div></div><div className={styles.filterField}><label htmlFor="integration-state"><Filter size={14} aria-hidden="true" />Durum</label><select id="integration-state" value={filter} onChange={event => setFilter(event.target.value as StatusFilter)}>{Object.entries(statusFilterLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></div><div className={styles.filterField}><label htmlFor="integration-kind"><PlugZap size={14} aria-hidden="true" />Entegrasyon türü</label><select id="integration-kind" value={kind} onChange={event => setKind(event.target.value)}><option value="all">Tüm türler</option>{availableKinds.map(key => <option key={key} value={key}>{integrationKinds[key].label}</option>)}</select></div><Button variant="outline" disabled={!query && filter === 'all' && kind === 'all'} onClick={clear}><X size={15} aria-hidden="true" />Filtreleri temizle</Button></div>
+    <section className={styles.collection} aria-labelledby="integration-list-title" aria-busy={loading}><header><h2 id="integration-list-title">Bağlantılar ve hizmetler</h2><p role="status" aria-live="polite">{snapshot ? `${shown.length.toLocaleString('tr-TR')} / ${all.length.toLocaleString('tr-TR')} kayıt gösteriliyor` : 'Henüz sonuç alınmadı'}</p></header>
+      {loading && !snapshot ? <div className={common.empty} role="status"><RefreshCw size={28} aria-hidden="true" className="animate-spin motion-reduce:animate-none" /><h2>Entegrasyon durumları yükleniyor</h2></div> : !snapshot ? <div className={common.empty}><CircleHelp size={28} aria-hidden="true" /><h2>Entegrasyon durumları gösterilemiyor</h2><p>Bilgileri yeniden almak için “Durumları yenile” düğmesini kullanın.</p></div> : !shown.length ? <div className={common.empty}><Search size={28} aria-hidden="true" /><h2>Filtrelere uygun entegrasyon bulunamadı</h2><p>Arama metnini veya filtreleri değiştirin.</p><Button variant="outline" onClick={clear}>Filtreleri temizle</Button></div> : shown.map(row => <IntegrationCard row={row} key={row.id} />)}
+    </section>
+  </div></div>;
+}
+function IntegrationCard({ row }: { row: IntegrationSnapshot }) {
+  const info = integrationKinds[row.kind], Icon = icons[row.kind], c = row.connection, s = row.sync, a = row.activity;
+  const failed = c.state === 'failed', issue = failed ? statusErrorLabels[c.errorCode || 'UNKNOWN'] || statusErrorLabels.UNKNOWN : null;
+  const isConfigured = row.configured === true, disabled = isConfigured && row.enabled === false;
+  return <article className={styles.card} aria-label={`${info.label}: ${row.name}`}>
+    <header><div className={styles.identity}><span className={common.icon}><Icon size={20} aria-hidden="true" /></span><div><h3>{row.name}</h3><p>{info.label}{row.host ? ` · ${row.host}` : ''}{row.scope ? ` · ${row.scope}` : ''}</p><div className={styles.badges}><SemanticBadge tone="neutral" icon={null}>{info.category}</SemanticBadge><SemanticBadge tone={row.configured === null ? 'warning' : !isConfigured || disabled ? 'neutral' : 'info'} icon={Settings2}>{row.configured === null ? 'Yapılandırma bilgisi alınamadı' : !isConfigured ? 'Yapılandırılmadı' : disabled ? 'Devre dışı' : 'Etkin'}</SemanticBadge>{row.identityConflict && <SemanticBadge tone="warning" icon={TriangleAlert}>Cihaz kimliği çakışıyor</SemanticBadge>}</div></div></div>{info.target && <Button asChild variant="outline" size="sm"><Link href={info.target}><Settings2 size={15} aria-hidden="true" />{row.kind === 'NMS' || row.kind === 'SNMP' ? 'İzlenen cihazları aç' : 'Entegrasyonu aç'}<ArrowUpRight size={14} aria-hidden="true" /></Link></Button>}</header>
+    <div className={styles.content}><dl className={styles.meta}>
+      <div><dt><Link2 size={15} aria-hidden="true" />Bağlantı durumu</dt><dd><SemanticBadge tone={disabled || !isConfigured ? 'neutral' : connectionTone(c.state)}>{connectionLabels[c.state]}</SemanticBadge><span className={styles.hint}>{a ? 'NMS hizmetine canlı bağlantı kontrolü yapılmadı. Cihaz ölçümleri aşağıda gösterilir.' : !isConfigured ? 'Önce entegrasyon ayarlarını tanımlayın.' : disabled ? 'Bu profil devre dışı. Varsa önceki kontrol sonucu korunur.' : c.state === 'unknown' ? 'Bu profil için saklanan bir bağlantı testi sonucu bulunmuyor.' : 'Bu sonuç son kayıtlı REST kontrolüne aittir; anlık bağlantı garantisi değildir.'}</span></dd></div>
+      <div><dt><Clock3 size={15} aria-hidden="true" />Son bağlantı kontrolü · TSİ</dt><dd>{userDate(c.checkedAt)}<span className={styles.hint}>{c.checkedAt ? 'Kontrolün kayıtlı zamanı' : 'Kontrol zamanı kayıtlı değil.'}</span></dd></div>
+      <div><dt><Database size={15} aria-hidden="true" />{a ? 'Son cihaz ölçümü · TSİ' : row.kind === 'FORTIGATE' ? 'Son profil aktarımı' : 'Son envanter aktarımı'}</dt><dd>{a ? <>{userDate(a.lastMetricAt)}<span className={styles.hint}>{a.readFailed ? 'Cihaz ve ölçüm bilgileri okunamadı.' : `${a.registered?.toLocaleString('tr-TR') ?? 'Bilgi yok'} kayıtlı cihaz · ${a.polling?.toLocaleString('tr-TR') ?? 'Bilgi yok'} cihazda izleme açık.`} Bir cihazın ölçümü tüm cihazların erişilebilir olduğunu doğrulamaz.</span></> : s ? <><SemanticBadge tone={s.status === 'success' ? 'success' : s.status === 'partial' ? 'warning' : s.status === 'failed' ? 'danger' : 'neutral'}>{s.status ? syncLabels[s.status] : 'Sonuç bilgisi yok'}</SemanticBadge><span className={styles.hint}>{userDate(s.completedAt)}{s.completedAt ? ' · TSİ' : ''}</span>{row.kind === 'FORTIGATE' && <span className={styles.hint}>Profilin ortak günlüğü; VDOM bazında ayrım tutulmaz.</span>}</> : <>{row.kind === 'FORTIANALYZER' ? 'Envanter aktarımı yapılmaz' : 'Aktarım kaydı yok'}<span className={styles.hint}>{row.kind === 'FORTIANALYZER' ? 'Alarm verilerinin güncelliği FortiAnalyzer ekranında gösterilir.' : 'Aktarım zamanı ve sonucu kayıtlı değil.'}</span></>}</dd></div>
+    </dl>
+    {issue && <div className={disabled ? common.info : common.error}><TriangleAlert size={18} aria-hidden="true" /><div><p><strong>{disabled ? 'Önceki kontrol: ' : ''}{issue.message}</strong></p><p>{issue.action}</p></div></div>}
+    {(s?.status === 'partial' || s?.status === 'failed') && <div className={`${common.info} ${styles.warning}`}><TriangleAlert size={18} aria-hidden="true" /><p>Son envanter aktarımı {s.status === 'partial' ? 'kısmen tamamlandı' : 'başarısız'}. {s.errors === null ? 'Ayrıntılı hata sayısı kayıtlı değil.' : `Kayıtlı hata sayısı: ${s.errors.toLocaleString('tr-TR')}.`} Entegrasyon ekranındaki senkronizasyon kapsamını ve kaynak erişimini kontrol edin.</p></div>}
+    {row.identityConflict && <div className={`${common.info} ${styles.warning}`}><Shield size={18} aria-hidden="true" /><p>FortiGate cihaz kimliği başka bir kayıtla çakışıyor. Güvenlik Duvarları ekranında seri numarası ve VDOM eşleşmesini inceleyin.</p></div>}
+    {row.configured === false && <p className={styles.hint}>{row.kind === 'NMS' ? 'İzlemeye alınmış cihaz bulunmuyor. Cihazı İzlemeye Al ekranından başlayabilirsiniz.' : 'Bu tür için kayıtlı bir entegrasyon profili yok.'}</p>}
     </div>
-  );
+    {(isConfigured || row.configured === null) && <details className={styles.disclosure}><summary><Info size={16} aria-hidden="true" />Kontrol ve hata ayrıntıları<ChevronDown size={16} aria-hidden="true" /></summary><div className={styles.details}><dl><div><dt>Kontrol kaynağı</dt><dd>{row.kind === 'FORTIGATE' && c.checkedAt ? 'Kayıtlı FortiGate REST kontrolü' : 'Saklanan bağlantı kontrolü yok'}</dd></div><div><dt>Kontrol yanıt süresi</dt><dd>{c.latencyMs === null ? 'Bilgi yok' : `${c.latencyMs.toLocaleString('tr-TR')} ms`}</dd></div><div><dt>Planlanan sonraki kontrol · TSİ</dt><dd>{userDate(c.nextCheckAt)}</dd></div><div><dt>Son kontrol hata kodu</dt><dd>{failed ? c.errorCode && c.errorCode !== 'UNKNOWN' ? c.errorCode : 'Tanımlanamayan hata' : c.state === 'success' ? 'Hata bildirilmedi' : 'Bilgi yok'}</dd></div><div><dt>Aktarım başlangıcı · TSİ</dt><dd>{userDate(s?.startedAt)}</dd></div><div><dt>Aktarım hata sayısı</dt><dd>{s?.errors === null || s?.errors === undefined ? 'Bilgi yok' : s.errors.toLocaleString('tr-TR')}</dd></div></dl><p className={styles.hint}>{s?.source === 'metadata' ? 'Aktarım bilgisi profilin son işlem kaydından alınmıştır; ayrıntılı günlük bulunmuyor. ' : ''}Bağlantı kontrolü, envanter aktarımı ve cihaz ölçümü farklı işlemlerdir. Bilgiler kayıtlardan okunur. Sonraki kontrol zamanı, kontrolün gerçekten çalıştığını doğrulamaz.</p>{!info.target && <p className={styles.hint}>Bu entegrasyon türü için uygulamada ayrı bir yönetim ekranı bulunmuyor.</p>}</div></details>}
+  </article>;
 }

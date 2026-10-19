@@ -1,7 +1,9 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- CommonJS regression runner with synthetic source/ORM only. */
 // Actual inventory services/API routes with synthetic source, ORM, clock and metadata faults.
 const assert = require('node:assert/strict');
 const { NextRequest, NextResponse } = require('next/server');
 const { moduleLoader } = require('./check-alarm-occurrences.cjs');
+const { createVMwarePageFixture } = require('./helpers/vmware-page-fixture.cjs');
 const quiet = new Proxy({}, { get: () => () => {} });
 const record = (kind, i = 1) => kind === 'hosts'
   ? { host: { value: `host-${i}` }, hostid: String(i), name: `fixture-host-${i}`, status: '0', inventory: {}, summary: {} }
@@ -22,7 +24,7 @@ function fixture(type = 'vmware', module = 'hosts', options = {}) {
     : { integrationId: 'fixture-config', url: 'https://zabbix.fixture.invalid', authToken: 'fixture-token', pollingInterval: 5,
       enabledModules: { hosts: true, interfaces: true, triggers: module === 'triggers', items: false } };
   const configRow = { id: 'fixture-config', type: type === 'vmware' ? 'VMWARE_VCENTER' : 'ZABBIX',
-    enabled: true, config, syncInterval: 10, name: 'Fixture' };
+    enabled: true, config, syncInterval: 10, name: 'Fixture', createdAt: new Date('2026-10-17T08:00:00Z'), updatedAt: new Date('2026-10-17T08:00:00Z') };
   const identity = data => data.vmwareMoref || data.zabbixHostId || data.vcenterId || data.name || data.id;
   const write = (table, operation, data) => {
     const id = identity(data);
@@ -46,7 +48,7 @@ function fixture(type = 'vmware', module = 'hosts', options = {}) {
     zabbixTrigger: { upsert: async ({ create }) => write('trigger', 'upsert', create) },
     organization: { findFirst: async () => ({ id: 'fixture-org' }) },
     integrationConfig: {
-      findFirst: async () => configRow, findMany: async () => [{ ...configRow, ...state.metadata, createdAt: new Date() }],
+      findFirst: async () => configRow, findMany: async () => [{ ...configRow, ...state.metadata, syncLogs: [...state.logs].reverse() }],
       update: async ({ data }) => { if (state.metadataFailure === 'config') throw new Error('Fixture metadata config failure');
         state.metadata = data; return { ...configRow, ...data }; },
     },
@@ -132,29 +134,29 @@ for (const type of ['vmware', 'zabbix']) {
     assert.deepEqual(f.state.logs.map(l => l.status), ['partial', 'success']); assert.equal(f.state.metadata.lastSyncStatus, 'success');
   });
 }
-for (const module of ['clusters', 'hosts', 'vms', 'datastores']) {
-  const table = module === 'clusters' ? 'cluster' : module === 'datastores' ? 'datastore' : 'device';
-  const id = module === 'clusters' ? 'cluster-1' : module === 'datastores' ? 'datastore-1' : module === 'vms' ? 'vm-1' : 'host-1';
-  for (const outcome of ['success', 'partial', 'failed']) test(`VMware ${module}: ${outcome} includes every acknowledged write in processed totals`, async () => {
-    const f = fixture('vmware', module);
+for (const inventoryModule of ['clusters', 'hosts', 'vms', 'datastores']) {
+  const table = inventoryModule === 'clusters' ? 'cluster' : inventoryModule === 'datastores' ? 'datastore' : 'device';
+  const id = inventoryModule === 'clusters' ? 'cluster-1' : inventoryModule === 'datastores' ? 'datastore-1' : inventoryModule === 'vms' ? 'vm-1' : 'host-1';
+  for (const outcome of ['success', 'partial', 'failed']) test(`VMware ${inventoryModule}: ${outcome} includes every acknowledged write in processed totals`, async () => {
+    const f = fixture('vmware', inventoryModule);
     if (outcome === 'partial') f.state.failWrites.add(`${table}:${id}`);
     if (outcome === 'failed') f.state.failWrites.add(`${table}:*`);
     const response = await f.post(); assert.equal(response.status, 200); const result = await response.json();
     checkResult(result, outcome, outcome === 'success' ? 2 : outcome === 'partial' ? 1 : 0, outcome === 'success' ? 0 : outcome === 'partial' ? 1 : 2);
     assert.equal(f.state.logs[0].itemsProcessed, f.state.writes.length);
-    if (module === 'datastores') assert.equal(result.itemsCreated + result.itemsUpdated, 0, 'Upsert classification must not be invented');
+    if (inventoryModule === 'datastores') assert.equal(result.itemsCreated + result.itemsUpdated, 0, 'Upsert classification must not be invented');
   });
 }
 test('VMware upstream failure after earlier progress is partial', async () => {
   const f = fixture('vmware', 'clusters'); f.config.enabledModules.hosts = true; f.state.failSource = 'hosts';
   const result = await f.newService().syncToInventory('fixture-org'); checkResult(result, 'partial', 2, 1);
 });
-for (const module of ['interfaces', 'triggers']) {
-  for (const outcome of ['success', 'partial', 'failed']) test(`Zabbix ${module}: ${outcome} includes auxiliary writes`, async () => {
-    const f = fixture('zabbix', module); f.state.existing = true;
+for (const inventoryModule of ['interfaces', 'triggers']) {
+  for (const outcome of ['success', 'partial', 'failed']) test(`Zabbix ${inventoryModule}: ${outcome} includes auxiliary writes`, async () => {
+    const f = fixture('zabbix', inventoryModule); f.state.existing = true;
     if (outcome !== 'failed') f.state.source.hosts = [record('hosts')];
-    if (outcome === 'partial' || outcome === 'failed') f.state.failWrites.add(`${module === 'interfaces' ? 'interface' : 'trigger'}:*`);
-    if (module === 'interfaces' && outcome === 'failed') {
+    if (outcome === 'partial' || outcome === 'failed') f.state.failWrites.add(`${inventoryModule === 'interfaces' ? 'interface' : 'trigger'}:*`);
+    if (inventoryModule === 'interfaces' && outcome === 'failed') {
       // Hosts must exist for their interfaces to be attempted; fail before any write.
       f.state.source.hosts = [record('hosts')]; f.state.failWrites.add('device:*');
     }
@@ -183,37 +185,68 @@ test('all three outcome labels are distinct and Turkish', () => {
   assert.equal(inventorySyncLabel('partial'), 'Senkronizasyon kısmen tamamlandı');
   assert.equal(inventorySyncLabel('failed'), 'Senkronizasyon başarısız');
 });
-function renderPage(result) {
-  const fs = require('node:fs'), vm = require('node:vm'), path = require('node:path'), ts = require('typescript');
-  const React = require('react'); let stateIndex = 0;
-  const react = { ...React, useEffect: () => {}, useState: initial => [++stateIndex === 3 ? result : typeof initial === 'function' ? initial() : initial, () => {}] };
-  const component = ({ children }) => React.createElement('div', null, children);
-  const jsx = fs.readFileSync(path.join(__dirname, '../app/integrations/vmware/page.tsx'), 'utf8');
-  const compiled = ts.transpileModule(jsx, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React, esModuleInterop: true } }).outputText;
-  const fixtureModules = fixture().load;
-  const module = { exports: {} }, outcomes = fixtureModules('lib/integrations/sync-outcome.ts');
-  const localRequire = name => {
-    if (name === 'react') return react;
-    if (name === '@/lib/integrations/sync-outcome') return outcomes;
-    if (name === '@/lib/i18n/tr') return fixtureModules('lib/i18n/tr.ts');
-    if (name === 'lucide-react') return new Proxy({}, { get: (_t, key) => props => React.createElement('svg', { ...props, 'data-icon': key }) });
-    if (name.startsWith('@/components/ui/')) return new Proxy({}, { get: (_t, key) => key === 'TabsContent'
-      ? ({ value, children }) => value === 'sync' ? component({ children }) : null : component });
-    throw new Error('Unapproved page fixture dependency: ' + name);
-  };
-  vm.runInNewContext(`(function(require,module,exports){${compiled}\n})`, { console: quiet })(localRequire, module, module.exports);
-  return require('react-dom/server').renderToStaticMarkup(React.createElement(module.exports.default));
+function pageFixture(f, { unconfigured = false } = {}) {
+  const api = f.load('app/api/integrations/vmware/route.ts');
+  return createVMwarePageFixture(async (url, options) => {
+    if (url === '/api/auth/me' && options.method === 'GET') return Response.json({ success: true, user: { id: 'fixture-admin', role: 'ADMIN', status: 'ACTIVE' } });
+    if (url === '/api/integrations/vmware?type=workspace' && options.method === 'GET') return unconfigured ? Response.json({ success: true, profiles: [] }) : api.GET(new NextRequest('http://fixture.invalid' + url));
+    assert.equal(url, '/api/integrations/vmware', 'Only the VMware endpoint can receive fixture writes');
+    assert.equal(options.method, 'POST');
+    const body = JSON.parse(options.body);
+    assert.deepEqual(body, { action: 'sync', configId: f.configRow.id }, 'UI must target the selected saved profile without credentials');
+    return api.POST(new NextRequest('http://fixture.invalid' + url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: options.body }));
+  });
 }
-for (const status of ['success', 'partial', 'failed']) test(`actual VMware page renders ${status} with the correct icon, totals and label`, async () => {
+function syncRegion(html) {
+  const region = html.match(/<section[^>]*aria-labelledby="vmware-sync-title"[\s\S]*?<\/section>/)?.[0];
+  assert.ok(region, 'Actual inventory sync section is rendered');
+  return region;
+}
+for (const status of ['success', 'partial', 'failed']) test(`actual VMware page renders ${status} after a scoped sync, with current badge and exact totals`, async () => {
   const f = fixture(); if (status === 'partial') f.state.failWrites.add('device:host-1'); if (status === 'failed') f.state.auth = false;
-  const result = await f.service.syncToInventory('fixture-org'), html = renderPage(result);
-  assert.ok(html.includes(f.load('lib/integrations/sync-outcome.ts').inventorySyncLabel(status)));
-  assert.match(html, new RegExp(`data-icon="${status === 'success' ? 'CheckCircle' : status === 'partial' ? 'AlertCircle' : 'XCircle'}"`));
-  assert.ok(html.includes(`${result.itemsProcessed} öğe işlendi · ${result.errorCount} hata`));
+  const page = pageFixture(f);
+  try {
+    page.render(); await page.flush();
+    assert.equal(f.state.sourceCalls.length, 0, 'Loading settings does not collect inventory');
+    const html = await page.click('Kayıtlı ayarlarla senkronize et'), region = syncRegion(html);
+    const labels = { success: 'Tamamlandı', partial: 'Kısmen tamamlandı', failed: 'Başarısız' };
+    const tones = { success: 'success', partial: 'warning', failed: 'danger' };
+    const glyphs = { success: 'circle-check', partial: 'triangle-alert', failed: 'circle-alert' };
+    const badges = [...region.matchAll(/<span class="fixture-badge ([^"]+)"[^>]*>([\s\S]*?)<\/span>/g)];
+    const badgeText = badge => badge[2].replace(/<[^>]*>/g, '');
+    const summary = badges.find(badge => badgeText(badge) === `Son kayıtlı deneme: ${labels[status]}`);
+    const journal = badges.find(badge => badgeText(badge) === labels[status]);
+    assert.ok(summary, 'Saved outcome badge is visible'); assert.ok(journal, 'Latest journal outcome badge is visible');
+    for (const badge of [summary, journal]) assert.equal(badge[1], `fixture-${tones[status]}`);
+    assert.match(summary[2], /lucide-file-clock/);
+    assert.match(journal[2], new RegExp(`lucide-${glyphs[status]}`));
+    const last = f.state.logs.at(-1);
+    assert.equal(last.status, status);
+    const manual = region.match(/<details[^>]*>[\s\S]*?Bu oturumdaki manuel işlem sonucu[\s\S]*?<\/details>/)?.[0];
+    assert.ok(manual, 'Current session result remains available alongside saved history');
+    for (const [label, value] of [['İşlenen kayıt', last.itemsProcessed], ['Eklenen kayıt', last.itemsCreated], ['Güncellenen kayıt', last.itemsUpdated], ['Hata', last.errorDetails.errorCount]]) {
+      const countMarkup = `<dt>${label}</dt><dd>${value}</dd>`;
+      assert.ok(region.includes(countMarkup), `Visible ${label} matches persisted history`);
+      assert.ok(manual.includes(countMarkup), `Manual ${label} matches the same real sync response`);
+    }
+    assert.ok(!html.includes('Senkronizasyon sürüyor…'), 'A completed response is not left running');
+    assert.ok(!html.includes('Son test başarılı'), 'Inventory sync is not a connection test');
+    assert.equal(page.requests.filter(call => call.method === 'POST').length, 1);
+    assert.equal(page.requests.filter(call => call.url.endsWith('?type=workspace')).length, 2, 'History is re-read after the write');
+  } finally { page.close(); }
 });
-test('initial VMware page cannot claim a sync or invent zero processed counts', () => {
-  const html = renderPage(null); assert.ok(html.includes('—'));
-  assert.ok(!html.includes('Senkronizasyon tamamlandı')); assert.ok(!html.includes('öğe işlendi'));
+test('initial VMware page cannot claim a sync or invent zero processed counts', async () => {
+  const f = fixture(), page = pageFixture(f, { unconfigured: true });
+  try {
+    const initial = page.render(); assert.ok(initial.includes('—'));
+    const html = await page.flush(), region = syncRegion(html);
+    assert.ok(region.includes('Senkronizasyon kaydı yok / sonuç bilgisi eksik'));
+    assert.ok(region.includes('Bu profil için kayıtlı son senkronizasyon zamanı yok.'));
+    assert.ok(!region.includes('<dt>İşlenen kayıt</dt>'), 'Missing history does not fabricate zero totals');
+    assert.ok(!region.includes('Son kayıtlı deneme: Tamamlandı'));
+    assert.equal(page.requests.filter(call => call.method !== 'GET').length, 0);
+    assert.equal(f.state.writes.length, 0); assert.equal(f.state.sourceCalls.length, 0);
+  } finally { page.close(); }
 });
 async function main() { let failed = 0; for (const [name, fn] of tests) { try { await fn(); console.log('PASS ' + name); }
   catch (error) { failed++; console.error('FAIL ' + name); console.error(error); } }

@@ -1,208 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authorizeApiRequest } from '@/lib/auth/api-permission';
 import { prisma } from '@/lib/prisma';
+import { buildStatusSnapshots, statusNeedsAttention, type IntegrationSnapshot } from '@/lib/integrations/status-workspace';
 
-interface IntegrationStatus {
-  id: string;
-  name: string;
-  type: 'monitoring' | 'backup' | 'security' | 'cloud' | 'cmdb';
-  status: 'connected' | 'disconnected' | 'error' | 'syncing';
-  lastSync: string;
-  message: string;
-  healthScore: number;
-}
-
+export const dynamic = 'force-dynamic';
+const reply = (body: unknown, status = 200) => NextResponse.json(body, { status, headers: { 'Cache-Control': 'private, no-store' } });
 export async function GET(request: NextRequest) {
   const access = await authorizeApiRequest(request, 'settings', 'read');
   if (!access.allowed) return access.response;
   try {
-    // Fetch all integration configs
-    const configs = await prisma.integrationConfig.findMany({
-      where: { enabled: true },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    const integrations: IntegrationStatus[] = configs.map((config) => {
-      const configData = config.config as { host?: string };
-      const lastSyncTime = config.lastSyncAt ? new Date(config.lastSyncAt) : null;
-      const now = new Date();
-      let lastSyncLabel = '-';
-
-      if (lastSyncTime) {
-        const diffMs = now.getTime() - lastSyncTime.getTime();
-        const diffMins = Math.floor(diffMs / 60000);
-        const diffHours = Math.floor(diffMs / 3600000);
-        const diffDays = Math.floor(diffMs / 86400000);
-
-        if (diffMins < 1) lastSyncLabel = 'şimdi';
-        else if (diffMins < 60) lastSyncLabel = `${diffMins} dakika`;
-        else if (diffHours < 24) lastSyncLabel = `${diffHours} saat`;
-        else lastSyncLabel = `${diffDays} gün`;
-      }
-
-      // Map integration type to status
-      let name = '';
-      let category = '';
-      let currentStatus: 'connected' | 'disconnected' | 'error' | 'syncing' = 'disconnected';
-      let healthScore = 0;
-      let message = '';
-
-      switch (config.type) {
-        case 'VMWARE_VCENTER':
-          name = 'VMware vCenter';
-          category = 'monitoring';
-          currentStatus = configData.host ? 'connected' : 'disconnected';
-          healthScore = configData.host ? 95 : 0;
-          message = configData.host ? 'VM envanteri senkronize ediliyor' : 'Yapılandırılmadı';
-          break;
-
-        case 'FORTIGATE':
-          name = 'FortiGate Firewall';
-          category = 'security';
-          currentStatus = configData.host ? 'connected' : 'disconnected';
-          healthScore = configData.host ? 100 : 0;
-          message = configData.host ? 'Policy listesi güncel' : 'Yapılandırılmadı';
-          break;
-
-        case 'ZABBIX':
-          name = 'Zabbix Server';
-          category = 'monitoring';
-          currentStatus = configData.host ? 'connected' : 'disconnected';
-          healthScore = configData.host ? 98 : 0;
-          message = configData.host ? 'Tüm hostlar izleniyor' : 'Yapılandırılmadı';
-          break;
-
-        case 'FORTIANALYZER':
-          name = 'FortiAnalyzer';
-          category = 'security';
-          currentStatus = configData.host ? 'connected' : 'disconnected';
-          healthScore = configData.host ? 92 : 0;
-          message = configData.host ? 'Log analizi aktif' : 'Yapılandırılmadı';
-          break;
-
-        case 'SNMP':
-          name = 'SNMP Monitoring';
-          category = 'monitoring';
-          currentStatus = configData.host ? 'connected' : 'disconnected';
-          healthScore = configData.host ? 90 : 0;
-          message = configData.host ? 'SNMP trap alındı' : 'Yapılandırılmadı';
-          break;
-
-        default:
-          name = config.name || config.type;
-          category = 'cmdb';
-          currentStatus = 'disconnected';
-          healthScore = 0;
-          message = 'Bilinmeyen entegrasyon';
-      }
-
-      // Check sync status
-      if (config.lastSyncStatus === 'success' && lastSyncTime) {
-        const diffMins = Math.floor((now.getTime() - lastSyncTime.getTime()) / 60000);
-        if (diffMins < 5) {
-          currentStatus = 'syncing';
-        }
-      } else if (config.lastSyncStatus === 'partial') {
-        currentStatus = 'error';
-        healthScore = Math.max(0, healthScore - 25);
-        message = 'Son senkronizasyon kısmen tamamlandı';
-      } else if (config.lastSyncStatus === 'failed') {
-        currentStatus = 'error';
-        healthScore = Math.max(0, healthScore - 50);
-        message = 'Son senkronizasyon başarısız';
-      }
-
-      return {
-        id: config.id,
-        name,
-        type: category as IntegrationStatus['type'],
-        status: currentStatus,
-        lastSync: lastSyncLabel,
-        message,
-        healthScore: Math.max(0, Math.min(100, healthScore)),
-      };
-    });
-
-    // Add unconfigured integrations
-    const configuredTypes = configs.map(c => c.type as string);
-    const allTypes: string[] = ['VMWARE_VCENTER', 'FORTIGATE', 'ZABBIX', 'FORTIANALYZER', 'SNMP'];
-    const unconfiguredTypes = allTypes.filter(t => !configuredTypes.includes(t));
-
-    const unconfiguredIntegrations: IntegrationStatus[] = unconfiguredTypes.map((type, idx) => {
-      let name = '';
-      let category = '';
-
-      switch (type) {
-        case 'VMWARE_VCENTER':
-          name = 'VMware vCenter';
-          category = 'monitoring';
-          break;
-        case 'FORTIGATE':
-          name = 'FortiGate Firewall';
-          category = 'security';
-          break;
-        case 'ZABBIX':
-          name = 'Zabbix Server';
-          category = 'monitoring';
-          break;
-        case 'FORTIANALYZER':
-          name = 'FortiAnalyzer';
-          category = 'security';
-          break;
-        case 'SNMP':
-          name = 'SNMP Monitoring';
-          category = 'monitoring';
-          break;
-        default:
-          name = type;
-          category = 'cmdb';
-      }
-
-      return {
-        id: `unconfigured-${idx}`,
-        name,
-        type: category as IntegrationStatus['type'],
-        status: 'disconnected' as const,
-        lastSync: '-',
-        message: 'Entegrasyon yapılandırılmadı',
-        healthScore: 0,
-      };
-    });
-
-    const allIntegrations = [...integrations, ...unconfiguredIntegrations];
-
-    // Calculate stats
-    const stats = {
-      total: allIntegrations.length,
-      connected: allIntegrations.filter(i => i.status === 'connected').length,
-      disconnected: allIntegrations.filter(i => i.status === 'disconnected').length,
-      errors: allIntegrations.filter(i => i.status === 'error').length,
-      syncing: allIntegrations.filter(i => i.status === 'syncing').length,
-      avgHealth: Math.round(allIntegrations.reduce((sum, i) => sum + i.healthScore, 0) / allIntegrations.length),
-    };
-
-    return NextResponse.json({
-      success: true,
-      data: allIntegrations,
-      stats,
-    });
-  } catch (error) {
-    console.error('Error fetching integration status:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: (error as Error).message,
-        data: [],
-        stats: {
-          total: 0,
-          connected: 0,
-          disconnected: 0,
-          errors: 0,
-          syncing: 0,
-          avgHealth: 0,
-        },
+    const records = await prisma.integrationConfig.findMany({
+      orderBy: [{ type: 'asc' }, { name: 'asc' }, { id: 'asc' }],
+      select: {
+        id: true, type: true, name: true, enabled: true, config: true, lastSyncAt: true, lastSyncStatus: true,
+        syncLogs: { orderBy: [{ startedAt: 'desc' }, { id: 'desc' }], take: 1, select: { status: true, startedAt: true, completedAt: true, errorDetails: true } },
+        firewallConnectors: { orderBy: [{ vdom: 'asc' }, { id: 'asc' }], select: { id: true, managementHost: true, vdom: true, capabilities: true, lastProbeAt: true, nextProbeAt: true, lastErrorCode: true, identityStatus: true } },
       },
-      { status: 500 }
-    );
+    });
+    const data = buildStatusSnapshots(records), warnings: string[] = [];
+    // NMS is configured per device, independently of IntegrationConfig SNMP profiles.
+    let activity: NonNullable<IntegrationSnapshot['activity']>;
+    try {
+      const [registered, polling, latest] = await Promise.all([
+        prisma.device.count({ where: { nmsDeviceId: { not: null } } }),
+        prisma.device.count({ where: { nmsDeviceId: { not: null }, pollingEnabled: true } }),
+        prisma.nmsHealthMetric.findFirst({ where: { device: { pollingEnabled: true } }, orderBy: [{ collectedAt: 'desc' }, { id: 'desc' }], select: { collectedAt: true } }),
+      ]);
+      activity = { registered, polling, lastMetricAt: latest?.collectedAt.toISOString() ?? null, readFailed: false };
+    } catch {
+      activity = { registered: null, polling: null, lastMetricAt: null, readFailed: true };
+      warnings.push('Cihaz izleme hizmetinin kayıt ve ölçüm bilgileri alınamadı. Diğer entegrasyonların bilgileri gösteriliyor.');
+    }
+    data.push({ id: 'system-nms', kind: 'NMS', name: 'Cihaz izleme hizmeti', configured: activity.readFailed ? null : Boolean(activity.registered), enabled: activity.readFailed ? null : Boolean(activity.polling), host: null, scope: 'NMS / SNMP', connection: { state: 'unknown', checkedAt: null, nextCheckAt: null, latencyMs: null, errorCode: null }, sync: null, activity, identityConflict: false });
+    // Keep the summary outcome for existing readers; connection and transfer evidence remain separate.
+    const output = data.map(row => ({ ...row, status: row.configured === false ? 'unconfigured' : row.enabled === false ? 'disabled' : statusNeedsAttention(row) ? 'error' : row.connection.state === 'success' ? 'connected' : 'unknown', message: row.sync?.status === 'partial' ? 'Son senkronizasyon kısmen tamamlandı.' : row.sync?.status === 'failed' ? 'Son senkronizasyon başarısız.' : row.connection.state === 'failed' ? 'Son bağlantı kontrolü başarısız.' : row.connection.state === 'success' ? 'Son kayıtlı bağlantı kontrolü başarılı.' : 'Kayıtlı bağlantı kontrolü bulunmuyor.' }));
+    return reply({ success: true, data: output, observedAt: new Date().toISOString(), warnings });
+  } catch {
+    return reply({ success: false, error: 'Entegrasyon durumları alınamadı. Daha sonra yeniden deneyin.' }, 503);
   }
 }
