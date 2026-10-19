@@ -1,5 +1,5 @@
 export type IncidentBulkLifecycleAction = 'RESOLVE' | 'CLOSE';
-export interface IncidentBulkLifecycleResult { success: boolean; error?: string }
+export interface IncidentBulkLifecycleResult { success: boolean; error?: string; authStatus?: 401 | 403 }
 export const INCIDENT_BULK_REASON_MAX_LENGTH = 4000;
 
 export function incidentBulkLifecycleReason(value: unknown): string {

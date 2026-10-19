@@ -794,6 +794,13 @@ export default function AlertsDashboardPage() {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids, action: 'ASSIGN', assigneeId }),
       });
+      if (response.status === 401 || response.status === 403) {
+        const error = response.status === 401
+          ? 'Oturumunuzun süresi doldu veya oturumunuz geçersiz. Tekrar giriş yapın. Olay seçiminiz ve seçtiğiniz sorumlu bu pencerede korunuyor.'
+          : 'Seçili olayların sorumlusunu değiştirme yetkiniz yok. Atamalar değiştirilmedi; olay seçiminiz ve seçtiğiniz sorumlu korundu.';
+        setMessage({ text: error, type: 'error' });
+        return { success: false, error, authStatus: response.status };
+      }
       const result = await response.json();
       if (!response.ok || !result.success) throw new Error(uiError(result.error || 'Toplu atama yapılamadı.'));
       const updated: NonNullable<AlarmEventData['incident']>[] = result.data || [];
@@ -828,6 +835,13 @@ export default function AlertsDashboardPage() {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids, action, bulk: true, reason }),
       });
+      if (response.status === 401 || response.status === 403) {
+        const error = response.status === 401
+          ? 'Oturumunuzun süresi doldu veya oturumunuz geçersiz. Tekrar giriş yapın. Seçiminiz ve açıklamanız bu pencerede korunuyor.'
+          : action === 'RESOLVE' ? 'Seçili olayları çözme yetkiniz yok. Olay durumları değiştirilmedi; seçiminiz ve açıklamanız korundu.' : 'Seçili olayları kapatma yetkiniz yok. Olay durumları değiştirilmedi; seçiminiz ve açıklamanız korundu.';
+        setMessage({ text: error, type: 'error' });
+        return { success: false, error, authStatus: response.status };
+      }
       const result = await response.json();
       if (!response.ok || !result.success) throw new Error(uiError(result.error || 'Toplu durum işlemi yapılamadı.'));
       if (result.updated === 0) throw new Error(uiError('İşlem uygulanabilecek kayıt kalmadı. Önceki isteğin sonucu sunucuda kaydedilmiş olabilir. Listeyi yenileyerek olay geçmişini kontrol edin; seçiminiz ve açıklamanız korundu.'));
@@ -851,28 +865,39 @@ export default function AlertsDashboardPage() {
   };
 
   const acknowledgeSelected = async () => {
-    if (acknowledgingIds.size > 0 || loading || refreshing) return;
+    if (bulkOperationInFlight.current || acknowledgingIds.size > 0 || loading || refreshing) return;
     const unackedIds = events
       .filter((event: AlarmEventData) => event.incident?.status === 'OPEN' && selectedIds.has(event.incident.id))
       .map((event: AlarmEventData) => event.incident!.id);
     if (unackedIds.length === 0) return;
-    setAcknowledgingIds(new Set(unackedIds));
+    bulkOperationInFlight.current = true;
+    setAcknowledgingIds(new Set(unackedIds)); setMessage(null);
+    let refreshAfter = false;
     try {
       const res = await fetch('/api/alarm-incidents', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids: unackedIds, action: 'ACKNOWLEDGE' }),
       });
+      if (res.status === 401 || res.status === 403) {
+        const text = res.status === 401
+          ? 'Oturumunuzun süresi doldu veya oturumunuz geçersiz. Tekrar giriş yapın. Olay seçiminiz bu sayfada korunuyor.'
+          : 'Seçili olayları onaylama yetkiniz yok. Onay durumları değiştirilmedi; olay seçiminiz korundu.';
+        setMessage({ text, type: 'error', authStatus: res.status, authAction: 'ACKNOWLEDGE' });
+        return;
+      }
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(uiError(data.error || 'Incident’lar onaylanamadı.'));
+      refreshAfter = true;
       setSelection({ key: viewKey, ids: new Set() });
       setMessage({ text: `${data.updated ?? unackedIds.length} olay onaylandı.`, type: 'success' });
     } catch (err) {
-      setMessage({ text: err instanceof Error ? err.message : 'Onaylama sırasında bağlantı hatası oluştu.', type: 'error' });
+      const detail = err instanceof Error ? uiError(err.message) : 'Onaylama sonucunu doğrulayamadık.';
+      setMessage({ text: `${detail} Olay seçiminiz korundu; tekrar deneyebilirsiniz.`, type: 'error' });
     } finally {
-      // The API may have applied part of a batch before returning an error.
-      await fetchEvents(true);
-      setAcknowledgingIds(new Set());
+      // Keep failed or unconfirmed batches retryable; ACKNOWLEDGE replays are idempotent.
+      try { if (refreshAfter) await fetchEvents(true); }
+      finally { setAcknowledgingIds(new Set()); bulkOperationInFlight.current = false; }
     }
   };
 
@@ -1131,6 +1156,7 @@ export default function AlertsDashboardPage() {
           <div role={message.type === 'error' ? 'alert' : 'status'} className={cn('mb-4 flex items-center gap-2 border-l-2 px-4 py-3 text-sm', message.type === 'success' ? 'border-emerald-500 bg-emerald-500/5 text-emerald-700 dark:text-emerald-200' : 'border-rose-500 bg-rose-500/5 text-rose-700 dark:text-rose-200')}>
             {message.type === 'success' ? <CheckCircle className="h-4 w-4 shrink-0" aria-hidden="true" /> : <AlertOctagon className="h-4 w-4 shrink-0" aria-hidden="true" />}
             <span className="flex-1">{uiError(message.text)}</span>
+            {message.authStatus === 401 && message.authAction === 'ACKNOWLEDGE' && !message.incidentId && acknowledgingIds.size === 0 && <Link href="/login?next=%2Fdashboard%2Falerts" target="_blank" rel="noopener noreferrer" className="font-medium underline">Yeni sekmede giriş yap</Link>}
             <Button variant="ghost" size="sm" className="h-8" onClick={() => setMessage(null)}><ActionIcon action="cancel" />Kapat</Button>
           </div>
         )}

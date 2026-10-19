@@ -210,7 +210,14 @@ async function main() {
             assert.equal(denied.status, auth ? 403 : 401); assert(!Object.hasOwn(await denied.json(), 'data'));
           }
         }
-        assert.deepEqual(await tx.alarmIncident.findMany({ where: { id: { in: lifecycleIds } }, orderBy: { id: 'asc' }, include: { transitions: { orderBy: { id: 'asc' } }, occurrences: { orderBy: { id: 'asc' } }, notificationAttempts: { orderBy: { id: 'asc' } } } }), lifecycleAccessBefore, 'Denied detail resolve/close attempts cannot change status, timestamps, fingerprint, occurrence acknowledgements or history');
+        for (const action of ['RESOLVE', 'CLOSE']) for (const reason of ['Shared denied reason', '']) {
+          for (let attempt = 0; attempt < 2; attempt++) {
+            const denied = await patch({ ids: lifecycleIds, action, bulk: true, reason, actorName: 'Untrusted' });
+            assert.equal(denied.status, auth ? 403 : 401, 'Bulk authorization precedes eligibility and explanation validation');
+            assert(!Object.hasOwn(await denied.json(), 'data'));
+          }
+        }
+        assert.deepEqual(await tx.alarmIncident.findMany({ where: { id: { in: lifecycleIds } }, orderBy: { id: 'asc' }, include: { transitions: { orderBy: { id: 'asc' } }, occurrences: { orderBy: { id: 'asc' } }, notificationAttempts: { orderBy: { id: 'asc' } } } }), lifecycleAccessBefore, 'Denied detail and bulk resolve/close attempts cannot change status, timestamps, fingerprint, occurrence acknowledgements or history');
         assert.deepEqual(await tx.auditLog.findMany({ where: { entityId: { in: lifecycleIds } }, orderBy: { id: 'asc' } }), lifecycleAccessAudits, 'Denied detail lifecycle actions cannot add audits');
       }
       auth = { role: 'EDITOR', actor: { type: 'USER', id: users.editor.id, name: users.editor.name } };
@@ -524,6 +531,24 @@ async function main() {
       const unreadBody = new NextRequest('http://localhost/api/alarms/whitelist', { method: 'POST', body: '{invalid-json' });
       assert.equal((await whitelist.POST(unreadBody)).status, 403, 'Write authorization precedes body parsing and mutation');
       assert.deepEqual(await tx.alarmWhitelist.findMany({ orderBy: { id: 'asc' } }), beforeStaleReplay, 'Unauthorized creation, update and reactivation must not change any exclusion');
+      const readBulkAssignmentEvidence = async () => ({
+        incidents: await tx.alarmIncident.findMany({ where: { id: { in: lifecycleIds } }, orderBy: { id: 'asc' }, include: {
+          transitions: { orderBy: { id: 'asc' } }, occurrences: { orderBy: { id: 'asc' } }, notificationAttempts: { orderBy: { id: 'asc' } },
+        } }),
+        audits: await tx.auditLog.findMany({ where: { entityId: { in: lifecycleIds } }, orderBy: { id: 'asc' } }),
+      });
+      const beforeDeniedBulkAssignment = await readBulkAssignmentEvidence();
+      for (const identity of [null, { role: 'VIEWER', actor: { type: 'USER', id: users.viewer.id, name: users.viewer.name } }]) {
+        auth = identity;
+        for (let attempt = 0; attempt < 2; attempt++) {
+          const denied = await patch({ ids: lifecycleIds, action: 'ASSIGN', assigneeId: users.admin.id, actorName: 'Untrusted' });
+          assert.equal(denied.status, identity ? 403 : 401); assert(!Object.hasOwn(await denied.json(), 'data'));
+          assert.deepEqual(await readBulkAssignmentEvidence(), beforeDeniedBulkAssignment, 'Denied bulk assignment preserves owners, history, audit, lifecycle and evidence');
+        }
+        const malformed = new NextRequest('http://localhost/api/alarm-incidents', { method: 'PATCH', body: '{invalid-json' });
+        assert.equal((await route.PATCH(malformed)).status, identity ? 403 : 401);
+        assert.deepEqual(await readBulkAssignmentEvidence(), beforeDeniedBulkAssignment);
+      }
       auth = { role: 'VIEWER', actor: { type: 'USER', id: users.viewer.id, name: users.viewer.name } };
       assert.equal((await patch({ ids: batchIds, action: 'ASSIGN', assigneeId: users.admin.id })).status, 403);
       for (const action of ['RESOLVE', 'CLOSE']) assert.equal((await patch({ ids: lifecycleIds, action, bulk: true })).status, 403);
@@ -538,6 +563,49 @@ async function main() {
       assert.equal((await patch({ action: 'ADD_NOTE', reason: 'Denied' })).status, 401);
       assert.equal((await getPeople()).status, 401);
       await assert.rejects(() => service.transitionAlarmIncident({ incidentId: incident.id, action: 'ADD_NOTE', reason: ' ', actor: { type: 'SYSTEM', name: 'fixture' } }), /boş/);
+      const bulkApprovalIds = [];
+      for (let index = 0; index < 2; index++) {
+        const created = await tx.alarmIncident.create({ data: { alarmId: rule.id, fingerprint: `${prefix}-bulk-approval-${index}`, source: 'fixture', severity: 'ALARM_HIGH', category: 'CONFIG_ACCESS', title: prefix, message: 'Bulk approval access fixture',
+          occurrences: { create: { alarmId: rule.id, severity: 'ALARM_HIGH', title: prefix, message: 'Bulk approval occurrence' } },
+        } }); bulkApprovalIds.push(created.id);
+      }
+      const terminalApprovalIds = (await tx.alarmIncident.findMany({ where: { id: { in: lifecycleIds }, status: { not: 'OPEN' } }, select: { id: true } })).map(row => row.id);
+      assert(terminalApprovalIds.length > 0);
+      const approvalBatch = [...bulkApprovalIds, ...terminalApprovalIds];
+      const readBulkApproval = async () => {
+        const records = await tx.alarmIncident.findMany({ where: { alarmId: rule.id }, orderBy: { id: 'asc' }, include: { transitions: { orderBy: { id: 'asc' } }, occurrences: { orderBy: { id: 'asc' } }, notificationAttempts: { orderBy: { id: 'asc' } } } });
+        return { records, audits: await tx.auditLog.findMany({ where: { entityId: { in: records.map(row => row.id) } }, orderBy: { id: 'asc' } }) };
+      };
+      const beforeBulkApproval = await readBulkApproval();
+      for (const role of [null, 'VIEWER']) {
+        auth = role ? { role, actor: { type: 'USER', id: users.viewer.id, name: users.viewer.name } } : null;
+        for (let attempt = 0; attempt < 2; attempt++) {
+          const denied = await patch({ ids: approvalBatch, action: 'ACKNOWLEDGE', actorName: 'Untrusted' });
+          assert.equal(denied.status, role ? 403 : 401); assert(!Object.hasOwn(await denied.json(), 'data'));
+          assert.deepEqual(await readBulkApproval(), beforeBulkApproval, 'Denied bulk approval preserves every status, actor/time, occurrence approval, history, audit and notification');
+        }
+        const malformed = new NextRequest('http://localhost/api/alarm-incidents', { method: 'PATCH', body: '{invalid-json' });
+        assert.equal((await route.PATCH(malformed)).status, role ? 403 : 401);
+        assert.deepEqual(await readBulkApproval(), beforeBulkApproval);
+      }
+      auth = { role: 'EDITOR', actor: { type: 'USER', id: users.editor.id, name: users.editor.name } };
+      assert.equal((await patch({ ids: approvalBatch, action: 'ACKNOWLEDGE' })).status, 200);
+      const afterBulkApproval = await readBulkApproval();
+      assert.equal(afterBulkApproval.audits.length, beforeBulkApproval.audits.length + 2);
+      for (const previous of beforeBulkApproval.records) {
+        const actual = afterBulkApproval.records.find(row => row.id === previous.id);
+        if (!bulkApprovalIds.includes(previous.id)) { assert.deepEqual(actual, previous); continue; }
+        assert.equal(actual.status, 'ACKNOWLEDGED'); assert(actual.acknowledgedAt); assert.equal(actual.acknowledgedById, users.editor.id);
+        assert.equal(actual.transitions.length, 1); assert.equal(actual.transitions[0].type, 'ACKNOWLEDGED'); assert.equal(actual.transitions[0].actorId, users.editor.id);
+        assert(actual.occurrences.every(row => row.acknowledged && row.acknowledgedAt && row.acknowledgedBy === users.editor.name));
+        assert.deepEqual({ ...actual, status: previous.status, updatedAt: previous.updatedAt, acknowledgedAt: previous.acknowledgedAt, acknowledgedById: previous.acknowledgedById, acknowledgedBy: previous.acknowledgedBy, transitions: previous.transitions,
+          occurrences: actual.occurrences.map(row => { const original = previous.occurrences.find(item => item.id === row.id); return { ...row, acknowledged: original.acknowledged, acknowledgedAt: original.acknowledgedAt, acknowledgedBy: original.acknowledgedBy }; }),
+        }, previous);
+      }
+      for (let attempt = 0; attempt < 2; attempt++) {
+        assert.equal((await patch({ ids: [...approvalBatch].reverse(), action: 'ACKNOWLEDGE' })).status, 200);
+        assert.deepEqual(await readBulkApproval(), afterBulkApproval, 'Same bulk approval retry cannot duplicate history/audit or replace original actor/time');
+      }
       throw rollback;
     }, { timeout: 30000 });
   } catch (error) { if (error !== rollback) throw error; }

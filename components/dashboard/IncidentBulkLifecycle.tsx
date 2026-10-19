@@ -1,6 +1,7 @@
 'use client';
 
 import { uiError } from '@/lib/i18n/tr';
+import Link from 'next/link';
 
 import { useEffect, useId, useRef, useState } from 'react';
 import { CircleCheck, RefreshCw, XCircle } from 'lucide-react';
@@ -27,6 +28,7 @@ export function IncidentBulkLifecycle({ action, incidents, excludedIncidents, se
   const [saving, setSaving] = useState(false);
   const [confirmation, setConfirmation] = useState<BulkConfirmation | null>(null);
   const [undoSelection, setUndoSelection] = useState<PrunedSelection | null>(null);
+  const [authStatus, setAuthStatus] = useState<401 | 403 | null>(null);
   const inFlight = useRef(false);
   const previousSelectionKey = useRef(selectionKey);
   const pendingPrune = useRef<{ selectionKey: string; incidentKey: string; confirmation?: BulkConfirmation } | null>(null);
@@ -100,15 +102,15 @@ export function IncidentBulkLifecycle({ action, incidents, excludedIncidents, se
   };
   const submit = async () => {
     if (disabled || count === 0 || !reason.trim() || reason.trim().length > INCIDENT_BULK_REASON_MAX_LENGTH || inFlight.current || !confirmation || !confirmationCurrent || confirmation.count !== count || confirmation.total !== total || confirmation.reason !== reason.trim()) return;
-    inFlight.current = true; setSaving(true); setError(null);
+    inFlight.current = true; setSaving(true); setError(null); setAuthStatus(null);
     try {
       const result = await onApply(action, confirmation.reason);
       if (result.success) { setReason(''); setConfirmation(null); setUndoSelection(null); setOpen(false); }
-      else setError(uiError(result.error || 'İşlem tamamlanamadı. Açıklamanız ve seçiminiz korundu.'));
+      else { setError(uiError(result.error || 'İşlem tamamlanamadı. Açıklamanız ve seçiminiz korundu.')); setAuthStatus(result.authStatus ?? null); }
     } catch { setError(uiError('Bağlantı hatası oluştu. Açıklamanız ve seçiminiz korundu.')); }
     finally { inFlight.current = false; setSaving(false); }
   };
-  return <Popover open={open} onOpenChange={value => { if (!saving) { setOpen(value); setConfirmation(null); if (value) setError(null); } }}>
+  return <Popover open={open} onOpenChange={value => { if (!saving) { setOpen(value); setConfirmation(null); if (value) { setError(null); setAuthStatus(null); } } }}>
     <PopoverTrigger asChild><Button variant="outline" className={styles.bulkLifecycleButton} disabled={disabled || saving || count === 0} title={resolving ? "Seçili açık ve onaylanmış olayları çözer" : "Yalnızca seçili çözümlenmiş olayları kapatır"}><Icon size={16} aria-hidden="true" />{resolving ? `Çözüldü işaretle (${count})` : `Kapat (${count})`}</Button></PopoverTrigger>
     <PopoverContent aria-label={title} align="end" collisionPadding={12} className="pointer-events-auto z-[1050] max-h-[var(--radix-popover-content-available-height)] w-[min(380px,calc(100vw-32px))] overflow-y-auto p-5" onEscapeKeyDown={event => { if (saving) event.preventDefault(); }} onInteractOutside={event => { if (saving) event.preventDefault(); }}>
       <h2 ref={headingRef} tabIndex={-1} className="text-sm font-semibold">{title}</h2>
@@ -146,6 +148,7 @@ export function IncidentBulkLifecycle({ action, incidents, excludedIncidents, se
         <p className={styles.bulkReviewReason}>{confirmation.reason}</p>
         <p className={styles.peopleHint}>Onayınızla birlikte açıklama, işlem uygulanan her olayın geçmişine adınız ve zaman bilgisiyle kaydedilir.</p>
         {error && <p role="alert" className={styles.bulkAssignError}>{uiError(error)}</p>}
+        {authStatus === 401 && !saving && <Button asChild variant="outline" size="sm"><Link href="/login?next=%2Fdashboard%2Falerts" target="_blank" rel="noopener noreferrer">Yeni sekmede giriş yap</Link></Button>}
         <div className={styles.bulkAssignFooter}>
           <Button type="button" variant="outline" size="sm" disabled={saving} onClick={() => { setConfirmation(null); setError(null); }}>Geri dön</Button>
           <Button type="button" size="sm" disabled={disabled || saving || count === 0 || !confirmationCurrent || confirmation.count !== count || confirmation.total !== total || confirmation.reason !== reason.trim()} onClick={() => void submit()}>{saving ? <RefreshCw size={14} className="animate-spin motion-reduce:animate-none" /> : <Icon size={14} />}{saving ? 'Kaydediliyor…' : resolving ? 'Onayla ve çöz' : 'Onayla ve kapat'}</Button>
@@ -157,6 +160,7 @@ export function IncidentBulkLifecycle({ action, incidents, excludedIncidents, se
         <textarea ref={reasonRef} id={fieldId} className={styles.bulkReason} rows={4} required aria-required="true" maxLength={INCIDENT_BULK_REASON_MAX_LENGTH} value={reason} onChange={event => { setReason(event.target.value); setError(null); }} disabled={disabled || saving} placeholder={resolving ? 'Uygulanan çözümü ve kontrol sonucunu yazın…' : 'Kapatma nedenini ve son kontrolü yazın…'} aria-describedby={`${fieldId}-help`} />
         <p id={`${fieldId}-help`} className={styles.peopleHint}>Açıklama, işlem uygulanan her olayın geçmişine adınız ve zaman bilgisiyle kaydedilir.<span className={styles.reasonCount}>{reason.length} / {INCIDENT_BULK_REASON_MAX_LENGTH}</span></p>
         {error && <p role="alert" className={styles.bulkAssignError}>{uiError(error)}</p>}
+        {authStatus === 401 && !saving && <Button asChild variant="outline" size="sm"><Link href="/login?next=%2Fdashboard%2Falerts" target="_blank" rel="noopener noreferrer">Yeni sekmede giriş yap</Link></Button>}
         <div className={styles.bulkAssignFooter}><Button type="button" variant="outline" size="sm" disabled={saving} onClick={() => setOpen(false)}>İptal</Button><Button type="submit" size="sm" disabled={disabled || saving || count === 0 || !reason.trim() || reason.trim().length > INCIDENT_BULK_REASON_MAX_LENGTH}>Onay ekranına geç</Button></div>
       </form>
       </>}

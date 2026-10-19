@@ -190,11 +190,42 @@ async function main() {
   assert(zeroCountHtml.includes('disabled=""')); assert(zeroCountHtml.includes('Kapat (0)'));
   const closedHtml = renderToStaticMarkup(React.createElement(IncidentList, { ...listProps, selectedIds: new Set(['batch-1', 'batch-2']) }));
   assert(closedHtml.includes('2 seçili')); assert(closedHtml.includes('Sorumlu ata')); assert(!closedHtml.includes('Seçilenleri onayla'));
+  const acknowledgeBulkCode = ts.transpileModule(`exports.run = ${declaration('acknowledgeSelected').initializer.getText(ast)};`, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
+  async function runBulkAcknowledgement(response, options = {}) {
+    let selection = new Set(['batch-0', 'batch-1', 'batch-2', 'off-page']), notice, request, calls = 0, refreshes = 0;
+    const context = { ...i18n, exports: {}, bulkOperationInFlight: { current: Boolean(options.busy) }, acknowledgingIds: new Set(options.acknowledging ? ['busy'] : []), loading: Boolean(options.loading), refreshing: Boolean(options.refreshing), events: batchEvents,
+      selectedIds: options.terminalOnly ? new Set(['batch-1', 'batch-2']) : selection, viewKey: 'fixture-view',
+      fetch: async (_url, init) => { calls++; request = JSON.parse(init.body); if (response instanceof Error) throw response; return { ok: response.ok, status: response.status, json: async () => { if (response.nonJson) throw new Error('No JSON body'); return response.body; } }; },
+      setAcknowledgingIds: value => { context.acknowledgingIds = value; }, setMessage: value => { notice = value; }, setSelection: value => { selection = value.ids; },
+      fetchEvents: async () => { refreshes++; if (options.refreshThrows) throw new Error('Refresh failed'); }, Set, Error };
+    vm.createContext(context); vm.runInContext(acknowledgeBulkCode, context);
+    if (options.concurrent) await Promise.all([context.exports.run(), context.exports.run()]);
+    else { try { await context.exports.run(); } catch (cause) { if (!options.refreshThrows) throw cause; } }
+    return { selection, notice, request, calls, refreshes, busy: context.acknowledgingIds, inFlight: context.bulkOperationInFlight.current };
+  }
+  for (const status of [401, 403]) {
+    const denied = await runBulkAcknowledgement({ ok: false, status, nonJson: true });
+    assert.equal(denied.notice.authStatus, status); assert.equal(denied.notice.authAction, 'ACKNOWLEDGE');
+    assert.match(denied.notice.text, status === 401 ? /Oturumunuzun/ : /onaylama yetkiniz yok/);
+    assert.deepEqual([...denied.selection], ['batch-0', 'batch-1', 'batch-2', 'off-page']);
+    assert.deepEqual([...denied.request.ids], ['batch-0']); assert.equal(denied.request.action, 'ACKNOWLEDGE');
+    assert.equal(denied.calls, 1); assert.equal(denied.refreshes, 0); assert.equal(denied.busy.size, 0); assert.equal(denied.inFlight, false);
+  }
+  const bulkAcknowledged = await runBulkAcknowledgement({ ok: true, body: { success: true, updated: 1 } }, { concurrent: true });
+  assert.equal(bulkAcknowledged.selection.size, 0); assert.equal(bulkAcknowledged.calls, 1); assert.equal(bulkAcknowledged.refreshes, 1); assert.equal(bulkAcknowledged.inFlight, false);
+  for (const options of [{ busy: true }, { acknowledging: true }, { loading: true }, { refreshing: true }, { terminalOnly: true }]) assert.equal((await runBulkAcknowledgement({ ok: true }, options)).calls, 0);
+  for (const response of [new Error('Offline'), { ok: false, status: 500, body: { success: false, error: 'Temporary failure' } }, { ok: false, status: 500, nonJson: true }, { ok: true, status: 200, nonJson: true }]) {
+    const failed = await runBulkAcknowledgement(response);
+    assert.deepEqual([...failed.selection], ['batch-0', 'batch-1', 'batch-2', 'off-page']); assert.equal(failed.refreshes, 0); assert.equal(failed.inFlight, false); assert.equal(failed.busy.size, 0);
+    assert.equal(failed.calls, 1); assert.match(failed.notice.text, /Olay seçiminiz korundu; tekrar deneyebilirsiniz/);
+  }
+  const refreshFailure = await runBulkAcknowledgement({ ok: true, body: { success: true } }, { refreshThrows: true });
+  assert.equal(refreshFailure.busy.size, 0); assert.equal(refreshFailure.inFlight, false);
   const bulkCode = ts.transpileModule(`exports.run = ${declaration('assignSelected').initializer.getText(ast)};`, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
   async function runBulk(response, initialBusy = false) {
     let selected = structuredClone(batchEvents[0]), selection = new Set(['batch-0', 'batch-1', 'batch-2', 'off-page']), notice, request, calls = 0, refreshes = 0, revision = 0;
     const context = { ...i18n, exports: {}, bulkOperationInFlight: { current: initialBusy }, acknowledgingIds: new Set(), loading: false, refreshing: false, events: batchEvents, selectedIds: selection, viewKey: 'fixture-view',
-      fetch: async (_url, init) => { calls++; request = JSON.parse(init.body); if (response instanceof Error) throw response; return { ok: response.ok, json: async () => response.body }; },
+      fetch: async (_url, init) => { calls++; request = JSON.parse(init.body); if (response instanceof Error) throw response; return { ok: response.ok, status: response.status, json: async () => { if (response.nonJson) throw new Error('No JSON body'); return response.body; } }; },
       setAcknowledgingIds: value => { context.acknowledgingIds = value; }, setMessage: value => { notice = value; },
       setSelectedEvent: setter => { selected = setter(selected); }, setIncidentDetailRevision: setter => { revision = setter(revision); },
       setSelection: value => { selection = value.ids; }, fetchEvents: async () => { refreshes++; }, Set, Error };
@@ -208,6 +239,16 @@ async function main() {
   assert.equal(bulkSuccess.selection.size, 0); assert.equal(bulkSuccess.refreshes, 1); assert.equal(bulkSuccess.selected.incident.assignedTo, 'Operatör'); assert.equal(bulkSuccess.revision, 1);
   const bulkFailure = await runBulk({ ok: false, body: { success: false, error: 'Atama yetkisi yok' } });
   assert.equal(bulkFailure.result.success, false); assert.equal(bulkFailure.selection.size, 4); assert.equal(bulkFailure.refreshes, 0); assert.equal(bulkFailure.busy.size, 0); assert.equal(bulkFailure.inFlight, false);
+  for (const authStatus of [401, 403]) {
+    const denied = await runBulk({ ok: false, status: authStatus, nonJson: true });
+    assert.equal(denied.result.success, false); assert.equal(denied.result.authStatus, authStatus);
+    assert.match(denied.result.error, authStatus === 401 ? /Oturumunuzun/ : /sorumlusunu değiştirme yetkiniz yok/);
+    assert.deepEqual([...denied.selection], ['batch-0', 'batch-1', 'batch-2', 'off-page']);
+    assert.equal(denied.request.assigneeId, 'operator'); assert.equal(denied.calls, 1);
+    assert.equal(denied.refreshes, 0); assert.equal(denied.revision, 0);
+    assert.equal(denied.busy.size, 0); assert.equal(denied.inFlight, false);
+    assert.deepEqual(denied.selected, batchEvents[0]);
+  }
   assert.equal((await runBulk(new Error('Offline'))).selection.size, 4);
   assert.equal((await runBulk({ ok: true }, true)).calls, 0, 'Duplicate bulk submissions must not issue requests');
   const { isIncidentBulkLifecycleEligible } = load('lib/alarms/incident-bulk-lifecycle.ts');
@@ -218,7 +259,7 @@ async function main() {
   async function runLifecycle(action, response, initialBusy = false, eligible = true, reason = 'Ortak işlem açıklaması') {
     let selected = structuredClone(action === 'CLOSE' ? batchEvents[2] : batchEvents[0]), selection = new Set(eligible ? ['batch-0', 'batch-1', 'batch-2', 'off-page'] : ['batch-0']), notice, request, calls = 0, refreshes = 0, revision = 0;
     const context = { ...i18n, exports: {}, bulkOperationInFlight: { current: initialBusy }, acknowledgingIds: new Set(), loading: false, refreshing: false, events: batchEvents, selectedIds: selection, viewKey: 'fixture-view', isIncidentBulkLifecycleEligible,
-      fetch: async (_url, init) => { calls++; request = JSON.parse(init.body); if (response instanceof Error) throw response; return { ok: response.ok, json: async () => response.body }; },
+      fetch: async (_url, init) => { calls++; request = JSON.parse(init.body); if (response instanceof Error) throw response; return { ok: response.ok, status: response.status, json: async () => { if (response.nonJson) throw new Error('No JSON body'); return response.body; } }; },
       setAcknowledgingIds: value => { context.acknowledgingIds = value; }, setMessage: value => { notice = value; }, setSelectedEvent: setter => { selected = setter(selected); },
       setIncidentDetailRevision: setter => { revision = setter(revision); }, setSelection: value => { selection = value.ids; }, fetchEvents: async () => { refreshes++; }, Set, Error };
     vm.createContext(context); vm.runInContext(lifecycleCode, context); const result = await context.exports.run(action, reason);
@@ -229,6 +270,15 @@ async function main() {
     assert.equal(result.request.action, action); assert.equal(result.request.bulk, true); assert.equal(result.request.reason, 'Ortak işlem açıklaması'); assert.equal(result.result.success, true); assert.deepEqual([...result.request.ids], ['batch-0', 'batch-1', 'batch-2']);
     assert.equal(result.calls, 1); assert.equal(result.selection.size, 0); assert.equal(result.refreshes, 1); assert.equal(result.selected.incident.status, status);
     assert.equal(result.revision, 1); assert(result.notice.text.includes('2 uygun olmayan kayıt değiştirilmedi')); assert.equal(result.busy.size, 0);
+    for (const authStatus of [401, 403]) {
+      const denied = await runLifecycle(action, { ok: false, status: authStatus, nonJson: true });
+      assert.equal(denied.result.success, false); assert.equal(denied.result.authStatus, authStatus);
+      assert.match(denied.result.error, authStatus === 401 ? /Oturumunuzun/ : action === 'RESOLVE' ? /çözme yetkiniz yok/ : /kapatma yetkiniz yok/);
+      assert.equal(denied.selection.size, 4); assert.equal(denied.refreshes, 0); assert.equal(denied.revision, 0);
+      assert.equal(denied.selected.incident.status, action === 'CLOSE' ? 'RESOLVED' : 'OPEN');
+      assert.equal(denied.request.reason, 'Ortak işlem açıklaması'); assert.equal(denied.calls, 1);
+      assert.equal(denied.inFlight, false); assert.equal(denied.busy.size, 0);
+    }
     const failed = await runLifecycle(action, { ok: false, body: { success: false, error: 'Durum işlemi reddedildi' } });
     assert.equal(failed.selection.size, 4); assert.equal(failed.notice.type, 'error'); assert.equal(failed.refreshes, 0); assert.equal(failed.inFlight, false);
   }
@@ -278,13 +328,13 @@ async function main() {
   const selectionEffect = reasonComponent.body.statements.find(node => ts.isExpressionStatement(node) && ts.isCallExpression(node.expression) && node.expression.expression.getText(reasonAst) === 'useEffect').expression.arguments[0];
   const reasonCode = ts.transpileModule(`exports.review = ${reasonReview.initializer.getText(reasonAst)}; exports.run = ${reasonSubmit.initializer.getText(reasonAst)}; exports.prune = ${reasonPrune.initializer.getText(reasonAst)}; exports.undo = ${reasonUndo.initializer.getText(reasonAst)}; exports.selectionEffect = ${selectionEffect.getText(reasonAst)};`, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
   async function runReasonForm(action, result, initialReason = '  Kontrol tamamlandı.\nOrtak açıklama.  ', duplicate = false, options = {}) {
-    let reason = initialReason, open = true, error, saving = false, calls = 0, submitted, prunes = 0, restores = 0, restoredIds;
+    let reason = initialReason, open = true, error, saving = false, calls = 0, submitted, prunes = 0, restores = 0, restoredIds, authStatus = null;
     const incidents = [{ id: 'preview-1', title: 'Bellek yüksek', status: action === 'RESOLVE' ? 'OPEN' : 'RESOLVED' }, { id: 'preview-2', title: 'Bağlantı hatası', status: action === 'RESOLVE' ? 'ACKNOWLEDGED' : 'RESOLVED' }];
     const excludedIncidents = [{ id: 'excluded', title: 'Kapatılmış olay', status: 'CLOSED' }];
     const context = { ...i18n, exports: {}, action, reason, confirmation: null, incidents, excludedIncidents, incidentKey: keyFor(incidents, excludedIncidents, action), get confirmationCurrent() { return this.confirmation?.incidentKey === this.incidentKey; }, disabled: false, saving, count: 2, total: 3, INCIDENT_BULK_REASON_MAX_LENGTH: 4000, inFlight: { current: duplicate },
       selectionKey: JSON.stringify([...incidents, ...excludedIncidents].map(row => row.id).sort()), previousSelectionKey: { current: JSON.stringify([...incidents, ...excludedIncidents].map(row => row.id).sort()) }, pendingPrune: { current: null },
       undoSelection: null, get canUndoSelection() { return this.undoSelection?.prunedSelectionKey === this.selectionKey && this.undoSelection?.prunedIncidentKey === this.incidentKey; },
-      setReason: value => { reason = value; }, setOpen: value => { open = value; }, setError: value => { error = value; }, setSaving: value => { saving = value; },
+      setReason: value => { reason = value; }, setOpen: value => { open = value; }, setError: value => { error = value; }, setSaving: value => { saving = value; }, setAuthStatus: value => { authStatus = value; },
       setConfirmation: value => { context.confirmation = typeof value === 'function' ? value(context.confirmation) : value; },
       setUndoSelection: value => { context.undoSelection = value; },
       onKeepEligible: () => { prunes++; context.selectionKey = JSON.stringify(incidents.map(row => row.id).sort()); context.excludedIncidents = []; context.total = incidents.length; context.incidentKey = keyFor(incidents, [], action); },
@@ -312,7 +362,7 @@ async function main() {
     }
     if (options.selectionEffect) context.exports.selectionEffect();
     if (!options.pruneOnly) await context.exports.run();
-    return { reason, open, error, saving, calls, submitted, preview, confirmation: context.confirmation, prunes, restores, restoredIds, undoSelection: context.undoSelection, pendingSelection: context.pendingPrune.current, selectionKey: context.selectionKey, inFlight: context.inFlight.current };
+    return { reason, open, error, saving, calls, submitted, authStatus, preview, confirmation: context.confirmation, prunes, restores, restoredIds, undoSelection: context.undoSelection, pendingSelection: context.pendingPrune.current, selectionKey: context.selectionKey, inFlight: context.inFlight.current };
   }
   for (const action of ['RESOLVE', 'CLOSE']) {
     const success = await runReasonForm(action, { success: true });
@@ -321,6 +371,11 @@ async function main() {
     assert.deepEqual([...success.preview.incidents].map(row => row.id), ['preview-1', 'preview-2']);
     assert.equal(success.preview.incidents[0].status, action === 'RESOLVE' ? 'OPEN' : 'RESOLVED');
     assert.equal(success.preview.excludedIncidents.length, 1); assert.equal(success.preview.excludedIncidents[0].title, 'Kapatılmış olay');
+    for (const authStatus of [401, 403]) {
+      const denied = await runReasonForm(action, { success: false, error: 'Yetki reddedildi', authStatus });
+      assert.equal(denied.authStatus, authStatus); assert.equal(denied.reason, '  Kontrol tamamlandı.\nOrtak açıklama.  ');
+      assert.equal(denied.open, true); assert.equal(denied.confirmation.reason, denied.preview.reason); assert.equal(denied.inFlight, false);
+    }
     const failure = await runReasonForm(action, { success: false, error: 'Kayıt başarısız' });
     assert.equal(failure.reason, '  Kontrol tamamlandı.\nOrtak açıklama.  '); assert.equal(failure.open, true); assert.equal(failure.error, 'Kayıt başarısız'); assert.equal(failure.inFlight, false);
     assert.equal(failure.confirmation.reason, failure.preview.reason, 'Failure retains the reviewed explanation for retry');
@@ -370,7 +425,7 @@ async function main() {
   assert.equal((await runReasonForm('CLOSE', { success: true }, 'x'.repeat(4001))).calls, 0);
   assert.equal((await runReasonForm('RESOLVE', { success: true }, 'Açıklama', true)).calls, 0);
   // Render the real confirmation branch with isolated hook state, without opening a portal or sending a request.
-  function renderReasonReview(action, excludedStatuses = action === 'RESOLVE' ? ['RESOLVED', 'CLOSED'] : ['OPEN', 'ACKNOWLEDGED', 'CLOSED'], pruned = false) {
+  function renderReasonReview(action, excludedStatuses = action === 'RESOLVE' ? ['RESOLVED', 'CLOSED'] : ['OPEN', 'ACKNOWLEDGED', 'CLOSED'], pruned = false, options = {}) {
     const incidents = [{ id: 'preview-1', title: 'Bellek yüksek', status: action === 'RESOLVE' ? 'OPEN' : 'RESOLVED' }, { id: 'preview-2', title: 'Bağlantı <script>kesildi</script>', status: action === 'RESOLVE' ? 'ACKNOWLEDGED' : 'RESOLVED' }];
     const originalExcluded = excludedStatuses.map(status => ({ id: `excluded-${status}`, title: `Hariç ${status} <b>olay</b>`, status }));
     const excludedIncidents = pruned ? [] : originalExcluded;
@@ -379,7 +434,7 @@ async function main() {
     const selectionKey = JSON.stringify([...incidents, ...excludedIncidents].map(row => row.id).sort());
     let undoSelection = pruned ? { selectionKey: JSON.stringify([...incidents, ...originalExcluded].map(row => row.id).sort()), confirmation: { ...confirmation, total: incidents.length + originalExcluded.length, excludedIncidents: originalExcluded, incidentKey: keyFor(incidents, originalExcluded, action) }, prunedSelectionKey: selectionKey, prunedIncidentKey: confirmation.incidentKey } : null;
     const draft = `  ${confirmation.reason}  `;
-    const values = [true, draft, null, false, confirmation, undoSelection];
+    const values = [true, draft, null, false, options.review === false ? null : confirmation, undoSelection, options.authStatus ?? null];
     let keptEligible = false, restoredIds;
     const module = { exports: {} };
     const code = ts.transpileModule(reasonSource, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true } }).outputText;
@@ -395,6 +450,7 @@ async function main() {
     const { PopoverContent } = load('components/ui/popover.tsx');
     const content = elements(tree).find(node => node.type === PopoverContent);
     const html = renderToStaticMarkup(React.createElement(React.Fragment, null, content.props.children));
+    if (options.review === false) return html;
     const pruneButton = elements(content).find(node => node.props?.children === 'İşlem dışında kalanları seçimden çıkar');
     if (excludedIncidents.length) { assert(pruneButton); assert.equal(pruneButton.props.disabled, false); pruneButton.props.onClick(); assert.equal(keptEligible, true); }
     else { assert.equal(pruneButton, undefined); assert.equal(keptEligible, false); }
@@ -411,6 +467,11 @@ async function main() {
     return html;
   }
   for (const action of ['RESOLVE', 'CLOSE']) {
+    for (const authStatus of [401, 403]) for (const review of [true, false]) {
+      const html = renderReasonReview(action, [], false, { authStatus, review });
+      assert.equal(html.split('Yeni sekmede giriş yap').length - 1, authStatus === 401 ? 1 : 0);
+      if (authStatus === 401) { assert(html.includes('href="/login?next=%2Fdashboard%2Falerts"')); assert(html.includes('target="_blank"')); }
+    }
     const reviewHtml = renderReasonReview(action);
     const excludedStatuses = action === 'RESOLVE' ? ['RESOLVED', 'CLOSED'] : ['OPEN', 'ACKNOWLEDGED', 'CLOSED'];
     assert(reviewHtml.includes(`Seçili olay</dt><dd>${2 + excludedStatuses.length}</dd>`));
@@ -442,15 +503,21 @@ async function main() {
   const submitDeclaration = bulkComponent.body.statements.filter(ts.isVariableStatement).flatMap(node => [...node.declarationList.declarations]).find(node => node.name.getText(bulkAst) === 'submit');
   const submitCode = ts.transpileModule(`exports.run = ${submitDeclaration.initializer.getText(bulkAst)};`, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
   async function runAssignmentForm(result, duplicate = false) {
-    let open = true, error, saving = false, calls = 0;
+    let open = true, error, saving = false, calls = 0, authStatus = null;
     const context = { ...i18n, exports: {}, assigneeId: 'operator', disabled: false, loading: false, canManage: true, inFlight: { current: duplicate },
-      setSaving: value => { saving = value; }, setError: value => { error = value; }, setOpen: value => { open = value; },
+      setSaving: value => { saving = value; }, setError: value => { error = value; }, setOpen: value => { open = value; }, setAuthStatus: value => { authStatus = value; },
       onAssign: async assigneeId => { calls++; assert.equal(assigneeId, 'operator'); if (result instanceof Error) throw result; return result; } };
     vm.createContext(context); vm.runInContext(submitCode, context); await context.exports.run();
-    return { open, error, saving, calls, assigneeId: context.assigneeId, inFlight: context.inFlight.current };
+    return { open, error, saving, calls, authStatus, assigneeId: context.assigneeId, inFlight: context.inFlight.current };
   }
   const formFailure = await runAssignmentForm({ success: false, error: 'Kullanıcı artık aktif değil' });
   assert.equal(formFailure.open, true); assert.equal(formFailure.assigneeId, 'operator'); assert.equal(formFailure.error, 'Kullanıcı artık aktif değil'); assert.equal(formFailure.saving, false);
+  for (const authStatus of [401, 403]) {
+    const denied = await runAssignmentForm({ success: false, error: 'Yetki reddedildi', authStatus });
+    assert.equal(denied.authStatus, authStatus); assert.equal(denied.open, true);
+    assert.equal(denied.assigneeId, 'operator'); assert.equal(denied.error, 'Yetki reddedildi');
+    assert.equal(denied.saving, false); assert.equal(denied.inFlight, false); assert.equal(denied.calls, 1);
+  }
   assert.equal((await runAssignmentForm({ success: true })).open, false);
   assert.equal((await runAssignmentForm(new Error('Offline'))).open, true);
   assert.equal((await runAssignmentForm({ success: true }, true)).calls, 0);
