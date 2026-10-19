@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+- **SSL-VPN session workspace** — Add explicit FortiGate/VDOM selection, distinct source and tunnel/destination addresses, full session durations, two-factor evidence, all-child byte totals and session details. Preserve multiple sessions per user, exact counters and unknown/zero distinctions; add Turkish filters, responsive records, scoped safe CSV export and optional renewal that pauses during inspection. Cover the real model, shared reader, target factory, authorized read route and browser states while preserving legacy alarm consumers.
+
 - **IPsec tunnel workspace** — Add explicit FortiGate/VDOM selection, all-child connected/partial/disconnected/unknown states, separate configured local and observed remote endpoints, directional byte counters and connection details. Keep local-configuration failures independent of monitoring, preserve exact counters and unknown values, project only allowlisted source fields and add scoped read/API and responsive browser regressions.
 
 - **Security policy workspace** — Add explicit FortiGate/VDOM selection, distinct rule state and action, source-to-destination blocks, complete definition details, Turkish filters and responsive records. Preserve returned source order, unknown/empty/zero distinctions and exact counters; use an authorized read-only source endpoint with observed-host guards and safe stale/error states. Cover the real model, source reader, target factory and route with isolated regressions.

@@ -1,388 +1,85 @@
 'use client';
-
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import Link from 'next/link';
+import { Activity, ArrowDownLeft, ArrowUpRight, ChevronLeft, ChevronRight, Clock3, Download, Eye, Globe, Info, KeyRound, ListFilter, Network, RefreshCw, Search, Server, Settings2, ShieldCheck, ShieldQuestion, TriangleAlert, UsersRound } from 'lucide-react';
+import { apiGet } from '@/lib/api';
 import { PageHeading } from '@/components/ui/page-heading';
-import React, { useState, useEffect, useMemo } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { SemanticBadge } from '@/components/ui/semantic-badge';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import {
-  ChevronLeft,
-  ChevronRight,
-  RefreshCw,
-  Search,
-  Users,
-  Download,
-  Clock,
-  Activity,
-  Globe,
-  Shield,
-} from 'lucide-react';
-
-interface SSLVPNUser {
-  user_name: string;
-  remote_host: string;
-  last_login_timestamp: number;
-  two_factor_auth: boolean;
-  interface: string;
-  duration: number;
-  aip: string;
-  in_bytes: number;
-  out_bytes: number;
-}
-
-interface VPNSummary {
-  total_users: number;
-  active_sessions: number;
-  total_in_bytes: number;
-  total_out_bytes: number;
-}
-
-const ITEMS_PER_PAGE = 15;
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import type { FirewallListItem } from '@/components/firewall/types';
+import { parseOverviewTargets } from '@/lib/firewall/overview';
+import { parseSslVpnSnapshot, sslVpnAddresses, sslVpnBytes, sslVpnCsv, sslVpnDuration, sslVpnFactorLabel, sslVpnSummary, type SslVpnSnapshot, type SslVpnSession } from '@/lib/security/ssl-vpn';
+import { ipsecCountLabel } from '@/lib/security/ipsec';
+import { userDate, userSearch } from '@/lib/users/workspace';
+import common from '@/components/users/users-workspace.module.css';
+import styles from './page.module.css';
 
 export default function SSLVPNPage() {
-  const [sslUsers, setSslUsers] = useState<SSLVPNUser[]>([]);
-  const [summary, setSummary] = useState<VPNSummary | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [page, setPage] = useState(1);
-  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
-
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const [usersRes, summaryRes] = await Promise.all([
-        fetch('/api/integrations/fortigate?vpn=ssl'),
-        fetch('/api/integrations/fortigate?vpn=ssl-summary'),
-      ]);
-
-      const usersData = await usersRes.json();
-      const summaryData = await summaryRes.json();
-
-      if (usersData.success) {
-        setSslUsers(usersData.data || []);
-      }
-
-      if (summaryData.success) {
-        setSummary(summaryData.data || null);
-      }
-
-      setLastUpdate(new Date());
-    } catch (error) {
-      console.error('Failed to fetch SSL-VPN data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, 30000); // Refresh every 30s
-    return () => clearInterval(interval);
+  const [targets, setTargets] = useState<FirewallListItem[] | null>(null), [choice, setChoice] = useState(''), [loading, setLoading] = useState(true), [error, setError] = useState(''), [revision, setRevision] = useState(0);
+  const active = useRef<AbortController | null>(null), sequence = useRef(0);
+  const load = useCallback(async () => {
+    const seq = ++sequence.current; active.current?.abort(); const controller = new AbortController(); active.current = controller; setLoading(true); setError('');
+    try { const json: unknown = await apiGet('/api/firewalls', undefined, { signal: controller.signal, timeout: 60000 }); const rows = parseOverviewTargets(json); if (controller.signal.aborted || seq !== sequence.current) return; setTargets(rows); setRevision(v => v + 1); }
+    catch { if (!controller.signal.aborted && seq === sequence.current) setError('Güvenlik duvarı listesi alınamadı. Yetkinizi ve bağlantıyı kontrol edip yeniden deneyin.'); }
+    finally { if (!controller.signal.aborted && seq === sequence.current) setLoading(false); }
   }, []);
-
-  const filteredUsers = useMemo(() => {
-    if (!search) return sslUsers;
-    const term = search.toLowerCase();
-    return sslUsers.filter(
-      (u: SSLVPNUser) =>
-        u.user_name.toLowerCase().includes(term) ||
-        u.remote_host.toLowerCase().includes(term) ||
-        u.aip.includes(term) ||
-        u.interface.toLowerCase().includes(term)
-    );
-  }, [sslUsers, search]);
-
-  const totalPages = Math.ceil(filteredUsers.length / ITEMS_PER_PAGE);
-  const paginatedUsers = useMemo(() => {
-    const start = (page - 1) * ITEMS_PER_PAGE;
-    return filteredUsers.slice(start, start + ITEMS_PER_PAGE);
-  }, [filteredUsers, page]);
-
-  const getPageNumbers = (currentPage: number, total: number) => {
-    const pages: (number | 'ellipsis')[] = [];
-    const maxVisible = 7;
-    if (total <= maxVisible) {
-      for (let i = 1; i <= total; i++) pages.push(i);
-    } else {
-      pages.push(1);
-      if (currentPage > 3) pages.push('ellipsis');
-      const start = Math.max(2, currentPage - 2);
-      const end = Math.min(total - 1, currentPage + 2);
-      for (let i = start; i <= end; i++) pages.push(i);
-      if (currentPage < total - 2) pages.push('ellipsis');
-      pages.push(total);
-    }
-    return pages;
-  };
-
-  const formatDuration = (seconds: number): string => {
-    const hours = Math.floor(seconds / 3600);
-    const mins = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
-    if (hours > 0) return `${hours}s ${mins}d ${secs}sn`;
-    if (mins > 0) return `${mins}d ${secs}sn`;
-    return `${secs}sn`;
-  };
-
-  const formatBytes = (bytes: number): string => {
-    if (bytes > 1073741824) return `${(bytes / 1073741824).toFixed(2)} GB`;
-    if (bytes > 1048576) return `${(bytes / 1048576).toFixed(2)} MB`;
-    if (bytes > 1024) return `${(bytes / 1024).toFixed(2)} KB`;
-    return `${bytes} B`;
-  };
-
-  const formatTime = (timestamp: number): string => {
-    return new Date(timestamp * 1000).toLocaleString('tr-TR');
-  };
-
-  const exportToCSV = () => {
-    const headers = ['Kullanıcı', 'Uzak Host', 'Kaynak IP', 'Interface', 'Giriş Zamanı', 'Süre', '2FA', 'İn Bytes', 'Out Bytes'];
-    const rows = filteredUsers.map((u: SSLVPNUser) => [
-      u.user_name,
-      u.remote_host,
-      u.aip,
-      u.interface,
-      formatTime(u.last_login_timestamp),
-      formatDuration(u.duration),
-      u.two_factor_auth ? 'Evet' : 'Hayır',
-      u.in_bytes.toString(),
-      u.out_bytes.toString(),
-    ]);
-
-    const csv = [headers.join(','), ...rows.map((r: string[]) => r.join(', '))].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `sslvpn-users-${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-4">
-        <div>
-          <PageHeading section="vpn" description={<>
-            Aktif FortiGate SSL-VPN bağlantıları
-            {lastUpdate && (
-              <span className="ml-2 text-xs">
-                (Son güncelleme: {lastUpdate.toLocaleTimeString('tr-TR')})
-              </span>
-            )}
-          </>}>SSL-VPN Kullanıcıları</PageHeading>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={fetchData} disabled={loading} aria-label="Yenile">
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          </Button>
-          <Button variant="outline" onClick={exportToCSV} disabled={filteredUsers.length === 0}>
-            <Download className="h-4 w-4 mr-2" />
-            CSV İndir
-          </Button>
-        </div>
-      </div>
-
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-blue-500/20">
-                <Users className="h-5 w-5 text-blue-500" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Toplam Kullanıcı</p>
-                <p className="text-2xl font-bold">{summary?.total_users || sslUsers.length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-green-500/20">
-                <Activity className="h-5 w-5 text-green-500" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Aktif Oturum</p>
-                <p className="text-2xl font-bold">{summary?.active_sessions || sslUsers.length}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-purple-500/20">
-                <Globe className="h-5 w-5 text-purple-500" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Toplam İngress</p>
-                <p className="text-2xl font-bold">{formatBytes(summary?.total_in_bytes || sslUsers.reduce((s, u) => s + u.in_bytes, 0))}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-orange-500/20">
-                <Shield className="h-5 w-5 text-orange-500" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Toplam Giden Trafik</p>
-                <p className="text-2xl font-bold">{formatBytes(summary?.total_out_bytes || sslUsers.reduce((s, u) => s + u.out_bytes, 0))}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Search */}
-      <div className="flex items-center gap-4">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Kullanıcı adı, IP veya interface ara..."
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
-            className="pl-9"
-          />
-        </div>
-        <Badge variant="secondary">
-          {filteredUsers.length} kullanıcı bulundu
-        </Badge>
-      </div>
-
-      {/* Users Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Aktif VPN Kullanıcıları</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="flex justify-center py-12">
-              <RefreshCw className="h-8 w-8 animate-spin text-primary" />
-            </div>
-          ) : (
-            <>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Kullanıcı</TableHead>
-                    <TableHead>Uzak Host</TableHead>
-                    <TableHead>Kaynak IP</TableHead>
-                    <TableHead>Arayüz</TableHead>
-                    <TableHead>Giriş Zamanı</TableHead>
-                    <TableHead>Süre</TableHead>
-                    <TableHead>2FA</TableHead>
-                    <TableHead>İngress</TableHead>
-                    <TableHead>Giden Trafik</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {paginatedUsers.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
-                        Aktif SSL-VPN kullanıcısı bulunamadı
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    paginatedUsers.map((user) => (
-                      <TableRow key={`${user.user_name}-${user.remote_host}-${user.last_login_timestamp}`}>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Users className="h-4 w-4 text-muted-foreground" />
-                            <span className="font-medium">{user.user_name}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="font-mono text-xs">{user.remote_host}</TableCell>
-                        <TableCell className="font-mono text-xs">{user.aip}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{user.interface}</Badge>
-                        </TableCell>
-                        <TableCell className="text-xs">{formatTime(user.last_login_timestamp)}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1">
-                            <Clock className="h-3 w-3 text-muted-foreground" />
-                            <span>{formatDuration(user.duration)}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={user.two_factor_auth ? 'default' : 'secondary'}>
-                            {user.two_factor_auth ? 'Aktif' : 'Yok'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-xs">{formatBytes(user.in_bytes)}</TableCell>
-                        <TableCell className="text-xs">{formatBytes(user.out_bytes)}</TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between mt-4">
-                  <p className="text-sm text-muted-foreground">
-                    Sayfa {page} / {totalPages}
-                  </p>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => setPage((p) => Math.max(1, p - 1))}
-                      disabled={page === 1}
-                     aria-label="Önceki sayfa">
-                      <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    {getPageNumbers(page, totalPages).map((p, idx) => (
-                      <React.Fragment key={idx}>
-                        {p === 'ellipsis' ? (
-                          <span className="px-2 text-muted-foreground">...</span>
-                        ) : (
-                          <Button
-                            variant={page === p ? 'default' : 'outline'}
-                            size="sm"
-                            onClick={() => setPage(p)}
-                            className="w-9"
-                          >
-                            {p}
-                          </Button>
-                        )}
-                      </React.Fragment>
-                    ))}
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                      disabled={page === totalPages}
-                     aria-label="Sonraki sayfa">
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </CardContent>
-      </Card>
-    </div>
-  );
+  useEffect(() => { void load(); return () => active.current?.abort(); }, [load]);
+  const target = targets?.find(row => JSON.stringify([row.configId, row.vdom]) === choice) || (!choice && targets?.length === 1 ? targets[0] : null);
+  return <div className={common.page}><div className={common.workspace}>
+    <header className={common.header}><PageHeading section="vpn" description="Bağlı kullanıcıları, kaynak adreslerini, oturum sürelerini ve veri sayaçlarını cihaz bazında inceleyin.">SSL-VPN Oturumları</PageHeading><div className={common.headerActions}><Button asChild variant="outline"><Link href="/integrations/firewall"><Settings2 size={16} aria-hidden="true" />Bağlantıları yönet</Link></Button><Button variant="outline" disabled={loading} onClick={() => void load()}><RefreshCw size={16} aria-hidden="true" className={loading ? 'animate-spin motion-reduce:animate-none' : ''} />{loading ? 'Okunuyor…' : 'Verileri yenile'}</Button></div></header>
+    <div className={common.serviceBar}><SemanticBadge tone="info" icon={Server}>Cihaz ve VDOM kapsamı</SemanticBadge><span>Kaynak: FortiGate REST · SSL-VPN izleme listesi · Salt okunur</span></div>
+    {error && <Notice error>{error}{targets && ' Önceki cihaz listesi korunuyor; güncel olmayabilir.'}</Notice>}
+    {loading && !targets ? <Empty icon={RefreshCw} title="Cihaz listesi yükleniyor" /> : targets && !targets.length ? <Empty icon={Server} title="Henüz güvenlik duvarı eklenmemiş"><p>SSL-VPN oturumlarını görmek için bir FortiGate bağlantısı ekleyin.</p><Button asChild><Link href="/integrations/firewall"><Settings2 size={16} aria-hidden="true" />Bağlantı ekle</Link></Button></Empty> : targets && <>
+      <section className={styles.target}><label htmlFor="sslvpn-target"><Server size={16} aria-hidden="true" />Güvenlik duvarı ve sanal alan (VDOM)</label><select id="sslvpn-target" value={target ? JSON.stringify([target.configId, target.vdom]) : ''} disabled={loading} onChange={e => setChoice(e.target.value)}><option value="">Cihaz ve VDOM seçin</option>{targets.map(row => <option key={JSON.stringify([row.configId, row.vdom])} value={JSON.stringify([row.configId, row.vdom])}>{row.device?.name || row.name} · {row.host} · VDOM: {row.vdom}{row.enabled ? '' : ' · Devre dışı'}</option>)}</select><p>Oturumlar yalnızca seçili bağlantı ve VDOM kapsamında okunur.</p></section>
+      {target ? <SslVpnDevice key={`${target.configId}:${target.vdom}:${target.host}:${target.enabled}`} target={target} revision={revision} parentStale={!!error} /> : <Notice>Oturumları görmek için bir cihaz ve VDOM seçin.</Notice>}
+    </>}
+  </div></div>;
 }
+function SslVpnDevice({ target, revision, parentStale }: { target: FirewallListItem; revision: number; parentStale: boolean }) {
+  const [data, setData] = useState<SslVpnSnapshot | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState(''), [search, setSearch] = useState(''), [factor, setFactor] = useState(''), [duration, setDuration] = useState(''), [refresh, setRefresh] = useState('0'), [page, setPage] = useState(1), [detailId, setDetail] = useState<string | null>(null);
+  const active = useRef<AbortController | null>(null), sequence = useRef(0);
+  const load = useCallback(async () => {
+    const seq = ++sequence.current; active.current?.abort(); const controller = new AbortController(); active.current = controller; setLoading(true); setError(''); setDetail(null);
+    if (!target.enabled) { setLoading(false); return; }
+    try { const json: unknown = await apiGet('/api/integrations/fortigate/ssl-vpn/workspace', { configId: target.configId, vdom: target.vdom, expectedHost: target.host }, { signal: controller.signal, timeout: 60000 }); if (controller.signal.aborted || seq !== sequence.current) return; setData(parseSslVpnSnapshot(json, target)); }
+    catch { if (!controller.signal.aborted && seq === sequence.current) setError('SSL-VPN oturumları okunamadı veya seçili cihaz için doğrulanamadı. REST erişimini ve okuma yetkisini kontrol edip yenileyin.'); }
+    finally { if (!controller.signal.aborted && seq === sequence.current) setLoading(false); }
+  }, [target]);
+  useEffect(() => { void load(); return () => active.current?.abort(); }, [load, revision]);
+  useEffect(() => { if (loading || refresh === '0' || !target.enabled || detailId !== null) return; const timer = setTimeout(() => void load(), Number(refresh) * 1000); return () => clearTimeout(timer); }, [loading, refresh, load, target.enabled, detailId]);
+  const rows = data?.rows, summary = rows ? sslVpnSummary(rows) : null;
+  const filtered = useMemo(() => (rows || []).filter(row => (!factor || (row.twoFactor === null ? 'unknown' : row.twoFactor ? 'yes' : 'no') === factor) && (!duration || (duration === 'unknown' ? row.durationSeconds === null : row.durationSeconds !== null && (duration === 'short' ? row.durationSeconds < 3600 : duration === 'medium' ? row.durationSeconds >= 3600 && row.durationSeconds < 28800 : row.durationSeconds >= 28800))) && (!search.trim() || userSearch([row.username, row.sourceAddress, row.interface, ...(sslVpnAddresses(row) || [])].join(' ')).includes(userSearch(search.trim())))), [rows, factor, duration, search]);
+  const pages = Math.max(1, Math.ceil(filtered.length / 10)), safePage = Math.min(page, pages), visible = filtered.slice((safePage - 1) * 10, safePage * 10), detail = rows?.find(row => row.id === detailId), filters = !!(search || factor || duration), historical = !!error || parentStale;
+  function clear() { setSearch(''); setFactor(''); setDuration(''); setPage(1); }
+  function download() { if (!data || loading || !filtered.length) return; const content = sslVpnCsv(filtered, { configId: target.configId, vdom: target.vdom, host: target.host, collectedAt: data.collectedAt, historical }); const url = URL.createObjectURL(new Blob([content], { type: 'text/csv;charset=utf-8' })); const anchor = document.createElement('a'); anchor.href = url; anchor.download = `sslvpn-oturumlari-${data.collectedAt.slice(0, 10)}.csv`; anchor.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
+  const timestamp = data ? `${userDate(data.collectedAt)} · TSİ` : 'Henüz okunmadı';
+  return <>
+    {!target.enabled && <Notice>Seçili bağlantı devre dışı. Bu cihazdan oturum verisi istenmez.</Notice>}
+    <section className={common.stats} aria-label="SSL-VPN özeti">{[
+      { label: 'Oturum kaydı', value: summary?.records?.toLocaleString('tr-TR'), icon: Activity, note: 'Seçili cihaz ve VDOM’un döndürdüğü bağlantı kayıtları' },
+      { label: 'Farklı kullanıcı', value: summary?.users === null ? 'Bilgi yok' : summary?.users?.toLocaleString('tr-TR'), icon: UsersRound, note: summary?.users === null ? 'Adı eksik kayıtlar var; kullanıcı toplamı doğrulanamıyor' : 'Aynı kullanıcı birden fazla oturumda görünebilir' },
+      { label: 'Alınan veri', value: summary ? sslVpnBytes(summary.incoming) : undefined, icon: ArrowDownLeft, note: 'Bildirilen tüm alt bağlantılarda alınan veri' },
+      { label: 'Gönderilen veri', value: summary ? sslVpnBytes(summary.outgoing) : undefined, icon: ArrowUpRight, note: 'Bildirilen tüm alt bağlantılarda gönderilen veri' },
+    ].map(stat => <article key={stat.label} className={common.stat}><div><h2>{stat.label}</h2><span className={common.icon}><stat.icon size={18} aria-hidden="true" /></span></div><strong>{stat.value === undefined ? loading && target.enabled ? 'Okunuyor…' : 'Bilgi yok' : stat.value}</strong><p>{stat.note}</p></article>)}</section>
+    {error && <Notice error>{error}{data && ' Önceki oturum listesi gösteriliyor; güncel olmayabilir.'}</Notice>}
+    <Notice>Kaynak adresi uzak istemciyi, tünel/hedef IP alanı ise alt bağlantı adreslerini gösterir. Süre ve trafik değerleri son okuma anına aittir; sayaçlar anlık hız değildir. Eksik sayaç içeren toplamlar “Bilgi yok” olarak gösterilir.</Notice>
+    <div className={common.filters} role="search" aria-label="SSL-VPN filtreleri"><div className={`${styles.field} ${styles.search}`}><label htmlFor="sslvpn-search"><Search size={14} aria-hidden="true" />Oturumlarda ara</label><Input id="sslvpn-search" type="search" maxLength={120} placeholder="Kullanıcı, kaynak IP, tünel/hedef IP veya arabirim" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} /></div><div className={styles.field}><label htmlFor="sslvpn-factor">İki aşamalı doğrulama</label><select id="sslvpn-factor" value={factor} onChange={e => { setFactor(e.target.value); setPage(1); }}><option value="">Tümü</option><option value="yes">Doğrulama var</option><option value="no">Doğrulama yok</option><option value="unknown">Bilgi yok</option></select></div><div className={styles.field}><label htmlFor="sslvpn-duration">Oturum süresi</label><select id="sslvpn-duration" value={duration} onChange={e => { setDuration(e.target.value); setPage(1); }}><option value="">Tüm süreler</option><option value="short">1 saatten az</option><option value="medium">1–8 saat arası</option><option value="long">8 saat ve üzeri</option><option value="unknown">Süre bilgisi yok</option></select></div><div className={styles.field}><label htmlFor="sslvpn-refresh">Yenileme</label><select id="sslvpn-refresh" value={refresh} disabled={!target.enabled} onChange={e => setRefresh(e.target.value)}><option value="0">Elle yenile</option><option value="30">30 saniyede bir</option><option value="60">60 saniyede bir</option></select></div>{filters && <Button variant="ghost" onClick={clear}><ListFilter size={16} aria-hidden="true" />Filtreleri temizle</Button>}</div>
+    <section className={common.collection} aria-label="SSL-VPN oturumları" aria-busy={loading}><header className={common.sectionHeader}><div><h2><UsersRound size={18} aria-hidden="true" />Bağlı kullanıcı ve oturum kayıtları</h2><p>{target.device?.name || target.name} · VDOM: {target.vdom} · Son okuma: {timestamp}</p></div><div className={styles.actions}><SemanticBadge tone={historical ? 'warning' : data ? 'info' : 'neutral'} icon={Clock3}>{loading ? 'Okunuyor…' : historical ? 'Önceki veri' : data ? 'FortiGate REST' : 'Veri yok'}</SemanticBadge><Button variant="outline" size="sm" disabled={loading || !filtered.length} onClick={download}><Download size={16} aria-hidden="true" />Filtreli listeyi CSV indir</Button></div></header>
+    {!data ? <Empty icon={loading && target.enabled ? RefreshCw : Info} title={loading && target.enabled ? 'SSL-VPN oturumları okunuyor' : target.enabled ? 'Oturum bilgisi alınamadı' : 'Bağlantı devre dışı'} /> : !visible.length ? <Empty icon={filters ? Search : UsersRound} title={filters ? 'Filtrelere uygun oturum yok' : 'İzleme kaynağı bağlı oturum döndürmedi'}>{filters ? <Button variant="outline" onClick={clear}>Filtreleri temizle</Button> : <p>Son başarılı okumada oturum listesi boş geldi.</p>}</Empty> : <>
+      <div className={styles.tableWrap}><table className={styles.table}><caption className="sr-only">Kullanıcı, kaynak adresi, tünel/hedef IP’leri, oturum süresi, doğrulama ve veri sayaçları</caption><thead><tr><th scope="col">Kullanıcı / doğrulama</th><th scope="col">Kaynak ve tünel/hedef IP</th><th scope="col">Oturum süresi / giriş</th><th scope="col">Veri sayaçları</th><th scope="col">Ayrıntılar</th></tr></thead><tbody>{visible.map(row => <tr key={row.id}><td><div className={styles.identity}><span className={styles.avatar} aria-hidden="true">{initials(row.username)}</span><strong>{row.username || 'Kullanıcı adı bildirilmemiş'}</strong></div><div className={styles.badges}><FactorBadge value={row.twoFactor} /></div><small>{row.children === null ? 'Alt bağlantı bilgisi yok' : `${row.children.length} alt bağlantı bildirildi`}</small></td><td><Addresses row={row} compact /></td><td><div className={styles.duration}><Clock3 size={14} aria-hidden="true" /><strong>{sslVpnDuration(row.durationSeconds)}</strong></div><small>Giriş (TSİ): {userDate(row.loginAt)}</small></td><td><Traffic row={row} /></td><td><Button variant="outline" size="sm" aria-label={`${row.username || 'Adsız kullanıcı'}: oturum ayrıntıları`} onClick={() => setDetail(row.id)}><Eye size={14} aria-hidden="true" />İncele</Button></td></tr>)}</tbody></table></div>
+      <div className={styles.mobile}>{visible.map(row => <article key={row.id} className={styles.record}><div className={styles.identity}><span className={styles.avatar} aria-hidden="true">{initials(row.username)}</span><h3>{row.username || 'Kullanıcı adı bildirilmemiş'}</h3></div><div className={styles.badges}><FactorBadge value={row.twoFactor} /></div><Addresses row={row} compact /><dl className={styles.meta}><Meta label="Oturum süresi" value={sslVpnDuration(row.durationSeconds)} /><Meta label="Giriş zamanı (TSİ)" value={userDate(row.loginAt)} /></dl><Traffic row={row} /><Button variant="outline" onClick={() => setDetail(row.id)}><Eye size={16} aria-hidden="true" />Oturum ayrıntıları</Button></article>)}</div>
+    </>}
+    {data && <footer className={styles.pagination}><div><p role="status">{filtered.length.toLocaleString('tr-TR')} / {data.rows.length.toLocaleString('tr-TR')} kayıt · Sayfa {safePage} / {pages}</p><p>CSV dosyası tüm filtrelenmiş kayıtları, cihaz kapsamını ve okuma zamanını içerir.</p></div><div><Button variant="outline" size="sm" aria-label="Önceki sayfa" disabled={safePage <= 1} onClick={() => setPage(safePage - 1)}><ChevronLeft size={16} aria-hidden="true" />Önceki</Button><Button variant="outline" size="sm" aria-label="Sonraki sayfa" disabled={safePage >= pages} onClick={() => setPage(safePage + 1)}>Sonraki<ChevronRight size={16} aria-hidden="true" /></Button></div></footer>}
+    </section>
+    <Dialog open={!!detail} onOpenChange={open => { if (!open) setDetail(null); }}><DialogContent className={`${common.modal} ${styles.modal}`}><DialogHeader><DialogTitle className={styles.dialogTitle}><UsersRound size={20} aria-hidden="true" />{detail?.username || 'SSL-VPN oturum ayrıntıları'}</DialogTitle><DialogDescription>{target.device?.name || target.name} · {target.host} · VDOM: {target.vdom}</DialogDescription></DialogHeader>{detail && <><div className={styles.badges}><FactorBadge value={detail.twoFactor} />{historical && <SemanticBadge tone="warning">Önceki veri</SemanticBadge>}</div><Addresses row={detail} /><dl className={styles.meta}><Meta label="Giriş zamanı (TSİ)" value={userDate(detail.loginAt)} /><Meta label="Oturum süresi (son okumada)" value={sslVpnDuration(detail.durationSeconds)} /><Meta label="Alt bağlantı sayısı" value={detail.children === null ? null : String(detail.children.length)} /><Meta label="Okuma zamanı (TSİ)" value={data ? userDate(data.collectedAt) : null} /></dl><section className={styles.note}><h3><Activity size={16} aria-hidden="true" />Trafik sayaçları</h3><Traffic row={detail} /><dl className={styles.meta}><Meta label="Alınan veri (tam bayt)" value={ipsecCountLabel(detail.incoming)} /><Meta label="Gönderilen veri (tam bayt)" value={ipsecCountLabel(detail.outgoing)} /></dl><p>Değerler, bildirilen tüm alt bağlantıların sayaçlarından hesaplanır. Eksik bir sayaç varsa toplam bilinmiyor olarak gösterilir.</p></section><section className={styles.note}><h3><Network size={16} aria-hidden="true" />Alt bağlantılar</h3>{detail.children?.length ? <div className={styles.children}>{detail.children.map((child, index) => <article key={index}><h4>Alt bağlantı {index + 1}</h4><dl className={styles.meta}><Meta label="Tünel/hedef IP" value={child.address} /><Meta label="Alınan veri (bayt)" value={ipsecCountLabel(child.incoming)} /><Meta label="Gönderilen veri (bayt)" value={ipsecCountLabel(child.outgoing)} /></dl></article>)}</div> : <p>{detail.children === null ? 'Kaynak alt bağlantı bilgisi bildirmemiş.' : 'Kaynak boş alt bağlantı listesi bildirdi.'}</p>}</section><Notice>{refresh !== '0' && 'Ayrıntılar açıkken otomatik yenileme bekletilir. '}Süre ve sayaçlar okuma anındaki değerlerdir; anlık bağlantı kalitesi veya trafik hızı göstermez.</Notice><div className={common.dialogActions}><Button onClick={() => setDetail(null)}>Kapat</Button></div></>}</DialogContent></Dialog>
+  </>;
+}
+function initials(value: string | null) { return value ? Array.from(value).slice(0, 2).join('').toLocaleUpperCase('tr-TR') : '?'; }
+function FactorBadge({ value }: { value: boolean | null }) { return <SemanticBadge tone={value === true ? 'success' : value === false ? 'warning' : 'neutral'} icon={value === true ? ShieldCheck : value === false ? KeyRound : ShieldQuestion}>2 aşama: {sslVpnFactorLabel(value)}</SemanticBadge>; }
+function Addresses({ row, compact = false }: { row: SslVpnSession; compact?: boolean }) { const addresses = sslVpnAddresses(row); return <div className={styles.addresses}><div><h3><Globe size={13} aria-hidden="true" />Kaynak adresi · Uzak istemci</h3><code>{row.sourceAddress || 'Bilgi yok'}</code></div><div><h3><Network size={13} aria-hidden="true" />Tünel / hedef IP’leri</h3>{addresses?.length ? <>{(compact ? addresses.slice(0, 2) : addresses).map(ip => <code key={ip}>{ip}</code>)}{compact && addresses.length > 2 && <small>+{addresses.length - 2} adres · Ayrıntılarda tümü</small>}</> : <span>{addresses === null ? 'Adres bilgisi bildirilmemiş' : 'Adres bildirilmemiş'}</span>}<small>Arabirim: {row.interface || 'Bilgi yok'}</small></div></div>; }
+function Traffic({ row }: { row: SslVpnSession }) { return <div className={styles.traffic}><div><span><ArrowDownLeft size={14} aria-hidden="true" />Alınan veri</span><strong>{sslVpnBytes(row.incoming)}</strong></div><div><span><ArrowUpRight size={14} aria-hidden="true" />Gönderilen veri</span><strong>{sslVpnBytes(row.outgoing)}</strong></div></div>; }
+function Meta({ label, value }: { label: string; value?: string | null }) { return <div><dt>{label}</dt><dd>{value || 'Bilgi yok'}</dd></div>; }
+function Notice({ children, error = false }: { children: ReactNode; error?: boolean }) { const Icon = error ? TriangleAlert : Info; return <div className={error ? common.error : common.info} role={error ? 'alert' : undefined}><Icon size={18} aria-hidden="true" /><div>{children}</div></div>; }
+function Empty({ icon: Icon, title, children }: { icon: typeof Info; title: string; children?: ReactNode }) { return <div className={common.empty}><Icon size={28} aria-hidden="true" /><h3>{title}</h3>{children}</div>; }

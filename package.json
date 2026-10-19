@@ -54,6 +54,7 @@
     "test:alarm-sources": "node scripts/check-alarm-sources.cjs",
     "test:alarm-dispatch": "node scripts/check-alarm-dispatch.cjs",
     "test:integration-permissions": "node scripts/check-integration-permissions.cjs",
+    "test:sslvpn-workspace": "node scripts/check-sslvpn-workspace.cjs",
     "test:ipsec-workspace": "node scripts/check-ipsec-workspace.cjs",
     "test:security-policies": "node scripts/check-security-policies.cjs",
     "test:quarantine": "node scripts/check-quarantine.cjs",

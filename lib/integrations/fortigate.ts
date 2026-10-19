@@ -10,6 +10,7 @@ import { buildIpsecSnapshot, type IpsecSnapshot } from '@/lib/security/ipsec';
 
 import { DeviceType, DeviceStatus, DeviceCriticality } from '@prisma/client';
 import { normalizeQuarantine, type QuarantineRecord } from '@/lib/security/quarantine';
+import { normalizeSslVpn, type SslVpnSnapshot } from '@/lib/security/ssl-vpn';
 import * as https from 'https';
 import * as querystring from 'querystring';
 import { createLogger } from '@/lib/logger';
@@ -196,6 +197,7 @@ export class FortiGateService {
   private csrfToken: string | null = null;
   private csrfCookie: string | null = null;
   private sessionExpiry: number = 0;
+  private sslVpnWorkspaceInFlight: Promise<SslVpnSnapshot> | null = null;
   private ipsecWorkspaceInFlight: Promise<IpsecSnapshot> | null = null;
 
   constructor(config: FortiGateConfig) {
@@ -997,6 +999,20 @@ export class FortiGateService {
   /**
    * Get SSL-VPN connected users
    */
+  async getSSLVPNWorkspace(): Promise<SslVpnSnapshot> {
+    // Share only an active read on this exact target-bound client, never completed data.
+    if (this.sslVpnWorkspaceInFlight) return this.sslVpnWorkspaceInFlight;
+    const pending = this.readSSLVPNWorkspace();
+    this.sslVpnWorkspaceInFlight = pending;
+    try { return await pending; }
+    finally { if (this.sslVpnWorkspaceInFlight === pending) this.sslVpnWorkspaceInFlight = null; }
+  }
+
+  private async readSSLVPNWorkspace(): Promise<SslVpnSnapshot> {
+    const data = await this.apiRequest<{ results?: unknown }>('/monitor/vpn/ssl');
+    return normalizeSslVpn(data?.results, new Date().toISOString());
+  }
+
   async getSSLVPNUsers(): Promise<Array<{
     user_name: string;
     remote_host: string;
