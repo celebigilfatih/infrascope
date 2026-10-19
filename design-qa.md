@@ -1,3 +1,13 @@
+# SSL-VPN visual follow-up completed — 19 October 2026
+
+The remaining supplemental mobile check passed **1/1 Chromium case (19.0s), zero retries**, with its single fixture manifest cleaned. Production application source is unchanged from 49eaf90ddacfea9376b28c29ff23f2e816f39851. The earlier **21/21** full focused suite and offline release results remain the main functional evidence; they were not rerun for this capture-only follow-up.
+
+- Inspected 390×844 light/dark record and detail captures. Earlier viewport captures coincided with background scrolling (2287 to 1888), while the actual modal/title stayed within bounds. The private diagnostic helper now waits for 12 stable animation frames and takes the screenshot without forcing animation cancellation. The final background scroll is unchanged (1595 before/after); panel x=16, y=16, width=358, height=812 and title y=35 remain within the viewport. The full title and close icon are visible in the final screenshot. No production layout defect was reproduced and no application/style/test source was changed by this diagnostic helper.
+- The supplemental scenario also verifies keyboard opening/Escape, all child addresses, exact counter details, no page overflow, post-capture title bounds and the scrolled close button within its panel/viewport. Only synthetic transport and a private PostgreSQL fixture were used; no customer appliance or installation database was accessed.
+- Removed and verified absence of containers, networks and project-owned volumes for infrascope-sslvpn-review-20261019 and infrascope-sslvpn-visual-20261019, plus the exact infrascope-sslvpn-build-20261019 container. External dependency volumes and unrelated application resources were preserved. The previous cleanup-pending and incomplete-visual items are closed.
+- Evidence: output/sslvpn-review-20261019/visual-verification.json, verification.json, visual-final.log and visual/report/index.html. The original captures and intermediate probe are retained separately. This follow-up changes documentation only; no new build/full-suite, live-firmware, remote CI or deployment claim.
+
+---
 # SSL-VPN commit review — 19 October 2026
 
 Result: **passed**. The candidate after 8178357ea44a074a0e0a1cfc83a1080d88cb10f6 passed **21/21 Chromium cases in 57.8s**, zero retries, runner exit 0, passed last-run metadata and 21 cleaned fixture manifests. Final browser/static/model/database tree: b6d1d991ad49980eba9c2c52f5b2e53727262c62; offline release tree: 6449feb912dc671db0911436783857c72ae9240f. Application source is identical; only browser test expectations and documentation differ between these trees. Only QA/module notes are added after final testing.
