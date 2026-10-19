@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+- **Lint debt closure** — Remove three unsafe shared metadata types and four hook/image warnings without relaxing rules. Keep navigation progress pending until the route changes, include shared types in standard lint and add strict lint, callback/polling/image/navigation regressions.
+
 - **Topology object actions** — Add object-specific right-click and keyboard/mobile ellipsis menus for buildings, devices and connections. Reuse scoped details, direct links, endpoint navigation, clipboard feedback and authorized edit forms; preserve dialog focus and viewport bounds without source requests on opening. Remove simulated operational actions and add isolated browser regressions.
 - **Building assignment floor regression** — Align assignment fixtures with per-device floor guards; verify same-building preservation, cross-building/unassignment clearing and rollback after partial success, including a separately committed concurrent floor change in disposable PostgreSQL. Include the topology workspace, recorded-link and layout prerequisites required by the object menus.
 

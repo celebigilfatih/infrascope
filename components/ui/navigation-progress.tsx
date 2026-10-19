@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 
 import { cn } from '@/lib/utils';
@@ -14,10 +14,13 @@ export function NavigationProgress() {
   const pathname = usePathname();
   const [isNavigating, setIsNavigating] = useState(false);
   const [progress, setProgress] = useState(0);
+  const previousPathname = useRef(pathname);
 
   useEffect(() => {
-    // Navigation complete - reset state
-    if (isNavigating) {
+    const pathnameChanged = previousPathname.current !== pathname;
+    previousPathname.current = pathname;
+    // Starting navigation must not complete it before the pathname changes.
+    if (pathnameChanged && isNavigating) {
       setProgress(100);
       const timeout = setTimeout(() => {
         setIsNavigating(false);
@@ -25,7 +28,7 @@ export function NavigationProgress() {
       }, 300);
       return () => clearTimeout(timeout);
     }
-  }, [pathname]);
+  }, [pathname, isNavigating]);
 
   useEffect(() => {
     if (isNavigating && progress < 90) {
@@ -73,6 +76,11 @@ export function NavigationProgress() {
     <>
       {/* Top progress bar - simplified */}
       <div 
+        role="progressbar"
+        aria-label="Sayfa yükleniyor"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={progress}
         className={cn(
           "fixed top-0 left-0 right-0 h-0.5 bg-primary z-[9999]",
           progress === 100 ? "opacity-0" : "opacity-100"

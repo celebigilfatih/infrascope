@@ -139,7 +139,7 @@ export interface Device {
   pollingEnabled?: boolean;
   pollingInterval?: number | null;
   lastPolledAt?: string | Date | null;
-  metadata?: any;
+  metadata?: unknown;
   createdAt?: string | Date;
   updatedAt?: string | Date;
 }
@@ -231,7 +231,7 @@ export interface BuildingConnection {
   circuitId?: string;
   installDate?: string | Date;
   notes?: string;
-  metadata?: any;
+  metadata?: unknown;
   createdAt?: string | Date;
   updatedAt?: string | Date;
   deviceLink?: import('@/lib/topology/building-connection-options').BuildingLinkedDevices | null;
@@ -276,7 +276,7 @@ export interface Service {
   application?: Application;
   criticality: DeviceCriticality;
   dependencies?: Dependency[];
-  metadata?: any;
+  metadata?: unknown;
   createdAt?: string | Date;
   updatedAt?: string | Date;
 }

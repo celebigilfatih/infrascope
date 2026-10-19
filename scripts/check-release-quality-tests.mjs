@@ -12,6 +12,9 @@ const current = () => readPolicy(root);
 test('actual production build explicitly enforces Next type/lint and the pre-compilation quality command', () => {
   const { config, pkg } = current(); assert.deepEqual(policyErrors(config, pkg), []);
 });
+test('release lint retains every default directory and includes shared frontend types', () => {
+  assert.deepEqual([...current().config.eslint.dirs].sort(), ['app', 'pages', 'components', 'lib', 'src', 'types'].sort());
+});
 for (const section of ['typescript', 'eslint']) test(`${section} bypass is rejected`, () => {
   const { config, pkg } = current(); config[section][section === 'eslint' ? 'ignoreDuringBuilds' : 'ignoreBuildErrors'] = true;
   assert.ok(policyErrors(config, pkg).length);

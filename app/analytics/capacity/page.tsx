@@ -3,7 +3,7 @@
 import { uiError } from '@/lib/i18n/tr';
 
 import { PageHeading, PageStateFrame } from '@/components/ui/page-heading';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -34,7 +34,7 @@ export default function CapacityPage() {
   const [error, setError] = useState<string | null>(null);
   const [days, setDays] = useState(7);
 
-  const fetchTrends = async () => {
+  const fetchTrends = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -52,13 +52,13 @@ export default function CapacityPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [days]);
 
   useEffect(() => {
     fetchTrends();
     const interval = setInterval(fetchTrends, 120000); // Refresh every 2 minutes
     return () => clearInterval(interval);
-  }, [days]);
+  }, [fetchTrends]);
 
   const collectMetrics = async () => {
     setLoading(true);

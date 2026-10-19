@@ -7,6 +7,7 @@ import { PageHeading } from '@/components/ui/page-heading';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { SeverityBadge } from '@/components/ui/severity-badge';
 import React, { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { apiGet, apiDelete } from '../../lib/api';
 import { Service, ApiResponse } from '../../types';
 import { getVendorLogo } from '../../lib/formatting';
@@ -148,9 +149,11 @@ export default function ServicesPage() {
                       <div className="space-y-1">
                         <CardTitle className="text-lg group-hover:text-primary transition-colors flex items-center gap-2">
                           {service.application?.vendor && getVendorLogo(service.application.vendor) && (
-                            <img 
+                            <Image
                               src={getVendorLogo(service.application.vendor)!} 
-                              alt={service.application.vendor} 
+                              alt={service.application.vendor}
+                              width={24}
+                              height={24}
                               className="h-6 w-6 object-contain"
                             />
                           )}

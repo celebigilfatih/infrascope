@@ -11,6 +11,7 @@ const nextConfig = {
     : {}),
   transpilePackages: ['three', '@react-three/fiber', '@react-three/drei'],
   eslint: {
+    dirs: ['app', 'pages', 'components', 'lib', 'src', 'types'],
     ignoreDuringBuilds: false,
   },
   typescript: {

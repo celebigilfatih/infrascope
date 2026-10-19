@@ -4,7 +4,7 @@ import { uiError, uiLabel } from '@/lib/i18n/tr';
 
 import { PageHeading } from '@/components/ui/page-heading';
 import { SeverityBadge } from '@/components/ui/severity-badge';
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -88,7 +88,7 @@ export default function DependenciesPage() {
   });
   const { toast } = useToast();
 
-  const fetchDependencies = async () => {
+  const fetchDependencies = useCallback(async () => {
     try {
       const response = await fetch('/api/services/dependencies');
       const data = await response.json();
@@ -105,9 +105,9 @@ export default function DependenciesPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
 
-  const fetchServices = async () => {
+  const fetchServices = useCallback(async () => {
     try {
       const response = await fetch('/api/services');
       const data = await response.json();
@@ -117,9 +117,9 @@ export default function DependenciesPage() {
     } catch (error) {
       console.error('Error fetching services:', error);
     }
-  };
+  }, []);
 
-  const fetchDevices = async () => {
+  const fetchDevices = useCallback(async () => {
     try {
       const response = await fetch('/api/devices');
       const data = await response.json();
@@ -129,13 +129,13 @@ export default function DependenciesPage() {
     } catch (error) {
       console.error('Error fetching devices:', error);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchDependencies();
     fetchServices();
     fetchDevices();
-  }, []);
+  }, [fetchDependencies, fetchServices, fetchDevices]);
 
   const handleCreate = async () => {
     try {
