@@ -117,6 +117,9 @@ export interface FortiGatePolicy {
   hit_count: number;
   last_used: string;
   status: 'enable' | 'disable';
+  comments?: string;
+  nat?: string;
+  logtraffic?: string;
 }
 
 export interface FortiGateAddress {
@@ -490,7 +493,7 @@ export class FortiGateService {
   /**
    * Fetch firewall policies
    */
-  async fetchFirewallPolicies(options?: { requireEnabled?: boolean }): Promise<FortiGatePolicy[]> {
+  async fetchFirewallPolicies(options?: { requireEnabled?: boolean; requireDestinationReferences?: boolean }): Promise<FortiGatePolicy[]> {
     if (!this.config.enabledModules.policies) {
       if (options?.requireEnabled) throw new FirewallIntegrationError('UNSUPPORTED_OPERATION', 'Policy reading is disabled for this profile', false, 409);
       return [];
@@ -510,9 +513,13 @@ export class FortiGateService {
         hit_count: number;
         last_used: string;
         status: 'enable' | 'disable';
+        comments?: string;
+        nat?: string;
+        logtraffic?: string;
       }>}>('/cmdb/firewall/policy');
 
-      if (options?.requireEnabled && (!Array.isArray(data.results) || data.results.some(policy => !policy || !Array.isArray(policy.dstaddr) || !policy.dstaddr.every(address => address && typeof address.name === 'string')))) throw new FirewallIntegrationError('INVALID_RESPONSE', 'Policy references could not be verified', false, 502);
+      // Definition inspection may display unknown references; VIP usage still requires them.
+      if (options?.requireEnabled && (!Array.isArray(data?.results) || data.results.some(policy => !policy || typeof policy !== 'object' || Array.isArray(policy) || options.requireDestinationReferences !== false && (!Array.isArray(policy.dstaddr) || !policy.dstaddr.every(address => address && typeof address.name === 'string'))))) throw new FirewallIntegrationError('INVALID_RESPONSE', 'Policy references could not be verified', false, 502);
       return data.results.map(policy => ({
         policyid: policy.policyid,
         name: policy.name,
@@ -526,6 +533,9 @@ export class FortiGateService {
         hit_count: policy.hit_count,
         last_used: policy.last_used,
         status: policy.status,
+        comments: policy.comments,
+        nat: policy.nat,
+        logtraffic: policy.logtraffic,
       }));
     } catch (error) {
       log.error({ err: error }, 'Failed to fetch firewall policies');

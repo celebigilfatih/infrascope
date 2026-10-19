@@ -1,229 +1,82 @@
 'use client';
-
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import Link from 'next/link';
+import { ArrowRight, CalendarClock, Check, ChevronLeft, ChevronRight, ClipboardList, Clock3, Eye, Info, ListFilter, Network, Pause, RefreshCw, Search, Server, Settings2, ShieldCheck, ShieldX, TriangleAlert } from 'lucide-react';
+import { apiGet } from '@/lib/api';
 import { PageHeading } from '@/components/ui/page-heading';
-import React, { useState, useEffect, useMemo } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { SemanticBadge } from '@/components/ui/semantic-badge';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { ChevronLeft, ChevronRight, RefreshCw, Search, Shield, CheckCircle, XCircle, ArrowRight } from 'lucide-react';
-
-interface FirewallPolicy {
-  id: string;
-  policyId: number;
-  name: string | null;
-  action: string;
-  srcInterface: string | null;
-  dstInterface: string | null;
-  srcAddresses: string[] | null;
-  dstAddresses: string[] | null;
-  services: string[] | null;
-  schedule: string | null;
-  hitCount: string;
-  lastHit: string | null;
-  device: {
-    name: string;
-    fortiDeviceId: string;
-  };
-}
-
-const ITEMS_PER_PAGE = 15;
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import type { FirewallListItem } from '@/components/firewall/types';
+import { parseOverviewTargets } from '@/lib/firewall/overview';
+import { parsePolicySnapshot, policyActionLabel, policyCounterLabel, policyLoggingLabel, policyNameLabel, policyScheduleLabel, type PolicySnapshot, type SecurityPolicy } from '@/lib/security/policies';
+import { userDate, userSearch } from '@/lib/users/workspace';
+import common from '@/components/users/users-workspace.module.css';
+import styles from './page.module.css';
 
 export default function FirewallPoliciesPage() {
-  const [policies, setPolicies] = useState<FirewallPolicy[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-
-  const fetchPolicies = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/firewall-policies');
-      const data = await res.json();
-      if (data.success) {
-        setPolicies(data.data);
-      }
-    } catch (error) {
-      console.error('Failed to fetch policies:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchPolicies();
+  const [targets, setTargets] = useState<FirewallListItem[] | null>(null), [choice, setChoice] = useState(''), [loading, setLoading] = useState(true), [error, setError] = useState(''), [revision, setRevision] = useState(0);
+  const active = useRef<AbortController | null>(null), sequence = useRef(0);
+  const load = useCallback(async () => {
+    const seq = ++sequence.current; active.current?.abort(); const controller = new AbortController(); active.current = controller; setLoading(true); setError('');
+    try { const json: unknown = await apiGet('/api/firewalls', undefined, { signal: controller.signal, timeout: 60000 }); const rows = parseOverviewTargets(json); if (controller.signal.aborted || seq !== sequence.current) return; setTargets(rows); setRevision(v => v + 1); }
+    catch { if (!controller.signal.aborted && seq === sequence.current) setError('Güvenlik duvarı listesi alınamadı. Yetkinizi ve bağlantıyı kontrol edip yeniden deneyin.'); }
+    finally { if (!controller.signal.aborted && seq === sequence.current) setLoading(false); }
   }, []);
-
-  const filteredPolicies = useMemo(() => {
-    if (!searchTerm) return policies;
-    const term = searchTerm.toLowerCase();
-    return policies.filter(
-      (p) =>
-        (p.name?.toLowerCase() || '').includes(term) ||
-        p.policyId.toString().includes(term) ||
-        (p.srcInterface?.toLowerCase() || '').includes(term) ||
-        (p.dstInterface?.toLowerCase() || '').includes(term)
-    );
-  }, [policies, searchTerm]);
-
-  const totalPages = Math.ceil(filteredPolicies.length / ITEMS_PER_PAGE);
-  const paginatedPolicies = useMemo(() => {
-    const start = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filteredPolicies.slice(start, start + ITEMS_PER_PAGE);
-  }, [filteredPolicies, currentPage]);
-
-  useEffect(() => {
-    if (currentPage > totalPages && totalPages > 0) setCurrentPage(1);
-  }, [totalPages, currentPage]);
-
-  const getActionBadge = (action: string) => {
-    switch (action.toLowerCase()) {
-      case 'accept': return <Badge variant="success"><CheckCircle className="h-3 w-3 mr-1" />İzin Ver</Badge>;
-      case 'deny': return <Badge variant="destructive"><XCircle className="h-3 w-3 mr-1" />Engelle</Badge>;
-      default: return <Badge variant="outline">{action}</Badge>;
-    }
-  };
-
-  const formatAddresses = (addresses: string[] | null) => {
-    if (!addresses || addresses.length === 0) return "Tümü";
-    if (addresses.length <= 2) return addresses.join(', ');
-    return `${addresses[0]}, ${addresses[1]} +${addresses.length - 2}`;
-  };
-
-  const getPageNumbers = () => {
-    const pages: (number | 'ellipsis')[] = [];
-    const maxVisible = 5;
-    if (totalPages <= maxVisible) { for (let i = 1; i <= totalPages; i++) pages.push(i); }
-    else {
-      pages.push(1);
-      if (currentPage > 3) pages.push('ellipsis');
-      const start = Math.max(2, currentPage - 1);
-      const end = Math.min(totalPages - 1, currentPage + 1);
-      for (let i = start; i <= end; i++) pages.push(i);
-      if (currentPage < totalPages - 2) pages.push('ellipsis');
-      pages.push(totalPages);
-    }
-    return pages;
-  };
-
-  return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-4">
-        <div>
-          <PageHeading section="policies" description={<>FortiGate güvenlik politikaları</>}>Güvenlik Politikaları</PageHeading>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={fetchPolicies} disabled={loading} aria-label="Yenile">
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          </Button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card><CardContent className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-full bg-blue-500/20"><Shield className="h-5 w-5 text-blue-500" /></div>
-            <div><p className="text-sm text-muted-foreground">Toplam Politika</p><p className="text-2xl font-bold">{policies.length}</p></div>
-          </div>
-        </CardContent></Card>
-        <Card><CardContent className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-full bg-green-500/20"><CheckCircle className="h-5 w-5 text-green-500" /></div>
-            <div><p className="text-sm text-muted-foreground">İzin Ver</p><p className="text-2xl font-bold">{policies.filter((p) => p.action === 'accept').length}</p></div>
-          </div>
-        </CardContent></Card>
-        <Card><CardContent className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-full bg-red-500/20"><XCircle className="h-5 w-5 text-red-500" /></div>
-            <div><p className="text-sm text-muted-foreground">Engelle</p><p className="text-2xl font-bold">{policies.filter((p) => p.action === 'deny').length}</p></div>
-          </div>
-        </CardContent></Card>
-        <Card><CardContent className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-full bg-orange-500/20"><ArrowRight className="h-5 w-5 text-orange-500" /></div>
-            <div><p className="text-sm text-muted-foreground">Toplam Eşleşme</p><p className="text-2xl font-bold">{policies.reduce((acc, p) => acc + Number(p.hitCount), 0).toLocaleString('tr-TR')}</p></div>
-          </div>
-        </CardContent></Card>
-      </div>
-
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input placeholder="Politika kimliği veya ad ile ara…" value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }} className="pl-9" />
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2"><Shield className="h-5 w-5" />Güvenlik Politikaları<Badge variant="secondary">{filteredPolicies.length}</Badge></CardTitle>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="flex justify-center py-12"><RefreshCw className="h-8 w-8 animate-spin text-primary" /></div>
-          ) : (
-            <>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-16">ID</TableHead>
-                    <TableHead>İsim</TableHead>
-                    <TableHead>Kaynak</TableHead>
-                    <TableHead>Hedef</TableHead>
-                    <TableHead>Servis</TableHead>
-                    <TableHead>İşlem</TableHead>
-                    <TableHead className="text-right">Eşleşme Sayısı</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {paginatedPolicies.length === 0 ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Policy bulunamadı</TableCell></TableRow>
-                  ) : (
-                    paginatedPolicies.map((policy) => (
-                      <TableRow key={policy.id}>
-                        <TableCell className="font-mono text-sm">{policy.policyId}</TableCell>
-                        <TableCell className="font-medium">{policy.name || '-'}</TableCell>
-                        <TableCell>
-                          <div className="text-xs text-muted-foreground">{policy.srcInterface || 'Any'}</div>
-                          <div className="text-xs">{formatAddresses(policy.srcAddresses)}</div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="text-xs text-muted-foreground">{policy.dstInterface || 'Any'}</div>
-                          <div className="text-xs">{formatAddresses(policy.dstAddresses)}</div>
-                        </TableCell>
-                        <TableCell className="text-xs">{formatAddresses(policy.services)}</TableCell>
-                        <TableCell>{getActionBadge(policy.action)}</TableCell>
-                        <TableCell className="text-right font-mono">{Number(policy.hitCount).toLocaleString('tr-TR')}</TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between mt-4">
-                  <p className="text-sm text-muted-foreground">Sayfa {currentPage} / {totalPages}</p>
-                  <div className="flex items-center gap-1">
-                    <Button variant="outline" size="icon" onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} aria-label="Önceki sayfa"><ChevronLeft className="h-4 w-4" /></Button>
-                    {getPageNumbers().map((page, idx) => (
-                      <React.Fragment key={idx}>
-                        {page === 'ellipsis' ? <span className="px-2 text-muted-foreground">...</span> : (
-                          <Button variant={currentPage === page ? 'default' : 'outline'} size="sm" onClick={() => setCurrentPage(page)} className="w-9">{page}</Button>
-                        )}
-                      </React.Fragment>
-                    ))}
-                    <Button variant="outline" size="icon" onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} aria-label="Sonraki sayfa"><ChevronRight className="h-4 w-4" /></Button>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </CardContent>
-      </Card>
-    </div>
-  );
+  useEffect(() => { void load(); return () => active.current?.abort(); }, [load]);
+  const target = targets?.find(row => JSON.stringify([row.configId, row.vdom]) === choice) || (!choice && targets?.length === 1 ? targets[0] : null);
+  return <div className={common.page}><div className={common.workspace}>
+    <header className={common.header}><PageHeading section="policies" description="Kaynak–hedef eşleşmelerini, kural durumunu ve izin/engelleme ayarlarını cihaz bazında inceleyin.">Güvenlik Politikaları</PageHeading><div className={common.headerActions}><Button asChild variant="outline"><Link href="/integrations/firewall"><Settings2 size={16} aria-hidden="true" />Bağlantıları yönet</Link></Button><Button variant="outline" disabled={loading} onClick={() => void load()}><RefreshCw size={16} aria-hidden="true" className={loading ? 'animate-spin motion-reduce:animate-none' : ''} />{loading ? 'Okunuyor…' : 'Verileri yenile'}</Button></div></header>
+    <div className={common.serviceBar}><SemanticBadge tone="info" icon={Server}>Cihaz ve VDOM kapsamı</SemanticBadge><span>Kaynak: FortiGate REST · Politika tanımları · Salt okunur</span></div>
+    {error && <Notice error>{error}{targets && ' Önceki cihaz listesi korunuyor; güncel olmayabilir.'}</Notice>}
+    {loading && !targets ? <Empty icon={RefreshCw} title="Cihaz listesi yükleniyor" /> : targets && !targets.length ? <Empty icon={Server} title="Henüz güvenlik duvarı eklenmemiş"><p>Politika tanımlarını görmek için bir FortiGate bağlantısı ekleyin.</p><Button asChild><Link href="/integrations/firewall"><Settings2 size={16} aria-hidden="true" />Bağlantı ekle</Link></Button></Empty> : targets && <>
+      <section className={styles.target}><label htmlFor="policy-target"><Server size={16} aria-hidden="true" />Güvenlik duvarı ve sanal alan (VDOM)</label><select id="policy-target" value={target ? JSON.stringify([target.configId, target.vdom]) : ''} disabled={loading} onChange={e => setChoice(e.target.value)}><option value="">Cihaz ve VDOM seçin</option>{targets.map(row => <option key={JSON.stringify([row.configId, row.vdom])} value={JSON.stringify([row.configId, row.vdom])}>{row.device?.name || row.name} · {row.host} · VDOM: {row.vdom}{row.enabled ? '' : ' · Devre dışı'}</option>)}</select><p>Politikalar yalnızca seçili bağlantı ve VDOM kapsamında okunur.</p></section>
+      {target ? <PolicyDevice key={`${target.configId}:${target.vdom}:${target.host}:${target.enabled}`} target={target} revision={revision} parentStale={!!error} /> : <Notice>Politikaları görmek için bir cihaz ve VDOM seçin.</Notice>}
+    </>}
+  </div></div>;
 }
+function PolicyDevice({ target, revision, parentStale }: { target: FirewallListItem; revision: number; parentStale: boolean }) {
+  const [data, setData] = useState<PolicySnapshot | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState(''), [search, setSearch] = useState(''), [status, setStatus] = useState(''), [action, setAction] = useState(''), [page, setPage] = useState(1), [detailId, setDetail] = useState<number | null>(null);
+  const active = useRef<AbortController | null>(null), sequence = useRef(0);
+  const load = useCallback(async () => {
+    const seq = ++sequence.current; active.current?.abort(); const controller = new AbortController(); active.current = controller; setLoading(true); setError(''); setDetail(null);
+    if (!target.enabled) { setLoading(false); return; }
+    try { const json: unknown = await apiGet('/api/firewall-policies/workspace', { configId: target.configId, vdom: target.vdom, expectedHost: target.host }, { signal: controller.signal, timeout: 60000 }); if (controller.signal.aborted || seq !== sequence.current) return; setData(parsePolicySnapshot(json, target)); }
+    catch { if (!controller.signal.aborted && seq === sequence.current) setError('Politikalar okunamadı veya seçili cihaz için doğrulanamadı. REST erişimini, politika okuma ayarını ve yetkinizi kontrol edip yenileyin.'); }
+    finally { if (!controller.signal.aborted && seq === sequence.current) setLoading(false); }
+  }, [target]);
+  useEffect(() => { void load(); return () => active.current?.abort(); }, [load, revision]);
+  const rows = data?.rows;
+  const filtered = useMemo(() => (rows || []).filter(row => (!status || (row.enabled === null ? 'unknown' : row.enabled ? 'enabled' : 'disabled') === status) && (!action || (row.action === 'accept' || row.action === 'deny' ? row.action : 'unknown') === action) && (!search.trim() || userSearch([row.policyId, row.name, row.comment, ...(row.sourceInterfaces || []), ...(row.destinationInterfaces || []), ...(row.sourceAddresses || []), ...(row.destinationAddresses || []), ...(row.services || []), policyActionLabel(row.action), policyScheduleLabel(row.schedule)].join(' ')).includes(userSearch(search.trim())))), [rows, status, action, search]);
+  const pages = Math.max(1, Math.ceil(filtered.length / 10)), safePage = Math.min(page, pages), visible = filtered.slice((safePage - 1) * 10, safePage * 10), detail = rows?.find(row => row.policyId === detailId), filters = !!(search || status || action), historical = !!error || parentStale;
+  function clear() { setSearch(''); setStatus(''); setAction(''); setPage(1); }
+  const timestamp = data ? `${userDate(data.collectedAt)} · TSİ` : 'Henüz okunmadı';
+  return <>
+    {!target.enabled && <Notice>Seçili bağlantı devre dışı. Bu cihazdan politika verisi istenmez.</Notice>}
+    <section className={common.stats} aria-label="Politika özeti">{[
+      { label: 'Politika kaydı', count: rows?.length, icon: ClipboardList, note: 'Seçili cihaz ve VDOM’dan dönen tanımlar' },
+      { label: 'Etkin kural', count: rows?.filter(row => row.enabled === true).length, icon: Check, note: 'Cihazda etkin olduğu bildirilen tanımlar' },
+      { label: 'Kapalı kural', count: rows?.filter(row => row.enabled === false).length, icon: Pause, note: 'Cihazda kapalı olduğu bildirilen tanımlar' },
+      { label: 'Durum bilgisi yok', count: rows?.filter(row => row.enabled === null).length, icon: Info, note: 'Etkinliği kaynak tarafından bildirilmeyenler' },
+    ].map(stat => <article key={stat.label} className={common.stat}><div><h2>{stat.label}</h2><span className={common.icon}><stat.icon size={18} aria-hidden="true" /></span></div><strong>{stat.count === undefined ? loading && target.enabled ? 'Okunuyor…' : 'Bilgi yok' : stat.count.toLocaleString('tr-TR')}</strong><p>{stat.note}</p></article>)}</section>
+    {error && <Notice error>{error}{data && ' Önceki politika listesi gösteriliyor; güncel olmayabilir.'}</Notice>}
+    <Notice>İzin/engelleme, kuralın tanımlı işlemidir. Etkinlik durumu ve zamanlama ayrıca gösterilir. Eksik eşleşme sayısı sıfır veya “kullanılmıyor” olarak gösterilmez.</Notice>
+    <div className={common.filters} role="search" aria-label="Politika filtreleri"><div className={`${styles.field} ${styles.search}`}><label htmlFor="policy-search"><Search size={14} aria-hidden="true" />Politikalarda ara</label><Input id="policy-search" type="search" maxLength={120} placeholder="Kural no, ad, adres, arabirim veya hizmet" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} /></div><div className={styles.field}><label htmlFor="policy-status">Kural durumu</label><select id="policy-status" value={status} onChange={e => { setStatus(e.target.value); setPage(1); }}><option value="">Tüm durumlar</option><option value="enabled">Etkin</option><option value="disabled">Kapalı</option><option value="unknown">Durum bilgisi yok</option></select></div><div className={styles.field}><label htmlFor="policy-action">Tanımlı işlem</label><select id="policy-action" value={action} onChange={e => { setAction(e.target.value); setPage(1); }}><option value="">Tüm işlemler</option><option value="accept">İzin ver</option><option value="deny">Engelle</option><option value="unknown">Diğer / bilgi yok</option></select></div>{filters && <Button variant="ghost" onClick={clear}><ListFilter size={16} aria-hidden="true" />Filtreleri temizle</Button>}</div>
+    <section className={common.collection} aria-label="Güvenlik politikaları" aria-busy={loading}><header className={common.sectionHeader}><div><h2><ClipboardList size={18} aria-hidden="true" />Politika tanımları</h2><p>{target.device?.name || target.name} · VDOM: {target.vdom} · Son okuma: {timestamp}</p></div><SemanticBadge tone={historical ? 'warning' : data ? 'info' : 'neutral'} icon={Clock3}>{loading ? 'Okunuyor…' : historical ? 'Önceki veri' : data ? 'FortiGate REST' : 'Veri yok'}</SemanticBadge></header>
+    {!data ? <Empty icon={loading && target.enabled ? RefreshCw : Info} title={loading && target.enabled ? 'Politika tanımları okunuyor' : target.enabled ? 'Politika bilgisi alınamadı' : 'Bağlantı devre dışı'} /> : !visible.length ? <Empty icon={filters ? Search : ClipboardList} title={filters ? 'Filtrelere uygun politika yok' : 'Kaynak bu cihaz ve VDOM için politika döndürmedi'}>{filters ? <Button variant="outline" onClick={clear}>Filtreleri temizle</Button> : <p>Son başarılı okumada boş liste alındı.</p>}</Empty> : <>
+      <div className={styles.tableWrap}><table className={styles.table}><caption className="sr-only">Kural kimliği ve durumu, kaynak–hedef eşleşmeleri, hizmetler, tanımlı işlem ve eşleşme bilgisi</caption><thead><tr><th scope="col">Kural / durum</th><th scope="col">Kaynak → hedef</th><th scope="col">Hizmet / zamanlama</th><th scope="col">İşlem / eşleşme</th><th scope="col">Ayrıntılar</th></tr></thead><tbody>{visible.map(row => <tr key={row.policyId}><td><span className={styles.id}>Kural no: {row.policyId}</span><strong>{row.name || 'Adı belirtilmemiş kural'}</strong><small>Kaynak liste sırası: {row.position}</small><div className={styles.badges}><DefinitionState row={row} /></div></td><td><Flow row={row} /></td><td><Names values={row.services} kind="services" compact /><small className={styles.iconLabel}><CalendarClock size={13} aria-hidden="true" />{policyScheduleLabel(row.schedule)}</small></td><td><ActionState row={row} /><p className={styles.counter}>{policyCounterLabel(row.hitCount)}<small>{row.hitCount === null ? 'Eşleşme sayısı bildirilmemiş' : 'Kaynağın bildirdiği eşleşme sayısı'}</small></p></td><td><Button variant="outline" size="sm" aria-label={`Kural ${row.policyId}: politika ayrıntıları`} onClick={() => setDetail(row.policyId)}><Eye size={14} aria-hidden="true" />İncele</Button></td></tr>)}</tbody></table></div>
+      <div className={styles.mobile}>{visible.map(row => <article key={row.policyId} className={styles.record}><div className={styles.recordHead}><span className={styles.id}>Kural no: {row.policyId}</span><DefinitionState row={row} /></div><h3>{row.name || 'Adı belirtilmemiş kural'}</h3><Flow row={row} /><dl className={styles.meta}><div><dt>Hizmetler</dt><dd><Names values={row.services} kind="services" compact /></dd></div><Meta label="Zamanlama" value={policyScheduleLabel(row.schedule)} /></dl><div className={styles.actions}><ActionState row={row} /><span className={styles.hint}>Eşleşme: {policyCounterLabel(row.hitCount)}</span></div><Button variant="outline" onClick={() => setDetail(row.policyId)}><Eye size={16} aria-hidden="true" />Politika ayrıntıları</Button></article>)}</div>
+    </>}
+    {data && <footer className={styles.pagination}><div><p role="status">{filtered.length.toLocaleString('tr-TR')} / {data.rows.length.toLocaleString('tr-TR')} kayıt · Sayfa {safePage} / {pages}</p><p>Kaynak liste sırası korunur. Kural numarası, öncelik sırası değildir.</p></div><div><Button variant="outline" size="sm" aria-label="Önceki sayfa" disabled={safePage <= 1} onClick={() => setPage(safePage - 1)}><ChevronLeft size={16} aria-hidden="true" />Önceki</Button><Button variant="outline" size="sm" aria-label="Sonraki sayfa" disabled={safePage >= pages} onClick={() => setPage(safePage + 1)}>Sonraki<ChevronRight size={16} aria-hidden="true" /></Button></div></footer>}
+    </section>
+    <Dialog open={!!detail} onOpenChange={open => { if (!open) setDetail(null); }}><DialogContent className={`${common.modal} ${styles.modal}`}><DialogHeader><DialogTitle className={styles.dialogTitle}><ClipboardList size={20} aria-hidden="true" />Kural {detail?.policyId}: {detail?.name || 'Politika ayrıntıları'}</DialogTitle><DialogDescription>{target.device?.name || target.name} · {target.host} · VDOM: {target.vdom}</DialogDescription></DialogHeader>{detail && <><div className={styles.badges}><DefinitionState row={detail} /><ActionState row={detail} />{historical && <SemanticBadge tone="warning">Önceki veri</SemanticBadge>}</div>{detail.comment && <section className={styles.note}><h3>Kural açıklaması</h3><p>{detail.comment}</p></section>}<Flow row={detail} expanded /><section className={styles.note}><h3><Network size={16} aria-hidden="true" />Hizmetler ve zamanlama</h3><Names values={detail.services} kind="services" /><p>{policyScheduleLabel(detail.schedule)}</p></section><dl className={styles.meta}><Meta label="Kaynak liste sırası" value={String(detail.position)} /><Meta label="NAT (adres çevirisi)" value={detail.nat === true ? 'Açık' : detail.nat === false ? 'Kapalı' : 'Bilgi yok'} /><Meta label="Trafik kaydı" value={policyLoggingLabel(detail.logging)} /><Meta label="Eşleşme sayısı" value={policyCounterLabel(detail.hitCount)} /><Meta label="Son eşleşme (TSİ)" value={userDate(detail.lastUsedAt)} /><Meta label="Liste okuma zamanı (TSİ)" value={data ? userDate(data.collectedAt) : null} /></dl><Notice>Kayıt, politika tanımını gösterir. Adres gruplarının üyeleri burada açılmaz. Eşleşme sayacının zaman aralığı kaynakta belirtilmemiştir; bu değer tek başına güncel trafik veya etkin koruma kanıtı değildir.</Notice><div className={common.dialogActions}><Button onClick={() => setDetail(null)}>Kapat</Button></div></>}</DialogContent></Dialog>
+  </>;
+}
+function DefinitionState({ row }: { row: SecurityPolicy }) { return <SemanticBadge tone={row.enabled === true ? 'success' : 'neutral'} icon={row.enabled === true ? Check : row.enabled === false ? Pause : Info}>{row.enabled === true ? 'Kural etkin' : row.enabled === false ? 'Kural kapalı' : 'Durum bilgisi yok'}</SemanticBadge>; }
+function ActionState({ row }: { row: SecurityPolicy }) { return <SemanticBadge className={styles.actionBadge} tone={row.action === 'accept' ? 'success' : row.action === 'deny' ? 'danger' : 'neutral'} icon={row.action === 'accept' ? ShieldCheck : row.action === 'deny' ? ShieldX : Info}><span>{policyActionLabel(row.action)}</span></SemanticBadge>; }
+function Names({ values, compact = false, kind }: { values: string[] | null; compact?: boolean; kind: 'addresses' | 'interfaces' | 'services' }) { return <div className={styles.names}>{values === null ? <span className={styles.hint}>Bilgi yok</span> : values.length === 0 ? <span className={styles.hint}>Kaynak boş liste bildirdi</span> : <>{(compact ? values.slice(0, 2) : values).map((value, index) => <span key={`${value}:${index}`}>{policyNameLabel(value, kind)}</span>)}{compact && values.length > 2 && <small>+{values.length - 2} öğe · Ayrıntılarda tümü</small>}</>}</div>; }
+function Flow({ row, expanded = false }: { row: SecurityPolicy; expanded?: boolean }) { return <div className={styles.flow}><div className={styles.endpoint}><h3><Network size={13} aria-hidden="true" />Kaynak</h3><span className={styles.subLabel}>Arabirim</span><Names values={row.sourceInterfaces} kind="interfaces" compact={!expanded} /><div className={styles.addresses}><span className={styles.subLabel}>Adres / grup</span><Names values={row.sourceAddresses} kind="addresses" compact={!expanded} /></div></div><ArrowRight size={16} className={styles.arrow} aria-label="şu hedefe" /><div className={styles.endpoint}><h3><Server size={13} aria-hidden="true" />Hedef</h3><span className={styles.subLabel}>Arabirim</span><Names values={row.destinationInterfaces} kind="interfaces" compact={!expanded} /><div className={styles.addresses}><span className={styles.subLabel}>Adres / grup</span><Names values={row.destinationAddresses} kind="addresses" compact={!expanded} /></div></div></div>; }
+function Meta({ label, value }: { label: string; value?: string | null }) { return <div><dt>{label}</dt><dd>{value || 'Bilgi yok'}</dd></div>; }
+function Notice({ children, error = false }: { children: ReactNode; error?: boolean }) { const Icon = error ? TriangleAlert : Info; return <div className={error ? common.error : common.info} role={error ? 'alert' : undefined}><Icon size={18} aria-hidden="true" /><div>{children}</div></div>; }
+function Empty({ icon: Icon, title, children }: { icon: typeof Info; title: string; children?: ReactNode }) { return <div className={common.empty}><Icon size={28} aria-hidden="true" /><h3>{title}</h3>{children}</div>; }

@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+- **Security policy workspace** — Add explicit FortiGate/VDOM selection, distinct rule state and action, source-to-destination blocks, complete definition details, Turkish filters and responsive records. Preserve returned source order, unknown/empty/zero distinctions and exact counters; use an authorized read-only source endpoint with observed-host guards and safe stale/error states. Cover the real model, source reader, target factory and route with isolated regressions.
+
 - **Quarantine workspace** — Add explicit FortiGate/VDOM selection, visible reasons and source labels, expiry filters, Turkish timestamps and responsive records. Distinguish missing expiry from unlimited duration and expired rows from confirmed removal. Preserve ADMIN/feature/audit gates, contextualize add/remove confirmation, verify outcomes by rereading the selected scope and block blind retries after uncertain writes. Add isolated source/API/audit and browser coverage.
 
 - **Web analytics workspace** — Add explicit FortiAnalyzer/ADOM and fixed time-window selection, separate traffic volume/user/category views, searchable top-100 results and responsive details. Keep unknown metrics distinct from zero, expose source limits and per-view failures, and use bounded cancellable FortiView queries without the legacy future-day buffer for this screen.
