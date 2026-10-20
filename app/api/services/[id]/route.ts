@@ -8,6 +8,8 @@ import type { Prisma } from '@prisma/client';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { authorizeApiRequest } from '@/lib/auth/api-permission';
+import { serviceRecordDate } from '@/lib/services/applications';
 
 // Valid service types, statuses, protocols, and criticalities
 const VALID_SERVICE_TYPES = [
@@ -376,9 +378,11 @@ export async function PUT(
 // DELETE - Delete service
 // ============================================================================
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const access = await authorizeApiRequest(request, 'devices', 'delete');
+  if (!access.allowed) return access.response;
   try {
     const { id } = params;
 
@@ -386,54 +390,31 @@ export async function DELETE(
       return NextResponse.json(
         {
           success: false,
-          error: 'Service ID is required',
+          error: 'Servis kimliği gereklidir.',
           timestamp: new Date(),
         },
         { status: 400 }
       );
     }
 
-    // Check service exists and get dependencies
-    const existing = await prisma.service.findUnique({
-      where: { id },
-      include: {
-        dependencies: true,
-      },
-    });
-
-    if (!existing) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Service not found',
-          timestamp: new Date(),
-        },
-        { status: 404 }
-      );
-    }
-
-    // Warn if service has dependencies
-    if (existing.dependencies && existing.dependencies.length > 0) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: `Cannot delete service with ${existing.dependencies.length} dependency/dependencies. Remove dependencies first.`,
-          timestamp: new Date(),
-        },
-        { status: 409 }
-      );
-    }
-
-    // Delete service
-    const deleted = await prisma.service.delete({
-      where: { id },
-    });
+    const expectedUpdatedAt = request.nextUrl.searchParams.get('expectedUpdatedAt');
+    if (expectedUpdatedAt !== null && !serviceRecordDate(expectedUpdatedAt)) return NextResponse.json({ success: false, error: 'Silmeden önce servis kaydını yenileyin.' }, { status: 400 });
+    const outcome = await prisma.$transaction(async tx => {
+      // Block concurrent FK inserts and service edits before checking relationships.
+      await tx.$queryRaw`SELECT "id" FROM "services" WHERE "id" = ${id} FOR UPDATE`;
+      const existing = await tx.service.findUnique({ where: { id }, include: { dependencies: true } });
+      if (!existing) return { status: 404, error: 'Servis kaydı bulunamadı.' };
+      if (expectedUpdatedAt !== null && existing.updatedAt.getTime() !== Date.parse(expectedUpdatedAt)) return { status: 409, error: 'Servis kaydı başka bir oturumda değişti. Listeyi yenileyin.' };
+      if (existing.dependencies.length) return { status: 409, error: `Bu servise ait ${existing.dependencies.length} ilişki kaydı var. Önce ilişkileri gözden geçirip kaldırın.` };
+      return { deleted: await tx.service.delete({ where: { id } }) };
+    }, { isolationLevel: 'ReadCommitted', maxWait: 5000, timeout: 15000 });
+    if ('error' in outcome) return NextResponse.json({ success: false, error: outcome.error, timestamp: new Date() }, { status: outcome.status });
 
     return NextResponse.json(
       {
         success: true,
-        data: deleted,
-        message: 'Service deleted successfully',
+        data: outcome.deleted,
+        message: 'Servis kaydı silindi.',
         timestamp: new Date(),
       },
       { status: 200 }
@@ -443,7 +424,7 @@ export async function DELETE(
     return NextResponse.json(
       {
         success: false,
-        error: 'Failed to delete service',
+        error: 'Servis kaydı silinemedi. Yeniden deneyin.',
         timestamp: new Date(),
       },
       { status: 500 }

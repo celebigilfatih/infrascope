@@ -21,6 +21,7 @@ const date = (v: unknown): string | null => {
   const day = new Date(v.slice(0, 10) + 'T00:00:00Z');
   return day.toISOString().slice(0, 10) === v.slice(0, 10) ? v : null;
 };
+export { date as serviceRecordDate };
 const distinct = (ids: string[]) => new Set(ids).size === ids.length;
 function device(v: unknown, id: string): AppDevice {
   if (!object(v) || v.id !== id || !text(v.name)) throw Error('Servisin cihaz eşleştirmesi doğrulanamadı.');

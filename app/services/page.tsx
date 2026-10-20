@@ -1,218 +1,90 @@
 'use client';
-
-import { uiError, uiLabel } from '@/lib/i18n/tr';
-
-import { ActionIcon } from '@/components/ui/action-icon';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import Link from 'next/link';
+import { ArrowRight, Boxes, ChevronLeft, ChevronRight, Clock3, Eye, GitBranch, Info, Layers3, ListFilter, Network, PackageOpen, RefreshCw, Search, Server, Trash2, TriangleAlert } from 'lucide-react';
+import { apiGet, apiDelete } from '@/lib/api';
 import { PageHeading } from '@/components/ui/page-heading';
+import { SemanticBadge } from '@/components/ui/semantic-badge';
 import { StatusBadge } from '@/components/ui/status-badge';
-import { SeverityBadge } from '@/components/ui/severity-badge';
-import React, { useState, useEffect } from 'react';
-import Image from 'next/image';
-import { apiGet, apiDelete } from '../../lib/api';
-import { Service, ApiResponse } from '../../types';
-import { getVendorLogo } from '../../lib/formatting';
-import { useToast } from '@/components/ui/use-toast';
-import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Search, Plus, Trash2, Settings2, RefreshCcw } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { serviceStateLabels, criticalityLabel, relationLabel, servicePortLabel, serviceTypeLabel } from '@/lib/services/applications';
+import { parseServicesSnapshot, servicesSummary, filterServices, type ServicesSnapshot, type WorkspaceService } from '@/lib/services/workspace';
+import { userDate } from '@/lib/users/workspace';
+import common from '@/components/users/users-workspace.module.css';
+import styles from './page.module.css';
 
 export default function ServicesPage() {
-  const { toast } = useToast();
-  const [services, setServices] = useState<Service[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-
-  // Delete dialog state
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [serviceToDelete, setServiceToDelete] = useState<{id: string, name: string} | null>(null);
-
-  useEffect(() => {
-    loadServices();
+  const [data, setData] = useState<ServicesSnapshot | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState('');
+  const [search, setSearch] = useState(''), [status, setStatus] = useState(''), [application, setApplication] = useState(''), [relation, setRelation] = useState(''), [page, setPage] = useState(1), [detailId, setDetail] = useState<string | null>(null);
+  const [remove, setRemove] = useState<WorkspaceService | null>(null), [deleting, setDeleting] = useState(false), [uncertain, setUncertain] = useState(false), [notice, setNotice] = useState('');
+  const active = useRef<AbortController | null>(null), sequence = useRef(0), deletingRef = useRef(false);
+  const load = useCallback(async () => {
+    const seq = ++sequence.current; active.current?.abort(); const controller = new AbortController(); active.current = controller;
+    setLoading(true); setError(''); setNotice(''); setDetail(null);
+    try {
+      const json: unknown = await apiGet('/api/services/workspace', undefined, { signal: controller.signal, timeout: 30000 });
+      if (controller.signal.aborted || seq !== sequence.current) return null;
+      const snapshot = parseServicesSnapshot(json); setData(snapshot); setUncertain(false); return snapshot;
+    } catch { if (!controller.signal.aborted && seq === sequence.current) setError('Servis, uygulama ve cihaz ilişkileri alınamadı veya doğrulanamadı. Oturumunuzu ve erişim yetkinizi kontrol edip yeniden deneyin.'); return null; }
+    finally { if (!controller.signal.aborted && seq === sequence.current) setLoading(false); }
   }, []);
-
-  const loadServices = async () => {
+  useEffect(() => { void load(); return () => active.current?.abort(); }, [load]);
+  const rows = data?.rows, summary = data ? servicesSummary(data.rows) : null;
+  const applications = useMemo(() => [...new Map((rows || []).flatMap(s => s.application ? [[s.application.id, s.application] as const] : [])).values()].sort((a, b) => a.name.localeCompare(b.name, 'tr')), [rows]);
+  const filtered = useMemo(() => filterServices(rows || [], { search, status, application, relation }), [rows, search, status, application, relation]);
+  const pages = Math.max(1, Math.ceil(filtered.length / 10)), safePage = Math.min(page, pages), visible = filtered.slice((safePage - 1) * 10, safePage * 10), detail = rows?.find(s => s.id === detailId), filters = !!(search || status || application || relation);
+  function clear() { setSearch(''); setStatus(''); setApplication(''); setRelation(''); setPage(1); }
+  function askRemove(service: WorkspaceService) { if (!service.updatedAt || !data?.canDelete || loading || error || uncertain || deletingRef.current || service.dependencies.length) return; setDetail(null); setRemove(service); }
+  async function confirmRemove() {
+    if (!remove || !remove.updatedAt || !data?.canDelete || loading || error || uncertain || deletingRef.current || remove.dependencies.length) return;
+    const selected = remove; deletingRef.current = true; setDeleting(true); setNotice('');
     try {
-      setLoading(true);
-      setError(null);
-      const response: ApiResponse<Service[]> = await apiGet('/api/services');
-      if (response.success) {
-        setServices(response.data || []);
-      } else {
-        setError(uiError('Servisler yüklenemedi'));
-      }
-    } catch (err) {
-      setError(uiError((err as Error).message || 'Servisler yüklenirken hata oluştu'));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDelete = (id: string, name: string) => {
-    setServiceToDelete({ id, name });
-    setDeleteDialogOpen(true);
-  };
-
-  const confirmDelete = async () => {
-    if (!serviceToDelete) return;
-
-    try {
-      const response: ApiResponse<unknown> = await apiDelete(`/api/services/${serviceToDelete.id}`);
-      if (response.success) {
-        toast({
-          title: "Başarılı",
-          description: `${serviceToDelete.name} servisi silindi.`,
-        });
-        loadServices();
-      } else {
-        toast({
-          title: "Hata",
-          description: response.error || 'Servis silinemedi',
-          variant: "destructive",
-        });
-      }
-    } catch {
-      toast({
-        title: "Hata",
-        description: 'Servis silinirken hata oluştu',
-        variant: "destructive",
-      });
-    } finally {
-      setDeleteDialogOpen(false);
-      setServiceToDelete(null);
-    }
-  };
-
-  const filteredServices = services.filter(service => {
-    return service.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-           service.displayName?.toLowerCase().includes(searchQuery.toLowerCase());
-  });
-
-  return (
-    <>
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
-          <div>
-            <PageHeading section="services" description={<>Ağ servislerini ve yazılım yığınlarını izleyin ve yönetin</>}>Servisler ve Uygulamalar</PageHeading>
-          </div>
-          <Button size="lg" className="font-bold shadow-lg shadow-primary/20">
-            <Plus className="mr-2 h-5 w-5" />
-            Yeni Servis Kaydet
-          </Button>
-        </div>
-
-        {/* Search */}
-        <Card className="mb-6">
-          <CardContent className="p-4 flex gap-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input 
-                placeholder="Servisleri isme göre ara..." 
-                className="pl-10"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
-            <Button variant="outline" size="icon" onClick={loadServices} title="Yenile" aria-label="Yenile">
-              <RefreshCcw className="h-4 w-4" />
-            </Button>
-          </CardContent>
-        </Card>
-
-        {loading ? (
-          <div className="flex justify-center py-12">
-            <RefreshCcw className="h-12 w-12 animate-spin text-primary" />
-          </div>
-        ) : error ? (
-          <Card className="border-destructive bg-destructive/10">
-            <CardContent className="p-6 flex items-center justify-between">
-              <p className="text-destructive font-medium">{uiError(error)}</p>
-              <Button variant="outline" size="sm" onClick={loadServices}><ActionIcon action="refresh" />Tekrar Dene</Button>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredServices.length === 0 ? (
-              <Card className="col-span-full">
-                <CardContent className="py-12 text-center text-muted-foreground">
-                  Henüz kayıtlı servis bulunamadı.
-                </CardContent>
-              </Card>
-            ) : (
-              filteredServices.map((service) => (
-                <Card key={service.id} className="hover:border-primary/50 transition-colors group overflow-hidden shadow-md">
-                  <CardHeader className="pb-3">
-                    <div className="flex justify-between items-start">
-                      <div className="space-y-1">
-                        <CardTitle className="text-lg group-hover:text-primary transition-colors flex items-center gap-2">
-                          {service.application?.vendor && getVendorLogo(service.application.vendor) && (
-                            <Image
-                              src={getVendorLogo(service.application.vendor)!} 
-                              alt={service.application.vendor}
-                              width={24}
-                              height={24}
-                              className="h-6 w-6 object-contain"
-                            />
-                          )}
-                          {service.displayName || service.name}
-                        </CardTitle>
-                        <CardDescription className="text-[10px] uppercase tracking-widest font-bold">
-                          {uiLabel(service.type)}
-                        </CardDescription>
-                      </div>
-                      <StatusBadge status={service.status} />
-                    </div>
-                  </CardHeader>
-                  
-                  <CardContent className="pb-4">
-                    <div className="space-y-3">
-                      <div className="flex items-center text-sm">
-                        <span className="w-20 text-muted-foreground font-semibold text-xs uppercase tracking-wider">Port/Prot:</span>
-                        <Badge variant="secondary" className="font-mono text-[11px]">
-                          {service.port} / {service.protocol}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center text-sm">
-                        <span className="w-20 text-muted-foreground font-semibold text-xs uppercase tracking-wider">Kritiklik:</span>
-                        <SeverityBadge severity={service.criticality} />
-                      </div>
-                    </div>
-                  </CardContent>
-
-                  <div className="flex justify-between items-center p-4 bg-muted/30 border-t border-border/50">
-                    <Button variant="ghost" size="sm" className="h-8 text-primary hover:text-primary hover:bg-primary/10">
-                      <Settings2 className="h-3.5 w-3.5 mr-1.5" />
-                      Detaylar
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="h-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                      onClick={() => handleDelete(service.id, service.name)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-                      Sil
-                    </Button>
-                  </div>
-                </Card>
-              ))
-            )}
-          </div>
-        )}
-
-        <ConfirmDialog
-          open={deleteDialogOpen}
-          onOpenChange={setDeleteDialogOpen}
-          title="Servisi Sil"
-          description={`${serviceToDelete?.name} servisini silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.`}
-          onConfirm={confirmDelete}
-          variant="destructive"
-          confirmText="Sil"
-        />
-      </main>
-    </>
-  );
+      const result = await apiDelete(`/api/services/${encodeURIComponent(selected.id)}?${new URLSearchParams({ expectedUpdatedAt: selected.updatedAt! })}`, { timeout: 30000 });
+      const acknowledged = result?.success === true && result?.data?.id === selected.id;
+      setRemove(null); const latest = await load();
+      if (acknowledged && latest && !latest.rows.some(s => s.id === selected.id)) setNotice(`${selected.displayName || selected.name} servis kaydı silindi ve güncel listede bulunmadığı doğrulandı.`);
+      else { setUncertain(true); setNotice('Silme sonucu tam olarak doğrulanamadı. Yeniden işlem yapmadan önce verileri yenileyip servis ve ilişki kayıtlarını kontrol edin.'); }
+    } catch { setRemove(null); setUncertain(true); setNotice('Silme sonucu doğrulanamadı. Yeniden işlem yapmadan önce verileri yenileyin.'); }
+    finally { deletingRef.current = false; setDeleting(false); }
+  }
+  return <div className={common.page}><div className={common.workspace}>
+    <header className={common.header}><PageHeading section="services" description="Servis durumunu, uygulama atamasını, barındıran cihazı ve kayıtlı bağımlılıkları birlikte inceleyin.">Servisler</PageHeading><div className={common.headerActions}><Button asChild variant="outline"><Link href="/services/apps"><Boxes size={16} aria-hidden="true" />Uygulamalar</Link></Button><Button asChild variant="outline"><Link href="/services/dependencies"><GitBranch size={16} aria-hidden="true" />Bağımlılıklar</Link></Button><Button variant="outline" disabled={loading || deleting} onClick={() => void load()}><RefreshCw size={16} aria-hidden="true" className={loading ? 'animate-spin motion-reduce:animate-none' : ''} />{loading ? 'Okunuyor…' : 'Verileri yenile'}</Button></div></header>
+    <div className={common.serviceBar}><SemanticBadge tone="info" icon={Server}>Kayıtlı servis envanteri</SemanticBadge><span>Kaynak: Veritabanı · Uygulama ve cihaz ilişkileri</span></div>
+    <section className={common.stats} aria-label="Servis özeti">{[
+      { label: 'Servis', value: summary?.total, icon: Layers3, note: 'Uygulama atanmamış servisler de dahildir' },
+      { label: 'Çalışıyor', value: summary?.running, icon: Network, note: 'Kayıtlı durumu çalışıyor olan servisler' },
+      { label: 'İnceleme gereken', value: summary?.attention, icon: TriangleAlert, note: 'Başarısız, sorunlu veya durmuş servis kayıtları' },
+      { label: 'Bağımlılık / ilişki', value: summary?.relations, icon: GitBranch, note: 'Servislerden hedef cihazlara kayıtlı ilişkiler' },
+    ].map(stat => <article className={common.stat} key={stat.label}><div><h2>{stat.label}</h2><span className={common.icon}><stat.icon size={18} aria-hidden="true" /></span></div><strong>{stat.value === undefined ? loading ? 'Okunuyor…' : 'Bilgi yok' : stat.value.toLocaleString('tr-TR')}</strong><p>{stat.note}</p></article>)}</section>
+    {error && <Notice error>{error}{data && ' Önceki liste korunuyor; güncel olmayabilir.'}</Notice>}
+    {notice && <Notice error={uncertain}>{notice}</Notice>}
+    <Notice>Durumlar servis kayıtlarına aittir; canlı erişilebilirlik testi değildir. Önem seviyesi durumdan ayrıdır. İlişkiler servis → hedef cihaz yönünde gösterilir; dolaylı bağımlılık çıkarımı yapılmaz.{summary && <p className={styles.coverage}>{summary.unknown} servisin durumu bilinmiyor · {summary.unassigned} servise uygulama atanmamış.</p>}</Notice>
+    <div className={common.filters} role="search" aria-label="Servis filtreleri"><div className={`${styles.field} ${styles.search}`}><label htmlFor="service-search"><Search size={14} aria-hidden="true" />Servis ve ilişkilerde ara</label><Input id="service-search" type="search" maxLength={120} placeholder="Servis, uygulama, cihaz, IP adresi veya port" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} /></div><div className={styles.field}><label htmlFor="service-status">Kayıtlı servis durumu</label><select id="service-status" value={status} onChange={e => { setStatus(e.target.value); setPage(1); }}><option value="">Tüm durumlar</option>{Object.entries(serviceStateLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div><div className={styles.field}><label htmlFor="service-app">Bağlı uygulama</label><select id="service-app" value={application} onChange={e => { setApplication(e.target.value); setPage(1); }}><option value="">Tüm uygulamalar</option>{applications.map(app => <option key={app.id} value={JSON.stringify(app.id)}>{app.name} · {app.version || 'Sürüm bilgisi yok'}</option>)}<option value="null">Uygulama atanmamış</option></select></div><div className={styles.field}><label htmlFor="service-relation">Bağımlılık / ilişki</label><select id="service-relation" value={relation} onChange={e => { setRelation(e.target.value); setPage(1); }}><option value="">Tümü</option><option value="linked">İlişki kaydı var</option><option value="none">İlişki kaydı yok</option></select></div>{filters && <Button variant="ghost" onClick={clear}><ListFilter size={16} aria-hidden="true" />Filtreleri temizle</Button>}</div>
+    <section className={common.collection} aria-label="Servis listesi" aria-busy={loading}><header className={common.sectionHeader}><div><h2><Layers3 size={18} aria-hidden="true" />Servis, uygulama ve cihaz özeti</h2><p>Son liste okuma: {data ? `${userDate(data.readAt)} · TSİ` : 'Henüz okunmadı'}</p></div><SemanticBadge tone={error ? 'warning' : data ? 'info' : 'neutral'} icon={Clock3}>{loading ? 'Okunuyor…' : error && data ? 'Önceki veri' : data ? 'Kayıtlı envanter' : 'Veri yok'}</SemanticBadge></header>
+    {!data ? <Empty icon={loading ? RefreshCw : Info} title={loading ? 'Servis kayıtları yükleniyor' : 'Servis kayıtları alınamadı'}>{!loading && <Button variant="outline" onClick={() => void load()}>Tekrar dene</Button>}</Empty> : !visible.length ? <Empty icon={filters ? Search : PackageOpen} title={filters ? 'Filtrelere uygun servis yok' : 'Henüz servis kaydı yok'}>{filters ? <Button variant="outline" onClick={clear}>Filtreleri temizle</Button> : <p>Kayıtlı servisler, uygulama atamaları ve cihaz ilişkileri burada gösterilir.</p>}</Empty> : <>
+      <div className={styles.tableWrap}><table className={styles.table}><caption className="sr-only">Servis, kayıtlı durum, uygulama ataması, barındıran cihaz ve hedef cihaz ilişkileri</caption><thead><tr><th scope="col">Servis / bağlantı</th><th scope="col">Durum / önem</th><th scope="col">Bağlı uygulama</th><th scope="col">Barındıran cihaz</th><th scope="col">Bağımlılıklar</th><th scope="col">Ayrıntılar</th></tr></thead><tbody>{visible.map(s => <tr key={s.id}><td><div className={styles.identity}><span className={styles.appIcon}><Layers3 size={18} aria-hidden="true" /></span><strong>{s.displayName || s.name}</strong></div><small>{serviceTypeLabel(s.type)}</small><small>{servicePortLabel(s)}</small></td><td><StatusBadge status={s.status} label={serviceStateLabels[s.status]} /><div className={styles.badges}><SemanticBadge tone="neutral">Önem: {criticalityLabel(s.criticality)}</SemanticBadge></div></td><td><Application service={s} /></td><td><Host service={s} /></td><td><RelationsPreview service={s} /></td><td><Button variant="outline" size="sm" aria-label={`${s.displayName || s.name}: servis ayrıntıları`} onClick={() => setDetail(s.id)}><Eye size={14} aria-hidden="true" />İncele</Button></td></tr>)}</tbody></table></div>
+      <div className={styles.mobile}>{visible.map(s => <article className={styles.record} key={s.id}><div className={styles.identity}><span className={styles.appIcon}><Layers3 size={18} aria-hidden="true" /></span><h3>{s.displayName || s.name}</h3></div><div className={styles.badges}><StatusBadge status={s.status} /><SemanticBadge tone="neutral">Önem: {criticalityLabel(s.criticality)}</SemanticBadge></div><p className={styles.hint}>{serviceTypeLabel(s.type)} · {servicePortLabel(s)}</p><section><h4><Boxes size={14} aria-hidden="true" />Bağlı uygulama</h4><Application service={s} /></section><section><h4><Server size={14} aria-hidden="true" />Barındıran cihaz</h4><Host service={s} /></section><section><h4><GitBranch size={14} aria-hidden="true" />Bağımlılıklar</h4><RelationsPreview service={s} /></section><Button variant="outline" onClick={() => setDetail(s.id)}><Eye size={16} aria-hidden="true" />Servis ayrıntıları</Button></article>)}</div>
+    </>}
+    {data && <footer className={styles.pagination}><div><p role="status">{filtered.length.toLocaleString('tr-TR')} / {data.rows.length.toLocaleString('tr-TR')} servis · Sayfa {safePage} / {pages}</p><p>Arama tüm servis, uygulama ve ilişki hedeflerini kapsar.</p></div><div><Button variant="outline" size="sm" aria-label="Önceki sayfa" disabled={safePage <= 1} onClick={() => setPage(safePage - 1)}><ChevronLeft size={16} aria-hidden="true" />Önceki</Button><Button variant="outline" size="sm" aria-label="Sonraki sayfa" disabled={safePage >= pages} onClick={() => setPage(safePage + 1)}>Sonraki<ChevronRight size={16} aria-hidden="true" /></Button></div></footer>}
+    </section>
+    <Dialog open={!!detail} onOpenChange={open => { if (!open) setDetail(null); }}><DialogContent className={`${common.modal} ${styles.modal}`}><DialogHeader><DialogTitle className={styles.dialogTitle}><Layers3 size={20} aria-hidden="true" />{detail?.displayName || detail?.name || 'Servis ayrıntıları'}</DialogTitle><DialogDescription>Uygulama ataması, barındıran cihaz ve kayıtlı hedef cihaz ilişkileri</DialogDescription></DialogHeader>{detail && <>
+      <div className={styles.badges}><StatusBadge status={detail.status} label={serviceStateLabels[detail.status]} /><SemanticBadge tone="neutral">Önem: {criticalityLabel(detail.criticality)}</SemanticBadge>{!!error && <SemanticBadge tone="warning">Önceki veri</SemanticBadge>}</div>
+      <Tabs defaultValue="service" key={detail.id}><TabsList className={styles.detailTabs} aria-label="Servis ayrıntı bölümleri"><TabsTrigger value="service"><Layers3 size={14} aria-hidden="true" />Servis bilgileri</TabsTrigger><TabsTrigger value="relations"><GitBranch size={14} aria-hidden="true" />İlişkiler ({detail.dependencies.length})</TabsTrigger></TabsList><TabsContent value="service"><div className={styles.detailSection}>
+        <dl className={styles.meta}><Meta label="Kayıt adı" value={detail.name} /><Meta label="Servis türü" value={serviceTypeLabel(detail.type)} /><Meta label="Port / protokol" value={servicePortLabel(detail)} /><Meta label="Kaydı oluşturma (TSİ)" value={userDate(detail.createdAt)} /><Meta label="Kaydı güncelleme (TSİ)" value={userDate(detail.updatedAt)} /><Meta label="Liste okuma zamanı (TSİ)" value={data ? userDate(data.readAt) : null} /></dl>
+        {detail.description && <p>{detail.description}</p>}<section className={styles.context}><h3><Boxes size={17} aria-hidden="true" />Bağlı uygulama</h3><Application service={detail} />{detail.application && <p>Üretici: {detail.application.vendor || 'Bilgi yok'}</p>}</section><section className={styles.context}><h3><Server size={17} aria-hidden="true" />Barındıran cihaz</h3><Host service={detail} /></section><Notice>Kayıt güncelleme zamanı son sağlık kontrolü zamanı değildir. Servis durumu, uygulamanın veya barındıran cihazın güncel sağlığını tek başına göstermez.</Notice>
+      </div></TabsContent><TabsContent value="relations"><section className={styles.detailSection}><h3><GitBranch size={17} aria-hidden="true" />Hedef cihaz ilişkileri <span>{detail.dependencies.length}</span></h3><p>Yön: bu servis → kayıtlı ilişki türü → hedef cihaz. Hedef, başka bir uygulama veya servis olarak yorumlanmaz.</p>{detail.dependencies.length ? <div className={styles.relations}>{detail.dependencies.map(d => <article key={d.id}><div className={styles.relationHead}><SemanticBadge tone="info" icon={GitBranch}>{relationLabel(d.type)}</SemanticBadge><SemanticBadge tone="neutral">İlişki önemi: {criticalityLabel(d.criticality)}</SemanticBadge></div><div className={styles.flow}><div><h4>Kaynak servis</h4><strong>{detail.displayName || detail.name}</strong><small>Barındıran cihaz: {detail.device.name}</small></div><ArrowRight size={16} aria-label="şu hedef cihaza" /><div><h4>Hedef cihaz</h4><strong>{d.targetDevice.name}</strong><code>{d.targetDevice.managementIp || 'IP bilgisi yok'}</code></div></div>{d.description && <p>{d.description}</p>}</article>)}</div> : <p>Bu servis için ilişki kaydı yok. Bu, servisin hiç bağımlılığı olmadığı anlamına gelmez.</p>}</section></TabsContent></Tabs>
+      {data?.canDelete && <div className={styles.deleteArea}><p>{detail.dependencies.length ? 'İlişki kayıtları olan servis silinemez. Önce bağımlılık kayıtlarını gözden geçirin.' : 'Silme, yalnızca servis envanter kaydını kaldırır; cihazdaki servisi durdurmaz.'}</p><Button variant="outline" disabled={loading || !!error || deleting || uncertain || !detail.updatedAt || detail.dependencies.length > 0} onClick={() => askRemove(detail)}><Trash2 size={15} aria-hidden="true" />Servis kaydını sil</Button></div>}
+      <div className={common.dialogActions}><Button onClick={() => setDetail(null)}>Kapat</Button></div>
+    </>}</DialogContent></Dialog>
+    <Dialog open={!!remove} onOpenChange={open => { if (!open && !deletingRef.current) setRemove(null); }}><DialogContent className={common.modal}><DialogHeader><DialogTitle className={styles.dialogTitle}><Trash2 size={20} aria-hidden="true" />Servis kaydını sil</DialogTitle><DialogDescription>Yalnızca seçili envanter kaydı kaldırılır. Cihazdaki servis durdurulmaz. Bu işlem geri alınamaz.</DialogDescription></DialogHeader>{remove && <><dl className={styles.meta}><Meta label="Servis" value={remove.displayName || remove.name} /><Meta label="Barındıran cihaz" value={remove.device.name} /><Meta label="Uygulama" value={remove.application?.name || 'Uygulama atanmamış'} /><Meta label="Port / protokol" value={servicePortLabel(remove)} /></dl><Notice>Son okumada {remove.dependencies.length} ilişki kaydı var. Silme sırasında sunucu ilişkileri ve güncel yetkinizi yeniden kontrol eder.</Notice><div className={common.dialogActions}><Button variant="outline" disabled={deleting} onClick={() => setRemove(null)}>Vazgeç</Button><Button variant="destructive" disabled={deleting} onClick={() => void confirmRemove()}>{deleting ? 'Siliniyor ve doğrulanıyor…' : 'Kaydı kalıcı olarak sil'}</Button></div></>}</DialogContent></Dialog>
+  </div></div>;
 }
+function Application({ service }: { service: WorkspaceService }) { return service.application ? <div className={styles.preview}><strong>{service.application.name}</strong><small>Sürüm: {service.application.version || 'Bilgi yok'}</small></div> : <SemanticBadge tone="neutral" icon={Boxes}>Uygulama atanmamış</SemanticBadge>; }
+function Host({ service }: { service: WorkspaceService }) { return <div className={styles.preview}><strong>{service.device.name}</strong><code>{service.device.managementIp || 'IP bilgisi yok'}</code></div>; }
+function RelationsPreview({ service }: { service: WorkspaceService }) { const targets = new Map(service.dependencies.map(d => [d.targetDeviceId, d.targetDevice.name])); return <div className={styles.preview}><strong>{service.dependencies.length} ilişki · {targets.size} hedef</strong>{[...targets.entries()].slice(0, 2).map(([id, name]) => <span key={id}>{name}</span>)}{targets.size > 2 && <small>+{targets.size - 2} hedef · Ayrıntılarda tümü</small>}{!targets.size && <small>Kayıtlı ilişki yok</small>}</div>; }
+function Meta({ label, value }: { label: string; value?: string | null }) { return <div><dt>{label}</dt><dd>{value || 'Bilgi yok'}</dd></div>; }
+function Notice({ children, error = false }: { children: ReactNode; error?: boolean }) { const Icon = error ? TriangleAlert : Info; return <div className={error ? common.error : common.info} role={error ? 'alert' : undefined}><Icon size={18} aria-hidden="true" /><div>{children}</div></div>; }
+function Empty({ icon: Icon, title, children }: { icon: typeof Info; title: string; children?: ReactNode }) { return <div className={common.empty}><Icon size={28} aria-hidden="true" /><h3>{title}</h3>{children}</div>; }

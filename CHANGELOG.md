@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+- **Services workspace** — Add a complete authorized service/application/host/relationship snapshot, Turkish counts and filters, responsive records and full details. Preserve unknown/stale evidence, enforce private caching and strict timestamps, and protect record deletion with current roles, optional version checks, row locks and verified read-back. Cover FK concurrency, permissions and desktop/mobile flows in disposable PostgreSQL.
+
 - **Lint debt closure** — Remove three unsafe shared metadata types and four hook/image warnings without relaxing rules. Keep navigation progress pending until the route changes, include shared types in standard lint and add strict lint, callback/polling/image/navigation regressions.
 
 - **Topology object actions** — Add object-specific right-click and keyboard/mobile ellipsis menus for buildings, devices and connections. Reuse scoped details, direct links, endpoint navigation, clipboard feedback and authorized edit forms; preserve dialog focus and viewport bounds without source requests on opening. Remove simulated operational actions and add isolated browser regressions.
