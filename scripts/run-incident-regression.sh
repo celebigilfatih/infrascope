@@ -100,4 +100,8 @@ npm run test:snapshot-workspace-collector
 npm run test:incident-detail
 npm run test:incident-center
 npm run test:incident-collaboration
-npm run test:incidents:e2e
+if [ -n "${INFRASCOPE_E2E_SHARD:-}" ]; then
+  npm run test:incidents:e2e -- --shard="$INFRASCOPE_E2E_SHARD"
+else
+  npm run test:incidents:e2e
+fi

@@ -78,6 +78,21 @@ test('tag and manual publication wait for every required reusable quality/regres
     for (const task of Object.values(workflow.jobs)) assert.ok(!task['continue-on-error']);
   }
 });
+test('incident CI runs all eight isolated shards and retains a distinct report for every shard', () => {
+  const workflow = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/incident-regression.yml'), 'utf8'));
+  const job = workflow.jobs['browser-and-database'];
+  assert.deepEqual(job.strategy.matrix.shard, [1, 2, 3, 4, 5, 6, 7, 8]);
+  assert.equal(job.strategy['fail-fast'], false);
+  const run = job.steps.find(step => step.run === 'npm run test:incidents:regression');
+  assert.equal(run.env.INFRASCOPE_E2E_SHARD, '${{ matrix.shard }}/8');
+  assert.ok(job.steps.find(step => step.uses === 'actions/upload-artifact@v4').with.name.includes('${{ matrix.shard }}'));
+  const compose = yaml.load(fs.readFileSync(path.join(root, 'compose.incident-tests.yml'), 'utf8'));
+  assert.equal(compose.services.tests.environment.INFRASCOPE_E2E_SHARD, '${INFRASCOPE_E2E_SHARD:-}');
+  const runner = fs.readFileSync(path.join(root, 'scripts/run-incident-regression.sh'), 'utf8');
+  assert.match(runner, /npm run test:incidents:e2e -- --shard="\$INFRASCOPE_E2E_SHARD"/);
+  assert.match(runner, /else\s+ npm run test:incidents:e2e/);
+});
+
 test('reusable quality workflow executes policy regressions, real compiler controls and the full gate', () => {
   const workflow = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/release-quality.yml'), 'utf8'));
   const steps = workflow.jobs.quality.steps;

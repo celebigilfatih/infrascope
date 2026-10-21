@@ -17,12 +17,18 @@ jobs:
   browser-and-database:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
       - name: Run isolated incident regression
+        env:
+          INFRASCOPE_E2E_SHARD: ${{ matrix.shard }}/8
         run: npm run test:incidents:regression
       - name: Remove disposable containers and database
         if: always()
@@ -31,7 +37,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: incident-regression-${{ github.run_attempt }}
+          name: incident-regression-${{ github.run_attempt }}-${{ matrix.shard }}
           path: output/incident-regression/
           if-no-files-found: warn
           retention-days: 7
