@@ -36,18 +36,22 @@ test('Lint: capacity callbacks keep the selected period on refresh without refet
   const list = page.getByRole('region', { name: 'Analiz sonuçları', exact: true });
   await expect(list.getByRole('table').getByText('TEST CPU 7', { exact: true })).toBeVisible();
   const queries = () => state.reads.filter(url => url.startsWith('/api/integrations/vmware')).map(url => new URL(url, 'http://fixture').searchParams.get('days'));
-  // The development server intentionally replays mount effects in Strict Mode.
-  await expect.poll(queries).toEqual(['7', '7']);
+  // Strict Mode may abort its first mount before the browser dispatches it.
+  // Bound mount reads, then require exact deltas for user actions and filters.
+  const mounted = queries();
+  expect(mounted.length).toBeGreaterThanOrEqual(1); expect(mounted.length).toBeLessThanOrEqual(2);
+  expect(mounted.every(days => days === '7')).toBe(true);
   await page.getByLabel('Ölçüm dönemi', { exact: true }).selectOption('30');
   await expect(list.getByRole('table').getByText('TEST CPU 30', { exact: true })).toBeVisible();
+  await expect.poll(queries).toEqual([...mounted, '30']);
   await page.getByRole('button', { name: 'Verileri yenile', exact: true }).click();
-  await expect.poll(queries).toEqual(['7', '7', '30', '30']);
+  await expect.poll(queries).toEqual([...mounted, '30', '30']);
   await page.getByLabel('Kaynaklarda ara', { exact: true }).fill('missing'); await expect(list.getByRole('table')).toHaveCount(0);
   await page.getByLabel('Kaynaklarda ara', { exact: true }).fill('TEST');
   await expect(list.getByRole('table').getByText('TEST CPU 30', { exact: true })).toBeVisible();
   await page.clock.fastForward(120000);
   // The current analysis screen refreshes explicitly; it has no polling timer.
-  expect(queries()).toEqual(['7', '7', '30', '30']);
+  expect(queries()).toEqual([...mounted, '30', '30']);
   expect(state.writes).toEqual([]); expect(state.errors).toEqual([]);
 });
 
@@ -58,13 +62,14 @@ test('Lint: dependency callbacks do not refetch on search renders', async ({ pag
   const list = page.getByRole('region', { name: 'Bağımlılık listesi', exact: true });
   await expect(list.getByRole('table').getByText('TEST Service', { exact: true })).toBeVisible();
   const reads = () => state.reads.filter(url => url === '/api/services/dependencies/workspace').length;
-  await expect.poll(reads).toBe(2);
+  const mounted = reads();
+  expect(mounted).toBeGreaterThanOrEqual(1); expect(mounted).toBeLessThanOrEqual(2);
   await page.getByLabel('İlişkilerde ara', { exact: true }).fill('missing');
   await expect(page.getByRole('heading', { name: 'Filtrelere uygun ilişki yok', exact: true })).toBeVisible();
   await page.getByLabel('İlişkilerde ara', { exact: true }).fill('TEST');
-  await expect(list.getByRole('table').getByText('TEST Service', { exact: true })).toBeVisible(); expect(reads()).toBe(2);
+  await expect(list.getByRole('table').getByText('TEST Service', { exact: true })).toBeVisible(); expect(reads()).toBe(mounted);
   await page.getByRole('button', { name: 'Verileri yenile', exact: true }).click();
-  await expect.poll(reads).toBe(3);
+  await expect.poll(reads).toBe(mounted + 1);
   expect(state.reads.filter(url => ['/api/services/dependencies', '/api/services', '/api/devices'].includes(url))).toEqual([]);
   expect(state.writes).toEqual([]); expect(state.errors).toEqual([]);
 });
