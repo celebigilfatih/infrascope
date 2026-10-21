@@ -6,7 +6,7 @@
 # ============================================================================
 # STAGE 1: BUILDER
 # ============================================================================
-FROM node:20 AS builder
+FROM node:24 AS builder
 
 # Disable lockfile patching bug in Next.js 14.2.35
 ENV NEXT_DISABLE_LOCKFILE_PATCH=1
@@ -44,7 +44,7 @@ RUN INFRASCOPE_BUILD=1 npm run build
 # ============================================================================
 # STAGE 2: DEPENDENCIES
 # ============================================================================
-FROM node:20 AS deps
+FROM node:24 AS deps
 
 WORKDIR /app
 
@@ -57,7 +57,7 @@ RUN npm ci --omit=dev --legacy-peer-deps && npm cache clean --force
 # ============================================================================
 # STAGE 3: RUNTIME
 # ============================================================================
-FROM node:20-slim
+FROM node:24-slim
 
 # Metadata
 LABEL maintainer="InfraScope Team"

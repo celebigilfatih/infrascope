@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { FirewallReadTargetError } from '@/lib/firewall/read-service';
 import { readFirewallSshStatus } from '@/lib/firewall/ssh-read';
 
-type RouteContext = { params: { id: string } };
+type RouteContext = { params: Promise<{ id: string }> };
 
-export async function GET(_request: NextRequest, { params }: RouteContext) {
+export async function GET(_request: NextRequest, props: RouteContext) {
+  const params = await props.params;
   try {
     const result = await readFirewallSshStatus(params.id);
     return NextResponse.json({ success: true, target: result.target, ...result.envelope });

@@ -107,7 +107,7 @@ export function TopologyTooltipSurface({ id, anchor, container, children, classN
     setPosition({ left: Math.max(minX, Math.min(left, maxX - rect.width)) - (bounds?.left || 0) - (container?.clientLeft || 0) + (container?.scrollLeft || 0), top: Math.max(minY, Math.min(top, maxY - rect.height)) - (bounds?.top || 0) - (container?.clientTop || 0) + (container?.scrollTop || 0) });
   }, [anchor, children, container]);
   if (!anchor) return null;
-  return createPortal(<div ref={ref} id={id} role="tooltip" onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave} onFocusCapture={onFocusCapture} onBlurCapture={onBlurCapture} onClick={event => event.stopPropagation()} onPointerDown={event => event.stopPropagation()} className={`z-[1020] max-w-[calc(100vw-24px)] overflow-y-auto rounded-xl border bg-popover text-popover-foreground shadow-xl ${className}`} style={{ ...position, position: container ? 'absolute' : 'fixed', pointerEvents: 'auto', maxWidth: container ? Math.max(0, container.clientWidth - 24) : undefined, maxHeight: container ? Math.max(0, container.clientHeight - 24) : 'calc(100dvh - 24px)' }}>{children}</div>, container || document.body);
+  return createPortal(<div ref={ref} id={id} role="tooltip" onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave} onFocusCapture={onFocusCapture} onBlurCapture={onBlurCapture} onClick={event => event.stopPropagation()} onPointerDown={event => event.stopPropagation()} className={`z-1020 max-w-[calc(100vw-24px)] overflow-y-auto rounded-xl border bg-popover text-popover-foreground shadow-xl ${className}`} style={{ ...position, position: container ? 'absolute' : 'fixed', pointerEvents: 'auto', maxWidth: container ? Math.max(0, container.clientWidth - 24) : undefined, maxHeight: container ? Math.max(0, container.clientHeight - 24) : 'calc(100dvh - 24px)' }}>{children}</div>, container || document.body);
 }
 
 export function ConnectionTooltip({ details, ...props }: Omit<Parameters<typeof TopologyTooltipSurface>[0], 'children' | 'className'> & { details?: ConnectionTooltipDetails }) {
@@ -115,8 +115,8 @@ export function ConnectionTooltip({ details, ...props }: Omit<Parameters<typeof 
   const endpoint = (source: boolean) => {
     const endpoint = source ? details.source : details.target;
     return <div className="min-w-0 space-y-1">
-      <p className="break-words text-xs text-muted-foreground">{source ? 'Kaynak' : 'Hedef'}{endpoint.location ? ` · ${endpoint.location}` : ''}</p>
-      <p className="break-words text-sm font-semibold">{endpoint.name || 'Cihaz belirtilmemiş'}</p>
+      <p className="wrap-break-word text-xs text-muted-foreground">{source ? 'Kaynak' : 'Hedef'}{endpoint.location ? ` · ${endpoint.location}` : ''}</p>
+      <p className="wrap-break-word text-sm font-semibold">{endpoint.name || 'Cihaz belirtilmemiş'}</p>
       <p className="flex items-start gap-1.5 text-xs text-muted-foreground"><EthernetPort aria-hidden="true" className="mt-0.5 h-3.5 w-3.5 shrink-0" /><span className="break-all">{endpoint.port || 'Port belirtilmemiş'}</span></p>
     </div>;
   };
@@ -124,7 +124,7 @@ export function ConnectionTooltip({ details, ...props }: Omit<Parameters<typeof 
     <p className="flex items-center gap-2 text-sm font-semibold"><Link2 aria-hidden="true" className="h-4 w-4 text-primary" />{details.title}</p>
     {details.status && <p className="text-xs text-muted-foreground">{details.status}</p>}
     {endpoint(true)}<ArrowDown aria-hidden="true" className="h-3.5 w-3.5 text-muted-foreground" />{endpoint(false)}
-    <dl className="grid grid-cols-2 gap-3 border-t pt-3 text-xs"><div><dt className="text-muted-foreground">Bağlantı türü</dt><dd className="mt-1 break-words font-semibold">{details.type || 'Tür belirtilmemiş'}</dd></div><div><dt className="text-muted-foreground">Bağlantı hızı</dt><dd className="mt-1 break-words font-semibold">{details.bandwidth?.trim() || 'Hız belirtilmemiş'}</dd></div></dl>
+    <dl className="grid grid-cols-2 gap-3 border-t pt-3 text-xs"><div><dt className="text-muted-foreground">Bağlantı türü</dt><dd className="mt-1 wrap-break-word font-semibold">{details.type || 'Tür belirtilmemiş'}</dd></div><div><dt className="text-muted-foreground">Bağlantı hızı</dt><dd className="mt-1 wrap-break-word font-semibold">{details.bandwidth?.trim() || 'Hız belirtilmemiş'}</dd></div></dl>
     {details.note && <p className="text-xs text-muted-foreground">{details.note}</p>}
   </TopologyTooltipSurface>;
 }

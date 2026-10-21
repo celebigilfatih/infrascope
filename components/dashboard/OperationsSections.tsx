@@ -12,7 +12,7 @@ function SectionHeader({ eyebrow, title, href }: { eyebrow: string; title: strin
         <p className="text-xs font-semibold uppercase text-muted-foreground">{eyebrow}</p>
         <h2 className="mt-1 text-lg font-semibold">{title}</h2>
       </div>
-      <Link href={href} className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+      <Link href={href} className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
         Detay <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
       </Link>
     </div>

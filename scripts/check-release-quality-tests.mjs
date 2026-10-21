@@ -15,6 +15,20 @@ test('actual production build explicitly enforces Next type/lint and the pre-com
 test('release lint retains every default directory and includes shared frontend types', () => {
   assert.deepEqual([...current().config.eslint.dirs].sort(), ['app', 'pages', 'components', 'lib', 'src', 'types'].sort());
 });
+
+test('every dependency finding blocks the release, including development tooling and low severity', () => {
+  const { pkg } = current();
+  assert.equal(pkg.scripts['security:dependencies'], 'npm audit --audit-level=low');
+  assert.ok(pkg.scripts['quality:release'].includes('&& npm run security:dependencies &&'));
+});
+
+for (const audit of ['npm audit --omit=dev', 'npm audit --audit-level=critical', 'npm audit || true']) {
+  test(`dependency audit bypass is rejected: ${audit}`, () => {
+    const { config, pkg } = current();
+    pkg.scripts['security:dependencies'] = audit;
+    assert.ok(policyErrors(config, pkg).length);
+  });
+}
 for (const section of ['typescript', 'eslint']) test(`${section} bypass is rejected`, () => {
   const { config, pkg } = current(); config[section][section === 'eslint' ? 'ignoreDuringBuilds' : 'ignoreBuildErrors'] = true;
   assert.ok(policyErrors(config, pkg).length);
@@ -64,7 +78,7 @@ test('scanner reports every match and line without exposing matched source', () 
   const result = scanContent('scripts/collector.py', '\nrequests.get(a, verify=False)\nrequests.get(b, verify=False)');
   assert.deepEqual(result.map(r => r.line), [2, 3]); assert.ok(result.every(r => !('text' in r)));
 });
-test('customer runtime disables the image optimization endpoint pending the dependency security upgrade', () => {
+test('customer runtime keeps the unused image optimization endpoint disabled after the dependency security upgrade', () => {
   const { config } = readPolicy(root);
   assert.equal(config.images?.unoptimized, true);
 });
@@ -96,7 +110,7 @@ test('incident CI runs all eight isolated shards and retains a distinct report f
 test('reusable quality workflow executes policy regressions, real compiler controls and the full gate', () => {
   const workflow = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/release-quality.yml'), 'utf8'));
   const steps = workflow.jobs.quality.steps;
-  for (const cmd of ['npm run test:release-quality', 'npm run test:release-compiler', 'npm run quality:release']) {
+  for (const cmd of ['npm run test:release-quality', 'npm run test:dependency-security', 'npm run test:release-compiler', 'npm run quality:release']) {
     const step = steps.find(s => s.run === cmd); assert.ok(step); assert.ok(!step['continue-on-error']); assert.equal(step.if, undefined);
   }
   const dockerfile = fs.readFileSync(path.join(root, 'Dockerfile'), 'utf8');

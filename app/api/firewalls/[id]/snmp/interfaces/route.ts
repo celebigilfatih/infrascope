@@ -3,9 +3,10 @@ import { firewallListQueryFromUrl } from '@/lib/firewall/read-query';
 import { FirewallReadTargetError } from '@/lib/firewall/read-service';
 import { readFirewallSnmpInterfaces } from '@/lib/firewall/snmp-read';
 
-type RouteContext = { params: { id: string } };
+type RouteContext = { params: Promise<{ id: string }> };
 
-export async function GET(request: NextRequest, { params }: RouteContext) {
+export async function GET(request: NextRequest, props: RouteContext) {
+  const params = await props.params;
   try {
     const result = await readFirewallSnmpInterfaces({
       connectorId: params.id,

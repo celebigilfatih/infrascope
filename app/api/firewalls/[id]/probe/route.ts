@@ -6,9 +6,10 @@ import {
   probeFirewallConnector,
 } from '@/lib/firewall/probe';
 
-type RouteContext = { params: { id: string } };
+type RouteContext = { params: Promise<{ id: string }> };
 
-export async function POST(request: NextRequest, { params }: RouteContext) {
+export async function POST(request: NextRequest, props: RouteContext) {
+  const params = await props.params;
   const actor = await getRequestActor(request);
   if (!actor) {
     return NextResponse.json({ success: false, error: 'Authentication required' }, { status: 401 });

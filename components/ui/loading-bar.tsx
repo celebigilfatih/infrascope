@@ -52,10 +52,10 @@ export function LoadingBar() {
   if (!isLoading && progress === 0) return null;
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-[9999] h-1 bg-transparent">
+    <div className="fixed top-0 left-0 right-0 z-9999 h-1 bg-transparent">
       <div
         className={cn(
-          "h-full bg-gradient-to-r from-primary via-primary/80 to-primary transition-all duration-300 ease-out shadow-lg",
+          "h-full bg-linear-to-r from-primary via-primary/80 to-primary transition-all duration-300 ease-out shadow-lg",
           isLoading ? "opacity-100" : "opacity-0"
         )}
         style={{
@@ -63,7 +63,7 @@ export function LoadingBar() {
           transition: isLoading ? 'width 0.3s ease-out' : 'opacity 0.3s ease-out',
         }}
       >
-        <div className="absolute right-0 top-0 h-full w-20 bg-gradient-to-r from-transparent to-white/30 animate-pulse" />
+        <div className="absolute right-0 top-0 h-full w-20 bg-linear-to-r from-transparent to-white/30 animate-pulse" />
       </div>
     </div>
   );

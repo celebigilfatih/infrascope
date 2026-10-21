@@ -5,9 +5,10 @@ import { enqueueDeviceBackup } from '@/lib/nms/backup-service';
 import { canManageBackups, resolveBackupPlatform, supportsBackupType } from '@/lib/nms/backup-platform';
 
 export const dynamic = 'force-dynamic';
-interface Params { params: { id: string } }
+interface Params { params: Promise<{ id: string }> }
 
-export async function GET(req: NextRequest, { params }: Params) {
+export async function GET(req: NextRequest, props: Params) {
+  const params = await props.params;
   const auth = await getRequestActor(req);
   if (!auth) return NextResponse.json({ error: 'Oturum açmanız gerekiyor.' }, { status: 401 });
   const device = await prisma.device.findUnique({ where: { id: params.id }, select: { nmsDeviceId: true, name: true, vendor: true, model: true, operatingSystem: true, backupPlatform: true } });
@@ -20,7 +21,8 @@ export async function GET(req: NextRequest, { params }: Params) {
   }, { headers: { 'Cache-Control': 'private, no-store' } });
 }
 
-export async function POST(req: NextRequest, { params }: Params) {
+export async function POST(req: NextRequest, props: Params) {
+  const params = await props.params;
   try { return await enqueueDeviceBackup(req, params.id); }
   catch (error) {
     console.error('[NMS Backups] Queue request failed', error instanceof Error ? error.name : 'UnknownError');

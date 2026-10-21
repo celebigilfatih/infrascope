@@ -28,10 +28,8 @@ const VALID_CRITICALITIES = [
 // ============================================================================
 // GET - Get device by ID
 // ============================================================================
-export async function GET(
-  _request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET(_request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const { id } = params;
 
@@ -145,10 +143,8 @@ export async function GET(
 // ============================================================================
 // PUT - Update device
 // ============================================================================
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function PUT(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const { id } = params;
     const body = await request.json();
@@ -421,10 +417,8 @@ export async function PUT(
 // ============================================================================
 // DELETE - Delete device
 // ============================================================================
-export async function DELETE(
-  _request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(_request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const { id } = params;
 

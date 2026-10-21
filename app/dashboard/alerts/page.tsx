@@ -1124,7 +1124,7 @@ export default function AlertsDashboardPage() {
             </Button>
             <Popover open={actionsOpen} onOpenChange={setActionsOpen}>
               <PopoverTrigger asChild><Button ref={actionsTrigger} variant="outline" disabled={acknowledgingIds.size > 0}><MoreHorizontal size={17} aria-hidden="true" />İşlemler<ChevronDown size={14} aria-hidden="true" /></Button></PopoverTrigger>
-              <PopoverContent align="end" className="z-[1050] w-60 p-1.5" aria-label="Olay işlemleri" onCloseAutoFocus={event => {
+              <PopoverContent align="end" className="z-1050 w-60 p-1.5" aria-label="Olay işlemleri" onCloseAutoFocus={event => {
                 if (pendingExclusions.current) {
                   event.preventDefault(); pendingExclusions.current = false; setExclusionsOpen(true);
                 }
@@ -1140,7 +1140,7 @@ export default function AlertsDashboardPage() {
             </div>
             {nmsPipeline && nmsPipeline.state !== 'healthy' && <div className={incidentStyles.health}>
               <Popover><PopoverTrigger asChild><button type="button"><Info size={16} aria-hidden="true" />İzleme kapsamı eksik</button></PopoverTrigger>
-                <PopoverContent align="end" className="z-[1050] w-[min(350px,calc(100vw-32px))] p-5">
+                <PopoverContent align="end" className="z-1050 w-[min(350px,calc(100vw-32px))] p-5">
                   <h2 className="text-sm font-semibold">NMS izleme kapsamı</h2><p className="mt-2 text-sm leading-6 text-muted-foreground">{nmsPipeline.blockingReasons.join(' ') || 'Switch alarm izlemesi için yapılandırmayı kontrol edin.'}</p>
                   <dl className="mt-4 grid grid-cols-2 gap-3 text-xs"><div><dt className="text-muted-foreground">Cihaz</dt><dd className="mt-1 font-medium">{nmsPipeline.registeredDevices}/{nmsPipeline.pollingDevices}</dd></div><div><dt className="text-muted-foreground">İzlenen port</dt><dd className="mt-1 font-medium">{nmsPipeline.monitoredPorts}</dd></div><div><dt className="text-muted-foreground">Taze arayüz</dt><dd className="mt-1 font-medium">{nmsPipeline.freshInterfaces}</dd></div><div><dt className="text-muted-foreground">Taze metrik</dt><dd className="mt-1 font-medium">{nmsPipeline.freshHealthMetrics}</dd></div></dl>
                 </PopoverContent>
@@ -1399,7 +1399,7 @@ export default function AlertsDashboardPage() {
                   id="incident-exclusion-reason"
                   required
                   autoFocus
-                  className="w-full min-h-[80px] rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="w-full min-h-[80px] rounded-md border bg-background px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-ring"
                   placeholder="Hariç tutma nedeni (örn. kurum içi DNS sunucusu)"
                   value={discardReason}
                   disabled={discardLoading}
@@ -1450,7 +1450,7 @@ export default function AlertsDashboardPage() {
                             {parsed.keyValueRows.filter(r => r.key !== 'Giris Zamani' && r.key !== 'Olay Zamani').map(({ key, value }, i) => (
                               <tr key={i} className="border-b last:border-0">
                                 <td className="px-4 py-2.5 text-muted-foreground w-[38%] bg-muted/20 align-top">{key}</td>
-                                <td className="px-4 py-2.5 break-words">{value}</td>
+                                <td className="px-4 py-2.5 wrap-break-word">{value}</td>
                               </tr>
                             ))}
                           </tbody>

@@ -1879,7 +1879,7 @@ const NetworkTopologyPage = () => {
       <div className={cn(styles.page, compactOverview && styles.buildingPage)}>
         <header className={styles.header}>
           <div className="min-w-0">
-            <PageHeading section="network" showIcon={false} className={compactOverview ? "!text-2xl !font-semibold" : "!text-lg !font-semibold"}>Ağ topolojisi</PageHeading>
+            <PageHeading section="network" showIcon={false} className={compactOverview ? "text-2xl! font-semibold!" : "text-lg! font-semibold!"}>Ağ topolojisi</PageHeading>
             <p className={styles.subtitle}>Binalar, cihazlar ve bağlantılar için ağ haritası</p>
           </div>
           {!compactOverview && <div className={styles.headerActions}>{pageActions}</div>}
@@ -1970,7 +1970,7 @@ const NetworkTopologyPage = () => {
                       </Card>
                     ) : (
                       organizations.map(org => (
-                        <Card key={org.id} className="overflow-hidden border-border/50 shadow-sm">
+                        <Card key={org.id} className="overflow-hidden border-border/50 shadow-xs">
                           <button
                             onClick={() => toggleExpand(org.id)}
                             className="w-full p-5 flex items-center justify-between hover:bg-muted/50 transition-colors text-left"
@@ -2088,7 +2088,7 @@ const NetworkTopologyPage = () => {
               <div className={styles.exploration}>
                 {/* Breadcrumb Navigation */}
                 {breadcrumbs.length > 0 && (
-                  <div className="sticky top-0 z-20 bg-background/80 backdrop-blur-md border-b border-border px-6 py-4 shadow-sm">
+                  <div className="sticky top-0 z-20 bg-background/80 backdrop-blur-md border-b border-border px-6 py-4 shadow-xs">
                     <div className="flex items-center gap-3">
                       <Button
                         onClick={() => {
@@ -2112,7 +2112,7 @@ const NetworkTopologyPage = () => {
                             variant="outline"
                             size="sm"
                             onClick={() => handleBreadcrumbClick(index)}
-                            className="h-9 px-3 bg-background border-border hover:border-primary hover:text-primary font-bold shadow-sm"
+                            className="h-9 px-3 bg-background border-border hover:border-primary hover:text-primary font-bold shadow-xs"
                           >
                             <span className="mr-2">
                               {crumb.level === 'building' && '🏢'}
@@ -2179,9 +2179,9 @@ const NetworkTopologyPage = () => {
                               <button
                                 key={building.id}
                                 onClick={() => handleZoomToBuilding(building)}
-                                className="group relative flex flex-col h-full text-left bg-card hover:bg-muted/30 border border-border hover:border-primary transition-all duration-300 rounded-2xl shadow-sm hover:shadow-2xl hover:-translate-y-1 overflow-hidden"
+                                className="group relative flex flex-col h-full text-left bg-card hover:bg-muted/30 border border-border hover:border-primary transition-all duration-300 rounded-2xl shadow-xs hover:shadow-2xl hover:-translate-y-1 overflow-hidden"
                               >
-                                <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-br from-primary/10 to-transparent rounded-bl-full -mr-10 -mt-10 group-hover:from-primary/20 transition-colors" />
+                                <div className="absolute top-0 right-0 w-40 h-40 bg-linear-to-br from-primary/10 to-transparent rounded-bl-full -mr-10 -mt-10 group-hover:from-primary/20 transition-colors" />
                                 
                                 <div className="p-8 flex flex-col h-full relative z-10">
                                   <div className="flex items-start justify-between mb-6">
@@ -2261,7 +2261,7 @@ const NetworkTopologyPage = () => {
                               <button
                                 key={floor.id}
                                 onClick={() => handleZoomToFloor(floor)}
-                                className="group relative flex flex-col text-left bg-card hover:bg-muted/30 border border-border hover:border-primary transition-all duration-300 rounded-2xl shadow-sm hover:shadow-xl hover:-translate-y-1 overflow-hidden"
+                                className="group relative flex flex-col text-left bg-card hover:bg-muted/30 border border-border hover:border-primary transition-all duration-300 rounded-2xl shadow-xs hover:shadow-xl hover:-translate-y-1 overflow-hidden"
                               >
                                 <div className="p-6 flex flex-col h-full relative z-10">
                                   <div className="flex items-center justify-between mb-6">
@@ -2331,7 +2331,7 @@ const NetworkTopologyPage = () => {
                               <button
                                 key={room.id}
                                 onClick={() => handleZoomToRoom(room)}
-                                className="group relative flex flex-col text-left bg-card hover:bg-muted/30 border border-border hover:border-primary transition-all duration-300 rounded-2xl shadow-sm hover:shadow-xl hover:-translate-y-1 overflow-hidden"
+                                className="group relative flex flex-col text-left bg-card hover:bg-muted/30 border border-border hover:border-primary transition-all duration-300 rounded-2xl shadow-xs hover:shadow-xl hover:-translate-y-1 overflow-hidden"
                                 aria-label={`${room.name} odasına git. ${rackCount} kabinet, ${roomDevices.length} cihaz içeriyor.`}
                               >
                                 <div className="p-6 flex flex-col h-full relative z-10">
@@ -2397,7 +2397,7 @@ const NetworkTopologyPage = () => {
                               <button
                                 key={rack.id}
                                 onClick={() => handleZoomToRack(rack)}
-                                className="group relative flex flex-col text-left bg-card hover:bg-muted/30 border border-border hover:border-primary transition-all duration-300 rounded-2xl shadow-sm hover:shadow-xl hover:-translate-y-1 overflow-hidden"
+                                className="group relative flex flex-col text-left bg-card hover:bg-muted/30 border border-border hover:border-primary transition-all duration-300 rounded-2xl shadow-xs hover:shadow-xl hover:-translate-y-1 overflow-hidden"
                                 aria-label={`${rack.name} kabinetine git. ${rack.maxUnits}U kapasite, ${rackDevices.length} cihaz içeriyor.`}
                               >
                                 {rack.imageUrl ? (
@@ -2407,11 +2407,11 @@ const NetworkTopologyPage = () => {
                                       alt={`${rack.name} fotoğrafı`}
                                       className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                                     />
-                                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                                    <div className="absolute inset-0 bg-linear-to-t from-black/60 to-transparent" />
                                   </div>
                                 ) : (
-                                  <div className="h-32 w-full bg-gradient-to-br from-slate-800 to-slate-900 relative flex items-center justify-center overflow-hidden">
-                                    <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-blue-500 via-transparent to-transparent" />
+                                  <div className="h-32 w-full bg-linear-to-br from-slate-800 to-slate-900 relative flex items-center justify-center overflow-hidden">
+                                    <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_center,var(--tw-gradient-stops))] from-blue-500 via-transparent to-transparent" />
                                     <div className="grid grid-cols-1 gap-1 w-1/3 opacity-30">
                                       {[...Array(8)].map((_, i) => (
                                         <div key={i} className="h-1 bg-blue-400 rounded-full" />
@@ -2493,7 +2493,7 @@ const NetworkTopologyPage = () => {
                               
 
                               return (
-                                <Card key={device.id} className="group overflow-hidden border-border hover:border-primary transition-all duration-300 shadow-sm hover:shadow-xl">
+                                <Card key={device.id} className="group overflow-hidden border-border hover:border-primary transition-all duration-300 shadow-xs hover:shadow-xl">
                                   <CardContent className="p-0">
                                     <div className="p-6 border-b border-border/50">
                                       <div className="flex items-center justify-between mb-4">
@@ -2628,7 +2628,7 @@ const NetworkTopologyPage = () => {
                   {activeBuildingNode && <ConnectionSelectionHint onlyConnected={neighborhoodActive} name={activeBuildingNode.data.name} count={topologyEdges.filter(edge => edge.source === activeBuildingNode.id || edge.target === activeBuildingNode.id).length} onClear={() => { setSelectedBuildingNodeId(null); setSelectedNode(null); }} />}
                   </div>
                   </div>
-                  {viewMode === 'building' && <div className={`${styles.mapLegend} flex flex-col items-end gap-2`}><NeighborhoodToggle active={neighborhoodActive} hasSelection={!!activeBuildingNode} disabled={loading || !navigationReady} depth={connectionDepth} hopDistances={buildingNeighborhood.distances} hiddenHopDistances={hiddenHopDistances} onHopToggle={toggleBuildingHopDistance} onHopReset={resetBuildingHopDistances} onDepthChange={changeBuildingConnectionDepth} onChange={toggleBuildingNeighborhood} /><div className="flex max-w-full flex-wrap items-center justify-end gap-2"><TopologyIconCount hiddenReason="Etkin filtreler veya kapalı ağ grupları nedeniyle" shown={networkMap.nodes.filter(node => node.type === 'building' && !node.hidden).length} total={totalBuildingIconCount} hiddenIcons={hiddenBuildingIcons} loading={loading || !navigationReady} /><Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="gap-2 bg-card shadow-sm" aria-label="Bağlantı türü filtrelerini aç"><Layers className="h-3.5 w-3.5 text-primary" />Bağlantı türleri<span className="text-[11px] tabular-nums text-muted-foreground">{topologyEdges.length}/{generatedTopologyEdges.length}</span></Button></PopoverTrigger><PopoverContent side="top" align="end" className="w-[540px] overflow-hidden p-0"><p className="border-b px-4 py-3 text-xs text-muted-foreground">Çakışan etiketler ve %60 altındaki etiketler gizlenir. Bağlantı bilgileri çizginin üzerine gelince gösterilir.</p><ConnectionTypeLegend labelsVisible={buildingLabelsVisible} onLabelsChange={setBuildingLabelsVisible} label="Binalar arası bağlantı türü filtreleri" options={buildingConnectionTypeOptions} hidden={hiddenBuildingConnectionTypes} visibleCount={topologyEdges.length} totalCount={generatedTopologyEdges.length} onToggle={value => setHiddenBuildingConnectionTypes(previous => toggleConnectionType(previous, value))} onReset={() => setHiddenBuildingConnectionTypes(new Set())} /></PopoverContent></Popover></div></div>}
+                  {viewMode === 'building' && <div className={`${styles.mapLegend} flex flex-col items-end gap-2`}><NeighborhoodToggle active={neighborhoodActive} hasSelection={!!activeBuildingNode} disabled={loading || !navigationReady} depth={connectionDepth} hopDistances={buildingNeighborhood.distances} hiddenHopDistances={hiddenHopDistances} onHopToggle={toggleBuildingHopDistance} onHopReset={resetBuildingHopDistances} onDepthChange={changeBuildingConnectionDepth} onChange={toggleBuildingNeighborhood} /><div className="flex max-w-full flex-wrap items-center justify-end gap-2"><TopologyIconCount hiddenReason="Etkin filtreler veya kapalı ağ grupları nedeniyle" shown={networkMap.nodes.filter(node => node.type === 'building' && !node.hidden).length} total={totalBuildingIconCount} hiddenIcons={hiddenBuildingIcons} loading={loading || !navigationReady} /><Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="gap-2 bg-card shadow-xs" aria-label="Bağlantı türü filtrelerini aç"><Layers className="h-3.5 w-3.5 text-primary" />Bağlantı türleri<span className="text-[11px] tabular-nums text-muted-foreground">{topologyEdges.length}/{generatedTopologyEdges.length}</span></Button></PopoverTrigger><PopoverContent side="top" align="end" className="w-[540px] overflow-hidden p-0"><p className="border-b px-4 py-3 text-xs text-muted-foreground">Çakışan etiketler ve %60 altındaki etiketler gizlenir. Bağlantı bilgileri çizginin üzerine gelince gösterilir.</p><ConnectionTypeLegend labelsVisible={buildingLabelsVisible} onLabelsChange={setBuildingLabelsVisible} label="Binalar arası bağlantı türü filtreleri" options={buildingConnectionTypeOptions} hidden={hiddenBuildingConnectionTypes} visibleCount={topologyEdges.length} totalCount={generatedTopologyEdges.length} onToggle={value => setHiddenBuildingConnectionTypes(previous => toggleConnectionType(previous, value))} onReset={() => setHiddenBuildingConnectionTypes(new Set())} /></PopoverContent></Popover></div></div>}
                   <ReactFlow style={{ width: '100%', height: '100%' }}
                     nodes={networkMap.nodes.map(node => ({ ...node, ...measuredNodeDimensions.current[node.id], connectable: canConnectBuildings && node.connectable !== false }))}
                     edges={networkMap.edges.map(edge => ({ ...edge, selected: selectedNode?.id === edge.id, style: { ...edge.style, strokeWidth: selectedNode?.id === edge.id ? 4 : edge.style?.strokeWidth } }))}
@@ -2684,7 +2684,7 @@ const NetworkTopologyPage = () => {
                     }}
                   >
                     <Background color="oklch(var(--border))" gap={24} size={1} />
-                    <Panel position="bottom-left" className="!m-3">
+                    <Panel position="bottom-left" className="m-3!">
                       <div className={styles.mapControls}>
                         <Button size="sm" variant="ghost" className="h-9 gap-1.5 rounded-none px-2 text-xs" aria-label="Haritayı yakınlaştır" onClick={() => zoomIn({ duration: 0 })}><Plus className="h-3.5 w-3.5" /><span>Yakınlaştır</span></Button>
                         <span className="min-w-11 text-center text-[11px] tabular-nums text-muted-foreground">{viewportZoom}%</span>
@@ -3081,7 +3081,7 @@ const BuildingConnectionModal: React.FC<BuildingConnectionModalProps> = ({
 
   return (
     <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent closeButtonText="Kapat" className={cn(styles.modal, "max-w-3xl bg-card border-border shadow-2xl overflow-hidden flex flex-col p-0 z-[1011] max-h-[90vh]")}>
+      <DialogContent closeButtonText="Kapat" className={cn(styles.modal, "max-w-3xl bg-card border-border shadow-2xl overflow-hidden flex flex-col p-0 z-1011 max-h-[90vh]")}>
         <DialogHeader className="p-6 bg-primary/10 border-b border-primary/20">
           <div className="flex items-center gap-3">
             <div className="bg-primary rounded-xl p-2.5 shadow-lg shadow-primary/20">
@@ -3300,7 +3300,7 @@ const BuildingConnectionModal: React.FC<BuildingConnectionModalProps> = ({
                 placeholder="Bu bağlantı hakkında ek notlar"
                 value={formData.notes}
                 onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
               />
             </div>
           </div>
@@ -3386,7 +3386,7 @@ const BuildingConnectionsManagementModal: React.FC<BuildingConnectionsManagement
 
   return (
     <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent closeButtonText="Kapat" className={cn(styles.modal, "max-w-5xl bg-card border-border shadow-2xl overflow-hidden flex flex-col p-0 z-[1011] max-h-[90vh]")}>
+      <DialogContent closeButtonText="Kapat" className={cn(styles.modal, "max-w-5xl bg-card border-border shadow-2xl overflow-hidden flex flex-col p-0 z-1011 max-h-[90vh]")}>
         <DialogHeader className="p-6 bg-primary/10 border-b border-primary/20">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -3556,7 +3556,7 @@ const BuildingConnectionsManagementModal: React.FC<BuildingConnectionsManagement
 
 function TopologyStat({ icon, label, value, hint, warning = false }: { icon: React.ReactNode; label: string; value: number | string; hint: string; warning?: boolean }) {
   return <div className={styles.stat}>
-    <div className="flex items-center justify-between gap-2"><p className="text-xs font-medium text-muted-foreground">{label}</p><span className={cn(styles.statIcon, warning && '!bg-amber-500/10 !text-amber-600 dark:!text-amber-300')}>{icon}</span></div>
+    <div className="flex items-center justify-between gap-2"><p className="text-xs font-medium text-muted-foreground">{label}</p><span className={cn(styles.statIcon, warning && 'bg-amber-500/10! text-amber-600! dark:text-amber-300!')}>{icon}</span></div>
     <p className="mt-1.5 text-2xl font-semibold tabular-nums">{value}</p>
     <p className="mt-1 text-[11px] text-muted-foreground">{hint}</p>
   </div>;

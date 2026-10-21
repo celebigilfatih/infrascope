@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authorizeApiRequest } from '@/lib/auth/api-permission';
 import { prisma } from '@/lib/prisma';
 
-interface Params { params: { id: string; portName: string } }
+interface Params { params: Promise<{ id: string; portName: string }> }
 
 function serializeBigInt(obj: unknown): unknown {
   return JSON.parse(JSON.stringify(obj, (_key, val) =>
@@ -10,7 +10,8 @@ function serializeBigInt(obj: unknown): unknown {
   ));
 }
 
-export async function GET(_req: NextRequest, { params }: Params) {
+export async function GET(_req: NextRequest, props: Params) {
+  const params = await props.params;
   const access = await authorizeApiRequest(_req, 'devices', 'read');
   if (!access.allowed) return access.response;
   try {

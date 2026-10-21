@@ -49,7 +49,7 @@ export function BuildingConnectionEndpointFields({ connectionId, sourceBuildingN
     const previousPort = saved?.endpoints.find(port => port.side === (source ? 0 : 1));
     const selectClass = 'h-10 w-full min-w-0 rounded-md border bg-background px-2 text-sm';
     return <div className="min-w-0 space-y-3 rounded-lg border bg-muted/20 p-3">
-      <div><p className="text-xs font-medium text-muted-foreground">{source ? 'Kaynak bina' : 'Hedef bina'}</p><p className="break-words text-sm font-semibold">{source ? sourceBuildingName : targetBuildingName}</p></div>
+      <div><p className="text-xs font-medium text-muted-foreground">{source ? 'Kaynak bina' : 'Hedef bina'}</p><p className="wrap-break-word text-sm font-semibold">{source ? sourceBuildingName : targetBuildingName}</p></div>
       <div className="space-y-1.5"><Label htmlFor={`${id}-device`}>{source ? 'Kaynak cihaz' : 'Hedef cihaz'}</Label><select id={`${id}-device`} className={selectClass} disabled={disabled || !devices.length} value={deviceId} onChange={event => onChange({ ...value, [deviceField]: event.target.value, [portField]: '' })}>
         <option value="">Cihaz seçin</option>
         {deviceId && !devices.some(device => device.id === deviceId) && <option value={deviceId} disabled>{previousDevice?.name || 'Kayıtlı cihaz'} · Bu binada bulunmuyor</option>}

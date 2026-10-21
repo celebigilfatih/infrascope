@@ -99,7 +99,7 @@ export function IncidentExclusions({ onClose, onReturnFocus }: { onClose: () => 
             <thead><tr className="border-b bg-muted/50"><th className="p-3">Alarm / eşleşme</th><th className="p-3">Açıklama</th><th className="p-3">İşlem</th></tr></thead>
             <tbody>{entries.map(entry => <tr key={entry.id} aria-selected={selected?.id === entry.id} className={selected?.id === entry.id ? 'border-b bg-muted/50' : 'border-b'}>
               <td className="p-3"><p className="font-medium">{entry.alarmCode}</p><p className="break-all text-muted-foreground">{entry.field}: {entry.value}</p>{!entry.enabled && <p className="text-xs text-muted-foreground">Devre dışı</p>}</td>
-              <td className="whitespace-pre-wrap break-words p-3">{entry.reason || '—'}</td>
+              <td className="whitespace-pre-wrap wrap-break-word p-3">{entry.reason || '—'}</td>
               <td className="p-3"><Button variant="outline" size="sm" disabled={busy || !canDelete || !!accessError} onClick={() => { if (accessBlocked.current || !canDelete) return; setSelected(entry); setError(null); setNotice(null); }}>Kaldır</Button></td>
             </tr>)}</tbody>
           </table>

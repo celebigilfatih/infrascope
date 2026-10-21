@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
       method: 'POST', headers: req.headers,
       body: JSON.stringify({ backupType: body.backup_type || 'Running Config', description: body.description || null }),
     });
-    return createDeviceBackup(deviceRequest, { params: { id: device.id } });
+    return createDeviceBackup(deviceRequest, { params: Promise.resolve({ id: device.id }) });
   } catch (error) {
     console.error('[NMS Backups] POST error:', error);
     return NextResponse.json({ error: 'Failed to create configuration backup' }, { status: 500 });

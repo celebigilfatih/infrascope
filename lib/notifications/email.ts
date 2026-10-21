@@ -13,7 +13,7 @@
  * - UI-managed SMTP configuration
  */
 
-import nodemailer from 'nodemailer';
+import nodemailer, { type Transporter } from 'nodemailer';
 import type SMTPPool from 'nodemailer/lib/smtp-pool';
 import { NotificationAttemptStatus } from '@prisma/client';
 import { prisma as sharedPrisma } from '@/lib/prisma';
@@ -86,7 +86,7 @@ let hourlyResetTime = Date.now() + 60 * 60 * 1000;
 const alarmCooldowns = new Map<string, number>();
 
 // Cached SMTP transporter (connection pooling)
-let cachedTransporter: nodemailer.Transporter<SMTPPool.SentMessageInfo, SMTPPool.Options> | null = null;
+let cachedTransporter: Transporter<SMTPPool.SentMessageInfo, SMTPPool.Options> | null = null;
 let transporterConfig: string | null = null;
 
 function getSmtpTlsOptions() {
@@ -137,7 +137,7 @@ function getEmailConfigError(config: EmailConfig, options?: { requireEnabled?: b
 /**
  * Get or create SMTP transporter (connection pooling)
  */
-async function getTransporter(): Promise<nodemailer.Transporter<SMTPPool.SentMessageInfo, SMTPPool.Options>> {
+async function getTransporter(): Promise<Transporter<SMTPPool.SentMessageInfo, SMTPPool.Options>> {
   const config = await getEmailConfig();
   const configError = getEmailConfigError(config, { requireEnabled: true });
   if (configError) throw new Error(configError);

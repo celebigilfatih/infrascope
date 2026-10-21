@@ -64,7 +64,7 @@ export const CustomEdge = ({
         <EdgeLabelRenderer>
           <div
             data-device-link-label={data?.compactLabel ? id : undefined}
-            className="rounded-md border bg-card px-2 py-1 text-xs font-medium text-foreground shadow-sm"
+            className="rounded-md border bg-card px-2 py-1 text-xs font-medium text-foreground shadow-xs"
             style={{
               position: 'absolute',
               transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
@@ -76,7 +76,7 @@ export const CustomEdge = ({
               zIndex: details ? 6 : undefined,
             }}
           >
-            {details ? <button type="button" className={`nodrag nopan rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${data?.compactLabel ? 'line-clamp-2' : ''}`} style={{ pointerEvents: 'all' }} aria-label={`${details.source.name} (${details.source.port || 'Port belirtilmemiş'}) – ${details.target.name} (${details.target.port || 'Port belirtilmemiş'}) bağlantı bilgileri`} aria-describedby={tooltip.anchor ? tooltip.id : undefined} onMouseEnter={tooltip.enter} onMouseMove={tooltip.show} onMouseLeave={tooltip.leave} onFocus={tooltip.focus} onBlur={tooltip.blur} onClick={event => { event.stopPropagation(); tooltip.close(); data.onInspect?.(); }}>{data.label}</button> : data.label}
+            {details ? <button type="button" className={`nodrag nopan rounded-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary ${data?.compactLabel ? 'line-clamp-2' : ''}`} style={{ pointerEvents: 'all' }} aria-label={`${details.source.name} (${details.source.port || 'Port belirtilmemiş'}) – ${details.target.name} (${details.target.port || 'Port belirtilmemiş'}) bağlantı bilgileri`} aria-describedby={tooltip.anchor ? tooltip.id : undefined} onMouseEnter={tooltip.enter} onMouseMove={tooltip.show} onMouseLeave={tooltip.leave} onFocus={tooltip.focus} onBlur={tooltip.blur} onClick={event => { event.stopPropagation(); tooltip.close(); data.onInspect?.(); }}>{data.label}</button> : data.label}
             {data?.onOpenMenu && <TopologyMenuButton name={details ? `${details.source.name} – ${details.target.name}` : 'Cihaz bağlantısı'} onOpen={event => { tooltip.close(); data.onOpenMenu(event); }} />}
           </div>
         </EdgeLabelRenderer>
@@ -147,7 +147,7 @@ export const BuildingConnectionEdge = ({
           >
             <button
               type="button"
-              className="nodrag nopan flex items-center rounded-md border bg-card px-2.5 py-1 text-xs font-semibold shadow-sm transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="nodrag nopan flex items-center rounded-md border bg-card px-2.5 py-1 text-xs font-semibold shadow-xs transition-shadow hover:shadow-md focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary"
               aria-label={`${data.buildingConnection?.sourceBuilding?.name || 'Kaynak bina'} – ${data.buildingConnection?.destBuilding?.name || 'Hedef bina'} bağlantısını düzenle`}
               aria-describedby={tooltip.anchor ? tooltip.id : undefined}
               onMouseEnter={tooltip.enter}

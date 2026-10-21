@@ -71,7 +71,7 @@ export const DeviceNode = memo(({ data, selected }: NodeProps<DeviceNodeData>) =
   return (
     <div 
       className={`
-        relative rounded-md border bg-card text-foreground shadow-sm transition-all duration-200
+        relative rounded-md border bg-card text-foreground shadow-xs transition-all duration-200
         ${hasPortDown
           ? selected
             ? 'border-red-500 ring-4 ring-red-500/15 scale-[1.02]'
@@ -88,11 +88,11 @@ export const DeviceNode = memo(({ data, selected }: NodeProps<DeviceNodeData>) =
         transformOrigin: 'center'
       }}
     >
-      <Handle type="target" position={Position.Top} className="!h-2.5 !w-2.5 !border-2 !border-card !bg-primary" />
-      <Handle type="source" position={Position.Bottom} className="!h-2.5 !w-2.5 !border-2 !border-card !bg-primary" />
+      <Handle type="target" position={Position.Top} className="h-2.5! w-2.5! border-2! border-card! bg-primary!" />
+      <Handle type="source" position={Position.Bottom} className="h-2.5! w-2.5! border-2! border-card! bg-primary!" />
       {hasPortDown && (
         <div
-          className="absolute -right-3 -top-3 z-20 flex min-h-6 items-center gap-1 rounded-full border border-red-300 bg-red-600 px-2.5 text-xs font-semibold text-white shadow-sm"
+          className="absolute -right-3 -top-3 z-20 flex min-h-6 items-center gap-1 rounded-full border border-red-300 bg-red-600 px-2.5 text-xs font-semibold text-white shadow-xs"
           title={`${data.portDownCount} kapalı port kaydı`}
         >
           <AlertTriangle className="h-3.5 w-3.5" />

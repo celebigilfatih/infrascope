@@ -3,7 +3,8 @@ import { authorizeApiRequest } from '@/lib/auth/api-permission';
 
 const NMS_BACKEND_URL = process.env.NMS_BACKEND_URL || 'http://localhost:4001';
 
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const access = await authorizeApiRequest(req, 'devices', 'read');
   if (!access.allowed) return access.response;
   try {
@@ -18,7 +19,8 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   }
 }
 
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const access = await authorizeApiRequest(req, 'devices', 'write');
   if (!access.allowed) return access.response;
   try {
@@ -37,7 +39,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   }
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(req: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const access = await authorizeApiRequest(req, 'devices', 'delete');
   if (!access.allowed) return access.response;
   try {

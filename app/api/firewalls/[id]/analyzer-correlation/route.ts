@@ -5,9 +5,10 @@ import {
   FirewallAnalyzerCorrelationError,
 } from '@/lib/firewall/fortianalyzer-correlation';
 
-type RouteContext = { params: { id: string } };
+type RouteContext = { params: Promise<{ id: string }> };
 
-export async function POST(request: NextRequest, { params }: RouteContext) {
+export async function POST(request: NextRequest, props: RouteContext) {
+  const params = await props.params;
   try {
     const auth = await getRequestActor(request);
     if (!auth) {

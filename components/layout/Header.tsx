@@ -167,7 +167,7 @@ export const Header: React.FC<HeaderProps> = ({ onMobileMenuOpen, mobileMenuOpen
                     <div className="flex items-center justify-between gap-3">
                       <div className={styles.notificationHeading}>
                         <span><Bell size={17} aria-hidden="true" /></span><div>
-                        <h3 ref={notificationHeading} tabIndex={-1} className="font-semibold text-sm outline-none">Bildirimler</h3>
+                        <h3 ref={notificationHeading} tabIndex={-1} className="font-semibold text-sm outline-hidden">Bildirimler</h3>
                         <p className="text-xs text-muted-foreground">{notificationCount} bekleyen alarm</p>
                       </div></div>
                       <Button variant="ghost" size="sm" asChild className="h-8 gap-1">

@@ -28,7 +28,7 @@ type Props = {
   onUncertain?: () => void;
 };
 
-const selectClass = 'h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
+const selectClass = 'h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
 
 export function FirewallOnboardingDialog({ open, onOpenChange, onCreated, onUncertain }: Props) {
   const [submitting, setSubmitting] = useState(false), [uncertain, setUncertain] = useState(false);
@@ -134,7 +134,7 @@ export function FirewallOnboardingDialog({ open, onOpenChange, onCreated, onUnce
                       key={mode}
                       type="button"
                       onClick={() => setAuthMode(mode)}
-                      className={cn('h-8 rounded-sm px-3 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', authMode === mode && 'bg-background shadow-sm')}
+                      className={cn('h-8 rounded-sm px-3 text-xs font-semibold focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring', authMode === mode && 'bg-background shadow-xs')}
                       aria-pressed={authMode === mode}
                     >
                       {mode === 'password' ? 'Kullanıcı / parola' : "API erişim anahtarı"}
@@ -215,7 +215,7 @@ export function FirewallOnboardingDialog({ open, onOpenChange, onCreated, onUnce
               </div>
             </FallbackSection>
 
-            <button type="button" aria-pressed={showSecrets} onClick={() => setShowSecrets((value) => !value)} className="inline-flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <button type="button" aria-pressed={showSecrets} onClick={() => setShowSecrets((value) => !value)} className="inline-flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
               {showSecrets ? <EyeOff className="h-4 w-4" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
               {showSecrets ? 'Gizli alanları maskele' : 'Gizli alanları göster'}
             </button>

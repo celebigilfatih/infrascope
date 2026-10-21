@@ -12,4 +12,8 @@
 
 ### Güvenlik kapsamı
 
-Bu yayın bir bağımlılık güvenlik yükseltmesi değildir. Kilitli Next.js sürümü için bilinen güvenlik bildirimleri vardır; bağımlılık denetimi temiz olarak raporlanmaz. GHSA-2xp9-vwfh-vxw4 kapsamındaki AVIF işleme yolunu kapatmak için kullanılmayan Next.js görsel optimizasyon API'si tamamen devre dışı bırakılmıştır. Sunucu Linux container içinde çalıştırılır; Windows üzerinde doğrudan Node sunucusu kurulumu desteklenmez. Next.js ve diğer üretim bağımlılıklarının desteklenen, düzeltilmiş sürümlere yükseltilmesi ayrıca gereklidir. Servisi yerel kullanım kılavuzuna uygun işletin.
+Bu sürüm, 1.0.5'te gözlenen 1 kritik, 22 yüksek ve 6 orta düzeydeki npm bağımlılık bildirimlerini giderir. Next.js 15.5.28, React 19, güncel Axios/Nodemailer/Undici/WebSocket paketleri ve Tailwind 4 ile uyumlu derleme zinciri kullanılır; Docker ve CI çalışma zamanı Node.js 24'tür. Üretim ağacı ve geliştirme araçlarını içeren tam npm denetimi sıfır bildirimle doğrulanır. Herhangi bir önem düzeyinde yeni bildirim çıkarsa zorunlu yayın kapısı derlemeyi durdurur; denetim istisnası veya bildirim filtresi kullanılmaz.
+
+Next.js'in kullanılmayan görsel optimizasyon API'si kapalı kalır. Dinamik API parametreleri ve lisans yönetimi çerezleri asenkron framework sözleşmesine uyarlandı. Oturum, yetki, TLS ve müşteri verisi koruma kontrolleri sürdürülür. Eski lint kural kümesi, yeni lint paketinin düzeltilmemiş glob/brace zincirini taşımamak için korunur; kendi glob bağımlılığı aynı ana sürümün güvenli yamasıyla sabitlenir. Gerçek derleyici/lint hata kontrolleri yayın testlerinde çalışır.
+
+Sıfır npm bildirimi, uygulamanın veya container işletim sistemi/Python paketlerinin tüm olası güvenlik açıklarına karşı onaylandığı anlamına gelmez. Gerçek müşteri lisansı, vSphere/Windows/Docker koşulları ve entegrasyon erişimleri kurulum kabulünde ayrıca doğrulanmalıdır. Windows üzerinde doğrudan Node sunucusu kurulumu desteklenmez.

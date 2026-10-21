@@ -25,7 +25,7 @@ export function PriorityIncidents({ items, total }: { items: PriorityIncident[];
           <p className="text-xs font-semibold uppercase text-muted-foreground">Operasyon kuyruğu</p>
           <h2 id="priority-incidents-title" className="mt-1 text-lg font-semibold">Öncelikli işler</h2>
         </div>
-        <Link href="/dashboard/alerts?status=OPEN%2CACKNOWLEDGED" className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        <Link href="/dashboard/alerts?status=OPEN%2CACKNOWLEDGED" className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
           Tümünü gör <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
         </Link>
       </div>
@@ -44,7 +44,7 @@ export function PriorityIncidents({ items, total }: { items: PriorityIncident[];
             <li key={incident.id}>
               <Link
                 href={`/dashboard/alerts?status=OPEN%2CACKNOWLEDGED&search=${encodeURIComponent(incident.code)}`}
-                className="group grid gap-3 px-1 py-3.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center"
+                className="group grid gap-3 px-1 py-3.5 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center"
               >
                 <Badge variant={incident.severity === 'ALARM_CRITICAL' ? 'destructive' : 'warning'} className="w-fit text-xs">
                   {severityLabel[incident.severity] || incident.severity}

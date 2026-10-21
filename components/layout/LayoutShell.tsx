@@ -43,7 +43,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
         {mobileNavigationOpen && (
           <button
             type="button"
-            className="fixed inset-0 z-[1100] bg-black/40 backdrop-blur-[1px] md:hidden"
+            className="fixed inset-0 z-1100 bg-black/40 backdrop-blur-[1px] md:hidden"
             aria-label="Gezinme menüsünü kapat"
             onClick={() => setMobileNavigationOpen(false)}
           />

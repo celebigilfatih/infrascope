@@ -125,7 +125,7 @@ export function Room3D({ room, selectedRackId, onRackClick, visibleRackIds, disp
         </Suspense>
       </Canvas>
 
-      {racks.length === 0 && <div className="pointer-events-none absolute inset-0 flex items-center justify-center"><div className="rounded-md border border-dashed border-border bg-background/90 px-6 py-5 text-center shadow-sm"><p className="font-medium">Bu odada kabinet yok</p><p className="mt-1 text-sm text-muted-foreground">Konumlar ve Odalar sayfasından kabinet ekleyin.</p></div></div>}
+      {racks.length === 0 && <div className="pointer-events-none absolute inset-0 flex items-center justify-center"><div className="rounded-md border border-dashed border-border bg-background/90 px-6 py-5 text-center shadow-xs"><p className="font-medium">Bu odada kabinet yok</p><p className="mt-1 text-sm text-muted-foreground">Konumlar ve Odalar sayfasından kabinet ekleyin.</p></div></div>}
     </div>
   );
 }

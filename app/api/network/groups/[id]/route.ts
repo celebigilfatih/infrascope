@@ -5,7 +5,8 @@ import { canAccessSync } from '@/lib/auth/permission-policy';
 import { NetworkGroupError, writeNetworkGroup } from '@/lib/topology/network-group-service';
 import { groupFailure, groupResult } from '@/lib/topology/network-group-response';
 export const dynamic = 'force-dynamic';
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const auth = await getRequestActor(request);
     if (!auth?.actor.id) return groupResult({ success: false, error: 'Oturum açmanız gerekiyor.' }, 401);
@@ -16,7 +17,8 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     return groupResult({ success: true, data: { id } });
   } catch (error) { return groupFailure(error); }
 }
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const auth = await getRequestActor(request);
     if (!auth?.actor.id) return groupResult({ success: false, error: 'Oturum açmanız gerekiyor.' }, 401);

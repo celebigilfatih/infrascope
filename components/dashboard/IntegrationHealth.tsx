@@ -34,7 +34,7 @@ export function IntegrationHealth({ items }: { items: IntegrationHealthItem[] })
           const Icon = config.icon;
           return (
             <li key={item.key}>
-              <Link href={item.href} className="group flex items-center gap-3 py-3.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
+              <Link href={item.href} className="group flex items-center gap-3 py-3.5 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
                 <Icon className={cn('h-4 w-4 shrink-0', config.className)} aria-hidden="true" />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">

@@ -4,7 +4,7 @@ import path from 'node:path';
 import vm from 'node:vm';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 const BUILD = 'npm run quality:release && next build';
-const QUALITY = 'node scripts/check-release-quality.mjs && npm run security:tls-check && npm run type-check && npm run lint';
+const QUALITY = 'node scripts/check-release-quality.mjs && npm run security:tls-check && npm run security:dependencies && npm run type-check && npm run lint';
 function policyErrors(config, pkg) {
   const errors = [];
   if (config?.typescript?.ignoreBuildErrors !== false) errors.push('Next.js TypeScript build checks must be explicitly enabled');
@@ -12,6 +12,7 @@ function policyErrors(config, pkg) {
   if (pkg?.scripts?.build !== BUILD) errors.push('Release build must pass quality:release before next build');
   if (pkg?.scripts?.['quality:release'] !== QUALITY) errors.push('Release quality command must enforce policy, TLS, type and lint checks');
   if (pkg?.scripts?.['type-check'] !== 'tsc --noEmit') errors.push('Type checking must execute the real compiler without suppressing failure');
+  if (pkg?.scripts?.['security:dependencies'] !== 'npm audit --audit-level=low') errors.push('Dependency audit must reject every finding across the full dependency tree');
   if (pkg?.scripts?.lint !== 'next lint') errors.push('Lint must execute the full configured Next.js lint scope without suppressing failure');
   return errors;
 }

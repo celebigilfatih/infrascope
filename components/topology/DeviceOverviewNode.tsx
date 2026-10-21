@@ -15,11 +15,11 @@ export const DeviceOverviewNode = memo(function DeviceOverviewNode({ data, selec
   return <div className={styles.device} style={{height: data.overviewHeight}} data-compact={data.compactOverview || undefined} data-selected={selected} data-center={data.overviewCenter || undefined} data-muted={data.muted} data-alert={data.portDownCount > 0}
     aria-label={`${data.name} · ${data.ipAddress || 'IP belirtilmemiş'} · ${uiLabel(data.type)} · ${status}`} title={`${data.name} · ${data.ipAddress || 'IP belirtilmemiş'} · ${data.buildingName || 'Konum atanmamış'} · ${uiLabel(data.type)} · ${status} · ${data.connectionCount} kayıtlı fiziksel bağlantı`}>
     <div className={styles.deviceIcon}>
-      <Handle id="top" type="source" position={Position.Top} isConnectable={false} className="!h-2 !w-2 !border-0 !bg-transparent" />
-      <Handle id="left" type="source" position={Position.Left} isConnectable={false} className="!h-2 !w-2 !border-0 !bg-transparent" />
+      <Handle id="top" type="source" position={Position.Top} isConnectable={false} className="h-2! w-2! border-0! bg-transparent!" />
+      <Handle id="left" type="source" position={Position.Left} isConnectable={false} className="h-2! w-2! border-0! bg-transparent!" />
       <Icon size={27} strokeWidth={1.5} aria-hidden="true" />
-      <Handle id="right" type="source" position={Position.Right} isConnectable={false} className="!h-2 !w-2 !border-0 !bg-transparent" />
-      <Handle id="bottom" type="source" position={Position.Bottom} isConnectable={false} className="!h-2 !w-2 !border-0 !bg-transparent" />
+      <Handle id="right" type="source" position={Position.Right} isConnectable={false} className="h-2! w-2! border-0! bg-transparent!" />
+      <Handle id="bottom" type="source" position={Position.Bottom} isConnectable={false} className="h-2! w-2! border-0! bg-transparent!" />
       <span className={styles.iconStatus} data-status={data.status} role="img" aria-label={status} />
     </div>
     <strong className={styles.deviceName} style={{ fontSize: labelSize, lineHeight: `${labelSize * (data.compactOverview ? 1.1 : 1.2)}px` }}>{data.overviewLabelLines?.join('\n') || data.name}</strong>

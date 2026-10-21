@@ -234,8 +234,8 @@ export default function FirewallDetailPage() {
           ))}
           <TabsContent value="vpn" className="mt-6">
             <div className="mb-5 inline-flex rounded-md bg-muted p-1">
-              <button type="button" onClick={() => setVpnTab('ssl-vpn')} aria-pressed={vpnTab === 'ssl-vpn'} className={cn('h-8 rounded-sm px-3 text-xs font-semibold', vpnTab === 'ssl-vpn' && 'bg-background shadow-sm')}>SSL-VPN</button>
-              <button type="button" onClick={() => setVpnTab('ipsec')} aria-pressed={vpnTab === 'ipsec'} className={cn('h-8 rounded-sm px-3 text-xs font-semibold', vpnTab === 'ipsec' && 'bg-background shadow-sm')}>IPsec</button>
+              <button type="button" onClick={() => setVpnTab('ssl-vpn')} aria-pressed={vpnTab === 'ssl-vpn'} className={cn('h-8 rounded-sm px-3 text-xs font-semibold', vpnTab === 'ssl-vpn' && 'bg-background shadow-xs')}>SSL-VPN</button>
+              <button type="button" onClick={() => setVpnTab('ipsec')} aria-pressed={vpnTab === 'ipsec'} className={cn('h-8 rounded-sm px-3 text-xs font-semibold', vpnTab === 'ipsec' && 'bg-background shadow-xs')}>IPsec</button>
             </div>
             <DataPanel connectorId={id} resource={vpnTab} active={activeTab === 'vpn'} />
           </TabsContent>
@@ -326,13 +326,13 @@ function DataView({ value, empty }: { value: unknown; empty: string }) {
     return <div className="overflow-x-auto rounded-md border"><table className="w-full min-w-[680px] text-left text-sm"><thead className="bg-muted/60 text-xs text-muted-foreground"><tr>{columns.map((column) => <th key={column} className="px-4 py-3 font-semibold">{columnLabel(column)}</th>)}</tr></thead><tbody className="divide-y">{rows.map((row, index) => <tr key={String(row.id || row.name || row.policyId || index)}>{columns.map((column) => <td key={column} className="max-w-[280px] px-4 py-3 align-top"><span className="line-clamp-2">{displayValue(row[column])}</span></td>)}</tr>)}</tbody></table></div>;
   }
   if (resolved && typeof resolved === 'object') {
-    return <dl className="grid divide-y rounded-md border sm:grid-cols-2 sm:divide-x sm:divide-y-0">{Object.entries(resolved as Record<string, unknown>).filter(([key]) => !/password|token|cookie/i.test(key)).slice(0, 12).map(([key, item]) => <div key={key} className="min-w-0 px-4 py-3"><dt className="text-xs text-muted-foreground">{columnLabel(key)}</dt><dd className="mt-1 break-words text-sm font-medium">{displayValue(item)}</dd></div>)}</dl>;
+    return <dl className="grid divide-y rounded-md border sm:grid-cols-2 sm:divide-x sm:divide-y-0">{Object.entries(resolved as Record<string, unknown>).filter(([key]) => !/password|token|cookie/i.test(key)).slice(0, 12).map(([key, item]) => <div key={key} className="min-w-0 px-4 py-3"><dt className="text-xs text-muted-foreground">{columnLabel(key)}</dt><dd className="mt-1 wrap-break-word text-sm font-medium">{displayValue(item)}</dd></div>)}</dl>;
   }
   return <PanelState icon={CheckCircle2} text={empty} />;
 }
 
 function PanelState({ icon: Icon, text, tone = 'normal', spin = false }: { icon: typeof Shield; text: string; tone?: 'normal' | 'critical'; spin?: boolean }) {
-  return <div className={cn('flex min-h-36 flex-col items-center justify-center rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground', tone === 'critical' && 'border-red-500/30 bg-red-500/[0.03] text-red-700 dark:text-red-300')}><Icon className={cn('mb-3 h-5 w-5', spin && 'animate-spin motion-reduce:animate-none')} aria-hidden="true" /><p className="max-w-md">{text}</p></div>;
+  return <div className={cn('flex min-h-36 flex-col items-center justify-center rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground', tone === 'critical' && 'border-red-500/30 bg-red-500/3 text-red-700 dark:text-red-300')}><Icon className={cn('mb-3 h-5 w-5', spin && 'animate-spin motion-reduce:animate-none')} aria-hidden="true" /><p className="max-w-md">{text}</p></div>;
 }
 
 function displayValue(value: unknown): string {

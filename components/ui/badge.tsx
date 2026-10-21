@@ -15,14 +15,14 @@ const badgeVariants = cva(
         secondary:
           "border-border bg-muted text-muted-foreground",
         destructive:
-          "border-[var(--ui-danger-border)] bg-[var(--ui-danger-bg)] text-[var(--ui-danger-fg)]",
+          "border-(--ui-danger-border) bg-(--ui-danger-bg) text-(--ui-danger-fg)",
         outline: "border-border text-muted-foreground",
         success:
-          "border-[var(--ui-success-border)] bg-[var(--ui-success-bg)] text-[var(--ui-success-fg)]",
+          "border-(--ui-success-border) bg-(--ui-success-bg) text-(--ui-success-fg)",
         warning:
-          "border-[var(--ui-warning-border)] bg-[var(--ui-warning-bg)] text-[var(--ui-warning-fg)]",
+          "border-(--ui-warning-border) bg-(--ui-warning-bg) text-(--ui-warning-fg)",
         info:
-          "border-[var(--ui-info-border)] bg-[var(--ui-info-bg)] text-[var(--ui-info-fg)]",
+          "border-(--ui-info-border) bg-(--ui-info-bg) text-(--ui-info-fg)",
       },
     },
     defaultVariants: {

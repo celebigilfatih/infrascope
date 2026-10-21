@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { getRequestActor } from '@/lib/auth/request-actor';
 import { NmsInternalError, nmsInternalFetch, parseNmsResponse } from '@/lib/nms/internal-client';
 
-type RouteContext = { params: { id: string } };
+type RouteContext = { params: Promise<{ id: string }> };
 type ObservedHostKey = { algorithm: string; fingerprint: string; observed_at: string };
 
 async function loadDevice(deviceId: string) {
@@ -32,9 +32,10 @@ function operationError(error: unknown) {
   return NextResponse.json({ success: false, error: 'SSH host key operation failed' }, { status: 500 });
 }
 
-export async function GET(request: NextRequest, { params }: RouteContext) {
+export async function GET(request: NextRequest, props: RouteContext) {
+  const params = await props.params;
   try {
-    if (!await getRequestActor(request)) {
+    if (!(await getRequestActor(request))) {
       return NextResponse.json({ success: false, error: 'Authentication required' }, { status: 401 });
     }
     const device = await loadDevice(params.id);
@@ -60,7 +61,8 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
   }
 }
 
-export async function POST(request: NextRequest, { params }: RouteContext) {
+export async function POST(request: NextRequest, props: RouteContext) {
+  const params = await props.params;
   try {
     const auth = await getRequestActor(request);
     if (!auth) return NextResponse.json({ success: false, error: 'Authentication required' }, { status: 401 });

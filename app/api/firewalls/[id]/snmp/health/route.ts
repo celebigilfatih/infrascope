@@ -5,10 +5,11 @@ import { readFirewallSnmpHealth } from '@/lib/firewall/snmp-read';
 
 export const dynamic = 'force-dynamic';
 
-type RouteContext = { params: { id: string } };
+type RouteContext = { params: Promise<{ id: string }> };
 
-export async function GET(request: NextRequest, { params }: RouteContext) {
-  const access = await authorizeApiRequest(request, 'firewall', 'read'); if (!access.allowed) return access.response;
+export async function GET(request: NextRequest, props: RouteContext) {
+  const params = await props.params;
+  const access = await authorizeApiRequest(request, 'firewall', 'read');if (!access.allowed) return access.response;
   try {
     const result = await readFirewallSnmpHealth(params.id);
     return NextResponse.json({ success: true, target: result.target, ...result.envelope }, { headers: { 'Cache-Control': 'private, no-store' } });

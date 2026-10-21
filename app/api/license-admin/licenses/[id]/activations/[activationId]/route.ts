@@ -4,10 +4,11 @@ import { prisma } from '@/lib/prisma';
 import { requireLicenseAdmin } from '@/lib/license/admin-auth';
 
 type RouteContext = {
-  params: { id: string; activationId: string };
+  params: Promise<{ id: string; activationId: string }>;
 };
 
-export async function PATCH(request: NextRequest, { params }: RouteContext) {
+export async function PATCH(request: NextRequest, props: RouteContext) {
+  const params = await props.params;
   const authError = await requireLicenseAdmin(request);
   if (authError) return authError;
 
