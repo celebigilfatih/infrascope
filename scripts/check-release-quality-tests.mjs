@@ -64,9 +64,13 @@ test('scanner reports every match and line without exposing matched source', () 
   const result = scanContent('scripts/collector.py', '\nrequests.get(a, verify=False)\nrequests.get(b, verify=False)');
   assert.deepEqual(result.map(r => r.line), [2, 3]); assert.ok(result.every(r => !('text' in r)));
 });
+test('customer runtime disables the image optimization endpoint pending the dependency security upgrade', () => {
+  const { config } = readPolicy(root);
+  assert.equal(config.images?.unoptimized, true);
+});
 test('tag and manual publication wait for every required reusable quality/regression workflow', () => {
   const publish = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/publish-image.yml'), 'utf8'));
-  assert.deepEqual([...publish.jobs.publish.needs].sort(), ['release-quality', 'alarm-checks', 'dashboard-checks', 'incident-checks', 'backup-checks'].sort());
+  assert.deepEqual([...publish.jobs.publish.needs].sort(), ['release-quality', 'alarm-checks', 'dashboard-checks', 'incident-checks', 'backup-checks', 'customer-deployment'].sort());
   assert.equal(publish.jobs.publish.if, undefined); assert.ok(publish.on.push.tags); assert.ok(publish.on.workflow_dispatch);
   for (const job of publish.jobs.publish.needs) {
     const file = publish.jobs[job].uses.replace('./', ''), workflow = yaml.load(fs.readFileSync(path.join(root, file), 'utf8'));

@@ -121,6 +121,6 @@ jobs:
           VERSION: ${{ steps.release.outputs.version }}
         run: |
           set -euo pipefail
-          gh release create "v$VERSION" --verify-tag --title "InfraScope $VERSION" --generate-notes \
+          gh release create "v$VERSION" --verify-tag --title "InfraScope $VERSION" --notes-file docs/releases/customer.md \
             "dist/online/infrascope-windows-online-$VERSION.zip" \
             dist/online/install-infrascope.ps1 "dist/online/SHA256SUMS-online-$VERSION.txt"

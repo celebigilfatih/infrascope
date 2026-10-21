@@ -4,6 +4,9 @@ const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
   compress: true,
+  // Disable the unused optimizer, including its API, while the framework upgrade is pending.
+  // GHSA-2xp9-vwfh-vxw4: untrusted AVIF decoding must not reach the server-side sharp pipeline.
+  images: { unoptimized: true },
   // compiler.removeConsole is NOT supported by Turbopack (dev mode)
   // Only apply in production builds where Turbopack isn't used
   ...(process.env.NODE_ENV === 'production' && process.env.npm_lifecycle_event !== 'dev'
