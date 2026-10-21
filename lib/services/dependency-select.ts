@@ -1,0 +1,3 @@
+export const dependencyDeviceSelect = { id: true, name: true, managementIp: true } as const;
+export const dependencySourceSelect = { id: true, name: true, displayName: true, type: true, status: true, port: true, protocol: true, deviceId: true, device: { select: dependencyDeviceSelect }, applicationId: true, application: { select: { id: true, name: true, version: true } } } as const;
+export const dependencySelect = { id: true, sourceServiceId: true, targetDeviceId: true, type: true, criticality: true, description: true, createdAt: true, updatedAt: true, sourceService: { select: dependencySourceSelect }, targetDevice: { select: dependencyDeviceSelect } } as const;

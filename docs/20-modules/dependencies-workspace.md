@@ -1,0 +1,23 @@
+# Dependencies workspace
+
+The Turkish /services/dependencies screen follows the applications and services workspace with shared headings, icons, summary cards, semantic importance badges, local search/type/importance filters, ten-row paging, responsive cards and accessible dialogs. Each record explicitly shows source service → target device. Hosting device, service port/protocol and nullable application assignment provide context without treating the target as another service.
+
+## Data and permissions
+
+GET /api/services/dependencies/workspace reads a selected complete snapshot using the shared Prisma client and a repeatable-read transaction. More than 50,000 relationships fails explicitly rather than returning a truncated list. GET /api/services/dependencies/options independently loads selected service/device choices only for creation, with explicit 20,000-record limits for each kind. Option failures do not prevent list inspection or fixed-endpoint editing. Both paths authorize the current ACTIVE actor through devices/read, return private/no-store data and omit credentials, service metadata and license details.
+
+The parser validates endpoint identities, nullable application identity, unique record IDs and source/target/type tuples. Invalid mappings fail instead of becoming an empty result. Unrecognized type/importance stays unknown and can be filtered. Dates use TSİ; record update times and list reading times are distinct. Summary counts cover relationship edges, unique source services, unique target devices and critical/high importance edges. Importance is recorded priority, not outage or device health. No incoming or transitive dependency inference is made.
+
+## Existing relation operations
+
+The existing POST/PUT/DELETE route remains in use, now checking current-actor devices/write or devices/delete permissions and validating all eight schema relationship types and five importance levels, including SUPPORTS and INFORMATIONAL. Existing creation defaults and optional legacy version fields remain compatible. The legacy GET serviceId filter now selects outgoing sourceServiceId records, never unrelated device IDs.
+
+Creation previews selected endpoints and uses the complete options envelope. Editing keeps endpoints fixed and permits type, importance and description changes. The new UI sends expectedUpdatedAt for conditional edits/deletions; changed records return a conflict without blind overwrite. Unique tuple violations and missing endpoints have safe Turkish messages. API mutation wrappers preserve HTTP status and structured error code, with an optional PUT timeout matching the other wrappers.
+
+Delete confirmation identifies the exact endpoints/type/importance and removes only the relationship record. Writes use a synchronous duplicate-submit guard. A matching acknowledgement and fresh snapshot confirming the complete change or absence are required before displaying verified success. Uncertain results retain the draft and lock writes until a successful manual refresh. Known validation/duplicate conflicts retain the draft. Read rendering remains independent of write permissions: EDITOR can create/edit; ADMIN can also delete; VIEWER can inspect.
+
+## Verification
+
+node scripts/check-dependencies-workspace.cjs exercises the actual parser, validator, selected projections, current-actor permission path, workspace/options/legacy routes and API wrappers with isolated persistence and transport. Coverage includes every type/importance payload value, nullable assignments, unknown values, unique tuples/counts, mismatched identities, search, bounds, independent option failures, inactive and role gates, duplicate/missing endpoint errors, immutable endpoints, version conflicts, verified identities and private error handling. Related services and applications regression scripts, full TypeScript and scoped ESLint pass.
+
+The actual component was browser tested using output/dependencies-refresh with explicit TEST VERİSİ and Gerçek yazma: 0 labels. Checks passed for paging, unknown/Bilgi filters, full target search, details, unchanged-edit disabling, duplicate rejection with draft retention, create/update/delete read-back verification, changed-record conflict, unconfirmed-result locking, independent option failure, viewer/editor controls, stale data, invalid identity rejection and empty results. At 390×844 in dark mode, cards, long IPv6 and the scrollable creation dialog have no horizontal overflow. Screenshots are retained in output/dependencies-refresh/screenshots. The independent live screen returned a successful empty relationship inventory. No real service, device or relationship was changed for QA.

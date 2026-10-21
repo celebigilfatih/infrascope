@@ -8,11 +8,13 @@ export const customerNavigation: NavigationSection[] = [
   { id: 'Dashboard', title: 'Genel Bakış', items: [
     { name: 'Genel Sağlık', href: '/dashboard', section: 'dashboard' },
     { name: 'Olay Merkezi', href: '/dashboard/alerts', section: 'incidents' },
+    { name: 'Riskli Varlıklar', href: '/dashboard/risks', section: 'risks' },
   ] },
   { id: 'Infrastructure', title: 'Fiziksel Altyapı', items: [
     { name: 'Konumlar ve Odalar', href: '/locations', section: 'locations' },
     { name: 'Kabinetler', href: '/racks', section: 'racks' },
     { name: 'Cihaz Envanteri', href: '/devices', section: 'devices' },
+    { name: 'Güç ve Kapasite', href: '/infrastructure/capacity', section: 'power' },
   ] },
   { id: 'Virtualization', title: 'Sanallaştırma', items: [
     { name: 'Kümeler', href: '/virtualization/clusters', section: 'clusters' },
@@ -43,6 +45,12 @@ export const customerNavigation: NavigationSection[] = [
     { name: 'Servisler', href: '/services', section: 'services' },
     { name: 'Bağımlılıklar', href: '/services/dependencies', section: 'dependencies' },
   ] },
+  { id: 'Analytics', title: 'Raporlar ve Analiz', items: [
+    { name: 'Raporlar ve Analiz', href: '/reports', section: 'reports' },
+    { name: 'Kapasite Eğilimleri', href: '/analytics/capacity', section: 'capacity' },
+    { name: 'Kapasite Tahminleri', href: '/analytics/forecast', section: 'forecast' },
+    { name: 'Atıl Sanal Makine Analizi', href: '/analytics/sprawl', section: 'sprawl' },
+  ] },
   { id: 'Integrations', title: 'Entegrasyonlar', items: [
     { name: 'VMware', href: '/integrations/vmware', section: 'vmware' },
     { name: 'Güvenlik Duvarları', href: '/integrations/firewall', section: 'firewall' },
@@ -67,13 +75,8 @@ export const licenseNavigation: NavigationSection[] = [
   ] },
 ];
 
+// Disabled routes retain breadcrumb identity without becoming menu entries.
 const extraRoutes: NavigationItem[] = [
-  { name: 'Riskli Varlıklar', href: '/dashboard/risks', section: 'risks' },
-  { name: 'Güç ve Kapasite', href: '/infrastructure/capacity', section: 'power' },
-  { name: 'Kapasite Eğilimleri', href: '/analytics/capacity', section: 'capacity' },
-  { name: 'Kapasite Tahminleri', href: '/analytics/forecast', section: 'forecast' },
-  { name: 'Atıl Sanal Makine Analizi', href: '/analytics/sprawl', section: 'sprawl' },
-  { name: 'Raporlar ve Analiz', href: '/reports', section: 'reports' },
   { name: 'IPS / DoS Olayları', href: '/security/ips', section: 'risks' },
 ];
 

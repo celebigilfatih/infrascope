@@ -84,7 +84,7 @@ export function BuildingDeviceConnectionForm({ buildingId, source, target, conne
     </div>;
   };
   return <Dialog open onOpenChange={open => { if (!open && !saving.current) onClose(); }}>
-    <DialogContent closeLabel="Cihaz bağlantı formunu kapat" className="max-h-[90dvh] overflow-y-auto" style={{ width: 'calc(100vw - 2rem)', maxWidth: 560 }}>
+    <DialogContent closeButtonText="Kapat" closeLabel="Cihaz bağlantı formunu kapat" className="max-h-[90dvh] overflow-y-auto" style={{ width: 'calc(100vw - 2rem)', maxWidth: 560 }}>
       <DialogHeader><DialogTitle>{connectionId ? 'Cihaz bağlantısını düzenle' : 'Cihazları bağla'}</DialogTitle><DialogDescription>{connectionId ? 'Kayıtlı bağlantının türünü, iki uçtaki portlarını ve hızını düzenleyin.' : 'İki cihazın portlarını, bağlantı türünü ve hızını seçin. Bağlantı bu topolojiye kaydedilir.'}</DialogDescription></DialogHeader>
       <form onSubmit={event => void submit(event)} className="min-w-0 space-y-4">
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}

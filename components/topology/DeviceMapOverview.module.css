@@ -1,0 +1,71 @@
+.overview { display: flex; flex: 1; min-width: 0; min-height: 0; flex-direction: column; background: oklch(var(--background)); }
+.toolbar { order: 0; display: flex; flex-shrink: 0; flex-wrap: wrap; align-items: center; gap: .625rem; padding: .75rem; border-bottom: 1px solid oklch(var(--border)); }
+.search { flex: 1; min-width: 12rem; }
+.toolbar > button,.toolbar > div > button { height: 2.5rem; }
+.scopebar { display: flex; flex-shrink: 0; flex-wrap: wrap; align-items: center; gap: .5rem; padding: .625rem .875rem; border-bottom: 1px solid oklch(var(--border)); }
+.scopebar button { min-height: 2.25rem; font-size: .75rem; }
+.mobileScope { display: flex; flex-shrink: 0; align-items: center; gap: .5rem; padding: .5rem; border-bottom: 1px solid oklch(var(--border)); }
+.mobileScope button { font-size: .75rem; }
+.scopeChoices { display: flex; flex-wrap: wrap; align-items: center; gap: .625rem; }
+.scopeChoices button { font-size: .75rem; }
+.modes { display: flex; gap: .25rem; padding-right: .5rem; border-right: 1px solid oklch(var(--border)); }
+.modes button[aria-pressed=true] { color: oklch(var(--primary)); background: oklch(var(--primary) / .08); }
+.location { min-width: 9rem; max-width: 14rem; height: 2.25rem; border: 1px solid oklch(var(--border)); border-radius: .375rem; background: oklch(var(--card)); padding: 0 .625rem; font-size: .75rem; }
+.summary { order: 3; display: flex; flex-shrink: 0; flex-wrap: wrap; justify-content: space-between; gap: .25rem .75rem; padding: .375rem .875rem; color: oklch(var(--muted-foreground)); font-size: .6875rem; }
+.scopeFooter { order: 4; display: flex; flex-wrap: wrap; flex-shrink: 0; align-items: center; justify-content: flex-end; gap: .5rem .75rem; padding: 0 .875rem .375rem; font-size: .6875rem; color: oklch(var(--muted-foreground)); }
+.graph { order: 1; position: relative; flex: 1; min-width: 0; min-height: 0; }
+.graph :global(.react-flow) { height: 100%; min-height: 0; overflow: clip !important; }
+.graph :global(.react-flow__panel.bottom.left) { max-width: calc(100% - 1.5rem); }
+.graph :global(.react-flow__attribution) { font-size: 9px; }
+.graph :global(.react-flow__minimap) { width: 144px; height: 90px; border: 1px solid oklch(var(--border)); border-radius: .5rem; }
+.device { position: relative; width: 192px; height: 144px; display: flex; flex-direction: column; align-items: center; text-align: center; color: oklch(var(--foreground)); }
+.deviceIcon { position: relative; display: grid; flex-shrink: 0; place-items: center; width: 48px; height: 48px; border: 1px solid oklch(var(--border)); border-radius: 50%; background: oklch(var(--card)); color: oklch(var(--primary)); box-shadow: 0 1px 3px #0000000a, 0 0 0 6px oklch(var(--primary) / .04); }
+.deviceName { margin-top: 9px; font-size: 16px; line-height: 20px; font-weight: 600; max-width: 192px; min-height: 20px; flex-shrink: 0; white-space: pre-line; overflow-wrap: anywhere; display: block; background: oklch(var(--background)); padding: 0 2px; }
+.ip { margin-top: 3px; padding: 0 2px; background: oklch(var(--background)); font-size: 12px; line-height: 16px; }
+.deviceMeta { display: flex; align-items: center; justify-content: center; gap: .375rem; margin-top: 3px; padding-inline: 2px; max-width: 192px; color: oklch(var(--muted-foreground)); background: oklch(var(--background)); font-size: 10px; line-height: 16px; }
+.deviceMeta > span:first-child { max-width: 110px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.device[data-compact=true] .deviceIcon,.compactGroup .deviceIcon { width: 32px; height: 32px; box-shadow: 0 0 0 4px oklch(var(--primary) / .04); }
+.device[data-compact=true] .deviceIcon > svg { width: 22px; height: 22px; }
+.device[data-compact=true] .deviceName { margin-top: 4px; }
+.device[data-compact=true] .ip,.device[data-compact=true] .deviceMeta { display: none; }
+.compactGroup { display: flex; flex-direction: column; align-items: center; width: 192px; height: 144px; gap: 4px; text-align: center; color: oklch(var(--foreground)); }
+.compactGroup .deviceIcon { color: #0d9488; border-color: #0d948866; }
+.compactGroupName { max-width: 192px; display: block; flex-shrink: 0; white-space: pre-line; overflow-wrap: anywhere; font-weight: 600; background: oklch(var(--background)); }
+.compactGroupMeta { color: oklch(var(--muted-foreground)); line-height: 1.1; }
+.status { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
+.dot { width: 6px; height: 6px; flex-shrink: 0; border-radius: 50%; background: #7c8593; }
+.dot[data-status=active] { background: #16804a; }
+.dot[data-status=error] { background: #dc4343; }
+.dot[data-status=maintenance] { background: #b77914; }
+.iconStatus { position: absolute; bottom: -3px; right: -3px; width: 12px; height: 12px; border: 2px solid oklch(var(--card)); border-radius: 50%; background: #7c8593; }
+.iconStatus[data-status=active] { background: #16804a; }
+.iconStatus[data-status=error],.iconStatus[data-status=inactive] { background: #dc4343; }
+.iconStatus[data-status=maintenance] { background: #b77914; }
+.device[data-selected=true] .deviceIcon { border-color: oklch(var(--primary)); box-shadow: 0 0 0 3px oklch(var(--primary) / .16); }
+.device[data-center=true] .deviceIcon { background: oklch(var(--primary) / .04); box-shadow: 0 1px 3px #0000000a, 0 0 0 7px oklch(var(--primary) / .07); }
+.device[data-alert=true] .deviceIcon { border-color: oklch(var(--destructive)); }
+.device[data-muted=true] { opacity: .35; }
+.deviceMenu { position: absolute; top: 0; left: 126px; opacity: 0; }
+.device:hover .deviceMenu,.device:focus-within .deviceMenu,:global(.react-flow__node:focus-visible) .deviceMenu { opacity: 1; }
+.controls { display: flex; flex-wrap: wrap; align-items: center; overflow: hidden; border: 1px solid oklch(var(--border)); border-radius: .5rem; background: oklch(var(--card)); box-shadow: 0 2px 6px #00000006; }
+.controls button { border-radius: 0; font-size: .75rem; gap: .375rem; padding-inline: .625rem; }
+.controls > span { font-size: .6875rem; min-width: 2.5rem; text-align: center; }
+.list { max-height: min(55dvh,24rem); overflow-y: auto; display: flex; flex-direction: column; gap: .25rem; }
+.list button { display: flex; flex-direction: column; align-items: flex-start; gap: .375rem; width: 100%; padding: .625rem; text-align: left; border-radius: .375rem; }
+.list button:hover,.list button[aria-pressed=true] { background: oklch(var(--primary) / .08); }
+.list strong { font-size: .8125rem; overflow-wrap: anywhere; }
+.list small,.menu small { font-size: .75rem; color: oklch(var(--muted-foreground)); overflow-wrap: anywhere; }
+.menu { display: flex; flex-direction: column; gap: .375rem; }
+.menu p { font-size: .875rem; font-weight: 600; }
+.menu > button { justify-content: flex-start; gap: .5rem; width: 100%; }
+.menu button > span { display: inline; }
+.footer { order: 2; display: flex; flex-shrink: 0; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; padding: .625rem .875rem; border-top: 1px solid oklch(var(--border)); color: oklch(var(--muted-foreground)); font-size: .75rem; }
+.footer button { margin-left: auto; font-size: .75rem; }
+.legend { display: inline-flex; align-items: center; gap: .5rem; }
+.legend i { width: 1.75rem; border-top: 2px solid; }
+.up { color: #16804a; }.down { color: #dc4343; border-top-style: dashed !important; }.unknown { color: #7c8593; border-top-style: dashed !important; }.logical { color: #0d9488; border-top-style: dashed !important; }
+.hint { flex-shrink: 0; padding: .375rem .875rem .5rem; color: oklch(var(--muted-foreground)); font-size: .6875rem; line-height: 1.5; }
+.empty { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: .75rem; padding: 1rem; text-align: center; font-size: .8125rem; color: oklch(var(--muted-foreground)); }
+.overview button:focus-visible,.location:focus-visible { outline: 2px solid oklch(var(--ring)); outline-offset: -2px; }
+@media (max-width: 767px) { .toolbar,.scopebar { padding: .5rem; gap: .5rem; } .search { flex-basis: 100%; min-width: 0; } .toolbar > button { font-size: .75rem; min-height: 2.25rem; } .scopebar button { padding-inline: .625rem; } .summary { font-size: .6875rem; padding: .375rem .625rem; } .footer { padding: .375rem .625rem; font-size: .625rem; gap: .375rem .75rem; } .footer button { font-size: .6875rem; } .hint { padding: .25rem .625rem; font-size: .625rem; } .controls button { font-size: .6875rem; padding-inline: .5rem; } }
+@media (max-width: 600px) { .graph :global(.react-flow__minimap) { display: none; } }

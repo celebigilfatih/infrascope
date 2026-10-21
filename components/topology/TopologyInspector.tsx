@@ -45,10 +45,11 @@ export function ConnectionInspector({ connection, devices, onSelectDevice }: { c
   </div>;
 }
 
-export function DeviceInspector({ device, devices, connections, downPorts, telemetryAvailable, connectionsAvailable, servicesCount, onSelectConnection, onOpenInventory }: {
+export function DeviceInspector({ device, devices, connections, downPorts, telemetryAvailable, connectionsAvailable, servicesCount, onSelectConnection, onOpenInventory, onCreateGroup }: {
   device: InspectorDevice; devices: InspectorDevice[]; connections: TopologyConnection[];
   downPorts: InspectorDownPort[]; telemetryAvailable: boolean; connectionsAvailable: boolean; servicesCount: number | null;
   onSelectConnection: (id: string) => void; onOpenInventory: () => void;
+  onCreateGroup?: (portId?: string) => void;
 }) {
   const links = connections.filter(link => link.sourceDeviceId === device.id || link.targetDeviceId === device.id);
   const location = [device.rack?.room?.floor?.building?.name || device.building?.name, device.rack?.room?.floor?.name || device.floor?.name, device.rack?.room?.name, device.rack?.name].filter(Boolean);
@@ -68,7 +69,8 @@ export function DeviceInspector({ device, devices, connections, downPorts, telem
       {!telemetryAvailable ? <p className={styles.empty}>Port izleme verileri alınamadı.</p> : !downPorts.length ? <p className={styles.empty}>Kapalı port kaydı dönmedi. Bu bilgi tüm portların izlendiği veya açık olduğu anlamına gelmez.</p> : downPorts.map(port => <div key={port.id} className={styles.portAlert}><strong>{port.interfaceName}</strong><SemanticBadge tone="danger">Kapalı</SemanticBadge>{port.description && <p>{port.description}</p>}<small>Kesinti başlangıcı: {timestamp(port.downSince)}</small><small>Son ölçüm (TSİ): {timestamp(port.lastPolledAt)}</small></div>)}
     </section>
     <section className={styles.section}><h3><MapPin size={16} />Fiziksel konum</h3><p className={styles.note}>{location.length ? location.join(' › ') : 'Cihaza konum atanmamış.'}</p></section>
-    <section className={styles.section}><h3><EthernetPort size={16} />Ağ arayüzleri</h3>{device.networkInterfaces === undefined ? <p className={styles.empty}>Arayüz bilgisi alınamadı.</p> : !device.networkInterfaces.length ? <p className={styles.empty}>Kayıtlı ağ arayüzü yok.</p> : device.networkInterfaces.map(iface => <div className={styles.interface} key={iface.id}><div><strong>{iface.name}</strong><code>{iface.ipv4 || 'IP belirtilmemiş'}</code></div><ConnectionStatus status={iface.status} /></div>)}</section>
+    <section className={styles.section}><h3><EthernetPort size={16} />Ağ arayüzleri</h3>{device.networkInterfaces === undefined ? <p className={styles.empty}>Arayüz bilgisi alınamadı.</p> : !device.networkInterfaces.length ? <p className={styles.empty}>Kayıtlı ağ arayüzü yok.</p> : device.networkInterfaces.map(iface => <div className={styles.interface} key={iface.id}><div><strong>{iface.name}</strong><code>{iface.ipv4 || 'IP belirtilmemiş'}</code>{onCreateGroup && <button type="button" className="mt-2 rounded border px-2 py-1 text-xs text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => onCreateGroup(`interface:${iface.id}`)}>Bu noktadan ağ grubu oluştur</button>}</div><ConnectionStatus status={iface.status} /></div>)}</section>
+    {onCreateGroup && <Button variant="outline" className="w-full" onClick={() => onCreateGroup()}>Bu cihazdan ağ grubu oluştur</Button>}
     <Button variant="outline" className="w-full gap-2" onClick={onOpenInventory}><Server size={16} />Cihaz envanterini aç<ArrowUpRight size={15} /></Button>
   </div>;
 }

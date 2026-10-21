@@ -26,7 +26,13 @@ export const CustomEdge = ({
   const tooltip = useConnectionTooltip(data?.onHoverChange);
   const details = data?.connectionTooltip as ConnectionTooltipDetails | undefined;
   const route = data?.deviceRoute as DeviceRoute | undefined;
-  const [edgePath, labelX, labelY] = route ? [route.path, route.label.x, route.label.y] : getBezierPath({
+  const overviewOffset = data?.overviewOffset;
+  const distance = Math.max(1, Math.hypot(targetX - sourceX, targetY - sourceY));
+  const controlX = (sourceX + targetX) / 2 - (targetY - sourceY) / distance * (overviewOffset || 0);
+  const controlY = (sourceY + targetY) / 2 + (targetX - sourceX) / distance * (overviewOffset || 0);
+  const [edgePath, labelX, labelY] = route ? [route.path, route.label.x, route.label.y] : typeof overviewOffset === 'number'
+    ? [`M ${sourceX} ${sourceY} Q ${controlX} ${controlY} ${targetX} ${targetY}`, (sourceX + 2 * controlX + targetX) / 4, (sourceY + 2 * controlY + targetY) / 4]
+    : getBezierPath({
     sourceX,
     sourceY,
     targetX,

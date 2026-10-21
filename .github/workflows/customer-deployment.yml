@@ -1,0 +1,47 @@
+name: Customer deployment checks
+
+on:
+  workflow_call:
+  pull_request:
+    paths:
+      - 'deploy/**'
+      - 'docker/**'
+      - 'scripts/*release*'
+      - 'scripts/check-windows-*.ps1'
+      - '.github/workflows/**'
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python scripts/check-online-release.py
+      - run: python scripts/check-customer-release-package.py
+  windows:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        shell: [powershell, pwsh]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Generate synthetic release (never published)
+        shell: pwsh
+        run: >-
+          python scripts/package-online-release.py --version 1.0.2 --repository celebigilfatih/infrascope
+          --revision aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+          --app-digest sha256:1111111111111111111111111111111111111111111111111111111111111111
+          --nms-digest sha256:2222222222222222222222222222222222222222222222222222222222222222
+          --postgres-digest sha256:3333333333333333333333333333333333333333333333333333333333333333
+          --output fixture
+      - name: Windows release failure/retry and state preservation
+        shell: ${{ matrix.shell }}
+        run: ./scripts/check-windows-update.ps1 -FixtureZip fixture/infrascope-windows-online-1.0.2.zip

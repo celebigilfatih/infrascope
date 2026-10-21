@@ -77,7 +77,7 @@ export function BuildingConnectionEditor({ connectionId, onClose, onChanged }: {
   };
 
   return <Dialog open onOpenChange={open => { if (!open && !saving.current) onClose(); }}>
-    <DialogContent closeLabel="Bina bağlantı formunu kapat" className="max-h-[90dvh] overflow-y-auto" style={{ width: 'calc(100vw - 2rem)', maxWidth: 640 }}>
+    <DialogContent closeButtonText="Kapat" closeLabel="Bina bağlantı formunu kapat" className="max-h-[90dvh] overflow-y-auto" style={{ width: 'calc(100vw - 2rem)', maxWidth: 640 }}>
       <DialogHeader><DialogTitle>Bina bağlantısını düzenle</DialogTitle><DialogDescription>Binalar arasındaki bağlantının cihazlarını, portlarını, türünü ve hızını güncelleyin.</DialogDescription></DialogHeader>
       {loading && <p role="status" className="text-sm text-muted-foreground">Bağlantı yükleniyor…</p>}
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}

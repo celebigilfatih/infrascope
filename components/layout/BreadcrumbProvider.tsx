@@ -26,7 +26,7 @@ const STATIC_BREADCRUMBS: Record<string, BreadcrumbItem[]> = {
   ],
   '/dashboard/risks': [
     { label: 'Genel Sağlık', href: '/dashboard' },
-    { label: 'Riskler' },
+    { label: 'Riskli Varlıklar' },
   ],
   '/integrations/nms/add-device': [
     { label: 'NMS İzlenen Cihazlar', href: '/integrations/nms/devices' },

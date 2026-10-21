@@ -225,12 +225,16 @@ test('Users workspace: refresh and identity errors preserve stale records and di
   expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390); expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(844);
   const deletion = dialog.getByRole('button', { name: 'Hesabı sil', exact: true });
   await deletion.scrollIntoViewIfNeeded();
-  const actionBounds = await deletion.boundingBox();
-  expect(actionBounds).not.toBeNull();
-  expect(actionBounds!.x).toBeGreaterThanOrEqual(bounds!.x);
-  expect(actionBounds!.y).toBeGreaterThanOrEqual(bounds!.y);
-  expect(actionBounds!.x + actionBounds!.width).toBeLessThanOrEqual(bounds!.x + bounds!.width);
-  expect(actionBounds!.y + actionBounds!.height).toBeLessThanOrEqual(bounds!.y + bounds!.height);
+  // Measure the action and its animated panel together after scrolling. Separate
+  // boundingBox calls can compare different animation frames by a fraction of a pixel.
+  await expect.poll(() => deletion.evaluate(button => {
+    const panel = button.closest('[role="dialog"]');
+    if (!panel) return false;
+    const action = button.getBoundingClientRect(); const container = panel.getBoundingClientRect();
+    return action.width > 0 && action.height > 0 && action.left >= container.left && action.top >= container.top
+      && action.right <= container.right && action.bottom <= container.bottom
+      && action.left >= 0 && action.top >= 0 && action.right <= window.innerWidth && action.bottom <= window.innerHeight;
+  })).toBe(true);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await capture(page, info, 'users-mobile-dark-detail');
   await deletion.click();

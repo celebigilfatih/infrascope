@@ -166,6 +166,14 @@ prepare_images() {
     set +a
     REGISTRY=${REGISTRY:-ghcr.io/celebigilfatih}
     VERSION=${VERSION:-1.0.0}
+    if ! docker image inspect postgres:16-alpine > /dev/null 2>&1; then
+        if [ -f ./images/postgres-16-alpine.tar ]; then
+            docker load -i ./images/postgres-16-alpine.tar
+        else
+            docker pull postgres:16-alpine
+        fi
+        docker image inspect postgres:16-alpine > /dev/null
+    fi
     for component in infrascope infrascope-nms; do
         image_ref="${REGISTRY}/${component}:${VERSION}"
         image_tar="./images/${component}-${VERSION}.tar"

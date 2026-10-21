@@ -78,6 +78,9 @@ async function main() {
   devices[5].nmsInterfaces.push({ id: 'friendly', interfaceName: 'if42', description: 'Ethernet4/48', speed: BigInt(0) });
   const friendly = (await devicePortCatalog(prisma, ['f'])).f.find(p => p.id === 'nms:friendly');
   assert.equal(friendly.name, 'Ethernet4/48'); assert.equal(friendly.key, 'if42');
+  devices[5].nmsInterfaces.find(p => p.id === 'friendly').description = '24 Gigabit - Level';
+  const numbered = (await devicePortCatalog(prisma, ['f'])).f.find(p => p.id === 'nms:friendly');
+  assert.equal(numbered.name, '24'); assert.equal(numbered.key, 'if42');
   devices[5].nmsInterfaces.pop();
   auth = null; assert.equal((await GET(request())).status, 401); assert.equal((await create()).status, 401);
   auth = { role: 'VIEWER' }; assert.equal((await GET(request())).status, 200); assert.equal((await create()).status, 403);

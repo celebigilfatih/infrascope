@@ -1,4 +1,4 @@
-export interface TopologySearchItem { id: string; kind: 'building' | 'device'; name: string; description?: string }
+export interface TopologySearchItem { id: string; kind: 'building' | 'device' | 'networkGroup'; name: string; description?: string }
 
 export function topologySearchText(value: string) {
   return value.toLocaleLowerCase('tr-TR').normalize('NFKD').replace(/\p{Diacritic}/gu, '').replace(/ı/g, 'i').trim();

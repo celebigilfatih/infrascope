@@ -90,6 +90,7 @@ npm run test:nms-backup-view
 npm run test:nms-backups
 npx eslint app/network/NetworkTopologyContent.tsx components/topology/TopologyObjectMenu.tsx components/topology/BuildingDeviceWorkspace.tsx components/topology/BuildingNode.tsx tests/incident-e2e/topology-object-menu.spec.ts components/topology/TopologyInspector.tsx components/topology/CustomEdge.tsx components/topology/DeviceNode.tsx lib/topology/workspace.ts scripts/check-topology-workspace.cjs scripts/fixtures/topology-workspace.cjs scripts/check-incident-detail.cjs scripts/check-incident-collaboration.cjs tests/incident-e2e/topology-workspace.spec.ts --max-warnings=0
 npm run test:topology-workspace
+npx eslint tests/incident-e2e/topology-overview.spec.ts tests/incident-e2e/topology-navigation.ts components/topology/BuildingMapOverview.tsx components/topology/BuildingOverviewEdge.tsx lib/topology/building-overview.ts --max-warnings=0
 npm run test:topology-contracts
 npm run test:topology-building
 INFRASCOPE_BUILDING_DB_TEST=1 npm run test:building-devices:db

@@ -111,6 +111,15 @@ async function main() {
   state.queries.length = 0;
   await list.GET({ url: 'http://fixture.invalid/api/devices?mode=minimal&filterType=all' });
   assert.equal(state.queries.find(q => q.kind === 'findMany').select.nmsDeviceId, true, 'NMS minimal inventory must remain compatible');
-  console.log('Device inventory checks passed: filters/counts, multi-U preview validation, empty slots, self-exclusion, overlap/overflow rejection, metadata preservation, unlink, pending U assignment, POST/PUT persistence, printer/camera editing and license guard. No live requests.');
+  const anchor = state.devices.find(d => d.id === 'edit');
+  anchor.networkGroups = [{ id: 'logical-group' }];
+  const beforeAnchorDelete = state.writes.length;
+  response = await detail.DELETE(request({}), { params: { id: 'edit' } });
+  assert.equal(response.status, 409); assert.match(response.body.error, /merkez cihaz/); assert.equal(state.writes.length, beforeAnchorDelete);
+  delete anchor.networkGroups;
+  prisma.device.delete = async () => { const error = new Error('Concurrent FK reference'); error.code = 'P2003'; throw error; };
+  response = await detail.DELETE(request({}), { params: { id: 'edit' } });
+  assert.equal(response.status, 409, 'A concurrently added group anchor must reject deletion without a generic server failure');
+  console.log('Device inventory checks passed: filters/counts, multi-U preview validation, empty slots, self-exclusion, overlap/overflow rejection, metadata preservation, unlink, pending U assignment, POST/PUT persistence, printer/camera editing, license guard and protected/concurrent network-group anchor deletion. No live requests.');
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

@@ -226,7 +226,12 @@ for (const path of ['/api/integrations/nms/backups', '/api/integrations/nms/devi
 }
 test('UI collection uses POST and VMware sync no longer requires a settings write', async () => {
   const capacity = fs.readFileSync('app/analytics/capacity/page.tsx', 'utf8');
-  assert.doesNotMatch(capacity, /vmware\?type=collect-metrics/); assert.match(capacity, /action: 'collect-metrics'/);
+  assert.match(capacity, /import AnalysisWorkspace from '@\/components\/analytics\/AnalysisWorkspace'/);
+  assert.match(capacity, /<AnalysisWorkspace kind="capacity"/);
+  const capacityWorkspace = fs.readFileSync('components/analytics/AnalysisWorkspace.tsx', 'utf8');
+  assert.doesNotMatch(capacity + capacityWorkspace, /vmware\?type=collect-metrics/);
+  assert.match(capacityWorkspace, /apiPost\('\/api\/integrations\/vmware'/);
+  assert.match(capacityWorkspace, /action:\s*'collect-metrics'/);
   const page = fs.readFileSync('app/integrations/vmware/page.tsx', 'utf8');
   const start = page.indexOf("} else if (action === 'sync')");
   assert.ok(start >= 0, 'The manual sync branch must exist');

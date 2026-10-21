@@ -3,6 +3,8 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VERSION="${VERSION:-1.0.0}"
+source "${ROOT_DIR}/scripts/customer-release-common.sh"
+validate_customer_release
 OUT_DIR="${ROOT_DIR}/dist"
 PACKAGE_DIR="${OUT_DIR}/infrascope-appliance-${VERSION}"
 ARCHIVE_PATH="${OUT_DIR}/infrascope-appliance-${VERSION}.tar.gz"
@@ -22,6 +24,7 @@ cp "${ROOT_DIR}/deploy/appliance/README.md" "${PACKAGE_DIR}/opt/infrascope/APPLI
 cp "${ROOT_DIR}/deploy/appliance/bin/infrascope-setup" "${PACKAGE_DIR}/usr/local/bin/infrascope-setup"
 cp "${ROOT_DIR}/deploy/appliance/bin/infrascope-status" "${PACKAGE_DIR}/usr/local/bin/infrascope-status"
 cp "${ROOT_DIR}/deploy/appliance/bin/infrascope-update" "${PACKAGE_DIR}/usr/local/bin/infrascope-update"
+prepare_customer_release_files "${PACKAGE_DIR}/opt/infrascope"
 
 chmod +x "${PACKAGE_DIR}/opt/infrascope/install.sh" "${PACKAGE_DIR}/opt/infrascope/update.sh" "${PACKAGE_DIR}/opt/infrascope/backup.sh"
 chmod +x "${PACKAGE_DIR}/usr/local/bin/infrascope-setup" "${PACKAGE_DIR}/usr/local/bin/infrascope-status" "${PACKAGE_DIR}/usr/local/bin/infrascope-update"
