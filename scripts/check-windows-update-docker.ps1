@@ -1,7 +1,7 @@
 # Isolated integration rehearsal using already-built production images.
 # GitHub transport and pull are fixtures; Compose, PostgreSQL, migrations, encryption and readiness are real.
 [CmdletBinding()]
-param([string]$ImageVersion = '1.0.2')
+param([string]$ImageVersion = '1.0.3')
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $source = Split-Path -Parent $PSScriptRoot

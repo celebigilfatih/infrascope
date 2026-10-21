@@ -25,9 +25,6 @@ jobs:
       - run: python scripts/check-customer-release-package.py
   windows:
     runs-on: windows-latest
-    strategy:
-      matrix:
-        shell: [powershell, pwsh]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -42,6 +39,9 @@ jobs:
           --nms-digest sha256:2222222222222222222222222222222222222222222222222222222222222222
           --postgres-digest sha256:3333333333333333333333333333333333333333333333333333333333333333
           --output fixture
-      - name: Windows release failure/retry and state preservation
-        shell: ${{ matrix.shell }}
+      - name: Windows PowerShell 5.1 release failure/retry and state preservation
+        shell: powershell
+        run: ./scripts/check-windows-update.ps1 -FixtureZip fixture/infrascope-windows-online-1.0.2.zip
+      - name: PowerShell 7 release failure/retry and state preservation
+        shell: pwsh
         run: ./scripts/check-windows-update.ps1 -FixtureZip fixture/infrascope-windows-online-1.0.2.zip
