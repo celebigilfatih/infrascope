@@ -126,7 +126,7 @@ jobs:
       - name: Install customer guide rendering tools
         run: |
           set -euo pipefail
-          npm ci --ignore-scripts
+          npm ci --ignore-scripts --legacy-peer-deps
           npx --no-install playwright install --with-deps chromium
           python -m pip install -r scripts/customer-guides-requirements.txt
       - name: Build and verify versioned HTML and PDF guides

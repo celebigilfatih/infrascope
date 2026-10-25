@@ -31,7 +31,7 @@ jobs:
       - name: Install rendering and PDF verification tools
         run: |
           set -euo pipefail
-          npm ci --ignore-scripts
+          npm ci --ignore-scripts --legacy-peer-deps
           npx --no-install playwright install --with-deps chromium
           python -m pip install -r scripts/customer-guides-requirements.txt
       - name: Verify two release versions, repositories, commands and PDFs

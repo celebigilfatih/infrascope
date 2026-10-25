@@ -40,3 +40,5 @@
 
 - Verification: 9 guide checks (two versions/repositories, real HTML/PDF and Windows PowerShell parsing), 3 online package checks, native Windows PowerShell 5.1 and PowerShell 7 updater suites passed. A 16-page preview was rendered and visually inspected. Node syntax and git whitespace checks passed.
 - Independent review identified one missing Repository parameter contract; a red-to-green regression now covers renames in both bootstrap and updater. No other blocking findings.
+- Guide-only npm installation uses the same legacy-peer-deps resolution mode as the existing release-quality workflow; dependency lifecycle scripts remain disabled for document rendering.
+- Remote quality gate reported the existing Undici 6.28.1 dependency as vulnerable after the advisory range update on 23 October. Application dependencies and security gate policy are outside this documentation change; the gate remains enabled.
