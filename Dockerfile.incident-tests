@@ -1,0 +1,4 @@
+# Keep the real global fetch parser in regression tests aligned with production.
+FROM node:24.22.1 AS runtime
+FROM mcr.microsoft.com/playwright:v1.64.1-noble
+COPY --from=runtime /usr/local/bin/node /usr/local/bin/node

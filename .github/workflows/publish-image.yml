@@ -118,7 +118,7 @@ jobs:
       - name: Set up Node for customer guides
         uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: '24.22.1'
       - name: Set up Python for customer guide verification
         uses: actions/setup-python@v5
         with:

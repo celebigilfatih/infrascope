@@ -14,7 +14,11 @@ services:
     tmpfs:
       - /var/lib/postgresql/data
   tests:
-    image: mcr.microsoft.com/playwright:v1.64.1-noble
+    image: infrascope-incident-tests:node24.22.1
+    build:
+      context: .
+      dockerfile: Dockerfile.incident-tests
+    pull_policy: build
     init: true
     shm_size: 1gb
     depends_on:
