@@ -115,12 +115,36 @@ jobs:
           python3 scripts/package-online-release.py --version "$VERSION" --repository "$GITHUB_REPOSITORY" \
             --revision "$GITHUB_SHA" --app-digest "$APP_DIGEST" --nms-digest "$NMS_DIGEST" \
             --postgres-digest "${POSTGRES_REF##*@}" --output dist/online
+      - name: Set up Node for customer guides
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.22.1'
+      - name: Set up Python for customer guide verification
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install customer guide rendering tools
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts --legacy-peer-deps
+          npx --no-install playwright install --with-deps chromium
+          python -m pip install -r scripts/customer-guides-requirements.txt
+      - name: Build and verify versioned HTML and PDF guides
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          python scripts/build-customer-guides.py --release-dir dist/online --output dist/online \
+            --version "$VERSION" --repository "$GITHUB_REPOSITORY" --release-date "$(date -u +%F)"
       - name: Publish release assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.release.outputs.version }}
         run: |
           set -euo pipefail
-          gh release create "v$VERSION" --verify-tag --title "InfraScope $VERSION" --notes-file docs/releases/customer.md \
+          gh release create "v$VERSION" --verify-tag --title "InfraScope $VERSION" --notes-file "dist/online/release-notes-$VERSION.md" \
             "dist/online/infrascope-windows-online-$VERSION.zip" \
-            dist/online/install-infrascope.ps1 "dist/online/SHA256SUMS-online-$VERSION.txt"
+            dist/online/install-infrascope.ps1 "dist/online/SHA256SUMS-online-$VERSION.txt" \
+            "dist/online/InfraScope-$VERSION-Windows11-Kurulum-Kilavuzu.html" \
+            "dist/online/InfraScope-$VERSION-Windows11-Kurulum-Kilavuzu.pdf" \
+            "dist/online/SHA256SUMS-guides-$VERSION.txt"

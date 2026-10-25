@@ -7,6 +7,8 @@ on:
       - 'deploy/**'
       - 'docker/**'
       - 'scripts/*release*'
+      - 'scripts/*guide*'
+      - 'docs/releases/**'
       - 'scripts/check-windows-*.ps1'
       - '.github/workflows/**'
 
@@ -14,6 +16,26 @@ permissions:
   contents: read
 
 jobs:
+  guides:
+    name: HTML and PDF release guide regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.22.1'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install rendering and PDF verification tools
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts --legacy-peer-deps
+          npx --no-install playwright install --with-deps chromium
+          python -m pip install -r scripts/customer-guides-requirements.txt
+      - name: Verify two release versions, repositories, commands and PDFs
+        run: python scripts/check-customer-guides.py --integration
   package:
     runs-on: ubuntu-latest
     steps:
@@ -39,6 +61,8 @@ jobs:
           --nms-digest sha256:2222222222222222222222222222222222222222222222222222222222222222
           --postgres-digest sha256:3333333333333333333333333333333333333333333333333333333333333333
           --output fixture
+      - name: Versioned guide and Windows PowerShell 5.1 command checks
+        run: python scripts/check-customer-guides.py
       - name: Windows PowerShell 5.1 release failure/retry and state preservation
         shell: powershell
         run: ./scripts/check-windows-update.ps1 -FixtureZip fixture/infrascope-windows-online-1.0.2.zip

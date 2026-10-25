@@ -16,4 +16,6 @@ Bu sürüm, 1.0.5'te gözlenen 1 kritik, 22 yüksek ve 6 orta düzeydeki npm ba�
 
 Next.js'in kullanılmayan görsel optimizasyon API'si kapalı kalır. Dinamik API parametreleri ve lisans yönetimi çerezleri asenkron framework sözleşmesine uyarlandı. Oturum, yetki, TLS ve müşteri verisi koruma kontrolleri sürdürülür. Eski lint kural kümesi, yeni lint paketinin düzeltilmemiş glob/brace zincirini taşımamak için korunur; kendi glob bağımlılığı aynı ana sürümün güvenli yamasıyla sabitlenir. Gerçek derleyici/lint hata kontrolleri yayın testlerinde çalışır.
 
+Undici'nin npm paketi 6.29.1'e, Node.js çalışma zamanı 24.22.1'e (gömülü Undici 7.30.1) sabitlenmiştir. Hem npm hem Node global fetch ayrıştırıcısı için erken kapanan aşırı Content-Encoding yanıtları, normal JSON/gzip istekleri ve gerçek özel CA/TLS, iptal ve zaman aşımı davranışı loopback regresyonlarıyla kontrol edilir. Üretim imajı güvenli çalışma zamanı kontrolünden geçmeden derlenmez. HTML ve PDF kurulum kılavuzları bu sürümün paketinden otomatik üretilir.
+
 Sıfır npm bildirimi, uygulamanın veya container işletim sistemi/Python paketlerinin tüm olası güvenlik açıklarına karşı onaylandığı anlamına gelmez. Gerçek müşteri lisansı, vSphere/Windows/Docker koşulları ve entegrasyon erişimleri kurulum kabulünde ayrıca doğrulanmalıdır. Windows üzerinde doğrudan Node sunucusu kurulumu desteklenmez.

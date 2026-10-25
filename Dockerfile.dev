@@ -3,7 +3,7 @@
 # Lightweight configuration with hot reload support
 # ============================================================================
 
-FROM node:20
+FROM node:24.22.1
 
 # Metadata
 LABEL maintainer="InfraScope Team"

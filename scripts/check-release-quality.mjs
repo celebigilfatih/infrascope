@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { assertSafeUndiciRuntime } from './check-undici-runtime.mjs';
 const BUILD = 'npm run quality:release && next build';
 const QUALITY = 'node scripts/check-release-quality.mjs && npm run security:tls-check && npm run security:dependencies && npm run type-check && npm run lint';
 function policyErrors(config, pkg) {
@@ -25,10 +26,11 @@ function readPolicy(root) {
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   try {
+    assertSafeUndiciRuntime();
     const { config, pkg } = readPolicy(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'));
     const errors = policyErrors(config, pkg);
     if (errors.length) { errors.forEach(error => console.error(error)); process.exitCode = 1; }
     else console.log('Release build quality policy passed.');
-  } catch { console.error('Release build quality configuration could not be validated'); process.exitCode = 1; }
+  } catch (error) { console.error('Release build quality check failed:', error.message); process.exitCode = 1; }
 }
 export { policyErrors, readPolicy, BUILD, QUALITY };

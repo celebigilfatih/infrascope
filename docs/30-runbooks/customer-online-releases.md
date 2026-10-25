@@ -9,14 +9,34 @@ Müşteriye açık imajlar `ghcr.io/celebigilfatih/infrascope-customer` ve `ghcr
 1. Test edilmiş kaynak değişikliklerini gözden geçirip depoya kaydedin. Çalışma dizinindeki kaydedilmemiş dosyalar GitHub Actions'a gitmez. Üretim derlemesi, regresyon ve dağıtım kontrolleri aynı commit için geçmelidir.
 2. Yeni, kullanılmamış sabit sürüm seçin; örneğin `1.0.2`. Etiketi tam olarak o commit üzerinde `v1.0.2` olarak yayımlayın. `publish-image.yml` etiket push'unda çalışır. Manuel çalıştırmada da branch yerine aynı etiketi seçin. Bu belge kendiliğinden commit/tag/push yapmaz.
 3. İş akışı release-quality, incident, dashboard, alarm, backup ve customer-deployment kapılarını bekler. App ve NMS imajlarını `RELEASE_VERSION` ve gerçek `SOURCE_REVISION` ile Linux amd64 için derleyip GHCR'ye yollar. Sadece sürüm etiketi yayımlanır; `latest` müşteride kullanılmaz.
-4. Başarılı push çıktısındaki app/NMS digest'leri ve PostgreSQL 16-alpine digest'iyle küçük ZIP üretilir. Release asset'leri: `install-infrascope.ps1`, `infrascope-windows-online-<sürüm>.zip`, `SHA256SUMS-online-<sürüm>.txt`.
-5. GitHub Release yalnız imajlar/paket hazır olduğunda oluşturulur. Var olan release üzerine yazılmaz; başarısız kontrolde release yayımlanmaz. İmaj push'u başarılı olup sonraki adım başarısızsa yayınlanmamış imajlar kalabilir; inceleyin. Etiketi/asset'i sonradan taşımayın/değiştirmeyin. Depoda immutable releases özelliğini etkinleştirmek ayrıca önerilir.
+4. Başarılı push çıktısındaki app/NMS digest'leri ve PostgreSQL 16-alpine digest'iyle küçük ZIP üretilir. Aynı sürüm paketinden HTML/PDF kılavuzları ve doğru indirme bağlantılarını içeren Release açıklaması otomatik üretilir. Release asset'leri: `install-infrascope.ps1`, `infrascope-windows-online-<sürüm>.zip`, `SHA256SUMS-online-<sürüm>.txt`, `InfraScope-<sürüm>-Windows11-Kurulum-Kilavuzu.html`, aynı adlı `.pdf` ve `SHA256SUMS-guides-<sürüm>.txt`.
+5. GitHub Release yalnız imajlar/paket ve iki doğrulanmış kılavuz hazır olduğunda oluşturulur. HTML veya PDF üretimi, komut/bütünlük kontrolü başarısızsa Release oluşturulmaz. Var olan release üzerine yazılmaz. İmaj push'u başarılı olup sonraki adım başarısızsa yayınlanmamış imajlar kalabilir; inceleyin. Etiketi/asset'i sonradan taşımayın/değiştirmeyin. Depoda immutable releases özelliğini etkinleştirmek ayrıca önerilir.
 6. Özel depoda müşteri hesabının Release erişimini ve **iki GHCR paketinin** okunabilirliğini doğrulayın. Herkese açık dağıtım seçilirse her iki paketin görünürlüğü GitHub Packages ekranından ayrıca düzenlenir; workflow depoyu veya paketleri otomatik olarak herkese açmaz.
 7. Gerçek release üzerinden temiz Windows kurulumunu ve mevcut sürümden güncellemeyi site kabulü kapsamında doğrulayın. Yerel fixture testleri GitHub yetkilerini ve uzak yayımlamayı doğrulamaz.
 
 ZIP yalnız izinli dağıtım dosyalarını içerir; `.env`, müşteri DB'si, lisans/makine kimliği, tokenlar ve merkezi lisans sunucusu içermez. `release.json` kaynak commit'ini, sürümü, depo adını, her dosyanın SHA-256 değerini ve üç imajın kesin referansını taşır. `release-images.yml` app/NMS/PostgreSQL/otomatik yedek servisini bu digest'lere sabitler. Müşterinin mevcut `.env` dosyasındaki anahtarlar yenilenmez.
 
 ## Kontroller
+
+Kılavuz içeriğinin tek kaynağı `deploy/guides/windows-install.html` dosyasıdır. Önceden yayımlanmış `Kurulum/InfraScope-1.0.7-...` dosyasını kopyalayıp sürüm değiştirmeyin. Şablondaki sürüm, depo, üretim tarihi, bootstrap SHA256 ve yedek servis adı paket metadata'sından doldurulur. Docker'ın `{{.OSType}}` gibi Go şablonları literal komut olarak korunur. Parametre isimleri değişirse üretici başarısız olur; şablon ve testler birlikte güncellenmelidir.
+
+`customer-deployment` kılavuz job'u iki sentetik sürüm/depo ile gerçek Chromium HTML/PDF üretimi yapar. Kopyalama, engellenen panoda Ctrl+C seçimi, yazdırmada hata çözümleri, seçilebilir PDF komutları, sayfa bölünmeleri, sürüm bağlantıları ve SHA256 değerleri kontrol edilir. Windows job'u üretilmiş komutları PowerShell 5.1 ile parse eder. Bu testler müşteri ortamı oluşturmaz ve sentetik sürümleri yayımlamaz.
+
+Yerel tam kılavuz kontrolü için mevcut Node bağımlılıklarını kurduktan sonra:
+
+```text
+python -m pip install -r scripts/customer-guides-requirements.txt
+npx --no-install playwright install chromium
+python scripts/check-customer-guides.py --integration
+```
+
+Üretim paketinin bulunduğu dizinden kılavuz üretmek için (örnek sürüm; yayımlanmaz):
+
+```text
+python scripts/build-customer-guides.py --release-dir dist/online --output dist/online --version 1.0.8 --repository celebigilfatih/infrascope --release-date 2026-10-25
+```
+
+Üretici PDF ve HTML hash'lerini doğrulamadan kılavuz checksum dosyasını ve `release-notes-<sürüm>.md` dosyasını yazmaz. PDF üretimi için varsayılan Chromium yerine yerel kurulu tarayıcı kullanılacaksa `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` açıkça tanımlanabilir. Bu değişken CI'da kullanılmaz.
 
 ```powershell
 python scripts/check-online-release.py

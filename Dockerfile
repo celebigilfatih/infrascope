@@ -6,7 +6,7 @@
 # ============================================================================
 # STAGE 1: BUILDER
 # ============================================================================
-FROM node:24 AS builder
+FROM node:24.22.1 AS builder
 
 # Disable lockfile patching bug in Next.js 14.2.35
 ENV NEXT_DISABLE_LOCKFILE_PATCH=1
@@ -44,7 +44,7 @@ RUN INFRASCOPE_BUILD=1 npm run build
 # ============================================================================
 # STAGE 2: DEPENDENCIES
 # ============================================================================
-FROM node:24 AS deps
+FROM node:24.22.1 AS deps
 
 WORKDIR /app
 
@@ -57,7 +57,7 @@ RUN npm ci --omit=dev --legacy-peer-deps && npm cache clean --force
 # ============================================================================
 # STAGE 3: RUNTIME
 # ============================================================================
-FROM node:24-slim
+FROM node:24.22.1-slim
 
 # Metadata
 LABEL maintainer="InfraScope Team"
@@ -100,6 +100,8 @@ COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 
 # Copy production dependencies from deps stage
 COPY --from=deps --chown=nextjs:nodejs /app/node_modules ./node_modules
+COPY --chown=nextjs:nodejs scripts/check-undici-runtime.mjs ./scripts/
+RUN node --input-type=module -e "import { assertSafeUndiciRuntime } from './scripts/check-undici-runtime.mjs'; console.log(assertSafeUndiciRuntime())"
 # Production dependency installation creates an uninitialized Prisma stub.
 # Keep the schema-specific client and engine generated in the matching Debian builder.
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
