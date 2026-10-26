@@ -56,7 +56,34 @@ test('NMS workspace: list errors remain distinct from a confirmed empty response
   await expect(page.getByRole('alert').filter({ hasText: 'Cihaz listesi yüklenemedi.' })).toBeVisible();
   source.state.failList = false; source.state.rows = []; await page.getByRole('button', { name: 'Tekrar dene', exact: true }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'Cihaz listesi yüklenemedi.' })).toHaveCount(0);
-  await expect(page.getByRole('heading', { name: /Cihaz listesi/ })).toContainText('0'); expect(source.saves).toEqual([]);
+  const list = page.getByRole('region', { name: 'Cihaz listesi', exact: true });
+  await expect(list.getByRole('heading', { name: 'Henüz izlenen cihaz yok', exact: true })).toBeVisible();
+  await expect(list.getByRole('link', { name: 'İlk cihazı izlemeye al', exact: true })).toHaveAttribute('href', '/integrations/nms/add-device');
+  await expect(page.getByRole('button', { name: 'TEST-GUNCEL: ölçüm özetini aç', exact: true })).toHaveCount(0);
+  expect(source.saves).toEqual([]);
+});
+
+test('NMS workspace: compact pagination shows twenty devices and filters across pages', async ({ page, fixtures }) => {
+  const source = await mockNms(page);
+  source.state.rows = Array.from({ length: 21 }, (_, index) => ({
+    ...fixture.rows()[0], id: `compact-list-${index + 1}`, name: `LISTE-${String(index + 1).padStart(2, '0')}`,
+    managementIp: `192.0.2.${index + 1}`,
+  }));
+  await signIn(page, fixtures); await page.clock.setFixedTime(fixture.NOW); await page.goto('/integrations/nms/devices');
+  const summaries = page.getByRole('button', { name: /^LISTE-\d{2}: ölçüm özetini aç$/ });
+  await expect(page.getByRole('button', { name: 'LISTE-01: ölçüm özetini aç', exact: true })).toBeVisible();
+  await expect(summaries).toHaveCount(20, { timeout: 5000 });
+  await expect(page.getByRole('combobox', { name: 'Sayfa başına cihaz', exact: true })).toHaveValue('20');
+  await page.getByRole('button', { name: 'Sonraki sayfa', exact: true }).click();
+  await expect(summaries).toHaveCount(1);
+  await expect(page.getByRole('button', { name: 'LISTE-21: ölçüm özetini aç', exact: true })).toBeVisible();
+  await page.getByRole('combobox', { name: 'Sayfa başına cihaz', exact: true }).selectOption('50');
+  await expect(summaries).toHaveCount(21);
+  await page.getByRole('textbox', { name: 'Cihaz ara', exact: true }).fill('LISTE-21');
+  await expect(summaries).toHaveCount(1);
+  await expect(page.getByRole('button', { name: 'LISTE-21: ölçüm özetini aç', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sonraki sayfa', exact: true })).toBeDisabled();
+  expect(source.probes).toEqual([]); expect(source.saves).toEqual([]); expect(source.errors).toEqual([]);
 });
 
 test('NMS workspace: cancel and changed credentials invalidate older probe results without saving', async ({ page, fixtures }, info) => {

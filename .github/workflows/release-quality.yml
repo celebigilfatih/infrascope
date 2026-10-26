@@ -34,5 +34,6 @@ jobs:
       - run: npm run test:dependency-security
       - run: npm run test:local-fonts
       - run: npm run test:topology-contracts
+      - run: npm run test:device-overview
       - run: npm run test:release-compiler
       - run: npm run quality:release
