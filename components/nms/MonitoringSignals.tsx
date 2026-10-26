@@ -23,7 +23,9 @@ export function Resources({ device, now, showTimestamp = true, showFreshness = t
   const health = device.latestHealth;
   const freshness = dataFreshness(health?.collectedAt, device.pollingInterval, now);
   if (!health) return <span className={styles.empty}>Kaynak ölçümü yok</span>;
-  return <div className={styles.resources}><ResourceMeter label="CPU" icon={Cpu} value={health.cpuUsage} /><ResourceMeter label="Bellek" icon={MemoryStick} value={health.memoryUsage} />{showFreshness && <small className={styles.measurement}><Clock3 size={12} aria-hidden="true" />{!device.pollingEnabled ? 'İzleme kapalı · son ölçüm' : freshness === 'fresh' ? 'Ölçüm güncel' : freshness === 'delayed' ? 'Ölçüm eski' : 'Ölçüm tarihi belirsiz'}</small>}{showTimestamp && <time dateTime={Number.isFinite(Date.parse(health.collectedAt)) ? health.collectedAt : undefined}>{absoluteTime(health.collectedAt)}{Number.isFinite(Date.parse(health.collectedAt)) ? ' TSİ' : ''}</time>}</div>;
+  // Compact rows must still distinguish historical or unverified values from current measurements.
+  const showMeasurementState = showFreshness || !device.pollingEnabled || freshness !== 'fresh';
+  return <div className={styles.resources}><ResourceMeter label="CPU" icon={Cpu} value={health.cpuUsage} /><ResourceMeter label="Bellek" icon={MemoryStick} value={health.memoryUsage} />{showMeasurementState && <small className={styles.measurement}><Clock3 size={12} aria-hidden="true" />{!device.pollingEnabled ? 'İzleme kapalı · son ölçüm' : freshness === 'fresh' ? 'Ölçüm güncel' : freshness === 'delayed' ? 'Ölçüm eski' : 'Ölçüm tarihi belirsiz'}</small>}{showTimestamp && <time dateTime={Number.isFinite(Date.parse(health.collectedAt)) ? health.collectedAt : undefined}>{absoluteTime(health.collectedAt)}{Number.isFinite(Date.parse(health.collectedAt)) ? ' TSİ' : ''}</time>}</div>;
 }
 export function ResourceMeter({ label, icon: Icon, value }: { label: string; icon: LucideIcon; value: number | null }) {
   const percent = measuredPercent(value);

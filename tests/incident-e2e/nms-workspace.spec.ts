@@ -35,6 +35,10 @@ const probePanel = (page: Page) => page.getByRole('region', { name: /SNMP bağla
 
 test('NMS workspace: independent freshness, valid zero, filters and failed refresh retain the summary', async ({ page, fixtures }, info) => {
   const source = await mockNms(page); await signIn(page, fixtures); await page.clock.setFixedTime(fixture.NOW); await page.goto('/integrations/nms/devices');
+  const staleButton = page.getByRole('button', { name: 'TEST-ESKI-OLCUM: ölçüm özetini aç', exact: true });
+  await expect(staleButton).toBeVisible();
+  await expect(page.getByRole('row').filter({ has: staleButton })).toContainText('Ölçüm eski', { timeout: 5000 });
+  await capture(page, info, 'nms-desktop-compact-list');
   await page.getByRole('button', { name: 'TEST-ESKI-OLCUM: ölçüm özetini aç', exact: true }).click();
   let summary = page.getByRole('dialog', { name: 'Ölçüm özeti', exact: true });
   await expect(summary).toContainText('Yanıt kaydı güncel'); await expect(summary).toContainText('Ölçüm eski'); await expect(summary).toContainText('%36');
@@ -131,6 +135,14 @@ for (const theme of ['light', 'dark']) {
   test(`NMS workspace: mobile ${theme} monitoring summary and setup test stay usable`, async ({ page, fixtures }, info) => {
     const source = await mockNms(page); await signIn(page, fixtures); await page.setViewportSize({ width: 390, height: 844 }); await page.clock.setFixedTime(fixture.NOW);
     await page.addInitScript(value => localStorage.setItem('theme', value), theme); await page.goto('/integrations/nms/devices');
+    const currentCard = page.getByRole('article').filter({ has: page.getByRole('button', { name: 'TEST-GUNCEL: ölçüm özetini aç', exact: true }) });
+    await expect(currentCard).toBeVisible();
+    await expect(currentCard).toContainText('Kapalı port kaydı yok', { timeout: 5000 });
+    await expect(page.getByRole('article').filter({ has: page.getByRole('button', { name: 'TEST-GECIKMIS: ölçüm özetini aç', exact: true }) })).toContainText('2 kapalı port');
+    const staleCard = page.getByRole('article').filter({ has: page.getByRole('button', { name: 'TEST-ESKI-OLCUM: ölçüm özetini aç', exact: true }) });
+    await expect(staleCard).toContainText('Ölçüm eski', { timeout: 5000 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await capture(page, info, `nms-mobile-compact-list-${theme}`);
     await page.getByRole('button', { name: 'TEST-KAPALI: ölçüm özetini aç', exact: true }).click(); const summary = page.getByRole('dialog');
     await expect(summary).toContainText('Doğrulanmıyor'); const bounds = await summary.boundingBox(); expect(bounds!.x).toBeGreaterThanOrEqual(0); expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
     await capture(page, info, `nms-summary-mobile-${theme}`); await summary.getByRole('button', { name: 'Ölçüm özetini kapat', exact: true }).click();
