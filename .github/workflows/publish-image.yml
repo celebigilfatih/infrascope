@@ -123,6 +123,14 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: Verify the published app runtime offline
+        env:
+          APP_IMAGE: ${{ steps.release.outputs.image }}@${{ steps.app.outputs.digest }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          docker pull --platform linux/amd64 "$APP_IMAGE"
+          node scripts/check-production-image.mjs "$APP_IMAGE" "$VERSION"
       - name: Install customer guide rendering tools
         run: |
           set -euo pipefail

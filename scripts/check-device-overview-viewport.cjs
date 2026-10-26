@@ -72,21 +72,6 @@ assert.equal(JSON.stringify(named),namedOriginal,'Label wrapping cannot rewrite 
 assert.deepEqual(fullNameDeviceLayout([],[],537,446,measure),{nodes:[],positions:{}});
 console.log('Complete names passed: all characters, readable fitted text, no label overlap or clipping at narrow and wide sizes.');
 
-const { buildingDeviceOverview } = load('lib/topology/building-device-overview.ts');
-const buildingDevices = names.slice(0,22).map((name,i)=>({id:`room-${i}`,name,type:'SWITCH',status:'UNKNOWN',criticality:'MEDIUM',managementIp:`192.0.2.${i+1}`}));
-const buildingLinks = buildingDevices.slice(1).map((device,i)=>({id:`room-link-${i}`,sourceDeviceId:'room-0',targetDeviceId:device.id,status:'UNKNOWN'}));
-const buildingOriginal = JSON.stringify({buildingDevices,buildingLinks});
-for(const [width,height] of [[537,480],[1100,600]]) {
- const result=buildingDeviceOverview(buildingDevices,buildingLinks,width,height,measure);
- const view=viewport(result.nodes,result.positions,width,height);
- assert.equal(result.nodes.length,22,'A building is one complete map, including isolated inventory');
- for(const node of result.nodes){
-  assert.equal(node.type,'buildingDevice');
-  assert.equal(node.data.overviewLabelLines.join('').replace(/\s/g,''),node.data.name.replace(/\s/g,''));
-  assert.ok(node.data.overviewLabelSize*view.zoom>=12.9,'Building names stay readable after fitting');
-  assert.ok((result.positions[node.id].y+node.data.overviewHeight)*view.zoom+view.y<=height-55,'Full building labels clear the map controls');
- }
- assert.deepEqual(result.positions,buildingDeviceOverview([...buildingDevices].reverse(),[...buildingLinks].reverse(),width,height,measure).positions);
-}
-assert.equal(JSON.stringify({buildingDevices,buildingLinks}),buildingOriginal,'The overview cannot rewrite device data or connections');
-console.log('Building device overview passed: complete readable names, responsive stable layout, one map and unchanged inventory.');
+// The building workspace uses building-device-layout, not the retired experimental
+// building-device-overview module. Exercise its actual responsive/immutable layout contract.
+require('./check-building-device-auto-layout.cjs');

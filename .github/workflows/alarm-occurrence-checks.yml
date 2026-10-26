@@ -4,6 +4,8 @@ on:
   workflow_call:
   pull_request:
     paths:
+      - '.github/workflows/publish-image.yml'
+      - '.github/workflows/release-quality.yml'
       - 'lib/alarms/**'
       - 'lib/notifications/**'
       - 'lib/firewall/connector-factory.ts'

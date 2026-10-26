@@ -1,5 +1,9 @@
 ## Windows + Docker Desktop müşteri sürümü
 
+İzlenen cihazlar ekranı, arama ve durum filtreleri ile ölçüm özetini koruyarak daha sıkı bir liste düzenine geçirildi. Varsayılan sayfa boyutu 20 cihazdır; ayrıntılı ölçüm ve izleme bilgileri özet penceresinden açılır.
+
+Yayın kapısı, gerçek GHCR uygulama imajında üretilmiş Prisma istemcisini, yerel veritabanı motorunu, sürüm bilgisini, yetkisiz kullanıcıyla çalışma koşulunu ve VMware Python bileşenlerini ağ erişimi olmadan doğrular. Kurulum dosyaları bu kontrol başarılı olduktan sonra yayımlanır.
+
 - Küçük Windows başlatıcısı ve doğrulanmış kurulum ZIP'i GitHub Releases üzerinden indirilir.
 - Linux amd64 uygulama ve NMS imajları ayrı herkese açık `infrascope-customer` / `infrascope-customer-nms` GHCR paketlerinde, kesin SHA-256 digest'leriyle kullanılır.
 - Windows güncelleyici dağıtım dosyalarını değiştirmeden önce zorunlu şifreli kurtarma yedeği alır. Müşteri verileri, ayarlar, oturum/şifreleme anahtarları ve lisans kimliği korunur.

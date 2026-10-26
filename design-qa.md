@@ -1,3 +1,13 @@
+# Customer release 1.0.1 — Windows + Docker Desktop — 21 October 2026
+
+Production app/NMS builds and offline Prisma/VMware runtime probes passed. Full merged suite: **565/565 Chromium scenarios, 48 spec files, zero failed/flaky/skipped/retried cases**. Full non-incremental TypeScript, full lint max-warnings=0 and the entire topology-containing shard rerun passed. Packaging: **10/10 behavioral tests**, native Windows config/secret preservation and tampered-image checks passed.
+
+Windows PowerShell 5.1 installed actual Linux amd64 production images on empty PostgreSQL16 (29 migrations). Setup/admin/login, protected page content after loading, persistence, second-installation isolation and authenticated Unicode-passphrase backup/restore passed. All private test DB volumes, containers and fixture secrets were removed; existing development installation preserved. Actual customer license and infrastructure connectivity remain customer-setup checks; licensing used a private synthetic wire fixture.
+
+Release repairs: generated Prisma client is retained in the production image and startup needs no generation/download; nested topology search portal accepts real pointer clicks; obsolete device-tab tests use building flow; stale model test invokes actual building layout. Bounded read-only review found no remaining important issues after protected backup staging ACL repair.
+
+Artifacts: `dist/infrascope-customer-deploy-1.0.1.zip`, `dist/SHA256SUMS-1.0.1.txt`, `deploy/INSTALL_WINDOWS.md`. Detailed evidence, initial failures, source/image hashes and report: `output/customer-release-20261021/RELEASE-REPORT.md`, `verification.json`, `merged/report/index.html`.
+
 # Full regression refresh including topology visibility — 20 October 2026
 
 Result: **565/565 Chromium scenarios passed across 48 spec files**, zero failed/flaky/skipped cases and zero Playwright retries in the final merged report. All **90 official preflight commands**, including full non-incremental TypeScript, full lint with --max-warnings=0 and **25 strict lint groups**, passed. Current-source TypeScript, full lint, topology strict lint and device-overview model checks passed again with the final map sources.
