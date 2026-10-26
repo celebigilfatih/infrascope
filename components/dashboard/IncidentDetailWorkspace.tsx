@@ -179,7 +179,7 @@ export function IncidentDetailWorkspace({ event, detail, loading, error, busy, n
           <div><dt><Bell size={14} aria-hidden="true" />Son bildirim</dt><dd>{lastNotification ? <>{lastNotification.title}<small className={styles.deliveryDate}>{incidentDate(lastNotification.createdAt)}</small></> : event.notifiedAt ? incidentDate(event.notifiedAt) : 'Gönderilmedi'}</dd></div>
         </dl>
         <Popover open={moreOpen} onOpenChange={setMoreOpen}><PopoverTrigger asChild><Button variant="outline" className={styles.moreButton} disabled={busy}><MoreHorizontal size={17} />Diğer işlemler<ChevronDown size={14} /></Button></PopoverTrigger>
-          <PopoverContent align="end" className="pointer-events-auto z-[1060] w-[min(290px,calc(100vw-32px))] p-2" onCloseAutoFocus={event => {
+          <PopoverContent align="end" className="pointer-events-auto z-1060 w-[min(290px,calc(100vw-32px))] p-2" onCloseAutoFocus={event => {
             if (pendingDiscard.current) {
               // Open the next modal after this popover releases its focus scope.
               event.preventDefault();

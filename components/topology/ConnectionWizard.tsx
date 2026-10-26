@@ -31,7 +31,7 @@ export const ConnectionWizard: React.FC<ConnectionWizardProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[10001] p-4">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-10001 p-4">
       <div className="bg-[#000044] border border-blue-800 rounded-xl shadow-2xl max-w-2xl w-full p-8 text-white">
         <h2 className="text-2xl font-extrabold mb-6 tracking-tight">Ağ Bağlantısı Oluştur</h2>
         <div className="space-y-6">
@@ -40,7 +40,7 @@ export const ConnectionWizard: React.FC<ConnectionWizardProps> = ({
             <select 
               value={sourceId} 
               onChange={(e) => setSourceId(e.target.value)}
-              className="w-full bg-[#000033] border border-blue-800 rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+              className="w-full bg-[#000033] border border-blue-800 rounded-lg p-3 text-white focus:outline-hidden focus:ring-2 focus:ring-blue-500 transition-all"
             >
               <option value="">Kaynak seçin...</option>
               {devices.map(d => <option key={d.id} value={d.id} className="bg-[#000033]">{d.name}</option>)}
@@ -51,7 +51,7 @@ export const ConnectionWizard: React.FC<ConnectionWizardProps> = ({
             <select 
               value={targetId} 
               onChange={(e) => setTargetId(e.target.value)}
-              className="w-full bg-[#000033] border border-blue-800 rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+              className="w-full bg-[#000033] border border-blue-800 rounded-lg p-3 text-white focus:outline-hidden focus:ring-2 focus:ring-blue-500 transition-all"
             >
               <option value="">Hedef seçin...</option>
               {devices.map(d => <option key={d.id} value={d.id} className="bg-[#000033]">{d.name}</option>)}

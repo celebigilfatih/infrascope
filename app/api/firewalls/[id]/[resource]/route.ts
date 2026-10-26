@@ -15,7 +15,7 @@ import { readVipWorkspace } from '@/lib/firewall/virtual-ips';
 
 export const dynamic = 'force-dynamic';
 
-type RouteContext = { params: { id: string; resource: string } };
+type RouteContext = { params: Promise<{ id: string; resource: string }> };
 type FirewallPolicyReadModel = {
   policyId: number;
   name: string;
@@ -66,8 +66,9 @@ function statusSnapshot(metadata: unknown, field?: 'ha') {
   return data == null ? null : { data, collectedAt: record.collectedAt };
 }
 
-export async function GET(request: NextRequest, { params }: RouteContext) {
-  const access = await authorizeApiRequest(request, 'firewall', 'read'); if (!access.allowed) return access.response;
+export async function GET(request: NextRequest, props: RouteContext) {
+  const params = await props.params;
+  const access = await authorizeApiRequest(request, 'firewall', 'read');if (!access.allowed) return access.response;
   try {
     const allowedFilters = params.resource === 'policies'
       ? ['action', 'enabled']

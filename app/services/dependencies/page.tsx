@@ -1,518 +1,101 @@
 'use client';
-
-import { uiError, uiLabel } from '@/lib/i18n/tr';
-
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import Link from 'next/link';
+import { ArrowRight, ChevronLeft, ChevronRight, Clock3, Eye, GitBranch, Info, Layers3, ListFilter, Pencil, Plus, RefreshCw, Search, Server, Trash2, TriangleAlert } from 'lucide-react';
+import { apiGet, apiPost, apiPut, apiDelete } from '@/lib/api';
 import { PageHeading } from '@/components/ui/page-heading';
-import { SeverityBadge } from '@/components/ui/severity-badge';
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { SemanticBadge } from '@/components/ui/semantic-badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { ChevronLeft, ChevronRight, RefreshCw, Search, GitBranch, Link, AlertTriangle, CheckCircle, Plus, Edit, Trash2 } from 'lucide-react';
-import { useToast } from '@/components/ui/use-toast';
-
-interface ServiceDependency {
-  id: string;
-  sourceServiceId: string;
-  targetDeviceId: string;
-  type: string;
-  criticality: string;
-  description: string | null;
-  sourceService: {
-    id: string;
-    name: string;
-    type: string;
-  };
-  targetDevice: {
-    id: string;
-    name: string;
-    type: string;
-  };
-  createdAt: string;
-}
-
-interface Service {
-  id: string;
-  name: string;
-  type: string;
-}
-
-interface Device {
-  id: string;
-  name: string;
-  type: string;
-}
-
-const ITEMS_PER_PAGE = 10;
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { criticalityLabel, relationLabel, servicePortLabel, serviceTypeLabel, type AppDevice } from '@/lib/services/applications';
+import { dependencyImportance, dependencyTypes, dependencyPayload, dependenciesSummary, filterDependencies, parseDependenciesSnapshot, parseDependencyOptions, relationDescription, type DependencyDraft, type DependencyOptions, type DependenciesSnapshot, type WorkspaceDependency, type DependencySource } from '@/lib/services/dependencies';
+import { userDate } from '@/lib/users/workspace';
+import common from '@/components/users/users-workspace.module.css';
+import styles from './page.module.css';
+const emptyDraft: DependencyDraft = { sourceServiceId: '', targetDeviceId: '', type: 'DEPENDS_ON', criticality: 'MEDIUM', description: '' };
 
 export default function DependenciesPage() {
-  const [dependencies, setDependencies] = useState<ServiceDependency[]>([]);
-  const [services, setServices] = useState<Service[]>([]);
-  const [devices, setDevices] = useState<Device[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingDep, setEditingDep] = useState<ServiceDependency | null>(null);
-  const [formData, setFormData] = useState({
-    sourceServiceId: '',
-    targetDeviceId: '',
-    type: 'DEPENDS_ON',
-    criticality: 'MEDIUM',
-    description: '',
-  });
-  const { toast } = useToast();
-
-  const fetchDependencies = useCallback(async () => {
-    try {
-      const response = await fetch('/api/services/dependencies');
-      const data = await response.json();
-      if (data.success) {
-        setDependencies(data.dependencies || []);
-      }
-    } catch (error) {
-      console.error('Error fetching dependencies:', error);
-      toast({
-        title: 'Hata',
-        description: 'Bağımlılıklar yüklenemedi',
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
-    }
-  }, [toast]);
-
-  const fetchServices = useCallback(async () => {
-    try {
-      const response = await fetch('/api/services');
-      const data = await response.json();
-      if (data.success) {
-        setServices(data.services || []);
-      }
-    } catch (error) {
-      console.error('Error fetching services:', error);
-    }
+  const [data, setData] = useState<DependenciesSnapshot | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState('');
+  const [search, setSearch] = useState(''), [type, setType] = useState(''), [importance, setImportance] = useState(''), [page, setPage] = useState(1), [detailId, setDetail] = useState<string | null>(null);
+  const [editor, setEditor] = useState<WorkspaceDependency | 'new' | null>(null), [remove, setRemove] = useState<WorkspaceDependency | null>(null), [draft, setDraft] = useState<DependencyDraft>(emptyDraft), [formError, setFormError] = useState(''), [conflict, setConflict] = useState(false);
+  const [options, setOptions] = useState<DependencyOptions | null>(null), [optionsLoading, setOptionsLoading] = useState(false), [optionsError, setOptionsError] = useState('');
+  const [busy, setBusy] = useState(false), [locked, setLocked] = useState(false), [message, setMessage] = useState('');
+  const active = useRef<AbortController | null>(null), sequence = useRef(0), optionActive = useRef<AbortController | null>(null), optionSequence = useRef(0), writing = useRef(false);
+  const load = useCallback(async () => {
+    const seq = ++sequence.current; active.current?.abort(); const c = new AbortController(); active.current = c; setLoading(true); setError(''); setMessage(''); setDetail(null);
+    try { const json: unknown = await apiGet('/api/services/dependencies/workspace', undefined, { signal: c.signal, timeout: 30000 }); if (c.signal.aborted || seq !== sequence.current) return null; const snapshot = parseDependenciesSnapshot(json); setData(snapshot); setLocked(false); return snapshot; }
+    catch { if (!c.signal.aborted && seq === sequence.current) setError('Bağımlılık kayıtları alınamadı veya doğrulanamadı. Oturumunuzu ve erişim yetkinizi kontrol edip yeniden deneyin.'); return null; }
+    finally { if (!c.signal.aborted && seq === sequence.current) setLoading(false); }
   }, []);
-
-  const fetchDevices = useCallback(async () => {
-    try {
-      const response = await fetch('/api/devices');
-      const data = await response.json();
-      if (data.success) {
-        setDevices(data.devices || []);
-      }
-    } catch (error) {
-      console.error('Error fetching devices:', error);
-    }
+  useEffect(() => { void load(); return () => active.current?.abort(); }, [load]);
+  const loadOptions = useCallback(async () => {
+    const seq = ++optionSequence.current; optionActive.current?.abort(); const c = new AbortController(); optionActive.current = c; setOptionsLoading(true); setOptionsError('');
+    try { const json: unknown = await apiGet('/api/services/dependencies/options', undefined, { signal: c.signal, timeout: 30000 }); if (!c.signal.aborted && seq === optionSequence.current) setOptions(parseDependencyOptions(json)); }
+    catch { if (!c.signal.aborted && seq === optionSequence.current) { setOptions(null); setOptionsError('Servis ve cihaz seçenekleri alınamadı. Yeniden deneyin.'); } }
+    finally { if (!c.signal.aborted && seq === optionSequence.current) setOptionsLoading(false); }
   }, []);
-
-  useEffect(() => {
-    fetchDependencies();
-    fetchServices();
-    fetchDevices();
-  }, [fetchDependencies, fetchServices, fetchDevices]);
-
-  const handleCreate = async () => {
+  useEffect(() => { if (editor === 'new') void loadOptions(); return () => optionActive.current?.abort(); }, [editor, loadOptions]);
+  const rows = data?.rows, summary = data ? dependenciesSummary(data.rows) : null;
+  const filtered = useMemo(() => filterDependencies(rows || [], { search, type, importance }), [rows, search, type, importance]);
+  const pages = Math.max(1, Math.ceil(filtered.length / 10)), safePage = Math.min(page, pages), visible = filtered.slice((safePage - 1) * 10, safePage * 10), filters = !!(search || type || importance), detail = rows?.find(r => r.id === detailId);
+  const stale = !!error, disabled = loading || stale || locked || busy;
+  const editing = editor && editor !== 'new' ? editor : null;
+  const formSource = editing?.sourceService || options?.services.find(s => s.id === draft.sourceServiceId), formTarget = editing?.targetDevice || options?.devices.find(d => d.id === draft.targetDeviceId);
+  const dirty = !editing || draft.type !== editing.type || draft.criticality !== editing.criticality || draft.description.trim() !== (editing.description || '');
+  const saveDisabled = disabled || conflict || !data?.canWrite || !dependencyTypes.includes(draft.type) || !dependencyImportance.includes(draft.criticality) || !dirty || editor === 'new' && (optionsLoading || !options || !formSource || !formTarget);
+  function clear() { setSearch(''); setType(''); setImportance(''); setPage(1); }
+  function openEditor(row: WorkspaceDependency | 'new') { if (disabled || !data?.canWrite || row !== 'new' && !row.updatedAt) return; setDetail(null); setFormError(''); setConflict(false); setOptions(null); setOptionsError(''); setDraft(row === 'new' ? { ...emptyDraft } : { sourceServiceId: row.sourceServiceId, targetDeviceId: row.targetDeviceId, type: row.type, criticality: row.criticality, description: row.description || '' }); setEditor(row); }
+  function openRemove(row: WorkspaceDependency) { if (disabled || !data?.canDelete || !row.updatedAt) return; setDetail(null); setFormError(''); setConflict(false); setRemove(row); }
+  async function mutate(kind: 'create' | 'update' | 'delete') {
+    if (writing.current || disabled || conflict) return;
+    if (kind === 'delete' ? !data?.canDelete || !remove : !data?.canWrite || !editor || saveDisabled) return;
+    const selected = kind === 'delete' ? remove : editing; let payload: ReturnType<typeof dependencyPayload> | undefined;
+    if (kind !== 'delete') { try { payload = dependencyPayload(kind === 'create' ? draft : { type: draft.type, criticality: draft.criticality, description: draft.description }, kind === 'update'); } catch (e) { setFormError(e instanceof Error ? e.message : 'Form bilgilerini kontrol edin.'); return; } }
+    writing.current = true; setBusy(true); setFormError('');
     try {
-      const response = await fetch('/api/services/dependencies', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
-      });
-      const data = await response.json();
-      
-      if (data.success) {
-        toast({
-          title: 'Başarılı',
-          description: 'Bağımlılık oluşturuldu',
-        });
-        setIsDialogOpen(false);
-        resetForm();
-        fetchDependencies();
-      } else {
-        toast({
-          title: 'Hata',
-          description: data.error || 'Bağımlılık oluşturulamadı',
-          variant: 'destructive',
-        });
+      const result = kind === 'create' ? await apiPost('/api/services/dependencies', payload, { timeout: 30000 }) : kind === 'update' ? await apiPut('/api/services/dependencies', { id: selected!.id, expectedUpdatedAt: selected!.updatedAt, ...payload }, { timeout: 30000 }) : await apiDelete('/api/services/dependencies?' + new URLSearchParams({ id: selected!.id, expectedUpdatedAt: selected!.updatedAt! }), { timeout: 30000 });
+      if (result?.success !== true) {
+        const messages: Record<string, string> = { DUPLICATE: 'Bu servis, hedef cihaz ve ilişki türü zaten kayıtlı. İlişki türünü kontrol edin.', INVALID: 'İlişki bilgileri geçersiz. Alanları kontrol edin.', RELATED: 'Seçili servis veya cihaz artık kullanılamıyor. Formu kapatıp seçenekleri yenileyin.', NOT_FOUND: 'İlişki kaydı bulunamadı. Formu kapatıp listeyi yenileyin.', CHANGED: 'Kayıt son okumadan sonra değişmiş. Taslağı gözden geçirin; formu kapatıp listeyi yenileyin.' };
+        if (result.status === 401 || result.status === 403) { setFormError(result.status === 401 ? 'Oturumunuz sona ermiş olabilir. Yeniden giriş yapıp listeyi yenileyin.' : 'Bu işlem için güncel yetkiniz bulunmuyor.'); setConflict(true); return; }
+        if (typeof result.code === 'string' && Object.prototype.hasOwnProperty.call(messages, result.code)) { setFormError(messages[result.code]); setConflict(['CHANGED', 'NOT_FOUND', 'RELATED'].includes(result.code)); return; }
+        throw Error('Uncertain mutation');
       }
-    } catch {
-      toast({
-        title: 'Hata',
-        description: 'Bağımlılık oluşturulamadı',
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const handleUpdate = async () => {
-    if (!editingDep) return;
-    
-    try {
-      const response = await fetch('/api/services/dependencies', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...formData, id: editingDep.id }),
-      });
-      const data = await response.json();
-      
-      if (data.success) {
-        toast({
-          title: 'Başarılı',
-          description: 'Bağımlılık güncellendi',
-        });
-        setIsDialogOpen(false);
-        resetForm();
-        fetchDependencies();
-      } else {
-        toast({
-          title: 'Hata',
-          description: 'Bağımlılık güncellenemedi',
-          variant: 'destructive',
-        });
-      }
-    } catch {
-      toast({
-        title: 'Hata',
-        description: 'Bağımlılık güncellenemedi',
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!confirm(uiError('Bu bağımlılığı silmek istediğinizden emin misiniz?'))) return;
-    
-    try {
-      const response = await fetch(`/api/services/dependencies?id=${id}`, {
-        method: 'DELETE',
-      });
-      const data = await response.json();
-      
-      if (data.success) {
-        toast({
-          title: 'Başarılı',
-          description: 'Bağımlılık silindi',
-        });
-        fetchDependencies();
-      } else {
-        toast({
-          title: 'Hata',
-          description: 'Bağımlılık silinemedi',
-          variant: 'destructive',
-        });
-      }
-    } catch {
-      toast({
-        title: 'Hata',
-        description: 'Bağımlılık silinemedi',
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const openCreateDialog = () => {
-    resetForm();
-    setEditingDep(null);
-    setIsDialogOpen(true);
-  };
-
-  const openEditDialog = (dep: ServiceDependency) => {
-    setEditingDep(dep);
-    setFormData({
-      sourceServiceId: dep.sourceServiceId,
-      targetDeviceId: dep.targetDeviceId,
-      type: dep.type,
-      criticality: dep.criticality,
-      description: dep.description || '',
-    });
-    setIsDialogOpen(true);
-  };
-
-  const resetForm = () => {
-    setFormData({
-      sourceServiceId: '',
-      targetDeviceId: '',
-      type: 'DEPENDS_ON',
-      criticality: 'MEDIUM',
-      description: '',
-    });
-  };
-
-  const filteredDeps = useMemo(() => {
-    if (!searchTerm) return dependencies;
-    const term = searchTerm.toLowerCase();
-    return dependencies.filter(dep => 
-      dep.sourceService.name.toLowerCase().includes(term) || 
-      dep.targetDevice.name.toLowerCase().includes(term)
-    );
-  }, [dependencies, searchTerm]);
-
-  const totalPages = Math.ceil(filteredDeps.length / ITEMS_PER_PAGE);
-  const paginatedDeps = useMemo(() => {
-    const start = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filteredDeps.slice(start, start + ITEMS_PER_PAGE);
-  }, [filteredDeps, currentPage]);
-
-  useEffect(() => { if (currentPage > totalPages && totalPages > 0) setCurrentPage(1); }, [totalPages, currentPage]);
-
-  const getPageNumbers = () => {
-    const pages: (number | 'ellipsis')[] = [];
-    const maxVisible = 5;
-    if (totalPages <= maxVisible) { for (let i = 1; i <= totalPages; i++) pages.push(i); }
-    else {
-      pages.push(1);
-      if (currentPage > 3) pages.push('ellipsis');
-      const start = Math.max(2, currentPage - 1);
-      const end = Math.min(totalPages - 1, currentPage + 1);
-      for (let i = start; i <= end; i++) pages.push(i);
-      if (currentPage < totalPages - 2) pages.push('ellipsis');
-      pages.push(totalPages);
-    }
-    return pages;
-  };
-
-  const healthyCount = dependencies.filter(d => d.criticality === 'LOW').length;
-  const criticalCount = dependencies.filter(d => d.criticality === 'CRITICAL').length;
-
-  return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between max-md:flex-col max-md:items-stretch max-md:gap-4">
-        <div>
-          <PageHeading section="dependencies" description={<>Servis bağımlılıkları ve iletişim haritası</>}>Servis Bağımlılıkları</PageHeading>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={fetchDependencies} aria-label="Yenile"><RefreshCw className="h-4 w-4" /></Button>
-          <Button onClick={openCreateDialog}><Plus className="h-4 w-4 mr-2" />Yeni Bağımlılık</Button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-blue-500/20"><GitBranch className="h-5 w-5 text-blue-500" /></div>
-              <div><p className="text-sm text-muted-foreground">Toplam Bağımlılık</p><p className="text-2xl font-bold">{dependencies.length}</p></div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-green-500/20"><CheckCircle className="h-5 w-5 text-green-500" /></div>
-              <div><p className="text-sm text-muted-foreground">Düşük Kritiklik</p><p className="text-2xl font-bold">{healthyCount}</p></div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-red-500/20"><AlertTriangle className="h-5 w-5 text-red-500" /></div>
-              <div><p className="text-sm text-muted-foreground">Yüksek Kritiklik</p><p className="text-2xl font-bold">{criticalCount}</p></div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-blue-500/20"><Link className="h-5 w-5 text-blue-500" /></div>
-              <div><p className="text-sm text-muted-foreground">Toplam Servis</p><p className="text-2xl font-bold">{services.length}</p></div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input placeholder="Servis ara..." value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }} className="pl-9" />
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2"><GitBranch className="h-5 w-5" />Servis Bağımlılıkları<Badge variant="secondary">{filteredDeps.length}</Badge></CardTitle>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="flex justify-center py-12"><RefreshCw className="h-8 w-8 animate-spin text-primary" /></div>
-          ) : (
-            <>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Kaynak Servis</TableHead>
-                    <TableHead>Hedef Cihaz/Servis</TableHead>
-                    <TableHead>Tip</TableHead>
-                    <TableHead>Kritiklik</TableHead>
-                    <TableHead>Açıklama</TableHead>
-                    <TableHead className="text-right">İşlemler</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {paginatedDeps.length === 0 ? (
-                    <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Sonuç bulunamadı</TableCell></TableRow>
-                  ) : (
-                    paginatedDeps.map((dep) => (
-                      <TableRow key={dep.id}>
-                        <TableCell className="font-medium">{dep.sourceService.name}</TableCell>
-                        <TableCell className="font-medium">{dep.targetDevice.name}</TableCell>
-                        <TableCell><Badge>{uiLabel(dep.type)}</Badge></TableCell>
-                        <TableCell>
-                          <SeverityBadge severity={dep.criticality} />
-                        </TableCell>
-                        <TableCell className="text-muted-foreground text-sm">{dep.description || '-'}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            <Button variant="outline" size="icon" onClick={() => openEditDialog(dep)} aria-label="Düzenle"><Edit className="h-4 w-4" /></Button>
-                            <Button variant="outline" size="icon" onClick={() => handleDelete(dep.id)} aria-label="Sil"><Trash2 className="h-4 w-4" /></Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between mt-4">
-                  <p className="text-sm text-muted-foreground">Sayfa {currentPage} / {totalPages}</p>
-                  <div className="flex items-center gap-1">
-                    <Button variant="outline" size="icon" onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} aria-label="Önceki sayfa"><ChevronLeft className="h-4 w-4" /></Button>
-                    {getPageNumbers().map((page, idx) => (
-                      <React.Fragment key={idx}>
-                        {page === 'ellipsis' ? <span className="px-2 text-muted-foreground">...</span> : (
-                          <Button variant={currentPage === page ? 'default' : 'outline'} size="sm" onClick={() => setCurrentPage(page)} className="w-9">{page}</Button>
-                        )}
-                      </React.Fragment>
-                    ))}
-                    <Button variant="outline" size="icon" onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} aria-label="Sonraki sayfa"><ChevronRight className="h-4 w-4" /></Button>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </CardContent>
-      </Card>
-
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>{editingDep ? 'Bağımlılık Düzenle' : 'Yeni Bağımlılık Ekle'}</DialogTitle>
-            <DialogDescription>
-              Servis bağımlılıklarını tanımlayın
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="sourceService">Kaynak Servis</Label>
-              <Select 
-                value={formData.sourceServiceId} 
-                onValueChange={(value) => setFormData({ ...formData, sourceServiceId: value })}
-                disabled={!!editingDep}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Servis seçin" />
-                </SelectTrigger>
-                <SelectContent>
-                  {services.map((service) => (
-                    <SelectItem key={service.id} value={service.id}>
-                      {service.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="targetDevice">Hedef Cihaz/Servis</Label>
-              <Select 
-                value={formData.targetDeviceId} 
-                onValueChange={(value) => setFormData({ ...formData, targetDeviceId: value })}
-                disabled={!!editingDep}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Cihaz seçin" />
-                </SelectTrigger>
-                <SelectContent>
-                  {devices.map((device) => (
-                    <SelectItem key={device.id} value={device.id}>
-                      {device.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="type">Bağımlılık Tipi</Label>
-              <Select value={formData.type} onValueChange={(value) => setFormData({ ...formData, type: value })}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="DEPENDS_ON">Bağımlı</SelectItem>
-                  <SelectItem value="REQUIRES">Gerektirir</SelectItem>
-                  <SelectItem value="PROVIDES">Sağlar</SelectItem>
-                  <SelectItem value="COMMUNICATES_WITH">İletişim</SelectItem>
-                  <SelectItem value="DEPLOYED_ON">Dağıtıldı</SelectItem>
-                  <SelectItem value="HOSTED_ON">Barındırılıyor</SelectItem>
-                  <SelectItem value="CONNECTED_TO">Bağlı</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="criticality">Kritiklik</Label>
-              <Select value={formData.criticality} onValueChange={(value) => setFormData({ ...formData, criticality: value })}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="CRITICAL">Kritik</SelectItem>
-                  <SelectItem value="HIGH">Yüksek</SelectItem>
-                  <SelectItem value="MEDIUM">Orta</SelectItem>
-                  <SelectItem value="LOW">Düşük</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="description">Açıklama</Label>
-              <Input
-                id="description"
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder="Bağımlılık hakkında açıklama..."
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>İptal</Button>
-            <Button onClick={editingDep ? handleUpdate : handleCreate}>
-              {editingDep ? 'Güncelle' : 'Oluştur'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
+      const ack = result.dependency, id = kind === 'create' ? ack?.id : selected?.id;
+      const acknowledged = typeof id === 'string' && ack?.id === id && (kind === 'delete' || ack.sourceServiceId === draft.sourceServiceId && ack.targetDeviceId === draft.targetDeviceId && ack.type === draft.type && ack.criticality === draft.criticality && (ack.description || '') === draft.description.trim());
+      const latest = await load(), row = latest?.rows.find(r => r.id === id);
+      const verified = acknowledged && latest && (kind === 'delete' ? !row : row && row.sourceServiceId === draft.sourceServiceId && row.targetDeviceId === draft.targetDeviceId && row.type === draft.type && row.criticality === draft.criticality && (row.description || '') === draft.description.trim());
+      if (!verified) throw Error('Unverified mutation');
+      setEditor(null); setRemove(null); setMessage(kind === 'delete' ? 'İlişki kaydı kaldırıldı ve güncel listede bulunmadığı doğrulandı.' : 'İlişki kaydedildi ve güncel listede doğrulandı.');
+    } catch { setLocked(true); setFormError('İşlem sonucu doğrulanamadı. Tekrar kaydetmeden veya kaldırmadan önce formu kapatıp listeyi yenileyin.'); setMessage('Son işlem doğrulanamadı. Yeniden işlem yapmadan önce verileri yenileyin.'); }
+    finally { writing.current = false; setBusy(false); }
+  }
+  return <div className={common.page}><div className={common.workspace}>
+    <header className={common.header}><PageHeading section="dependencies" description="Kaynak servis, hedef cihaz, ilişki türü ve önem seviyesini tek bir görünümde inceleyin.">Bağımlılıklar</PageHeading><div className={common.headerActions}><Button asChild variant="outline"><Link href="/services"><Layers3 size={16} aria-hidden="true" />Servisler</Link></Button><Button variant="outline" disabled={loading || busy} onClick={() => void load()}><RefreshCw size={16} aria-hidden="true" className={loading ? 'animate-spin motion-reduce:animate-none' : ''} />{loading ? 'Okunuyor…' : 'Verileri yenile'}</Button>{data?.canWrite && <Button disabled={disabled} onClick={() => openEditor('new')}><Plus size={16} aria-hidden="true" />İlişki ekle</Button>}</div></header>
+    <div className={common.serviceBar}><SemanticBadge tone="info" icon={GitBranch}>Kayıtlı servis ilişkileri</SemanticBadge><span>Kaynak: Veritabanı · Yön: servis → hedef cihaz</span></div>
+    <section className={common.stats} aria-label="Bağımlılık özeti">{[
+      { label: 'İlişki kaydı', value: summary?.total, icon: GitBranch, note: 'Aynı uçlar arasındaki farklı ilişki türleri ayrı sayılır' }, { label: 'Kaynak servis', value: summary?.sources, icon: Layers3, note: 'İlişki tanımlanmış farklı servisler' }, { label: 'Hedef cihaz', value: summary?.targets, icon: Server, note: 'İlişkilerde yer alan farklı hedef cihazlar' }, { label: 'Öncelikli ilişki', value: summary?.important, icon: TriangleAlert, note: 'Önem seviyesi kritik veya yüksek olarak kaydedilenler' },
+    ].map(stat => <article className={common.stat} key={stat.label}><div><h2>{stat.label}</h2><span className={common.icon}><stat.icon size={18} aria-hidden="true" /></span></div><strong>{stat.value === undefined ? loading ? 'Okunuyor…' : 'Bilgi yok' : stat.value.toLocaleString('tr-TR')}</strong><p>{stat.note}</p></article>)}</section>
+    {error && <Notice error>{error}{data && ' Önceki liste korunuyor; güncel olmayabilir.'}</Notice>}{message && <Notice error={locked}>{message}</Notice>}
+    <Notice>Önem seviyesi, ilişkinin kayıtlı önceliğidir; kesinti veya cihaz sağlığı göstergesi değildir. Hedef bir cihaz kaydıdır. Bu ekran uygulamalar arası veya dolaylı bağımlılık çıkarımı yapmaz.</Notice>
+    <div className={common.filters} role="search" aria-label="Bağımlılık filtreleri"><div className={`${styles.field} ${styles.search}`}><label htmlFor="dep-search"><Search size={14} aria-hidden="true" />İlişkilerde ara</label><Input id="dep-search" type="search" maxLength={120} value={search} placeholder="Kaynak servis, hedef cihaz, IP, uygulama veya açıklama" onChange={e => { setSearch(e.target.value); setPage(1); }} /></div><div className={styles.field}><label htmlFor="dep-type">İlişki türü</label><select id="dep-type" value={type} onChange={e => { setType(e.target.value); setPage(1); }}><option value="">Tüm türler</option>{dependencyTypes.map(v => <option key={v} value={v}>{relationLabel(v)}</option>)}<option value="__unknown">Tür bilgisi yok / tanınmıyor</option></select></div><div className={styles.field}><label htmlFor="dep-importance">Önem seviyesi</label><select id="dep-importance" value={importance} onChange={e => { setImportance(e.target.value); setPage(1); }}><option value="">Tüm seviyeler</option>{dependencyImportance.map(v => <option key={v} value={v}>{criticalityLabel(v)}</option>)}<option value="__unknown">Önem bilgisi yok / tanınmıyor</option></select></div>{filters && <Button variant="ghost" onClick={clear}><ListFilter size={16} aria-hidden="true" />Filtreleri temizle</Button>}</div>
+    <section className={common.collection} aria-label="Bağımlılık listesi" aria-busy={loading}><header className={common.sectionHeader}><div><h2><GitBranch size={18} aria-hidden="true" />Servisten hedef cihaza ilişkiler</h2><p>Son liste okuma: {data ? `${userDate(data.readAt)} · TSİ` : 'Henüz okunmadı'}</p></div><SemanticBadge tone={error ? 'warning' : data ? 'info' : 'neutral'} icon={Clock3}>{loading ? 'Okunuyor…' : error && data ? 'Önceki veri' : data ? 'Kayıtlı envanter' : 'Veri yok'}</SemanticBadge></header>
+    {!data ? <Empty title={loading ? 'İlişki kayıtları yükleniyor' : 'İlişki kayıtları alınamadı'} /> : !visible.length ? <Empty title={filters ? 'Filtrelere uygun ilişki yok' : 'Henüz ilişki kaydı yok'}>{filters ? <Button variant="outline" onClick={clear}>Filtreleri temizle</Button> : <p>Kaynak servislerden hedef cihazlara tanımlanan ilişkiler burada gösterilir.</p>}</Empty> : <>
+      <div className={styles.tableWrap}><table className={styles.table}><caption className="sr-only">Kaynak servis → hedef cihaz yönü, ilişki türü ve kayıtlı önem seviyesi</caption><thead><tr><th scope="col">Kaynak servis → hedef cihaz</th><th scope="col">İlişki türü</th><th scope="col">Önem seviyesi</th><th scope="col">Ayrıntılar</th></tr></thead><tbody>{visible.map(row => <tr key={row.id}><td><Flow source={row.sourceService} target={row.targetDevice} compact /></td><td><SemanticBadge tone="info" icon={GitBranch}>{relationLabel(row.type)}</SemanticBadge><p className={styles.hint}>{relationDescription(row.type)}</p></td><td><Importance value={row.criticality} /></td><td><Button variant="outline" size="sm" aria-label={`İlişki ${row.id}: ayrıntılar`} onClick={() => setDetail(row.id)}><Eye size={14} aria-hidden="true" />İncele</Button></td></tr>)}</tbody></table></div>
+      <div className={styles.mobile}>{visible.map(row => <article className={styles.record} key={row.id}><div className={styles.badges}><SemanticBadge tone="info" icon={GitBranch}>{relationLabel(row.type)}</SemanticBadge><Importance value={row.criticality} /></div><Flow source={row.sourceService} target={row.targetDevice} compact /><p className={styles.hint}>{relationDescription(row.type)}</p><Button variant="outline" onClick={() => setDetail(row.id)}><Eye size={16} aria-hidden="true" />İlişki ayrıntıları</Button></article>)}</div>
+    </>}
+    {data && <footer className={styles.pagination}><div><p role="status">{filtered.length.toLocaleString('tr-TR')} / {data.rows.length.toLocaleString('tr-TR')} ilişki · Sayfa {safePage} / {pages}</p><p>Özetler tüm kayıtları, filtreler ve sayfalama görüntülenen listeyi kapsar.</p></div><div><Button variant="outline" size="sm" aria-label="Önceki sayfa" disabled={safePage <= 1} onClick={() => setPage(safePage - 1)}><ChevronLeft size={16} aria-hidden="true" />Önceki</Button><Button variant="outline" size="sm" aria-label="Sonraki sayfa" disabled={safePage >= pages} onClick={() => setPage(safePage + 1)}>Sonraki<ChevronRight size={16} aria-hidden="true" /></Button></div></footer>}
+    </section>
+    <Dialog open={!!detail} onOpenChange={open => { if (!open) setDetail(null); }}><DialogContent className={`${common.modal} ${styles.modal}`}><DialogHeader><DialogTitle className={styles.dialogTitle}><GitBranch size={20} aria-hidden="true" />İlişki ayrıntıları</DialogTitle><DialogDescription>Kaynak servis ve hedef cihaz arasındaki kayıtlı ilişki</DialogDescription></DialogHeader>{detail && <><div className={styles.badges}><SemanticBadge tone="info" icon={GitBranch}>{relationLabel(detail.type)}</SemanticBadge><Importance value={detail.criticality} />{stale && <SemanticBadge tone="warning">Önceki veri</SemanticBadge>}</div><Flow source={detail.sourceService} target={detail.targetDevice} /><Notice>{relationDescription(detail.type)} İlişki kaydı gerçek ağ ayarlarını veya servisin barındıran cihaz atamasını değiştirmez.</Notice>{detail.description && <section className={styles.context}><h3>Açıklama</h3><p className={styles.description}>{detail.description}</p></section>}<dl className={styles.meta}><Meta label="Kaynak servis türü" value={serviceTypeLabel(detail.sourceService.type)} /><div><dt>Kaynak servisin kayıtlı durumu</dt><dd><StatusBadge status={detail.sourceService.status} /></dd></div><Meta label="İlişki oluşturulma (TSİ)" value={userDate(detail.createdAt)} /><Meta label="İlişki güncelleme (TSİ)" value={userDate(detail.updatedAt)} /><Meta label="Liste okuma zamanı (TSİ)" value={data ? userDate(data.readAt) : null} /></dl><div className={common.dialogActions}>{data?.canWrite && <Button variant="outline" disabled={disabled || !detail.updatedAt} onClick={() => openEditor(detail)}><Pencil size={15} aria-hidden="true" />Düzenle</Button>}{data?.canDelete && <Button variant="outline" disabled={disabled || !detail.updatedAt} onClick={() => openRemove(detail)}><Trash2 size={15} aria-hidden="true" />İlişkiyi kaldır</Button>}<Button onClick={() => setDetail(null)}>Kapat</Button></div></>}</DialogContent></Dialog>
+    <Dialog open={!!editor} onOpenChange={open => { if (!open && !writing.current) setEditor(null); }}><DialogContent className={`${common.modal} ${styles.modal}`}><DialogHeader><DialogTitle className={styles.dialogTitle}><GitBranch size={20} aria-hidden="true" />{editing ? 'İlişkiyi düzenle' : 'İlişki ekle'}</DialogTitle><DialogDescription>{editing ? 'Kaynak servis ve hedef cihaz sabittir. İlişki türünü, önemini ve açıklamasını düzenleyin.' : 'Önce kaynak servisi ve hedef cihazı seçin, ardından ilişkinin anlamını belirleyin.'}</DialogDescription></DialogHeader>
+    {editor === 'new' && <>{optionsLoading && <Notice>Servis ve cihaz seçenekleri yükleniyor…</Notice>}{optionsError && <Notice error>{optionsError} <Button variant="outline" size="sm" onClick={() => void loadOptions()}>Seçenekleri yeniden yükle</Button></Notice>}{options && (!options.services.length || !options.devices.length) && <Notice>İlişki eklemek için kayıtlı bir servis ve hedef cihaz gereklidir.</Notice>}<div className={styles.formGrid}><div className={styles.field}><label htmlFor="dep-source">Kaynak servis</label><select id="dep-source" value={draft.sourceServiceId} disabled={busy || optionsLoading || !options} onChange={e => setDraft({ ...draft, sourceServiceId: e.target.value })}><option value="">Servis seçin</option>{options?.services.map(s => <option key={s.id} value={s.id}>{s.displayName || s.name} · {s.device.name} · {servicePortLabel(s)}</option>)}</select></div><div className={styles.field}><label htmlFor="dep-target">Hedef cihaz</label><select id="dep-target" value={draft.targetDeviceId} disabled={busy || optionsLoading || !options} onChange={e => setDraft({ ...draft, targetDeviceId: e.target.value })}><option value="">Cihaz seçin</option>{options?.devices.map(d => <option key={d.id} value={d.id}>{d.name} · {d.managementIp || 'IP bilgisi yok'}</option>)}</select></div></div></>}
+    {formSource && formTarget && <Flow source={formSource} target={formTarget} />}<div className={styles.formGrid}><div className={styles.field}><label htmlFor="dep-edit-type">İlişki türü</label><select id="dep-edit-type" disabled={busy} value={draft.type} onChange={e => setDraft({ ...draft, type: e.target.value })}>{!dependencyTypes.includes(draft.type) && <option value={draft.type}>Tür bilgisi yok / tanınmıyor</option>}{dependencyTypes.map(v => <option key={v} value={v}>{relationLabel(v)}</option>)}</select><p className={styles.hint}>{relationDescription(draft.type)}</p></div><div className={styles.field}><label htmlFor="dep-edit-importance">Önem seviyesi</label><select id="dep-edit-importance" disabled={busy} value={draft.criticality} onChange={e => setDraft({ ...draft, criticality: e.target.value })}>{!dependencyImportance.includes(draft.criticality) && <option value={draft.criticality}>Önem bilgisi yok / tanınmıyor</option>}{dependencyImportance.map(v => <option key={v} value={v}>{criticalityLabel(v)}</option>)}</select><p className={styles.hint}>Önem seviyesi, kayıtlı ilişkiye aittir; kesinti anlamına gelmez.</p></div></div><div className={styles.field}><label htmlFor="dep-description">Açıklama</label><textarea id="dep-description" rows={3} maxLength={2000} disabled={busy} value={draft.description} onChange={e => setDraft({ ...draft, description: e.target.value })} placeholder="Bu ilişkinin amacını ve kullanımını açıklayın" /><p className={styles.hint}>{draft.description.length} / 2000 karakter</p></div>{formError && <Notice error>{formError}</Notice>}<div className={common.dialogActions}><Button variant="outline" disabled={busy} onClick={() => setEditor(null)}>Vazgeç</Button><Button disabled={saveDisabled} onClick={() => void mutate(editing ? 'update' : 'create')}>{busy ? 'Kaydediliyor ve doğrulanıyor…' : editing ? 'Değişiklikleri kaydet' : 'İlişki ekle'}</Button></div></DialogContent></Dialog>
+    <Dialog open={!!remove} onOpenChange={open => { if (!open && !writing.current) setRemove(null); }}><DialogContent className={`${common.modal} ${styles.modal}`}><DialogHeader><DialogTitle className={styles.dialogTitle}><Trash2 size={20} aria-hidden="true" />İlişkiyi kaldır</DialogTitle><DialogDescription>Yalnızca seçili ilişki kaydı kaldırılır. Servis ve hedef cihaz silinmez; gerçek ağ bağlantısı değiştirilmez.</DialogDescription></DialogHeader>{remove && <><Flow source={remove.sourceService} target={remove.targetDevice} /><div className={styles.badges}><SemanticBadge tone="info">{relationLabel(remove.type)}</SemanticBadge><Importance value={remove.criticality} /></div>{formError && <Notice error>{formError}</Notice>}<div className={common.dialogActions}><Button variant="outline" disabled={busy} onClick={() => setRemove(null)}>Vazgeç</Button><Button variant="destructive" disabled={disabled || conflict || !data?.canDelete} onClick={() => void mutate('delete')}>{busy ? 'Kaldırılıyor ve doğrulanıyor…' : 'İlişki kaydını kaldır'}</Button></div></>}</DialogContent></Dialog>
+  </div></div>;
 }
+function Flow({ source, target, compact = false }: { source: DependencySource; target: AppDevice; compact?: boolean }) { return <div className={`${styles.flow} ${styles.dependencyFlow}`}><div><h4><Layers3 size={13} aria-hidden="true" />Kaynak servis</h4><strong>{source.displayName || source.name}</strong><small>{servicePortLabel(source)}</small><small>Barındıran: {source.device.name}</small>{!compact && <><code>{source.device.managementIp || 'IP bilgisi yok'}</code><small>Uygulama: {source.application?.name || 'Uygulama atanmamış'}</small></>}</div><ArrowRight size={16} aria-label="şu hedef cihaza" /><div><h4><Server size={13} aria-hidden="true" />Hedef cihaz</h4><strong>{target.name}</strong><code>{target.managementIp || 'IP bilgisi yok'}</code></div></div>; }
+function Importance({ value }: { value: string }) { return <SemanticBadge tone={value === 'CRITICAL' ? 'danger' : value === 'HIGH' ? 'warning' : value === 'MEDIUM' || value === 'INFORMATIONAL' ? 'info' : 'neutral'}>{criticalityLabel(value)}</SemanticBadge>; }
+function Meta({ label, value }: { label: string; value?: string | null }) { return <div><dt>{label}</dt><dd>{value || 'Bilgi yok'}</dd></div>; }
+function Notice({ children, error = false }: { children: ReactNode; error?: boolean }) { const Icon = error ? TriangleAlert : Info; return <div className={error ? common.error : common.info} role={error ? 'alert' : undefined}><Icon size={18} aria-hidden="true" /><div>{children}</div></div>; }
+function Empty({ title, children }: { title: string; children?: ReactNode }) { return <div className={common.empty}><GitBranch size={28} aria-hidden="true" /><h3>{title}</h3>{children}</div>; }

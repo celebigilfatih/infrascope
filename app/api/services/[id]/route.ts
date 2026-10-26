@@ -31,10 +31,8 @@ const VALID_CRITICALITIES = [
 // ============================================================================
 // GET - Get service by ID
 // ============================================================================
-export async function GET(
-  _request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET(_request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const { id } = params;
 
@@ -144,10 +142,8 @@ export async function GET(
 // ============================================================================
 // PUT - Update service
 // ============================================================================
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function PUT(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const { id } = params;
     const body = await request.json();
@@ -377,10 +373,8 @@ export async function PUT(
 // ============================================================================
 // DELETE - Delete service
 // ============================================================================
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const access = await authorizeApiRequest(request, 'devices', 'delete');
   if (!access.allowed) return access.response;
   try {

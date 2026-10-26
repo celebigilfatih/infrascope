@@ -4,7 +4,7 @@ import { installTestSession } from './session-fixtures';
 
 async function sources(page: Page) {
   const reads: string[] = [], writes: string[] = [], errors: string[] = [];
-  const service = { id: 'lint-service', name: 'TEST Service', type: 'HTTP', status: 'RUNNING', criticality: 'MEDIUM', port: 443, protocol: 'TCP', deviceId: 'lint-device', application: { id: 'lint-app', name: 'TEST App', vendor: 'Cisco' }, device: { id: 'lint-device', name: 'TEST Host' } };
+  const service = { id: 'lint-service', name: 'TEST Service', type: 'HTTP', status: 'RUNNING', criticality: 'MEDIUM', port: 443, protocol: 'TCP', deviceId: 'lint-device', applicationId: 'lint-app', application: { id: 'lint-app', name: 'TEST App', vendor: 'Cisco' }, device: { id: 'lint-device', name: 'TEST Host' } };
   const dependency = { id: 'lint-dependency', sourceServiceId: service.id, targetDeviceId: 'lint-device', type: 'DEPENDS_ON', criticality: 'MEDIUM', description: null, createdAt: '2026-10-19T10:00:00Z', sourceService: service, targetDevice: service.device };
   page.on('pageerror', error => errors.push(error.message));
   await page.route('**/api/**', async route => {
@@ -20,6 +20,7 @@ async function sources(page: Page) {
       return route.fulfill({ json: { trends: [{ resourceId: 'lint-host', resourceType: 'host', resourceName: `TEST CPU ${days}`, metricType: 'cpu', currentValue: '25', trendPercent: '1', status: 'normal', dataPoints: [] }] } });
     }
     if (url.pathname === '/api/services/dependencies') return route.fulfill({ json: { success: true, dependencies: [dependency] } });
+    if (url.pathname === '/api/services/dependencies/workspace') return route.fulfill({ json: { success: true, source: 'database', readAt: new Date().toISOString(), canWrite: false, canDelete: false, data: [dependency] } });
     if (url.pathname === '/api/services') return route.fulfill({ json: { success: true, data: [service], services: [service] } });
     if (url.pathname === '/api/devices') return route.fulfill({ json: { success: true, data: [service.device], devices: [service.device] } });
     return route.fulfill({ json: { success: true, data: [], count: 0 } });
@@ -27,21 +28,30 @@ async function sources(page: Page) {
   return { reads, writes, errors };
 }
 
-test('Lint: capacity callbacks keep the selected period on refresh and polling', async ({ page, fixtures }) => {
+test('Lint: capacity callbacks keep the selected period on refresh without refetching for local filters or idle time', async ({ page, fixtures }) => {
   const state = await sources(page);
   await installTestSession(page.context(), fixtures, 'ADMIN');
   await page.clock.install();
   await page.goto('/analytics/capacity');
-  await expect(page.getByRole('cell', { name: 'TEST CPU 7', exact: true })).toBeVisible();
+  const list = page.getByRole('region', { name: 'Analiz sonuçları', exact: true });
+  await expect(list.getByRole('table').getByText('TEST CPU 7', { exact: true })).toBeVisible();
   const queries = () => state.reads.filter(url => url.startsWith('/api/integrations/vmware')).map(url => new URL(url, 'http://fixture').searchParams.get('days'));
-  // The development server intentionally replays mount effects in Strict Mode.
-  await expect.poll(queries).toEqual(['7', '7']);
-  await page.getByRole('combobox').selectOption('30');
-  await expect(page.getByRole('cell', { name: 'TEST CPU 30', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Yenile', exact: true }).click();
-  await expect.poll(queries).toEqual(['7', '7', '30', '30']);
+  // Strict Mode may abort its first mount before the browser dispatches it.
+  // Bound mount reads, then require exact deltas for user actions and filters.
+  const mounted = queries();
+  expect(mounted.length).toBeGreaterThanOrEqual(1); expect(mounted.length).toBeLessThanOrEqual(2);
+  expect(mounted.every(days => days === '7')).toBe(true);
+  await page.getByLabel('Ölçüm dönemi', { exact: true }).selectOption('30');
+  await expect(list.getByRole('table').getByText('TEST CPU 30', { exact: true })).toBeVisible();
+  await expect.poll(queries).toEqual([...mounted, '30']);
+  await page.getByRole('button', { name: 'Verileri yenile', exact: true }).click();
+  await expect.poll(queries).toEqual([...mounted, '30', '30']);
+  await page.getByLabel('Kaynaklarda ara', { exact: true }).fill('missing'); await expect(list.getByRole('table')).toHaveCount(0);
+  await page.getByLabel('Kaynaklarda ara', { exact: true }).fill('TEST');
+  await expect(list.getByRole('table').getByText('TEST CPU 30', { exact: true })).toBeVisible();
   await page.clock.fastForward(120000);
-  await expect.poll(queries).toEqual(['7', '7', '30', '30', '30']);
+  // The current analysis screen refreshes explicitly; it has no polling timer.
+  expect(queries()).toEqual([...mounted, '30', '30']);
   expect(state.writes).toEqual([]); expect(state.errors).toEqual([]);
 });
 
@@ -49,13 +59,18 @@ test('Lint: dependency callbacks do not refetch on search renders', async ({ pag
   const state = await sources(page);
   await installTestSession(page.context(), fixtures, 'ADMIN');
   await page.goto('/services/dependencies');
-  await expect(page.getByRole('cell', { name: 'TEST Service', exact: true })).toBeVisible();
-  await page.getByPlaceholder('Servis ara...').fill('missing');
-  await page.getByPlaceholder('Servis ara...').fill('TEST');
-  await page.getByRole('button', { name: 'Yenile', exact: true }).click();
-  await expect.poll(() => state.reads.filter(url => url === '/api/services/dependencies').length).toBe(3);
-  expect(state.reads.filter(url => url === '/api/services')).toHaveLength(2);
-  expect(state.reads.filter(url => url === '/api/devices')).toHaveLength(2);
+  const list = page.getByRole('region', { name: 'Bağımlılık listesi', exact: true });
+  await expect(list.getByRole('table').getByText('TEST Service', { exact: true })).toBeVisible();
+  const reads = () => state.reads.filter(url => url === '/api/services/dependencies/workspace').length;
+  const mounted = reads();
+  expect(mounted).toBeGreaterThanOrEqual(1); expect(mounted).toBeLessThanOrEqual(2);
+  await page.getByLabel('İlişkilerde ara', { exact: true }).fill('missing');
+  await expect(page.getByRole('heading', { name: 'Filtrelere uygun ilişki yok', exact: true })).toBeVisible();
+  await page.getByLabel('İlişkilerde ara', { exact: true }).fill('TEST');
+  await expect(list.getByRole('table').getByText('TEST Service', { exact: true })).toBeVisible(); expect(reads()).toBe(mounted);
+  await page.getByRole('button', { name: 'Verileri yenile', exact: true }).click();
+  await expect.poll(reads).toBe(mounted + 1);
+  expect(state.reads.filter(url => ['/api/services/dependencies', '/api/services', '/api/devices'].includes(url))).toEqual([]);
   expect(state.writes).toEqual([]); expect(state.errors).toEqual([]);
 });
 

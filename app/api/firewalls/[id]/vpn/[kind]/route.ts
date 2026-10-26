@@ -8,10 +8,11 @@ import { firewallListQueryFromUrl, paginateFirewallItems } from '@/lib/firewall/
 
 export const dynamic = 'force-dynamic';
 
-type RouteContext = { params: { id: string; kind: string } };
+type RouteContext = { params: Promise<{ id: string; kind: string }> };
 
-export async function GET(request: NextRequest, { params }: RouteContext) {
-  const access = await authorizeApiRequest(request, 'firewall', 'read'); if (!access.allowed) return access.response;
+export async function GET(request: NextRequest, props: RouteContext) {
+  const params = await props.params;
+  const access = await authorizeApiRequest(request, 'firewall', 'read');if (!access.allowed) return access.response;
   try {
     const query = firewallListQueryFromUrl(request.url, params.kind === 'ipsec' ? ['status'] : []);
     const result = params.kind === 'ssl-sessions'

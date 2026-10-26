@@ -60,7 +60,7 @@ Topolojiyi interaktif bir akordeon listesi olarak sunar. Hızlı navigasyon içi
 - Mod seçimi ana harita ve bina içi cihaz görünümü arasında ortaktır. Sayfa yenilendiğinde Görüntüleme moduna dönülür; kaydedilmiş ikon konumları korunur.
 
 ### Cihaz ve bağlantı ayrıntıları
-- **Cihazlar** sekmesi, kayıtlı cihaz bağlantılarını katmanlı bir haritada gösterir. Konum atanmamış cihazlar da korunur; birbirine bağlı olmayan cihazlar için çizgi üretilmez. Sürüklenen konumlar görünüm boyunca korunur.
+- **Binalar** ana haritadır; ayrı bir **Cihazlar** sekmesi yoktur. Binaya tıklayınca o binanın cihazları ve bağlantıları açılır. Ana haritadaki aramada cihaz adı veya IP seçilince cihazın bulunduğu bina açılır ve cihaza odaklanılır. Konum atanmamış cihazlar **Konumsuz cihazlar** üzerinden açılır. Tam envantere sol menüdeki **Cihaz Envanteri** bağlantısından erişilir.
 - Cihaz çizgileri durum etiketi ve çizgi biçimiyle ayrılır: açık düz yeşil, kapalı kesik kırmızı, beklemede noktalı sarı, bilinmeyen noktalı gri. Bina haritasında kablo türü renkleri korunur; durum etikette ayrıca yazılır.
 - Çizgiye tıklamak bağlantı adını, kayıtlı durumunu, iki cihazı ve gerçek port adlarını açar. Cihaz seçimi yönetim IP’sini, kritiklik bilgisini, konumunu, arayüzlerini ve bağlı cihazlarını gösterir. Komşu bağlantıdan uç cihaza geçilebilir.
 - **Bağlantı listesi**, geçerli cihaz filtrelerine uyan bağlantıları cihaz/port/durum metniyle arama ve duruma göre süzme olanağı sağlar. Çizgi hedeflerine alternatif olarak klavyeyle kullanılabilir. Bina bağlantıları **Bağlantıları yönet** üzerinden incelenir.
@@ -94,6 +94,12 @@ Belgelendirme paketi için aşağıdaki ekran görüntülerinin alınması öner
 5. **Connection_Wizard.png**: Yeni bir bağlantı ekleme ekranı.
 
 ---
+### Çizimden aktarılan cihazlar ve katlar
+
+İncelenmiş draw.io çizimleri, mevcut cihaz ve NMS kimlikleri korunarak aktarılabilir. Bina içi görünümde **Kat kapsamı** seçimi doğrudan atanmış katları ve kabinetten gelen katları kullanır. Yalnız seçili kattaki cihazlar arasındaki bağlantılar görünür; katlar arası bağlantılar için **Tüm katlar** seçilir. Çizimde oda veya kabinet bulunmuyorsa bu kayıtlar oluşturulmaz.
+
+Çizim bağlantılarının ayrıntılarında kaynak açıklanır. Eksik port, kablo türü, hız ve canlı durum bilinmiyor olarak korunur. Aynı cihaz ve bilinen portlarla eşleşen NMS keşfi ikinci bir çizgi oluşturmaz; farklı portlardaki paralel bağlantılar korunur. İşletim adımları ve güvenli yeniden çalıştırma kuralları: [draw.io aktarım kılavuzu](../../30-runbooks/drawio-topology-import.md).
+
 *Hazırlayan: infraScope Geliştirme Ekibi*
 
 
@@ -105,9 +111,23 @@ Cihazda ayrıntılar, kimliğe göre doğrudan bağlantılar ve varsa yönetim I
 
 Regresyon: tests/incident-e2e/topology-object-menu.spec.ts, mevcut topology-workspace.spec.ts ile izole incident regresyon ortamında çalıştırılır. Doğrulama sonuçları design-qa.md içinde kayıtlıdır. Bina atama regresyonu, doğrudan kat atamasını koruma/temizleme ve çakışmada tüm isteği geri alma davranışını da doğrular.
 
+- Bina ve bina içi haritalarda “Gösterilen X / Y ikon” sayacı görünür. Altındaki “Gizlenen Z ikon”, toplamdan gösterilen sayının çıkarılmasıyla hesaplanır; filtrelerle birlikte güncellenir ve tüm ikonlar gösterildiğinde 0 olur. Yükleme sırasında sayılar yerine çizgi gösterilir. Gizlenen sayısına tıklamak, etkin filtrelerin gizlediği ikon adlarını alfabetik ve kaydırılabilir bir listede açar. Cihazlarda varsa IP adresi de gösterilir; kat ve diğer kapsam filtreleriyle haritadan çıkarılan ikonlar da listeye dahildir. Gizlenen yoksa düğme pasiftir. Liste kapatma düğmesiyle veya Escape ile kapanır; bina görünümü açık kalır. X, kat/kapsam ve uzaklık filtrelerinden sonra gerçekten gösterilen ikonları; Y, filtrelerden bağımsız toplamı belirtir. Bina haritasının toplamı tüm binaları ve mevcutsa Konumsuz Cihazlar ikonunu, bina içindeki toplam ise o binanın tüm cihazlarını kapsar. Bağlantı türleri komşuluk kapsamını değiştirdiğinde X buna göre güncellenir; yakınlaştırma ve kaydırma sayıyı değiştirmez.
+
 
 ## Bina ataması ve doğrudan kat kaydı
 
 Aynı binaya yeniden atanan cihazın doğrudan kat kaydı korunur. Farklı binaya taşıma veya bina atamasını kaldırma eski kat kaydını temizler. Kabinete bağlı cihazın konumu kabinet üzerinden belirlenir. Birden çok cihazın atamasında herhangi bir cihazın bina, kat veya kabineti arada değişirse istek 409 döner ve bu isteğin önceki yazmaları da geri alınır; diğer oturumun kaydı korunur.
 
 `npm run test:topology-building` sentetik atama, bağlantı ve yerleşim kontrollerini çalıştırır. Gerçek PostgreSQL atama regresyonu yalnız `npm run test:incidents:regression` içindeki ayrı incident veritabanında, açık opt-in ile çalışır; mevcut kurulum veritabanına bağlanmaz.
+
+## Ağ grupları
+
+“Ağ grupları” ile ortak bir hat veya merkez cihaz arkasındaki konumlar yönetilir. “Ağ grubu oluştur” ve cihaz/arayüz üzerindeki “Bu noktadan ağ grubu oluştur” seçenekleri aynı formu kullanır. Üyelik elle seçilir; keşif sonuçları konumları kendiliğinden ekleyip çıkarmaz.
+
+Bina ve cihaz haritalarındaki “Grubu aç” düğmesi, aynı çalışma alanında merkez cihaz → ağ grubu → konumlar sırasını gösterir. Bir seferde tek grup incelenir. Konumlar alfabetik kartlarla sıralanır; cihaz haritasında kartların içinde gerçek cihaz adları ve IP adresleri de görünür. Konum veya cihaz seçilerek o konumun mevcut port bağlantılı topolojisi açılır. Böylece fiziksel çizgiler ile grup üyeliği çizgileri üst üste bindirilmez. “Tüm ağa dön” veya “Grubu kapat” ile genel haritaya dönülür; kayıtlı ikon konumları değişmez.
+
+Kapalı gruptaki bir konum veya cihaz aramayla seçildiğinde ilgili grup açılır. Grup içindeki arama konum, cihaz ve IP bilgilerini tarar; genel cihaz filtreleri geçerliliğini korur. Grup toplamı ile filtreye uyan konum sayısı ayrı gösterilir. Bina içi cihaz ekranı mevcut düzenini korur. Gizlenen ikon listesine kapalı gruptaki konumlar da dahildir; grup ikonu bir cihaz veya bina olarak sayılmaz.
+
+Noktalı turkuaz çizgiler mantıksal grup ilişkileri ve dış bağlantı özetleridir; yeni fiziksel bağlantı kaydı değildir. Kayıtlı bağlantı toplamları korunur. Hat durumu yalnız seçilen merkez arayüzünün güncel ölçümünden gelir; üye cihazların durumu ayrı gösterilir. Bilinmeyen arayüz boş bırakılır. Grubu silmek konumları, cihazları veya port bağlantılarını silmez.
+
+API, migration, yetkiler ve doğrulanmış çizimden ilk grup oluşturma: [Network groups](network-groups.md).

@@ -69,7 +69,8 @@ async function main() {
   const detail = load('app/api/integrations/nms/backups/[id]/route.ts');
   const deviceRoute = load('app/api/integrations/nms/devices/[id]/backups/route.ts');
   const policies = load('app/api/integrations/nms/backup-policies/route.ts');
-  const context = { params: { id: row.id } };
+  // Next 15 supplies request params asynchronously; exercise the actual contract.
+  const context = { params: Promise.resolve({ id: row.id }) };
 
   actor = null;
   assert.equal((await global.GET(request())).status, 401);

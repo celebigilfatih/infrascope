@@ -25,6 +25,7 @@ services:
       DATABASE_URL: postgresql://postgres:incident-fixture-only@postgres:5432/infrascope_incident_e2e
       NEXTAUTH_SECRET: incident-e2e-session-secret-only
       INFRASCOPE_INCIDENT_E2E: '1'
+      INFRASCOPE_E2E_SHARD: ${INFRASCOPE_E2E_SHARD:-}
       INFRASCOPE_COLLABORATION_DB_TEST: '1'
       NEXT_TELEMETRY_DISABLED: '1'
     working_dir: /app

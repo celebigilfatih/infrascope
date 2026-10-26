@@ -2,8 +2,10 @@
 const nextConfig = {
   output: 'standalone',
   reactStrictMode: true,
-  swcMinify: true,
   compress: true,
+  // Keep the unused optimizer and its API disabled after the framework security upgrade.
+  // GHSA-2xp9-vwfh-vxw4: untrusted AVIF decoding must not reach the server-side sharp pipeline.
+  images: { unoptimized: true },
   // compiler.removeConsole is NOT supported by Turbopack (dev mode)
   // Only apply in production builds where Turbopack isn't used
   ...(process.env.NODE_ENV === 'production' && process.env.npm_lifecycle_event !== 'dev'
@@ -71,7 +73,6 @@ const nextConfig = {
     ];
   },
   experimental: {
-    instrumentationHook: true,
     // Optimize package imports to reduce bundle size
     optimizePackageImports: [
       'lucide-react', 

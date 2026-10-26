@@ -15,6 +15,20 @@ test('actual production build explicitly enforces Next type/lint and the pre-com
 test('release lint retains every default directory and includes shared frontend types', () => {
   assert.deepEqual([...current().config.eslint.dirs].sort(), ['app', 'pages', 'components', 'lib', 'src', 'types'].sort());
 });
+
+test('every dependency finding blocks the release, including development tooling and low severity', () => {
+  const { pkg } = current();
+  assert.equal(pkg.scripts['security:dependencies'], 'npm audit --audit-level=low');
+  assert.ok(pkg.scripts['quality:release'].includes('&& npm run security:dependencies &&'));
+});
+
+for (const audit of ['npm audit --omit=dev', 'npm audit --audit-level=critical', 'npm audit || true']) {
+  test(`dependency audit bypass is rejected: ${audit}`, () => {
+    const { config, pkg } = current();
+    pkg.scripts['security:dependencies'] = audit;
+    assert.ok(policyErrors(config, pkg).length);
+  });
+}
 for (const section of ['typescript', 'eslint']) test(`${section} bypass is rejected`, () => {
   const { config, pkg } = current(); config[section][section === 'eslint' ? 'ignoreDuringBuilds' : 'ignoreBuildErrors'] = true;
   assert.ok(policyErrors(config, pkg).length);
@@ -64,9 +78,13 @@ test('scanner reports every match and line without exposing matched source', () 
   const result = scanContent('scripts/collector.py', '\nrequests.get(a, verify=False)\nrequests.get(b, verify=False)');
   assert.deepEqual(result.map(r => r.line), [2, 3]); assert.ok(result.every(r => !('text' in r)));
 });
+test('customer runtime keeps the unused image optimization endpoint disabled after the dependency security upgrade', () => {
+  const { config } = readPolicy(root);
+  assert.equal(config.images?.unoptimized, true);
+});
 test('tag and manual publication wait for every required reusable quality/regression workflow', () => {
   const publish = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/publish-image.yml'), 'utf8'));
-  assert.deepEqual([...publish.jobs.publish.needs].sort(), ['release-quality', 'alarm-checks', 'dashboard-checks', 'incident-checks', 'backup-checks'].sort());
+  assert.deepEqual([...publish.jobs.publish.needs].sort(), ['release-quality', 'alarm-checks', 'dashboard-checks', 'incident-checks', 'backup-checks', 'customer-deployment'].sort());
   assert.equal(publish.jobs.publish.if, undefined); assert.ok(publish.on.push.tags); assert.ok(publish.on.workflow_dispatch);
   for (const job of publish.jobs.publish.needs) {
     const file = publish.jobs[job].uses.replace('./', ''), workflow = yaml.load(fs.readFileSync(path.join(root, file), 'utf8'));
@@ -74,10 +92,25 @@ test('tag and manual publication wait for every required reusable quality/regres
     for (const task of Object.values(workflow.jobs)) assert.ok(!task['continue-on-error']);
   }
 });
+test('incident CI runs all eight isolated shards and retains a distinct report for every shard', () => {
+  const workflow = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/incident-regression.yml'), 'utf8'));
+  const job = workflow.jobs['browser-and-database'];
+  assert.deepEqual(job.strategy.matrix.shard, [1, 2, 3, 4, 5, 6, 7, 8]);
+  assert.equal(job.strategy['fail-fast'], false);
+  const run = job.steps.find(step => step.run === 'npm run test:incidents:regression');
+  assert.equal(run.env.INFRASCOPE_E2E_SHARD, '${{ matrix.shard }}/8');
+  assert.ok(job.steps.find(step => step.uses === 'actions/upload-artifact@v4').with.name.includes('${{ matrix.shard }}'));
+  const compose = yaml.load(fs.readFileSync(path.join(root, 'compose.incident-tests.yml'), 'utf8'));
+  assert.equal(compose.services.tests.environment.INFRASCOPE_E2E_SHARD, '${INFRASCOPE_E2E_SHARD:-}');
+  const runner = fs.readFileSync(path.join(root, 'scripts/run-incident-regression.sh'), 'utf8');
+  assert.match(runner, /npm run test:incidents:e2e -- --shard="\$INFRASCOPE_E2E_SHARD"/);
+  assert.match(runner, /else\s+ npm run test:incidents:e2e/);
+});
+
 test('reusable quality workflow executes policy regressions, real compiler controls and the full gate', () => {
   const workflow = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/release-quality.yml'), 'utf8'));
   const steps = workflow.jobs.quality.steps;
-  for (const cmd of ['npm run test:release-quality', 'npm run test:release-compiler', 'npm run quality:release']) {
+  for (const cmd of ['npm run test:release-quality', 'npm run test:dependency-security', 'npm run test:release-compiler', 'npm run quality:release']) {
     const step = steps.find(s => s.run === cmd); assert.ok(step); assert.ok(!step['continue-on-error']); assert.equal(step.if, undefined);
   }
   const dockerfile = fs.readFileSync(path.join(root, 'Dockerfile'), 'utf8');

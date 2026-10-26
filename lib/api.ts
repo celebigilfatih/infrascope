@@ -30,31 +30,47 @@ export const apiPost = async (url: string, data: unknown, options?: { headers?: 
   } catch (error) {
     return {
       success: false,
+      status: (error as { response?: { status?: number } }).response?.status,
+      code: typeof (error as { response?: { data?: { code?: unknown } } }).response?.data?.code === 'string' ? (error as { response?: { data?: { code?: string } } }).response?.data?.code : undefined,
       error: (error as Error & { response?: { data?: { error?: string }; status?: number } }).response?.data?.error || (error as Error & { response?: { data?: { error?: string }; status?: number } }).message || 'API request failed',
     };
   }
 };
 
-export const apiPut = async (url: string, data: unknown) => {
+export const apiPut = async (url: string, data: unknown, options?: { timeout?: number }) => {
   try {
-    const response = await api.put(url, data);
+    const response = await api.put(url, data, options);
     return response.data;
   } catch (error) {
     return {
       success: false,
+      status: (error as { response?: { status?: number } }).response?.status,
+      code: typeof (error as { response?: { data?: { code?: unknown } } }).response?.data?.code === 'string' ? (error as { response?: { data?: { code?: string } } }).response?.data?.code : undefined,
       error: (error as Error & { response?: { data?: { error?: string }; status?: number } }).response?.data?.error || (error as Error & { response?: { data?: { error?: string }; status?: number } }).message || 'API request failed',
     };
   }
 };
 
-export const apiDelete = async (url: string, options?: { timeout?: number }) => {
+export const apiDelete = async (url: string, options?: { timeout?: number; data?: unknown }) => {
   try {
     const response = await api.delete(url, options);
     return response.data;
   } catch (error) {
     return {
       success: false,
+      status: (error as { response?: { status?: number } }).response?.status,
+      code: typeof (error as { response?: { data?: { code?: unknown } } }).response?.data?.code === 'string' ? (error as { response?: { data?: { code?: string } } }).response?.data?.code : undefined,
       error: (error as Error & { response?: { data?: { error?: string }; status?: number } }).response?.data?.error || (error as Error & { response?: { data?: { error?: string }; status?: number } }).message || 'API request failed',
     };
+  }
+};
+
+export const apiPatch = async (url: string, data: unknown, options?: { timeout?: number }) => {
+  try {
+    const response = await api.patch(url, data, options);
+    return response.data;
+  } catch (error) {
+    const response = (error as { response?: { status?: number; data?: { error?: string } } }).response;
+    return { success: false, status: response?.status, error: response?.data?.error || 'Değişiklik kaydedilemedi. Yeniden deneyin.' };
   }
 };

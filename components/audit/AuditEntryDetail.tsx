@@ -13,7 +13,7 @@ export function AuditAction({ action }: { action: string }) {
   return <SemanticBadge tone={tone} icon={Icon} className={styles.actionBadge}>{auditTitle(action)}</SemanticBadge>;
 }
 export function AuditActor({ entry }: { entry: AuditEntry }) {
-  return <div className="flex min-w-0 items-start gap-2.5"><span className={styles.actorIcon}><UserRound size={16} /></span><div className="min-w-0"><p className="break-words text-sm font-medium">{entry.userName === 'System' ? 'Sistem' : entry.userName || (entry.userId ? 'Silinmiş kullanıcı' : 'Sistem')}</p>{entry.userEmail && <p className="mt-0.5 break-all text-xs text-muted-foreground">{entry.userEmail}</p>}{entry.userRole && <span className="mt-1 inline-block text-[11px] text-muted-foreground">{uiLabel(entry.userRole)}</span>}{!entry.userId && <p className="mt-0.5 text-xs text-muted-foreground">Kullanıcı atanmadı</p>}</div></div>;
+  return <div className="flex min-w-0 items-start gap-2.5"><span className={styles.actorIcon}><UserRound size={16} /></span><div className="min-w-0"><p className="wrap-break-word text-sm font-medium">{entry.userName === 'System' ? 'Sistem' : entry.userName || (entry.userId ? 'Silinmiş kullanıcı' : 'Sistem')}</p>{entry.userEmail && <p className="mt-0.5 break-all text-xs text-muted-foreground">{entry.userEmail}</p>}{entry.userRole && <span className="mt-1 inline-block text-[11px] text-muted-foreground">{uiLabel(entry.userRole)}</span>}{!entry.userId && <p className="mt-0.5 text-xs text-muted-foreground">Kullanıcı atanmadı</p>}</div></div>;
 }
 function DetailValue({ value, depth = 0 }: { value: unknown; depth?: number }) {
   if (value && typeof value === 'object') {
@@ -22,7 +22,7 @@ function DetailValue({ value, depth = 0 }: { value: unknown; depth?: number }) {
     if (!fields.length) return <span className="text-muted-foreground">Ek bilgi yok</span>;
     return <dl className={styles.fields}>{fields.map(([key, child]) => <div key={key} className={child && typeof child === 'object' ? styles.group : undefined}><dt>{Array.isArray(value) ? `Öğe ${Number(key) + 1}` : auditFieldLabels[key] || key}</dt><dd><DetailValue value={child} depth={depth + 1} /></dd></div>)}</dl>;
   }
-  return <span className="whitespace-pre-wrap break-words">{auditValue(value)}</span>;
+  return <span className="whitespace-pre-wrap wrap-break-word">{auditValue(value)}</span>;
 }
 export function AuditEntryDetail({ entry, onClose, onUserFilter }: { entry: AuditEntry | null; onClose: () => void; onUserFilter: (id: string, name: string) => void }) {
   return <Dialog open={!!entry} onOpenChange={open => { if (!open) onClose(); }}><DialogContent className="max-w-3xl"><DialogHeader><DialogTitle className="flex items-center gap-2"><FileClock size={20} className="text-primary" />İşlem ayrıntıları</DialogTitle><DialogDescription>İşlemi yapan kullanıcı, etkilenen kaynak ve kaydedilen bilgiler.</DialogDescription></DialogHeader>{entry && <>

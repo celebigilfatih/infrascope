@@ -24,10 +24,18 @@ import 'reactflow/dist/style.css';
 import { toPng } from 'html-to-image';
 import { BuildingNode, buildingNodeStatus } from '../../components/topology/BuildingNode';
 import { BuildingDeviceWorkspace } from '@/components/topology/BuildingDeviceWorkspace';
+import { BuildingMapOverview } from '@/components/topology/BuildingMapOverview';
+import { NetworkGroupNode } from '@/components/topology/NetworkGroupNode';
+import { NetworkGroupFocus } from '@/components/topology/NetworkGroupFocus';
+import { NetworkGroupWorkspace } from '@/components/topology/NetworkGroupWorkspace';
+import { useNetworkGroups } from '@/components/topology/useNetworkGroups';
+import { projectNetworkGroups } from '@/lib/topology/network-groups';
+import { mergeBuildingDevicePositions } from '@/lib/topology/building-device-layout';
 import { BuildingConnectionEditor } from '@/components/topology/BuildingConnectionEditor';
 import { readMapNavigation, saveTopologyNavigation } from '@/lib/topology/navigation-state';
 import { deviceBuildingId } from '@/lib/topology/building-devices';
 import { DeviceNode } from '../../components/topology/DeviceNode';
+import { DeviceMapOverview } from '@/components/topology/DeviceMapOverview';
 import { CustomEdge, BuildingConnectionEdge } from '../../components/topology/CustomEdge';
 import { ConnectionWizard } from '../../components/topology/ConnectionWizard';
 import { getZoomConfig, filterNodesByZoom, filterEdgesByZoom } from '../../lib/semanticZoom';
@@ -45,6 +53,7 @@ import { connectionInteractionEmphasis, connectionNeighborhood, filterNeighborho
 import { useConnectionTooltip } from '@/components/topology/ConnectionTooltip';
 import { NodeTooltip } from '@/components/topology/NodeTooltip';
 import { NeighborhoodToggle } from '@/components/topology/NeighborhoodToggle';
+import { TopologyIconCount } from '@/components/topology/TopologyIconCount';
 import { TopologyObjectMenu, TopologyMenuButton, useTopologyObjectMenu, topologyMenuShortcut, type TopologyObject, type TopologyAction } from '@/components/topology/TopologyObjectMenu';
 import { ConnectionSelectionHint } from '@/components/topology/ConnectionSelectionHint';
 import { TopologyInteractionMode } from '@/components/topology/TopologyInteractionMode';
@@ -108,7 +117,8 @@ import {
   CircleCheck,
   Link2,
   AlertTriangle,
-  EthernetPort
+  EthernetPort,
+  Cloud
 } from 'lucide-react';
 import { Minus, Info, MousePointer2, Move, CircleHelp } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -257,6 +267,11 @@ const connectionStyles: Record<string, { color: string; width: number; label: st
 
 const NetworkTopologyPage = () => {
   const router = useRouter();
+  const networkGroups = useNetworkGroups();
+  const toggleGroup = networkGroups.toggle;
+  const collapsedGroupBuildingIds = useMemo(() => new Set(networkGroups.groups.filter(group => !networkGroups.expanded.has(group.id)).flatMap(group => group.members.map(member => member.buildingId))), [networkGroups.groups, networkGroups.expanded]);
+  const [groupWorkspace, setGroupWorkspace] = useState<{ id?: string; source?: { deviceId: string; portId?: string } } | null>(null);
+  const inspectNetworkGroup = useCallback((id: string) => setGroupWorkspace({ id }), []);
   const [devices, setDevices] = useState<Device[]>([]);
   const [topologyStatusByDeviceId, setTopologyStatusByDeviceId] = useState<Record<string, DeviceTopologyStatus>>({});
   const [services, setServices] = useState<Service[]>([]);
@@ -277,6 +292,7 @@ const NetworkTopologyPage = () => {
   const nodeTypes = React.useMemo(() => ({
     building: BuildingNode,
     device: DeviceNode,
+    networkGroup: NetworkGroupNode,
   }), []);
   const edgeTypes = React.useMemo(() => ({
     custom: CustomEdge,
@@ -299,6 +315,10 @@ const NetworkTopologyPage = () => {
   const layoutSaveCount = useRef(0);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [viewMode, setViewMode] = useState<'physical' | 'services' | 'hierarchy' | 'zoom' | 'building'>('building');
+  // The balanced design is the entry view; saved positions are an explicit editing view only.
+  const [buildingMapStyle, setBuildingMapStyle] = useState<'balanced' | 'saved'>('balanced');
+  const focusedNetworkGroup = ['building', 'physical'].includes(viewMode) ? networkGroups.groups.find(group => networkGroups.expanded.has(group.id)) : undefined;
+  const balancedBuildingMap = viewMode === 'building' && !focusedNetworkGroup && buildingMapStyle === 'balanced';
   const { fitView, zoomIn, zoomOut, getNodes, getEdges, setViewport } = useReactFlow();
   const [viewportZoom, setViewportZoom] = useState(100);
   const [compactMap, setCompactMap] = useState(false);
@@ -325,16 +345,36 @@ const NetworkTopologyPage = () => {
   const [exportError, setExportError] = useState('');
   const [exportPreview, setExportPreview] = useState<string | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
+  const networkGroupCaptureRef = useRef<HTMLDivElement | null>(null);
+  const balancedMapCaptureRef = useRef<HTMLDivElement | null>(null);
+  const deviceMapCaptureRef = useRef<HTMLDivElement | null>(null);
+  // Enter the device tab with the single map and complete device labels.
+  const [physicalDetailed, setPhysicalDetailed] = useState(false);
+  const compactOverview = balancedBuildingMap || (viewMode === 'physical' && !focusedNetworkGroup && !physicalDetailed);
+  const returnToGroupRef = useRef<string | null>(null);
   const detailsRef = useRef<HTMLElement>(null);
   const fitOverview = useCallback((persist = false, ids?: ReadonlySet<string>) => {
-    const canvas = canvasRef.current;
-    if (viewMode !== 'building' || !canvas) { void fitView({ padding: .18, maxZoom: 1, duration: 0 }); return; }
-    const bounds = canvas.getBoundingClientRect();
-    const overlays = ['[data-topology-toolbar]', '[data-topology-feedback]'].map(selector => canvas.querySelector(selector)?.getBoundingClientRect()).filter(rect => rect && rect.height > 0);
-    const top = Math.max(80, ...overlays.map(rect => rect!.bottom - bounds.top + 16));
+    // Tools reserve their own row. Viewport coordinates belong to React Flow's
+    // remaining drawing area, rather than the outer region including that row.
+    const canvas = canvasRef.current?.querySelector<HTMLElement>('.react-flow');
+    if (!canvas) return;
+    if (getNodes().some(node => node.type === 'networkGroup')) {
+      const visible = getNodes().filter(node => !node.hidden && (!ids || ids.has(node.id)));
+      if (!visible.length) return;
+      const top = 20, bottom = 130;
+      const minX = Math.min(...visible.map(n => n.position.x)), minY = Math.min(...visible.map(n => n.position.y));
+      const width = Math.max(...visible.map(n => n.position.x + (n.width || (n.type === 'networkGroup' ? 280 : viewMode === 'building' ? 128 : 240)))) - minX;
+      const height = Math.max(...visible.map(n => n.position.y + (n.height || (n.type === 'networkGroup' ? 180 : viewMode === 'building' ? 116 : 200)))) - minY;
+      const availableHeight = Math.max(100, canvas.clientHeight - top - bottom);
+      const zoom = Math.max(.05, Math.min(1, (canvas.clientWidth - 80) / Math.max(1, width), availableHeight / Math.max(1, height)));
+      const viewport = { x: (canvas.clientWidth - width * zoom) / 2 - minX * zoom, y: top + (availableHeight - height * zoom) / 2 - minY * zoom, zoom };
+      if (persist) restoreViewport(viewport);
+      void setViewport(viewport, { duration: 0 }); return;
+    }
+    if (viewMode !== 'building') { void fitView({ padding: .18, maxZoom: 1, duration: 0 }); return; }
     const positions = Object.fromEntries(getNodes().filter(node => node.type === 'building' && (!ids || ids.has(node.id))).map(node => [node.id, node.position]));
     const routes = getEdges().flatMap(edge => edge.data?.buildingRoute && (!ids || (ids.has(edge.source) && ids.has(edge.target))) ? [edge.data.buildingRoute] : []);
-    const viewport = buildingMapViewport(positions, routes, canvas.clientWidth, canvas.clientHeight, top);
+    const viewport = buildingMapViewport(positions, routes, canvas.clientWidth, canvas.clientHeight, 20, 130);
     if (persist) restoreViewport(viewport);
     void setViewport(viewport, { duration: 0 });
   }, [viewMode, fitView, getNodes, getEdges, setViewport, restoreViewport]);
@@ -352,7 +392,7 @@ const NetworkTopologyPage = () => {
     let timer: ReturnType<typeof setTimeout>;
     const observer = new ResizeObserver(() => {
       clearTimeout(timer);
-      timer = setTimeout(() => { if (viewMode === 'building') { if (!navigationReady || !buildingLayoutReady || !flowReady || !nodesInitialized) return; if (retainedViewport.current) { void setViewport(retainedViewport.current, { duration: 0 }); return; } } if (onlyConnected && selectedBuildingNodeId && viewMode === 'building') fitOverview(false, new Set(getNodes().filter(node => !node.hidden).map(node => node.id))); else if (searchFocusNodeId && viewMode === 'building') void fitView({ nodes: [{ id: searchFocusNodeId }], padding: .5, minZoom: .8, maxZoom: 1.2, duration: 0 }); else fitOverview(); }, 100);
+      timer = setTimeout(() => { if (viewMode === 'building') { if (!navigationReady || !buildingLayoutReady || !flowReady || !nodesInitialized) return; if (retainedViewport.current) { void setViewport(retainedViewport.current, { duration: 0 }); return; } } if (onlyConnected && selectedBuildingNodeId && viewMode === 'building') fitOverview(false, new Set(getNodes().filter(node => !node.hidden).map(node => node.id))); else if (searchFocusNodeId && ['building', 'physical'].includes(viewMode)) void fitView({ nodes: [{ id: searchFocusNodeId }], padding: .5, minZoom: .8, maxZoom: 1.2, duration: 0 }); else fitOverview(); }, 100);
     });
     observer.observe(canvas);
     return () => { observer.disconnect(); clearTimeout(timer); };
@@ -402,6 +442,8 @@ const NetworkTopologyPage = () => {
   const changeView = (next: typeof viewMode) => {
     releaseViewport();
     setSelectedBuildingNodeId(null);
+    if (next === 'building') { setBuildingMapStyle('balanced'); setEditingTopology(false); }
+    if (next === 'physical') { setPhysicalDetailed(false); setEditingTopology(false); }
     setViewMode(next); setSelectedNode(null); setIsSidebarOpen(false); setExportError('');
     if (next === 'zoom') {
       setZoomLevel('building'); setSelectedBuilding(null); setSelectedFloor(null);
@@ -410,7 +452,7 @@ const NetworkTopologyPage = () => {
   };
   useEffect(() => {
     if (!graphView || !flowReady || !nodesInitialized || loading || (viewMode === 'building' && (!buildingLayoutReady || !navigationReady))) return;
-    const timer = setTimeout(() => { if (viewMode === 'building' && retainedViewport.current) { void setViewport(retainedViewport.current, { duration: 0 }); return; } if (onlyConnected && selectedBuildingNodeId && viewMode === 'building') fitOverview(false, new Set(getNodes().filter(node => !node.hidden).map(node => node.id))); else if (searchFocusNodeId && viewMode === 'building') void fitView({ nodes: [{ id: searchFocusNodeId }], padding: .5, minZoom: .8, maxZoom: 1.2, duration: 250 }); else fitOverview(); }, 100);
+    const timer = setTimeout(() => { if (viewMode === 'building' && retainedViewport.current) { void setViewport(retainedViewport.current, { duration: 0 }); return; } if (onlyConnected && selectedBuildingNodeId && viewMode === 'building') fitOverview(false, new Set(getNodes().filter(node => !node.hidden).map(node => node.id))); else if (searchFocusNodeId && ['building', 'physical'].includes(viewMode)) void fitView({ nodes: [{ id: searchFocusNodeId }], padding: .5, minZoom: .8, maxZoom: 1.2, duration: 250 }); else fitOverview(); }, 100);
     return () => clearTimeout(timer);
   }, [viewMode, searchQuery, filterDeviceType, filterStatus, filterCriticality, devices.length, graphView, flowReady, nodesInitialized, loading, compactMap, fitView, fitOverview, isSidebarOpen, expandedMap, buildingLayoutReady, layoutRevision, searchFocusNodeId, searchFocusRevision, navigationReady, retainedViewport, setViewport, onlyConnected, connectionDepth, selectedBuildingNodeId, getNodes]);
   
@@ -466,13 +508,15 @@ const NetworkTopologyPage = () => {
 
   // Export topology as PNG
   const onExport = useCallback(async () => {
-    const element = canvasRef.current?.querySelector('.react-flow') as HTMLElement | null;
+    const groupElement = networkGroupCaptureRef.current;
+    const element = groupElement || deviceMapCaptureRef.current || balancedMapCaptureRef.current || canvasRef.current?.querySelector('.react-flow') as HTMLElement | null;
     if (!element || exporting) return;
     setExporting(true); setExportError('');
     try {
-      const backgroundColor = getComputedStyle(canvasRef.current!).backgroundColor;
+      const backgroundColor = getComputedStyle(element).backgroundColor;
       const dataUrl = await toPng(element, {
         backgroundColor,
+        ...(groupElement ? { height: groupElement.scrollHeight } : {}),
         filter: node => !node.classList?.contains('react-flow__panel') && !node.classList?.contains('react-flow__controls'),
       });
       setExportPreview(dataUrl);
@@ -747,6 +791,7 @@ const NetworkTopologyPage = () => {
   };
 
   const handleNodeClick = (node: Node) => {
+    if (node.type === 'networkGroup') { inspectNetworkGroup(node.data.group.id); return; }
     if (viewMode === 'building' && node.type === 'building') {
       const building = buildings.find(b => `building-${b.id}` === node.id)
         || (node.data.buildingId === UNASSIGNED_BUILDING_ID ? { id: UNASSIGNED_BUILDING_ID, name: UNASSIGNED_BUILDING_NAME, organizationId: '' } : null);
@@ -773,6 +818,7 @@ const NetworkTopologyPage = () => {
     setIsSidebarOpen(true);
   };
   const handleEdgeClick = (_event: React.MouseEvent, edge: Edge) => {
+    if (edge.data?.isNetworkGroupRelation) { inspectNetworkGroup(edge.data.groupId); return; }
     if (edge.data?.connectionId) { selectConnection(edge.data.connectionId); return; }
     if (edge.data?.type === 'building-connection' && edge.data?.buildingConnection) {
       setEditingBuildingConnectionId(edge.data.buildingConnection.id);
@@ -1336,7 +1382,10 @@ const NetworkTopologyPage = () => {
       }
       
       const buildingsArray = Array.from(buildingMap.values()).filter(item => !hasFilters || item.devices.length > 0);
-      const buildingPositions = buildingGraphPositions(buildingsArray.map(item => item.building.id), buildingConnections, compactMap, UNASSIGNED_BUILDING_ID);
+      const collapsedBuildings = new Set(networkGroups.groups.filter(group => !networkGroups.expanded.has(group.id)).flatMap(group => group.members.map(member => member.buildingId)));
+      const layoutBuildings = buildingsArray.filter(item => !collapsedBuildings.has(item.building.id));
+      const defaultBuildingPositions = buildingGraphPositions(buildingsArray.map(item => item.building.id), buildingConnections, compactMap, UNASSIGNED_BUILDING_ID);
+      const buildingPositions = { ...defaultBuildingPositions, ...buildingGraphPositions(layoutBuildings.map(item => item.building.id), buildingConnections, compactMap, UNASSIGNED_BUILDING_ID, networkGroups.groups[0]?.sourceDevice.buildingId || undefined) };
 
       buildingsArray.forEach((buildingData) => {
         const { building, devices } = buildingData;
@@ -1488,7 +1537,8 @@ const NetworkTopologyPage = () => {
             portDownCount: portStatus?.portDownCount || 0,
             downPorts: portStatus?.downPorts || [],
             activeConnections: availableSources.connections ? connections.filter(c => (c.sourceDeviceId === device.id || c.targetDeviceId === device.id) && connectionState(c.status).key === 'up').length : undefined,
-            buildingName: device.rack?.room?.floor?.building?.name,
+            buildingId: getDeviceBuildingId(device),
+            buildingName: device.rack?.room?.floor?.building?.name || device.building?.name || buildings.find(building => building.id === getDeviceBuildingId(device))?.name,
             location: [device.rack?.room?.name, device.rack?.name].filter(Boolean).join(' / ') || 'Konum atanmamış',
           },
         };
@@ -1550,6 +1600,7 @@ const NetworkTopologyPage = () => {
     return { topologyNodes: newNodes, topologyEdges: filterEdgesByZoom(newEdges, newNodes) };
   }, [
     devices,
+    buildings,
     filteredDevices,
     hasFilters,
     compactMap,
@@ -1561,6 +1612,8 @@ const NetworkTopologyPage = () => {
     topologyStatusByDeviceId,
     semanticZoom,
     expandedBuildings,
+    networkGroups.groups,
+    networkGroups.expanded,
     getBuildingConnectionHandles,
     availableSources
   ]);
@@ -1575,7 +1628,15 @@ const NetworkTopologyPage = () => {
     const override = nodePositionOverrides[getNodePositionKey(node.id)];
     return override ? { ...node, position: override } : node;
   }), [generatedTopologyNodes, nodePositionOverrides, getNodePositionKey]);
-  const buildingRoutePositions = useMemo(() => Object.fromEntries(positionedTopologyNodes.filter(node => node.type === 'building').map(node => [node.id, node.position])), [positionedTopologyNodes]);
+  const groupAwarePositionedNodes = useMemo(() => {
+    if (viewMode !== 'building' || !networkGroups.groups.length) return positionedTopologyNodes;
+    const visible = generatedTopologyNodes.filter(node => node.type === 'building' && !collapsedGroupBuildingIds.has(node.data.buildingId));
+    const defaults = Object.fromEntries(visible.map(node => [node.id, node.position]));
+    const saved = Object.fromEntries(visible.flatMap(node => { const value = nodePositionOverrides[getNodePositionKey(node.id)]; return value ? [[node.id, value]] : []; }));
+    const positions = mergeBuildingDevicePositions(defaults, saved);
+    return positionedTopologyNodes.map(node => positions[node.id] ? { ...node, position: positions[node.id] } : node);
+  }, [viewMode, networkGroups.groups.length, positionedTopologyNodes, generatedTopologyNodes, collapsedGroupBuildingIds, nodePositionOverrides, getNodePositionKey]);
+  const buildingRoutePositions = useMemo(() => Object.fromEntries(groupAwarePositionedNodes.filter(node => node.type === 'building' && !collapsedGroupBuildingIds.has(node.data.buildingId)).map(node => [node.id, node.position])), [groupAwarePositionedNodes, collapsedGroupBuildingIds]);
   // Route the complete set, including hidden types, so filtering keeps the
   // remaining paths stable. Virtual unassigned buildings remain obstacles.
   const buildingRouting = useMemo(() => viewMode === 'building'
@@ -1633,26 +1694,49 @@ const NetworkTopologyPage = () => {
   const visibleBuildingConnectionCounts = useMemo(() => directConnectionCounts(topologyEdges.filter(edge => !edge.data?.routeBlocked)), [topologyEdges]);
 
   const topologyNodes = useMemo(() => {
-    return positionedTopologyNodes.map((node) => {
+    return groupAwarePositionedNodes.map((node) => {
       return { ...node, hidden: neighborhoodActive && !neighborhoodBuildingIds.has(node.id), selected: selectedNodeSnapshot?.id === node.id || (viewMode === 'building' && selectedBuildingNodeId === node.id),
         data: viewMode === 'building' ? { ...node.data, hopDistance: neighborhoodActive && connectionDepth === 2 ? buildingNeighborhood.distances.get(node.id) : undefined, tooltipId: hoveredBuildingNodeId === node.id && buildingNodeTooltip.anchor ? buildingNodeTooltip.id : undefined, hoverActive: !!hoveredBuildingConnection || !!hoveredBuildingNode, nodeEmphasis: nodeInteractionEmphasis(node.id, emphasisBuildingNodeId, connectedBuildingIds, hoveredBuildingConnection) } : node.data,
       };
     });
-  }, [positionedTopologyNodes, selectedNodeSnapshot, viewMode, selectedBuildingNodeId, emphasisBuildingNodeId, connectedBuildingIds, hoveredBuildingConnection, hoveredBuildingNode, hoveredBuildingNodeId, buildingNodeTooltip.anchor, buildingNodeTooltip.id, neighborhoodActive, neighborhoodBuildingIds, connectionDepth, buildingNeighborhood.distances]);
+  }, [groupAwarePositionedNodes, selectedNodeSnapshot, viewMode, selectedBuildingNodeId, emphasisBuildingNodeId, connectedBuildingIds, hoveredBuildingConnection, hoveredBuildingNode, hoveredBuildingNodeId, buildingNodeTooltip.anchor, buildingNodeTooltip.id, neighborhoodActive, neighborhoodBuildingIds, connectionDepth, buildingNeighborhood.distances]);
+
+
+  const allBuildingIcons = useMemo(() => {
+    const icons = new Map(buildings.map(building => [building.id, { id: `building-${building.id}`, name: building.name, description: building.city || undefined }]));
+    if (devices.some(device => { const id = getDeviceBuildingId(device); return !id || !icons.has(id); })) icons.set(UNASSIGNED_BUILDING_ID, { id: `building-${UNASSIGNED_BUILDING_ID}`, name: UNASSIGNED_BUILDING_NAME, description: 'Bina atanmamış cihazlar' });
+    return [...icons.values()];
+  }, [buildings, devices]);
+  const totalBuildingIconCount = allBuildingIcons.length;
+
 
   const topologySearchItems = useMemo<TopologySearchItem[]>(() => [
+    ...networkGroups.groups.map(group => ({ id: group.id, kind: 'networkGroup' as const, name: group.name, description: `${group.members.length} konum · ${group.sourceDevice.name}` })),
     ...buildings.map(building => ({ id: building.id, kind: 'building' as const, name: building.name, description: building.city })),
     ...(devices.some(device => !getDeviceBuildingId(device)) ? [{ id: UNASSIGNED_BUILDING_ID, kind: 'building' as const, name: UNASSIGNED_BUILDING_NAME }] : []),
     ...devices.map(device => ({ id: device.id, kind: 'device' as const, name: device.name,
       description: [device.managementIp, buildings.find(building => building.id === getDeviceBuildingId(device))?.name || UNASSIGNED_BUILDING_NAME].filter(Boolean).join(' · '),
     })),
-  ], [buildings, devices]);
+  ], [buildings, devices, networkGroups.groups]);
   const focusSearchResult = (item: TopologySearchItem) => {
+    if (item.kind === 'networkGroup') { if (!networkGroups.expanded.has(item.id)) toggleNetworkGroup(item.id); return; }
     const device = item.kind === 'device' ? devices.find(value => value.id === item.id) : undefined;
     const buildingId = device ? getDeviceBuildingId(device) || UNASSIGNED_BUILDING_ID : item.id;
     const building = buildings.find(value => value.id === buildingId)
       || (buildingId === UNASSIGNED_BUILDING_ID ? { id: UNASSIGNED_BUILDING_ID, name: UNASSIGNED_BUILDING_NAME, organizationId: '' } : null);
     if (!building) return;
+    networkGroups.reveal(building.id);
+    const memberGroup = networkGroups.groups.find(group => group.members.some(member => member.buildingId === building.id));
+    if (memberGroup) {
+      releaseViewport(); clearFilters(); setOnlyConnected(false); setSelectedNode(null); setIsSidebarOpen(false);
+      setSelectedBuildingNodeId(`building-${building.id}`); setSearchFocusNodeId(null);
+      if (device) { setSearchDeviceId(device.id); setSelectedBuildingForPopup(building); }
+      return;
+    }
+    if (viewMode === 'physical' && device) {
+      releaseViewport(); clearFilters(); setSearchFocusNodeId(device.id); setSearchFocusRevision(value => value + 1); selectDevice(device.id); return;
+    }
+    if (viewMode === 'physical') setViewMode('building');
     releaseViewport(); clearFilters(); setSelectedNode(null); setIsSidebarOpen(false); setSearchFocusNodeId(`building-${building.id}`);
     setSelectedBuildingNodeId(`building-${building.id}`);
     setSearchFocusRevision(value => value + 1);
@@ -1670,6 +1754,27 @@ const NetworkTopologyPage = () => {
 
   const menuNodes = useMemo(() => topologyNodes.map(node => ({ ...node, data: { ...node.data, onOpenMenu: (event: React.MouseEvent<HTMLButtonElement>) => openObjectMenu({ kind: node.type === 'building' ? 'building' : 'device', id: node.type === 'building' ? node.data.buildingId : node.data.deviceId || node.id }, event) } })), [topologyNodes, openObjectMenu]);
   const menuEdges = useMemo(() => topologyEdges.map(edge => ({ ...edge, data: { ...edge.data, onOpenMenu: (event: React.MouseEvent<HTMLButtonElement>) => openObjectMenu({ kind: edge.data?.buildingConnection ? 'building-connection' : 'device-connection', id: edge.data?.buildingConnection?.id || edge.data?.connectionId || edge.id }, event) } })), [topologyEdges, openObjectMenu]);
+  const networkGroupBuildingByDevice = useMemo(() => new Map(devices.flatMap(device => { const id = getDeviceBuildingId(device); return id ? [[device.id, id] as const] : []; })), [devices]);
+  const toggleNetworkGroup = useCallback((id: string) => { returnToGroupRef.current = networkGroups.expanded.has(id) ? id : null; releaseViewport(); toggleGroup(id); setSearchFocusNodeId(null); setSelectedNode(null); setIsSidebarOpen(false); setOnlyConnected(false); setSelectedBuildingNodeId(null); setLayoutRevision(value => value + 1); }, [toggleGroup, releaseViewport, networkGroups.expanded]);
+  useEffect(() => {
+    if (focusedNetworkGroup || !returnToGroupRef.current || !nodesInitialized) return;
+    // React Flow mounts its node controls after its canvas and measurements.
+    const timer = window.setTimeout(() => {
+      const name = networkGroups.groups.find(group => group.id === returnToGroupRef.current)?.name;
+      const button = [...(canvasRef.current?.querySelectorAll<HTMLButtonElement>('button[aria-label]') || [])].find(element => element.getAttribute('aria-label') === `${name}: Grubu aç`);
+      if (button) { button.focus({ preventScroll: true }); returnToGroupRef.current = null; }
+    }, 200);
+    return () => window.clearTimeout(timer);
+  }, [focusedNetworkGroup, nodesInitialized, layoutRevision, networkGroups.groups]);
+  const networkMap = useMemo(() => {
+    // Expansion has its own readable focus surface; the overview stays folded.
+    const graph = projectNetworkGroups(menuNodes, menuEdges, networkGroups.groups, new Set(), viewMode, networkGroupBuildingByDevice, toggleNetworkGroup, inspectNetworkGroup);
+    return { ...graph, nodes: graph.nodes.map(node => node.type === 'networkGroup' && nodePositionOverrides[getNodePositionKey(node.id)] ? { ...node, position: nodePositionOverrides[getNodePositionKey(node.id)] } : node) };
+  }, [menuNodes, menuEdges, networkGroups.groups, viewMode, networkGroupBuildingByDevice, toggleNetworkGroup, inspectNetworkGroup, nodePositionOverrides, getNodePositionKey]);
+  const hiddenBuildingIcons = useMemo(() => {
+    const shownIds = new Set(networkMap.nodes.filter(node => node.type === 'building' && !node.hidden).map(node => node.id));
+    return allBuildingIcons.filter(icon => !shownIds.has(icon.id));
+  }, [allBuildingIcons, networkMap.nodes]);
   const resolveMenuObject = (kind: 'node' | 'edge', id: string): TopologyObject | undefined => {
     if (kind === 'node') { const node = topologyNodes.find(value => value.id === id); return node ? { kind: node.type === 'building' ? 'building' : 'device', id: node.type === 'building' ? node.data.buildingId : node.data.deviceId || id } : undefined; }
     const edge = topologyEdges.find(value => value.id === id); return edge ? { kind: edge.data?.buildingConnection ? 'building-connection' : 'device-connection', id: edge.data?.buildingConnection?.id || edge.data?.connectionId || id } : undefined;
@@ -1685,6 +1790,7 @@ const NetworkTopologyPage = () => {
     const id = menuDevice.id; menuName = menuDevice.name;
     menuActions.push({ id: 'details', label: 'Ayrıntıları aç', run: () => selectDevice(id) }, { id: 'connections', label: 'Bağlı cihazları göster', disabled: !availableSources.connections, run: () => { setConnectionListDeviceId(id); setConnectionListQuery(''); setConnectionListStatus('all'); setShowConnectionList(true); } });
     if (menuDevice.managementIp) menuActions.push({ id: 'copy', label: 'Yönetim IP’sini kopyala', keepFocus: true, run: () => objectMenu.copyAddress(menuDevice.managementIp!) });
+    if (networkGroups.canManage) menuActions.push({ id: 'network-group', label: 'Bu noktadan ağ grubu oluştur', run: () => setGroupWorkspace({ source: { deviceId: id } }) });
   } else if (menuBuilding) {
     const building = menuBuilding; menuName = building.name;
     menuActions.push({ id: 'devices', label: 'Binadaki cihazları aç', run: () => { setSelectedBuildingNodeId('building-' + building.id); setSearchDeviceId(null); setSelectedBuildingForPopup(building); } }, { id: 'connections', label: 'Bağlantılı binaları göster', disabled: !availableSources.buildings, run: () => { releaseViewport(); setSelectedBuildingNodeId('building-' + building.id); setConnectionDepth(1); setOnlyConnected(true); setSearchFocusRevision(value => value + 1); } });
@@ -1729,62 +1835,23 @@ const NetworkTopologyPage = () => {
 
 
 
-  return (
-    <>
-      <TopologyObjectMenu menu={objectMenu} name={menuName} actions={menuActions} />
-      <Dialog open={showConnectionList} onOpenChange={setShowConnectionList}>
-        <DialogContent className="max-w-2xl" closeLabel="Bağlantı listesini kapat" onCloseAutoFocus={event => { if (selectedNode?.data.isDeviceConnection) { event.preventDefault(); detailsRef.current?.focus({ preventScroll: true }); } }}><DialogHeader><DialogTitle className="flex items-center gap-2"><Link2 className="h-5 w-5 text-primary" />Cihaz bağlantıları</DialogTitle><DialogDescription>Geçerli cihaz filtrelerine uyan bağlantılar. Bir kaydı seçerek uçları ve portları inceleyin. Bina bağlantıları için “Bağlantıları yönet”i kullanın.</DialogDescription></DialogHeader>
-          {connectionListDeviceId && <div className="flex flex-wrap items-center gap-2 text-xs"><span>{devices.find(device => device.id === connectionListDeviceId)?.name || 'Seçili cihaz'} · Doğrudan bağlantılar</span><Button size="sm" variant="ghost" onClick={() => setConnectionListDeviceId(null)}>Tüm bağlantıları göster</Button></div>}
-          <Input aria-label="Bağlantılarda ara" placeholder="Cihaz, port veya durum ile ara…" value={connectionListQuery} onChange={event => setConnectionListQuery(event.target.value)} />
-          <div className="space-y-1.5"><Label htmlFor="connection-list-status">Bağlantı durumu</Label><select id="connection-list-status" className={styles.select} value={connectionListStatus} onChange={event => setConnectionListStatus(event.target.value)}><option value="all">Tüm durumlar</option><option value="up">Açık</option><option value="down">Kapalı</option><option value="unknown">Bilinmiyor</option><option value="dormant">Beklemede</option></select></div>
-          <p className="text-xs text-muted-foreground" role="status">{availableSources.connections ? `${listedConnections.length} / ${visibleConnections.length} bağlantı` : 'Bağlantı sayısı doğrulanamadı.'}</p>
-          <div className={styles.connectionList}>{!availableSources.connections ? <p className={styles.listEmpty}>Bağlantı verileri alınamadı. Yenileyerek tekrar deneyin.</p> : !listedConnections.length ? <p className={styles.listEmpty}>{visibleConnections.length ? 'Aramaya uygun bağlantı bulunamadı.' : 'Bu görünümde kayıtlı cihaz bağlantısı yok. Cihazların aynı haritada bulunması aralarında bağlantı olduğu anlamına gelmez.'}</p> : listedConnections.map(link => <button type="button" key={link.id} onClick={() => { setShowConnectionList(false); selectConnection(link.id); }}><span><Server size={16} /><strong>{devices.find(device => device.id === link.sourceDeviceId)?.name || 'Bilinmeyen cihaz'} ↔ {devices.find(device => device.id === link.targetDeviceId)?.name || 'Bilinmeyen cihaz'}</strong></span><small>{link.sourcePortName || 'Port belirtilmemiş'} ↔ {link.targetPortName || 'Port belirtilmemiş'}</small><ConnectionStatus status={link.status} /></button>)}</div>
-        </DialogContent>
-      </Dialog>
-      <div className={styles.page}>
-        <header className={styles.header}>
-          <div className="min-w-0">
-            <PageHeading section="network" showIcon={false} className="!text-lg !font-semibold">Ağ topolojisi</PageHeading>
-            <p className={styles.subtitle}>Binalar, cihazlar ve bağlantılar için ağ haritası</p>
-          </div>
-          <div className={styles.headerActions}>
+  const pageActions = <>
             <Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="gap-1.5" aria-label="Ağ özetini göster"><Activity className="h-3.5 w-3.5 text-primary" /><span className="tabular-nums">{summaryUnavailable ? '—' : devices.length} cihaz</span><span className="text-muted-foreground">· {summaryUnavailable || !(graphView ? mapConnectionsAvailable : availableSources.buildings) ? '—' : graphView ? topologyEdges.length : buildingConnections.length} bağlantı</span></Button></PopoverTrigger><PopoverContent align="end" className="w-[440px] p-3"><p className="mb-3 text-sm font-semibold">Ağ özeti</p>
         <section className={styles.stats} aria-label="Ağ özeti">
           <TopologyStat icon={<Server className="h-4 w-4" />} label="Toplam cihaz" value={summaryUnavailable ? '—' : devices.length} hint={`${buildings.length} bina · ${devices.filter(isUnassignedDevice).length} konumsuz cihaz`} />
           <TopologyStat icon={<CircleCheck className="h-4 w-4" />} label="Aktif cihaz" value={summaryUnavailable ? '—' : networkSummary.active} hint={`${networkSummary.unknown} cihazın durumu bilinmiyor`} />
           <TopologyStat icon={<EthernetPort className="h-4 w-4" />} label="Kapalı port kaydı" value={summaryUnavailable || !availableSources.telemetry ? '—' : networkSummary.portDown} hint="NMS port uyarıları · kapsam garantisi vermez" warning={networkSummary.portDown > 0} />
-          <TopologyStat icon={<Link2 className="h-4 w-4" />} label="Görünen bağlantı" value={summaryUnavailable || !(graphView ? mapConnectionsAvailable : availableSources.buildings) ? '—' : graphView ? topologyEdges.length : buildingConnections.length} hint={graphView ? currentViewLabel : 'Binalar arası bağlantılar'} />
+          <TopologyStat icon={<Link2 className="h-4 w-4" />} label="Filtreye uyan bağlantı" value={summaryUnavailable || !(graphView ? mapConnectionsAvailable : availableSources.buildings) ? '—' : graphView ? topologyEdges.length : buildingConnections.length} hint={graphView ? currentViewLabel : 'Binalar arası bağlantılar'} />
         </section>
             </PopoverContent></Popover>
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => loadData(true)} disabled={loading || refreshing} aria-label={refreshing ? 'Yenileniyor' : 'Yenile'} title="Envanteri ve bağlantıları yenile"><RefreshCw className={cn('h-3.5 w-3.5', refreshing && 'animate-spin')} /><span className={styles.actionLabel}>{refreshing ? 'Yenileniyor' : 'Yenile'}</span></Button>
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => { void loadData(true); void networkGroups.load(); }} disabled={loading || refreshing} aria-label={refreshing ? 'Yenileniyor' : 'Yenile'} title="Envanteri ve bağlantıları yenile"><RefreshCw className={cn('h-3.5 w-3.5', refreshing && 'animate-spin')} /><span className={styles.actionLabel}>{refreshing ? 'Yenileniyor' : 'Yenile'}</span></Button>
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setGroupWorkspace({})} disabled={loading} aria-label="Ağ grupları"><Cloud className="h-3.5 w-3.5" /><span className={styles.actionLabel}>Ağ grupları</span><span className="tabular-nums">{networkGroups.groups.length}</span></Button>
+            {networkGroups.canManage && <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setGroupWorkspace({ source: { deviceId: '' } })} aria-label="Ağ grubu oluştur"><Plus className="h-3.5 w-3.5" /><span className={styles.actionLabel}>Ağ grubu oluştur</span></Button>}
             <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setShowManagementModal(true)} disabled={loading} aria-label="Bağlantıları yönet" title="Bağlantıları yönet"><Settings2 className="h-3.5 w-3.5" /><span className={styles.actionLabel}>Bağlantıları yönet</span></Button>
-            <Button variant="outline" size="icon" className="h-9 w-9" onClick={onExport} disabled={loading || !graphView || exporting || !topologyNodes.length} aria-label="Topolojiyi PNG olarak dışa aktar" title="Görünen haritayı PNG olarak indir">{exporting ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}</Button>
-            <Button onClick={() => { if (!editingTopology || !canEditBuildingLayout) return; setBuildingConnectionToEdit(null); setBuildingConnectionEndpoints(null); setShowBuildingConnectionModal(true); }} size="sm" aria-label="Yeni bağlantı" className="gap-1.5" disabled={loading || !editingTopology || !canEditBuildingLayout} title={!editingTopology ? 'Bağlantı oluşturmak için Düzenleme moduna geçin.' : undefined}><Plus className="h-4 w-4" /><span className={styles.actionLabel}>Yeni bağlantı</span></Button>
-          </div>
-        </header>
-
-        <div className={styles.viewToolbar}>
-          <div className={styles.viewTabs} role="tablist" aria-label="Topoloji görünümü" onKeyDown={event => {
-            const keys = ['building', 'physical', 'services', 'hierarchy', 'zoom'] as const;
-            const index = keys.indexOf(viewMode);
-            const next = event.key === 'ArrowRight' ? (index + 1) % keys.length : event.key === 'ArrowLeft' ? (index - 1 + keys.length) % keys.length : event.key === 'Home' ? 0 : event.key === 'End' ? keys.length - 1 : -1;
-            if (next < 0) return;
-            event.preventDefault(); changeView(keys[next]); document.getElementById(`topology-tab-${keys[next]}`)?.focus();
-          }}>
-            {([
-              { key: 'building', label: 'Binalar', icon: Building2 },
-              { key: 'physical', label: 'Cihazlar', icon: Network },
-              { key: 'services', label: 'Servisler', icon: Server },
-              { key: 'hierarchy', label: 'Hiyerarşi', icon: Layers },
-              { key: 'zoom', label: 'Konum keşfi', icon: Search },
-            ] as const).map(view => <button key={view.key} id={`topology-tab-${view.key}`} role="tab" type="button" aria-selected={viewMode === view.key} aria-controls="topology-view-panel" tabIndex={viewMode === view.key ? 0 : -1} onClick={() => changeView(view.key)}><view.icon className="h-4 w-4" />{view.label}</button>)}
-          </div>
-          {graphView && <div className={styles.tools}>
-            <div className={styles.search} hidden={viewMode === 'building'}>
-              <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Cihaz adı veya IP ile ara…" value={searchQuery} onChange={event => setSearchQuery(event.target.value)} className="pl-9 pr-9" aria-label="Topolojide cihaz ara" />
-              {searchQuery && <Button variant="ghost" size="icon" className="absolute right-0 top-0 h-10 w-9" onClick={() => setSearchQuery('')} aria-label="Aramayı temizle"><X className="h-3.5 w-3.5" /></Button>}
-            </div>
+            <Button variant="outline" size="sm" className="h-9 shrink-0 gap-1.5" onClick={onExport} disabled={loading || !graphView || exporting || !topologyNodes.length} aria-label="Topolojiyi PNG olarak dışa aktar" title="Görünen haritayı PNG olarak indir">{exporting ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}<span>PNG olarak indir</span></Button>
+            <Button onClick={() => { if (!editingTopology || !canEditBuildingLayout) return; setBuildingConnectionToEdit(null); setBuildingConnectionEndpoints(null); setShowBuildingConnectionModal(true); }} size="sm" aria-label="Yeni bağlantı" className="gap-1.5" disabled={loading || !!focusedNetworkGroup || !editingTopology || !canEditBuildingLayout} title={focusedNetworkGroup ? 'Bağlantı eklemek için konumun kendi topolojisini açın.' : !editingTopology ? 'Bağlantı oluşturmak için Düzenleme moduna geçin.' : undefined}><Plus className="h-4 w-4" /><span className={styles.actionLabel}>Yeni bağlantı</span></Button>
+</>;
+  const filterControls = <>
             <Popover><PopoverTrigger asChild><Button variant="outline" className="gap-2"><Filter className="h-4 w-4" />Filtreler{activeFilterCount > 0 && <Badge variant="secondary" icon={null}>{activeFilterCount}</Badge>}</Button></PopoverTrigger>
               <PopoverContent align="end" className="w-80 space-y-4" aria-labelledby="topology-filters-heading">
                 <div><h2 id="topology-filters-heading" className="text-sm font-semibold">Görünümü filtrele</h2><p className="mt-1 text-xs text-muted-foreground">Seçimler haritadaki cihazlara uygulanır.</p></div>
@@ -1794,6 +1861,52 @@ const NetworkTopologyPage = () => {
                 <Button variant="outline" size="sm" className="w-full gap-2" disabled={!hasFilters} onClick={clearFilters}><RotateCcw className="h-3.5 w-3.5" />Filtreleri sıfırla</Button>
               </PopoverContent>
             </Popover>
+  </>;
+
+  return (
+    <>
+      <TopologyObjectMenu menu={objectMenu} name={menuName} actions={menuActions} />
+      {groupWorkspace && <NetworkGroupWorkspace groups={networkGroups.groups} canManage={networkGroups.canManage} initialId={groupWorkspace.id} initialSource={groupWorkspace.source} expanded={networkGroups.expanded} onToggle={id => { toggleNetworkGroup(id); setGroupWorkspace(null); }} onRefresh={networkGroups.load} onClose={() => setGroupWorkspace(null)} devices={devices.map(device => ({ id: device.id, status: device.status, buildingId: getDeviceBuildingId(device) }))} onFocusMember={id => { const building = buildings.find(b => b.id === id); if (building) { networkGroups.reveal(id); releaseViewport(); setViewMode('building'); clearFilters(); setOnlyConnected(false); setSelectedBuildingNodeId(`building-${id}`); setSearchFocusNodeId(`building-${id}`); setSearchFocusRevision(v => v + 1); setSearchDeviceId(null); setSelectedBuildingForPopup(building); } }} />}
+      <Dialog open={showConnectionList} onOpenChange={setShowConnectionList}>
+        <DialogContent closeButtonText="Kapat" className="max-w-2xl" closeLabel="Bağlantı listesini kapat" onCloseAutoFocus={event => { if (selectedNode?.data.isDeviceConnection) { event.preventDefault(); detailsRef.current?.focus({ preventScroll: true }); } }}><DialogHeader><DialogTitle className="flex items-center gap-2"><Link2 className="h-5 w-5 text-primary" />Cihaz bağlantıları</DialogTitle><DialogDescription>Geçerli cihaz filtrelerine uyan bağlantılar. Bir kaydı seçerek uçları ve portları inceleyin. Bina bağlantıları için “Bağlantıları yönet”i kullanın.</DialogDescription></DialogHeader>
+          {connectionListDeviceId && <div className="flex flex-wrap items-center gap-2 text-xs"><span>{devices.find(device => device.id === connectionListDeviceId)?.name || 'Seçili cihaz'} · Doğrudan bağlantılar</span><Button size="sm" variant="ghost" onClick={() => setConnectionListDeviceId(null)}>Tüm bağlantıları göster</Button></div>}
+          <Input aria-label="Bağlantılarda ara" placeholder="Cihaz, port veya durum ile ara…" value={connectionListQuery} onChange={event => setConnectionListQuery(event.target.value)} />
+          <div className="space-y-1.5"><Label htmlFor="connection-list-status">Bağlantı durumu</Label><select id="connection-list-status" className={styles.select} value={connectionListStatus} onChange={event => setConnectionListStatus(event.target.value)}><option value="all">Tüm durumlar</option><option value="up">Açık</option><option value="down">Kapalı</option><option value="unknown">Bilinmiyor</option><option value="dormant">Beklemede</option></select></div>
+          <p className="text-xs text-muted-foreground" role="status">{availableSources.connections ? `${listedConnections.length} / ${visibleConnections.length} bağlantı` : 'Bağlantı sayısı doğrulanamadı.'}</p>
+          <div className={styles.connectionList}>{!availableSources.connections ? <p className={styles.listEmpty}>Bağlantı verileri alınamadı. Yenileyerek tekrar deneyin.</p> : !listedConnections.length ? <p className={styles.listEmpty}>{visibleConnections.length ? 'Aramaya uygun bağlantı bulunamadı.' : 'Bu görünümde kayıtlı cihaz bağlantısı yok. Cihazların aynı haritada bulunması aralarında bağlantı olduğu anlamına gelmez.'}</p> : listedConnections.map(link => <button type="button" key={link.id} onClick={() => { setShowConnectionList(false); selectConnection(link.id); }}><span><Server size={16} /><strong>{devices.find(device => device.id === link.sourceDeviceId)?.name || 'Bilinmeyen cihaz'} ↔ {devices.find(device => device.id === link.targetDeviceId)?.name || 'Bilinmeyen cihaz'}</strong></span><small>{link.sourcePortName || 'Port belirtilmemiş'} ↔ {link.targetPortName || 'Port belirtilmemiş'}</small><ConnectionStatus status={link.status} /></button>)}</div>
+        </DialogContent>
+      </Dialog>
+      <div className={cn(styles.page, compactOverview && styles.buildingPage)}>
+        <header className={styles.header}>
+          <div className="min-w-0">
+            <PageHeading section="network" showIcon={false} className={compactOverview ? "text-2xl! font-semibold!" : "text-lg! font-semibold!"}>Ağ topolojisi</PageHeading>
+            <p className={styles.subtitle}>Binalar, cihazlar ve bağlantılar için ağ haritası</p>
+          </div>
+          {!compactOverview && <div className={styles.headerActions}>{pageActions}</div>}
+        </header>
+
+        <div className={styles.viewToolbar}>
+          <div className={styles.viewTabs} role="tablist" aria-label="Topoloji görünümü" onKeyDown={event => {
+            const keys = ['building', 'services', 'hierarchy', 'zoom'] as const;
+            const index = keys.findIndex(key => key === viewMode);
+            const next = event.key === 'ArrowRight' ? (index + 1) % keys.length : event.key === 'ArrowLeft' ? (index - 1 + keys.length) % keys.length : event.key === 'Home' ? 0 : event.key === 'End' ? keys.length - 1 : -1;
+            if (next < 0) return;
+            event.preventDefault(); changeView(keys[next]); document.getElementById(`topology-tab-${keys[next]}`)?.focus();
+          }}>
+            {([
+              { key: 'building', label: 'Binalar', icon: Building2 },
+              { key: 'services', label: 'Servisler', icon: Server },
+              { key: 'hierarchy', label: 'Hiyerarşi', icon: Layers },
+              { key: 'zoom', label: 'Konum keşfi', icon: Search },
+            ] as const).map(view => <button key={view.key} id={`topology-tab-${view.key}`} role="tab" type="button" aria-selected={viewMode === view.key} aria-controls="topology-view-panel" tabIndex={viewMode === view.key ? 0 : -1} onClick={() => changeView(view.key)}><view.icon className="h-4 w-4" />{view.label}</button>)}
+          </div>
+          {graphView && !compactOverview && <div className={styles.tools}>
+            <div className={styles.search} hidden={viewMode === 'building'}>
+              <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+              <Input placeholder="Cihaz adı veya IP ile ara…" value={searchQuery} onChange={event => setSearchQuery(event.target.value)} className="pl-9 pr-24" aria-label="Topolojide cihaz ara" />
+              {searchQuery && <Button variant="ghost" size="sm" className="absolute right-1 top-1 h-8 gap-1.5 px-2 text-xs" onClick={() => setSearchQuery('')} aria-label="Aramayı temizle"><X className="h-3.5 w-3.5" /><span>Temizle</span></Button>}
+            </div>
+            {filterControls}
           </div>}
         </div>
         {graphView && hasFilters && <div className={styles.activeFilters} aria-label="Etkin filtreler">
@@ -1857,7 +1970,7 @@ const NetworkTopologyPage = () => {
                       </Card>
                     ) : (
                       organizations.map(org => (
-                        <Card key={org.id} className="overflow-hidden border-border/50 shadow-sm">
+                        <Card key={org.id} className="overflow-hidden border-border/50 shadow-xs">
                           <button
                             onClick={() => toggleExpand(org.id)}
                             className="w-full p-5 flex items-center justify-between hover:bg-muted/50 transition-colors text-left"
@@ -1975,7 +2088,7 @@ const NetworkTopologyPage = () => {
               <div className={styles.exploration}>
                 {/* Breadcrumb Navigation */}
                 {breadcrumbs.length > 0 && (
-                  <div className="sticky top-0 z-20 bg-background/80 backdrop-blur-md border-b border-border px-6 py-4 shadow-sm">
+                  <div className="sticky top-0 z-20 bg-background/80 backdrop-blur-md border-b border-border px-6 py-4 shadow-xs">
                     <div className="flex items-center gap-3">
                       <Button
                         onClick={() => {
@@ -1999,7 +2112,7 @@ const NetworkTopologyPage = () => {
                             variant="outline"
                             size="sm"
                             onClick={() => handleBreadcrumbClick(index)}
-                            className="h-9 px-3 bg-background border-border hover:border-primary hover:text-primary font-bold shadow-sm"
+                            className="h-9 px-3 bg-background border-border hover:border-primary hover:text-primary font-bold shadow-xs"
                           >
                             <span className="mr-2">
                               {crumb.level === 'building' && '🏢'}
@@ -2066,9 +2179,9 @@ const NetworkTopologyPage = () => {
                               <button
                                 key={building.id}
                                 onClick={() => handleZoomToBuilding(building)}
-                                className="group relative flex flex-col h-full text-left bg-card hover:bg-muted/30 border border-border hover:border-primary transition-all duration-300 rounded-2xl shadow-sm hover:shadow-2xl hover:-translate-y-1 overflow-hidden"
+                                className="group relative flex flex-col h-full text-left bg-card hover:bg-muted/30 border border-border hover:border-primary transition-all duration-300 rounded-2xl shadow-xs hover:shadow-2xl hover:-translate-y-1 overflow-hidden"
                               >
-                                <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-br from-primary/10 to-transparent rounded-bl-full -mr-10 -mt-10 group-hover:from-primary/20 transition-colors" />
+                                <div className="absolute top-0 right-0 w-40 h-40 bg-linear-to-br from-primary/10 to-transparent rounded-bl-full -mr-10 -mt-10 group-hover:from-primary/20 transition-colors" />
                                 
                                 <div className="p-8 flex flex-col h-full relative z-10">
                                   <div className="flex items-start justify-between mb-6">
@@ -2148,7 +2261,7 @@ const NetworkTopologyPage = () => {
                               <button
                                 key={floor.id}
                                 onClick={() => handleZoomToFloor(floor)}
-                                className="group relative flex flex-col text-left bg-card hover:bg-muted/30 border border-border hover:border-primary transition-all duration-300 rounded-2xl shadow-sm hover:shadow-xl hover:-translate-y-1 overflow-hidden"
+                                className="group relative flex flex-col text-left bg-card hover:bg-muted/30 border border-border hover:border-primary transition-all duration-300 rounded-2xl shadow-xs hover:shadow-xl hover:-translate-y-1 overflow-hidden"
                               >
                                 <div className="p-6 flex flex-col h-full relative z-10">
                                   <div className="flex items-center justify-between mb-6">
@@ -2218,7 +2331,7 @@ const NetworkTopologyPage = () => {
                               <button
                                 key={room.id}
                                 onClick={() => handleZoomToRoom(room)}
-                                className="group relative flex flex-col text-left bg-card hover:bg-muted/30 border border-border hover:border-primary transition-all duration-300 rounded-2xl shadow-sm hover:shadow-xl hover:-translate-y-1 overflow-hidden"
+                                className="group relative flex flex-col text-left bg-card hover:bg-muted/30 border border-border hover:border-primary transition-all duration-300 rounded-2xl shadow-xs hover:shadow-xl hover:-translate-y-1 overflow-hidden"
                                 aria-label={`${room.name} odasına git. ${rackCount} kabinet, ${roomDevices.length} cihaz içeriyor.`}
                               >
                                 <div className="p-6 flex flex-col h-full relative z-10">
@@ -2284,7 +2397,7 @@ const NetworkTopologyPage = () => {
                               <button
                                 key={rack.id}
                                 onClick={() => handleZoomToRack(rack)}
-                                className="group relative flex flex-col text-left bg-card hover:bg-muted/30 border border-border hover:border-primary transition-all duration-300 rounded-2xl shadow-sm hover:shadow-xl hover:-translate-y-1 overflow-hidden"
+                                className="group relative flex flex-col text-left bg-card hover:bg-muted/30 border border-border hover:border-primary transition-all duration-300 rounded-2xl shadow-xs hover:shadow-xl hover:-translate-y-1 overflow-hidden"
                                 aria-label={`${rack.name} kabinetine git. ${rack.maxUnits}U kapasite, ${rackDevices.length} cihaz içeriyor.`}
                               >
                                 {rack.imageUrl ? (
@@ -2294,11 +2407,11 @@ const NetworkTopologyPage = () => {
                                       alt={`${rack.name} fotoğrafı`}
                                       className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                                     />
-                                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                                    <div className="absolute inset-0 bg-linear-to-t from-black/60 to-transparent" />
                                   </div>
                                 ) : (
-                                  <div className="h-32 w-full bg-gradient-to-br from-slate-800 to-slate-900 relative flex items-center justify-center overflow-hidden">
-                                    <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-blue-500 via-transparent to-transparent" />
+                                  <div className="h-32 w-full bg-linear-to-br from-slate-800 to-slate-900 relative flex items-center justify-center overflow-hidden">
+                                    <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_center,var(--tw-gradient-stops))] from-blue-500 via-transparent to-transparent" />
                                     <div className="grid grid-cols-1 gap-1 w-1/3 opacity-30">
                                       {[...Array(8)].map((_, i) => (
                                         <div key={i} className="h-1 bg-blue-400 rounded-full" />
@@ -2380,7 +2493,7 @@ const NetworkTopologyPage = () => {
                               
 
                               return (
-                                <Card key={device.id} className="group overflow-hidden border-border hover:border-primary transition-all duration-300 shadow-sm hover:shadow-xl">
+                                <Card key={device.id} className="group overflow-hidden border-border hover:border-primary transition-all duration-300 shadow-xs hover:shadow-xl">
                                   <CardContent className="p-0">
                                     <div className="p-6 border-b border-border/50">
                                       <div className="flex items-center justify-between mb-4">
@@ -2447,17 +2560,63 @@ const NetworkTopologyPage = () => {
             ) : (
               // TOPOLOGY VIEWS
               <div className={cn(styles.workspace, expandedMap && styles.workspaceExpanded)} onKeyDown={event => { if (event.key === 'Escape' && expandedMap) { event.preventDefault(); setExpandedMap(false); } }}>
+                {focusedNetworkGroup ? <NetworkGroupFocus key={focusedNetworkGroup.id}
+                  group={focusedNetworkGroup}
+                  devices={devices.map(device => ({ ...device, buildingId: getDeviceBuildingId(device) || null }))}
+                  visibleIds={visibleDeviceIds} filtered={hasFilters}
+                  view={viewMode === 'physical' ? 'physical' : 'building'}
+                  focusBuildingId={selectedBuildingNodeId?.replace(/^building-/, '')}
+                  onClose={() => toggleNetworkGroup(focusedNetworkGroup.id)}
+                  onInspect={() => inspectNetworkGroup(focusedNetworkGroup.id)}
+                  onOpenSite={(buildingId, deviceId) => { const building = buildings.find(item => item.id === buildingId); if (building) { setSearchDeviceId(deviceId || null); setSelectedBuildingNodeId(`building-${buildingId}`); setSelectedBuildingForPopup(building); } }}
+                  onOpenSource={() => selectDevice(focusedNetworkGroup.sourceDeviceId)}
+                  onConnections={() => { setConnectionListDeviceId(focusedNetworkGroup.sourceDeviceId); setConnectionListQuery(''); setConnectionListStatus('all'); setShowConnectionList(true); }}
+                  onClearFilters={clearFilters}
+                  captureRef={networkGroupCaptureRef}
+                  expandedMap={expandedMap} onExpand={() => setExpandedMap(value => !value)}
+                /> : balancedBuildingMap ? <BuildingMapOverview
+                  nodes={networkMap.nodes} edges={networkMap.edges} buildings={buildings} links={buildingConnections} groups={networkGroups.groups}
+                  unassignedId={UNASSIGNED_BUILDING_ID} unassignedCount={devices.filter(isUnassignedDevice).length}
+                  searchItems={topologySearchItems} onSearch={focusSearchResult} focusNodeId={searchFocusNodeId} focusRevision={searchFocusRevision}
+                  returnGroupId={returnToGroupRef.current} captureRef={balancedMapCaptureRef}
+                  onNodeClick={handleNodeClick} onEdgeClick={handleEdgeClick}
+                  onNodeMenu={(event, node) => { const target = resolveMenuObject('node', node.id); if (target) openObjectMenu(target, event); }}
+                  onEdgeMenu={(event, edge) => { const target = resolveMenuObject('edge', edge.id); if (target) openObjectMenu(target, event); }}
+                  onUseSavedLayout={() => { setBuildingMapStyle('saved'); releaseViewport(); setSearchFocusNodeId(null); setLayoutRevision(value => value + 1); }}
+                  onClearFocus={() => { setSearchFocusNodeId(null); setSelectedBuildingNodeId(null); setSelectedNode(null); }}
+                  onUnassigned={() => { setSearchDeviceId(null); setSelectedBuildingForPopup({ id: UNASSIGNED_BUILDING_ID, name: UNASSIGNED_BUILDING_NAME, organizationId: '' }); }}
+                  onExpand={() => setExpandedMap(value => !value)} expanded={expandedMap}
+                  filters={filterControls} actions={pageActions} error={networkGroups.error}
+                  connectionFilters={<ConnectionTypeLegend labelsVisible={buildingLabelsVisible} onLabelsChange={setBuildingLabelsVisible} label="Binalar arası bağlantı türü filtreleri" options={buildingConnectionTypeOptions} hidden={hiddenBuildingConnectionTypes} visibleCount={topologyEdges.length} totalCount={generatedTopologyEdges.length} onToggle={value => setHiddenBuildingConnectionTypes(previous => toggleConnectionType(previous, value))} onReset={() => setHiddenBuildingConnectionTypes(new Set())} />}
+                /> : viewMode === 'physical' && !physicalDetailed ? <DeviceMapOverview
+                  nodes={networkMap.nodes} edges={networkMap.edges.map(edge => { const link = connections.find(item => item.id === edge.id); return link ? { ...edge, data: { ...edge.data, sourcePortName: link.sourcePortName, targetPortName: link.targetPortName } } : edge; })}
+                  selectedId={selectedNode?.id} focusId={searchFocusNodeId} focusRevision={searchFocusRevision}
+                  expanded={expandedMap} onExpand={() => setExpandedMap(value => !value)}
+                  onDetailed={() => { setPhysicalDetailed(true); setEditingTopology(false); }}
+                  onSelectConnection={selectConnection}
+                  onNodeClick={handleNodeClick} onEdgeClick={handleEdgeClick}
+                  onNodeMenu={(event, node) => { const target = resolveMenuObject('node', node.id); if (target) openObjectMenu(target, event); }}
+                  onEdgeMenu={(event, edge) => { const target = resolveMenuObject('edge', edge.id); if (target) openObjectMenu(target, event); }}
+                  captureRef={deviceMapCaptureRef} connectionsAvailable={availableSources.connections} totalDevices={filteredDevices.length}
+                  searchItems={topologySearchItems} onSearch={focusSearchResult} filters={filterControls} actions={pageActions} returnGroupId={returnToGroupRef.current}
+                  error={networkGroups.error} onRetryGroups={() => void networkGroups.load()}
+                  onClearSelection={() => { setSelectedNode(null); setIsSidebarOpen(false); setSearchFocusNodeId(null); }}
+                /> : <>
                 <div className={styles.canvas} ref={canvasRef} tabIndex={-1} aria-label="Topoloji haritası" role="region">
                   <div className={styles.mapOverlays}>
                   <div className={styles.mapHeading} data-topology-toolbar>
+                    {viewMode === 'physical' && <Button variant="outline" size="sm" onClick={() => { setPhysicalDetailed(false); setEditingTopology(false); }}>Dengeli görünüme dön</Button>}
+                    {viewMode === 'building' && <Button variant="outline" size="sm" onClick={() => { setBuildingMapStyle('balanced'); setEditingTopology(false); setSearchFocusNodeId(null); releaseViewport(); }}>Dengeli görünüme dön</Button>}
                     <TopologyInteractionMode editing={editingTopology} onChange={setEditingTopology} canEdit={buildingLayoutReady && canEditBuildingLayout} disabled={loading || layoutResetting || layoutStatus === 'saving'} label="Topoloji etkileşim modu" />
-                    {viewMode === 'building' && <div className="flex min-w-0 flex-1 basis-64 items-center"><TopologySearch items={topologySearchItems} onSelect={focusSearchResult} label="Topolojide bina veya cihaz ara" placeholder="Bina veya cihaz ara ve odaklan…" disabled={loading || !buildingLayoutReady} /></div>}
+                    {['building', 'physical'].includes(viewMode) && <div className="flex min-w-0 flex-1 basis-64 items-center"><TopologySearch items={topologySearchItems} onSelect={focusSearchResult} label="Topolojide bina veya cihaz ara" placeholder="Bina veya cihaz ara ve odaklan…" disabled={loading || !buildingLayoutReady} /></div>}
                     {viewMode === 'building' && <Button type="button" variant="ghost" size="sm" className="h-8 gap-1.5 px-2 text-xs" disabled={loading || !navigationReady || !buildingLayoutReady || !flowReady || !nodesInitialized} title="İlk otomatik yakınlaştırma ve kaydırma görünümüne dön ve kaydet" onClick={() => { closeBuildingNodeTooltip(); setHoveredBuildingConnectionId(null); if (neighborhoodActive) toggleBuildingNeighborhood(true); else fitOverview(true); }}><RotateCcw size={14} aria-hidden="true" />Görünümü sıfırla</Button>}
-                    <span className={styles.mapMeta}><Network className="h-3.5 w-3.5 text-primary" />{currentViewLabel}<span className="font-normal text-muted-foreground">{topologyNodes.filter(node => !node.hidden).length} öğe · {mapConnectionsAvailable ? topologyEdges.length : '—'} bağlantı</span></span>
+                    <span className={styles.mapMeta}><Network className="h-3.5 w-3.5 text-primary" />{currentViewLabel}<span className="font-normal text-muted-foreground">{viewMode !== 'building' && <>{topologyNodes.filter(node => !node.hidden).length} öğe · </>}{mapConnectionsAvailable ? topologyEdges.length : '—'} bağlantı</span></span>
                     <div className={styles.mapTools}><Button size="sm" variant="ghost" className={`${styles.mapExpandButton} h-8 shrink-0 gap-1.5 text-xs`} aria-label={expandedMap ? 'Normal görünüme dön' : 'Haritayı genişlet'} title={expandedMap ? 'Normal görünüme dön · Esc' : 'Haritayı genişlet'} onClick={() => setExpandedMap(!expandedMap)}>{expandedMap ? <X className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}<span>{expandedMap ? 'Normal görünüme dön' : 'Haritayı genişlet'}</span></Button><Button variant="ghost" size="sm" aria-label="Bağlantı listesi" title="Bağlantı listesi" className="h-8 gap-1.5 text-xs" onClick={() => { setConnectionListDeviceId(null); setConnectionListQuery(''); setConnectionListStatus('all'); setShowConnectionList(true); }}><Link2 size={14} /><span className={styles.mapToolLabel}>Bağlantı listesi</span></Button><Popover><PopoverTrigger asChild><Button size="sm" variant="ghost" aria-label="Harita rehberi" title="Harita rehberi" className="h-8 gap-1.5 text-xs"><Info className="h-3.5 w-3.5" /><span className={styles.mapToolLabel}>Harita rehberi</span></Button></PopoverTrigger><PopoverContent align="end" className="w-72 space-y-3"><p className="text-sm font-semibold">Haritayı keşfedin</p><p className="flex gap-2 text-xs text-muted-foreground"><Move className="h-4 w-4 shrink-0" />Boş alanı sürükleyerek haritada gezinin.</p><p className="flex gap-2 text-xs text-muted-foreground"><MousePointer2 className="h-4 w-4 shrink-0" />Bir cihaza veya bağlantı çizgisine tıklayarak ayrıntılarını açın. Klavyeyle incelemek için bağlantı listesini kullanın.</p><p className="text-xs text-muted-foreground">İkon taşıma ve bağlantı oluşturma yalnızca Düzenleme modunda kullanılabilir.</p><div className="space-y-2 border-t border-border pt-3 text-xs"><p className="font-medium">Binalar arası bağlantı renkleri</p>{BUILDING_CONNECTION_LEGEND.map(group => <p key={group.label}><span aria-hidden="true" className="mr-2 inline-block w-6 border-t-2" style={{ borderColor: group.color }} />{group.label}</p>)}<p className="text-muted-foreground">WAN / kablosuz: kablosuz, mikrodalga, kiralık hat, MPLS ve VPN. Düz çizgi açık, kesikli çizgi diğer durumları gösterir.</p><p className="border-t border-border pt-2">Cihaz haritasında çizgi rengi ve etiketi bağlantı durumunu gösterir. Düz yeşil: açık · kesik kırmızı: kapalı · noktalı gri: bilinmiyor.</p></div></PopoverContent></Popover></div>
                   </div>
                   <div className={styles.mapFeedback} data-topology-feedback>
-                  {viewMode === 'building' && topologyEdges.some(edge => edge.data.routeBlocked) && <p role="status" className={styles.editingNotice}>Bazı bağlantılar için güvenli çizgi rotası bulunamadı. Düzenleme modunda binalar arasında boşluk bırakın; bağlantı bilgileri Bağlantıları yönet listesinde korunur.</p>}
+                  {networkGroups.error && <p role="alert" className={styles.editingNotice}>{networkGroups.error} <Button variant="outline" size="sm" onClick={() => void networkGroups.load()}>Ağ gruplarını yeniden yükle</Button></p>}
+                  {networkGroups.groups.length > 0 && ['building', 'physical'].includes(viewMode) && <p className="text-[11px] text-muted-foreground">Noktalı turkuaz çizgiler mantıksal ağ grubu ilişkileridir; fiziksel bağlantı sayısına dahil değildir.</p>}
+                  {viewMode === 'building' && networkMap.edges.some(edge => edge.data?.routeBlocked) && <p role="status" className={styles.editingNotice}>Bazı bağlantılar için güvenli çizgi rotası bulunamadı. Düzenleme modunda binalar arasında boşluk bırakın; bağlantı bilgileri Bağlantıları yönet listesinde korunur.</p>}
                   {viewMode === 'building' && (editingTopology || layoutStatus === 'error' || layoutStatus === 'loading') && <div className={styles.editingNotice}>
                     <p role="status">{editingTopology && canEditBuildingLayout ? 'Düzenleme modu: İkonu gövdesinden sürükleyerek taşıyın. Bağlantı için kenarındaki noktadan başka bir binanın noktasına sürükleyin.' : 'Görüntüleme modu: Binaları ve bağlantıları inceleyin. Taşımak veya bağlantı oluşturmak için Düzenleme moduna geçin.'}</p>
                     <div className="flex flex-wrap items-center gap-2">
@@ -2469,17 +2628,17 @@ const NetworkTopologyPage = () => {
                   {activeBuildingNode && <ConnectionSelectionHint onlyConnected={neighborhoodActive} name={activeBuildingNode.data.name} count={topologyEdges.filter(edge => edge.source === activeBuildingNode.id || edge.target === activeBuildingNode.id).length} onClear={() => { setSelectedBuildingNodeId(null); setSelectedNode(null); }} />}
                   </div>
                   </div>
-                  {viewMode === 'building' && <div className={`${styles.mapLegend} flex flex-col items-end gap-2`}><NeighborhoodToggle active={neighborhoodActive} hasSelection={!!activeBuildingNode} disabled={loading || !navigationReady} depth={connectionDepth} hopDistances={buildingNeighborhood.distances} hiddenHopDistances={hiddenHopDistances} onHopToggle={toggleBuildingHopDistance} onHopReset={resetBuildingHopDistances} onDepthChange={changeBuildingConnectionDepth} onChange={toggleBuildingNeighborhood} /><Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="gap-2 bg-card shadow-sm" aria-label="Bağlantı türü filtrelerini aç"><Layers className="h-3.5 w-3.5 text-primary" />Bağlantı türleri<span className="text-[11px] tabular-nums text-muted-foreground">{topologyEdges.length}/{generatedTopologyEdges.length}</span></Button></PopoverTrigger><PopoverContent side="top" align="end" className="w-[540px] overflow-hidden p-0"><p className="border-b px-4 py-3 text-xs text-muted-foreground">Çakışan etiketler ve %60 altındaki etiketler gizlenir. Bağlantı bilgileri çizginin üzerine gelince gösterilir.</p><ConnectionTypeLegend labelsVisible={buildingLabelsVisible} onLabelsChange={setBuildingLabelsVisible} label="Binalar arası bağlantı türü filtreleri" options={buildingConnectionTypeOptions} hidden={hiddenBuildingConnectionTypes} visibleCount={topologyEdges.length} totalCount={generatedTopologyEdges.length} onToggle={value => setHiddenBuildingConnectionTypes(previous => toggleConnectionType(previous, value))} onReset={() => setHiddenBuildingConnectionTypes(new Set())} /></PopoverContent></Popover></div>}
+                  {viewMode === 'building' && <div className={`${styles.mapLegend} flex flex-col items-end gap-2`}><NeighborhoodToggle active={neighborhoodActive} hasSelection={!!activeBuildingNode} disabled={loading || !navigationReady} depth={connectionDepth} hopDistances={buildingNeighborhood.distances} hiddenHopDistances={hiddenHopDistances} onHopToggle={toggleBuildingHopDistance} onHopReset={resetBuildingHopDistances} onDepthChange={changeBuildingConnectionDepth} onChange={toggleBuildingNeighborhood} /><div className="flex max-w-full flex-wrap items-center justify-end gap-2"><TopologyIconCount hiddenReason="Etkin filtreler veya kapalı ağ grupları nedeniyle" shown={networkMap.nodes.filter(node => node.type === 'building' && !node.hidden).length} total={totalBuildingIconCount} hiddenIcons={hiddenBuildingIcons} loading={loading || !navigationReady} /><Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="gap-2 bg-card shadow-xs" aria-label="Bağlantı türü filtrelerini aç"><Layers className="h-3.5 w-3.5 text-primary" />Bağlantı türleri<span className="text-[11px] tabular-nums text-muted-foreground">{topologyEdges.length}/{generatedTopologyEdges.length}</span></Button></PopoverTrigger><PopoverContent side="top" align="end" className="w-[540px] overflow-hidden p-0"><p className="border-b px-4 py-3 text-xs text-muted-foreground">Çakışan etiketler ve %60 altındaki etiketler gizlenir. Bağlantı bilgileri çizginin üzerine gelince gösterilir.</p><ConnectionTypeLegend labelsVisible={buildingLabelsVisible} onLabelsChange={setBuildingLabelsVisible} label="Binalar arası bağlantı türü filtreleri" options={buildingConnectionTypeOptions} hidden={hiddenBuildingConnectionTypes} visibleCount={topologyEdges.length} totalCount={generatedTopologyEdges.length} onToggle={value => setHiddenBuildingConnectionTypes(previous => toggleConnectionType(previous, value))} onReset={() => setHiddenBuildingConnectionTypes(new Set())} /></PopoverContent></Popover></div></div>}
                   <ReactFlow style={{ width: '100%', height: '100%' }}
-                    nodes={menuNodes.map(node => ({ ...node, ...measuredNodeDimensions.current[node.id], connectable: canConnectBuildings && node.connectable !== false }))}
-                    edges={menuEdges.map(edge => ({ ...edge, selected: selectedNode?.id === edge.id, style: { ...edge.style, strokeWidth: selectedNode?.id === edge.id ? 4 : edge.style?.strokeWidth } }))}
+                    nodes={networkMap.nodes.map(node => ({ ...node, ...measuredNodeDimensions.current[node.id], connectable: canConnectBuildings && node.connectable !== false }))}
+                    edges={networkMap.edges.map(edge => ({ ...edge, selected: selectedNode?.id === edge.id, style: { ...edge.style, strokeWidth: selectedNode?.id === edge.id ? 4 : edge.style?.strokeWidth } }))}
                     nodeTypes={nodeTypes}
                     edgeTypes={edgeTypes}
                     onNodesChange={handleNodesChange}
-                    onNodeDragStop={(_, node) => { if (canMoveNodes && viewMode === 'building' && node.type === 'building') saveBuildingPosition(node.id, node.position); }}
+                    onNodeDragStop={(_, node) => { if (!canMoveNodes) return; if (node.type === 'networkGroup') networkGroups.savePosition(node.data.group.id, viewMode, node.position); else if (viewMode === 'building' && node.type === 'building') saveBuildingPosition(node.id, node.position); }}
                     onNodeClick={(_, node) => { buildingNodeTooltip.close(); handleNodeClick(node); }}
-                    onNodeMouseEnter={(event, node) => { if (!objectMenu.state && viewMode === 'building') { setHoveredBuildingConnectionId(null); setHoveredBuildingNodeId(node.id); buildingNodeTooltip.enter(event); } }}
-                    onNodeMouseMove={(event, node) => { if (!objectMenu.state && viewMode === 'building' && !node.dragging && buildingNodeTooltip.show(event)) { setHoveredBuildingConnectionId(null); setHoveredBuildingNodeId(node.id); } }}
+                    onNodeMouseEnter={(event, node) => { if (!objectMenu.state && viewMode === 'building' && node.type === 'building') { setHoveredBuildingConnectionId(null); setHoveredBuildingNodeId(node.id); buildingNodeTooltip.enter(event); } }}
+                    onNodeMouseMove={(event, node) => { if (!objectMenu.state && viewMode === 'building' && node.type === 'building' && !node.dragging && buildingNodeTooltip.show(event)) { setHoveredBuildingConnectionId(null); setHoveredBuildingNodeId(node.id); } }}
                     onNodeMouseLeave={buildingNodeTooltip.leave}
                     onNodeDragStart={() => { buildingNodeTooltip.close(); closeObjectMenu(); }}
                     onInit={() => setFlowReady(true)}
@@ -2525,11 +2684,11 @@ const NetworkTopologyPage = () => {
                     }}
                   >
                     <Background color="oklch(var(--border))" gap={24} size={1} />
-                    <Panel position="bottom-left" className="!m-3">
+                    <Panel position="bottom-left" className="m-3!">
                       <div className={styles.mapControls}>
-                        <Button size="icon" variant="ghost" className="h-9 w-9 rounded-none" aria-label="Haritayı yakınlaştır" onClick={() => zoomIn({ duration: 0 })}><Plus className="h-4 w-4" /></Button>
+                        <Button size="sm" variant="ghost" className="h-9 gap-1.5 rounded-none px-2 text-xs" aria-label="Haritayı yakınlaştır" onClick={() => zoomIn({ duration: 0 })}><Plus className="h-3.5 w-3.5" /><span>Yakınlaştır</span></Button>
                         <span className="min-w-11 text-center text-[11px] tabular-nums text-muted-foreground">{viewportZoom}%</span>
-                        <Button size="icon" variant="ghost" className="h-9 w-9 rounded-none" aria-label="Haritayı uzaklaştır" onClick={() => zoomOut({ duration: 0 })}><Minus className="h-4 w-4" /></Button>
+                        <Button size="sm" variant="ghost" className="h-9 gap-1.5 rounded-none px-2 text-xs" aria-label="Haritayı uzaklaştır" onClick={() => zoomOut({ duration: 0 })}><Minus className="h-3.5 w-3.5" /><span>Uzaklaştır</span></Button>
                         <Button size="sm" variant="ghost" className="h-9 gap-1.5 rounded-none border-l border-border text-xs" onClick={() => { releaseViewport(); setSelectedBuildingNodeId(null); setSearchFocusNodeId(null); fitOverview(); }}><Maximize2 className="h-3.5 w-3.5" />Ekrana sığdır</Button>
                       </div>
                     </Panel>
@@ -2552,11 +2711,12 @@ const NetworkTopologyPage = () => {
                   </ReactFlow>
                   {hoveredBuildingNode && <NodeTooltip id={buildingNodeTooltip.id} anchor={buildingNodeTooltip.anchor} container={buildingNodeTooltip.container} onMouseEnter={buildingNodeTooltip.keepOpen} onMouseLeave={buildingNodeTooltip.leaveTooltip} onFocusCapture={buildingNodeTooltip.focusTooltip} onBlurCapture={buildingNodeTooltip.blurTooltip} name={hoveredBuildingNode.data.name} summary={{ kind: 'building', deviceCount: hoveredBuildingNode.data.deviceCount, onShowDevices: () => { closeBuildingNodeTooltip(); handleNodeClick(hoveredBuildingNode); } }} status={<SemanticBadge tone={buildingNodeStatus(hoveredBuildingNode.data.status).tone}>{buildingNodeStatus(hoveredBuildingNode.data.status).label}</SemanticBadge>} connectionCount={availableSources.buildings ? buildingConnectionCounts.get(hoveredBuildingNode.id) || 0 : undefined} visibleConnectionCount={visibleBuildingConnectionCounts.get(hoveredBuildingNode.id) || 0} />}
                 </div>
+                </>}
 
                 {selectedNode && !isSidebarOpen && <Button className={styles.reopenDetails} variant="outline" size="sm" onClick={() => setIsSidebarOpen(true)}><Info className="mr-1.5 h-3.5 w-3.5" />Detayları göster</Button>}
                 <div className={cn(styles.detailsContainer, (!selectedNode || !isSidebarOpen) && styles.detailsHidden)}>
                   <aside ref={detailsRef} tabIndex={-1} className={styles.details} aria-label="Seçim detayları" aria-hidden={!isSidebarOpen || !selectedNode}>
-                    <div className={styles.detailsBar}><p className="text-xs font-semibold text-muted-foreground">Seçim detayları</p>{selectedDevice && <TopologyMenuButton name="Seçili cihaz" onOpen={event => openObjectMenu({ kind: 'device', id: selectedDevice.id }, event)} />}{selectedConnection && <TopologyMenuButton name="Seçili bağlantı" onOpen={event => openObjectMenu({ kind: 'device-connection', id: selectedConnection.id }, event)} />}<Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Detay panelini kapat" onClick={() => { setIsSidebarOpen(false); canvasRef.current?.focus({ preventScroll: true }); }}><X className="h-4 w-4" /></Button></div>
+                    <div className={styles.detailsBar}><p className="text-xs font-semibold text-muted-foreground">Seçim detayları</p>{selectedDevice && <TopologyMenuButton name="Seçili cihaz" onOpen={event => openObjectMenu({ kind: 'device', id: selectedDevice.id }, event)} />}{selectedConnection && <TopologyMenuButton name="Seçili bağlantı" onOpen={event => openObjectMenu({ kind: 'device-connection', id: selectedConnection.id }, event)} />}<Button variant="ghost" size="sm" className="h-8 shrink-0 gap-1.5 px-2 text-xs" aria-label="Detay panelini kapat" onClick={() => { setIsSidebarOpen(false); canvasRef.current?.focus({ preventScroll: true }); }}><X className="h-3.5 w-3.5" /><span>Kapat</span></Button></div>
                     {selectedNode ? (
                     <div className="flex-1 overflow-y-auto">
                       {selectedNode.data.isDeviceConnection ? (
@@ -2703,7 +2863,7 @@ const NetworkTopologyPage = () => {
                           downPorts={topologyStatusByDeviceId[selectedDevice.id]?.downPorts || []}
                           telemetryAvailable={availableSources.telemetry} connectionsAvailable={availableSources.connections}
                           servicesCount={availableSources.services ? services.filter(service => service.deviceId === selectedDevice.id).length : null}
-                          onSelectConnection={selectConnection} onOpenInventory={() => router.push('/devices')} /> : <p className="p-4 text-sm text-muted-foreground">Seçili cihaz artık envanterde bulunmuyor.</p>
+                          onCreateGroup={networkGroups.canManage ? portId => setGroupWorkspace({ source: { deviceId: selectedDevice.id, portId } }) : undefined} onSelectConnection={selectConnection} onOpenInventory={() => router.push('/devices')} /> : <p className="p-4 text-sm text-muted-foreground">Seçili cihaz artık envanterde bulunmuyor.</p>
                       )}
                     </div>
                   ) : (
@@ -2725,7 +2885,7 @@ const NetworkTopologyPage = () => {
         )}
         
         <Dialog open={!!exportPreview} onOpenChange={open => { if (!open) setExportPreview(null); }}>
-          <DialogContent className="max-w-3xl">
+          <DialogContent closeButtonText="Kapat" className="max-w-3xl">
             <DialogHeader><DialogTitle>Topoloji görseli hazır</DialogTitle><DialogDescription>Görünen harita PNG olarak hazırlandı. İndirmeden önce görünümü kontrol edebilirsiniz.</DialogDescription></DialogHeader>
             {exportPreview && <Image src={exportPreview} width={1440} height={900} unoptimized alt="Dışa aktarılacak ağ topolojisi" className="h-auto max-h-[55vh] w-full rounded-lg border border-border object-contain" />}
             <DialogFooter className="gap-2"><Button variant="outline" onClick={() => setExportPreview(null)}>Kapat</Button><Button asChild className="gap-2"><a href={exportPreview || undefined} download={`infrascope-topology-${new Date().toISOString().slice(0,10)}.png`}><Download className="h-4 w-4" />PNG indir</a></Button></DialogFooter>
@@ -2921,7 +3081,7 @@ const BuildingConnectionModal: React.FC<BuildingConnectionModalProps> = ({
 
   return (
     <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className={cn(styles.modal, "max-w-3xl bg-card border-border shadow-2xl overflow-hidden flex flex-col p-0 z-[1011] max-h-[90vh]")}>
+      <DialogContent closeButtonText="Kapat" className={cn(styles.modal, "max-w-3xl bg-card border-border shadow-2xl overflow-hidden flex flex-col p-0 z-1011 max-h-[90vh]")}>
         <DialogHeader className="p-6 bg-primary/10 border-b border-primary/20">
           <div className="flex items-center gap-3">
             <div className="bg-primary rounded-xl p-2.5 shadow-lg shadow-primary/20">
@@ -3140,7 +3300,7 @@ const BuildingConnectionModal: React.FC<BuildingConnectionModalProps> = ({
                 placeholder="Bu bağlantı hakkında ek notlar"
                 value={formData.notes}
                 onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
               />
             </div>
           </div>
@@ -3226,7 +3386,7 @@ const BuildingConnectionsManagementModal: React.FC<BuildingConnectionsManagement
 
   return (
     <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className={cn(styles.modal, "max-w-5xl bg-card border-border shadow-2xl overflow-hidden flex flex-col p-0 z-[1011] max-h-[90vh]")}>
+      <DialogContent closeButtonText="Kapat" className={cn(styles.modal, "max-w-5xl bg-card border-border shadow-2xl overflow-hidden flex flex-col p-0 z-1011 max-h-[90vh]")}>
         <DialogHeader className="p-6 bg-primary/10 border-b border-primary/20">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -3285,23 +3445,25 @@ const BuildingConnectionsManagementModal: React.FC<BuildingConnectionsManagement
                           )}
                         </div>
                       </div>
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex shrink-0 flex-wrap items-center gap-1">
                         <Button 
                           variant="ghost" 
-                          size="icon" 
-                          className="h-8 w-8 text-primary hover:bg-primary/10"
+                          size="sm"
+                          className="h-8 gap-1.5 px-2 text-xs text-primary hover:bg-primary/10"
                           onClick={(e) => { e.stopPropagation(); onEdit(conn); }}
-                         aria-label="Ayarlar">
+                         aria-label="Bağlantıyı düzenle">
                           <Settings2 className="h-4 w-4" />
+                          <span>Düzenle</span>
                         </Button>
                         {conn.recordingMethod === 'MANUAL' && (
                           <Button 
                             variant="ghost" 
-                            size="icon" 
-                            className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                            size="sm"
+                            className="h-8 gap-1.5 px-2 text-xs text-destructive hover:bg-destructive/10"
                             onClick={(e) => { e.stopPropagation(); setDeleteConfirm(conn.id); }}
-                           aria-label="Kapat">
+                           aria-label="Bağlantıyı sil">
                             <X className="h-4 w-4" />
+                            <span>Sil</span>
                           </Button>
                         )}
                       </div>
@@ -3394,7 +3556,7 @@ const BuildingConnectionsManagementModal: React.FC<BuildingConnectionsManagement
 
 function TopologyStat({ icon, label, value, hint, warning = false }: { icon: React.ReactNode; label: string; value: number | string; hint: string; warning?: boolean }) {
   return <div className={styles.stat}>
-    <div className="flex items-center justify-between gap-2"><p className="text-xs font-medium text-muted-foreground">{label}</p><span className={cn(styles.statIcon, warning && '!bg-amber-500/10 !text-amber-600 dark:!text-amber-300')}>{icon}</span></div>
+    <div className="flex items-center justify-between gap-2"><p className="text-xs font-medium text-muted-foreground">{label}</p><span className={cn(styles.statIcon, warning && 'bg-amber-500/10! text-amber-600! dark:text-amber-300!')}>{icon}</span></div>
     <p className="mt-1.5 text-2xl font-semibold tabular-nums">{value}</p>
     <p className="mt-1 text-[11px] text-muted-foreground">{hint}</p>
   </div>;

@@ -5,7 +5,7 @@ import { requireLicenseAdmin } from '@/lib/license/admin-auth';
 import { maskLicenseKey } from '@/lib/license/admin-service';
 
 type RouteContext = {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 };
 
 function parseOptionalPositiveInt(value: unknown): number | undefined {
@@ -14,7 +14,8 @@ function parseOptionalPositiveInt(value: unknown): number | undefined {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
 }
 
-export async function GET(request: NextRequest, { params }: RouteContext) {
+export async function GET(request: NextRequest, props: RouteContext) {
+  const params = await props.params;
   const authError = await requireLicenseAdmin(request);
   if (authError) return authError;
 
@@ -84,7 +85,8 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
   });
 }
 
-export async function PATCH(request: NextRequest, { params }: RouteContext) {
+export async function PATCH(request: NextRequest, props: RouteContext) {
+  const params = await props.params;
   const authError = await requireLicenseAdmin(request);
   if (authError) return authError;
 

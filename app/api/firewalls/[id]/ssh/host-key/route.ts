@@ -5,7 +5,7 @@ import { FirewallReadTargetError } from '@/lib/firewall/read-service';
 import { inspectFirewallSshHostKey } from '@/lib/firewall/ssh-read';
 import { NmsInternalError } from '@/lib/nms/internal-client';
 
-type RouteContext = { params: { id: string } };
+type RouteContext = { params: Promise<{ id: string }> };
 
 function routeError(error: unknown) {
   if (error instanceof FirewallReadTargetError || error instanceof NmsInternalError) {
@@ -15,9 +15,10 @@ function routeError(error: unknown) {
   return NextResponse.json({ success: false, error: 'SSH host key operation failed' }, { status: 500 });
 }
 
-export async function GET(request: NextRequest, { params }: RouteContext) {
+export async function GET(request: NextRequest, props: RouteContext) {
+  const params = await props.params;
   try {
-    if (!await getRequestActor(request)) {
+    if (!(await getRequestActor(request))) {
       return NextResponse.json({ success: false, error: 'Authentication required' }, { status: 401 });
     }
     return NextResponse.json({ success: true, data: await inspectFirewallSshHostKey(params.id) });
@@ -26,7 +27,8 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
   }
 }
 
-export async function POST(request: NextRequest, { params }: RouteContext) {
+export async function POST(request: NextRequest, props: RouteContext) {
+  const params = await props.params;
   try {
     const auth = await getRequestActor(request);
     if (!auth) {

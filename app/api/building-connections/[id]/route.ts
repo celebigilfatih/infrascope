@@ -22,10 +22,8 @@ async function currentLink(tx: Prisma.TransactionClient, id: string, updatedAt: 
   return { ok: true, link } as const;
 }
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const auth = await getRequestActor(request);
     if (!auth) return result({ success: false, error: 'Oturum açmanız gerekiyor.' }, 401);
@@ -47,7 +45,7 @@ export async function GET(
       const sourceDeviceId = request.nextUrl.searchParams.get('sourceDeviceId') || '';
       const targetDeviceId = request.nextUrl.searchParams.get('targetDeviceId') || '';
       if ([sourceDeviceId, targetDeviceId].some(value => value && !/^[a-zA-Z0-9_-]{1,160}$/.test(value))) return result({ success: false, error: 'Geçerli bir cihaz seçin.' }, 400);
-      if (!await buildingEndpointMembership(prisma, connection.sourceBuildingId, connection.destBuildingId, sourceDeviceId, targetDeviceId)) return result({ success: false, error: 'Cihazlardan biri ilgili binada bulunmuyor. Bağlantıyı yenileyin.' }, 409);
+      if (!(await buildingEndpointMembership(prisma, connection.sourceBuildingId, connection.destBuildingId, sourceDeviceId, targetDeviceId))) return result({ success: false, error: 'Cihazlardan biri ilgili binada bulunmuyor. Bağlantıyı yenileyin.' }, 409);
       const ports = await devicePortCatalog(prisma, [sourceDeviceId, targetDeviceId].filter(Boolean), connection.deviceLink?.id);
       return result({ success: true, data: { ports } });
     }
@@ -65,14 +63,13 @@ export async function GET(
   }
 }
 
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function PUT(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return updateConnection(request, params.id, true);
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return updateConnection(request, params.id, false);
 }
 
@@ -105,7 +102,7 @@ async function updateConnection(request: NextRequest, id: string, full: boolean)
       if (!scope.ok) return { error: scope.error, status: scope.status };
       const sourceBuildingId = full ? body.sourceBuildingId : scope.link.sourceBuildingId;
       const destBuildingId = full ? body.destBuildingId : scope.link.destBuildingId;
-      if (full && await tx.building.count({ where: { id: { in: [sourceBuildingId, destBuildingId] } } }) !== 2) return { error: 'Binalardan biri artık mevcut değil.', status: 409 };
+      if (full && (await tx.building.count({ where: { id: { in: [sourceBuildingId, destBuildingId] } } })) !== 2) return { error: 'Binalardan biri artık mevcut değil.', status: 409 };
       const duplicate = await tx.buildingConnection.findFirst({ where: { id: { not: id }, connectionType: body.connectionType, OR: [{ sourceBuildingId, destBuildingId }, { sourceBuildingId: destBuildingId, destBuildingId: sourceBuildingId }] } });
       if (duplicate) return { error: 'Bu iki bina arasında seçilen türde başka bir bağlantı var.', status: 409 };
       const physical = scope.link.deviceLink;
@@ -142,10 +139,8 @@ async function updateConnection(request: NextRequest, id: string, full: boolean)
   }
 }
 
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const auth = await getRequestActor(request);
     if (!auth) return result({ success: false, error: 'Oturum açmanız gerekiyor.' }, 401);

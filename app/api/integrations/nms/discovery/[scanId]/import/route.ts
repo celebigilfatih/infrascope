@@ -9,7 +9,7 @@ import {
 } from '@/lib/nms/snmp-config';
 import { protectNmsCredential } from '@/lib/security/integration-credentials';
 
-interface Params { params: { scanId: string } }
+interface Params { params: Promise<{ scanId: string }> }
 
 /**
  * POST /api/integrations/nms/discovery/[scanId]/import
@@ -23,7 +23,8 @@ interface Params { params: { scanId: string } }
  *   snmpPort?           - SNMP port (defaults to 161)
  *   pollingInterval?    - Poll interval in seconds (defaults to 30)
  */
-export async function POST(req: NextRequest, { params }: Params) {
+export async function POST(req: NextRequest, props: Params) {
+  const params = await props.params;
   const access = await authorizeApiRequest(req, 'devices', 'write');
   if (!access.allowed) return access.response;
   try {

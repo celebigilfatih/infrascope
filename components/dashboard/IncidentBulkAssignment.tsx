@@ -57,7 +57,7 @@ export function IncidentBulkAssignment({ count, disabled, onAssign }: {
     if (value && authStatus !== 401) { setAssigneeId(''); setError(null); setAuthStatus(null); }
   }}>
     <PopoverTrigger asChild><Button variant="outline" className={styles.bulkAssignTrigger} disabled={disabled || saving}><UserRound size={16} aria-hidden="true" />Sorumlu ata</Button></PopoverTrigger>
-    <PopoverContent aria-label="Toplu sorumlu atama" align="end" collisionPadding={12} className="pointer-events-auto z-[1050] max-h-[var(--radix-popover-content-available-height)] w-[min(340px,calc(100vw-32px))] overflow-y-auto p-5" onEscapeKeyDown={event => { if (saving) event.preventDefault(); }} onInteractOutside={event => { if (saving) event.preventDefault(); }}>
+    <PopoverContent aria-label="Toplu sorumlu atama" align="end" collisionPadding={12} className="pointer-events-auto z-1050 max-h-(--radix-popover-content-available-height) w-[min(340px,calc(100vw-32px))] overflow-y-auto p-5" onEscapeKeyDown={event => { if (saving) event.preventDefault(); }} onInteractOutside={event => { if (saving) event.preventDefault(); }}>
       <h2 className="text-sm font-semibold">Toplu sorumlu atama</h2>
       <p className={styles.bulkAssignHint}>{count} olay seçili. Mevcut sorumlular seçtiğiniz kullanıcıyla değiştirilecek.</p>
       {peopleError ? <div role="alert" className={styles.bulkAssignError}><p>{uiError(peopleError)}</p><Button variant="outline" size="sm" disabled={saving} onClick={() => setRevision(value => value + 1)}>Tekrar dene</Button></div> : <>

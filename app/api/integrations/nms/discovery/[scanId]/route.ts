@@ -2,13 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authorizeApiRequest } from '@/lib/auth/api-permission';
 import { prisma } from '@/lib/prisma';
 
-interface Params { params: { scanId: string } }
+interface Params { params: Promise<{ scanId: string }> }
 
 /**
  * GET /api/integrations/nms/discovery/[scanId]
  * Get scan progress and discovered devices.
  */
-export async function GET(_req: NextRequest, { params }: Params) {
+export async function GET(_req: NextRequest, props: Params) {
+  const params = await props.params;
   const access = await authorizeApiRequest(_req, 'devices', 'read');
   if (!access.allowed) return access.response;
   try {

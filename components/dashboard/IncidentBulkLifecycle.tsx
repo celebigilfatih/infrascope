@@ -112,7 +112,7 @@ export function IncidentBulkLifecycle({ action, incidents, excludedIncidents, se
   };
   return <Popover open={open} onOpenChange={value => { if (!saving) { setOpen(value); setConfirmation(null); if (value) { setError(null); setAuthStatus(null); } } }}>
     <PopoverTrigger asChild><Button variant="outline" className={styles.bulkLifecycleButton} disabled={disabled || saving || count === 0} title={resolving ? "Seçili açık ve onaylanmış olayları çözer" : "Yalnızca seçili çözümlenmiş olayları kapatır"}><Icon size={16} aria-hidden="true" />{resolving ? `Çözüldü işaretle (${count})` : `Kapat (${count})`}</Button></PopoverTrigger>
-    <PopoverContent aria-label={title} align="end" collisionPadding={12} className="pointer-events-auto z-[1050] max-h-[var(--radix-popover-content-available-height)] w-[min(380px,calc(100vw-32px))] overflow-y-auto p-5" onEscapeKeyDown={event => { if (saving) event.preventDefault(); }} onInteractOutside={event => { if (saving) event.preventDefault(); }}>
+    <PopoverContent aria-label={title} align="end" collisionPadding={12} className="pointer-events-auto z-1050 max-h-(--radix-popover-content-available-height) w-[min(380px,calc(100vw-32px))] overflow-y-auto p-5" onEscapeKeyDown={event => { if (saving) event.preventDefault(); }} onInteractOutside={event => { if (saving) event.preventDefault(); }}>
       <h2 ref={headingRef} tabIndex={-1} className="text-sm font-semibold">{title}</h2>
       {confirmation ? <>
         <p className={styles.bulkAssignHint}>İşlemi uygulamadan önce seçiminizi ve olay geçmişine kaydedilecek açıklamayı kontrol edin.</p>

@@ -33,7 +33,7 @@ export function MetricStrip({ metrics }: { metrics: DashboardMetric[] }) {
             <Link
               key={metric.label}
               href={metric.href}
-              className="group min-h-32 rounded-lg border border-border bg-card p-4 transition-colors hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="group min-h-32 rounded-lg border border-border bg-card p-4 transition-colors hover:border-primary/40 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               <div className="flex items-start justify-between gap-3">
                 <span className="flex h-8 w-8 items-center justify-center rounded-md bg-muted text-muted-foreground group-hover:text-primary">

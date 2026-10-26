@@ -9,7 +9,7 @@ import {
 import { clearFortiGateConnectors } from '@/lib/firewall/connector-factory';
 import type { FortiGateConfig } from '@/lib/integrations/fortigate';
 
-type RouteContext = { params: { id: string } };
+type RouteContext = { params: Promise<{ id: string }> };
 type IdentityAction = 'keep-current' | 'accept-candidate' | 'merge-into-existing';
 
 async function requireAdmin(request: NextRequest) {
@@ -21,7 +21,8 @@ async function requireAdmin(request: NextRequest) {
   return auth.actor;
 }
 
-export async function PATCH(request: NextRequest, { params }: RouteContext) {
+export async function PATCH(request: NextRequest, props: RouteContext) {
+  const params = await props.params;
   try {
     const actor = await requireAdmin(request);
     if (actor instanceof NextResponse) return actor;

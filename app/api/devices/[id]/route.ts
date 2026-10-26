@@ -28,10 +28,8 @@ const VALID_CRITICALITIES = [
 // ============================================================================
 // GET - Get device by ID
 // ============================================================================
-export async function GET(
-  _request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET(_request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const { id } = params;
 
@@ -145,10 +143,8 @@ export async function GET(
 // ============================================================================
 // PUT - Update device
 // ============================================================================
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function PUT(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const { id } = params;
     const body = await request.json();
@@ -421,10 +417,8 @@ export async function PUT(
 // ============================================================================
 // DELETE - Delete device
 // ============================================================================
-export async function DELETE(
-  _request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(_request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const { id } = params;
 
@@ -446,6 +440,7 @@ export async function DELETE(
         childDevices: true,
         services: true,
         networkInterfaces: true,
+        networkGroups: { select: { id: true }, take: 1 },
       },
     });
 
@@ -458,6 +453,11 @@ export async function DELETE(
         },
         { status: 404 }
       );
+    }
+
+    // Logical anchors must be reassigned before deleting their source device.
+    if (existing.networkGroups?.length) {
+      return NextResponse.json({ success: false, error: 'Bu cihaz bir ağ grubunun merkez cihazıdır. Önce grubun merkezini değiştirin veya grubu kaldırın.', timestamp: new Date() }, { status: 409 });
     }
 
     // Prevent deletion if device has child devices (e.g., VMs)
@@ -500,6 +500,9 @@ export async function DELETE(
     );
   } catch (error) {
     console.error('Error deleting device:', error);
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'P2003') {
+      return NextResponse.json({ success: false, error: 'Cihaza bağlı kayıtlar değişti. Önce bağımlı kayıtları veya ağ grubu merkezini düzenleyin.', timestamp: new Date() }, { status: 409 });
+    }
     return NextResponse.json(
       {
         success: false,

@@ -246,12 +246,12 @@ export function FloorPlanView({ room, onUpdate, selectedRackId, onRackClick, edi
 
   return (
     <div ref={containerRef} className="relative h-full w-full overflow-hidden bg-background">
-      <div role="group" aria-label="Plan yakınlaştırma kontrolleri" className="absolute bottom-3 right-3 z-20 flex items-center gap-1 rounded-lg border border-border bg-background/95 p-1 shadow-sm backdrop-blur">
+      <div role="group" aria-label="Plan yakınlaştırma kontrolleri" className="absolute bottom-3 right-3 z-20 flex items-center gap-1 rounded-lg border border-border bg-background/95 p-1 shadow-xs backdrop-blur-sm">
         <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setScale((value) => Math.min(160, value + 10))} disabled={scale >= 160} aria-label="Planı yakınlaştır" title="Yakınlaştır"><Plus className="h-4 w-4" /></Button>
         <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setScale((value) => Math.max(15, value - 10))} disabled={scale <= 15} aria-label="Planı uzaklaştır" title="Uzaklaştır"><Minus className="h-4 w-4" /></Button>
         <Button variant="ghost" size="sm" className="h-9 text-xs" onClick={fitView} aria-label="Planı ekrana sığdır"><Focus className="h-4 w-4" />Sığdır</Button>
       </div>
-      {savingRackId && <div role="status" className="absolute left-3 top-3 z-20 flex items-center gap-2 rounded-md border border-border bg-background/90 px-3 py-2 text-xs shadow-sm"><RefreshCw className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />Konum kaydediliyor…</div>}
+      {savingRackId && <div role="status" className="absolute left-3 top-3 z-20 flex items-center gap-2 rounded-md border border-border bg-background/90 px-3 py-2 text-xs shadow-xs"><RefreshCw className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />Konum kaydediliyor…</div>}
       <canvas ref={canvasRef} className={editMode ? 'touch-none cursor-crosshair' : 'touch-none cursor-grab active:cursor-grabbing'} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerCancel} role="img" aria-label={`${room.name} iki boyutlu kabinet yerleşim planı`} />
     </div>
   );

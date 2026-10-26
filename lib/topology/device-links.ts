@@ -2,6 +2,12 @@ import type { Prisma } from '@prisma/client';
 import type { BuildingDeviceConnection } from './building-devices';
 import { portNameKey, type DeviceLinkPort } from './device-link-options';
 
+function nmsPortLabel(name: string, description: string | null) {
+  if (!/^if\d+$/i.test(name)) return name;
+  return description?.match(/^(\d+)\s+Gigabit\s*-\s*Level$/i)?.[1]
+    || (/^(?:[a-z]+)?\d+(?:\/\d+)*$/i.test(description || '') ? description! : name);
+}
+
 export const deviceLinkSelect = { id: true, sourceDeviceId: true, targetDeviceId: true, type: true, bandwidth: true, status: true, source: true, sourceRef: true, endpoints: { select: { side: true, portName: true } } } satisfies Prisma.DeviceLinkSelect;
 export function normalizeDeviceLinks(rows: Prisma.DeviceLinkGetPayload<{ select: typeof deviceLinkSelect }>[]): BuildingDeviceConnection[] {
   return rows.flatMap(row => {
@@ -33,7 +39,7 @@ export async function devicePortCatalog(db: Pick<Prisma.TransactionClient, 'devi
     };
     device.switchPorts.forEach(port => add(`switch:${port.id}`, port.name, 'Switch portu', port.speed || undefined, !!port.connectedToId));
     device.networkInterfaces.forEach(port => add(`interface:${port.id}`, port.name, 'Ağ arayüzü', undefined, !!port.switchPorts?.length));
-    device.nmsInterfaces.forEach(port => add(`nms:${port.id}`, /^if\d+$/i.test(port.interfaceName) && /^(?:[a-z]+)?\d+(?:\/\d+)*$/i.test(port.description || '') ? port.description! : port.interfaceName, 'NMS portu', port.speed > BigInt(0) ? `${port.speed.toString()} bps` : undefined, false, port.interfaceName));
+    device.nmsInterfaces.forEach(port => add(`nms:${port.id}`, nmsPortLabel(port.interfaceName, port.description), 'NMS portu', port.speed > BigInt(0) ? `${port.speed.toString()} bps` : undefined, false, port.interfaceName));
     return [device.id, [...ports.values()].sort((a, b) => a.name.localeCompare(b.name, 'tr', { numeric: true }))];
   }));
 }

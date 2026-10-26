@@ -41,12 +41,12 @@ export function NodeTooltip({ name, status, summary, connectionCount, visibleCon
     }
   };
   return <TopologyTooltipSurface {...props} className="w-[248px] space-y-2.5 p-3">
-    <p className="break-words text-sm font-semibold leading-5">{name}</p>
+    <p className="wrap-break-word text-sm font-semibold leading-5">{name}</p>
     <div className="flex items-center justify-between gap-3 text-xs"><span className="text-muted-foreground">Durum</span>{status}</div>
     <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-xs">
       {summary.kind === 'building' ? <><dt className="text-muted-foreground">Cihaz sayısı</dt><dd className="text-right font-medium tabular-nums">{summary.deviceCount}</dd></> : <>
-        <dt className="self-center text-muted-foreground">IP adresi</dt><dd className="flex min-w-0 items-center justify-end gap-1"><span className="min-w-0 text-right font-mono text-[11px] [overflow-wrap:anywhere]">{ipAddress || 'Belirtilmemiş'}</span>{ipAddress && <Button type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0" aria-label="IP adresini kopyala" title="IP adresini kopyala" aria-disabled={copying} aria-busy={copying} onClick={() => void copyIp()}>{copyFeedback === 'copied' ? <Check aria-hidden="true" size={13} className="text-primary" /> : <Copy aria-hidden="true" size={13} />}</Button>}</dd>
-        <dt className="text-muted-foreground">Cihaz türü</dt><dd className="text-right font-medium [overflow-wrap:anywhere]">{summary.deviceType?.trim() ? uiLabel(summary.deviceType.trim()) : 'Belirtilmemiş'}</dd>
+        <dt className="self-center text-muted-foreground">IP adresi</dt><dd className="flex min-w-0 flex-wrap items-center justify-end gap-1"><span className="min-w-0 text-right font-mono text-[11px] wrap-anywhere">{ipAddress || 'Belirtilmemiş'}</span>{ipAddress && <Button type="button" variant="ghost" size="sm" className="h-8 shrink-0 gap-1.5 px-2 text-xs" aria-label="IP adresini kopyala" title="IP adresini kopyala" aria-disabled={copying} aria-busy={copying} onClick={() => void copyIp()}>{copyFeedback === 'copied' ? <Check aria-hidden="true" size={13} className="text-primary" /> : <Copy aria-hidden="true" size={13} />}<span>{copyFeedback === 'copied' ? 'Kopyalandı' : 'Kopyala'}</span></Button>}</dd>
+        <dt className="text-muted-foreground">Cihaz türü</dt><dd className="text-right font-medium wrap-anywhere">{summary.deviceType?.trim() ? uiLabel(summary.deviceType.trim()) : 'Belirtilmemiş'}</dd>
       </>}
     </dl>
     {copyFeedback && <p role={copyFeedback === 'error' ? 'alert' : 'status'} className={`text-xs ${copyFeedback === 'error' ? 'text-destructive' : 'text-primary'}`}>{copyFeedback === 'copied' ? 'IP adresi panoya kopyalandı.' : 'IP kopyalanamadı. Adresi seçerek kopyalayın.'}</p>}

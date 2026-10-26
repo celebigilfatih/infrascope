@@ -112,6 +112,7 @@ for (const theme of ['light', 'dark']) {
     const dialog = page.getByRole('dialog'); await expect(dialog).toBeVisible();
     await expect(dialog.getByRole('button', { name: 'Görüntüyü sil', exact: true })).toHaveCount(0);
     const bounds = await dialog.boundingBox(); expect(bounds).not.toBeNull(); expect(bounds!.x).toBeGreaterThanOrEqual(0); expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
+    expect(bounds!.y).toBeGreaterThanOrEqual(0); expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(844);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await capture(page, info, `snapshot-mobile-${theme}`); expect(source.writes).toEqual([]);
   });

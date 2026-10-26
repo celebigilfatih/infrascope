@@ -13,10 +13,14 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository_owner }}/infrascope
+  IMAGE_NAME: ${{ github.repository_owner }}/infrascope-customer
 
 permissions:
   contents: read
+
+concurrency:
+  group: customer-release-${{ github.ref_name }}
+  cancel-in-progress: false
 
 jobs:
   backup-checks:
@@ -29,17 +33,38 @@ jobs:
     uses: ./.github/workflows/dashboard-checks.yml
   incident-checks:
     uses: ./.github/workflows/incident-regression.yml
+  customer-deployment:
+    uses: ./.github/workflows/customer-deployment.yml
   publish:
-    needs: [release-quality, alarm-checks, dashboard-checks, incident-checks, backup-checks]
-    name: Build and push Docker image
+    needs: [release-quality, alarm-checks, dashboard-checks, incident-checks, backup-checks, customer-deployment]
+    name: Publish pinned images and customer installer
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: write
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate immutable release source
+        id: release
+        env:
+          REQUESTED_VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION="${REQUESTED_VERSION:-${GITHUB_REF_NAME#v}}"
+          [[ "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || { echo 'Use a stable pinned version'; exit 1; }
+          test "$(git rev-parse "refs/tags/v$VERSION^{commit}")" = "$GITHUB_SHA" || { echo 'Dispatch from the release tag, not a branch'; exit 1; }
+          STATUS=$(curl --silent --show-error --output /tmp/existing-release.json --write-out '%{http_code}' \
+            -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/tags/v$VERSION")
+          test "$STATUS" = 404 || { echo "Release exists or GitHub is unavailable (HTTP $STATUS); refusing replacement"; exit 1; }
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "image=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/infrascope-customer" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -51,35 +76,51 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract image metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=semver,pattern={{version}}
-            type=raw,value=${{ inputs.version }},enable=${{ github.event_name == 'workflow_dispatch' }}
-
       - name: Build and push
+        id: app
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-      - name: Extract NMS image metadata
-        id: nms-meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-nms
-          tags: |
-            type=semver,pattern={{version}}
-            type=raw,value=${{ inputs.version }},enable=${{ github.event_name == 'workflow_dispatch' }}
+          platforms: linux/amd64
+          tags: ${{ steps.release.outputs.image }}:${{ steps.release.outputs.version }}
+          build-args: |
+            RELEASE_VERSION=${{ steps.release.outputs.version }}
+            SOURCE_REVISION=${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
       - name: Build and push NMS service
+        id: nms
         uses: docker/build-push-action@v6
         with:
           context: .
           file: nms_service/Dockerfile
           push: true
-          tags: ${{ steps.nms-meta.outputs.tags }}
-          labels: ${{ steps.nms-meta.outputs.labels }}
+          platforms: linux/amd64
+          tags: ${{ steps.release.outputs.image }}-nms:${{ steps.release.outputs.version }}
+          build-args: |
+            RELEASE_VERSION=${{ steps.release.outputs.version }}
+            SOURCE_REVISION=${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+      - name: Resolve PostgreSQL and package the online Windows installer
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+          APP_DIGEST: ${{ steps.app.outputs.digest }}
+          NMS_DIGEST: ${{ steps.nms.outputs.digest }}
+        run: |
+          set -euo pipefail
+          docker pull --platform linux/amd64 postgres:16-alpine
+          POSTGRES_REF=$(docker image inspect postgres:16-alpine --format '{{index .RepoDigests 0}}')
+          python3 scripts/package-online-release.py --version "$VERSION" --repository "$GITHUB_REPOSITORY" \
+            --revision "$GITHUB_SHA" --app-digest "$APP_DIGEST" --nms-digest "$NMS_DIGEST" \
+            --postgres-digest "${POSTGRES_REF##*@}" --output dist/online
+      - name: Publish release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          gh release create "v$VERSION" --verify-tag --title "InfraScope $VERSION" --notes-file docs/releases/customer.md \
+            "dist/online/infrascope-windows-online-$VERSION.zip" \
+            dist/online/install-infrascope.ps1 "dist/online/SHA256SUMS-online-$VERSION.txt"

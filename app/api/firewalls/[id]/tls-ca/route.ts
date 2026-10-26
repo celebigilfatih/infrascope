@@ -8,7 +8,7 @@ import type { FortiGateConfig } from '@/lib/integrations/fortigate';
 import { prisma } from '@/lib/prisma';
 import { protectIntegrationConfig, unprotectIntegrationConfig } from '@/lib/security/integration-credentials';
 
-type RouteContext = { params: { id: string } };
+type RouteContext = { params: Promise<{ id: string }> };
 
 async function requireAdmin(request: NextRequest) {
   const auth = await getRequestActor(request);
@@ -45,7 +45,8 @@ async function refreshProbe(connectorId: string, targetKey: string) {
   return probeFirewallConnector(connectorId, { trigger: 'configuration' });
 }
 
-export async function GET(request: NextRequest, { params }: RouteContext) {
+export async function GET(request: NextRequest, props: RouteContext) {
+  const params = await props.params;
   const actor = await requireAdmin(request);
   if (actor instanceof NextResponse) return actor;
 
@@ -55,7 +56,8 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
   return NextResponse.json({ success: true, data: publicCaStatus(config) });
 }
 
-export async function POST(request: NextRequest, { params }: RouteContext) {
+export async function POST(request: NextRequest, props: RouteContext) {
+  const params = await props.params;
   try {
     const actor = await requireAdmin(request);
     if (actor instanceof NextResponse) return actor;
@@ -116,7 +118,8 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: RouteContext) {
+export async function DELETE(request: NextRequest, props: RouteContext) {
+  const params = await props.params;
   try {
     const actor = await requireAdmin(request);
     if (actor instanceof NextResponse) return actor;

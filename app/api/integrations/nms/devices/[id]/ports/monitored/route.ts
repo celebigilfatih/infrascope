@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authorizeApiRequest } from '@/lib/auth/api-permission';
 import { prisma } from '@/lib/prisma';
 
-type Params = { params: { id: string } };
+type Params = { params: Promise<{ id: string }> };
 
 function serializeBigInt(obj: unknown): unknown {
   return JSON.parse(
@@ -16,7 +16,8 @@ function serializeBigInt(obj: unknown): unknown {
  * GET /api/integrations/nms/devices/[id]/ports/monitored
  * Returns all interfaces for a device with their monitored status
  */
-export async function GET(_req: NextRequest, { params }: Params) {
+export async function GET(_req: NextRequest, props: Params) {
+  const params = await props.params;
   const access = await authorizeApiRequest(_req, 'devices', 'read');
   if (!access.allowed) return access.response;
   try {
@@ -76,7 +77,8 @@ export async function GET(_req: NextRequest, { params }: Params) {
  *   OR
  *   { all: true, monitored: true }  -- toggle ALL interfaces for this device
  */
-export async function PATCH(req: NextRequest, { params }: Params) {
+export async function PATCH(req: NextRequest, props: Params) {
+  const params = await props.params;
   const access = await authorizeApiRequest(req, 'devices', 'write');
   if (!access.allowed) return access.response;
   try {

@@ -82,7 +82,7 @@ export function NavigationProgress() {
         aria-valuemax={100}
         aria-valuenow={progress}
         className={cn(
-          "fixed top-0 left-0 right-0 h-0.5 bg-primary z-[9999]",
+          "fixed top-0 left-0 right-0 h-0.5 bg-primary z-9999",
           progress === 100 ? "opacity-0" : "opacity-100"
         )}
         style={{ 

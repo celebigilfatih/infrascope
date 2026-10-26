@@ -13,7 +13,7 @@ import {
 } from '@/lib/nms/snmp-config';
 import { protectNmsCredential } from '@/lib/security/integration-credentials';
 
-interface Params { params: { id: string } }
+interface Params { params: Promise<{ id: string }> }
 
 /** Convert BigInt fields to strings for JSON serialization */
 function serializeBigInt(obj: unknown): unknown {
@@ -34,7 +34,8 @@ function serializeBigInt(obj: unknown): unknown {
  * Remove NMS monitoring from the device while keeping the inventory record.
  */
 
-export async function GET(_req: NextRequest, { params }: Params) {
+export async function GET(_req: NextRequest, props: Params) {
+  const params = await props.params;
   const access = await authorizeApiRequest(_req, 'devices', 'read');
   if (!access.allowed) return access.response;
   try {
@@ -147,7 +148,8 @@ export async function GET(_req: NextRequest, { params }: Params) {
   }
 }
 
-export async function PUT(req: NextRequest, { params }: Params) {
+export async function PUT(req: NextRequest, props: Params) {
+  const params = await props.params;
   const access = await authorizeApiRequest(req, 'devices', 'write');
   if (!access.allowed) return access.response;
   try {
@@ -363,7 +365,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
   }
 }
 
-export async function DELETE(_req: NextRequest, { params }: Params) {
+export async function DELETE(_req: NextRequest, props: Params) {
+  const params = await props.params;
   const access = await authorizeApiRequest(_req, 'devices', 'delete');
   if (!access.allowed) return access.response;
   try {

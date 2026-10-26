@@ -71,9 +71,14 @@ fi
 echo "📋 Running Prisma migrations..."
 npx prisma migrate deploy
 
-# Generate Prisma client to ensure it matches the runtime environment
-echo "💎 Generating Prisma client..."
-npx prisma generate
+# Production images already contain the schema-specific client and native engine.
+# Generating at startup can trigger a download and prevents offline installation.
+if [ "$NODE_ENV" = "production" ]; then
+  node -e 'const {PrismaClient}=require("@prisma/client"); const client=new PrismaClient(); client.$disconnect()'
+else
+  echo "💎 Generating Prisma client..."
+  npx prisma generate
+fi
 
 # Seed database if in development
 if [ "$NODE_ENV" = "development" ]; then

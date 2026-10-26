@@ -20,6 +20,7 @@ model Organization {
   subnets     Subnet[]
   vmwareClusters VMwareCluster[]
   vmwareDatastores VMwareDatastore[]
+  networkGroups NetworkGroup[]
 
   @@map("organizations")
 }
@@ -133,6 +134,8 @@ model Building {
   organization      Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   floors            Floor[]
   devices           Device[]
+
+  networkGroupMember NetworkGroupMember?
 
   @@unique([organizationId, name])
   @@map("buildings")
@@ -281,6 +284,7 @@ model Device {
   switchPorts       SwitchPort[]
   outgoingDeviceLinks DeviceLink[] @relation("DeviceLinkSource")
   incomingDeviceLinks DeviceLink[] @relation("DeviceLinkTarget")
+  networkGroups NetworkGroup[]
   
   // VMware relationships
   vmwareCluster     VMwareCluster?     @relation("ClusterHosts", fields: [vmwareClusterId], references: [id])
@@ -384,6 +388,36 @@ model Connection {
 }
 
 /// Recorded connection between any two devices and their selected ports
+model NetworkGroup {
+  id             String @id @default(cuid())
+  name           String
+  organizationId String
+  kind           String @default("WAN")
+  sourceDeviceId String
+  sourcePortId   String?
+  positions      Json @default("{}")
+  version        Int @default(1)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sourceDevice   Device @relation(fields: [sourceDeviceId], references: [id], onDelete: Restrict)
+  members        NetworkGroupMember[]
+
+  @@unique([organizationId, name])
+  @@index([sourceDeviceId])
+  @@map("network_groups")
+}
+
+model NetworkGroupMember {
+  groupId    String
+  buildingId String @unique
+  group      NetworkGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  building   Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, buildingId])
+  @@map("network_group_members")
+}
+
 model DeviceLink {
   id             String @id @default(cuid())
   buildingConnectionId String? @unique

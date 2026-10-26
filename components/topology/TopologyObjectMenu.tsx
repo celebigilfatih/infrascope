@@ -34,7 +34,7 @@ export function useTopologyObjectMenu() {
 }
 
 export function TopologyMenuButton({ name, onOpen }: { name: string; onOpen: (event: MouseEvent<HTMLButtonElement>) => void }) {
-  return <button type="button" className="nodrag nopan nowheel inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border bg-card text-foreground shadow-sm hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" style={{ pointerEvents: 'all' }} aria-label={`${name}: işlemler`} aria-haspopup="menu" onPointerDown={event => event.stopPropagation()} onDoubleClick={event => event.stopPropagation()} onClick={onOpen}><MoreHorizontal size={16} aria-hidden="true" /></button>;
+  return <button type="button" className="nodrag nopan nowheel inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-md border bg-card px-2 text-xs font-medium text-foreground shadow-xs hover:bg-accent focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring" style={{ pointerEvents: 'all' }} aria-label={`${name}: işlemler`} aria-haspopup="menu" onPointerDown={event => event.stopPropagation()} onDoubleClick={event => event.stopPropagation()} onClick={onOpen}><MoreHorizontal size={14} aria-hidden="true" /><span>İşlemler</span></button>;
 }
 
 export function TopologyObjectMenu({ menu, name, actions }: { menu: ReturnType<typeof useTopologyObjectMenu>; name: string; actions: TopologyAction[] }) {
@@ -62,19 +62,26 @@ export function TopologyObjectMenu({ menu, name, actions }: { menu: ReturnType<t
     document.addEventListener('pointerdown', outside, true); document.addEventListener('keydown', escape, true); window.addEventListener('scroll', scroll, true);
     return () => {
       document.removeEventListener('pointerdown', outside, true); document.removeEventListener('keydown', escape, true); window.removeEventListener('scroll', scroll, true);
-      if (restoreFocus.current && state.origin?.isConnected) state.origin.focus({ preventScroll: true });
+      const origin = state.origin;
+      if (restoreFocus.current && origin?.isConnected) {
+        // Let the portal removal and the enclosing dialog's focus scope settle
+        // before restoring the trigger. A newly opened menu keeps its own focus.
+        requestAnimationFrame(() => {
+          if (origin.isConnected && !host.querySelector('[role="menu"]')) origin.focus({ preventScroll: true });
+        });
+      }
     };
   }, [state, host, menu.close]);
   return <>
-    {state && host && actions.length > 0 && createPortal(<div ref={content} role="menu" aria-label={name + ': işlemler'} className="fixed z-[1050] w-64 max-w-[calc(100vw-24px)] overflow-y-auto rounded-xl border bg-popover p-1 text-popover-foreground shadow-md outline-none" style={position} onContextMenu={event => event.preventDefault()} onKeyDown={event => {
+    {state && host && actions.length > 0 && createPortal(<div ref={content} role="menu" aria-label={name + ': işlemler'} className="fixed z-1050 w-64 max-w-[calc(100vw-24px)] overflow-y-auto rounded-xl border bg-popover p-1 text-popover-foreground shadow-md outline-hidden" style={position} onContextMenu={event => event.preventDefault()} onKeyDown={event => {
       const items = Array.from(content.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)') || []), index = items.indexOf(document.activeElement as HTMLButtonElement);
       if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) { event.preventDefault(); event.stopPropagation(); focusItem(event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1 : index + (event.key === 'ArrowDown' ? 1 : -1)); }
       if (event.key === 'Tab') { event.preventDefault(); event.stopPropagation(); menu.close(); }
     }}>
-      <p className="break-words border-b px-3 py-2 text-xs font-semibold text-muted-foreground">{name}</p>
-      {actions.map(action => <button key={action.id} type="button" role="menuitem" tabIndex={-1} disabled={action.disabled} className="flex min-h-[44px] w-full items-center rounded-md px-3 py-2 text-left text-sm hover:bg-accent focus:bg-accent focus:outline-none disabled:opacity-50" onClick={() => { restoreFocus.current = !!action.keepFocus; menu.close(); action.run(); }}>{action.label}</button>)}
+      <p className="wrap-break-word border-b px-3 py-2 text-xs font-semibold text-muted-foreground">{name}</p>
+      {actions.map(action => <button key={action.id} type="button" role="menuitem" tabIndex={-1} disabled={action.disabled} className="flex min-h-[44px] w-full items-center rounded-md px-3 py-2 text-left text-sm hover:bg-accent focus:bg-accent focus:outline-hidden disabled:opacity-50" onClick={() => { restoreFocus.current = !!action.keepFocus; menu.close(); action.run(); }}>{action.label}</button>)}
     </div>, host)}
-    {menu.feedback && <div role="status" className="fixed bottom-4 right-4 z-[1100] flex max-w-[calc(100vw-2rem)] items-center gap-3 rounded-lg border bg-popover p-3 text-sm text-popover-foreground shadow-lg"><span className="break-all">{menu.feedback}</span><button type="button" aria-label="Kopyalama bildirimini kapat" onClick={menu.clearFeedback}><X size={16} /></button></div>}
+    {menu.feedback && <div role="status" className="fixed bottom-4 right-4 z-1100 flex max-w-[calc(100vw-2rem)] items-center gap-3 rounded-lg border bg-popover p-3 text-sm text-popover-foreground shadow-lg"><span className="break-all">{menu.feedback}</span><button type="button" className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2 text-xs font-medium hover:bg-accent focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring" aria-label="Kopyalama bildirimini kapat" onClick={menu.clearFeedback}><X size={14} /><span>Kapat</span></button></div>}
   </>;
 }
 

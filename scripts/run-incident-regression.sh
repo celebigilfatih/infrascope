@@ -15,6 +15,7 @@ npx prisma migrate deploy
 npx eslint app/dashboard/alerts/page.tsx components/dashboard/IncidentDetailWorkspace.tsx app/api/alarm-incidents/route.ts tests/incident-e2e/alerts-operation-note-access.spec.ts tests/incident-e2e/alerts-assignment-access.spec.ts tests/incident-e2e/alerts-lifecycle-access.spec.ts tests/incident-e2e/alerts-acknowledge-access.spec.ts tests/incident-e2e/alerts-unacknowledge-access.spec.ts tests/incident-e2e/alerts-bulk-lifecycle-access.spec.ts tests/incident-e2e/alerts-bulk-assignment-access.spec.ts tests/incident-e2e/alerts-bulk-acknowledge-access.spec.ts tests/incident-e2e/bulk-acknowledge.spec.ts components/dashboard/IncidentBulkAssignment.tsx components/dashboard/IncidentBulkLifecycle.tsx lib/alarms/incident-bulk-lifecycle.ts tests/incident-e2e/alerts-archive-access.spec.ts tests/incident-e2e/alerts-legal-hold-access.spec.ts app/api/alarm-incidents/assignees/route.ts components/dashboard/IncidentExclusions.tsx app/api/alarms/whitelist/route.ts tests/incident-e2e/detail-exclusion-removal.spec.ts tests/incident-e2e/alerts-exclusion-loading.spec.ts tests/incident-e2e/alerts-exclusion-access.spec.ts tests/incident-e2e/exclusion-fixtures.ts tests/incident-e2e/alerts-exclusion-create-access.spec.ts tests/incident-e2e/session-fixtures.ts --max-warnings=0
 npm run type-check -- --incremental false
 npm run lint -- --max-warnings=0
+npm run test:dependency-security
 npx eslint components/ui/navigation-progress.tsx scripts/check-navigation-progress.cjs tests/incident-e2e/lint-regressions.spec.ts types/index.ts --max-warnings=0
 npm run test:navigation-progress
 npx eslint app/settings/audit/page.tsx components/audit/*.tsx lib/audit/*.ts app/api/audit/route.ts app/api/audit/export/route.ts scripts/check-audit-workspace.cjs tests/incident-e2e/audit-workspace.spec.ts --max-warnings=0
@@ -90,6 +91,7 @@ npm run test:nms-backup-view
 npm run test:nms-backups
 npx eslint app/network/NetworkTopologyContent.tsx components/topology/TopologyObjectMenu.tsx components/topology/BuildingDeviceWorkspace.tsx components/topology/BuildingNode.tsx tests/incident-e2e/topology-object-menu.spec.ts components/topology/TopologyInspector.tsx components/topology/CustomEdge.tsx components/topology/DeviceNode.tsx lib/topology/workspace.ts scripts/check-topology-workspace.cjs scripts/fixtures/topology-workspace.cjs scripts/check-incident-detail.cjs scripts/check-incident-collaboration.cjs tests/incident-e2e/topology-workspace.spec.ts --max-warnings=0
 npm run test:topology-workspace
+npx eslint tests/incident-e2e/topology-overview.spec.ts tests/incident-e2e/topology-navigation.ts components/topology/BuildingMapOverview.tsx components/topology/BuildingOverviewEdge.tsx lib/topology/building-overview.ts --max-warnings=0
 npm run test:topology-contracts
 npm run test:topology-building
 INFRASCOPE_BUILDING_DB_TEST=1 npm run test:building-devices:db
@@ -99,4 +101,8 @@ npm run test:snapshot-workspace-collector
 npm run test:incident-detail
 npm run test:incident-center
 npm run test:incident-collaboration
-npm run test:incidents:e2e
+if [ -n "${INFRASCOPE_E2E_SHARD:-}" ]; then
+  npm run test:incidents:e2e -- --shard="$INFRASCOPE_E2E_SHARD"
+else
+  npm run test:incidents:e2e
+fi

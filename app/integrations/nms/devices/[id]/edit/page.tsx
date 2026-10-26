@@ -298,7 +298,7 @@ export default function EditNmsDevicePage() {
             </Button>
             <div className="min-w-0">
               <p className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-primary"><Radio className="h-3.5 w-3.5" /> NMS İzleme</p>
-              <PageHeading section="nms" showIcon={false} className="!text-2xl !font-semibold">İzleme ayarları</PageHeading>
+              <PageHeading section="nms" showIcon={false} className="text-2xl! font-semibold!">İzleme ayarları</PageHeading>
               <p className="mt-1.5 text-sm text-muted-foreground">Cihaz bağlantısını, veri toplama sıklığını ve erişim bilgilerini yönetin.</p>
               <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-muted-foreground">
                 <span className="inline-flex min-w-0 items-center gap-1.5 font-medium text-foreground"><Server className="h-3.5 w-3.5 shrink-0" /><span className="break-all">{initialDevice.name}</span></span>
@@ -430,7 +430,7 @@ export default function EditNmsDevicePage() {
                 <Label htmlFor="snmp-version">SNMP sürümü</Label>
                 <select
                   id="snmp-version"
-                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   value={form.snmpVersion}
                   onChange={(event) => set('snmpVersion', event.target.value as SnmpVersion)}
                 >
@@ -456,11 +456,11 @@ export default function EditNmsDevicePage() {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="snmp-v3-security">Güvenlik seviyesi</Label>
-                      <select id="snmp-v3-security" className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" value={form.snmpV3SecurityLevel} onChange={(event) => set('snmpV3SecurityLevel', event.target.value as SnmpV3SecurityLevel)}><option value="authPriv">Doğrulama + şifreleme</option><option value="authNoPriv">Yalnızca doğrulama</option></select>
+                      <select id="snmp-v3-security" className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" value={form.snmpV3SecurityLevel} onChange={(event) => set('snmpV3SecurityLevel', event.target.value as SnmpV3SecurityLevel)}><option value="authPriv">Doğrulama + şifreleme</option><option value="authNoPriv">Yalnızca doğrulama</option></select>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="snmp-v3-auth-protocol">Doğrulama protokolü</Label>
-                      <select id="snmp-v3-auth-protocol" className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" value={form.snmpV3AuthProtocol} onChange={(event) => set('snmpV3AuthProtocol', event.target.value)}><option value="SHA">SHA</option><option value="SHA-256">SHA-256</option></select>
+                      <select id="snmp-v3-auth-protocol" className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" value={form.snmpV3AuthProtocol} onChange={(event) => set('snmpV3AuthProtocol', event.target.value)}><option value="SHA">SHA</option><option value="SHA-256">SHA-256</option></select>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="snmp-v3-auth-password">Doğrulama parolası</Label>
@@ -471,7 +471,7 @@ export default function EditNmsDevicePage() {
                       <>
                         <div className="space-y-2">
                           <Label htmlFor="snmp-v3-privacy-protocol">Şifreleme protokolü</Label>
-                          <select id="snmp-v3-privacy-protocol" className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" value={form.snmpV3PrivacyProtocol} onChange={(event) => set('snmpV3PrivacyProtocol', event.target.value)}><option value="AES">AES-128</option></select>
+                          <select id="snmp-v3-privacy-protocol" className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" value={form.snmpV3PrivacyProtocol} onChange={(event) => set('snmpV3PrivacyProtocol', event.target.value)}><option value="AES">AES-128</option></select>
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="snmp-v3-privacy-password">Şifreleme parolası</Label>
@@ -653,7 +653,7 @@ export default function EditNmsDevicePage() {
               </CardHeader>
               <CardContent className="space-y-5">
                 {changes.length ? <dl className={styles.changeList} aria-live="polite" aria-relevant="additions removals">
-                  {changes.map(change => <div key={change.label} className="space-y-1.5 border-b border-border pb-3 last:border-0 last:pb-0"><dt className="text-xs font-medium">{change.label}</dt><dd className="space-y-1 break-words text-xs"><span className="block text-muted-foreground"><span className="sr-only">Önceki değer: </span>{change.before}</span><span className="flex items-start gap-1.5 font-medium text-primary"><span aria-hidden="true">→</span><span><span className="sr-only">Yeni değer: </span>{change.secret && <ShieldCheck className="mr-1 inline h-3 w-3" />}{change.after}</span></span></dd></div>)}
+                  {changes.map(change => <div key={change.label} className="space-y-1.5 border-b border-border pb-3 last:border-0 last:pb-0"><dt className="text-xs font-medium">{change.label}</dt><dd className="space-y-1 wrap-break-word text-xs"><span className="block text-muted-foreground"><span className="sr-only">Önceki değer: </span>{change.before}</span><span className="flex items-start gap-1.5 font-medium text-primary"><span aria-hidden="true">→</span><span><span className="sr-only">Yeni değer: </span>{change.secret && <ShieldCheck className="mr-1 inline h-3 w-3" />}{change.after}</span></span></dd></div>)}
                 </dl> : <dl className="space-y-3 text-sm">
                   <SummaryRow label="Yönetim IP" value={form.managementIp || 'Girilmedi'} mono />
                   <SummaryRow label="SNMP" value={`SNMP${form.snmpVersion} · ${form.snmpPort}`} />

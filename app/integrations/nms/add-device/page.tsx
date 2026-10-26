@@ -313,7 +313,7 @@ export default function AddNmsDevicePage() {
                   {availableDevices.length > 8 && <div className="relative"><Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input aria-label="Envanterde cihaz ara" placeholder="Cihaz adı, IP adresi veya üretici ara…" value={deviceSearch} onChange={(event) => setDeviceSearch(event.target.value)} className="pl-9" /></div>}
                   <Field label="Cihaz" htmlFor="device" required>
                     <div className="relative">
-                      <select id="device" {...validationFor('device')} required disabled={saving || success} value={form.deviceId} onChange={(event) => selectDevice(event.target.value)} className="h-11 w-full appearance-none rounded-md border border-input bg-background px-3 pr-10 text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 aria-[invalid=true]:border-destructive">
+                      <select id="device" {...validationFor('device')} required disabled={saving || success} value={form.deviceId} onChange={(event) => selectDevice(event.target.value)} className="h-11 w-full appearance-none rounded-md border border-input bg-background px-3 pr-10 text-sm outline-hidden transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 aria-invalid:border-destructive">
                         <option value="">Envanterden cihaz seçin</option>
                         {selectedDevice && !filteredDevices.some((device) => device.id === selectedDevice.id) && <option value={selectedDevice.id}>{selectedDevice.name} · {deviceTypeLabel(selectedDevice.type)}</option>}
                         {filteredDevices.map((device) => <option key={device.id} value={device.id}>{device.name}{device.managementIp ? ` · ${device.managementIp}` : ''} · {deviceTypeLabel(device.type)}</option>)}
@@ -347,7 +347,7 @@ export default function AddNmsDevicePage() {
               <SectionHeading id="snmp-heading" icon={ShieldCheck} title="SNMP erişim ayarları" description="Sürümü ve kimlik bilgilerini cihazın mevcut SNMP yapılandırmasıyla eşleştirin." />
               <div className="grid gap-4 sm:grid-cols-[11rem_minmax(0,1fr)]">
                 <Field label="SNMP sürümü" htmlFor="snmpVersion">
-                  <div className="relative"><select id="snmpVersion" value={form.snmpVersion} onChange={(event) => set('snmpVersion', event.target.value as SnmpVersion)} className="h-10 w-full appearance-none rounded-md border border-input bg-background px-3 pr-9 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"><option value="v2c">SNMPv2c</option><option value="v3">SNMPv3</option></select><ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /></div>
+                  <div className="relative"><select id="snmpVersion" value={form.snmpVersion} onChange={(event) => set('snmpVersion', event.target.value as SnmpVersion)} className="h-10 w-full appearance-none rounded-md border border-input bg-background px-3 pr-9 text-sm outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"><option value="v2c">SNMPv2c</option><option value="v3">SNMPv3</option></select><ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /></div>
                 </Field>
                 {form.snmpVersion === 'v2c' && (
                   <Field label="Topluluk adı (community)" htmlFor="snmpCommunity" required>
@@ -362,10 +362,10 @@ export default function AddNmsDevicePage() {
                     <Input id="snmpV3Username" {...validationFor('snmpV3Username')} required autoComplete="off" placeholder="infrascope-monitor" value={form.snmpV3Username} onChange={(event) => set('snmpV3Username', event.target.value)} />
                   </Field>
                   <Field label="Güvenlik seviyesi" htmlFor="snmpV3SecurityLevel" required>
-                    <select id="snmpV3SecurityLevel" value={form.snmpV3SecurityLevel} onChange={(event) => set('snmpV3SecurityLevel', event.target.value as SnmpV3SecurityLevel)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"><option value="authPriv">Doğrulama + şifreleme</option><option value="authNoPriv">Yalnızca doğrulama</option></select>
+                    <select id="snmpV3SecurityLevel" value={form.snmpV3SecurityLevel} onChange={(event) => set('snmpV3SecurityLevel', event.target.value as SnmpV3SecurityLevel)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"><option value="authPriv">Doğrulama + şifreleme</option><option value="authNoPriv">Yalnızca doğrulama</option></select>
                   </Field>
                   <Field label="Doğrulama protokolü" htmlFor="snmpV3AuthProtocol">
-                    <select id="snmpV3AuthProtocol" value={form.snmpV3AuthProtocol} onChange={(event) => set('snmpV3AuthProtocol', event.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"><option value="SHA">SHA</option><option value="SHA-256">SHA-256</option></select>
+                    <select id="snmpV3AuthProtocol" value={form.snmpV3AuthProtocol} onChange={(event) => set('snmpV3AuthProtocol', event.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"><option value="SHA">SHA</option><option value="SHA-256">SHA-256</option></select>
                   </Field>
                   <Field label="Doğrulama parolası" htmlFor="snmpV3AuthPassword" required>
                     <div className="relative"><Input id="snmpV3AuthPassword" {...validationFor('snmpV3AuthPassword')} required type={showSnmpAuthPassword ? 'text' : 'password'} autoComplete="new-password" minLength={8} maxLength={255} value={form.snmpV3AuthPassword} onChange={(event) => set('snmpV3AuthPassword', event.target.value)} className="pr-10" /><PasswordToggle visible={showSnmpAuthPassword} onClick={() => setShowSnmpAuthPassword((visible) => !visible)} label="SNMPv3 doğrulama parolasını göster veya gizle" /></div>
@@ -373,7 +373,7 @@ export default function AddNmsDevicePage() {
                   {form.snmpV3SecurityLevel === 'authPriv' && (
                     <>
                       <Field label="Şifreleme protokolü" htmlFor="snmpV3PrivacyProtocol">
-                        <select id="snmpV3PrivacyProtocol" value={form.snmpV3PrivacyProtocol} onChange={(event) => set('snmpV3PrivacyProtocol', event.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"><option value="AES">AES-128</option></select>
+                        <select id="snmpV3PrivacyProtocol" value={form.snmpV3PrivacyProtocol} onChange={(event) => set('snmpV3PrivacyProtocol', event.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"><option value="AES">AES-128</option></select>
                       </Field>
                       <Field label="Şifreleme parolası" htmlFor="snmpV3PrivacyPassword" required>
                         <div className="relative"><Input id="snmpV3PrivacyPassword" {...validationFor('snmpV3PrivacyPassword')} required type={showSnmpPrivacyPassword ? 'text' : 'password'} autoComplete="new-password" minLength={8} maxLength={255} value={form.snmpV3PrivacyPassword} onChange={(event) => set('snmpV3PrivacyPassword', event.target.value)} className="pr-10" /><PasswordToggle visible={showSnmpPrivacyPassword} onClick={() => setShowSnmpPrivacyPassword((visible) => !visible)} label="SNMPv3 şifreleme parolasını göster veya gizle" /></div>
@@ -416,7 +416,7 @@ export default function AddNmsDevicePage() {
         </Card>
 
         <aside className={styles.summary} aria-label="İzleme özeti">
-          <div className={cn(styles.summaryCard, "overflow-hidden rounded-xl border border-border bg-card shadow-sm")}>
+          <div className={cn(styles.summaryCard, "overflow-hidden rounded-xl border border-border bg-card shadow-xs")}>
             <div className="border-b border-border bg-muted/25 p-5">
               <div className="flex items-center justify-between gap-2"><h2 className="flex items-center gap-2 font-semibold"><ClipboardCheck aria-hidden="true" className="h-4 w-4 text-primary" />İzleme özeti</h2><Badge variant="outline" className="bg-background text-xs">{completedSteps}/3 alan grubu hazır</Badge></div>
               <p className="mt-2 text-xs leading-5 text-muted-foreground">{selectedDevice ? 'Kaydetmeden önce yapılandırmayı kontrol edin.' : 'Başlamak için envanterden bir cihaz seçin.'}</p>
@@ -467,9 +467,9 @@ function PasswordToggle({ visible, onClick, label }: { visible: boolean; onClick
 
 function SelectedDevice({ device }: { device: InventoryDevice }) {
   const Icon = deviceTypeIcon(device.type);
-  return <div className="flex items-start gap-3 rounded-lg border border-primary/25 bg-primary/5 p-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-background text-primary"><Icon aria-hidden="true" className="h-4 w-4" /></span><div className="min-w-0 flex-1"><p className="break-words text-sm font-medium">{device.name}</p><p className="mt-0.5 break-words text-xs text-muted-foreground">{deviceTypeLabel(device.type)}{device.vendor ? ` · ${device.vendor}` : ''}{device.model ? ` · ${device.model}` : ''}</p></div><CheckCircle2 aria-hidden="true" className="mt-1 h-4 w-4 shrink-0 text-primary" /></div>;
+  return <div className="flex items-start gap-3 rounded-lg border border-primary/25 bg-primary/5 p-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-background text-primary"><Icon aria-hidden="true" className="h-4 w-4" /></span><div className="min-w-0 flex-1"><p className="wrap-break-word text-sm font-medium">{device.name}</p><p className="mt-0.5 wrap-break-word text-xs text-muted-foreground">{deviceTypeLabel(device.type)}{device.vendor ? ` · ${device.vendor}` : ''}{device.model ? ` · ${device.model}` : ''}</p></div><CheckCircle2 aria-hidden="true" className="mt-1 h-4 w-4 shrink-0 text-primary" /></div>;
 }
 
 function SummaryRow({ icon: Icon, label, value, mono = false }: { icon: LucideIcon; label: string; value: string; mono?: boolean }) {
-  return <div className="flex items-start justify-between gap-3"><dt className="flex shrink-0 items-center gap-2 text-muted-foreground"><Icon aria-hidden="true" className="mt-0.5 h-3.5 w-3.5" />{label}</dt><dd className={cn('min-w-0 break-words text-right font-medium', mono && 'break-all font-mono text-xs')}>{value}</dd></div>;
+  return <div className="flex items-start justify-between gap-3"><dt className="flex shrink-0 items-center gap-2 text-muted-foreground"><Icon aria-hidden="true" className="mt-0.5 h-3.5 w-3.5" />{label}</dt><dd className={cn('min-w-0 wrap-break-word text-right font-medium', mono && 'break-all font-mono text-xs')}>{value}</dd></div>;
 }

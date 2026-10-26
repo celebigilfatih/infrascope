@@ -104,7 +104,7 @@ export function Rack3D({ position, rotation = [0, 0, 0], name, maxUnits, operati
               <boxGeometry args={[RACK_WIDTH * 0.82, height * 0.92, RACK_DEPTH * 0.88]} />
               <meshStandardMaterial color={color} metalness={0.52} roughness={0.42} />
             </mesh>
-            <Text position={[0, 0, RACK_DEPTH * 0.45]} fontSize={Math.min(0.045, height * 0.52)} color="#ffffff" anchorX="center" maxWidth={RACK_WIDTH * 0.72}>
+            <Text font="/fonts/inter/InterVariable.ttf" position={[0, 0, RACK_DEPTH * 0.45]} fontSize={Math.min(0.045, height * 0.52)} color="#ffffff" anchorX="center" maxWidth={RACK_WIDTH * 0.72}>
               {device.name.length > 18 ? `${device.name.slice(0, 17)}…` : device.name}
             </Text>
             <mesh position={[RACK_WIDTH * 0.34, 0, RACK_DEPTH * 0.45]}>
@@ -117,7 +117,7 @@ export function Rack3D({ position, rotation = [0, 0, 0], name, maxUnits, operati
       })}
 
       {(hovered || isSelected) && (
-        <Text position={[0, rackHeight / 2 + 0.18, 0]} fontSize={0.12} color={isSelected ? '#22c55e' : '#e2e8f0'} anchorX="center" outlineWidth={0.008} outlineColor="#020617">
+        <Text font="/fonts/inter/InterVariable.ttf" position={[0, rackHeight / 2 + 0.18, 0]} fontSize={0.12} color={isSelected ? '#22c55e' : '#e2e8f0'} anchorX="center" outlineWidth={0.008} outlineColor="#020617">
           {name}
         </Text>
       )}

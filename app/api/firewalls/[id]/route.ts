@@ -15,7 +15,7 @@ import {
 import type { FortiGateConfig } from '@/lib/integrations/fortigate';
 import { inspectTrustedCaBundle } from '@/lib/firewall/tls-ca';
 
-type RouteContext = { params: { id: string } };
+type RouteContext = { params: Promise<{ id: string }> };
 
 async function requireAdmin(request: NextRequest) {
   const auth = await getRequestActor(request);
@@ -51,7 +51,8 @@ const safeDeviceSelect = {
   updatedAt: true,
 } as const;
 
-export async function GET(_request: NextRequest, { params }: RouteContext) {
+export async function GET(_request: NextRequest, props: RouteContext) {
+  const params = await props.params;
   const connector = await prisma.firewallConnector.findUnique({
     where: { id: params.id },
     include: {
@@ -83,7 +84,8 @@ export async function GET(_request: NextRequest, { params }: RouteContext) {
   return NextResponse.json({ success: true, data: { ...connector, integrationConfig: safeIntegrationConfig, tls, conflict } });
 }
 
-export async function PATCH(request: NextRequest, { params }: RouteContext) {
+export async function PATCH(request: NextRequest, props: RouteContext) {
+  const params = await props.params;
   try {
     const body = await request.json() as Record<string, unknown>;
     const managementHost = normalizeFirewallManagementHost(body.host);
@@ -157,7 +159,8 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
 }
 
 /** Removes only InfraScope's connection configuration; the inventory device remains intact. */
-export async function DELETE(request: NextRequest, { params }: RouteContext) {
+export async function DELETE(request: NextRequest, props: RouteContext) {
+  const params = await props.params;
   try {
     const actor = await requireAdmin(request);
     if (actor instanceof NextResponse) return actor;

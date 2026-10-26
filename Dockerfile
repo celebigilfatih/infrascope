@@ -6,7 +6,7 @@
 # ============================================================================
 # STAGE 1: BUILDER
 # ============================================================================
-FROM node:20 AS builder
+FROM node:24 AS builder
 
 # Disable lockfile patching bug in Next.js 14.2.35
 ENV NEXT_DISABLE_LOCKFILE_PATCH=1
@@ -35,6 +35,8 @@ COPY . .
 # Set build-time environment variables
 ARG NEXT_PUBLIC_API_URL=http://localhost:8170
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ARG RELEASE_VERSION=1.0.0
+ENV NEXT_PUBLIC_APP_VERSION=$RELEASE_VERSION
 
 # Build Next.js application
 RUN INFRASCOPE_BUILD=1 npm run build
@@ -42,7 +44,7 @@ RUN INFRASCOPE_BUILD=1 npm run build
 # ============================================================================
 # STAGE 2: DEPENDENCIES
 # ============================================================================
-FROM node:20 AS deps
+FROM node:24 AS deps
 
 WORKDIR /app
 
@@ -55,11 +57,15 @@ RUN npm ci --omit=dev --legacy-peer-deps && npm cache clean --force
 # ============================================================================
 # STAGE 3: RUNTIME
 # ============================================================================
-FROM node:20-slim
+FROM node:24-slim
 
 # Metadata
 LABEL maintainer="InfraScope Team"
-LABEL version="1.0.0"
+ARG RELEASE_VERSION=1.0.0
+ARG SOURCE_REVISION=unknown
+LABEL version=$RELEASE_VERSION
+LABEL org.opencontainers.image.version=$RELEASE_VERSION
+LABEL org.opencontainers.image.revision=$SOURCE_REVISION
 LABEL description="Enterprise Infrastructure Management Platform"
 
 # Install runtime dependencies - skip if network unavailable
@@ -85,6 +91,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
+ENV APP_VERSION=$RELEASE_VERSION
 
 # Copy built application from builder stage
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
@@ -93,6 +100,9 @@ COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 
 # Copy production dependencies from deps stage
 COPY --from=deps --chown=nextjs:nodejs /app/node_modules ./node_modules
+# Production dependency installation creates an uninitialized Prisma stub.
+# Keep the schema-specific client and engine generated in the matching Debian builder.
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
 
 # Copy Prisma schema and migrations
 COPY --chown=nextjs:nodejs prisma ./prisma

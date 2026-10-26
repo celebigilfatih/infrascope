@@ -1,6 +1,11 @@
 FROM python:3.11-slim
 
 WORKDIR /app
+ARG RELEASE_VERSION=1.0.0
+ARG SOURCE_REVISION=unknown
+LABEL org.opencontainers.image.version=$RELEASE_VERSION
+LABEL org.opencontainers.image.revision=$SOURCE_REVISION
+ENV APP_VERSION=$RELEASE_VERSION
 
 # System deps for SNMP CLI tools and paramiko
 RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g; s|http://security.debian.org|https://security.debian.org|g' /etc/apt/sources.list.d/debian.sources \

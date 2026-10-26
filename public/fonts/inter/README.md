@@ -16,3 +16,12 @@ directory also ships the original font and its license in production images.
 Keep the binary and license in source control. Updating the font is an explicit
 asset update: verify provenance, update the checksum in the font regression and
 rerun the network-isolated product build. Do not add an install/download step.
+
+`InterVariable.ttf` is the uncompressed representation of the same bundled WOFF2
+font for the 3D text renderer, which cannot consume the layout's WOFF2 directly.
+It retains the same family, axes, Turkish glyphs and accompanying OFL license.
+SHA-256: `c5de106eb3ffd7790cde68809043884c14380ce0bdb6560e812b75e1981fc61c`.
+It was generated with FontTools using `TTFont(source, recalcTimestamp=False)`,
+`font.flavor = None`, and `font.save(destination)`. The existing root layout still
+uses the original WOFF2. Both formats ship as source assets; no font converter or
+font download runs at installation, image startup or customer request time.
