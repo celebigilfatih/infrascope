@@ -94,6 +94,10 @@ For key rotation: stop NMS; retain the current key as `INTEGRATION_CREDENTIALS_P
 | `CREDENTIALS_UNAVAILABLE` | Restore the matching encryption key; do not replace it or overwrite encrypted data. |
 | `STORAGE_OR_WORKER_ERROR`, `WORKER_INTERRUPTED` | Check DB/storage capacity and NMS health; inspect sanitized logs and durable job state. |
 
+The device backup tab lists missing platform, management address, SSH credentials, trusted host key and role prerequisites, with links to the corresponding settings. A ready prerequisite check does not establish valid SSH authentication or a successful backup. Unsupported startup backups stay disabled independently of running backups; enabling a schedule is not required for manual capture.
+
+For HP ProCurve / ArubaOS-Switch, structural validation requires the `Configuration Editor` header and a `hostname` line. A failed check names the missing marker and selected profile without exposing configuration contents. Check the actual device OS/model and transport completion before changing the profile; do not infer the OS from the HP brand or bypass validation to save the output. Existing historical job messages are unchanged.
+
 ## Regression checks
 
 Create a dedicated database ending in `_backup_tests`, apply all Prisma migrations using that database URL, then:

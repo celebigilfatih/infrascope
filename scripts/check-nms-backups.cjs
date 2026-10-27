@@ -124,6 +124,22 @@ async function main() {
   assert.equal((await policies.PUT(request('PUT', { ...policy, platform: 'arbitrary-command' }))).status, 400);
   const capabilities = await (await deviceRoute.GET(request(), { params: { id: device.id } })).json();
   assert.equal(capabilities.permissions.startup, true);
+  assert.ok(capabilities.readiness, 'Device backup metadata must explain readiness and blocking prerequisites');
+  assert.equal(capabilities.readiness.ready, true);
+  const original = { ...device };
+  device.vendor = 'HP'; device.backupPlatform = null; device.sshHostKeyFingerprint = null;
+  const blocked = await (await deviceRoute.GET(request(), { params: { id: device.id } })).json();
+  assert.equal(blocked.readiness.ready, false);
+  assert.deepEqual(blocked.readiness.blockers.map(item => item.code), ['PLATFORM_REQUIRED', 'SSH_HOST_KEY_REQUIRED']);
+  assert.doesNotMatch(JSON.stringify(blocked), /encrypted-fixture|sshPassword|SHA256:fixture/);
+  assert.equal((await service.enqueueDeviceBackup(request('POST', {}, '', 'fixture-blocked-key'), device.id)).status, 422);
+  device.backupPlatform = 'aruba_switch'; device.sshHostKeyFingerprint = 'SHA256:fixture'; device.sshPassword = null;
+  const noCredentials = await (await deviceRoute.GET(request(), { params: { id: device.id } })).json();
+  assert.deepEqual(noCredentials.readiness.blockers.map(item => item.code), ['SSH_CREDENTIALS_REQUIRED']);
+  actor = { role: 'VIEWER', actor: { id: 'fixture-viewer' } };
+  const readOnly = await (await deviceRoute.GET(request(), { params: { id: device.id } })).json();
+  assert.equal(readOnly.readiness.blockers[0].code, 'PERMISSION_REQUIRED');
+  Object.assign(device, original); actor = { role: 'ADMIN', actor: { id: 'fixture-admin' } };
 
   // A fresh backup of a different type cannot hide a stale scheduled type.
   prisma.nmsBackupPolicy.findMany = async () => [{ ...policy, id: 'policy-current', nmsDeviceId: 75, inventoryDeviceId: device.id, backupType: 'Running Config' }];

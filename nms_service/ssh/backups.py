@@ -78,7 +78,17 @@ def validate_configuration(output: str, platform: str) -> str:
     else:
         valid = bool(re.search(r"(?i)routeros", output)) and any(line.startswith("/") for line in lines)
     if not valid:
-        raise BackupError("INCOMPLETE_OUTPUT", "Yapılandırma platformun bütünlük kontrolünü geçemedi.")
+        if validation == "procurve":
+            missing = []
+            if "Configuration Editor" not in output:
+                missing.append("Configuration Editor başlığı bulunamadı")
+            if not re.search(r"(?m)^hostname\s+\S+", output):
+                missing.append("hostname satırı bulunamadı")
+            reason = "; ".join(missing)
+        else:
+            reason = "beklenen yapılandırma yapısı veya bitiş işareti bulunamadı"
+        raise BackupError("INCOMPLETE_OUTPUT", f"{PROFILES[platform]['label']}: {reason}. "
+                          "Seçilen platformu ve cihazın işletim sistemini kontrol edin; çıktı eksik olabilir. Yedek kaydedilmedi.")
     return output
 
 

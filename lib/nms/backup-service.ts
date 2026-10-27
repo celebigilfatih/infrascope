@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { getRequestActor } from '@/lib/auth/request-actor';
 import { unprotectNmsBackup } from '@/lib/security/integration-credentials';
-import { canManageBackups, resolveBackupPlatform, supportsBackupType } from './backup-platform';
+import { canManageBackups, getBackupReadiness, resolveBackupPlatform, supportsBackupType } from './backup-platform';
 
 export const jobSelect = {
   id: true, nmsDeviceId: true, deviceName: true, backupType: true, status: true,
@@ -35,7 +35,8 @@ export async function enqueueDeviceBackup(req: NextRequest, inventoryId: string)
   const platform = resolveBackupPlatform(device);
   if (!platform) return NextResponse.json({ error: 'Cihazın yedekleme platformunu ayarlardan seçin.', code: 'UNSUPPORTED_PLATFORM' }, { status: 422 });
   if (!supportsBackupType(platform, parsed.data.backupType)) return NextResponse.json({ error: 'Bu platform seçilen yedek türünü desteklemiyor.', code: 'UNSUPPORTED_TYPE' }, { status: 422 });
-  if (!device.sshUsername || !device.sshPassword || !device.sshHostKeyFingerprint) return NextResponse.json({ error: 'SSH bilgileri ve cihaz anahtarı onayı gerekiyor.' }, { status: 422 });
+  const readiness = getBackupReadiness(device, auth.role);
+  if (!readiness.ready) return NextResponse.json({ error: readiness.blockers[0].message, code: readiness.blockers[0].code }, { status: 422 });
   const respond = (job: Prisma.NmsBackupJobGetPayload<{ select: typeof jobSelect }>, reused: boolean) =>
     NextResponse.json({ success: true, accepted: true, reused, job }, { status: 202, headers: { 'Cache-Control': 'private, no-store' } });
   const existing = await prisma.nmsBackupJob.findUnique({ where: { idempotencyKey }, select: { ...jobSelect, inventoryDeviceId: true } });

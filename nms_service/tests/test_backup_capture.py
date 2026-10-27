@@ -77,6 +77,17 @@ class CaptureTests(unittest.TestCase):
             with self.subTest(platform=platform), self.assertRaises(BackupError):
                 validate_configuration(FIXTURES[platform].rsplit(marker, 1)[0], platform)
 
+    def test_structural_failure_explains_missing_procurve_marker_without_config_contents(self):
+        for original, expected in [('Configuration Editor', 'Configuration Editor'), ('hostname "fixture-switch"', 'hostname')]:
+            output = FIXTURES['aruba_switch'].replace(original, 'fixture-private-value')
+            with self.subTest(marker=original), self.assertRaises(BackupError) as error:
+                validate_configuration(output, 'aruba_switch')
+            self.assertEqual(error.exception.code, 'INCOMPLETE_OUTPUT')
+            self.assertIn('HP ProCurve / ArubaOS-Switch', str(error.exception))
+            self.assertIn(expected, str(error.exception))
+            self.assertNotIn('fixture-private-value', str(error.exception))
+            self.assertFalse(error.exception.retryable)
+
     def test_pager_error_and_invalid_encoding_rejected(self):
         for output in [IOS+'--More--', IOS+'\n% Invalid input', IOS+'\ufffd', 'hostname short']:
             with self.assertRaises(BackupError): validate_configuration(output, 'cisco_ios')

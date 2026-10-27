@@ -30,3 +30,22 @@ export function supportsBackupType(platform: BackupPlatform | null, type: string
 export function canManageBackups(role: string): boolean {
   return role === 'ADMIN' || role === 'EDITOR';
 }
+
+export interface BackupReadiness {
+  ready: boolean;
+  platform: { id: BackupPlatform; label: string } | null;
+  blockers: Array<{ code: string; message: string; action: 'platform' | 'ssh' | null }>;
+}
+
+export function getBackupReadiness(device: Parameters<typeof resolveBackupPlatform>[0] & {
+  managementIp?: string | null; sshUsername?: string | null; sshPassword?: string | null; sshHostKeyFingerprint?: string | null;
+}, role: string): BackupReadiness {
+  const platform = resolveBackupPlatform(device);
+  const blockers: BackupReadiness['blockers'] = [];
+  if (!canManageBackups(role)) blockers.push({ code: 'PERMISSION_REQUIRED', message: 'Yeni yedek başlatmak için yönetici veya düzenleyici yetkisi gerekir.', action: null });
+  if (!platform) blockers.push({ code: 'PLATFORM_REQUIRED', message: 'Yedekleme platformu seçilmemiş.', action: 'platform' });
+  if (!device.managementIp) blockers.push({ code: 'MANAGEMENT_IP_REQUIRED', message: 'Cihazın yönetim IP adresi eksik.', action: 'ssh' });
+  if (!device.sshUsername || !device.sshPassword) blockers.push({ code: 'SSH_CREDENTIALS_REQUIRED', message: 'SSH kullanıcı adı veya kayıtlı parola eksik.', action: 'ssh' });
+  if (!device.sshHostKeyFingerprint) blockers.push({ code: 'SSH_HOST_KEY_REQUIRED', message: 'SSH cihaz anahtarı henüz onaylanmamış.', action: 'ssh' });
+  return { ready: blockers.length === 0, platform: platform ? { id: platform, label: BACKUP_PROFILES[platform].label } : null, blockers };
+}

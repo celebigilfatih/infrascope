@@ -48,6 +48,7 @@ import Link from 'next/link';
 import { usePageBreadcrumb } from '@/components/layout/BreadcrumbProvider';
 import { apiGet, apiPost } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import type { BackupReadiness } from '@/lib/nms/backup-platform';
 import styles from './page.module.css';
 
 interface DbNmsBackup {
@@ -147,6 +148,7 @@ export default function ViewNmsDevicePage() {
   const [backupError, setBackupError] = useState<string | null>(null);
   const [triggering, setTriggering] = useState(false);
   const [backupAccess, setBackupAccess] = useState({ create: false, running: false, startup: false });
+  const [backupReadiness, setBackupReadiness] = useState<BackupReadiness | null>(null);
   const [activeBackupJob, setActiveBackupJob] = useState<string | null>(null);
   const [triggerResult, setTriggerResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [viewBackup, setViewBackup] = useState<{ id: string; config: string; type: string; createdAt: string } | null>(null);
@@ -194,10 +196,11 @@ export default function ViewNmsDevicePage() {
   const loadBackups = useCallback(async () => {
     setBackupsLoading(true);
     setBackupError(null);
+    setBackupReadiness(null);
     try {
       const res = await fetch(`/api/integrations/nms/devices/${deviceId}/backups`);
       const data = await res.json();
-      if (res.ok) { setBackups(data.backups || []); setBackupAccess(data.permissions || { create: false, running: false, startup: false }); setBackupsLoaded(true); }
+      if (res.ok) { setBackups(data.backups || []); setBackupAccess(data.permissions || { create: false, running: false, startup: false }); setBackupReadiness(data.readiness || null); setBackupsLoaded(true); }
       else setBackupError(uiError(data.error || 'Yedek listesi yüklenemedi.'));
     } catch (e: unknown) {
       setBackupError(uiError(e instanceof Error ? e.message : 'Yedekleme işlemi başarısız.'));
@@ -683,11 +686,11 @@ export default function ViewNmsDevicePage() {
           {/* Trigger buttons */}
           <p className="text-sm leading-6 text-muted-foreground">Çalışan veya başlangıç yapılandırmasını yedekleyin; önceki yedekleri görüntüleyin ve indirin.</p>
           <div className="flex flex-wrap items-center gap-3">
-            <Button size="sm" className="gap-2 bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => triggerBackup('Running Config')} disabled={triggering || !!activeBackupJob || !backupsLoaded || !backupAccess.create || !backupAccess.running}>
+            <Button size="sm" className="gap-2 bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => triggerBackup('Running Config')} aria-describedby="backup-readiness" disabled={triggering || !!activeBackupJob || backupsLoading || !backupReadiness?.ready || !backupsLoaded || !backupAccess.create || !backupAccess.running}>
               {triggering ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
               Çalışan yapılandırmayı yedekle
             </Button>
-            <Button size="sm" variant="outline" className="gap-2" onClick={() => triggerBackup('Startup Config')} disabled={triggering || !!activeBackupJob || !backupsLoaded || !backupAccess.create || !backupAccess.startup}>
+            <Button size="sm" variant="outline" className="gap-2" onClick={() => triggerBackup('Startup Config')} aria-describedby="backup-readiness" disabled={triggering || !!activeBackupJob || backupsLoading || !backupReadiness?.ready || !backupsLoaded || !backupAccess.create || !backupAccess.startup}>
               {triggering ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
               Başlangıç yapılandırmasını yedekle
             </Button>
@@ -697,7 +700,15 @@ export default function ViewNmsDevicePage() {
           </div>
 
           {/* Trigger result */}
-          {backupsLoaded && (!backupAccess.create || !backupAccess.running || !backupAccess.startup) && <p className="text-xs leading-5 text-muted-foreground">{!backupAccess.create ? 'Yeni yedek başlatmak için yönetici yetkisi gerekir.' : 'Yalnızca cihaz platformunun desteklediği yedek türleri kullanılabilir.'}</p>}
+          <div id="backup-readiness" role="status" className="space-y-2 rounded-lg border border-border bg-muted/30 p-4 text-sm leading-6">
+            {backupReadiness?.platform && <p className="font-medium">Seçili platform: {backupReadiness.platform.label}</p>}
+            {!backupReadiness ? <p>{backupsLoading ? 'Yedekleme ön koşulları kontrol ediliyor…' : 'Yedekleme ön koşulları doğrulanamadı. Listeyi yeniden yükleyin.'}</p> : <>
+              {backupReadiness.blockers.length > 0 ? <ul className="list-disc space-y-1 pl-5">{backupReadiness.blockers.map(blocker => <li key={blocker.code}>{blocker.message}</li>)}</ul> : <p>Ön koşullar tamam. SSH erişimi ve yapılandırma çıktısı yedekleme sırasında doğrulanır.</p>}
+              {backupReadiness.blockers.some(blocker => blocker.action === 'platform') && <p><Link className="font-medium text-primary underline underline-offset-4" href="/integrations/nms/backups">Platform ayarlarını aç</Link><span className="text-muted-foreground"> · Zamanlama bölümünden cihazı ve işletim sistemi platformunu seçin. Elle yedek için zamanlamayı etkinleştirmek gerekmez.</span></p>}
+              {backupReadiness.blockers.some(blocker => blocker.action === 'ssh') && <p><Link className="font-medium text-primary underline underline-offset-4" href={`/integrations/nms/devices/${deviceId}/edit#ssh-section`}>SSH ayarlarını aç</Link><span className="text-muted-foreground"> · Bağlantı bilgilerini ve cihaz anahtarını doğrulayın.</span></p>}
+              {backupReadiness.platform && !backupAccess.startup && <p>Bu platform başlangıç yapılandırması yedeğini desteklemiyor.</p>}
+            </>}
+          </div>
           {triggerResult && (
             <div role={triggerResult.ok ? 'status' : 'alert'} className={`flex items-start gap-2 p-3 rounded-lg text-sm border ${
               triggerResult.ok
