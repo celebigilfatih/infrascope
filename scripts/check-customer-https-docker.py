@@ -52,6 +52,7 @@ def main():
     events = []
     fixtures = []
     owned_volumes = []
+    owned_containers = []
     failed = True
 
     def run(command, data=None, expect_failure=False):
@@ -218,6 +219,19 @@ def main():
         caddy = 'caddy@sha256:eb4d35b7452d1ab6171fbdbe8d9275b2301dad6dad92115d91e19fb9b24d510f'
         restored_ca = run(['docker', 'run', '--rm', '--network', 'none', '--volume', volume + ':/target', '--volume', str(recovery) + ':/recovery:ro', caddy, 'sh', '-ec', 'tar -xf /recovery/https-recovery.tar -C /target; sha256sum /target/caddy/pki/authorities/local/root.crt']).split()[0]
         check(restored_ca == old_ca, 'Restored separate CA volume has the same trusted fingerprint')
+        restored_proxy='infrascope-rc110-restored-'+uuid.uuid4().hex[:10]
+        restored_port=free_port()
+        owned_containers.append(restored_proxy)
+        run(['docker','run','--detach','--name',restored_proxy,'--network',old_project+'_infrascope-net','--read-only','--cap-drop','ALL','--cap-add','NET_BIND_SERVICE','--tmpfs','/tmp','--tmpfs','/config','--volume',volume+':/data','--volume',str(ROOT/'deploy/https/Caddyfile')+':/etc/caddy/Caddyfile:ro','--publish',f'127.0.0.1:{restored_port}:443','--env','PUBLIC_HOST=127.0.0.1',caddy])
+        recovered_client=urllib.request.build_opener(urllib.request.ProxyHandler({}),urllib.request.HTTPSHandler(context=ssl.create_default_context(cafile=str(external/'infrascope-root-ca.crt'))))
+        usable=False
+        for _ in range(30):
+            try:
+                usable=json.load(recovered_client.open(f'https://127.0.0.1:{restored_port}/api/health/ready',timeout=2))['status']=='ready'
+                if usable:break
+            except (urllib.error.URLError,TimeoutError):
+                time.sleep(.5)
+        check(usable,'Restored CA private keys serve usable HTTPS trusted by the original public certificate')
         run(compose(old) + ['cp', recovery / 'database.dump', 'postgres:/tmp/release-restore.dump'])
         run(compose(old) + ['exec', '-T', 'postgres', 'createdb', '-U', 'infrascope', 'release_restore_fixture'])
         run(compose(old) + ['exec', '-T', 'postgres', 'pg_restore', '--no-owner', '--no-acl', '-U', 'infrascope', '-d', 'release_restore_fixture', '/tmp/release-restore.dump'])
@@ -225,6 +239,9 @@ def main():
         failed = False
     finally:
         cleanup_errors = []
+        for container in owned_containers:
+            result=subprocess.run(['docker','rm','--force',container],capture_output=True)
+            if result.returncode:cleanup_errors.append('Restored proxy cleanup failed: '+container)
         for entry in reversed(fixtures):
             root, project, *_ = entry
             if (root / '.env').exists():

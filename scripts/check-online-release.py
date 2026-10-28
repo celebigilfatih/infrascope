@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 import zipfile
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -43,10 +44,18 @@ class OnlineRelease(unittest.TestCase):
                 self.assertIn(f'  {service}:', pins)
             self.assertIn('ghcr.io/celebigilfatih/infrascope-customer@sha256:' + '1' * 64, pins)
             self.assertIn(b'VERSION=1.0.2\n', archive.read('infrascope/env.example'))
+
             for name in ('update.ps1', 'release-common.ps1', 'install.ps1', 'backup.ps1'):
                 self.assertIn('infrascope/' + name, names)
         sums = (self.output / 'SHA256SUMS-online-1.0.2.txt').read_text()
         self.assertIn(hashlib.sha256(target.read_bytes()).hexdigest(), sums)
+
+    def test_same_source_and_digests_produce_identical_zip_bytes_at_different_times(self):
+        with patch('zipfile.time.localtime',return_value=(2020,1,2,3,4,6,3,2,-1)):
+            before=self.build().read_bytes()
+        with patch('zipfile.time.localtime',return_value=(2026,10,28,9,10,12,2,301,-1)):
+            after=self.build().read_bytes()
+        self.assertEqual(hashlib.sha256(before).hexdigest(),hashlib.sha256(after).hexdigest())
 
     def test_invalid_version_repository_or_digest_is_rejected(self):
         for override in ({'version': 'latest'}, {'repository': '../private'}, {'app_digest': 'latest'},

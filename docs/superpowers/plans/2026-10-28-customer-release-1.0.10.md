@@ -56,10 +56,10 @@
 
 **Interfaces:** coordinator accepts installation root/project, public IPv4, HTTPS/legacy/backend ports and an existing installation lock. It returns the CA-verified HTTPS URL, exported public CA path/hash and owned proxy identities.
 
-- [ ] Add failing tests for clean enrollment, existing standalone CA reuse, lock ownership, occupied port, canceled/failed transition and resumable completion.
-- [ ] Reuse the pinned separate proxies and journals; avoid nested update-lock deadlock and preserve existing completed proxy configurations.
-- [ ] Include required TLS state/CA recovery material in the mandatory encrypted backup; prove recovery into a separate synthetic installation preserves the CA fingerprint.
-- [ ] Run focused Windows/Docker tests; commit when green.
+- [x] Add failing tests for clean enrollment, existing standalone CA reuse, lock ownership, occupied port, canceled/failed transition and resumable completion.
+- [x] Reuse the pinned separate proxies and journals; avoid nested update-lock deadlock and preserve existing completed proxy configurations.
+- [x] Include required TLS state/CA recovery material in the mandatory encrypted backup; prove recovery into a separate synthetic installation preserves the CA fingerprint.
+- [x] Run focused Windows/Docker tests; commit when green.
 
 ## Task 4: Portable production installation/update rehearsal
 
@@ -67,10 +67,10 @@
 
 **Interfaces:** consumes candidate app/NMS images and package; real Docker/PostgreSQL/TLS/session behavior with synthetic data. Mock only GitHub transport for unpublished assets where necessary.
 
-- [ ] Replace the ignored historical fixture's dependency on local pilot output with source-controlled setup.
-- [ ] Verify empty database installation, fresh separate CA identities, legacy HTTP308 path/query/fixed target, TLS-authenticated readiness and real login/refresh.
-- [ ] Install official1.0.9, create synthetic data/settings/identity, upgrade with encrypted backup, interrupt/retry, and prove data and CA preservation plus restoration.
-- [ ] Assert cleanup of every owned synthetic project/volume; preserve shared/live services.
+- [x] Replace the ignored historical fixture's dependency on local pilot output with source-controlled setup.
+- [x] Verify empty database installation, fresh separate CA identities, legacy HTTP308 path/query/fixed target, TLS-authenticated readiness and real login/refresh.
+- [x] Install official1.0.9, create synthetic data/settings/identity, upgrade with encrypted backup, interrupt/retry, and prove data and CA preservation plus restoration.
+- [x] Assert cleanup of every owned synthetic project/volume; preserve shared/live services.
 
 ## Task 5: Freeze, build and validate the final source
 

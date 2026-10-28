@@ -45,9 +45,14 @@ def build(*, root, output, version, repository, revision, app_digest, nms_digest
     payload['release.json'] = (json.dumps(manifest, indent=2) + '\n').encode()
     output.mkdir(parents=True, exist_ok=True)
     target = output / f'infrascope-windows-online-{version}.zip'
-    with zipfile.ZipFile(target, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
+    # Tiny text-only payload: fixed metadata and no zlib-version dependency keep
+    # locally rehearsed and CI-created archives byte-identical for the same inputs.
+    with zipfile.ZipFile(target, 'w', compression=zipfile.ZIP_STORED) as archive:
         for name, data in sorted(payload.items()):
-            archive.writestr('infrascope/' + name, data)
+            entry=zipfile.ZipInfo('infrascope/' + name,date_time=(1980,1,1,0,0,0))
+            entry.create_system=3
+            entry.external_attr=0o100644 << 16
+            archive.writestr(entry, data)
     bootstrap = output / 'install-infrascope.ps1'
     bootstrap.write_bytes((root / 'deploy/install-infrascope.ps1').read_bytes())
     sums = ''.join(f'{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}\n' for path in (target, bootstrap))

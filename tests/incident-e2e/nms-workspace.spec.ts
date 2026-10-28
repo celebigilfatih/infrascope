@@ -29,7 +29,12 @@ async function mockNms(page: Page) {
   return { state, probes, saves, errors };
 }
 async function capture(page: Page, info: TestInfo, name: string) { await info.attach(name, { body: await page.screenshot({ animations: 'disabled' }), contentType: 'image/png' }); }
-async function selectDevice(page: Page) { await page.goto('/integrations/nms/add-device'); await page.locator('#device').selectOption('fixture-new-device'); }
+async function selectDevice(page: Page) {
+  await page.goto('/integrations/nms/add-device');
+  await page.getByRole('combobox', { name: 'Cihaz adı veya IP ile ara', exact: true }).fill('Fixture inventory device');
+  await page.getByRole('option', { name: /Fixture inventory device/ }).click();
+  await expect(page.locator('#managementIp')).toHaveValue('192.0.2.10');
+}
 const probeButton = (page: Page) => page.getByRole('button', { name: 'SNMP bağlantısını test et', exact: true });
 const probePanel = (page: Page) => page.getByRole('region', { name: /SNMP bağlantı testi/ });
 

@@ -82,6 +82,7 @@ class CustomerGuides(unittest.TestCase):
         self.assertIn('-Destination',commands['update'])
         self.assertNotIn('-File .\\update.ps1',commands['update'])
         self.assertNotIn('http://localhost:8170',commands['health'])
+        self.assertLess(text.index('<section id="sertifika">'),text.index('<section id="ilk-giris">'))
 
     def test_invalid_versions_repository_and_date_are_rejected(self):
         args = self.fixture()

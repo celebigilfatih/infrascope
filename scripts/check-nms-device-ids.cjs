@@ -1,4 +1,5 @@
 // Actual NMS enable/discovery/firewall routes and allocator. Synthetic source/auth/ORM only.
+/* eslint-disable @typescript-eslint/no-require-imports -- CommonJS fixture runner. */
 const assert = require('node:assert/strict');
 const { NextRequest, NextResponse } = require('next/server');
 const { moduleLoader } = require('./check-alarm-occurrences.cjs');
@@ -173,7 +174,8 @@ test('SSH-only firewall onboarding still obtains its own NMS identity', async ()
 test('SNMPv3 and SSH secrets remain encrypted and absent from enable responses', async () => {
   const f = fixture(), device = await f.addDevice();
   const response = await f.enable(device, { snmpVersion: '3', snmpV3Username: 'fixture', snmpV3SecurityLevel: 'authPriv',
-    snmpV3AuthPassword: 'fixture-auth-secret', snmpV3PrivacyPassword: 'fixture-privacy-secret', sshPassword: 'fixture-ssh-secret' });
+    snmpV3AuthPassword: 'fixture-auth-secret', snmpV3PrivacyPassword: 'fixture-privacy-secret',
+    backupPlatform: 'cisco_ios', sshUsername: 'fixture', sshPassword: 'fixture-ssh-secret' });
   assert.equal(response.status, 201); const body = await response.json();
   for (const key of ['snmpV3AuthPassword', 'snmpV3PrivacyPassword', 'sshPassword']) {
     assert.match(f.state.devices[0][key], /^enc:v1:/); assert.equal(body.device[key], undefined);
