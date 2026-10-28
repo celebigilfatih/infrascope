@@ -72,6 +72,8 @@ CUSTOM_SETTING=customer-$value
 function New-Installation([string]$Name) {
     $root = Join-Path $scratch $Name
     [IO.Directory]::CreateDirectory($root) | Out-Null
+    [IO.Directory]::CreateDirectory((Join-Path $root 'https')) | Out-Null
+    Copy-Item -LiteralPath (Join-Path $source 'deploy/https/private-files.ps1') -Destination (Join-Path $root 'https/private-files.ps1')
     foreach ($name in @('update.ps1', 'release-common.ps1', 'release-https.ps1', 'docker-compose.yml')) {
         Copy-Item -LiteralPath (Join-Path $source "deploy/$name") -Destination $root
     }

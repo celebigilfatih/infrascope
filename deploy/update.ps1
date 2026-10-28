@@ -47,6 +47,7 @@ try {
             (Get-ReleaseLabel $info.Config.Labels 'com.docker.compose.project.working_dir') -ine $InstallationRoot) { throw 'Application container belongs to another installation.' }
     }
     $https = Get-ReleaseHttpsContext -InstallationRoot $InstallationRoot -Project $project -PublicIp $PublicIp -HttpsDirectory $HttpsDirectory -HttpsPort $HttpsPort -LegacyPort $LegacyPort -BackendPort $BackendPort
+    Assert-ReleaseHttpsUpdateReady -Context $https -UpdateJournal $journal -Manifest $package.Manifest
     if (-not $journal -and $Version -ceq $current -and (Test-Path -LiteralPath (Join-Path $InstallationRoot 'release.json')) -and (-not $https -or ($https.Existing -and $https.RedirectComplete -and -not $https.NeedsSetup))) {
         Test-ReleasePayload $InstallationRoot $Version $Repository | Out-Null
         if ($https) { Enable-ReleaseHttps -Context $https -InstallationLock $lock -SourceRoot $package.Root | Out-Null }
@@ -114,7 +115,11 @@ try {
         Copy-Item -LiteralPath (Join-Path $package.Root $name) -Destination $destination -Force
     }
     Set-ReleaseVersion $envPath $Version
-    $journal.appliedEnvHash = Get-ReleaseHash $envPath
+    $appliedHash=Get-ReleaseHash $envPath
+    if($appliedHash -cnotin @($journal.appliedEnvHash,$journal.secureEnvHash)){
+        $ownedRedirect=if($https -and (Test-Path -LiteralPath (Join-Path $https.Root '.redirect-state.json'))){Get-Content -LiteralPath (Join-Path $https.Root '.redirect-state.json') -Raw|ConvertFrom-Json}else{$null}
+        if(-not $ownedRedirect -or $ownedRedirect.beforeHash -cne $journal.appliedEnvHash -or $ownedRedirect.afterHash -cne $appliedHash){throw 'Applied ENV differs from the planned recovery transition.'}
+    }
     Write-ReleaseJson $journalPath $journal
     $compose = @(Get-ReleaseCompose $InstallationRoot $project)
     Invoke-ReleaseDocker ($compose + @('config', '--quiet'))

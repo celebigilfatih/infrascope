@@ -19,9 +19,19 @@
 <p>Windows VM’ye uzaktan bağlan. Docker Desktop’ı çalıştıran kullanıcıyla PowerShell aç. Docker’ın Linux konteyner motoru açık ve internet bağlantısı erişilebilir olmalı.</p>
 <p>Mevcut kurulumun <code>C:\InfraScope\infrascope</code> konumunda olduğunu ve kurtarma parolası dosyasının <code>C:\Private\infrascope-recovery-passphrase.txt</code> yolunda bulunduğunu doğrula. Farklıysa komuttaki yolları düzelt. Parola dosyası mevcut yedekleme için kullandığın, en az 16 baytlık tek satırlık UTF-8 dosya olmalı.</p>
 <div class="note maintenance"><strong>Bakım zamanı:</strong> Mevcut 1.0.9 betiği yedeği aldıktan sonra app/NMS servislerini durdurur. Yedek başlamadan önce kullanıcı işlemlerini, entegrasyon ve harici DB yazmalarını durdur; güncelleme tamamlanana kadar yeniden başlatma. Yedekten sonra yapılan yazmalar kurtarma noktasında bulunmaz.</div>
-<div class="codebox"><div class="codehead"><span>Müşteri VM’sinde · PowerShell</span><button type="button" data-copy="customer">Komutları kopyala</button></div><pre><code id="customer">Set-Location 'C:\InfraScope\infrascope'
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\update.ps1 -Version (Read-Host 'Yayımlanan hedef sürüm (başında v olmadan)') -PassphraseFile 'C:\Private\infrascope-recovery-passphrase.txt'</code></pre></div>
-<p>Sorulduğunda <a href="https://github.com/celebigilfatih/infrascope/releases">GitHub Releases</a> sayfasında gerçekten yayımlanmış hedef sürümü yaz. Biçim örneği: <code>1.0.10</code>; bu örnek, o sürümün yayımlandığı anlamına gelmez. <code>v</code> öneki veya <code>latest</code> yazma.</p>
+<div class="codebox"><div class="codehead"><span>Müşteri VM’sinde · PowerShell</span><button type="button" data-copy="customer">Komutları kopyala</button></div><pre><code id="customer">&amp; {
+  $ErrorActionPreference = 'Stop'
+  $version = Read-Host 'Yayimlanan hedef surum (basinda v olmadan)'
+  if ($version -notmatch '^\d+\.\d+\.\d+$') { throw 'Gecerli sabit surum girin.' }
+  $release = Invoke-RestMethod "https://api.github.com/repos/celebigilfatih/infrascope/releases/tags/v$version"
+  $assets = @($release.assets | Where-Object name -eq 'install-infrascope.ps1')
+  if ($assets.Count -ne 1 -or $assets[0].digest -notmatch '^sha256:[a-f0-9]{64}$') { throw 'Dogrulanmis baslatici bulunamadi.' }
+  $path = Join-Path $env:TEMP "infrascope-update-$version.ps1"
+  Invoke-WebRequest $assets[0].browser_download_url -OutFile $path -UseBasicParsing
+  if ('sha256:' + (Get-FileHash $path -Algorithm SHA256).Hash.ToLowerInvariant() -cne $assets[0].digest) { throw 'Baslatici SHA256 uyusmuyor.' }
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File $path -Version $version -Update -Destination 'C:\InfraScope\infrascope' -PassphraseFile 'C:\Private\infrascope-recovery-passphrase.txt'
+}</code></pre></div>
+<p>1.0.9 dahil mevcut kurulumlarda hedef sürümün yeni başlatıcısı indirilip GitHub asset SHA256 değeriyle doğrulanır; eski kurulu güncelleyicinin dosya listesine bağlı kalınmaz. Mevcut HTTPS/CA korunur. Henüz HTTPS yoksa yeni başlatıcı komutuna <code>-PublicIp SUNUCU_IP</code> ekleyin. Sorulduğunda <a href="https://github.com/celebigilfatih/infrascope/releases">GitHub Releases</a> sayfasında gerçekten yayımlanmış hedef sürümü yaz. Biçim örneği: <code>1.0.10</code>; bu örnek, o sürümün yayımlandığı anlamına gelmez. <code>v</code> öneki veya <code>latest</code> yazma.</p>
 <p>Betik paket ve dosya özetlerini doğrular, sabitlenmiş imajları indirir, zorunlu şifreli yedek alır ve güncellemeyi uygular. Mevcut veritabanı, ayarlar, lisans ve makine kimliği korunur; <code>.env</code> içinde yalnız <code>VERSION</code> güncellenir.</p>
 <h3>Başarıyı kontrol et</h3>
 <p><code>Update complete</code> mesajını ve servis sağlığı sonucunu gör. Uygulamayı <a href="http://localhost:8170">http://localhost:8170</a> adresinde aç; müşteri verileri ve kullanılan entegrasyonları kontrol et. Özel port kullanılıyorsa kendi adresini aç. Ekranda belirtilen <code>.isbackup</code> yedeğini VM dışındaki güvenli depoya kopyala; parolayı ayrı sakla.</p>

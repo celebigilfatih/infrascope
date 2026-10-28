@@ -52,6 +52,7 @@ if($PublicIp){
 }
 $newInstallation = -not (Test-Path -LiteralPath $envPath)
 if ($newInstallation) { Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'env.example') -Destination $envPath }
+Protect-ReleasePrivateFile -Path $envPath
 $lines = [Collections.Generic.List[string]]::new()
 foreach ($line in [IO.File]::ReadAllLines($envPath)) { $lines.Add($line) }
 function Get-Setting([string]$Key) {
@@ -87,13 +88,7 @@ if (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'release.json')) {
     $metadata = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'release.json') -Raw | ConvertFrom-Json
     $onlineRelease = Test-ReleasePayload $PSScriptRoot $version $metadata.repository
 }
-[IO.File]::WriteAllLines($envPath, $lines, [Text.UTF8Encoding]::new($false))
-# The ENV and recovery files contain private installation keys.
-if ($env:OS -eq 'Windows_NT') {
-    $owner = [Security.Principal.WindowsIdentity]::GetCurrent().Name
-    & icacls $envPath /inheritance:r /grant:r "${owner}:(F)" '*S-1-5-18:(F)' '*S-1-5-32-544:(F)' | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw 'Cannot protect installation ENV permissions.' }
-}
+Set-ReleasePrivateText -Path $envPath -Text (($lines -join [Environment]::NewLine)+[Environment]::NewLine)
 foreach ($directory in @('data/machine-id', 'data/license-cache', 'certs', 'logs', 'images', 'backups/database')) {
     [IO.Directory]::CreateDirectory((Join-Path $PSScriptRoot $directory)) | Out-Null
 }

@@ -1,10 +1,11 @@
 # Shared release transport and validation. Compatible with Windows PowerShell 5.1.
 Set-StrictMode -Version Latest
+. (Join-Path $PSScriptRoot 'https/private-files.ps1')
 $script:ReleaseFiles = @('install.ps1', 'update.ps1', 'backup.ps1', 'release-common.ps1', 'release-https.ps1',
     'docker-compose.yml', 'release-images.yml', 'env.example', '.env.example',
     'postgres-backup.sh', 'INSTALL_WINDOWS.md', 'BACKUP_OPERATIONS.md',
     'https/Caddyfile', 'https/Redirectfile', 'https/compose.yml', 'https/redirect-compose.yml',
-    'https/install-https.ps1', 'https/install-redirect.ps1', 'https/README.txt', 'https/README-REDIRECT.txt')
+    'https/install-https.ps1', 'https/install-redirect.ps1', 'https/private-files.ps1', 'https/README.txt', 'https/README-REDIRECT.txt')
 
 function Invoke-ReleaseDocker([string[]]$Arguments) {
     & docker @Arguments | Out-Host
@@ -34,10 +35,7 @@ function Set-ReleaseVersion([string]$Path, [string]$Version) {
     $text = [IO.File]::ReadAllText($Path)
     if ([regex]::Matches($text, '(?m)^VERSION=[^\r\n]*').Count -ne 1) { throw 'ENV must contain exactly one VERSION setting.' }
     $updated = [regex]::Replace($text, '(?m)^VERSION=[^\r\n]*', "VERSION=$Version")
-    $temporary = $Path + '.update-tmp'
-    [IO.File]::WriteAllText($temporary, $updated, [Text.UTF8Encoding]::new($false))
-    if ($env:OS -eq 'Windows_NT') { Set-Acl -LiteralPath $temporary -AclObject (Get-Acl -LiteralPath $Path) }
-    Move-Item -LiteralPath $temporary -Destination $Path -Force
+    Set-ReleasePrivateText -Path $Path -Text $updated
 }
 function Enter-ReleaseLock([string]$Root) {
     try { return [IO.File]::Open((Join-Path $Root '.update.lock'), [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None) }

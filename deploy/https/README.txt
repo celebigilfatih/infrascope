@@ -2,6 +2,8 @@ InfraScope — Windows/Docker IP üzerinden HTTPS
 
 Amaç: üretimde Secure oturum çerezini koruyarak ağdan giriş sağlamak.
 Yeni erişim: https://SUNUCU_IP (443). HTTP 8170 adresi otomatik yönlendirilmez.
+Bu belge yalnız ayrı HTTPS yardımcısı içindir; güncel çevrimiçi kurulum
+başlatıcısı HTTPS ve eski HTTP adresinden yönlendirmeyi birlikte tamamlar.
 
 1. Bu klasörü müşteri sunucusunda C:\InfraScope\InfraScope-HTTPS konumuna
    kopyalayın. Mevcut uygulama klasörünü veya .env dosyasını değiştirmeyin.

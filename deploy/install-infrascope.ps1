@@ -50,7 +50,7 @@ try {
         $allowed = @('install.ps1', 'update.ps1', 'backup.ps1', 'release-common.ps1', 'release-https.ps1', 'docker-compose.yml', 'release-images.yml',
             'env.example', '.env.example', 'postgres-backup.sh', 'INSTALL_WINDOWS.md', 'BACKUP_OPERATIONS.md', 'release.json',
             'https/Caddyfile', 'https/Redirectfile', 'https/compose.yml', 'https/redirect-compose.yml',
-            'https/install-https.ps1', 'https/install-redirect.ps1', 'https/README.txt', 'https/README-REDIRECT.txt')
+            'https/install-https.ps1', 'https/install-redirect.ps1', 'https/private-files.ps1', 'https/README.txt', 'https/README-REDIRECT.txt')
         if (@(Compare-Object @($allowed | ForEach-Object { "infrascope/$_" } | Sort-Object) @($archive.Entries.FullName | Sort-Object) -CaseSensitive).Count) { throw 'Unexpected files in installation ZIP.' }
         [IO.Directory]::CreateDirectory($payloadRoot) | Out-Null
         foreach ($entry in $archive.Entries) {

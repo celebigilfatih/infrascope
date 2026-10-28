@@ -93,6 +93,7 @@ function Get-ReleaseHttpsContext {
         $redirect = $null
         if (Test-Path -LiteralPath (Join-Path $directory '.redirect-state.json')) {
             $redirect = Get-Content -LiteralPath (Join-Path $directory '.redirect-state.json') -Raw | ConvertFrom-Json
+            if((Get-ReleaseLabel $redirect 'schema') -cne '1' -or (Get-ReleaseLabel $redirect 'status') -cnotin @('planned','switching','complete','rolled-back')){throw 'Unsupported redirect recovery journal.'}
             if ($redirect.root -ine $directory -or $redirect.installation -ine $InstallationRoot -or $redirect.project -cne $Project -or $redirect.caHash -cne $state.caHash) { throw 'Existing redirect ownership or CA identity differs.' }
             $expectedTarget = 'https://' + $state.ip + $(if($state.port -eq 443){''}else{':'+$state.port})
             if ($redirect.target -cne $expectedTarget -or $redirect.redirectProject -cne ($state.project+'-redirect')) { throw 'Existing redirect destination differs.' }
@@ -140,6 +141,33 @@ function Get-ReleaseHttpsContext {
     }
 }
 
+function Assert-ReleaseHttpsUpdateReady {
+    param($Context,$UpdateJournal,$Manifest)
+    if(-not $Context){return}
+    $path=Join-Path $Context.Root '.redirect-state.json'
+    if(-not (Test-Path -LiteralPath $path -PathType Leaf)){return}
+    $redirect=Get-Content -LiteralPath $path -Raw|ConvertFrom-Json
+    if((Get-ReleaseLabel $redirect 'schema') -ceq '1' -and (Get-ReleaseLabel $redirect 'status') -ceq 'complete'){return}
+    # An incomplete operation may resume only if this active target update
+    # created it, using its original planned ENV and exact candidate files/image.
+    if($UpdateJournal -and (Get-ReleaseLabel $UpdateJournal 'schema') -ceq '2' -and
+        (Get-ReleaseLabel $UpdateJournal 'state') -ceq 'applying' -and
+        (Get-ReleaseLabel $UpdateJournal 'version') -ceq $Manifest.version -and
+        (Get-ReleaseLabel $UpdateJournal 'installationRoot') -ieq $Context.InstallationRoot -and
+        (Get-ReleaseLabel $UpdateJournal 'project') -ceq $Context.InstallationProject -and
+        (Get-ReleaseLabel $redirect 'schema') -ceq '1' -and
+        (Get-ReleaseLabel $redirect 'status') -cin @('planned','switching','rolled-back') -and
+        (Get-ReleaseLabel $redirect 'image') -ceq $Manifest.images.app -and
+        (Get-ReleaseLabel $redirect 'beforeHash') -ceq (Get-ReleaseLabel $UpdateJournal 'appliedEnvHash')){
+        $files=@('docker-compose.yml','release-images.yml')
+        $paths=@($files|ForEach-Object{Join-Path $Context.InstallationRoot $_})
+        $hashes=@($files|ForEach-Object{Get-ReleaseLabel $Manifest.files $_})
+        if(-not @(Compare-Object @($redirect.files) $paths -CaseSensitive).Count -and
+            ($hashes -join ':') -ceq (Get-ReleaseLabel $redirect 'filesHash')){return}
+    }
+    throw 'Finish the original HTTP redirect operation with its original installation/settings before updating. No application files or services have been changed.'
+}
+
 function Test-ReleaseHttpsAccess($Context) {
     $payload = & curl.exe --noproxy '*' --cacert $Context.CaPath --ssl-revoke-best-effort --fail --silent --show-error --connect-timeout 5 --max-time 15 ($Context.Url+'/api/health/ready')
     if ($LASTEXITCODE -ne 0 -or (($payload -join "`n")|ConvertFrom-Json).status -cne 'ready') { throw 'CA-verified HTTPS readiness failed.' }
@@ -182,6 +210,11 @@ function Enable-ReleaseHttps {
     param($Context, [IO.FileStream]$InstallationLock, [string]$SourceRoot=$PSScriptRoot)
     if (-not $Context) { return $null }
     Test-ReleaseInstallationLock -InstallationRoot $Context.InstallationRoot -InstallationLock $InstallationLock | Out-Null
+    $privateEnv=Join-Path $Context.InstallationRoot '.env'
+    Protect-ReleasePrivateFile -Path $privateEnv
+    foreach($privatePath in @((Join-Path $Context.InstallationRoot '.http-redirect.env.before'),($privateEnv+'.redirect.tmp'))){
+        if(Test-Path -LiteralPath $privatePath -PathType Leaf){Protect-ReleasePrivateFile -Path $privatePath -SourcePath $privateEnv}
+    }
     if ($Context.Existing -and -not $Context.NeedsSetup -and $Context.RedirectComplete) {
         try {
             Test-ReleaseHttpsAccess $Context

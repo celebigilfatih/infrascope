@@ -138,8 +138,9 @@ jobs:
           NMS_DIGEST: ${{ steps.images.outputs.nms }}
         run: |
           set -euo pipefail
-          docker pull --platform linux/amd64 postgres:16-alpine
-          POSTGRES_REF=$(docker image inspect postgres:16-alpine --format '{{index .RepoDigests 0}}')
+          POSTGRES_REF=$(cat deploy/postgres-image.ref)
+          [[ "$POSTGRES_REF" =~ ^postgres@sha256:[a-f0-9]{64}$ ]] || { echo 'Invalid rehearsed PostgreSQL reference'; exit 1; }
+          docker pull --platform linux/amd64 "$POSTGRES_REF"
           python3 scripts/package-online-release.py --version "$VERSION" --repository "$GITHUB_REPOSITORY" \
             --revision "$GITHUB_SHA" --app-digest "$APP_DIGEST" --nms-digest "$NMS_DIGEST" \
             --postgres-digest "${POSTGRES_REF##*@}" --output dist/online

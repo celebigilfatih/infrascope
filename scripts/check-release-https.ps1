@@ -61,7 +61,7 @@ try {
     Assert $rejected 'Changed public CA certificate was accepted.'
     Assert ($global:ContextWrites.Count -eq 0) 'Read-only validation mutated Docker resources.'
     [IO.File]::WriteAllText($ca,'synthetic public CA')
-    $redirectState=[pscustomobject]@{root=$tlsRoot;installation=$root;project='fixture';caHash=$state.caHash;legacyPort=8170;backendPort=18170;status='complete';redirectProject='fixture-https-redirect';target=$global:ContextUrl;configHash=((Get-ReleaseHash (Join-Path $tlsRoot 'Redirectfile'))+':'+(Get-ReleaseHash (Join-Path $tlsRoot 'redirect-compose.yml')))}
+    $redirectState=[pscustomobject]@{schema=1;root=$tlsRoot;installation=$root;project='fixture';caHash=$state.caHash;legacyPort=8170;backendPort=18170;status='complete';redirectProject='fixture-https-redirect';target=$global:ContextUrl;configHash=((Get-ReleaseHash (Join-Path $tlsRoot 'Redirectfile'))+':'+(Get-ReleaseHash (Join-Path $tlsRoot 'redirect-compose.yml')))}
     Write-ReleaseJson (Join-Path $tlsRoot '.redirect-state.json') $redirectState
     $redirectState.target='https://invalid.example';Write-ReleaseJson (Join-Path $tlsRoot '.redirect-state.json') $redirectState
     $rejected=$false
@@ -76,12 +76,23 @@ try {
     [IO.File]::WriteAllText($redirectFile,$redirectBefore,[Text.UTF8Encoding]::new($false))
     $context=Get-ReleaseHttpsContext -InstallationRoot $root -Project fixture
     $before=[IO.File]::ReadAllText((Join-Path $root '.env'))
+    $historical=Join-Path $root '.http-redirect.env.before'
+    [IO.File]::WriteAllText($historical,$before)
+    if($env:OS -eq 'Windows_NT'){
+        Assert (-not (Get-Acl -LiteralPath $historical).AreAccessRulesProtected) 'Historical ACL fixture is already protected.'
+        Get-ReleaseHttpsContext -InstallationRoot $root -Project fixture|Out-Null
+        Assert (-not (Get-Acl -LiteralPath $historical).AreAccessRulesProtected) 'Discovery changed historical permissions.'
+    }
     $lock=Enter-ReleaseLock $root
     try{
         Assert (Test-ReleaseInstallationLock -InstallationRoot $root -InstallationLock $lock) 'The held installation lock was not accepted.'
         $enabled=Enable-ReleaseHttps -Context $context -InstallationLock $lock -SourceRoot (Join-Path $source 'deploy')
         Assert ($enabled.CaHash -ceq $state.caHash) 'Completed external HTTPS was replaced.'
         Assert ([IO.File]::ReadAllText((Join-Path $root '.env')) -ceq $before) 'Completed external HTTPS changed customer ENV.'
+        if($env:OS -eq 'Windows_NT'){
+            Assert (Get-Acl -LiteralPath $historical).AreAccessRulesProtected 'Healthy-proxy upgrade left historical plaintext ENV permissions inherited.'
+            Assert (Get-Acl -LiteralPath (Join-Path $root '.env')).AreAccessRulesProtected 'Healthy-proxy upgrade left ENV permissions inherited.'
+        }
         Assert ($global:ContextWrites.Count -eq 0) 'Healthy completed proxies were unnecessarily changed.'
         $global:ContextExportDirectory=Join-Path $root 'backups/.fixture.installation'
         [IO.Directory]::CreateDirectory($global:ContextExportDirectory)|Out-Null

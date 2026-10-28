@@ -27,6 +27,12 @@ ROOT = Path(__file__).resolve().parent.parent
 PS_ENV = {k: v for k, v in os.environ.items() if k.upper() != 'PSMODULEPATH'}
 
 
+def require_rehearsed_postgres(reference):
+    pinned=(ROOT/'deploy/postgres-image.ref').read_text(encoding='utf8').strip()
+    if not re.fullmatch(r'postgres@sha256:[a-f0-9]{64}',pinned) or reference!=pinned:
+        raise ValueError('Production checks require the source-controlled rehearsed PostgreSQL reference')
+
+
 def free_port():
     with socket.socket() as listener:
         listener.bind(('127.0.0.1', 0))
@@ -46,6 +52,7 @@ def main():
     for ref in (args.app_ref, args.nms_ref, args.postgres_ref):
         if not re.fullmatch(r'[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}', ref):
             raise ValueError('Only immutable image references are accepted')
+    require_rehearsed_postgres(args.postgres_ref)
     args.output.mkdir(parents=True, exist_ok=True)
     # Windows TEMP may use an8.3 alias; Compose records its canonical long path.
     scratch = Path(tempfile.mkdtemp(prefix='infrascope-release-https-')).resolve()
@@ -55,17 +62,24 @@ def main():
     owned_containers = []
     failed = True
 
-    def run(command, data=None, expect_failure=False):
+    def run(command, data=None, expect_failure=False, expected_error=None):
         result = subprocess.run(list(map(str, command)), input=data, text=True, capture_output=True, cwd=ROOT,
-                                env=PS_ENV if command[0] == 'powershell.exe' else None)
+                                env=PS_ENV if command[0] == 'powershell.exe' else None,timeout=900)
         with (args.output / 'commands.log').open('a', encoding='utf8') as log:
             log.write(result.stdout + result.stderr)
         if expect_failure:
             if not result.returncode:
                 raise AssertionError('Expected interruption did not fail')
+            if expected_error and expected_error not in result.stdout+result.stderr:
+                raise AssertionError('Command failed for an unexpected reason; see commands.log')
         elif result.returncode:
             raise RuntimeError(f'Command failed ({result.returncode}): {command[0]}; see commands.log')
         return result.stdout.strip()
+
+    def verify_private_env(entry):
+        root=entry[0]
+        run(ps(ROOT/'scripts/fixtures/check-release-env-acl.ps1',InstallationRoot=root))
+        check(True,'ENV and redirect rollback files retain restricted Windows ACLs')
 
     def check(condition, message):
         if not condition:
@@ -160,6 +174,7 @@ def main():
         check(bool(partial_ca),'Interrupted enrollment already owns a recoverable CA')
         run(ps(root/'install.ps1',NoBrowser=True,PublicIp='127.0.0.1',ProjectName=project,AppPort=http_port,HttpsPort=tls_port,BackendPort=backend_port,PassphraseFile=phrase))
         fresh_ca = verify_session(fresh)
+        verify_private_env(fresh)
         check(fresh_ca==partial_ca,'TLS enrollment retry preserves the CA created before interruption')
         initial = list((root / 'backups').glob('*.isbackup'))
         check(len(initial) == 1, 'Fresh installation creates exactly one encrypted secure recovery bundle')
@@ -189,6 +204,21 @@ def main():
         external = old_root.parent / 'InfraScope-HTTPS'
         shutil.copytree(ROOT / 'deploy/https', external)
         run(ps(external / 'install-https.ps1', PublicIp='127.0.0.1', InstallationProject=old_project, ProxyProject=old_project + '-https', HttpsPort=old_tls))
+        # Fail after the original1.0.9 redirect intent is durable, before app mutation.
+        run(ps(bootstrap,Destination=old_root,RedirectOnly=True,HttpsDirectory=external,PublicIp='127.0.0.1',ProjectName=old_project,AppPort=old_http,BackendPort=old_backend,FailRedirectPull=True),expect_failure=True)
+        check(json.loads((external/'.redirect-state.json').read_text())['status']=='planned','Original redirect failure retains a planned1.0.9 journal')
+        def reject_old_transition(status):
+            before=sha(old_root/'.env')
+            app_id=run(compose(old)+['ps','-q','app'])
+            files=[sha(old_root/name) for name in ('docker-compose.yml','release-images.yml')]
+            run(ps(bootstrap,FixtureZip=candidate,Version='1.0.10',Destination=old_root,PassphraseFile=phrase,Update=True),expect_failure=True,expected_error='original HTTP redirect')
+            check(sha(old_root/'.env')==before and run(compose(old)+['ps','-q','app'])==app_id and files==[sha(old_root/name) for name in ('docker-compose.yml','release-images.yml')],f'Old {status} redirect rejects upgrade before ENV/files/services change')
+            check(not (old_root/'.update-state.json').exists() and not list((old_root/'backups').glob('*.isbackup')),f'Old {status} redirect cannot begin an update intent or backup')
+        reject_old_transition('planned')
+        run(ps(external / 'install-redirect.ps1', PublicIp='127.0.0.1', InstallationRoot=old_root, InstallationProject=old_project, ProxyProject=old_project + '-https', LegacyPort=old_http, BackendPort=old_backend))
+        run(ps(external / 'install-redirect.ps1', PublicIp='127.0.0.1', InstallationRoot=old_root, InstallationProject=old_project, ProxyProject=old_project + '-https', LegacyPort=old_http, BackendPort=old_backend,Action='Rollback'))
+        check(json.loads((external/'.redirect-state.json').read_text())['status']=='rolled-back','Original redirect rollback is durable')
+        reject_old_transition('rolled-back')
         run(ps(external / 'install-redirect.ps1', PublicIp='127.0.0.1', InstallationRoot=old_root, InstallationProject=old_project, ProxyProject=old_project + '-https', LegacyPort=old_http, BackendPort=old_backend))
         old_ca = verify_session(old)
         check(old_ca != fresh_ca, 'Separate customer installations have separate CA identities')
@@ -203,6 +233,7 @@ def main():
         check((old_root / '.env').read_bytes() == before_env.replace(b'VERSION=1.0.9', b'VERSION=1.0.10'), 'Update preserves every customer ENV byte except VERSION')
         check((old_root / 'data/machine-id/machine-id').read_bytes() == before_id, 'License identity preserved')
         check(verify_session(old) == old_ca, 'Existing external CA and login preserved across upgrade/resume')
+        verify_private_env(old)
         check(len(list((old_root / 'backups').glob('*.isbackup'))) == 1 and sha(bundles[0]) == bundle_hash, 'Resume retains the same original encrypted backup')
         check(run(compose(old) + ['exec', '-T', 'postgres', 'psql', '-U', 'infrascope', '-d', 'infrascope', '-At', '-c', 'SELECT note FROM customer_release_fixture WHERE id=1']) == 'persistent customer data', 'Customer data preserved')
         run(ps(bootstrap, FixtureZip=candidate, Version='1.0.10', Destination=old_root, PassphraseFile=phrase, Update=True))
@@ -236,6 +267,26 @@ def main():
         run(compose(old) + ['exec', '-T', 'postgres', 'createdb', '-U', 'infrascope', 'release_restore_fixture'])
         run(compose(old) + ['exec', '-T', 'postgres', 'pg_restore', '--no-owner', '--no-acl', '-U', 'infrascope', '-d', 'release_restore_fixture', '/tmp/release-restore.dump'])
         check(run(compose(old) + ['exec', '-T', 'postgres', 'psql', '-U', 'infrascope', '-d', 'release_restore_fixture', '-At', '-c', 'SELECT note FROM customer_release_fixture WHERE id=1']) == 'persistent customer data', 'Original database backup restores customer data into separate DB')
+        # A new HTTPS transition belongs to its active update, unlike the old
+        # journals above. Retry it through planned and hard process-loss states.
+        enrollment=fixture('enrollment')
+        enroll_root,enroll_project,enroll_http,enroll_tls,enroll_backend=enrollment
+        with zipfile.ZipFile(old_zip) as archive:archive.extractall(enroll_root.parent)
+        run(ps(enroll_root/'install.ps1',NoBrowser=True,ProjectName=enroll_project,AppPort=enroll_http))
+        run(compose(enrollment)+['exec','-T','postgres','psql','-U','infrascope','-d','infrascope','-v','ON_ERROR_STOP=1','-c',sql])
+        update_options=dict(FixtureZip=candidate,Version='1.0.10',Destination=enroll_root,PassphraseFile=phrase,Update=True,PublicIp='127.0.0.1',AppPort=enroll_http,HttpsPort=enroll_tls,BackendPort=enroll_backend)
+        run(ps(bootstrap,**update_options,FailRedirectPull=True),expect_failure=True)
+        active=json.loads((enroll_root/'.update-state.json').read_text())
+        planned_hash=active['appliedEnvHash'];original_bundle=Path(active['backup']);original_hash=sha(original_bundle)
+        check(json.loads((enroll_root/'https/.redirect-state.json').read_text())['status']=='planned','Current target update owns its planned HTTPS transition')
+        run(ps(bootstrap,**update_options,KillAfterBackend=True),expect_failure=True)
+        check(re.search(rb'(?m)^APP_PORT=127\.0\.0\.1:',(enroll_root/'.env').read_bytes()) is not None,'Hard process interruption preserves the completed backend transition')
+        check(json.loads((enroll_root/'.update-state.json').read_text())['appliedEnvHash']==planned_hash,'Interrupted retry retains its original planned ENV hash')
+        run(ps(bootstrap,**update_options))
+        check(sha(original_bundle)==original_hash and len(list((enroll_root/'backups').glob('infrascope-preupdate-*.isbackup')))==1,'Repeated HTTPS-update interruptions preserve one original backup')
+        check(len(list((enroll_root/'backups').glob('infrascope-secure-*.isbackup')))==1,'New HTTPS enrollment has one separately labelled secure recovery point')
+        verify_session(enrollment);verify_private_env(enrollment)
+        check(run(compose(enrollment)+['exec','-T','postgres','psql','-U','infrascope','-d','infrascope','-At','-c','SELECT note FROM customer_release_fixture WHERE id=1'])=='persistent customer data','Owned interrupted HTTPS enrollment preserves customer data')
         failed = False
     finally:
         cleanup_errors = []

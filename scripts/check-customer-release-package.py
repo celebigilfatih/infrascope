@@ -68,7 +68,7 @@ class CustomerReleasePackage(unittest.TestCase):
         result = self.package()
         self.assertEqual(result.returncode, 0, result.stderr)
         with zipfile.ZipFile(self.root / 'dist' / f'infrascope-customer-deploy-{VERSION}.zip') as archive:
-            for name in ('install.ps1', 'backup.ps1', 'update.ps1', 'release-common.ps1', 'release-https.ps1', 'https/install-https.ps1', 'https/install-redirect.ps1', 'install-infrascope.ps1', 'INSTALL_WINDOWS.md'):
+            for name in ('install.ps1', 'backup.ps1', 'update.ps1', 'release-common.ps1', 'release-https.ps1', 'https/install-https.ps1', 'https/install-redirect.ps1', 'https/private-files.ps1', 'install-infrascope.ps1', 'INSTALL_WINDOWS.md'):
                 self.assertGreater(len(archive.read('infrascope/' + name)), 100)
 
     def test_repackaging_replaces_stale_archive_entries(self):

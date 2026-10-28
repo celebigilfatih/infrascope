@@ -6,6 +6,8 @@ $scratch=Join-Path ([IO.Path]::GetTempPath()) ('infrascope-install-check-'+[Guid
 [IO.Directory]::CreateDirectory($scratch)|Out-Null
 $original=(Get-Location).Path
 try{
+    [IO.Directory]::CreateDirectory((Join-Path $scratch 'https'))|Out-Null
+    Copy-Item -LiteralPath (Join-Path $source 'deploy/https/private-files.ps1') -Destination (Join-Path $scratch 'https/private-files.ps1')
     foreach($name in @('install.ps1','release-common.ps1','release-https.ps1','env.example')){Copy-Item -LiteralPath (Join-Path $source "deploy/$name") -Destination $scratch}
     $phrase=Join-Path $scratch 'phrase.txt';[IO.File]::WriteAllText($phrase,'synthetic-recovery-passphrase')
     & (Join-Path $scratch 'install.ps1') -ConfigureOnly -NoBrowser -ProjectName fixture -PublicIp 127.0.0.1 -HttpsPort 18443 -AppPort 18271 -BackendPort 18272 -PassphraseFile $phrase

@@ -63,6 +63,13 @@ class OnlineRelease(unittest.TestCase):
             with self.subTest(override=override), self.assertRaises(ValueError):
                 self.build(**override)
 
+    def test_production_rehearsal_rejects_an_unrehearsed_postgres_ref_before_effects(self):
+        spec=importlib.util.spec_from_file_location('production_rehearsal',ROOT/'scripts/check-customer-https-docker.py')
+        module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+        with self.assertRaisesRegex(ValueError,'rehearsed PostgreSQL'):
+            module.require_rehearsed_postgres('postgres@sha256:'+('f'*64))
+        module.require_rehearsed_postgres((ROOT/'deploy/postgres-image.ref').read_text().strip())
+
     def test_release_bootstrap_is_also_a_separate_asset(self):
         self.build()
         bootstrap = self.output / 'install-infrascope.ps1'
@@ -72,7 +79,7 @@ class OnlineRelease(unittest.TestCase):
         target = self.build()
         expected = {f'https/{name}' for name in (
             'Caddyfile', 'Redirectfile', 'compose.yml', 'redirect-compose.yml',
-            'install-https.ps1', 'install-redirect.ps1', 'README.txt', 'README-REDIRECT.txt')}
+            'install-https.ps1', 'install-redirect.ps1', 'private-files.ps1', 'README.txt', 'README-REDIRECT.txt')}
         with zipfile.ZipFile(target) as archive:
             manifest = json.loads(archive.read('infrascope/release.json'))
             self.assertEqual(manifest['schema'], 2)

@@ -27,7 +27,7 @@ cp "${ROOT_DIR}/deploy/update.ps1" "${PACKAGE_DIR}/update.ps1"
 cp "${ROOT_DIR}/deploy/release-common.ps1" "${PACKAGE_DIR}/release-common.ps1"
 cp "${ROOT_DIR}/deploy/release-https.ps1" "${PACKAGE_DIR}/release-https.ps1"
 mkdir -p "${PACKAGE_DIR}/https"
-for file in Caddyfile Redirectfile compose.yml redirect-compose.yml install-https.ps1 install-redirect.ps1 README.txt README-REDIRECT.txt; do
+for file in Caddyfile Redirectfile compose.yml redirect-compose.yml install-https.ps1 install-redirect.ps1 private-files.ps1 README.txt README-REDIRECT.txt; do
   cp "${ROOT_DIR}/deploy/https/${file}" "${PACKAGE_DIR}/https/${file}"
 done
 cp "${ROOT_DIR}/deploy/install-infrascope.ps1" "${PACKAGE_DIR}/install-infrascope.ps1"

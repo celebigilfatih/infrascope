@@ -9,7 +9,7 @@ import zipfile
 FILES = ('install.ps1', 'update.ps1', 'backup.ps1', 'release-common.ps1', 'release-https.ps1', 'docker-compose.yml',
          'env.example', '.env.example', 'INSTALL_WINDOWS.md',
          'https/Caddyfile', 'https/Redirectfile', 'https/compose.yml', 'https/redirect-compose.yml',
-         'https/install-https.ps1', 'https/install-redirect.ps1', 'https/README.txt', 'https/README-REDIRECT.txt')
+         'https/install-https.ps1', 'https/install-redirect.ps1', 'https/private-files.ps1', 'https/README.txt', 'https/README-REDIRECT.txt')
 
 
 def build(*, root, output, version, repository, revision, app_digest, nms_digest, postgres_digest):

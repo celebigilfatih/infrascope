@@ -93,9 +93,13 @@ jobs:
           ./scripts/check-release-https.ps1
           ./scripts/check-release-backup.ps1
           ./scripts/check-release-install.ps1
+          ./scripts/check-release-private-files.ps1
+          ./scripts/check-release-https-transition.ps1
       - name: PowerShell 7 HTTPS ownership and recovery checks
         shell: pwsh
         run: |
           ./scripts/check-release-https.ps1
           ./scripts/check-release-backup.ps1
           ./scripts/check-release-install.ps1
+          ./scripts/check-release-private-files.ps1
+          ./scripts/check-release-https-transition.ps1

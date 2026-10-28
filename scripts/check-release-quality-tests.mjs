@@ -117,6 +117,14 @@ test('preverified customer images are promoted without rebuilding and every asse
   assert.equal(packager.env.APP_DIGEST,'${{ steps.images.outputs.app }}');assert.equal(packager.env.NMS_DIGEST,'${{ steps.images.outputs.nms }}');
 });
 
+test('publication packages the immutable PostgreSQL reference used by production rehearsal',()=>{
+  const publish=yaml.load(fs.readFileSync(path.join(root,'.github/workflows/publish-image.yml'),'utf8'));
+  const step=publish.jobs.publish.steps.find(s=>s.name==='Resolve PostgreSQL and package the online Windows installer');
+  assert.doesNotMatch(step.run,/docker pull[^\n]*postgres:16-alpine/);
+  assert.match(step.run,/POSTGRES_REF=\$\(cat deploy\/postgres-image\.ref\)/);
+  assert.match(fs.readFileSync(path.join(root,'deploy/postgres-image.ref'),'utf8').trim(),/^postgres@sha256:[a-f0-9]{64}$/);
+});
+
 test('reusable quality workflow executes policy regressions, real compiler controls and the full gate', () => {
   const workflow = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/release-quality.yml'), 'utf8'));
   const steps = workflow.jobs.quality.steps;

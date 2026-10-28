@@ -13,6 +13,7 @@ param(
 )
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
+. (Join-Path $PSScriptRoot 'private-files.ps1')
 if(-not $ConfigurationRoot){$ConfigurationRoot=$PSScriptRoot}
 $parsed=$null
 if (-not [Net.IPAddress]::TryParse($PublicIp,[ref]$parsed) -or $parsed.AddressFamily -ne [Net.Sockets.AddressFamily]::InterNetwork -or $parsed.ToString() -cne $PublicIp -or $PublicIp -in @('0.0.0.0','255.255.255.255')) { throw 'Use a canonical server IPv4 address.' }
@@ -37,7 +38,7 @@ function Test-Https {
 function Restore-Original {
     Invoke-Checked ($redirectCompose+@('down'))
     if((Hash $backupPath) -cne $journal.beforeHash){throw 'Original environment recovery file differs.'}
-    Copy-Item -LiteralPath $backupPath -Destination $envPath -Force
+    Set-ReleasePrivateText -Path $envPath -Text ([IO.File]::ReadAllText($backupPath))
     Invoke-Checked ($appCompose+@('up','-d','--no-deps','--pull','never','--wait','--wait-timeout','180','app'))
     Test-Https
     $journal.status='rolled-back'; Save-Journal
@@ -96,6 +97,10 @@ try {
         $existing=@((& docker inspect $id)|ConvertFrom-Json)[0]
         if(-not $journal -or $existing.Config.Labels.'io.infrascope.component' -cne 'http-redirect' -or $existing.Config.Labels.'com.docker.compose.project.working_dir' -ine $root){throw 'Redirect project is owned by another installation.'}
     }
+    Protect-ReleasePrivateFile -Path $envPath
+    foreach($privatePath in @($backupPath,($envPath+'.redirect.tmp'))){
+        if(Test-Path -LiteralPath $privatePath -PathType Leaf){Protect-ReleasePrivateFile -Path $privatePath -SourcePath $envPath}
+    }
     $redirectEnv=Join-Path $root '.redirect.env'
     $redirectSettings="HTTPS_TARGET=$target`nLEGACY_PORT=$LegacyPort`n"
     if((Test-Path -LiteralPath $redirectEnv) -and [IO.File]::ReadAllText($redirectEnv).Replace("`r`n","`n") -cne $redirectSettings){throw 'Redirect settings differ.'}
@@ -113,7 +118,7 @@ try {
         if([regex]::Matches($original,'(?m)^APP_PORT=[^\r\n]*').Count -ne 1 -or [regex]::Match($original,'(?m)^APP_PORT=([^\r\n]*)').Groups[1].Value -cne [string]$LegacyPort){throw 'Expected one numeric APP_PORT matching legacy port.'}
         $probe=[Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback,$BackendPort)
         try{$probe.Start()}finally{$probe.Stop()}
-        Copy-Item -LiteralPath $envPath -Destination $backupPath
+        Write-ReleasePrivateText -Path $backupPath -Text $original -SourcePath $envPath
         $updated=[regex]::Replace($original,'(?m)^APP_PORT=[^\r\n]*',('APP_PORT=127.0.0.1:'+$BackendPort))
         $bytes=[Text.UTF8Encoding]::new($false).GetBytes($updated)
         $sha=[Security.Cryptography.SHA256]::Create()
@@ -132,8 +137,7 @@ try {
         $mutating=$true
         $original=[IO.File]::ReadAllText($backupPath)
         $updated=[regex]::Replace($original,'(?m)^APP_PORT=[^\r\n]*',('APP_PORT=127.0.0.1:'+$BackendPort))
-        [IO.File]::WriteAllText($envPath+'.redirect.tmp',$updated,[Text.UTF8Encoding]::new($false))
-        Move-Item -LiteralPath ($envPath+'.redirect.tmp') -Destination $envPath -Force
+        Set-ReleasePrivateText -Path $envPath -Text $updated
     }
     $mutating=$true
     $journal.status='switching'; Save-Journal
