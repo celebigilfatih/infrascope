@@ -68,6 +68,7 @@ class OnlineRelease(unittest.TestCase):
             manifest = json.loads(archive.read('infrascope/release.json'))
             self.assertEqual(manifest['schema'], 2)
             self.assertTrue(expected.issubset(manifest['files']))
+            self.assertIn('release-https.ps1', manifest['files'])
             for name in expected:
                 self.assertEqual(hashlib.sha256(archive.read('infrascope/' + name)).hexdigest(), manifest['files'][name])
             self.assertFalse(any(name.endswith(('.key', '.crt', '.pfx')) or '/.https-state' in name for name in archive.namelist()))

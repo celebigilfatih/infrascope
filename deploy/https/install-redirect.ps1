@@ -7,7 +7,9 @@ param(
     [string]$ProxyProject='infrascope-https',
     [ValidateRange(1,65535)][int]$LegacyPort=8170,
     [ValidateRange(1,65535)][int]$BackendPort=18170,
-    [ValidateSet('Apply','Rollback')][string]$Action='Apply'
+    [ValidateSet('Apply','Rollback')][string]$Action='Apply',
+    [string]$ConfigurationRoot=$PSScriptRoot,
+    [IO.FileStream]$InstallationLock
 )
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
@@ -15,9 +17,9 @@ $parsed=$null
 if (-not [Net.IPAddress]::TryParse($PublicIp,[ref]$parsed) -or $parsed.AddressFamily -ne [Net.Sockets.AddressFamily]::InterNetwork -or $parsed.ToString() -cne $PublicIp -or $PublicIp -in @('0.0.0.0','255.255.255.255')) { throw 'Use a canonical server IPv4 address.' }
 foreach($name in @($InstallationProject,$ProxyProject)) { if($name -cnotmatch '^[a-z0-9][a-z0-9_-]{0,53}$'){throw 'Invalid project name.'} }
 if($InstallationProject -ceq $ProxyProject -or $LegacyPort -eq $BackendPort){throw 'Use distinct projects and ports.'}
-$root=[IO.Path]::GetFullPath($PSScriptRoot)
+$root=[IO.Path]::GetFullPath($ConfigurationRoot)
 $InstallationRoot=(Resolve-Path -LiteralPath $InstallationRoot).Path
-$updateLock=$null; $setupLock=$null; $mutating=$false; $journal=$null
+$updateLock=$null; $setupLock=$null; $mutating=$false; $journal=$null; $borrowedUpdateLock=$false
 function Invoke-Checked([string[]]$Arguments) {
     & docker @Arguments | Out-Host
     if($LASTEXITCODE -ne 0){throw "Docker command failed (exit $LASTEXITCODE)."}
@@ -40,7 +42,12 @@ function Restore-Original {
     $journal.status='rolled-back'; Save-Journal
 }
 try {
-    $updateLock=[IO.File]::Open((Join-Path $InstallationRoot '.update.lock'),[IO.FileMode]::OpenOrCreate,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)
+    if($InstallationLock){
+        if($InstallationLock.SafeFileHandle.IsClosed -or -not $InstallationLock.CanWrite -or [IO.Path]::GetFullPath($InstallationLock.Name) -ine [IO.Path]::GetFullPath((Join-Path $InstallationRoot '.update.lock'))){throw 'Invalid borrowed installation lock.'}
+        $updateLock=$InstallationLock; $borrowedUpdateLock=$true
+    }else{
+        $updateLock=[IO.File]::Open((Join-Path $InstallationRoot '.update.lock'),[IO.FileMode]::OpenOrCreate,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)
+    }
     $setupLock=[IO.File]::Open((Join-Path $root '.setup.lock'),[IO.FileMode]::OpenOrCreate,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)
     $tls=Get-Content -LiteralPath (Join-Path $root '.https-state.json') -Raw|ConvertFrom-Json
     $caPath=Join-Path $root 'infrascope-root-ca.crt'
@@ -151,5 +158,5 @@ try {
     }
     throw
 }finally{
-    if($setupLock){$setupLock.Dispose()}; if($updateLock){$updateLock.Dispose()}
+    if($setupLock){$setupLock.Dispose()}; if($updateLock -and -not $borrowedUpdateLock){$updateLock.Dispose()}
 }

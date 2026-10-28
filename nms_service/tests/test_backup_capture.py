@@ -1,4 +1,5 @@
 import io
+import json
 import os
 import tempfile
 import unittest
@@ -10,6 +11,7 @@ import paramiko
 from nms_service.ssh.backups import BackupError, PROFILES, _read_exec, capture_configuration, resolve_platform, validate_configuration
 from nms_service.ssh.poller import SSHDeviceConfig
 from nms_service.recovery import create_bundle, extract_bundle
+from nms_service import recovery
 from nms_service.tests.ssh_fixture import FixtureServer
 from nms_service.ssh.poller import host_key_fingerprint
 
@@ -145,6 +147,55 @@ class CaptureTests(unittest.TestCase):
 
 
 class RecoveryTests(unittest.TestCase):
+    def test_verify_authenticates_bundle_without_publishing_plaintext(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);dump=root/'database.dump';dump.write_bytes(os.urandom(2*1024*1024))
+            bundle=root/'verified.isbackup';phrase=b'fixture-passphrase-32-characters'
+            create_bundle(dump,bundle,phrase,{'NEXTAUTH_SECRET':'fixture-key'})
+            before=set(root.iterdir())
+            self.assertEqual(recovery.verify_bundle(bundle,phrase)['format'],1)
+            self.assertEqual(set(root.iterdir()),before)
+            with self.assertRaises(Exception):recovery.verify_bundle(bundle,b'wrong-fixture-passphrase')
+            data=bytearray(bundle.read_bytes());data[-17]^=1;bundle.write_bytes(data)
+            with self.assertRaises(Exception):recovery.verify_bundle(bundle,phrase)
+            self.assertEqual(set(root.iterdir()),before)
+
+    def test_https_ca_and_metadata_are_authenticated_encrypted_and_restored(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory); dump=root/'database.dump'; dump.write_bytes(b'fixture database')
+            material=root/'installation'; material.mkdir()
+            private_ca=b'fixture-only private CA key material'+os.urandom(32000)
+            metadata=b'{"project":"fixture-https","caHash":"fixture-fingerprint"}'
+            (material/'https-recovery.tar').write_bytes(private_ca)
+            (material/'https-recovery.json').write_bytes(metadata)
+            bundle=root/'tls.isbackup'; phrase=b'fixture-passphrase-32-characters'
+            create_bundle(dump,bundle,phrase,{'NEXTAUTH_SECRET':'fixture-key'},material)
+            self.assertNotIn(b'fixture-only private CA key material',bundle.read_bytes())
+            extract_bundle(bundle,root/'restored',phrase)
+            recovered=json.loads((root/'restored/installation-keys.json').read_text())
+            self.assertEqual(recovered['format'],2)
+            self.assertEqual((root/'restored/https-recovery.tar').read_bytes(),private_ca)
+            self.assertEqual((root/'restored/https-recovery.json').read_bytes(),metadata)
+
+    def test_oversized_tls_recovery_material_is_rejected_before_publishing_bundle(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory); dump=root/'database.dump'; dump.write_bytes(b'fixture')
+            material=root/'installation'; material.mkdir()
+            (material/'https-recovery.tar').write_bytes(b'x'*(2*1024*1024+1))
+            (material/'https-recovery.json').write_bytes(b'{}')
+            output=root/'rejected.isbackup'
+            with self.assertRaises(ValueError):
+                create_bundle(dump,output,b'fixture-passphrase-32-characters',{'NEXTAUTH_SECRET':'fixture-key'},material)
+            self.assertFalse(output.exists())
+
+    def test_partial_tls_recovery_material_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory); dump=root/'database.dump'; dump.write_bytes(b'fixture')
+            material=root/'installation'; material.mkdir()
+            (material/'https-recovery.json').write_bytes(b'{}')
+            with self.assertRaises(ValueError):
+                create_bundle(dump,root/'rejected.isbackup',b'fixture-passphrase-32-characters',{'NEXTAUTH_SECRET':'fixture-key'},material)
+
     def test_authenticated_bundle_round_trip(self):
         with tempfile.TemporaryDirectory() as root:
             root=Path(root); dump=root/'database.dump'; payload=os.urandom(2*1024*1024+13); dump.write_bytes(payload)

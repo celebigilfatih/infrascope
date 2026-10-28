@@ -83,3 +83,15 @@ jobs:
       - name: PowerShell 7 verified bootstrap upgrade from1.0.9
         shell: pwsh
         run: ./scripts/check-windows-bootstrap.ps1 -FixtureZip bootstrap-fixture/infrascope-windows-online-1.0.10.zip
+      - name: Windows PowerShell 5.1 HTTPS ownership and recovery checks
+        shell: powershell
+        run: |
+          ./scripts/check-release-https.ps1
+          ./scripts/check-release-backup.ps1
+          ./scripts/check-release-install.ps1
+      - name: PowerShell 7 HTTPS ownership and recovery checks
+        shell: pwsh
+        run: |
+          ./scripts/check-release-https.ps1
+          ./scripts/check-release-backup.ps1
+          ./scripts/check-release-install.ps1

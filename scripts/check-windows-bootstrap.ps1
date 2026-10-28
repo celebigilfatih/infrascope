@@ -24,10 +24,18 @@ function global:Invoke-WebRequest {
     else{Copy-Item -LiteralPath $global:BootstrapFixture -Destination $OutFile}
 }
 function global:docker {
-    $call=$args -join ' ';$global:BootstrapCalls.Add($call);$global:LASTEXITCODE=0
+    $arguments=@($args);$call=$arguments -join ' ';$global:BootstrapCalls.Add($call);$global:LASTEXITCODE=0
     if($call -like 'info --format*'){return 'linux/amd64'}
     if($call -match 'config --format json'){return '{"name":"bootstrap-fixture"}'}
     if($call -match 'image inspect.*Architecture'){return 'linux/amd64'}
+    if($call -match 'ps -aq app'){return 'synthetic-app'}
+    if($call -eq 'inspect synthetic-app'){return (@{Config=@{Labels=@{'com.docker.compose.project'='bootstrap-fixture';'com.docker.compose.project.working_dir'=(Get-Location).Path}}}|ConvertTo-Json -Depth 5)}
+    if($call -match ' cp postgres:'){[IO.File]::WriteAllText($arguments[-1],'synthetic dump');return}
+    if($call -match 'nms_service.recovery create'){
+        $global:BootstrapCalls.Add('backup')
+        $mount=$arguments[[Array]::IndexOf($arguments,'--volume')+1]
+        [IO.File]::WriteAllText((Join-Path $mount.Substring(0,$mount.Length-10) (Split-Path -Leaf $arguments[-1])),'synthetic encrypted backup')
+    }
 }
 function New-Installation([string]$Name){
     $root=Join-Path $scratch $Name;[IO.Directory]::CreateDirectory($root)|Out-Null

@@ -6,7 +6,7 @@ from pathlib import Path
 import re
 import zipfile
 
-FILES = ('install.ps1', 'update.ps1', 'backup.ps1', 'release-common.ps1', 'docker-compose.yml',
+FILES = ('install.ps1', 'update.ps1', 'backup.ps1', 'release-common.ps1', 'release-https.ps1', 'docker-compose.yml',
          'env.example', '.env.example', 'INSTALL_WINDOWS.md',
          'https/Caddyfile', 'https/Redirectfile', 'https/compose.yml', 'https/redirect-compose.yml',
          'https/install-https.ps1', 'https/install-redirect.ps1', 'https/README.txt', 'https/README-REDIRECT.txt')

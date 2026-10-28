@@ -21,10 +21,11 @@ class CustomerReleasePackage(unittest.TestCase):
             (self.root / directory).mkdir(parents=True, exist_ok=True)
         for name in ('docker-compose.yml', '.env.example', 'env.example', 'install.sh', 'update.sh', 'backup.sh', 'INSTALL.md'):
             shutil.copyfile(ROOT / 'deploy' / name, self.root / 'deploy' / name)
-        for name in ('install.ps1', 'backup.ps1', 'update.ps1', 'release-common.ps1', 'install-infrascope.ps1', 'INSTALL_WINDOWS.md'):
+        for name in ('install.ps1', 'backup.ps1', 'update.ps1', 'release-common.ps1', 'release-https.ps1', 'install-infrascope.ps1', 'INSTALL_WINDOWS.md'):
             source = ROOT / 'deploy' / name
             if source.exists():
                 shutil.copyfile(source, self.root / 'deploy' / name)
+        shutil.copytree(ROOT / 'deploy/https', self.root / 'deploy/https')
         for name in ('package-customer-deploy.sh', 'package-appliance-assets.sh', 'customer-release-common.sh'):
             shutil.copyfile(ROOT / 'scripts' / name, self.root / 'scripts' / name)
         shutil.copytree(ROOT / 'deploy/appliance', self.root / 'deploy/appliance', dirs_exist_ok=True)
@@ -40,7 +41,7 @@ class CustomerReleasePackage(unittest.TestCase):
 
     def package(self, **extra):
         env = {**os.environ, 'VERSION': VERSION, **extra}
-        return subprocess.run(['bash', 'scripts/package-customer-deploy.sh'], cwd=self.root, env=env, capture_output=True, text=True)
+        return subprocess.run([shutil.which('bash'), 'scripts/package-customer-deploy.sh'], cwd=self.root, env=env, capture_output=True, text=True)
 
     def test_non_default_version_is_pinned_in_both_templates(self):
         result = self.package()
@@ -67,7 +68,7 @@ class CustomerReleasePackage(unittest.TestCase):
         result = self.package()
         self.assertEqual(result.returncode, 0, result.stderr)
         with zipfile.ZipFile(self.root / 'dist' / f'infrascope-customer-deploy-{VERSION}.zip') as archive:
-            for name in ('install.ps1', 'backup.ps1', 'update.ps1', 'release-common.ps1', 'install-infrascope.ps1', 'INSTALL_WINDOWS.md'):
+            for name in ('install.ps1', 'backup.ps1', 'update.ps1', 'release-common.ps1', 'release-https.ps1', 'https/install-https.ps1', 'https/install-redirect.ps1', 'install-infrascope.ps1', 'INSTALL_WINDOWS.md'):
                 self.assertGreater(len(archive.read('infrascope/' + name)), 100)
 
     def test_repackaging_replaces_stale_archive_entries(self):

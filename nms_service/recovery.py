@@ -22,6 +22,8 @@ MAGIC = b'ISRECOVERY\x01'
 CHUNK = 1024 * 1024
 KEY_NAMES = ('INTEGRATION_CREDENTIALS_KEY', 'INTEGRATION_CREDENTIALS_PREVIOUS_KEY', 'NEXTAUTH_SECRET', 'NMS_INTERNAL_TOKEN', 'DATABASE_URL')
 INSTALLATION_FILES = ('environment.env', 'machine-id', 'license.json')
+TLS_FILES = {'https-recovery.tar': 2 * 1024 * 1024, 'https-recovery.json': 128 * 1024}
+MAX_METADATA = 4 * 1024 * 1024
 
 
 def key(passphrase, salt):
@@ -39,10 +41,15 @@ def create_bundle(dump_path, output_path, passphrase, environment=None, installa
                 'keys': {name: environment.get(name, '') for name in KEY_NAMES}}
     if installation_dir is not None:
         metadata['installationFiles'] = {}
-        for name in INSTALLATION_FILES:
+        present_tls = [name for name in TLS_FILES if (Path(installation_dir) / name).is_file()]
+        if present_tls and len(present_tls) != len(TLS_FILES):
+            raise ValueError('Incomplete HTTPS recovery material')
+        if present_tls:
+            metadata['format'] = 2
+        for name in (*INSTALLATION_FILES, *TLS_FILES):
             source = Path(installation_dir) / name
             if source.is_file():
-                if source.stat().st_size > 16384:
+                if source.stat().st_size > TLS_FILES.get(name, 16384):
                     raise ValueError('Installation recovery file exceeds the size limit')
                 metadata['installationFiles'][name] = base64.b64encode(source.read_bytes()).decode('ascii')
     if not metadata['keys']['INTEGRATION_CREDENTIALS_KEY'] and not metadata['keys']['NEXTAUTH_SECRET']:
@@ -52,7 +59,7 @@ def create_bundle(dump_path, output_path, passphrase, environment=None, installa
     encryptor = Cipher(algorithms.AES(key(passphrase, salt)), modes.GCM(nonce)).encryptor()
     encryptor.authenticate_additional_data(header)
     encoded = json.dumps(metadata).encode()
-    if len(encoded) > 65536:
+    if len(encoded) > MAX_METADATA:
         raise ValueError('Installation recovery metadata exceeds the size limit')
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fd, temporary = tempfile.mkstemp(prefix='.recovery-', dir=output_path.parent)
@@ -70,6 +77,57 @@ def create_bundle(dump_path, output_path, passphrase, environment=None, installa
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)
+
+
+def _installation_material(metadata):
+    version = metadata.get('format')
+    if type(version) is not int or version not in (1, 2):
+        raise ValueError('Unsupported recovery format')
+    files = metadata.get('installationFiles', {})
+    if not isinstance(files, dict):
+        raise ValueError('Invalid installation recovery metadata')
+    if version == 2 and any(name not in files for name in TLS_FILES):
+        raise ValueError('Incomplete HTTPS recovery material')
+    material = []
+    for name, value in files.items():
+        if name not in INSTALLATION_FILES and not (version == 2 and name in TLS_FILES):
+            raise ValueError('Unexpected installation recovery filename')
+        decoded = base64.b64decode(value, validate=True)
+        if len(decoded) > TLS_FILES.get(name, 16384):
+            raise ValueError('Installation recovery file exceeds the size limit')
+        material.append((name, decoded))
+    return material
+
+
+def verify_bundle(input_path, passphrase):
+    """Authenticate the complete encrypted stream without publishing plaintext."""
+    input_path = Path(input_path)
+    with input_path.open('rb') as source:
+        header = source.read(len(MAGIC) + 28)
+        if not header.startswith(MAGIC) or len(header) != len(MAGIC) + 28:
+            raise ValueError('Unsupported recovery bundle')
+        remaining = input_path.stat().st_size - len(header) - 16
+        if remaining < 4:
+            raise ValueError('Recovery bundle is truncated')
+        source.seek(-16, 2); tag = source.read(16); source.seek(len(header))
+        salt, nonce = header[len(MAGIC):len(MAGIC)+16], header[-12:]
+        decryptor = Cipher(algorithms.AES(key(passphrase, salt)), modes.GCM(nonce, tag)).decryptor()
+        decryptor.authenticate_additional_data(header)
+        prefix = bytearray()
+        while remaining:
+            chunk = source.read(min(CHUNK, remaining))
+            if not chunk:
+                raise ValueError('Recovery bundle is truncated')
+            remaining -= len(chunk)
+            plaintext = decryptor.update(chunk)
+            prefix.extend(plaintext[:max(0, MAX_METADATA + 4 - len(prefix))])
+        decryptor.finalize()
+    size = struct.unpack('>I', prefix[:4])[0]
+    if size > MAX_METADATA or len(prefix) < size + 4:
+        raise ValueError('Invalid recovery metadata')
+    metadata = json.loads(prefix[4:4+size])
+    _installation_material(metadata)
+    return metadata
 
 
 def extract_bundle(input_path, directory, passphrase):
@@ -103,11 +161,10 @@ def extract_bundle(input_path, directory, passphrase):
                 target.write(decryptor.finalize())
         with authenticated.open('rb') as source:
             size = struct.unpack('>I', source.read(4))[0]
-            if size > 65536:
+            if size > MAX_METADATA:
                 raise ValueError('Invalid recovery metadata')
             metadata = json.loads(source.read(size))
-            if metadata.get('format') != 1:
-                raise ValueError('Unsupported recovery format')
+            material = _installation_material(metadata)
             destination = Path(temporary) / 'result'
             destination.mkdir(mode=0o700)
             with (destination / 'database.dump').open('xb') as target:
@@ -117,12 +174,10 @@ def extract_bundle(input_path, directory, passphrase):
             with (destination / 'installation-keys.json').open('x') as target:
                 os.chmod(target.name, 0o600)
                 json.dump(metadata, target, indent=2)
-            for name, value in metadata.get('installationFiles', {}).items():
-                if name not in INSTALLATION_FILES:
-                    raise ValueError('Unexpected installation recovery filename')
+            for name, decoded in material:
                 with (destination / name).open('xb') as target:
                     os.chmod(target.name, 0o600)
-                    target.write(base64.b64decode(value, validate=True))
+                    target.write(decoded)
             os.rename(destination, directory)
 
 
@@ -136,13 +191,17 @@ def main():
     extract = sub.add_parser('extract')
     extract.add_argument('--input', required=True)
     extract.add_argument('--directory', required=True)
+    verify = sub.add_parser('verify')
+    verify.add_argument('--input', required=True)
     args = parser.parse_args()
     passphrase = sys.stdin.buffer.readline(4096).rstrip(b'\r\n')
     try:
         if args.command == 'create':
             create_bundle(args.dump, args.output, passphrase, installation_dir=args.installation_dir)
-        else:
+        elif args.command == 'extract':
             extract_bundle(args.input, args.directory, passphrase)
+        else:
+            verify_bundle(args.input, passphrase)
         print('Recovery operation completed.')
     except Exception as error:
         print(f'Recovery operation failed ({type(error).__name__}). No keys or passphrases are logged.', file=sys.stderr)

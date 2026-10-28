@@ -3,6 +3,10 @@
 param(
     [ValidateRange(1, 65535)][int]$AppPort = 8170,
     [ValidatePattern('^[a-z0-9][a-z0-9_-]*$')][string]$ProjectName,
+    [string]$PublicIp = '',
+    [ValidateRange(1,65535)][int]$HttpsPort=443,
+    [ValidateRange(1,65535)][int]$BackendPort=18170,
+    [string]$PassphraseFile='',
     [switch]$ConfigureOnly,
     [switch]$NoBrowser
 )
@@ -13,6 +17,7 @@ $releaseHelper = Join-Path $PSScriptRoot 'release-common.ps1'
 $installationLock = $null
 if (Test-Path -LiteralPath $releaseHelper) {
     . $releaseHelper
+    . (Join-Path $PSScriptRoot 'release-https.ps1')
     $installationLock = Enter-ReleaseLock $PSScriptRoot
 }
 try {
@@ -37,6 +42,14 @@ function Get-ArchiveHash([string]$Path) {
     finally { $algorithm.Dispose(); $stream.Dispose() }
 }
 $envPath = Join-Path $PSScriptRoot '.env'
+if($PublicIp){
+    $parsed=$null
+    if(-not [Net.IPAddress]::TryParse($PublicIp,[ref]$parsed) -or $parsed.AddressFamily -ne [Net.Sockets.AddressFamily]::InterNetwork -or $parsed.ToString() -cne $PublicIp -or $PublicIp -in @('0.0.0.0','255.255.255.255')){throw 'Use a canonical server IPv4 address.'}
+    if(-not $PassphraseFile){throw 'HTTPS installation requires a recovery PassphraseFile.'}
+    $PassphraseFile=(Resolve-Path -LiteralPath $PassphraseFile).Path
+    if([Text.Encoding]::UTF8.GetByteCount([IO.File]::ReadAllText($PassphraseFile).TrimEnd("`r","`n")) -lt 16){throw 'Recovery passphrase must contain at least16 bytes.'}
+    if(@($AppPort,$HttpsPort,$BackendPort|Sort-Object -Unique).Count -ne 3){throw 'HTTPS, legacy HTTP and backend ports must differ.'}
+}
 $newInstallation = -not (Test-Path -LiteralPath $envPath)
 if ($newInstallation) { Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'env.example') -Destination $envPath }
 $lines = [Collections.Generic.List[string]]::new()
@@ -57,12 +70,16 @@ foreach ($key in @('POSTGRES_PASSWORD', 'NEXTAUTH_SECRET', 'INTEGRATION_CREDENTI
         Set-Setting $key (New-Secret -Hex:($key -eq 'POSTGRES_PASSWORD'))
     }
 }
-if ($newInstallation -or $PSBoundParameters.ContainsKey('AppPort')) {
+if ($newInstallation -or ($PSBoundParameters.ContainsKey('AppPort') -and -not $PublicIp)) {
     Set-Setting 'APP_PORT' "$AppPort"
     Set-Setting 'APP_URL' "http://localhost:$AppPort"
     Set-Setting 'NEXTAUTH_URL' "http://localhost:$AppPort"
 }
 if ($ProjectName) { Set-Setting 'COMPOSE_PROJECT_NAME' $ProjectName }
+if($PublicIp -and $newInstallation){
+    $httpsUrl='https://'+$PublicIp+$(if($HttpsPort -eq 443){''}else{':'+$HttpsPort})
+    Set-Setting 'APP_URL' $httpsUrl;Set-Setting 'NEXTAUTH_URL' $httpsUrl
+}
 $version = Get-Setting 'VERSION'
 if ($version -notmatch '^\d+\.\d+\.\d+(-[A-Za-z0-9][A-Za-z0-9.-]*)?$') { throw 'VERSION must be a pinned release in .env.' }
 $onlineRelease = $null
@@ -126,6 +143,15 @@ if ($onlineRelease) { $compose += @('-f', (Join-Path $PSScriptRoot 'release-imag
 Invoke-Docker ($compose + @('config', '--quiet'))
 Invoke-Docker ($compose + @('run', '--rm', '--no-deps', '--user', '0', '--entrypoint', 'sh', 'app', '-c', 'chown 1001:1001 /app/.machine-id /app/.license-cache /app/logs'))
 Invoke-Docker ($compose + @('up', '-d', '--wait', '--wait-timeout', '300', '--pull', 'never'))
+if($PublicIp){
+    $config=Get-ReleaseDockerJson ($compose+@('config','--format','json')) 'installation project'
+    $https=Get-ReleaseHttpsContext -InstallationRoot $PSScriptRoot -Project $config.name -PublicIp $PublicIp -HttpsPort $HttpsPort -LegacyPort $AppPort -BackendPort $BackendPort
+    $https=Enable-ReleaseHttps -Context $https -InstallationLock $installationLock -SourceRoot $PSScriptRoot
+    $recoveryImage=if($onlineRelease){$onlineRelease.images.nms}else{''}
+    Complete-ReleaseInitialRecovery -Context $https -RecoveryImage $recoveryImage -PassphraseFile $PassphraseFile -SourceRoot $PSScriptRoot
+    Write-Host "Public CA certificate: $($https.CaPath)"
+    Write-Host "CA SHA256: $($https.CaHash). Verify and trust only this public certificate on authorized clients."
+}
 $url = (Get-Setting 'APP_URL').TrimEnd('/') + '/setup'
 Write-Host "Installation ready: $url"
 Write-Host 'Complete setup with your customer license and create the first administrator.'

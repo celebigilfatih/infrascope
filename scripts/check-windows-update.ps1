@@ -36,6 +36,21 @@ function global:docker {
     if ($call -eq 'info --format {{.OSType}}/{{.Architecture}}') { return 'linux/x86_64' }
     if ($call -match 'config --format json') { return '{"name":"preserved-customer-project"}' }
     if ($call -match 'image inspect.*Architecture') { return 'linux/amd64' }
+    if ($call -match 'ps -aq app') { return 'synthetic-app' }
+    if ($call -eq 'inspect synthetic-app') {
+        $root=(Get-Location).Path
+        $owner=if($global:FailAt -eq 'foreign-owner'){'C:\OtherCustomer'}else{$root}
+        return (@{Config=@{Labels=@{'com.docker.compose.project'='preserved-customer-project';'com.docker.compose.project.working_dir'=$owner}}}|ConvertTo-Json -Depth 5)
+    }
+    if ($call -match ' cp postgres:') { [IO.File]::WriteAllText($arguments[-1],'synthetic dump');return }
+    if ($call -match 'nms_service.recovery create') {
+        $global:Calls.Add('backup')
+        if($global:FailAt -eq 'backup'){$global:LASTEXITCODE=19;return}
+        $mount=$arguments[[Array]::IndexOf($arguments,'--volume')+1]
+        $path=Join-Path $mount.Substring(0,$mount.Length-10) (Split-Path -Leaf $arguments[-1])
+        [IO.File]::WriteAllText($path,'synthetic encrypted bundle fixture')
+        if($global:FailAt -eq 'backup-response-lost'){$global:LASTEXITCODE=20};return
+    }
     if ($global:FailAt -eq 'candidate-config' -and $call -match 'infrascope-release-.*config --quiet') { $global:LASTEXITCODE = 16; return }
     if ($global:FailAt -eq 'pull' -and $arguments[0] -eq 'pull') { $global:LASTEXITCODE = 17; return }
     if ($global:FailAt -eq 'start' -and $call -match 'up -d') { $global:LASTEXITCODE = 18; return }
@@ -57,7 +72,7 @@ CUSTOM_SETTING=customer-$value
 function New-Installation([string]$Name) {
     $root = Join-Path $scratch $Name
     [IO.Directory]::CreateDirectory($root) | Out-Null
-    foreach ($name in @('update.ps1', 'release-common.ps1', 'docker-compose.yml')) {
+    foreach ($name in @('update.ps1', 'release-common.ps1', 'release-https.ps1', 'docker-compose.yml')) {
         Copy-Item -LiteralPath (Join-Path $source "deploy/$name") -Destination $root
     }
     [IO.File]::WriteAllText((Join-Path $root '.env'), $envText, [Text.UTF8Encoding]::new($false))
@@ -68,6 +83,7 @@ if ($global:FailAt -eq 'backup') { throw 'Synthetic backup failure' }
 $path = Join-Path $PSScriptRoot 'backups/fixture.isbackup'
 [IO.Directory]::CreateDirectory((Split-Path -Parent $path)) | Out-Null
 [IO.File]::WriteAllText($path, 'synthetic encrypted bundle fixture')
+if ($global:FailAt -eq 'backup-response-lost') { throw 'Synthetic lost backup response' }
 if ($PassThru) { Get-Item -LiteralPath $path }
 '@)
     foreach ($name in @('data/machine-id/machine-id', 'data/license-cache/license.json', 'certs/customer-ca.pem')) {
@@ -84,7 +100,18 @@ try {
     [IO.File]::WriteAllText((Join-Path $scratch 'passphrase.txt'), 'synthetic recovery passphrase')
     # RED before implementation: these scripts must exist, then exercise their real control flow.
     Assert (Test-Path -LiteralPath (Join-Path $source 'deploy/update.ps1')) 'Windows updater is missing.'
-    foreach ($failure in @('network', '401', '403', 'wrong-version', 'candidate-config', 'pull', 'backup', 'checksum')) {
+    $root = New-Installation 'backup-response-lost'
+    $global:Calls.Clear(); $global:FailAt = 'backup-response-lost'
+    $failed=$false
+    try { Run-Update $root } catch { $failed=$true }
+    Assert $failed 'Expected lost backup response.'
+    Assert (Test-Path -LiteralPath (Join-Path $root '.update-state.json')) 'Lost backup response has no resumable intent journal.'
+    Assert (-not (@($global:Calls|Where-Object{$_ -match 'stop app nms|up -d'}).Count)) 'Lost backup response reached deployment.'
+    $global:FailAt=''
+    Run-Update $root
+    Assert (@($global:Calls|Where-Object{$_ -eq 'backup'}).Count -eq 1) 'Lost backup response retry created a second original backup.'
+    Write-Host 'PASS: lost backup response resumes the original authenticated backup before deployment.'
+    foreach ($failure in @('network', '401', '403', 'wrong-version', 'candidate-config', 'pull', 'backup', 'checksum', 'foreign-owner')) {
         $root = New-Installation $failure
         $global:Calls.Clear(); $global:FailAt = $failure
         if ($failure -eq 'checksum') { $global:AssetHash = '0' * 64 }
@@ -93,7 +120,7 @@ try {
         Assert $failed "Expected failure: $failure"
         Assert ([IO.File]::ReadAllText((Join-Path $root '.env')) -ceq $envText) "ENV changed on $failure"
         Assert (-not (@($global:Calls | Where-Object { $_ -match 'stop app nms|up -d' }).Count)) "Services changed on $failure"
-        Assert (-not (Test-Path -LiteralPath (Join-Path $root '.update-state.json'))) "Update journal written on $failure"
+        Assert ((Test-Path -LiteralPath (Join-Path $root '.update-state.json')) -eq ($failure -eq 'backup')) "Unexpected intent journal on $failure"
         $global:AssetHash = (Get-FileHash -LiteralPath $global:UpdateFixture -Algorithm SHA256).Hash.ToLowerInvariant()
         Write-Host "PASS: $failure preserves customer state and running services."
     }
@@ -164,13 +191,15 @@ try {
     Assert $rejected 'Bootstrap ignored the GitHub asset digest.'
     Assert (-not (Test-Path -LiteralPath $bootstrapRoot)) 'Unverified bootstrap wrote installation files.'
     $global:AssetHash = (Get-FileHash -LiteralPath $global:UpdateFixture -Algorithm SHA256).Hash.ToLowerInvariant()
-    & (Join-Path $source 'deploy/install-infrascope.ps1') -Version 1.0.2 -Destination $bootstrapRoot -NoBrowser -ProjectName customer-bootstrap-check -AppPort 18179
-    $bootstrapEnv = [IO.File]::ReadAllText((Join-Path $bootstrapRoot '.env'))
-    Assert ($bootstrapEnv.Contains('VERSION=1.0.2') -and $bootstrapEnv.Contains('COMPOSE_PROJECT_NAME=customer-bootstrap-check')) 'Bootstrap lost version or project.'
     $rejected = $false
-    try { & (Join-Path $source 'deploy/install-infrascope.ps1') -Version 1.0.2 -Destination $bootstrapRoot -NoBrowser } catch { $rejected = $_.Exception.Message -match 'Destination must be empty' }
+    try { & (Join-Path $source 'deploy/install-infrascope.ps1') -Version 1.0.2 -Destination $bootstrapRoot -NoBrowser } catch { $rejected = $_.Exception.Message -match 'require PublicIp' }
+    Assert $rejected 'New online bootstrap allowed an insecure installation without server IP/recovery.'
+    Assert (-not (Test-Path -LiteralPath $bootstrapRoot)) 'Incomplete secure bootstrap wrote installation files.'
+    $occupied=New-Installation 'occupied destination'
+    $rejected=$false
+    try { & (Join-Path $source 'deploy/install-infrascope.ps1') -Version 1.0.2 -Destination $occupied -NoBrowser } catch { $rejected = $_.Exception.Message -match 'Destination must be empty' }
     Assert $rejected 'Bootstrap overwrote an existing customer installation.'
-    Write-Host 'PASS: standalone bootstrap verifies the asset before writing and refuses existing installations.'
+    Write-Host 'PASS: bootstrap verifies integrity and requires secure enrollment for new installations.'
 
     $root = New-Installation 'resume'
     $global:Calls.Clear(); $global:FailAt = 'start'
@@ -183,7 +212,7 @@ try {
     $rejected = $false
     try { & (Join-Path $root 'update.ps1') -Version 1.0.3 -PassphraseFile (Join-Path $scratch 'passphrase.txt') } catch { $rejected = $_.Exception.Message -match 'interrupted update' }
     Assert $rejected 'Interrupted update allowed a different target release.'
-    $backupPath = Join-Path $root 'backups/fixture.isbackup'
+    $backupPath = (Get-Content -LiteralPath (Join-Path $root '.update-state.json') -Raw | ConvertFrom-Json).backup
     $backupBytes = [IO.File]::ReadAllBytes($backupPath)
     [IO.File]::AppendAllText($backupPath, 'tampered')
     $rejected = $false

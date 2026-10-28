@@ -1,6 +1,6 @@
 # Shared release transport and validation. Compatible with Windows PowerShell 5.1.
 Set-StrictMode -Version Latest
-$script:ReleaseFiles = @('install.ps1', 'update.ps1', 'backup.ps1', 'release-common.ps1',
+$script:ReleaseFiles = @('install.ps1', 'update.ps1', 'backup.ps1', 'release-common.ps1', 'release-https.ps1',
     'docker-compose.yml', 'release-images.yml', 'env.example', '.env.example',
     'postgres-backup.sh', 'INSTALL_WINDOWS.md', 'BACKUP_OPERATIONS.md',
     'https/Caddyfile', 'https/Redirectfile', 'https/compose.yml', 'https/redirect-compose.yml',

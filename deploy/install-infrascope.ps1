@@ -8,6 +8,11 @@ param(
     [ValidatePattern('^[a-z0-9][a-z0-9_-]*$')][string]$ProjectName = 'infrascope',
     [switch]$Update,
     [string]$PassphraseFile,
+    [string]$PublicIp='',
+    [string]$HttpsDirectory='',
+    [ValidateRange(0,65535)][int]$HttpsPort=0,
+    [ValidateRange(0,65535)][int]$LegacyPort=0,
+    [ValidateRange(0,65535)][int]$BackendPort=0,
     [switch]$NoBrowser
 )
 $ErrorActionPreference = 'Stop'
@@ -42,7 +47,7 @@ try {
     $archive = [IO.Compression.ZipFile]::OpenRead($zip)
     try {
         # Exact, case-sensitive allowlist: no traversal, duplicate entries or customer state.
-        $allowed = @('install.ps1', 'update.ps1', 'backup.ps1', 'release-common.ps1', 'docker-compose.yml', 'release-images.yml',
+        $allowed = @('install.ps1', 'update.ps1', 'backup.ps1', 'release-common.ps1', 'release-https.ps1', 'docker-compose.yml', 'release-images.yml',
             'env.example', '.env.example', 'postgres-backup.sh', 'INSTALL_WINDOWS.md', 'BACKUP_OPERATIONS.md', 'release.json',
             'https/Caddyfile', 'https/Redirectfile', 'https/compose.yml', 'https/redirect-compose.yml',
             'https/install-https.ps1', 'https/install-redirect.ps1', 'https/README.txt', 'https/README-REDIRECT.txt')
@@ -59,8 +64,10 @@ try {
     Test-ReleasePayload $payloadRoot $Version $Repository | Out-Null
     if ($Update) {
         # Use the verified candidate updater; an installed1.0.9 helper has an older ZIP allowlist.
-        & (Join-Path $payloadRoot 'update.ps1') -Version $Version -Repository $Repository -PassphraseFile $PassphraseFile -InstallationRoot $destinationPath
+        & (Join-Path $payloadRoot 'update.ps1') -Version $Version -Repository $Repository -PassphraseFile $PassphraseFile -InstallationRoot $destinationPath -PublicIp $PublicIp -HttpsDirectory $HttpsDirectory -HttpsPort $HttpsPort -LegacyPort $LegacyPort -BackendPort $BackendPort
     } else {
+        if(-not $PublicIp -or -not $PassphraseFile){throw 'New online installations require PublicIp and a recovery PassphraseFile. Use the HTTPS installation guide.'}
+        $PassphraseFile=(Resolve-Path -LiteralPath $PassphraseFile).Path
         if ((Test-Path -LiteralPath $destinationPath) -and @(Get-ChildItem -LiteralPath $destinationPath -Force).Count) { throw 'Destination changed during download; refusing to overwrite it.' }
         [IO.Directory]::CreateDirectory($destinationPath) | Out-Null
         foreach ($name in $allowed) {
@@ -68,7 +75,9 @@ try {
             [IO.Directory]::CreateDirectory((Split-Path -Parent $file)) | Out-Null
             [IO.File]::Copy((Join-Path $payloadRoot $name), $file, $false)
         }
-        & (Join-Path $destinationPath 'install.ps1') -AppPort $AppPort -ProjectName $ProjectName -NoBrowser:$NoBrowser
+        $installOptions=@{AppPort=$AppPort;ProjectName=$ProjectName;NoBrowser=$NoBrowser;PublicIp=$PublicIp;PassphraseFile=$PassphraseFile}
+        if($HttpsPort){$installOptions.HttpsPort=$HttpsPort};if($BackendPort){$installOptions.BackendPort=$BackendPort}
+        & (Join-Path $destinationPath 'install.ps1') @installOptions
     }
 } finally {
     # This exact GUID directory was created by this bootstrap under the OS temporary directory.

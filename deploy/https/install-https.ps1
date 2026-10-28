@@ -4,7 +4,8 @@ param(
     [Parameter(Mandatory=$true)][string]$PublicIp,
     [string]$InstallationProject='infrascope-musteri',
     [string]$ProxyProject='infrascope-https',
-    [ValidateRange(1,65535)][int]$HttpsPort=443
+    [ValidateRange(1,65535)][int]$HttpsPort=443,
+    [string]$ConfigurationRoot=$PSScriptRoot
 )
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
@@ -12,7 +13,7 @@ $parsedIp=$null
 if (-not [Net.IPAddress]::TryParse($PublicIp,[ref]$parsedIp) -or $parsedIp.AddressFamily -ne [Net.Sockets.AddressFamily]::InterNetwork -or $parsedIp.ToString() -cne $PublicIp -or $PublicIp -in @('0.0.0.0','255.255.255.255')) { throw 'Use a canonical IPv4 address assigned to this Windows server.' }
 foreach ($name in @($InstallationProject,$ProxyProject)) { if ($name -cnotmatch '^[a-z0-9][a-z0-9_-]{0,62}$') { throw 'Invalid Docker project name.' } }
 if ($InstallationProject -ceq $ProxyProject) { throw 'HTTPS must use a separate project.' }
-$root=[IO.Path]::GetFullPath($PSScriptRoot)
+$root=[IO.Path]::GetFullPath($ConfigurationRoot)
 $lock=[IO.File]::Open((Join-Path $root '.setup.lock'),[IO.FileMode]::OpenOrCreate,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)
 function Invoke-Docker([string[]]$Arguments) {
     & docker @Arguments | Out-Host
