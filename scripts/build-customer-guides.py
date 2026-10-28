@@ -40,8 +40,8 @@ def package_context(*, root, release_dir, version, repository, release_date):
         # This asset is intentionally separate from the ZIP's file allowlist.
         if bootstrap != (Path(root) / 'deploy/install-infrascope.ps1').read_bytes():
             raise ValueError('Separate bootstrap differs from the release source')
-        contracts = {'install-infrascope.ps1': (bootstrap, ['Version', 'Repository', 'Destination', 'ProjectName', 'AppPort']),
-                     'install.ps1': (payload['install.ps1'], ['AppPort']),
+        contracts = {'install-infrascope.ps1': (bootstrap, ['Version', 'Repository', 'Destination', 'ProjectName', 'AppPort', 'PublicIp', 'PassphraseFile', 'Update']),
+                     'install.ps1': (payload['install.ps1'], ['AppPort', 'PublicIp', 'PassphraseFile']),
                      'update.ps1': (payload['update.ps1'], ['Version', 'Repository', 'PassphraseFile']),
                      'backup.ps1': (payload['backup.ps1'], ['PassphraseFile'])}
         for name, (data, parameters) in contracts.items():

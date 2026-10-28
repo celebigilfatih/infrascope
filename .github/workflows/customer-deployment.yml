@@ -44,6 +44,10 @@ jobs:
         with:
           python-version: '3.11'
       - run: python scripts/check-online-release.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.22.1'
+      - run: node scripts/check-customer-image-promotion.mjs
       - run: python scripts/check-customer-release-package.py
   windows:
     runs-on: windows-latest

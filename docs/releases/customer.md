@@ -1,6 +1,8 @@
 ## Windows + Docker Desktop müşteri sürümü
 
-İzlenen cihazlar ekranı, arama ve durum filtreleri ile ölçüm özetini koruyarak daha sıkı bir liste düzenine geçirildi. Varsayılan sayfa boyutu 20 cihazdır; ayrıntılı ölçüm ve izleme bilgileri özet penceresinden açılır.
+Ağ topolojisinde Görüntüle/Düzenle kontrolleri, otomatik yerleşim kaydı, doğrudan bina/cihaz bağlantısı ekleme ve gerçek tam ekran akışı geliştirildi. NMS, cihaz envanteri ve oda ekranındaki tamamlanan iyileştirmeler aynı ana sürümde birleştirildi.
+
+Windows çevrimiçi kurulumuna IP üzerinden HTTPS, public CA doğrulama ve eski HTTP adresinden sabit hedefe otomatik yönlendirme eklendi. Güncelleme mevcut harici HTTPS kurulumunu ve CA kimliğini korur; şifreli kurtarma yedeği yönetilen CA/proxy durumunu da içerir. Kesilen güncelleme aynı özgün yedekle devam eder.
 
 Yayın kapısı, gerçek GHCR uygulama imajında üretilmiş Prisma istemcisini, yerel veritabanı motorunu, sürüm bilgisini, yetkisiz kullanıcıyla çalışma koşulunu ve VMware Python bileşenlerini ağ erişimi olmadan doğrular. Kurulum dosyaları bu kontrol başarılı olduktan sonra yayımlanır.
 
@@ -12,7 +14,7 @@ Yayın kapısı, gerçek GHCR uygulama imajında üretilmiş Prisma istemcisini,
 
 ### Kullanım
 
-`install-infrascope.ps1` ve `SHA256SUMS-online-<sürüm>.txt` dosyalarını bu Release'in Assets bölümünden alın; SHA-256 değerini kontrol edin. Başlatıcıya bu Release başlığındaki sürümü `-Version` ile verin. Güncelleme için kurulu klasördeki `update.ps1 -Version <sürüm> -PassphraseFile <özel-parola-dosyası>` komutunu kullanın. Ayrıntılı adımlar ZIP içindeki Windows kılavuzundadır. GitHub hesabı/tokenı açık imajları indirmek için gerekmez; uygulama lisans etkinleştirmesi ayrıca gerekir.
+`install-infrascope.ps1` ve `SHA256SUMS-online-<sürüm>.txt` dosyalarını bu Release'in Assets bölümünden alın; SHA-256 değerini kontrol edin. Yeni kurulumda `-Version <sürüm> -PublicIp <sunucu-IPv4> -PassphraseFile <özel-parola-dosyası>` kullanın. Güncellemede yine bu Release'in yeni başlatıcısını `-Version <sürüm> -Update -Destination <mevcut-kurulum> -PassphraseFile <özel-parola-dosyası>` ile çalıştırın. 1.0.9'un eski kurulu güncelleyicisi yeni paket dosya listesini tanımaz. HTML/PDF kılavuzları HTTPS güveni ve sürüme özel komutları içerir. GitHub hesabı/tokenı açık imajları indirmek için gerekmez; uygulama lisans etkinleştirmesi ayrıca gerekir.
 
 ### Güvenlik kapsamı
 

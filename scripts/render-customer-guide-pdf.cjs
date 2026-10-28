@@ -1,4 +1,5 @@
 // Convert the shared guide to a selectable A4 PDF. No app, database or external content is loaded.
+/* eslint-disable @typescript-eslint/no-require-imports -- CommonJS rendering CLI. */
 const fs = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
@@ -20,7 +21,7 @@ async function render(args) {
     await page.goto(pathToFileURL(path.resolve(options['--html'])).href);
     const commands = await page.locator('pre code').evaluateAll(elements => elements.map(el => ({ id: el.id, text: el.textContent })));
     assert.deepEqual(commands, metadata.commands);
-    assert.equal(commands.length, 18);
+    assert.equal(commands.length, 20);
     assert.equal(await page.locator('[data-copy]').count(), commands.length);
     await page.locator('details').evaluateAll(elements => elements.forEach(el => { el.open = true; }));
     assert.equal(await page.locator('details[open]').count(), 14);

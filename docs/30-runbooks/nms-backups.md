@@ -110,3 +110,13 @@ docker compose exec -T web npm run type-check
 ```
 
 The Python runner forces the test database name and generates isolated encryption keys. It refuses to truncate an installation database. Additional release checks: build both images, start the actual customer Compose against empty volumes, run real HTTP permission/queue tests, verify a database dump by restoring it to a second isolated database, test key decryption after restore, interrupt/restart a running worker, and qualify representative hardware. Record the tested models/firmware and limits in release evidence.
+
+## Windows HTTPS recovery bundles (release1.0.10 onward)
+
+The Windows release backup includes only the installation-owned Caddy local PKI and validated proxy state, encrypted together with the database and original installation keys. Plaintext CA staging is access-restricted beneath `backups` and removed after encryption/failure. Copy the `.isbackup` to independent storage and retain its passphrase separately. External user-managed `certs` still require their own secure backup.
+
+TLS material uses authenticated metadata format2 (`https-recovery.tar`, `https-recovery.json`). Use the matching release NMS image or a compatible newer version to extract it; the1.0.9 tool cannot read format2. Format1 bundles remain readable. `python -m nms_service.recovery verify --input <bundle>` authenticates a bundle without publishing plaintext. Supply the passphrase through stdin, never command arguments.
+
+Restore first into a separate isolated database and owned temporary CA volume. After authenticated extraction, verify the archive SHA256 and CA fingerprint against `https-recovery.json`; restore the tar only into an empty installation-owned CA volume. Keep the original public certificate fingerprint. Restore database dump and matching ENV/encryption/session/license identity together. Reconstruct validated proxy configuration with the correct destination paths, project/network/IP/ports before starting it. Do not distribute private keys or a different CA to clients. This is an administrator recovery operation, not an automatic downgrade after migrations.
+
+The production rehearsal `scripts/check-customer-https-docker.py` uses an official1.0.9 ZIP, actual Docker/PostgreSQL/Caddy and explicit CA verification. It exercises installation, real secure login/refresh, fixed-target HTTP308, interrupted update/resume and database/CA restoration into separate synthetic storage, then removes its random owned projects/volumes.

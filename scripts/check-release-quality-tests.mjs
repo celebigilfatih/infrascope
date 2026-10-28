@@ -107,6 +107,16 @@ test('incident CI runs all eight isolated shards and retains a distinct report f
   assert.match(runner, /else\s+ npm run test:incidents:e2e/);
 });
 
+test('preverified customer images are promoted without rebuilding and every asset uses the selected digests',()=>{
+  const publish=yaml.load(fs.readFileSync(path.join(root,'.github/workflows/publish-image.yml'),'utf8'));
+  const steps=publish.jobs.publish.steps;
+  assert.ok(steps.find(s=>s.id==='candidate')?.run.includes('scripts/promote-customer-images.mjs'));
+  for(const id of ['app','nms'])assert.equal(steps.find(s=>s.id===id).if,"steps.candidate.outputs.available != 'true'");
+  const images=steps.find(s=>s.id==='images');assert.ok(images.run.includes('--promote'));
+  const packager=steps.find(s=>s.name==='Resolve PostgreSQL and package the online Windows installer');
+  assert.equal(packager.env.APP_DIGEST,'${{ steps.images.outputs.app }}');assert.equal(packager.env.NMS_DIGEST,'${{ steps.images.outputs.nms }}');
+});
+
 test('reusable quality workflow executes policy regressions, real compiler controls and the full gate', () => {
   const workflow = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/release-quality.yml'), 'utf8'));
   const steps = workflow.jobs.quality.steps;

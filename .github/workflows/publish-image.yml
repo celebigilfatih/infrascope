@@ -76,8 +76,18 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Resolve preverified candidate images
+        id: candidate
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+          IMAGE: ${{ steps.release.outputs.image }}
+        run: >-
+          node scripts/promote-customer-images.mjs --version "$VERSION" --revision "$GITHUB_SHA"
+          --image "$IMAGE" --manifest "$RUNNER_TEMP/customer-candidates.json"
+
       - name: Build and push
         id: app
+        if: steps.candidate.outputs.available != 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -91,6 +101,7 @@ jobs:
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
       - name: Build and push NMS service
         id: nms
+        if: steps.candidate.outputs.available != 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -103,11 +114,28 @@ jobs:
             SOURCE_REVISION=${{ github.sha }}
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
+      - name: Select final immutable image digests
+        id: images
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+          IMAGE: ${{ steps.release.outputs.image }}
+          VERIFIED: ${{ steps.candidate.outputs.available }}
+          APP_DIGEST: ${{ steps.candidate.outputs.app || steps.app.outputs.digest }}
+          NMS_DIGEST: ${{ steps.candidate.outputs.nms || steps.nms.outputs.digest }}
+        run: |
+          set -euo pipefail
+          if [ "$VERIFIED" = true ]; then
+            node scripts/promote-customer-images.mjs --promote --version "$VERSION" --revision "$GITHUB_SHA" \
+              --image "$IMAGE" --manifest "$RUNNER_TEMP/customer-candidates.json"
+          fi
+          [[ "$APP_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]] && [[ "$NMS_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]
+          echo "app=$APP_DIGEST" >> "$GITHUB_OUTPUT"
+          echo "nms=$NMS_DIGEST" >> "$GITHUB_OUTPUT"
       - name: Resolve PostgreSQL and package the online Windows installer
         env:
           VERSION: ${{ steps.release.outputs.version }}
-          APP_DIGEST: ${{ steps.app.outputs.digest }}
-          NMS_DIGEST: ${{ steps.nms.outputs.digest }}
+          APP_DIGEST: ${{ steps.images.outputs.app }}
+          NMS_DIGEST: ${{ steps.images.outputs.nms }}
         run: |
           set -euo pipefail
           docker pull --platform linux/amd64 postgres:16-alpine
@@ -125,7 +153,7 @@ jobs:
           python-version: '3.11'
       - name: Verify the published app runtime offline
         env:
-          APP_IMAGE: ${{ steps.release.outputs.image }}@${{ steps.app.outputs.digest }}
+          APP_IMAGE: ${{ steps.release.outputs.image }}@${{ steps.images.outputs.app }}
           VERSION: ${{ steps.release.outputs.version }}
         run: |
           set -euo pipefail

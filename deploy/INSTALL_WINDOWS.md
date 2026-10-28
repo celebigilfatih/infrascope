@@ -1,6 +1,6 @@
 # Windows + Docker Desktop yerel kurulum
 
-Bu paket Linux x86_64 imajlarıyla Windows üzerinde Docker Desktop kullanır. Docker Desktop'ın Linux containers motoru çalışır durumda olmalıdır. Kurulum bilgisayarındaki tarayıcıdan `http://localhost:8170` adresi kullanılır. Lisans etkinleştirmesi için lisans sunucusuna erişim ve müşteriye ait lisans anahtarı gerekir. İnternete bağlı müşteride aşağıdaki **GitHub Releases + GHCR üzerinden ilk kurulum** bölümünü kullanın; çevrimdışı imaj paketi alternatifidir.
+Bu paket Linux x86_64 imajlarıyla Windows üzerinde Docker Desktop kullanır. Docker Desktop'ın Linux containers motoru çalışır durumda olmalıdır. Standart çevrimiçi kurulum sabit sunucu IPv4 adresinde HTTPS443 ve eski HTTP8170 adresinden otomatik yönlendirme kurar; backend18170 yalnız loopback üzerinde kalır. Lisans etkinleştirmesi için lisans sunucusuna erişim ve müşteriye ait lisans anahtarı gerekir. İnternete bağlı müşteride aşağıdaki **GitHub Releases + GHCR üzerinden ilk kurulum** bölümünü kullanın; çevrimdışı imaj paketi alternatifidir.
 
 ## Çevrimdışı imaj paketiyle ilk kurulum (alternatif)
 
@@ -49,7 +49,8 @@ Sürüm örneği aşağıda **1.0.2**'dir; komutta yalnız yayımlanmış gerçe
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass `
   -File .\install-infrascope.ps1 -Version 1.0.2 `
-  -Destination C:\InfraScope\infrascope -ProjectName infrascope-musteri
+  -Destination C:\InfraScope\infrascope -ProjectName infrascope-musteri `
+  -PublicIp SUNUCU_IP -PassphraseFile C:\Private\infrascope-recovery-passphrase.txt
 ```
 
 Başlatıcı yalnız boş hedefe kurulum yapar; mevcut klasörün üstüne yazmaz. GitHub API'sinin verdiği ZIP SHA-256 değerini, paket içindeki dosya manifestini ve istenen sürüm/depo eşleşmesini doğrular. Docker imajları GHCR'den `sha256` özetiyle sabitlenmiş olarak alınır. `latest` kullanılmaz. `.env`, veritabanı volume'u ve lisans kimliği müşteriye özel oluşur. Kurulum başladıktan sonra hata olursa aynı klasördeki `install.ps1` betiğiyle devam edin.
@@ -64,19 +65,20 @@ Herkese açık release/imajlarda oturum açmak gerekmez. Özel depoda GitHub Rel
 
 ## Windows üzerinden sürüm güncelleme
 
-Mevcut kurulum klasöründe, Docker Desktop çalışırken uygulayın. `VERSION` değerini elle önceden değiştirmeyin; başka bir klasör veya Docker projesi oluşturmayın. Kurtarma parolası dosyası ilk bölümdeki en az 16 baytlık özel dosya olmalıdır.
+Hedef sürümün yeni `install-infrascope.ps1` başlatıcısını Release sayfasından indirin, SHA256 değerini doğrulayın ve indirilen klasörde Docker Desktop çalışırken uygulayın. Özellikle1.0.9 kurulu güncelleyicisi yeni iç içe HTTPS dosya listesini tanımaz; yeni başlatıcı doğrulanmış aday güncelleyiciyi kullanır. `VERSION` değerini elle önceden değiştirmeyin; başka bir klasör veya Docker projesi oluşturmayın. Kurtarma parolası dosyası ilk bölümdeki en az 16 baytlık özel dosya olmalıdır.
 
 ```powershell
-Set-Location C:\InfraScope\infrascope
+Set-Location C:\InfraScope\Downloads
 powershell.exe -NoProfile -ExecutionPolicy Bypass `
-  -File .\update.ps1 -Version 1.0.2 `
+  -File .\install-infrascope.ps1 -Version 1.0.2 -Update `
+  -Destination C:\InfraScope\infrascope `
   -PassphraseFile C:\Private\infrascope-recovery-passphrase.txt
 ```
 
 Betik sırasıyla:
 
 1. Yayımlanmış sabit sürümü ve ZIP/dosya hash'lerini doğrular, imajları kesin özetleriyle indirir. İndirme hatasında çalışan servisler etkilenmez.
-2. **Mevcut `backup.ps1` ile şifreli `.isbackup` yedeğini alır. Yedek başarısızsa güncellemeyi durdurur.** Yedek normal PostgreSQL anlık görüntüsüdür; güncelleme penceresinde kullanıcı işlemlerini ve harici yazmaları durdurun. Yedek alımı ile servislerin durması arasındaki yeni yazmalar yedeğe dahil olmaz.
+2. **Doğrulanmış aday NMS imajı ve yedekleme aracıyla şifreli `.isbackup` yedeğini alır. Yedek başarısızsa güncellemeyi durdurur.** Yedek normal PostgreSQL anlık görüntüsüdür; güncelleme penceresinde kullanıcı işlemlerini ve harici yazmaları durdurun. Yedek alımı ile servislerin durması arasındaki yeni yazmalar yedeğe dahil olmaz.
 3. Önceki dağıtım dosyalarını ve devam kaydını saklar; app/NMS servislerini durdurur. `.env` içindeki yalnız `VERSION` değişir. Proje adı, port/URL, lisans, oturum/şifreleme anahtarları, `data`, `certs`, yedekler ve PostgreSQL volume'u korunur.
 4. Yeni dağıtım dosyalarını uygular; uygulama açılışında bekleyen migration işlemleri çalışır. Servislerin sağlıklı olmasını en fazla 300 saniye bekler.
 
@@ -95,4 +97,14 @@ Yeni kurulumda veya güncellemeden sonra elle Compose komutu çalıştırırken 
 
 ### Eski çevrimdışı kurulumdan geçiş
 
-Önce eski kurulumla şifreli yedek alın. Yeni küçük release ZIP'ini **ayrı bir geçici klasöre** açın. Yalnız `update.ps1` ve `release-common.ps1` dosyalarını mevcut kurulum klasörüne kopyalayıp hash'lerini doğrulayın; sonra yukarıdaki güncelleme komutunu hedef sürümle çalıştırın. Mevcut `.env` veya klasörleri yeni paketten kopyalamayın. Eski `backup.ps1` dosyasında `-PassThru` parametresi yoksa doğrulanmış küçük paketteki `backup.ps1` dosyasını da kopyalayın. Güncelleyici kendi zorunlu yedeğini ayrıca alacaktır.
+1.0.9 dahil eski çevrimiçi kurulumda hedef Release’in yeni başlatıcısını kullanın: `install-infrascope.ps1 -Version <hedef-sürüm> -Update -Destination <mevcut-kurulum> -PassphraseFile <mevcut-parola-dosyası>`. Güncelleme dosyalarını elle mevcut kurulumun üzerine açmayın. Henüz HTTPS olmayan eski kurulumda `-PublicIp SUNUCU_IP` ekleyin. Eski çevrimdışı kurulumun kimliği/betikleri farklıysa geçişi ayrı ortamda prova edin.
+
+## HTTPS güveni ve kurtarma
+
+Yeni çevrimiçi kurulumda `-PublicIp` ve `-PassphraseFile` zorunludur. Yukarıdaki `SUNUCU_IP` yer tutucusunu sabit sunucu IPv4 adresiyle değiştirin. Parola dosyasını en az16 baytlık tek satır olarak yalnız yetkili yöneticinin okuyabildiği izinlerle hazırlayın; mevcut dosyanın üzerine yazmayın. Sürüme özel HTML/PDF kılavuzu güvenli dosya oluşturma ve komutları içerir.
+
+Kurucu public `infrascope-root-ca.crt` yolunu ve SHA256 değerini gösterir. Yalnız bu CRT’yi yetkili istemciye kopyalayın, hash’i güvenilir kanaldan doğrulayın ve ilgili Windows kullanıcısının `Cert:\CurrentUser\Root` deposuna ekleyin. Docker CA volume’unu veya özel anahtarları istemcilere taşımayın; TLS doğrulamasını kapatmayın. Sonra `https://SUNUCU_IP/setup` adresini açın. Her müşteri ayrı CA alır; güncelleme mevcut CA’yı ve varsa dış `InfraScope-HTTPS` klasörünü korur.
+
+Şifreli kurtarma yedeği yönetilen yerel CA/proxy kimliğini de içerir. Yeni kurulumda veya ilk HTTPS geçişinde ayrıca bir başlangıç güvenli durum yedeği oluşturulur. Yedek dosyasını bağımsız depolamaya, parolayı ayrı kasaya alın. TLS içeren format2 yedeğini bu sürümün veya uyumlu daha yeni NMS imajıyla açın;1.0.9 kurtarma aracı format2’yi okuyamaz. Haricen eklenmiş `certs` dosyalarını ayrıca koruyun.
+
+Yarım kalan ilk HTTPS kurulumunda mevcut `install.ps1 -PublicIp SUNUCU_IP -PassphraseFile <mevcut-parola-dosyası>` ile aynı portları kullanarak devam edin. Güncelleme journal’ını silmeyin; aynı sürümle tekrar deneme özgün yedeği doğrulayıp kullanır. Kaybolan CA volume’unu yeniden üretmeyin; bağımsız yedekten kurtarın. CA/proje/IP değişikliği ve belirsiz sahiplikte güncelleme durur.

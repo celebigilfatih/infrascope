@@ -3,7 +3,7 @@
 param(
     [Parameter(Mandatory = $true)][string]$Version,
     [Parameter(Mandatory = $true)][string]$PassphraseFile,
-    [string]$InstallationRoot = $PSScriptRoot,
+    [string]$InstallationRoot = '',
     [string]$PublicIp = '',
     [string]$HttpsDirectory = '',
     [ValidateRange(0,65535)][int]$HttpsPort = 0,
@@ -13,6 +13,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+if(-not $InstallationRoot){$InstallationRoot=$PSScriptRoot}
 . (Join-Path $PSScriptRoot 'release-common.ps1')
 . (Join-Path $PSScriptRoot 'release-https.ps1')
 $InstallationRoot = (Resolve-Path -LiteralPath $InstallationRoot).Path

@@ -2,7 +2,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory=$true)][string]$PassphraseFile,
-    [string]$InstallationRoot=$PSScriptRoot,
+    [string]$InstallationRoot='',
     [string]$RecoveryImage='',
     [ValidatePattern('^[a-z0-9][a-z0-9_-]*$')][string]$ProjectName='',
     [ValidatePattern('^infrascope-[A-Za-z0-9][A-Za-z0-9.-]{1,120}$')][string]$BackupName,
@@ -11,6 +11,7 @@ param(
 )
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
+if(-not $InstallationRoot){$InstallationRoot=$PSScriptRoot}
 $OutputEncoding=[Text.UTF8Encoding]::new($false)
 . (Join-Path $PSScriptRoot 'release-common.ps1')
 . (Join-Path $PSScriptRoot 'release-https.ps1')

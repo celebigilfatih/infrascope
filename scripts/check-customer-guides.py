@@ -54,7 +54,7 @@ class CustomerGuides(unittest.TestCase):
             self.assertIn("'{{.OSType}}/{{.Architecture}}'", text)
             self.assertNotIn('postgres-backup', text)
             self.assertIn('logs --tail 100 app nms postgres database-backup', text)
-            self.assertEqual(len(self.guide.html_commands(text)), 18)
+            self.assertEqual(len(self.guide.html_commands(text)), 20)
             self.assertIn('25 Ekim 2026', text)
             # Windows CI also parses the actual generated commands with PowerShell 5.1.
             if shutil.which('powershell.exe'):
@@ -67,6 +67,21 @@ class CustomerGuides(unittest.TestCase):
                           "if($e.Count){throw ($b.id+': '+($e.Message -join '; '))}}")
                 parsed = subprocess.run(['powershell.exe', '-NoProfile', '-Command', script], capture_output=True, text=True)
                 self.assertEqual(parsed.returncode, 0, parsed.stderr)
+
+    def test_secure_install_and_verified_bootstrap_upgrade_commands(self):
+        args=self.fixture('1.0.10')
+        text=self.guide.render_html(ROOT,self.guide.package_context(**args))
+        commands={item['id']:item['text'] for item in self.guide.html_commands(text)}
+        self.assertIn('-PublicIp $serverIp',commands['install'])
+        self.assertIn('-PassphraseFile',commands['install'])
+        self.assertIn('Read-Host',commands['passphrase'])
+        self.assertIn('Import-Certificate',commands['trust-ca'])
+        self.assertIn('Get-FileHash',commands['trust-ca'])
+        self.assertIn('install-infrascope.ps1',commands['update'])
+        self.assertIn('-Update',commands['update'])
+        self.assertIn('-Destination',commands['update'])
+        self.assertNotIn('-File .\\update.ps1',commands['update'])
+        self.assertNotIn('http://localhost:8170',commands['health'])
 
     def test_invalid_versions_repository_and_date_are_rejected(self):
         args = self.fixture()
@@ -163,10 +178,10 @@ if INTEGRATION:
                 manifest = json.loads(result.read_text(encoding='utf-8'))
                 self.assertEqual(manifest['version'], version)
                 self.assertEqual(manifest['repository'], repo)
-                self.assertEqual(manifest['checks']['command_blocks'], 18)
+                self.assertEqual(manifest['checks']['command_blocks'], 20)
                 self.assertEqual(manifest['checks']['faqs'], 14)
                 self.assertGreater(manifest['checks']['pages'], 10)
-                self.assertEqual(manifest['checks']['html_copy_buttons'], 18)
+                self.assertEqual(manifest['checks']['html_copy_buttons'], 20)
                 for name, digest in manifest['files'].items():
                     self.assertEqual(hashlib.sha256((output / name).read_bytes()).hexdigest(), digest)
                 sums = (output / f'SHA256SUMS-guides-{version}.txt').read_text()

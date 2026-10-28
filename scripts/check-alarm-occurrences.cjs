@@ -1,5 +1,6 @@
 // Execute the real incident service and notification decision with an in-memory DB.
 // No application environment, database, integration or SMTP connection is loaded.
+/* eslint-disable @typescript-eslint/no-require-imports -- CommonJS fixture runner. */
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -94,8 +95,12 @@ function moduleLoader(dependencies, globals = {}) {
   function load(relative) {
     const filename = path.resolve(root, relative);
     if (modules.has(filename)) return modules.get(filename).exports;
-    const module = { exports: {} };
-    modules.set(filename, module);
+    const fixtureModule = { exports: {} };
+    modules.set(filename, fixtureModule);
+    if (filename.endsWith('.json')) {
+      fixtureModule.exports = JSON.parse(fs.readFileSync(filename, 'utf8'));
+      return fixtureModule.exports;
+    }
     const compiled = ts.transpileModule(fs.readFileSync(filename, 'utf8'), {
       compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, esModuleInterop: true },
     }).outputText;
@@ -103,8 +108,9 @@ function moduleLoader(dependencies, globals = {}) {
       const alias = name.startsWith('.')
         ? '@/' + path.relative(root, path.resolve(path.dirname(filename), name)).split(path.sep).join('/') : name;
       if (dependencies[alias]) return dependencies[alias];
-      if (name.startsWith('@/')) return load(name.slice(2) + '.ts');
-      if (name.startsWith('.')) return load(path.relative(root, path.resolve(path.dirname(filename), name)) + '.ts');
+      const extension = name.endsWith('.json') ? '' : '.ts';
+      if (name.startsWith('@/')) return load(name.slice(2) + extension);
+      if (name.startsWith('.')) return load(path.relative(root, path.resolve(path.dirname(filename), name)) + extension);
       if (['crypto', 'node:crypto', 'node:async_hooks', '@prisma/client'].includes(name)) return require(name);
       throw new Error(`Unapproved fixture dependency: ${name}`);
     };
@@ -115,8 +121,8 @@ function moduleLoader(dependencies, globals = {}) {
       fetch: () => { throw new Error('Network access is forbidden in occurrence checks'); },
       setTimeout: () => { throw new Error('Background jobs are forbidden in occurrence checks'); },
       ...globals,
-    }, { filename })(localRequire, module, module.exports);
-    return module.exports;
+    }, { filename })(localRequire, fixtureModule, fixtureModule.exports);
+    return fixtureModule.exports;
   }
   return load;
 }

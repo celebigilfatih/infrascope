@@ -5,10 +5,11 @@ param(
     [string]$InstallationProject='infrascope-musteri',
     [string]$ProxyProject='infrascope-https',
     [ValidateRange(1,65535)][int]$HttpsPort=443,
-    [string]$ConfigurationRoot=$PSScriptRoot
+    [string]$ConfigurationRoot=''
 )
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
+if(-not $ConfigurationRoot){$ConfigurationRoot=$PSScriptRoot}
 $parsedIp=$null
 if (-not [Net.IPAddress]::TryParse($PublicIp,[ref]$parsedIp) -or $parsedIp.AddressFamily -ne [Net.Sockets.AddressFamily]::InterNetwork -or $parsedIp.ToString() -cne $PublicIp -or $PublicIp -in @('0.0.0.0','255.255.255.255')) { throw 'Use a canonical IPv4 address assigned to this Windows server.' }
 foreach ($name in @($InstallationProject,$ProxyProject)) { if ($name -cnotmatch '^[a-z0-9][a-z0-9_-]{0,62}$') { throw 'Invalid Docker project name.' } }
