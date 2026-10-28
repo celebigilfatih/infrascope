@@ -2,7 +2,9 @@
 Set-StrictMode -Version Latest
 $script:ReleaseFiles = @('install.ps1', 'update.ps1', 'backup.ps1', 'release-common.ps1',
     'docker-compose.yml', 'release-images.yml', 'env.example', '.env.example',
-    'postgres-backup.sh', 'INSTALL_WINDOWS.md', 'BACKUP_OPERATIONS.md')
+    'postgres-backup.sh', 'INSTALL_WINDOWS.md', 'BACKUP_OPERATIONS.md',
+    'https/Caddyfile', 'https/Redirectfile', 'https/compose.yml', 'https/redirect-compose.yml',
+    'https/install-https.ps1', 'https/install-redirect.ps1', 'https/README.txt', 'https/README-REDIRECT.txt')
 
 function Invoke-ReleaseDocker([string[]]$Arguments) {
     & docker @Arguments | Out-Host
@@ -43,10 +45,10 @@ function Enter-ReleaseLock([string]$Root) {
 }
 function Test-ReleasePayload([string]$Root, [string]$Version, [string]$Repository) {
     $manifest = Get-Content -LiteralPath (Join-Path $Root 'release.json') -Raw | ConvertFrom-Json
-    if ($manifest.schema -ne 1 -or $manifest.version -cne $Version -or $manifest.repository -cne $Repository -or
+    if ($manifest.schema -ne 2 -or $manifest.version -cne $Version -or $manifest.repository -cne $Repository -or
         $manifest.revision -notmatch '^[a-f0-9]{40,64}$') { throw 'Release metadata does not match the requested repository/version.' }
     $names = @($manifest.files.PSObject.Properties.Name)
-    if (@(Compare-Object ($script:ReleaseFiles | Sort-Object) ($names | Sort-Object)).Count) { throw 'Unexpected release file list.' }
+    if (@(Compare-Object ($script:ReleaseFiles | Sort-Object) ($names | Sort-Object) -CaseSensitive).Count) { throw 'Unexpected release file list.' }
     foreach ($name in $script:ReleaseFiles) {
         $path = Join-Path $Root $name
         $expected = $manifest.files.$name
@@ -96,10 +98,13 @@ function Get-ReleasePackage([string]$Version, [string]$Repository) {
         try {
             $expected = @($script:ReleaseFiles + 'release.json' | ForEach-Object { "infrascope/$_" })
             $entries = @($archive.Entries.FullName)
-            if (@(Compare-Object ($expected | Sort-Object) ($entries | Sort-Object)).Count) { throw 'Unsafe or unexpected files in release ZIP.' }
+            if (@(Compare-Object ($expected | Sort-Object) ($entries | Sort-Object) -CaseSensitive).Count) { throw 'Unsafe or unexpected files in release ZIP.' }
             foreach ($entry in $archive.Entries) {
                 if ($entry.Length -gt 2MB) { throw 'Unexpectedly large release file.' }
-                [IO.Compression.ZipFileExtensions]::ExtractToFile($entry, (Join-Path $root $entry.Name), $false)
+                $relative = $entry.FullName.Substring('infrascope/'.Length)
+                $destination = Join-Path $root $relative
+                [IO.Directory]::CreateDirectory((Split-Path -Parent $destination)) | Out-Null
+                [IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $destination, $false)
             }
         } finally { $archive.Dispose() }
         $manifest = Test-ReleasePayload $root $Version $Repository

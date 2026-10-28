@@ -7,7 +7,9 @@ import re
 import zipfile
 
 FILES = ('install.ps1', 'update.ps1', 'backup.ps1', 'release-common.ps1', 'docker-compose.yml',
-         'env.example', '.env.example', 'INSTALL_WINDOWS.md')
+         'env.example', '.env.example', 'INSTALL_WINDOWS.md',
+         'https/Caddyfile', 'https/Redirectfile', 'https/compose.yml', 'https/redirect-compose.yml',
+         'https/install-https.ps1', 'https/install-redirect.ps1', 'https/README.txt', 'https/README-REDIRECT.txt')
 
 
 def build(*, root, output, version, repository, revision, app_digest, nms_digest, postgres_digest):
@@ -38,7 +40,7 @@ def build(*, root, output, version, repository, revision, app_digest, nms_digest
     for service in ('app', 'nms', 'postgres', 'database-backup'):
         pins += f'  {service}:\n    image: {images["postgres" if service == "database-backup" else service]}\n'
     payload['release-images.yml'] = pins.encode()
-    manifest = dict(schema=1, version=version, repository=repository, revision=revision, images=images,
+    manifest = dict(schema=2, version=version, repository=repository, revision=revision, images=images,
                     files={name: hashlib.sha256(data).hexdigest() for name, data in sorted(payload.items())})
     payload['release.json'] = (json.dumps(manifest, indent=2) + '\n').encode()
     output.mkdir(parents=True, exist_ok=True)

@@ -46,9 +46,9 @@
 
 **Interfaces:** verified ZIP/manifest allowlist; bootstrap `-Update -Destination <existing-root> -PassphraseFile <path>` invokes the candidate updater against the existing installation rather than the staging directory.
 
-- [ ] Add failing tests for nested HTTPS payload verification, traversal/duplicates/tampering and upgrading an existing1.0.9 installation through the downloaded bootstrap.
-- [ ] Update the fixed allowlist, safe extraction and manifest validation together; preserve old installation data and use explicit installation root parameters.
-- [ ] Run Python package tests and Windows5.1/7 failure/retry tests; commit when green.
+- [x] Add failing tests for nested HTTPS payload verification, traversal/duplicates/tampering and upgrading an existing1.0.9 installation through the downloaded bootstrap.
+- [x] Update the fixed allowlist, safe extraction and manifest validation together; preserve old installation data and use explicit installation root parameters.
+- [x] Run Python package tests and Windows5.1/7 failure/retry tests; commit when green.
 
 ## Task 3: HTTPS and encrypted recovery integration
 

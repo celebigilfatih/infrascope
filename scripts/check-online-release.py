@@ -59,6 +59,19 @@ class OnlineRelease(unittest.TestCase):
         bootstrap = self.output / 'install-infrascope.ps1'
         self.assertEqual(bootstrap.read_bytes(), (ROOT / 'deploy/install-infrascope.ps1').read_bytes())
 
+    def test_release_includes_only_versioned_https_helpers_and_hashes_nested_paths(self):
+        target = self.build()
+        expected = {f'https/{name}' for name in (
+            'Caddyfile', 'Redirectfile', 'compose.yml', 'redirect-compose.yml',
+            'install-https.ps1', 'install-redirect.ps1', 'README.txt', 'README-REDIRECT.txt')}
+        with zipfile.ZipFile(target) as archive:
+            manifest = json.loads(archive.read('infrascope/release.json'))
+            self.assertEqual(manifest['schema'], 2)
+            self.assertTrue(expected.issubset(manifest['files']))
+            for name in expected:
+                self.assertEqual(hashlib.sha256(archive.read('infrascope/' + name)).hexdigest(), manifest['files'][name])
+            self.assertFalse(any(name.endswith(('.key', '.crt', '.pfx')) or '/.https-state' in name for name in archive.namelist()))
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

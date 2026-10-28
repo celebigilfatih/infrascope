@@ -69,3 +69,17 @@ jobs:
       - name: PowerShell 7 release failure/retry and state preservation
         shell: pwsh
         run: ./scripts/check-windows-update.ps1 -FixtureZip fixture/infrascope-windows-online-1.0.2.zip
+      - name: Generate nested HTTPS bootstrap fixture
+        run: >-
+          python scripts/package-online-release.py --version 1.0.10 --repository celebigilfatih/infrascope
+          --revision aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+          --app-digest sha256:1111111111111111111111111111111111111111111111111111111111111111
+          --nms-digest sha256:2222222222222222222222222222222222222222222222222222222222222222
+          --postgres-digest sha256:3333333333333333333333333333333333333333333333333333333333333333
+          --output bootstrap-fixture
+      - name: Windows PowerShell 5.1 verified bootstrap upgrade from1.0.9
+        shell: powershell
+        run: ./scripts/check-windows-bootstrap.ps1 -FixtureZip bootstrap-fixture/infrascope-windows-online-1.0.10.zip
+      - name: PowerShell 7 verified bootstrap upgrade from1.0.9
+        shell: pwsh
+        run: ./scripts/check-windows-bootstrap.ps1 -FixtureZip bootstrap-fixture/infrascope-windows-online-1.0.10.zip
