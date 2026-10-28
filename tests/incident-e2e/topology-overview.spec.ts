@@ -63,7 +63,7 @@ async function mockOverview(page: Page) {
 const map = (page: Page) => page.getByRole('region', { name: 'Topoloji haritası', exact: true });
 const overview = (page: Page) => page.getByRole('region', { name: 'Dengeli bina topolojisi', exact: true });
 const expand = (page: Page) => page.getByRole('button', { name: 'Haritayı tam ekran yap', exact: true });
-const restore = (page: Page) => page.getByRole('button', { name: 'Normal görünüme dön', exact: true });
+const restore = (page: Page) => page.getByRole('button', { name: 'Tam ekrandan çık', exact: true });
 
 async function expectPhysicalPaths(scope: Locator, ids: string[]) {
   const edges = scope.locator('.react-flow__edge-buildingOverview');

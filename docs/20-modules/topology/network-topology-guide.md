@@ -2,6 +2,18 @@
 
 Bu belge, infraScope projesindeki modern ağ topolojisi görselleştirme sisteminin özelliklerini ve kullanımını açıklar.
 
+## Doğrudan düzenleme ve tam ekran
+
+- Ana harita kayıtlı bina ve ağ grubu konumlarını açılışta gösterir. Kayıtsız nesneler otomatik yerleştirilir; Görüntüleme/Düzenleme geçişi konumları değiştirmez.
+- Üst çubuktaki **Düzenleme** ile ikonları taşıyın. Yerleşim otomatik kaydedilir ve mevcut ortak kayıt kapsamını korur. Kayıt durumu görünür; hatada konumlar bu sayfada kalır, **Yeniden dene** ile kaydedilir.
+- **Bağlantı ekle**, ana haritada iki bina; bina içi görünümde iki cihaz ve gerçek portlarını seçtirir. Noktadan sürükleme de aynı formu açar. Boş port bulunamazsa envanterde portları tamamlayın veya NMS portlarını eşitleyin. Formdaki hata seçimleri silmez. Bağlantı oluşturma cihazın ağ yapılandırmasını değiştirmez; envantere bağlantı kaydı ekler.
+- Yeni bağlantının varsayılan durumu **Bilinmiyor** olur. Aynı içeriğin tekrar gönderilmesi mevcut kaydı döndürür; farklı içerik veya port çakışması yeni bir kayıt oluşturmaz.
+- **Ekrana sığdır** çerçeve ikonu taşır ve yalnız kamerayı değiştirir. **Okunabilir ölçek**, isimleri incelemek için daha yakın bir görünüm sağlar; tüm nesnelerin aynı anda görünmesi gerekmez.
+- **Tam ekran** dört yöne açılma ikonu ile gerçek tarayıcı tam ekranını açar. **Tam ekrandan çık** veya Esc ile çıkılır; tarayıcı desteklemiyorsa/izin vermezse açıklamayla sayfa içi büyütme kullanılır. Bağlantı formları ve menüler tam ekranda da kullanılabilir.
+- İnceleme modunda bina tek tıklamayla açılır. Düzenleme modunda tek tıklama kaynak binayı seçer; binayı açmak için çift tıklayın veya nesne menüsünü kullanın. **Harita seçenekleri → Ayrıntılı görünüm**, mevcut gelişmiş filtre/komşuluk araçlarını korur.
+
+Regresyon: `test:topology-building` içine oluşturma/tekrar deneme ve tam ekran yaşam döngüsü kontrolleri dahildir. `tests/incident-e2e/topology-editing.spec.ts`, izole incident test veritabanında aynı haritada taşıma, hata/401/403, yanıt kaybı, arama odağı, tam ekran ve formları kontrol eder. Gerçek müşteri kayıtlarına test yazılmaz.
+
 ## 1. Genel Bakış
 Network Topology sayfası, altyapınızın hem fiziksel hem de mantıksal katmanlarını görselleştirmek için tasarlanmıştır. Sistem, ölçeklenebilir bir ReactFlow tabanlı harita ve detaylı drill-down (derinlemesine inceleme) görünümleri sunar.
 
@@ -64,7 +76,7 @@ Topolojiyi interaktif bir akordeon listesi olarak sunar. Hızlı navigasyon içi
 - Cihaz çizgileri durum etiketi ve çizgi biçimiyle ayrılır: açık düz yeşil, kapalı kesik kırmızı, beklemede noktalı sarı, bilinmeyen noktalı gri. Bina haritasında kablo türü renkleri korunur; durum etikette ayrıca yazılır.
 - Çizgiye tıklamak bağlantı adını, kayıtlı durumunu, iki cihazı ve gerçek port adlarını açar. Cihaz seçimi yönetim IP’sini, kritiklik bilgisini, konumunu, arayüzlerini ve bağlı cihazlarını gösterir. Komşu bağlantıdan uç cihaza geçilebilir.
 - **Bağlantı listesi**, geçerli cihaz filtrelerine uyan bağlantıları cihaz/port/durum metniyle arama ve duruma göre süzme olanağı sağlar. Çizgi hedeflerine alternatif olarak klavyeyle kullanılabilir. Bina bağlantıları **Bağlantıları yönet** üzerinden incelenir.
-- **Haritayı genişlet** düğmesinde açıklama ikonun sağında görünür. Düğme, harita ile ayrıntı paneline daha fazla alan ayırır. Genişletilmiş görünümde düğme **Normal görünüme dön** yazar; bu düğmeyle veya harita içindeyken Esc ile normal görünüme dönülür. Açıklama dar ekranlarda da görünür kalır.
+- **Tam ekran** düğmesi açıklamayı ikonun sağında gösterir. Harita tarayıcı tam ekranına geçer; destek yoksa sayfa içinde büyütülür. Tam ekrandan çık düğmesi veya Esc ile normal görünüme dönülür; açıklamalar dar ekranlarda da görünür kalır.
 - NMS port uyarıları kayıtlı bağlantı durumundan ve cihazın envanter durumundan ayrıdır. Kapalı port kaydı dönmemesi bütün portların izlendiğini veya açık olduğunu kanıtlamaz. Her uyarıda son ölçüm TSİ ile gösterilir; kaynak alınamazsa sıfır yerine eksik veri açıklaması gösterilir.
 - Bağlantı uçları mevcut veri modeli üzerinden eşlenir: kaynak switch portu → ilişkili cihaz arayüzü. Birleşim yapılmayan eski hedef alanları başka bir cihaza atfedilmez; kaynağı olmayan ve kendisine bağlanan kayıtlar çizilmez. Eksik hız bilgisine örnek değer atanmaz.
 

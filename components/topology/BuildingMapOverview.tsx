@@ -1,8 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from 'react';
-import ReactFlow, { Background, ConnectionMode, Panel, ReactFlowProvider, useNodesInitialized, useReactFlow, type Edge, type Node } from 'reactflow';
-import { Ellipsis, Eye, Layers, List, Maximize2, Minimize2, Minus, Plus, SlidersHorizontal } from 'lucide-react';
+import ReactFlow, { Background, ConnectionMode, Panel, ReactFlowProvider, useNodesInitialized, useReactFlow, type Connection, type Edge, type Node, type NodeChange, type Viewport } from 'reactflow';
+import { Ellipsis, Eye, Layers, List, Minus, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { SemanticBadge } from '@/components/ui/semantic-badge';
@@ -18,13 +18,21 @@ import { TopologySearch } from './TopologySearch';
 import { NodeTooltip } from './NodeTooltip';
 import { useConnectionTooltip } from './ConnectionTooltip';
 import styles from './BuildingMapOverview.module.css';
+import { MapViewActions } from './MapViewActions';
 
 interface Props {
   nodes: Node[]; edges: Edge[]; buildings: { id: string; name: string }[]; links: BuildingEndpoints[]; groups: NetworkGroup[];
   unassignedId: string; unassignedCount: number; searchItems: TopologySearchItem[];
   onSearch: (item: TopologySearchItem) => void; onNodeClick: (node: Node) => void; onEdgeClick: (event: React.MouseEvent, edge: Edge) => void;
+  onOpenNode: (node: Node) => void;
+  onDetailed: () => void;
   onNodeMenu: (event: React.MouseEvent, node: Node) => void; onEdgeMenu: (event: React.MouseEvent, edge: Edge) => void;
-  onUseSavedLayout: () => void; onUnassigned: () => void; onExpand: () => void; expanded: boolean; onClearFocus: () => void;
+  onUnassigned: () => void; onExpand: () => void; expanded: boolean; onClearFocus: () => void;
+  interaction: ReactNode; connectionAction: ReactNode; feedback: ReactNode; ready: boolean;
+  editing: boolean; canMove: boolean; canConnect: boolean;
+  savedPositions: Record<string, { x: number; y: number }>;
+  onNodesChange: (changes: NodeChange[]) => void; onDragStop: (node: Node) => void; onConnect: (connection: Connection) => void;
+  viewport: Viewport | null; onViewport: (viewport: Viewport) => void;
   filters: ReactNode; actions: ReactNode; connectionFilters: ReactNode; error?: string;
   focusNodeId: string | null; focusRevision: number; returnGroupId: string | null;
   captureRef: MutableRefObject<HTMLDivElement | null>;
@@ -36,7 +44,7 @@ export function BuildingMapOverview(props: Props) {
   return <ReactFlowProvider><Overview {...props} /></ReactFlowProvider>;
 }
 function Overview(props: Props) {
-  const { fitView, setViewport, zoomIn, zoomOut } = useReactFlow();
+  const { fitView, setViewport, getViewport, zoomIn, zoomOut } = useReactFlow();
   const initialized = useNodesInitialized();
   const [ready, setReady] = useState(false), [zoom, setZoom] = useState(100), [showCross, setShowCross] = useState(true);
   const [optionsOpen, setOptionsOpen] = useState(false), [listOpen, setListOpen] = useState(false);
@@ -44,7 +52,11 @@ function Overview(props: Props) {
   const canvas = useRef<HTMLDivElement>(null), returned = useRef(false);
   const dimensions = useRef<Record<string, { width: number; height: number }>>({});
   const tooltip = useConnectionTooltip(open => { if (!open) setHoverNodeId(null); });
-  const graph = useMemo(() => balancedBuildingOverview(props.nodes, props.edges, props.buildings, props.links, props.groups, showCross, props.unassignedId, props.focusNodeId), [props.nodes, props.edges, props.buildings, props.links, props.groups, props.unassignedId, props.focusNodeId, showCross]);
+  const graph = useMemo(() => balancedBuildingOverview(props.nodes, props.edges, props.buildings, props.links, props.groups, showCross, props.unassignedId, props.focusNodeId, props.savedPositions), [props.nodes, props.edges, props.buildings, props.links, props.groups, props.unassignedId, props.focusNodeId, props.savedPositions, showCross]);
+  const graphRef = useRef(graph); graphRef.current = graph;
+  const cameraApplied = useRef(false), userCamera = useRef(false);
+  const viewportRef = useRef(props.viewport); viewportRef.current = props.viewport;
+  const nodeSignature = graph.nodes.map(node => node.id).join(',');
   const visibleNodes = graph.nodes.filter(node => !node.hidden);
   const hoverEdge = graph.edges.find(edge => edge.id === hoverEdgeId);
   const emphasisId = hoverNodeId || props.focusNodeId;
@@ -63,18 +75,23 @@ function Overview(props: Props) {
   }, [visibleNodes, setViewport]);
   const fitRef = useRef(fit); fitRef.current = fit;
   useEffect(() => {
-    if (!ready || !initialized) return;
-    const observer = new ResizeObserver(() => fitRef.current());
+    if (!ready || !initialized || !props.ready) return;
+    if (!cameraApplied.current) {
+      if (viewportRef.current) { userCamera.current = true; void setViewport(viewportRef.current, { duration: 0 }); }
+      else fitRef.current();
+      cameraApplied.current = true;
+    }
+    const observer = new ResizeObserver(() => { if (!userCamera.current) fitRef.current(); });
     if (canvas.current) observer.observe(canvas.current);
-    fitRef.current();
     return () => observer.disconnect();
-  }, [ready, initialized, graph.nodes.length]);
+  }, [ready, initialized, props.ready, setViewport, nodeSignature]);
   useEffect(() => {
-    if (!ready || !initialized) return;
-    if (!props.focusNodeId) { fitRef.current(); return; }
-    if (!graph.nodes.some(node => node.id === props.focusNodeId)) return;
+    if (!ready || !initialized || !props.ready) return;
+    if (!props.focusNodeId) return;
+    if (!graphRef.current.nodes.some(node => node.id === props.focusNodeId)) return;
+    userCamera.current = true;
     void fitView({ nodes: [{ id: props.focusNodeId }], minZoom: .9, maxZoom: 1.1, padding: .7, duration: 0 });
-  }, [ready, initialized, props.focusNodeId, props.focusRevision, graph.nodes, fitView]);
+  }, [ready, initialized, props.ready, props.focusNodeId, props.focusRevision, nodeSignature, fitView]);
   useEffect(() => {
     if (!props.returnGroupId || !initialized || returned.current) return;
     const timer = window.setTimeout(() => {
@@ -84,7 +101,7 @@ function Overview(props: Props) {
     }, 200);
     return () => window.clearTimeout(timer);
   }, [props.returnGroupId, initialized, props.groups]);
-  const renderNodes = graph.nodes.map(node => ({ ...node, ...dimensions.current[node.id], data: { ...node.data,
+  const renderNodes = graph.nodes.map(node => ({ ...node, ...dimensions.current[node.id], draggable: props.canMove, connectable: props.canConnect && node.type === 'building', selected: node.id === props.focusNodeId, data: { ...node.data,
     tooltipId: node.id === hoverNodeId && tooltip.anchor ? tooltip.id : undefined,
     hoverActive: !!hoverEdge || !!hoverNodeId,
     nodeEmphasis: nodeInteractionEmphasis(node.id, emphasisId, adjacent, hoverEdge),
@@ -100,35 +117,40 @@ function Overview(props: Props) {
     <div className={styles.toolbar}>
       <div className={styles.search}><TopologySearch items={props.searchItems} onSelect={props.onSearch} label="Topolojide bina veya cihaz ara" placeholder="Bina, cihaz veya ağ grubu ara…" emptyMessage="Eşleşen bina, ağ grubu veya cihaz bulunamadı." /></div>
       {props.filters}
+      {props.interaction}
+      {props.connectionAction}
       {props.focusNodeId && <Button variant="ghost" size="sm" onClick={props.onClearFocus}>Vurguyu temizle</Button>}
-      <Button variant="outline" className="gap-2" onClick={() => { closeHover(); fit(true); }}><Maximize2 size={16} />Ekrana sığdır</Button>
-      <Button variant="outline" className="shrink-0 gap-1.5 text-xs" onClick={() => { closeHover(); props.onExpand(); }} aria-label={props.expanded ? 'Normal görünüme dön' : 'Haritayı tam ekran yap'} title={props.expanded ? 'Normal görünüme dön · Esc' : 'Haritayı tam ekran yap'}>{props.expanded ? <Minimize2 size={16} /> : <Maximize2 size={16} />}<span>{props.expanded ? 'Normal görünüme dön' : 'Tam ekran'}</span></Button>
+      <MapViewActions onFit={() => { closeHover(); userCamera.current = true; fit(true); }} expanded={props.expanded} onExpand={props.onExpand} />
       <Popover open={optionsOpen} onOpenChange={setOptionsOpen}><PopoverTrigger asChild><Button variant="outline" size="sm" className="shrink-0 gap-1.5 text-xs" aria-label="Bina haritası seçenekleri"><Ellipsis size={16} /><span>Harita seçenekleri</span></Button></PopoverTrigger><PopoverContent align="end" className="max-h-[75dvh] w-80 overflow-y-auto"><div className={styles.menu}>
         <p className="px-2 py-1 text-sm font-semibold">Harita seçenekleri</p>
-        <Button variant="ghost" onClick={() => { setOptionsOpen(false); props.onUseSavedLayout(); }}><SlidersHorizontal size={16} />Kayıtlı düzen / Düzenleme</Button>
-        <p className="px-2 pb-2 text-xs text-muted-foreground">Dengeli görünüm kayıtlı ikon konumlarını değiştirmez.</p>
+        <p className="px-2 pb-2 text-xs text-muted-foreground">Kayıtlı yerleşim kullanılır. Taşıma ve yeni bağlantı için üst çubuktan Düzenleme moduna geçin.</p>
+        <Button variant="ghost" onClick={() => { setOptionsOpen(false); props.onDetailed(); }}><List size={16} />Ayrıntılı görünüm</Button>
         <Button variant="ghost" onClick={() => { setOptionsOpen(false); setListOpen(true); }}><List size={16} />Bina ve ağ grubu listesi</Button>
         <div className="my-1 border-t" />{props.actions}
       </div></PopoverContent></Popover>
     </div>
+    {props.feedback}
     {props.error && <p role="alert" className={styles.notice}>{props.error}</p>}
     <div className={styles.canvas} ref={canvas} role="region" aria-label="Topoloji haritası">
       {!graph.nodes.length ? <div className={styles.empty}><p>Filtrelere uygun bina bulunamadı.</p><p>Filtreleri değiştirerek tekrar deneyin.</p></div> : <ReactFlow nodes={renderNodes} edges={renderEdges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} onInit={() => setReady(true)}
-        onNodesChange={changes => changes.forEach(change => { if (change.type === 'dimensions' && change.dimensions) dimensions.current[change.id] = change.dimensions; })}
+        onNodesChange={changes => { changes.forEach(change => { if (change.type === 'dimensions' && change.dimensions) dimensions.current[change.id] = change.dimensions; }); props.onNodesChange(changes); }}
+        onNodeDragStart={() => { closeHover(); userCamera.current = true; }} onNodeDragStop={(_, node) => props.onDragStop(node)} onConnect={props.onConnect}
+        isValidConnection={connection => props.canConnect && !!connection.source && !!connection.target && connection.source !== connection.target && graph.nodes.some(node => node.id === connection.source && node.type === 'building') && graph.nodes.some(node => node.id === connection.target && node.type === 'building')}
         onNodeClick={(_, node) => { closeHover(); props.onNodeClick(node); }} onEdgeClick={props.onEdgeClick}
+        onNodeDoubleClick={(_, node) => { closeHover(); props.onOpenNode(node); }}
         onNodeContextMenu={props.onNodeMenu} onEdgeContextMenu={props.onEdgeMenu}
         onNodeMouseEnter={(event, node) => { if (node.type === 'building') { setHoverEdgeId(null); setHoverNodeId(node.id); tooltip.enter(event); } }}
         onNodeMouseMove={(event, node) => { if (node.type === 'building' && tooltip.show(event)) setHoverNodeId(node.id); }} onNodeMouseLeave={tooltip.leave}
-        onPaneClick={closeHover} onMoveStart={closeHover} onMove={(_, viewport) => setZoom(Math.round(viewport.zoom * 100))}
-        nodesDraggable={false} nodesConnectable={false} connectionMode={ConnectionMode.Loose} deleteKeyCode={null} minZoom={.2} maxZoom={2} aria-label="Etkileşimli bina topolojisi">
+        onPaneClick={closeHover} onMoveStart={event => { closeHover(); if (event) userCamera.current = true; }} onMove={(_, viewport) => setZoom(Math.round(viewport.zoom * 100))} onMoveEnd={(_, viewport) => { if (cameraApplied.current && props.ready) props.onViewport(viewport); }}
+        nodesDraggable={props.canMove} nodesConnectable={props.canConnect} connectionMode={ConnectionMode.Loose} deleteKeyCode={null} minZoom={.05} maxZoom={2} aria-label="Etkileşimli bina topolojisi">
         <Background gap={26} size={.7} color="rgba(100,116,139,.08)" />
-        <Panel position="bottom-left" className="m-3!"><div className={styles.controls}><Button variant="ghost" size="sm" className="h-9 gap-1.5 rounded-none px-2 text-xs" aria-label="Haritayı yakınlaştır" onClick={() => zoomIn({ duration: 0 })}><Plus size={14} /><span>Yakınlaştır</span></Button><span className="min-w-10 text-center text-xs text-muted-foreground">{zoom}%</span><Button variant="ghost" size="sm" className="h-9 gap-1.5 rounded-none px-2 text-xs" aria-label="Haritayı uzaklaştır" onClick={() => zoomOut({ duration: 0 })}><Minus size={14} /><span>Uzaklaştır</span></Button></div></Panel>
+        <Panel position="bottom-left" className="m-3!"><div className={styles.controls}><Button variant="ghost" size="sm" className="h-9 gap-1.5 rounded-none px-2 text-xs" aria-label="Haritayı yakınlaştır" onClick={() => { userCamera.current = true; void zoomIn({ duration: 0 }); }}><Plus size={14} /><span>Yakınlaştır</span></Button><span className="min-w-10 text-center text-xs text-muted-foreground">{zoom}%</span><Button variant="ghost" size="sm" className="h-9 gap-1.5 rounded-none px-2 text-xs" aria-label="Haritayı uzaklaştır" onClick={() => { userCamera.current = true; void zoomOut({ duration: 0 }); }}><Minus size={14} /><span>Uzaklaştır</span></Button><Button variant="ghost" size="sm" className="h-9 gap-1.5 px-2 text-xs" onClick={() => { if (!canvas.current) return; const view = getViewport(), width = canvas.current.clientWidth, height = canvas.current.clientHeight, zoom = .75; userCamera.current = true; void setViewport({ x: width / 2 - (width / 2 - view.x) / view.zoom * zoom, y: height / 2 - (height / 2 - view.y) / view.zoom * zoom, zoom }, { duration: 0 }); }}>Okunabilir ölçek</Button></div></Panel>
       </ReactFlow>}
       {hovered && <NodeTooltip id={tooltip.id} anchor={tooltip.anchor} container={tooltip.container} onMouseEnter={tooltip.keepOpen} onMouseLeave={tooltip.leaveTooltip} onFocusCapture={tooltip.focusTooltip} onBlurCapture={tooltip.blurTooltip}
         name={hovered.data.name} status={<SemanticBadge tone={buildingNodeStatus(hovered.data.status).tone}>{buildingNodeStatus(hovered.data.status).label}</SemanticBadge>}
         connectionCount={props.links.filter(link => link.sourceBuildingId === hovered.data.buildingId || link.destBuildingId === hovered.data.buildingId).length}
         visibleConnectionCount={graph.edges.filter(edge => edge.source === hovered.id || edge.target === hovered.id).length}
-        summary={{ kind: 'building', deviceCount: hovered.data.deviceCount, onShowDevices: () => { closeHover(); props.onNodeClick(hovered); } }} />}
+        summary={{ kind: 'building', deviceCount: hovered.data.deviceCount, onShowDevices: () => { closeHover(); props.onOpenNode(hovered); } }} />}
     </div>
     <div className={styles.footer}>
       <span className={styles.legend}><i className={styles.physical} aria-hidden="true" />Fiziksel bağlantı</span><span className={styles.legend}><i className={styles.logical} aria-hidden="true" />Mantıksal ağ grubu</span><span className={styles.legend}><i className={styles.unknown} aria-hidden="true" />Durum bilinmiyor</span>

@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from 'react';
 import ReactFlow, { Background, ConnectionMode, Panel, ReactFlowProvider, useNodesInitialized, useReactFlow, type Edge, type Node } from 'reactflow';
-import { Cloud, Ellipsis, Eye, Focus, Link2, List, Maximize2, Minimize2, Minus, Plus, Settings2 } from 'lucide-react';
+import { Cloud, Ellipsis, Eye, Focus, Link2, List, Minus, Plus, Settings2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { MapViewActions } from './MapViewActions';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { deviceNetworkEdges, deviceOverviewCenterId, deviceOverviewExtraEdges, deviceOverviewScope, deviceOverviewSummary, OVERVIEW_GROUP_SIZE } from '@/lib/topology/device-overview';
 import { fullNameDeviceLayout, balancedDeviceViewport } from '@/lib/topology/device-overview-viewport';
@@ -168,8 +169,7 @@ function Overview(props: Props) {
     <div className={styles.toolbar}>
       <div className={styles.search}><TopologySearch items={props.searchItems} onSelect={props.onSearch} label="Cihaz haritasında ara" placeholder="Cihaz, IP veya ağ grubu ara…" emptyMessage="Eşleşen cihaz, konum veya ağ grubu bulunamadı." /></div>
       {props.filters}
-      <Button variant="outline" className="gap-2" onClick={() => fit(true)}><Maximize2 size={16} />Ekrana sığdır</Button>
-      <Button variant="outline" className="gap-2" onClick={props.onExpand} aria-label={props.expanded ? 'Normal görünüme dön' : 'Cihaz haritasını tam ekran yap'}>{props.expanded ? <Minimize2 size={16} /> : <Maximize2 size={16} />}{props.expanded ? 'Normal görünüm' : 'Tam ekran'}</Button>
+      <MapViewActions onFit={() => fit(true)} expanded={props.expanded} onExpand={props.onExpand} />
       <Popover open={optionsOpen} onOpenChange={setOptionsOpen}><PopoverTrigger asChild><Button variant="outline" className="gap-2" aria-label="Cihaz haritası seçenekleri"><Ellipsis size={16} />Harita seçenekleri</Button></PopoverTrigger><PopoverContent align="end" className="max-h-[75dvh] w-80 overflow-y-auto"><div className={styles.menu}><p>Harita seçenekleri</p><Button variant="ghost" onClick={() => { setOptionsOpen(false); props.onDetailed(); }}><Settings2 size={16} />Kayıtlı düzen / Düzenleme</Button><small>Bu görünüm kayıtlı cihaz ve grup konumlarını değiştirmez.</small>{props.actions}</div></PopoverContent></Popover>
     </div>
     {props.error && <p role="alert" className="order-1 flex shrink-0 flex-wrap items-center gap-2 border-b p-2 text-xs text-muted-foreground">{props.error}<Button variant="outline" size="sm" onClick={props.onRetryGroups}>Ağ gruplarını yeniden yükle</Button></p>}

@@ -59,6 +59,17 @@ export async function POST(request: NextRequest) {
       const source = catalog[body.sourceDeviceId]?.find(port => port.id === body.sourcePortId);
       const target = catalog[body.targetDeviceId]?.find(port => port.id === body.targetPortId);
       if (!source || !target) return { error: 'Seçilen portlardan biri bu cihaza ait değil veya artık mevcut değil.', status: 400 };
+      const existing = await tx.deviceLink.findFirst({ where: { OR: [
+        { sourceDeviceId: body.sourceDeviceId, targetDeviceId: body.targetDeviceId },
+        { sourceDeviceId: body.targetDeviceId, targetDeviceId: body.sourceDeviceId },
+      ], AND: [
+        { endpoints: { some: { deviceId: body.sourceDeviceId, portId: body.sourcePortId } } },
+        { endpoints: { some: { deviceId: body.targetDeviceId, portId: body.targetPortId } } },
+      ] }, select: editableSelect });
+      if (existing) {
+        if (!existing.buildingConnectionId && existing.source !== 'DRAWIO' && existing.type === body.type && existing.bandwidth === body.bandwidth) return { connection: normalizeDeviceLinks([existing])[0], replayed: true };
+        return { error: 'Bu portlar arasında farklı bir bağlantı zaten var.', status: 409 };
+      }
       if (source.occupied || target.occupied) return { error: 'Seçilen portlardan biri başka bir bağlantıda kullanılıyor. Boş bir port seçin.', status: 409 };
       const link = await tx.deviceLink.create({ data: { sourceDeviceId: body.sourceDeviceId, targetDeviceId: body.targetDeviceId, type: body.type, bandwidth: body.bandwidth, status: 'UNKNOWN', endpoints: { create: [
         { deviceId: body.sourceDeviceId, portId: source.id, portKey: source.key, portName: source.name, side: 0 },
@@ -67,7 +78,7 @@ export async function POST(request: NextRequest) {
       return { connection: normalizeDeviceLinks([link])[0] };
     }, { isolationLevel: 'Serializable' });
     if ('error' in outcome) return result({ success: false, error: outcome.error }, outcome.status);
-    return result({ success: true, data: { connection: outcome.connection } }, 201);
+    return result({ success: true, data: { connection: outcome.connection } }, 'replayed' in outcome ? 200 : 201);
   } catch (err) {
     if (conflict(err)) return result({ success: false, error: 'Portlardan biri az önce kullanıldı veya cihaz değişti. Portları yenileyip tekrar deneyin.' }, 409);
     return result({ success: false, error: 'Cihaz bağlantısı kaydedilemedi.' }, 503);

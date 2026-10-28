@@ -15,6 +15,7 @@ function matches(device, where) {
   return Object.entries(where).every(([key, value]) => {
     if (key === 'AND') return value.every(item => matches(device, item));
     if (key === 'OR') return value.some(item => matches(device, item));
+    if (value && typeof value === 'object' && value.some) return Array.isArray(device[key]) && device[key].some(item => matches(item, value.some));
     if (value && typeof value === 'object') return value.in ? value.in.includes(device[key]) : device[key] && matches(device[key], value);
     return device[key] === value;
   });
@@ -38,6 +39,7 @@ const prisma = {
     links.push(row); return row;
   },
     findUnique: async ({ where }) => { const row = links.find(link => link.id === where.id); return row ? { ...row, endpoints: endpoints.filter(port => port.linkId === row.id) } : null; },
+    findFirst: async ({ where }) => { const row = links.find(link => matches(link, where)); return row ? { ...row, endpoints: endpoints.filter(port => port.linkId === row.id) } : null; },
     findUniqueOrThrow: async args => { const row = await prisma.deviceLink.findUnique(args); if (!row) throw Object.assign(new Error('Missing'), { code: 'P2025' }); return row; },
     updateMany: async ({ where, data }) => { if (race) throw Object.assign(new Error('Concurrent update'), { code: race }); const row = links.find(link => link.id === where.id && link.updatedAt.getTime() === where.updatedAt.getTime()); if (!row) return { count: 0 }; Object.assign(row, data); return { count: 1 }; },
     deleteMany: async ({ where }) => { if (race) throw Object.assign(new Error('Concurrent delete'), { code: race }); const index = links.findIndex(link => link.id === where.id && link.updatedAt.getTime() === where.updatedAt.getTime()); if (index < 0) return { count: 0 }; const [row] = links.splice(index, 1); await prisma.deviceLinkEndpoint.deleteMany({ where: { linkId: row.id } }); return { count: 1 }; },
@@ -99,14 +101,17 @@ async function main() {
   assert.equal((await create({ sourcePortId: 'switch:b1' })).status, 400, 'A port belonging to the other device cannot be forged');
   assert.equal(writes, 0);
   const first = await create(); assert.equal(first.status, 201);
+  const replay = await create(); assert.equal(replay.status, 200, 'Committed-but-lost create response is safely replayed');
+  assert.equal(replay.body.data.connection.id, first.body.data.connection.id); assert.equal(writes, 1);
+  assert.equal((await create({ bandwidth: '25 Gbps' })).status, 409, 'Different contents cannot reuse occupied ports');
   assert.deepEqual(first.body.data.connection, { id: 'link-1', sourceDeviceId: 'a', targetDeviceId: 'b', sourcePortName: 'Gi1', targetPortName: 'Gi1', type: 'FIBER', bandwidth: '10 Gbps', status: 'UNKNOWN', recordKind: 'device-link' });
   const { buildingInternalConnections } = load('lib/topology/building-devices.ts');
   const observed = buildingInternalConnections([{ ...devices[0], nmsDeviceId: 1 }, { ...devices[1], nmsDeviceId: 2 }], [], [{ id: 'neighbor', nmsDeviceId: 1, localInterface: 'Gi1', remoteDeviceName: devices[1].name, remoteInterface: 'Gi1', protocol: 'LLDP', lastSeenAt: new Date() }], devices, [first.body.data.connection]);
   assert.equal(observed.length, 1, 'Manual metadata replaces the same observed port-to-port LLDP edge');
   assert.equal(observed[0].bandwidth, '10 Gbps');
   assert.equal((await GET(request())).body.data.ports.a[0].occupied, true);
-  assert.equal((await create()).status, 409);
-  assert.equal((await create({ sourceDeviceId: 'b', targetDeviceId: 'a', sourcePortId: 'switch:b1', targetPortId: 'switch:a1' })).status, 409, 'Reverse duplicate must be rejected');
+  assert.equal((await create()).status, 200);
+  assert.equal((await create({ sourceDeviceId: 'b', targetDeviceId: 'a', sourcePortId: 'switch:b1', targetPortId: 'switch:a1' })).status, 200, 'Reverse exact retry returns the same link');
   assert.equal((await create({ sourcePortId: 'nms:a-nms' })).status, 400, 'A duplicate inventory alias cannot bypass physical port reservation');
   assert.equal((await create({ sourcePortId: 'switch:a2', targetPortId: 'switch:b2' })).status, 201, 'Parallel connections may use different ports');
   assert.equal((await create({ sourceDeviceId: 'c', targetDeviceId: 'd', sourcePortId: 'interface:c1', targetPortId: 'interface:d1', type: 'ETHERNET', bandwidth: '1 Gbps' })).status, 201, 'Rack-based membership and server-to-server interfaces are supported');

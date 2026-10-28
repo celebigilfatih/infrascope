@@ -29,4 +29,9 @@ assert.ok(project(disconnected,[...edges,{id:'xy',source:'building-x',target:'bu
 // Parallel paths cannot replace unique-neighbor hub selection or disappear.
 const parallel=Array.from({length:20},(_,i)=>({id:'parallel'+i,source:'building-b0',target:'building-b1'}));
 const p=project(nodes,[...edges,...parallel],buildings,[...links,...parallel.map(()=>({sourceBuildingId:'b0',destBuildingId:'b1'}))],groups,true,'none');assert.equal(p.centerId,'building-hub');assert.equal(p.edges.length,edges.length+20);
-console.log('Building overview passed: balanced hub, real endpoints, explicit cross-link visibility, filtered position stability, disconnected/parallel paths, circular groups and immutable saved inventory/layout. Synthetic records only.');
+const saved={'building-hub':{x:987,y:654}};
+const custom=project(nodes,edges,buildings,links,groups,true,'none',null,saved);
+assert.equal(custom.nodes.find(n=>n.id==='building-hub').position.x,987,'Overview must honor persisted manual layout on initial load');
+assert.equal(custom.nodes.find(n=>n.id==='building-hub').position.y,654);
+assert.deepEqual(project(nodes,edges,buildings,links,groups,true,'none',null,saved).nodes.map(n=>n.position),custom.nodes.map(n=>n.position),'Mode changes never change node positions');
+console.log('Building overview passed: balanced hub, saved positions, real endpoints, explicit cross-link visibility, filtered position stability, disconnected/parallel paths, circular groups and immutable inventory/layout. Synthetic records only.');

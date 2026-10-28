@@ -1,5 +1,6 @@
 .dialog { min-width: 0; }
-.header { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .625rem 1rem; padding: .875rem 3.25rem .875rem 1.25rem; border-bottom: 1px solid oklch(var(--border)); flex-shrink: 0; text-align: left; }
+/* Reserve room for the labelled, absolutely positioned dialog close button. */
+.header { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .625rem 1rem; padding: .875rem 6rem .875rem 1.25rem; border-bottom: 1px solid oklch(var(--border)); flex-shrink: 0; text-align: left; }
 .header > * + * { margin-top: 0 !important; }
 .headerTitle { min-width: 0; flex: 1 1 12rem; }
 .counts { margin-top: .375rem; font-size: .6875rem; color: oklch(var(--muted-foreground)); }
@@ -53,16 +54,16 @@
 @container (max-width: 900px) { .mapLegend { bottom: 4rem; } }
 @container (max-width: 480px) { .mapLegend { bottom: 6.5rem; } }
 @media (max-width: 767px) {
-  .header { padding: .75rem 3rem .75rem .875rem; }
+  .header { padding: .75rem 6rem .75rem .875rem; }
   .headerTitle { flex-basis: 100%; }
-  .headerActions { margin-right: -2rem; gap: .25rem; }
+  .headerActions { gap: .25rem; }
   .headerActions > button { padding-left: .5rem; padding-right: .5rem; font-size: .6875rem; }
   .toolbar { padding: .75rem 1rem; }
   .body { flex-direction: column; }
   .graph { flex: 1; }
   .mapOverlays { left: .5rem; right: .5rem; top: .5rem; }
   .mapToolbar { padding: .375rem; gap: .375rem; }
-  .mapToolbar > div:nth-child(2) { order: 3; flex-basis: 100%; }
+  .mapToolbar > div:first-child { order: 3; flex-basis: 100%; }
   .mapLegend { right: .5rem; max-width: calc(100% - 1rem); }
   .sidebar { flex: 0 0 43%; width: 100%; max-width: none; border-left: 0; border-top: 1px solid oklch(var(--border)); }
   .footer { padding: .75rem 1rem; }

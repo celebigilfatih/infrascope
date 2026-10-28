@@ -54,10 +54,10 @@ async function openConnections(workspace: Locator) {
 test('topology workspace: building connections preserve identity, keyboard selection and peer navigation', async ({ page, fixtures }, info) => {
   const source = await mockTopology(page); await signIn(page, fixtures); await page.goto('/network');
   await openSavedTopology(page);
-  await page.getByRole('button', { name: 'Haritayı genişlet', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Normal görünüme dön', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Haritayı tam ekran yap', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Tam ekrandan çık', exact: true })).toBeVisible();
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('button', { name: 'Haritayı genişlet', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Haritayı tam ekran yap', exact: true })).toBeVisible();
   const workspace = await openBuildingDevices(page);
   await expect(workspace.getByRole('status').filter({ hasText: '4 cihaz · 3 bağlantı · 1 aktif' })).toBeVisible();
   const graph = workspace.getByRole('region', { name: 'Bina içi cihaz topolojisi', exact: true });

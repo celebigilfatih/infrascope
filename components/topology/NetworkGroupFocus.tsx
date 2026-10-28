@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
-import { ArrowDown, ArrowLeft, ArrowUpRight, Building2, ChevronRight, Cloud, Info, Link2, Maximize2, Minimize2, Router, Search, Server, X } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ArrowUpRight, Building2, ChevronRight, Cloud, Info, Link2, Expand, Shrink, Router, Search, Server, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { SemanticBadge } from '@/components/ui/semantic-badge';
@@ -45,7 +45,7 @@ export function NetworkGroupFocus({ group, devices, visibleIds, filtered, view, 
     <header className={styles.toolbar}>
       <Button variant="outline" size="sm" onClick={onClose} className="gap-1.5"><ArrowLeft size={15} />Tüm ağa dön</Button>
       <div className={styles.breadcrumb}><span>Ağ grubu</span><ChevronRight size={14} /><h2 ref={heading} tabIndex={-1}>{group.name}</h2></div>
-      <div className={styles.actions}><Button variant="ghost" size="sm" onClick={onConnections} className="gap-1.5"><Link2 size={15} />Merkez bağlantıları</Button><Button variant="ghost" size="sm" onClick={onInspect} className="gap-1.5"><Info size={15} />Grup ayrıntıları</Button><Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2 text-xs" onClick={onExpand} aria-label={expandedMap ? 'Normal görünüme dön' : 'Haritayı genişlet'} title={expandedMap ? 'Normal görünüme dön · Esc' : 'Haritayı genişlet'}>{expandedMap ? <Minimize2 size={16} /> : <Maximize2 size={16} />}<span>{expandedMap ? 'Normal görünüme dön' : 'Haritayı genişlet'}</span></Button></div>
+      <div className={styles.actions}><Button variant="ghost" size="sm" onClick={onConnections} className="gap-1.5"><Link2 size={15} />Merkez bağlantıları</Button><Button variant="ghost" size="sm" onClick={onInspect} className="gap-1.5"><Info size={15} />Grup ayrıntıları</Button><Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2 text-xs" onClick={onExpand} aria-label={expandedMap ? 'Tam ekrandan çık' : 'Tam ekran'} title={expandedMap ? 'Tam ekrandan çık · Esc' : 'Haritayı tam ekran yap'}>{expandedMap ? <Shrink size={16} /> : <Expand size={16} />}<span>{expandedMap ? 'Tam ekrandan çık' : 'Tam ekran'}</span></Button></div>
     </header>
     <div ref={element => { content.current = element; captureRef.current = element; }} className={styles.scroll} tabIndex={0} aria-label="Grup topolojisi içeriği">
       <div className={styles.root}>

@@ -1318,3 +1318,90 @@ Source and revised browser screenshots were opened in the same comparison input.
 **Residual test gaps:** No production build, cross-browser certification, screen-reader certification or forced network-failure browser simulation is claimed. Group-load failures are surfaced with a retry action; existing unavailable-source alerts remain in place.
 
 final result: passed
+
+## 2026-10-27 — Topology direct editing and native fullscreen
+
+**Approved scope delivered.** The building map keeps the same canvas in View/Edit and honors saved coordinates on entry. Edit exposes connection creation and autosave/retry status. Device creation uses the existing real-port form. Scan fit and Expand/Shrink fullscreen controls are distinct, labelled and responsive. Native fullscreen preserves body-portalled dialogs; unavailable/denied fullscreen uses an explained fallback. Esc/browser exit synchronize without changing saved layout. Existing detailed tools remain accessible.
+
+**API and recovery.** Building creation authenticates/authorizes and validates endpoints/fields; new status defaults to UNKNOWN. Exact same-content building/device-port replay returns the existing record; conflicting contents return409. Drafts survive503/401/403 and committed-but-lost response tests. No new data model or NMS source change.
+
+**Verified results.** Full isolated browser regression: **582/582 passed** (146+164+136+136), all four exit0 and zero failed tests. Full runner TypeScript, zero-warning global/scoped lint, security/unit and PostgreSQL preflights passed. After the final test-selector correction, TypeScript and global/scoped lint passed again. Focused topology15/15, final CSS/desktop/mobile/fullscreen/visibility4/4 and detailed keyboard/port/peer compatibility1/1 passed. Camera-focus and modal-fallback review findings were reproduced RED and fixed; a remaining old fullscreen accessible-name test selector was updated without removing assertions, then its entire136-case shard passed.
+
+**Environment and cleanup.** Initial concurrent DB-timeout/memory-pressure attempts and the stale-selector failure remain archived. Test-only pool/timeouts were bounded and concurrency capped at two full groups; production DB settings were unchanged. All owned fixture Compose containers/networks and tmpfs databases were removed. Shared dependency volume and live services were preserved. Live readiness is ready; all26 synchronized topology/test/doc files match the verified worktree. No live node positions or connection records were written during manual inspection.
+
+**Evidence.** `output/topology-edit/REPORT.md`, `verification.json`, `shard-N.log`, `shard-N-result.json`, `shard-N-final-artifacts/report/`, `preview-css.log`, and `preview-artifacts/topology-editing.png`. The accepted screenshot uses synthetic test data. Full log/report artifacts remain in the retained worktree.
+
+**Deferred.** No production build, other-browser certification, customer package, GitHub Release or GHCR publication is claimed. Existing HTTPS/package improvements stay in the deferred delivery plan. No commit/push was performed.
+
+final result: passed
+
+## 2026-10-28 — Gerçek veride tarayıcı kontrolü
+
+**Temel akışlar doğrulandı; bir görsel bulgu açık.** Yerel uygulamada gerçek envanter ve oturum kullanıldı; istek/yanıt taklidi yapılmadı. Güvenlik Binası (260,531 → 300,571) ve CCTVSWITCH_1 (220,180 → 260,200) gövdelerinden taşındı; kaydediliyor/kaydedildi mesajları ve tam sayfa yenilemesinden sonra yeni konumlar görüldü. İkisi başlangıç konumlarına geri taşınıp otomatik kaydedildi. 10 bina ve 5 cihazın DOM konumları başlangıçla karşılaştırıldı; cihazların geri alınan konumları yeniden sunucudan yüklendi.
+
+**Bağlantı ve temizlik.** Kullanıcının geçici kayıt tercihine göre Güvenlik Binası–Ambar (Diğer/Bilinmiyor) ve SAYAC_SW_1 GigabitEthernet1/0/48–SAYAC_KACAKSU_SW GigabitEthernet0/18 (Ethernet/1 Gbps/Bilinmiyor) oluşturuldu. Kaynak seçimi otomatik doldu; formlar native tam ekranda kullanılabildi. Cihaz bağlantısı yenilemede korundu ve mevcut paralel hat yerinde kaldı. Sonra yalnız bu iki geçici kayıt UI üzerinden onaylarıyla silindi; PostgreSQL salt okunur kontrolünde ikisinin de sayısı0. Bina bağlantısı sayısı tekrar31. Sayaç'taki özgün3 bağlantının kimlikleri aynı; test portları tekrar seçilebilir, özgün hattın portları kullanımda kaldı. CCTVSWITCH_1'in tek kayıtlı portunun kullanımda olması kaydı doğru şekilde engelledi.
+
+**Tam ekran.** Bina ve cihaz görünümünde giriş/çıkış, açık formlar ve Esc denendi. DOM :fullscreen öğesi HTML; Esc sonrası null ve cihaz penceresi açık kaldı. Son harita görüntüleme modunda, ekrana sığdırılmış halde bırakıldı.
+
+**Bağımsız grup kaydı.** İlk görünümdeki ağ grubu konumu, bizim ilk taşıma işlemimizden önce 08:39:52 TSİ'de kaydedilen version4 güncellemesiyle farklıydı; yeniden yükleme güncel konumu getirdi. Bu güncel kayıt geri alınmadı. Bina/cihaz taşıma isteklerimizden sonra yeni bir grup PATCH kaydı yok.
+
+**Açık bulgu LIVE-UI-01:** Native tam ekranda sağ üst Kapat düğmesi Cihaz ata düğmesini kısmen örtüyor (35.5 × 23.75px kesişim). Ekran görüntüsü ve DOM ölçümü kaydedildi; uygulama kodu bu kontrol sırasında değiştirilmedi. Temel akışları engellemeyen bu başlık yerleşimi ayrı düzeltme gerektiriyor.
+
+**Kanıtlar:** retained worktree `output/topology-live-2026-10-28/verification.json`, `database-readback.json`, konum karşılaştırmaları ve PNG'ler. Özellikle `device-link-created.png`, `device-occupied-port.png`, `device-restored-fullscreen.png`, `header-overlap.png` ve `topology-clean-final.png`. Bu oturum manuel gerçek veri kontrolüdür; dün geçen582 senaryoluk otomatik paketin bugün yeniden çalıştırıldığı iddia edilmiyor. Paket/yayın yapılmadı.
+
+## 2026-10-28 — LIVE-UI-01 kapatıldı: topoloji başlık düğmeleri
+
+Metinli Kapat düğmesi için bina içi başlığın sağ boşluğu96px yapıldı; mobilde aynı koruma sağlandı ve eylemleri bu alana taşıran negatif sağ kenar boşluğu kaldırıldı. Normal ve tam ekranda Cihaz ata ile Kapat ayrı kalıyor. Değişiklik yalnız BuildingDeviceWorkspace.module.css ve mevcut topology-editing regresyon dosyasına uygulandı; yerel kaynaklar eşitlik kontrolüyle güncellendi.
+
+Test önce eski CSS ile855px² çakışma ölçerek başarısız oldu. Masaüstü1440, tablet1024 ve mobil390 genişliklerinde normal/tam ekran/Esc dönüşü için3 regresyon eklendi: sıfır kesişim, viewport sınırları, düğmelerin iki tarafında pointer hedefi, Cihaz ata ile atama görünümüne giriş/geri dönüş ve Kapat ile pencereyi kapatma. Tüm topoloji tarayıcı paketi29/29 geçti. TypeScript, genel lint ve test dosyası lint kontrolü sıfır uyarıyla geçti. Tam incident paketi bu CSS düzeltmesi için tekrar çalıştırılmadı.
+
+Gerçek envanterde normal ve native tam ekran kontrolünde kesişim0; iki düğmenin iki tarafı doğru pointer hedefini alıyor. Normal görünümde atama düğmesinin sağ tarafından, native tam ekranda da düğmeye tıklanarak atama görünümü açıldı; kayıt yapılmadı. Native :fullscreen öğesi HTML. Mobil ekran görüntüsü ayrıca incelendi. LIVE-UI-01 çözüldü; doğrulanan başlıkta açık çakışma kalmadı.
+
+Kanıtlar: retained worktree `output/topology-header/verification.json`, `red.log`, `green.log`, `green-artifacts/report/`, `typescript.log`, `lint.log`, `live-normal.png`, `live-fullscreen.png`. İzole test konteynerleri/ağları ve geçici veritabanları temizlendi; paylaşılan bağımlılık volume'u ve müşteri verileri korundu. NMS veya yayın/paketleme değişikliği yapılmadı.
+
+
+## 2026-10-28 — Başlık düzeltmesi sonrası tam regresyon
+
+**Sonuç: geçti.** Kapat/Cihaz ata çakışması düzeltmesini içeren sabit kaynak kopyasında 51 dosyadaki **585/585 tarayıcı testi** başarılı (152 + 158 + 136 + 139); dört grubun çıkış kodu 0, başarısız test listeleri boş. Yeni masaüstü/tablet/mobil normal görünüm, native tam ekran ve Esc başlık regresyonları da bu pakete dahil. Incident hata/bağlantı kesilmesi, güvenli tekrar deneme ve oturum/yetki senaryoları yeniden çalıştırıldı.
+
+**Kod kontrolleri.** Tam çalıştırıcının TypeScript (`--incremental false`), genel ve kapsamlı ESLint (`--max-warnings=0`), mevcut güvenlik/birim kontrolleri, PostgreSQL bağlantı/iş birliği kontrolleri ve topoloji sözleşmeleri geçti. Bunlar ilk grubun tarayıcı adımından önce hata durumunda duran aynı çalıştırıcıda yürütüldü. Üretim derlemesi veya yeni güvenlik taraması bu doğrulamanın kapsamı olarak sunulmuyor.
+
+**Kaynak ve ilk deneme.** 1301 dosyanın SHA256 değeri test sonunda kaynak kopyası ve çalışma ağacıyla eşleşti; 930 gerekli çalışma zamanı/test dosyasında eksik yok. İlk kopyalama filtresi iç içe backups rotalarını atladığı için eksik deneme durduruldu; filtre yalnız kök özel dizinleri dışlayacak şekilde düzeltildi ve dört grup baştan çalıştırıldı. İlk loglar `attempt-incomplete/` altında korundu. Uygulama kodu veya test beklentileri bu tam çalıştırma sırasında değiştirilmedi; rapor eklemesi bütünlük kontrolünden sonra yapıldı. Başlık CSS/test dosyaları canlı yerel kaynaklarla da eşleşti.
+
+**Temizlik.** Dört izole Compose projesinin tüm test konteynerleri, ağları ve tmpfs PostgreSQL veritabanları kaldırıldı; proje volume'u kalmadığı Docker üzerinden doğrulandı. Testler canlı/müşteri veritabanını kullanmadı. Yerel uygulama ve diğer servisler korundu. Daha önce gerçek veri kontrolünde oluşturulan iki geçici bağlantı da silinmiş ve taşınan bina/cihazlar eski yerlerine alınmıştı.
+
+**Kanıtlar:** retained worktree `output/header-full-regression-2026-10-28/verification.json`, `source-manifest.json`, `source-coverage.json`, `preflight-result.json`, `shard-N.log`, `shard-N-result.json` ve `shard-N-artifacts/report/`. Başlık görsel ölçümleri `output/topology-header/` altında. Müşteri paketi veya GitHub/GHCR yayını yapılmadı; önceki erteleme kararı sürüyor.
+
+
+## 2026-10-28 — Son tarayıcı kontrolü: başlık ve bağlantı görünürlüğü
+
+Gerçek yerel oturum ve envanterle Güvenlik Binası yeniden kontrol edildi. Normal görünümde, native tam ekranda (:fullscreen = HTML) ve Esc dönüşünde Kapat/Cihaz ata kesişimi 0px²; iki düğmenin genişliğinin %15 ve %85 noktalarında pointer hedefi doğru. Cihaz ata her iki görünümde atama ekranını açtı; atama yapılmadan geri dönüldü. Kapat düğmesi normal ve tam ekranda bina penceresini kapattı.
+
+Bina içindeki 5 cihaz ve 4 bağlantı normal/tam ekran/Esc dönüşünde görünür kaldı; dört SVG çizgisinin görünürlük, opaklık ve viewport kontrolleri geçti. Ana haritada 12 fiziksel çizgi ve 1 mantıksal grup özeti aynı SVG yollarıyla normal/tam ekran/Esc dönüşünde korundu. Bunlar ağ grubunda kapalı 19 konumu özetlediği için tüm fiziksel kayıtların tek tek çizildiği iddia edilmiyor. Tam ekrandaki bina penceresi Kapat ile kapatılınca ana harita tam ekranda kaldı; ana çıkış düğmesiyle normal görünüme dönüldü.
+
+Haritalar Ekrana sığdır ile incelendi; konum, atama veya bağlantı kaydı yazılmadı. Son görünüm normal ekranda, görüntüleme modunda Güvenlik Binası haritası açık bırakıldı. Uygulama kodu değiştirilmedi; bu kontrol, hemen önce geçen 585/585 regresyon paketine ek gerçek tarayıcı doğrulamasıdır.
+
+Kanıtlar: retained worktree `output/topology-final-browser-2026-10-28/verification.json`, `normal.png`, `fullscreen.png`, `after-escape.png`, `overview-normal.png`, `overview-fullscreen.png` ve `final-normal.png`.
+
+
+## 2026-10-28 — Bina penceresini kapatırken tam ekrandan çıkış
+
+Bina penceresinin onClose akışına mevcut closeMapFullscreen çağrısı eklendi. Kapat düğmesi, pencereyi kapatırken ana haritayı da normal görünüme döndürüyor; kaydetme/işlem sürerken kapatmayı engelleyen mevcut koşullar korundu. Pencere içindeki formların kendi Kapat ve Esc davranışları değişmedi. Uygulama değişikliği yalnız NetworkTopologyContent.tsx içindeki bu çağrıdır.
+
+Masaüstü ve mobil için 10 regresyon eklendi: normal görünüm, bina içinden açılan native tam ekran, ana haritadan açılan native tam ekran, reddedilen ve desteklenmeyen tam ekranda sayfa içi genişletme. Her biri pencerenin kapanmasını, native fullscreen öğesinin temizlenmesini, tam ekran çıkış düğmesinin/genişletme uyarısının kalkmasını, normal sayfa yerleşimini ve mevcut fiziksel bağlantının çizilmeye devam etmesini doğruluyor. Yazma isteği yapılmıyor. Önce eski kodda native ve fallback kapanışları başarısız oldu; düzeltmeden sonra topoloji paketi **39/39** geçti.
+
+Tam regresyon paketi **595/595** geçti (152 + 158 + 154 + 131), dört çıkış kodu 0 ve başarısız test listeleri boş. TypeScript, sıfır uyarılı genel/kapsamlı ESLint ve tam çalıştırıcının güvenlik/birim/PostgreSQL ön kontrolleri geçti. 1301 dosyanın sabit test kopyası ve çalışma ağacı SHA256 değerleri rapor eklenmeden önce eşleşti. Uygulama ve test dosyaları yerel ana kaynakla eşitlik denetimiyle güncellendi; diğer çalışmalar korunuyor.
+
+Gerçek tarayıcıda Güvenlik Binası native tam ekranda açılıp Kapat ile kapatıldı: :fullscreen HTML → null, bina penceresi kaldırıldı, ana haritada Tam ekran düğmesi geri geldi ve 13 çizgi korundu. Geliştirme sırasında sıcak yükleme sonrası görülen geçici stil/yükleme durumu tam sayfa yenilenip akış yeniden uygulanarak elendi; son kanıt yenilenmiş sayfadandır. Envanter/bağlantı yazma işlemi yapılmadı. Önceki son tarayıcı kontrolündeki “pencere kapatılınca ana harita tam ekranda kalır” davranışı bu değişiklikle güncellendi.
+
+Altı izole test projesinin konteynerleri/ağları ve tmpfs veritabanları temizlendi; projelere ait volume kalmadığı doğrulandı. Canlı servisler ve paylaşılan bağımlılık volume'u korundu. Kanıtlar `output/topology-close-fullscreen-2026-10-28/` altında red/green logları, 39 test raporu ve live-after-close.png; `output/topology-close-full-regression-2026-10-28/` altında dört tam grup logu/raporu, kaynak manifesti ve verification.json. Müşteri paketi/yayın yapılmadı.
+
+## 2026-10-28 — Commit öncesi inceleme ve doğrulama
+
+Bağımsız kod incelemesi, tam ekrana giriş isteği beklerken pencere kapatılırsa geç gelen başarı veya ret yanıtının görünümü tekrar genişletebildiğini yakaladı. Giriş nesliyle iptal takibi eklendi; bekleyen isteğin sahipliği sonuçlanana kadar korunuyor. İptalden sonra gelen başarı native tam ekranı bırakıyor, ret yanıtı fallback görünümünü açmıyor. Tekrar kapatma ve sonraki yeni giriş de test ediliyor. Çıkış tarayıcı tarafından reddedilirse sahiplik korunarak yeniden çıkış mümkün kalıyor. İncelemedeki önemli bulgu giderildi ve yeniden inceleme engelleyici bulgu bırakmadı.
+
+Önce gerçek denetleyicide kapanıştan sonra geç gelen yanıt testi başarısız oldu; düzeltmeden sonra geçti. Son kaynakta TypeScript, sıfır uyarılı genel/kapsamlı lint, tüm topoloji birim kontrolleri ve **39/39 topoloji tarayıcı testi** yeniden geçti. Önceki **595/595 tam paket** bu son iki dosyalık denetleyici/birim testi düzeltmesinden önceki kaynağa aittir; bu son adımda tüm 595 testin yeniden çalıştırıldığı iddia edilmiyor. Değişmeyen kaynaklar önceki sabit kopyayla SHA256 üzerinden karşılaştırıldı.
+
+HTTPS yardımcıları ayrı commit kapsamındadır. PowerShell dosyaları sözdizimi hatası vermedi; iki Compose dosyası örnek parametrelerle yalnız config doğrulamasından geçti. Geçmiş yerel 39 HTTPS provasının test kaynağını temiz checkout üzerinde yeniden üretilebilir hale getirme işi, bekleyen müşteri paketi planına açık madde olarak eklendi. Bu adım müşteride kurulum/dağıtım veya standart paket entegrasyonu provası değildir.
+
+Staged dosyalarda özel anahtar/token işaretleri ve gizli ortam/sertifika dosyaları kontrol edildi. Son test projesinin konteynerleri, ağı ve geçici veritabanı kaldırıldı; paylaşılan bağımlılık volume'u korundu. Kanıtlar: retained worktree `output/commit-push-2026-10-28/` altında `fullscreen-race-red.log`, `fullscreen-race-green.log`, `post-review.log`, `post-review-result.json`, `post-review-artifacts/report/`, `powershell-parse.json` ve `prepush-verification.json`.

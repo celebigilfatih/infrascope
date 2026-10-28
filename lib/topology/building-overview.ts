@@ -5,8 +5,8 @@ interface Link { sourceBuildingId: string; destBuildingId: string; connectionTyp
 interface Group { id: string; members: { buildingId: string }[]; sourceDevice: { buildingId: string | null } }
 interface OverviewGraph { nodes: Node[]; edges: Edge[]; centerId: string | undefined; hiddenCrossLinks: Edge[]; crossLinks: Edge[]; positions: Record<string, { x: number; y: number }> }
 
-// A display-only preset. The complete catalog keeps positions stable under filters.
-export function balancedBuildingOverview(nodes: Node[], edges: Edge[], buildings: Building[], links: Link[], groups: Group[], showCrossLinks: boolean, unassignedId: string, focusId?: string | null): OverviewGraph {
+// Stable automatic defaults under filters; saved positions take precedence. Callers control editing.
+export function balancedBuildingOverview(nodes: Node[], edges: Edge[], buildings: Building[], links: Link[], groups: Group[], showCrossLinks: boolean, unassignedId: string, focusId?: string | null, savedPositions: Record<string, { x: number; y: number }> = {}): OverviewGraph {
   const grouped = new Set(groups.flatMap(group => group.members.map(member => member.buildingId)));
   const catalog = buildings.filter(building => !grouped.has(building.id)).sort((a, b) => a.name.localeCompare(b.name, 'tr-TR') || a.id.localeCompare(b.id));
   const neighbors = new Map(catalog.map(building => [building.id, new Set<string>()]));
@@ -36,6 +36,7 @@ export function balancedBuildingOverview(nodes: Node[], edges: Edge[], buildings
   const physicalRight = Math.max(500, ...Object.values(positions).map(position => position.x + 160));
   const groupNodes = nodes.filter(node => node.type === 'networkGroup');
   groupNodes.forEach((node, index) => { positions[node.id] = { x: physicalRight + 105, y: 195 + index * 280 }; });
+  for (const node of nodes) { const saved = savedPositions[node.id]; if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)) positions[node.id] = { x: saved.x, y: saved.y }; }
   const result = nodes.filter(node => node.data?.buildingId !== unassignedId).map(node => ({
     ...node, position: positions[node.id] || node.position, draggable: false, connectable: false,
     data: { ...node.data, overview: true, roundOverview: node.type === 'networkGroup', overviewCenter: node.id === centerId },

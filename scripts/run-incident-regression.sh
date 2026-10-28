@@ -93,6 +93,7 @@ npx eslint app/network/NetworkTopologyContent.tsx components/topology/TopologyOb
 npm run test:topology-workspace
 npx eslint tests/incident-e2e/topology-overview.spec.ts tests/incident-e2e/topology-navigation.ts components/topology/BuildingMapOverview.tsx components/topology/BuildingOverviewEdge.tsx lib/topology/building-overview.ts --max-warnings=0
 npm run test:topology-contracts
+npx eslint components/topology/MapViewActions.tsx components/topology/useMapFullscreen.ts components/topology/BuildingDeviceConnectionForm.tsx components/topology/DeviceMapOverview.tsx components/topology/NetworkGroupFocus.tsx lib/topology/fullscreen.ts app/api/building-connections/route.ts app/api/network/building-device-connections/route.ts scripts/check-topology-create.cjs scripts/check-topology-fullscreen.cjs tests/incident-e2e/topology-editing.spec.ts --max-warnings=0
 npm run test:topology-building
 INFRASCOPE_BUILDING_DB_TEST=1 npm run test:building-devices:db
 npx eslint app/virtualization/snapshots/page.tsx app/virtualization/vms/page.tsx components/virtualization/SnapshotWorkspace.tsx components/virtualization/VMWorkspace.tsx scripts/check-snapshot-workspace.cjs scripts/fixtures/snapshot-workspace.cjs tests/incident-e2e/snapshot-workspace.spec.ts --max-warnings=0

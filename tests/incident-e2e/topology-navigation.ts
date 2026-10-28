@@ -4,7 +4,7 @@ import { expect, type Page } from '@playwright/test';
 export async function openSavedTopology(page: Page) {
   await page.getByRole('tab', { name: 'Binalar', exact: true }).click();
   await page.getByRole('button', { name: 'Bina haritası seçenekleri', exact: true }).click();
-  await page.getByRole('button', { name: 'Kayıtlı düzen / Düzenleme', exact: true }).click();
+  await page.getByRole('button', { name: 'Ayrıntılı görünüm', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Topoloji haritası', exact: true })).toBeVisible();
   const map = page.getByRole('region', { name: 'Topoloji haritası', exact: true });
   await expect.poll(async () => {
