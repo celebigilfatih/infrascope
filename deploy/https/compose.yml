@@ -1,0 +1,35 @@
+services:
+  https:
+    image: caddy@sha256:eb4d35b7452d1ab6171fbdbe8d9275b2301dad6dad92115d91e19fb9b24d510f
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    environment:
+      PUBLIC_HOST: ${PUBLIC_HOST:?PUBLIC_HOST is required}
+    ports:
+      - "${TLS_BIND_IP:?TLS_BIND_IP is required}:${HTTPS_PORT:-443}:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    tmpfs:
+      - /tmp
+      - /config
+    labels:
+      io.infrascope.component: https
+    networks:
+      - installation
+
+networks:
+  installation:
+    external: true
+    name: ${INFRASCOPE_NETWORK:?INFRASCOPE_NETWORK is required}
+
+volumes:
+  caddy_data:
+    labels:
+      io.infrascope.component: https

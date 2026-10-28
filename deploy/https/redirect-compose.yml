@@ -1,0 +1,23 @@
+services:
+  redirect:
+    image: caddy@sha256:eb4d35b7452d1ab6171fbdbe8d9275b2301dad6dad92115d91e19fb9b24d510f
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    environment:
+      HTTPS_TARGET: ${HTTPS_TARGET:?HTTPS_TARGET is required}
+    ports:
+      - "${LEGACY_PORT:?LEGACY_PORT is required}:8080"
+    volumes:
+      - ./Redirectfile:/etc/caddy/Caddyfile:ro
+    tmpfs:
+      - /tmp
+      - /config
+      - /data
+    labels:
+      io.infrascope.component: http-redirect

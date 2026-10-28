@@ -1,0 +1,11 @@
+{
+	auto_https disable_redirects
+	default_sni {$PUBLIC_HOST}
+	skip_install_trust
+	admin off
+}
+
+https://{$PUBLIC_HOST}, https://localhost {
+	tls internal
+	reverse_proxy app:3000
+}
