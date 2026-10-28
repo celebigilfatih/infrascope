@@ -5,14 +5,14 @@ import { uiError, uiLabel } from '@/lib/i18n/tr';
 import { ActionIcon } from '@/components/ui/action-icon';
 import { PageHeading } from '@/components/ui/page-heading';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { AlertTriangle, Building2, ChevronDown, ChevronRight, Cuboid, Database, Edit3, Layers3, MapPin, MoreHorizontal, Plus, RefreshCw, Search, Server, SlidersHorizontal, Trash2, X } from 'lucide-react';
 import styles from './page.module.css';
 import { apiDelete, apiGet, apiPost, apiPut } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
 import { useToast } from '@/components/ui/use-toast';
@@ -47,7 +47,6 @@ const STATUS_LABELS = {
 };
 
 export default function LocationsPage() {
-  const router = useRouter();
   const { toast } = useToast();
   const [organizations, setOrganizations] = useState<LocationOrganization[]>([]);
   const [summary, setSummary] = useState<LocationsSummary>(EMPTY_SUMMARY);
@@ -145,29 +144,29 @@ export default function LocationsPage() {
   };
 
   const metrics = [
-    { label: 'Sistem odası', value: summary.totals.rooms, detail: `${summary.totals.organizations} organizasyon · ${summary.totals.buildings} bina`, icon: Building2 },
-    { label: 'Kabinet', value: summary.totals.racks, detail: `${summary.totals.usedUnits.toLocaleString('tr-TR')} / ${summary.totals.totalUnits.toLocaleString('tr-TR')} U kullanılıyor`, icon: Database },
-    { label: 'Cihaz', value: summary.totals.devices, detail: summary.totals.devices === 0 ? 'Henüz cihaz eklenmemiş' : summary.totals.unpositionedDevices > 0 ? `${summary.totals.unpositionedDevices} cihazın kabinet içi yeri atanmamış` : 'Tüm cihazların kabinet içi yeri atanmış', icon: Server },
-    { label: 'Sorunlu cihaz', value: summary.totals.problemDevices, detail: summary.totals.problemDevices > 0 ? 'İnceleme gerektiren cihazlar' : 'Sorun bildirilen cihaz yok', icon: AlertTriangle },
+    { label: 'Sistem odası', value: summary.totals.rooms, icon: Building2 },
+    { label: 'Kabinet', value: summary.totals.racks, icon: Database },
+    { label: 'Cihaz', value: summary.totals.devices, icon: Server },
+    { label: 'Sorunlu cihaz', value: summary.totals.problemDevices, icon: AlertTriangle },
   ];
 
   return (
     <main className={styles.page}>
       <header className={styles.header}>
-        <PageHeading section="locations" description="Organizasyon, bina ve odaları yönetin; kabinet ve cihaz yerleşimini inceleyin.">Konumlar ve Sistem Odaları</PageHeading>
+        <PageHeading section="locations" compact showIcon={false} className="text-base sm:text-lg">Konumlar ve Sistem Odaları</PageHeading>
         <div className={styles.headerActions}>
-          <Button variant="outline" onClick={() => loadData(true)} disabled={refreshing || loading}>
+          <Button size="sm" variant="outline" onClick={() => loadData(true)} disabled={refreshing || loading}>
             <RefreshCw className={cn('h-4 w-4', refreshing && 'animate-spin')} aria-hidden="true" />Yenile
           </Button>
-          <Button onClick={() => setEditor({ mode: 'add', type: 'org' })}><Plus className="h-4 w-4" aria-hidden="true" />Organizasyon ekle</Button>
+          <Button size="sm" onClick={() => setEditor({ mode: 'add', type: 'org' })}><Plus className="h-4 w-4" aria-hidden="true" />Organizasyon ekle</Button>
         </div>
       </header>
 
       <section className={styles.metrics} aria-label="Konum özeti" aria-busy={loading}>
-        {metrics.map(({ label, value, detail, icon: Icon }) => (
+        {metrics.map(({ label, value, icon: Icon }) => (
           <div key={label} className={styles.summaryCard}>
-            <span className={cn(styles.summaryIcon, label === 'Sorunlu cihaz' && value > 0 && styles.danger)}><Icon size={19} aria-hidden="true" /></span>
-            <div className="min-w-0"><p className={styles.metricLabel}>{label}</p><p className={styles.metricValue}>{loading || error ? '—' : value.toLocaleString('tr-TR')}</p><p className={styles.metricDetail}>{loading ? 'Veriler yükleniyor…' : error ? 'Veri alınamadı' : detail}</p></div>
+            <span className={cn(styles.summaryIcon, label === 'Sorunlu cihaz' && value > 0 && styles.danger)}><Icon size={15} aria-hidden="true" /></span>
+            <div className="min-w-0"><p className={styles.metricLabel}>{label}</p><p className={styles.metricValue}>{loading || error ? '—' : value.toLocaleString('tr-TR')}</p></div>
           </div>
         ))}
       </section>
@@ -179,22 +178,20 @@ export default function LocationsPage() {
       ) : (
         <div className={styles.workspace}>
           <aside className={styles.explorer} aria-label="Konuma göre filtrele">
-            <div className={styles.explorerHeading}><span className={styles.smallIcon}><MapPin size={18} aria-hidden="true" /></span><div><h2>Konumlar</h2><p>Bir konum seçerek odaları filtreleyin.</p></div></div>
+            <div className={styles.explorerHeading}><MapPin size={16} aria-hidden="true" /><h2>Konumlar</h2></div>
             <button className={styles.mobileExplorerToggle} aria-expanded={explorerOpen} aria-controls="location-explorer" onClick={() => setExplorerOpen(!explorerOpen)}><SlidersHorizontal size={16} aria-hidden="true" />Konum seçimi<ChevronDown size={16} aria-hidden="true" /></button>
             <div id="location-explorer" className={cn(styles.explorerBody, explorerOpen && styles.explorerOpen)}>
-              <button className={cn(styles.allLocations, scope.type === 'all' && styles.allLocationsActive)} aria-pressed={scope.type === 'all'} onClick={() => { setScope({ type: 'all', label: 'Tüm odalar' }); setSelectedRoomId(null); }}><Building2 size={17} aria-hidden="true" /><span>Tüm konumlar</span><Badge icon={null} variant="secondary">{summary.totals.rooms}</Badge></button>
+              <button className={cn(styles.allLocations, scope.type === 'all' && styles.allLocationsActive)} aria-pressed={scope.type === 'all'} onClick={() => { setScope({ type: 'all', label: 'Tüm odalar' }); setSelectedRoomId(null); }}><Building2 size={16} aria-hidden="true" /><span>Tüm konumlar</span></button>
               <nav className={styles.tree} aria-label="Organizasyon, bina, kat ve odalar">
                 {organizations.map((org) => <TreeOrganization key={org.id} org={org} expanded={expanded} toggle={toggle} scope={scope} setScope={setScope} setSelectedRoomId={setSelectedRoomId} setEditor={setEditor} setDeleteTarget={setDeleteTarget} />)}
               </nav>
               {organizations.length === 0 && <p className="px-3 py-5 text-sm text-muted-foreground">Henüz konum eklenmemiş. Organizasyon ekleyerek başlayın.</p>}
-              <p className={styles.explorerHint}><Layers3 size={16} aria-hidden="true" /><span>Organizasyon → Bina → Kat → Oda<br />Alt konum eklemek için ⋯ menüsünü kullanın.</span></p>
             </div>
           </aside>
 
           <section className={styles.rooms} aria-labelledby="rooms-heading">
             <div className={styles.listHeading}>
-              <div><h2 id="rooms-heading">{scope.label}</h2><p aria-live="polite">{filteredRooms.length} / {summary.rooms.length} oda gösteriliyor</p></div>
-              {['org', 'building', 'floor', 'room'].includes(scope.type) && <Badge variant="outline" icon={MapPin}>{scope.type === 'org' ? 'Organizasyon' : scope.type === 'building' ? 'Bina' : scope.type === 'floor' ? 'Kat' : 'Oda'} filtresi</Badge>}
+              <h2 id="rooms-heading">{scope.label}</h2><p aria-live="polite">{filteredRooms.length} / {summary.rooms.length} oda</p>
             </div>
             <div className={styles.toolbar}>
               <div className={styles.search}><Search size={17} aria-hidden="true" /><Input aria-label="Oda, bina veya kabinet ara" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Oda, bina veya kabinet ara…" className="pl-10" /></div>
@@ -203,13 +200,12 @@ export default function LocationsPage() {
               </select>
               {hasFilters && <Button variant="ghost" size="sm" onClick={clearFilters}><X size={15} aria-hidden="true" />Temizle</Button>}
             </div>
-            <p className={styles.listHint}><Cuboid size={16} aria-hidden="true" />Oda yerleşiminde kabinetleri 3B görünümde veya kat planında inceleyebilirsiniz.</p>
 
             <div className={styles.roomList}>
               {filteredRooms.length === 0 ? (
                 <div className={styles.emptyState}><Cuboid className="h-9 w-9 text-primary" aria-hidden="true" /><h3>{summary.rooms.length === 0 ? 'Henüz sistem odası eklenmemiş' : 'Aramanıza uygun oda bulunamadı'}</h3><p>{summary.rooms.length === 0 ? 'Konumlar bölümünden organizasyon, bina ve kat ekleyin. Ardından katın menüsünden oda oluşturun.' : 'Arama metnini, seçili konumu veya durum filtresini değiştirebilirsiniz.'}</p>{hasFilters && <Button variant="outline" onClick={clearFilters}><X size={16} aria-hidden="true" />Filtreleri temizle</Button>}</div>
               ) : filteredRooms.map((room) => (
-                <RoomRow key={room.id} room={room} selected={selectedRoomId === room.id} onSelect={() => setSelectedRoomId(selectedRoomId === room.id ? null : room.id)} onOpen={() => router.push(`/locations/rooms/${room.id}`)} setEditor={setEditor} setDeleteTarget={setDeleteTarget} />
+                <RoomRow key={room.id} room={room} selected={selectedRoomId === room.id} onSelect={() => setSelectedRoomId(selectedRoomId === room.id ? null : room.id)} setEditor={setEditor} setDeleteTarget={setDeleteTarget} />
               ))}
             </div>
           </section>
@@ -258,20 +254,21 @@ function TreeLine({ depth, label, meta, open, selected, onToggle, onSelect, menu
   </div>;
 }
 
-function RoomRow({ room, selected, onSelect, onOpen, setEditor, setDeleteTarget }: { room: RoomPortfolioSummary; selected: boolean; onSelect: () => void; onOpen: () => void } & EntityControls) {
+function RoomRow({ room, selected, onSelect, setEditor, setDeleteTarget }: { room: RoomPortfolioSummary; selected: boolean; onSelect: () => void } & EntityControls) {
   const statusTone = room.status === 'HEALTHY' ? 'success' : room.status === 'ATTENTION' ? 'destructive' : 'warning';
   const dimensions = room.width && room.depth ? `${room.width.toLocaleString('tr-TR')} × ${room.depth.toLocaleString('tr-TR')}${room.height ? ` × ${room.height.toLocaleString('tr-TR')}` : ''} m` : 'Oda ölçüleri eklenmemiş';
+  const locationPath = [...new Set([room.floor.building.organization.name, room.floor.building.name, room.floor.name])].join(' / ');
   return <article className={cn(styles.roomCard, selected && styles.roomSelected)} aria-label={room.name}>
     <div className={styles.roomHeader}>
-      <span className={styles.summaryIcon}><Cuboid size={20} aria-hidden="true" /></span>
-      <div className={styles.roomIdentity}><div className={styles.roomTitle}><h3>{room.name}</h3><Badge variant={statusTone}>{STATUS_LABELS[room.status]}</Badge></div><p className={styles.roomPath}>{room.floor.building.organization.name} / {room.floor.building.name} / {room.floor.name}</p><p className={styles.roomDimensions}>{dimensions}</p></div>
+      <span className={styles.summaryIcon}><Cuboid size={16} aria-hidden="true" /></span>
+      <div className={styles.roomIdentity}><div className={styles.roomTitle}><h3>{room.name}</h3><Badge variant={statusTone}>{STATUS_LABELS[room.status]}</Badge></div><div className={styles.roomMeta}><p className={styles.roomPath}>{locationPath}</p><p className={styles.roomDimensions}>{dimensions}</p></div></div>
       <EntityMenu name={room.name} onAdd={() => setEditor({ mode: 'add', type: 'rack', parentId: room.id })} addLabel="Kabinet ekle" onEdit={() => setEditor({ mode: 'edit', type: 'room', item: room })} onDelete={() => setDeleteTarget({ type: 'room', id: room.id, name: room.name })} />
     </div>
-    <div className={styles.roomMetrics}><Metric label="Kabinet" value={room.rackCount} /><Metric label="Cihaz" value={room.deviceCount} /><div><Metric label="Doluluk" value={`%${room.utilization.toLocaleString('tr-TR')}`} /><div className={styles.capacityTrack} aria-hidden="true"><span style={{ width: `${Math.max(0, Math.min(100, room.utilization))}%` }} /></div></div><Metric label="Sorunlu cihaz" value={room.problemDeviceCount} alert={room.problemDeviceCount > 0} /></div>
-    {room.unpositionedDeviceCount > 0 && <p className="mx-5 mb-4 flex items-center gap-2 text-xs text-muted-foreground"><Layers3 size={14} aria-hidden="true" />{room.unpositionedDeviceCount} cihazın kabinet içi yeri atanmamış.</p>}
+    <div className={styles.roomMetrics}><Metric label="Kabinet" value={room.rackCount} /><Metric label="Cihaz" value={room.deviceCount} /><Metric label="Doluluk" value={`%${room.utilization.toLocaleString('tr-TR')}`} /><Metric label="Sorunlu cihaz" value={room.problemDeviceCount} alert={room.problemDeviceCount > 0} /></div>
+    {room.unpositionedDeviceCount > 0 && <p className={styles.roomNotice}><Layers3 size={14} aria-hidden="true" />{room.unpositionedDeviceCount} cihazın kabinet içi yeri atanmamış.</p>}
     <div className={styles.roomFooter}>
-      <Button variant="ghost" size="sm" aria-label={`${room.name}: kabinet ${selected ? 'listesini kapat' : 've kapasite bilgilerini göster'}`} aria-expanded={selected} aria-controls={`room-racks-${room.id}`} onClick={onSelect}><Database size={15} aria-hidden="true" />Kabinetleri {selected ? 'gizle' : 'göster'}<ChevronDown size={14} className={cn('transition-transform', selected && 'rotate-180')} aria-hidden="true" /></Button>
-      <Button size="sm" variant="outline" onClick={onOpen} aria-label={`${room.name}: oda yerleşimini aç`}><Cuboid size={16} aria-hidden="true" />Oda yerleşimini aç<ChevronRight size={14} aria-hidden="true" /></Button>
+      <Button variant="ghost" size="sm" aria-label={`${room.name}: kabinet ${selected ? 'listesini kapat' : 've kapasite bilgilerini göster'}`} aria-expanded={selected} aria-controls={`room-racks-${room.id}`} onClick={onSelect}><Database size={15} aria-hidden="true" />Kabinetler<ChevronDown size={14} className={cn('transition-transform', selected && 'rotate-180')} aria-hidden="true" /></Button>
+      <Button size="sm" variant="outline" asChild><Link href={`/locations/rooms/${room.id}`} aria-label={`${room.name}: oda yerleşimini aç`}><Cuboid size={16} aria-hidden="true" />Oda yerleşimini aç<ChevronRight size={14} aria-hidden="true" /></Link></Button>
     </div>
     <div id={`room-racks-${room.id}`} hidden={!selected}>{selected && <RoomRackSection room={room} setEditor={setEditor} setDeleteTarget={setDeleteTarget} />}</div>
   </article>;
@@ -310,7 +307,16 @@ function EntityDialog({ state, onClose, onSubmit }: { state: EditorState; onClos
   if (!state) return null;
   const set = (key: string, value: unknown) => setForm((current) => ({ ...current, [key]: value }));
   const submit = async (event: React.FormEvent) => { event.preventDefault(); setSaving(true); setError(null); try { await onSubmit(form); } catch (submitError) { setError(uiError(submitError instanceof Error ? submitError.message : 'İşlem tamamlanamadı')); } finally { setSaving(false); } };
-  return <Dialog open onOpenChange={(open) => !open && onClose()}><DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto"><DialogHeader><DialogTitle>{`${({ org: 'Organizasyon', building: 'Bina', floor: 'Kat', room: 'Oda', rack: 'Kabinet', device: 'Cihaz' })[state.type]} ${state.mode === 'add' ? 'ekle' : 'düzenle'}`}</DialogTitle><DialogDescription>Fiziksel altyapı bilgilerini eksiksiz girin.</DialogDescription></DialogHeader><form onSubmit={submit} className="space-y-4"><EntityFields type={state.type} form={form} set={set} rack={state.item as LocationRack | undefined} />{error && <p className="text-sm text-destructive">{uiError(error)}</p>}<DialogFooter><Button type="button" variant="outline" onClick={onClose}>İptal</Button><Button type="submit" disabled={saving}>{saving ? 'Kaydediliyor...' : 'Kaydet'}</Button></DialogFooter></form></DialogContent></Dialog>;
+  return <Dialog open onOpenChange={(open) => !open && onClose()}>
+    <DialogContent className={styles.organizationDialog} aria-describedby={undefined}>
+      <DialogHeader><DialogTitle className={styles.organizationTitle}>{`${({ org: 'Organizasyon', building: 'Bina', floor: 'Kat', room: 'Oda', rack: 'Kabinet', device: 'Cihaz' })[state.type]} ${state.mode === 'add' ? 'ekle' : 'düzenle'}`}</DialogTitle></DialogHeader>
+      <form onSubmit={submit} className={styles.organizationForm}>
+        <EntityFields type={state.type} form={form} set={set} rack={state.item as LocationRack | undefined} />
+        {error && <p className="text-sm text-destructive">{uiError(error)}</p>}
+        <DialogFooter className={styles.organizationActions}><Button type="button" size="sm" variant="outline" onClick={onClose}>İptal</Button><Button type="submit" size="sm" disabled={saving}>{saving ? 'Kaydediliyor...' : 'Kaydet'}</Button></DialogFooter>
+      </form>
+    </DialogContent>
+  </Dialog>;
 }
 
 function EntityFields({ type, form, set, rack }: { type: EntityType; form: Record<string, unknown>; set: (key: string, value: unknown) => void; rack?: LocationRack }) {

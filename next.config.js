@@ -79,6 +79,9 @@ const nextConfig = {
       '@radix-ui/react-icons',
       'recharts',
       'date-fns',
+      // Avoid walking unrelated loaders and effects when compiling the room scene.
+      '@react-three/drei',
+      'three-stdlib',
     ],
     // Enable SWC transformations for faster compilation
     swcTraceProfiling: false,

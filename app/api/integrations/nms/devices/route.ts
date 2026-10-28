@@ -13,6 +13,7 @@ import {
   validateSnmpV3Secret,
 } from '@/lib/nms/snmp-config';
 import { protectNmsCredential } from '@/lib/security/integration-credentials';
+import { isBackupPlatform } from '@/lib/nms/backup-platform';
 
 /**
  * GET /api/integrations/nms/devices
@@ -90,6 +91,10 @@ export async function POST(req: NextRequest) {
     const sshUsername = body.sshUsername || body.ssh_username || null;
     const sshPassword = body.sshPassword || body.ssh_password || null;
     const sshPort = body.sshPort || body.ssh_port ? Number(body.sshPort || body.ssh_port) : 22;
+    const backupPlatform = body.backupPlatform ?? body.backup_platform;
+    if ((backupPlatform != null || sshUsername || sshPassword) && !isBackupPlatform(backupPlatform)) {
+      throw new NmsSnmpValidationError('SSH yedekleme için cihazın işletim sistemini seçin.');
+    }
 
     if (!Number.isInteger(snmpPort) || snmpPort < 1 || snmpPort > 65535) {
       throw new NmsSnmpValidationError('SNMP port must be between 1 and 65535');
@@ -212,6 +217,7 @@ export async function POST(req: NextRequest) {
             ? protectNmsCredential(String(sshPassword), 'sshPassword')
             : null,
           sshPort,
+          ...(isBackupPlatform(backupPlatform) ? { backupPlatform } : {}),
         },
         select: {
           id: true,
@@ -230,6 +236,7 @@ export async function POST(req: NextRequest) {
           pollingInterval: true,
           sshUsername: true,
           sshPort: true,
+          backupPlatform: true,
         },
       });
 

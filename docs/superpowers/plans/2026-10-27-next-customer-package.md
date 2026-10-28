@@ -1,8 +1,8 @@
 # Sonraki müşteri kurulum/güncelleme paketi
 
-**Durum: Beklemede — yalnızca plan.**
+**Durum: Uygulamada — 28 Ekim 2026 kullanıcı onayıyla [1.0.10 yayın planı](2026-10-28-customer-release-1.0.10.md) kapsamında.**
 
-Kullanıcı kararı (27 Ekim 2026): HTTPS ve otomatik HTTP yönlendirmesi standart kurulum/güncelleme paketine eklenecek. Diğer iyileştirme ve değişiklikler tamamlandıktan sonra paket hazırlanacak. Şimdi paket oluşturma, imaj derleme, sürüm numarası artırma, GitHub Releases/GHCR yayını veya müşteri güncellemesi yapılmayacak.
+27 Ekim 2026 tarihli karar HTTPS ve otomatik HTTP yönlendirmesini diğer iyileştirmeler bitene kadar erteledi. Kullanıcı 28 Ekim 2026'da hazırlığa geçilmesini ve tamamlanan yerel NMS, envanter, oda ve topoloji çalışmalarının main üzerinde tek müşteri sürümünde birleştirilmesini onayladı. Paket, üretim imajı ve GitHub Releases/GHCR yayını artık doğrulama kapıları geçtikten sonra yapılacak; önceki bekleme talimatı bu onayla güncellendi.
 
 ## Mevcut dayanak
 
@@ -27,4 +27,4 @@ HTTPS ve HTTP308 yönlendirmesi ayrı yardımcı paketler olarak hazırlandı. M
 - [HTTPS uygulama ve doğrulama kaydı](2026-10-27-customer-ip-https.md)
 - [HTTP yönlendirme uygulama ve doğrulama kaydı](2026-10-27-customer-http-redirect.md)
 
-Bu kayıt zamanlanmış görev veya otomatik yayın talimatı değildir. Çalışma, kullanıcı diğer iyileştirmeleri tamamlayıp paket hazırlığına geçilmesini istediğinde sürdürülecek.
+Bu kayıt zamanlanmış görev değildir. Çalışma onaylanan1.0.10 planı ve doğrulama kayıtlarıyla bu oturumda yürütülür.

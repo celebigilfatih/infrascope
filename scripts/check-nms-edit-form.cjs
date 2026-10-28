@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- CommonJS test runner. */
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -9,17 +10,34 @@ const compiled = ts.transpileModule(fs.readFileSync(filename, 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
 }).outputText;
 const loaded = { exports: {} };
-vm.runInThisContext(`(function(module,exports){${compiled}\n})`, { filename })(loaded, loaded.exports);
+function localRequire(name) {
+  if (name === '@/lib/nms/backup-platform') {
+    const profiles = require('../nms_service/ssh/backup_profiles.json');
+    return { BACKUP_PROFILES: profiles, isBackupPlatform: value => typeof value === 'string' && Object.hasOwn(profiles, value) };
+  }
+  return require(name);
+}
+vm.runInThisContext(`(function(require,module,exports){${compiled}\n})`, { filename })(localRequire, loaded, loaded.exports);
 const { createEditForm, validateEditForm, buildEditPayload, getEditChanges } = loaded.exports;
 const device = {
   managementIp: '192.0.2.10', snmpVersion: '2c', snmpPort: 161,
   pollingEnabled: true, pollingInterval: 300, sshUsername: 'fixture', sshPort: 22,
   hasSnmpCommunity: true, hasSnmpV3AuthPassword: false,
   hasSnmpV3PrivacyPassword: false, hasSshPassword: true,
+  backupPlatform: 'cisco_ios',
 };
 let checks = 0;
 function check(name, run) { run(); checks++; console.log(`PASS ${name}`); }
 
+check('SSH backup platform is explicit, editable and never inferred from the vendor', () => {
+  const form = createEditForm(device);
+  assert.equal(form.backupPlatform, 'cisco_ios');
+  assert.equal(createEditForm({ ...device, backupPlatform: null, vendor: 'Cisco' }).backupPlatform, '');
+  for (const value of ['', 'unknown', '__proto__']) assert.ok(validateEditForm({ ...form, backupPlatform: value }, device)['backup-platform']);
+  const changed = { ...form, backupPlatform: 'cisco_nxos' };
+  assert.equal(buildEditPayload(changed).backupPlatform, 'cisco_nxos');
+  assert.deepEqual(getEditChanges(changed, device), [{ label: 'Yedekleme işletim sistemi', before: 'Cisco IOS / IOS XE', after: 'Cisco NX-OS' }]);
+});
 check('Untouched settings preserve stored secrets and contain no changes', () => {
   const form = createEditForm(device);
   assert.deepEqual(validateEditForm(form, device), {});
@@ -76,5 +94,18 @@ check('Community and username constraints give specific field errors', () => {
   assert.ok(validateEditForm({ ...createEditForm(device), sshUsername: '', sshPassword: 'fixture' }, device)['ssh-username']);
   assert.ok(validateEditForm({ ...createEditForm(device), snmpVersion: 'v3', snmpV3Username: 'invalid user' }, device)['snmp-v3-username']);
   assert.deepEqual(getEditChanges({ ...createEditForm(device), managementIp: ' 192.0.2.10 ' }, device), []);
+});
+check('Operating system loads, tracks edits, trims saves and can be cleared', () => {
+  const stored = { ...device, operatingSystem: 'Cisco IOS 15.2' };
+  const form = createEditForm(stored);
+  assert.equal(form.operatingSystem, 'Cisco IOS 15.2');
+  assert.deepEqual(getEditChanges(form, stored), []);
+  const edited = { ...form, operatingSystem: '  Cisco IOS XE 17.12  ' };
+  assert.equal(buildEditPayload(edited).operatingSystem, 'Cisco IOS XE 17.12');
+  assert.deepEqual(getEditChanges(edited, stored), [{ label: 'İşletim sistemi', before: 'Cisco IOS 15.2', after: 'Cisco IOS XE 17.12' }]);
+  assert.equal(buildEditPayload({ ...form, operatingSystem: '  ' }).operatingSystem, null);
+  assert.equal(createEditForm({ ...device, operatingSystem: null }).operatingSystem, '');
+  assert.ok(validateEditForm({ ...form, operatingSystem: 'x'.repeat(256) }, stored)['operating-system']);
+  assert.deepEqual(validateEditForm({ ...form, operatingSystem: 'x'.repeat(255) }, stored), {});
 });
 console.log(`${checks} NMS edit form checks passed.`);

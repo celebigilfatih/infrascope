@@ -22,7 +22,7 @@ async function mockBackups(page: Page) {
   const state = { devices: devices(), files: [...files], failReads: false, canWrite: true, status: 200, mime: 'text/plain; charset=utf-8', body: 'hostname fixture-only\nend\n', networkError: false,
     holdDownload: null as ReturnType<typeof deferred> | null, holdCreate: null as ReturnType<typeof deferred> | null,
     createFails: false, created: false };
-  const downloads: string[] = [], listQueries: URLSearchParams[] = [], writes: Array<{ body: Record<string, unknown>; key: string | undefined }> = [], errors: string[] = [];
+  const downloads: string[] = [], listQueries: URLSearchParams[] = [], writes: Array<{ body: Record<string, unknown>; key: string | undefined }> = [], policySaves: Array<Record<string, unknown>> = [], errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.route('**/api/integrations/nms/**', async route => {
@@ -39,6 +39,16 @@ async function mockBackups(page: Page) {
       return;
     }
     if (req.method() !== 'GET') {
+      if (pathname === '/api/integrations/nms/backup-policies' && req.method() === 'PUT') {
+        if (!state.canWrite) return route.fulfill({ status: 403, json: { error: 'Fixture forbidden' } });
+        const body = req.postDataJSON(); policySaves.push(body);
+        const device = state.devices.find(item => item.id === body.device_id);
+        if (device) {
+          device.platform = body.platform || device.platform;
+          device.policy = { ...device.policy, enabled: body.enabled, backupType: body.backup_type, intervalHours: body.interval_hours, staleAfterHours: body.stale_after_hours, retentionDays: body.retention_days, keepLast: body.keep_last };
+        }
+        return route.fulfill({ json: { success: true } });
+      }
       if (pathname !== '/api/integrations/nms/backups' || req.method() !== 'POST') throw Error('Unexpected backup write');
       writes.push({ body: req.postDataJSON(), key: req.headers()['idempotency-key'] });
       if (state.holdCreate) await state.holdCreate.promise;
@@ -55,13 +65,73 @@ async function mockBackups(page: Page) {
     }
     throw Error('Unexpected NMS request');
   });
-  return { state, downloads, listQueries, writes, errors };
+  return { state, downloads, listQueries, writes, policySaves, errors };
 }
 async function openFiles(page: Page, device = 'Fixture current') {
   await page.getByRole('tab', { name: 'Yedekler', exact: true }).click();
   await page.getByRole('button', { name: `${device} yedek ayrıntıları ve indirme`, exact: true }).first().click();
   return page.getByRole('dialog', { name: 'Yedek ayrıntıları' });
 }
+
+test('NMS compact backups: redundant descriptions and counts are removed without hiding coverage distinctions', async ({ page, fixtures }, info) => {
+  const source = await mockBackups(page); await signIn(page, fixtures); await page.clock.setFixedTime(NOW);
+  await page.setViewportSize({ width: 1440, height: 900 }); await page.goto('/integrations/nms/backups');
+  await expect(page.getByRole('heading', { name: 'Yapılandırma yedekleri', exact: true })).toBeVisible();
+  await expect(page.getByText('NMS Yedekleme', { exact: true })).toHaveCount(0, { timeout: 5000 });
+  await expect(page.getByText('Son 100 iş içinde', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Kuyrukta, çalışıyor veya yeniden denenecek', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('article')).toHaveCount(5);
+  const card = page.getByRole('article').filter({ hasText: 'Fixture different type' });
+  await expect(card).toContainText('Yedek gecikmiş');
+  await expect(card).toContainText('Zamanlanan türün son yedeği');
+  const bounds = await card.boundingBox();
+  expect(bounds && bounds.height < 280).toBeTruthy();
+  await capture(page, info, 'compact-backup-coverage');
+  await page.getByRole('tab', { name: 'Yedekler', exact: true }).click();
+  await expect(page.getByText('Şifreli saklama', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Kayıtlı', { exact: true })).toHaveCount(0);
+  expect(source.writes).toEqual([]); expect(source.policySaves).toEqual([]); expect(source.errors).toEqual([]);
+});
+
+test('NMS compact backups: hidden retention errors reopen advanced settings and save unchanged scheduling contracts', async ({ page, fixtures }) => {
+  const source = await mockBackups(page); await signIn(page, fixtures); await page.clock.setFixedTime(NOW); await page.goto('/integrations/nms/backups');
+  await page.getByRole('tab', { name: 'Zamanlama', exact: true }).click();
+  await page.locator('#policy-device').selectOption('1');
+  const advanced = page.getByRole('button', { name: 'Gelişmiş ayarlar', exact: true });
+  await expect(advanced).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.getByRole('complementary', { name: 'Zamanlama özeti', exact: true })).toHaveCount(0);
+  await expect(page.locator('#retention_days')).toBeHidden();
+  const save = page.getByRole('button', { name: 'Ayarları kaydet', exact: true });
+  await expect(save).toBeDisabled();
+  await page.locator('#interval_hours').fill('48'); await page.locator('#stale_after_hours').fill('24');
+  await save.click(); await expect(page.locator('#stale_after_hours')).toBeFocused();
+  expect(source.policySaves).toEqual([]);
+  await page.locator('#stale_after_hours').fill('72');
+  await advanced.click(); await page.locator('#retention_days').fill('0'); await advanced.click();
+  await save.click(); await expect(advanced).toHaveAttribute('aria-expanded', 'true'); await expect(page.locator('#retention_days')).toBeFocused();
+  await page.locator('#retention_days').fill('100'); await page.locator('#keep_last').fill('7'); await advanced.click();
+  await save.click();
+  await expect(page.getByRole('status').filter({ hasText: 'Yedekleme ayarları kaydedildi.' })).toBeVisible();
+  expect(source.policySaves).toEqual([{ device_id: 1, platform: 'cisco_ios', enabled: true, backup_type: 'Startup Config', interval_hours: 48, stale_after_hours: 72, retention_days: 100, keep_last: 7 }]);
+  await expect(save).toBeDisabled();
+  await page.locator('#policy-platform').selectOption('fortios');
+  await expect(page.locator('#policy-type')).toHaveValue('Running Config');
+  await page.getByRole('button', { name: 'Değişiklikleri sıfırla', exact: true }).click();
+  await expect(page.locator('#policy-platform')).toHaveValue('cisco_ios'); await expect(advanced).toHaveAttribute('aria-expanded', 'false');
+  expect(source.writes).toEqual([]); expect(source.errors).toEqual([]);
+});
+
+test('NMS compact backups: read-only scheduling can reveal advanced values without enabling edits', async ({ page, fixtures }) => {
+  const source = await mockBackups(page); source.state.canWrite = false;
+  await signIn(page, fixtures); await page.setViewportSize({ width: 390, height: 844 }); await page.goto('/integrations/nms/backups');
+  await page.getByRole('tab', { name: 'Zamanlama', exact: true }).click(); await page.locator('#policy-device').selectOption('1');
+  await page.getByRole('button', { name: 'Gelişmiş ayarlar', exact: true }).click();
+  await expect(page.locator('#retention_days')).toBeVisible(); await expect(page.locator('#retention_days')).toBeDisabled();
+  await expect(page.locator('#policy-enabled')).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Ayarları kaydet', exact: true })).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  expect(source.policySaves).toEqual([]); expect(source.writes).toEqual([]); expect(source.errors).toEqual([]);
+});
 
 test('NMS backups: coverage follows scheduled type independently of file filters', async ({ page, fixtures }, info) => {
   const source = await mockBackups(page); await signIn(page, fixtures); await page.clock.setFixedTime(NOW); await page.goto('/integrations/nms/backups');

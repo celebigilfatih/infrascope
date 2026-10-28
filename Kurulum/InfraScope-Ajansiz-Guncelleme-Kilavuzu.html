@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>InfraScope Ajansız Güncelleme Kılavuzu</title>
+<style>
+:root{color-scheme:light;--green:#147d58;--ink:#172b25;--muted:#52675e;--line:#dce7e0}*{box-sizing:border-box}body{margin:0;background:#f3f6f4;color:var(--ink);font:16px/1.65 system-ui,-apple-system,"Segoe UI",sans-serif}main{max-width:940px;margin:36px auto;padding:36px 42px;background:white;border:1px solid var(--line);border-radius:16px}h1{font-size:30px;line-height:1.2;margin:8px 0 16px}h2{font-size:23px;margin:30px 0 12px}h3{font-size:17px;margin:20px 0 8px}p{margin:10px 0}.eyebrow{color:var(--green);font-size:13px;font-weight:700;letter-spacing:.06em}.lead{color:var(--muted);font-size:18px}.note{padding:12px 16px;background:#eef8f2;border-left:4px solid var(--green);border-radius:6px;margin:16px 0}.maintenance{background:#fff8e8;border-left-color:#b4811a}.codebox{border:1px solid var(--line);border-radius:8px;overflow:hidden;margin:12px 0}.codehead{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:8px 14px;background:#edf3ef;font-size:13px;font-weight:600}button{font:inherit;color:var(--green);background:white;border:1px solid #bad5c6;border-radius:6px;padding:6px 12px;cursor:pointer}button:focus-visible,a:focus-visible{outline:3px solid #4b97dc;outline-offset:3px}pre{margin:0;padding:16px;overflow:auto;background:#10251c;color:#effaf3;font-size:13px;line-height:1.7;white-space:pre-wrap;overflow-wrap:anywhere}code{font-family:Consolas,"Courier New",monospace}p code,li code{font-size:.9em;background:#eff3f0;border-radius:4px;padding:2px 5px}li{margin:7px 0}a{color:var(--green);text-underline-offset:3px}.small{font-size:13px;color:var(--muted)}footer{border-top:1px solid var(--line);margin-top:28px;padding-top:14px}.copy-status{min-height:1.7em;color:var(--green);font-size:13px}@media(max-width:650px){main{margin:0;padding:24px 18px;border:0;border-radius:0}h1{font-size:26px}.lead{font-size:16px}}@media print{body{background:white;font-size:11pt}main{max-width:none;margin:0;padding:0;border:0}button,.copy-status{display:none}.codehead{background:#eee}pre{background:#f4f4f4;color:#111;font-size:9pt}.codebox,.note{break-inside:avoid}h2,h3{break-after:avoid}a{color:inherit}}
+</style>
+</head>
+<body>
+<main>
+<div class="eyebrow">WINDOWS 11 · DOCKER DESKTOP · MEVCUT 1.0.9 KURULUMUNDAN GÜNCELLEME</div>
+<h1>InfraScope ajansız güncelleme</h1>
+<p class="lead">Yeni sürümü GitHub Releases ve GHCR’ye yayımla; müşteriye uzaktan bağlanıp mevcut güncelleme betiğini çalıştır.</p>
+<p>Her müşteri için aynı yöntem kullanılır. Hedef sürümü sen seçersin; güncellemeyi bakım zamanında sen başlatırsın. Ajan kurulumu gerekmez.</p>
+
+<h2>1. Müşteride çalıştırılacak iki komut</h2>
+<p>Windows VM’ye uzaktan bağlan. Docker Desktop’ı çalıştıran kullanıcıyla PowerShell aç. Docker’ın Linux konteyner motoru açık ve internet bağlantısı erişilebilir olmalı.</p>
+<p>Mevcut kurulumun <code>C:\InfraScope\infrascope</code> konumunda olduğunu ve kurtarma parolası dosyasının <code>C:\Private\infrascope-recovery-passphrase.txt</code> yolunda bulunduğunu doğrula. Farklıysa komuttaki yolları düzelt. Parola dosyası mevcut yedekleme için kullandığın, en az 16 baytlık tek satırlık UTF-8 dosya olmalı.</p>
+<div class="note maintenance"><strong>Bakım zamanı:</strong> Mevcut 1.0.9 betiği yedeği aldıktan sonra app/NMS servislerini durdurur. Yedek başlamadan önce kullanıcı işlemlerini, entegrasyon ve harici DB yazmalarını durdur; güncelleme tamamlanana kadar yeniden başlatma. Yedekten sonra yapılan yazmalar kurtarma noktasında bulunmaz.</div>
+<div class="codebox"><div class="codehead"><span>Müşteri VM’sinde · PowerShell</span><button type="button" data-copy="customer">Komutları kopyala</button></div><pre><code id="customer">Set-Location 'C:\InfraScope\infrascope'
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\update.ps1 -Version (Read-Host 'Yayımlanan hedef sürüm (başında v olmadan)') -PassphraseFile 'C:\Private\infrascope-recovery-passphrase.txt'</code></pre></div>
+<p>Sorulduğunda <a href="https://github.com/celebigilfatih/infrascope/releases">GitHub Releases</a> sayfasında gerçekten yayımlanmış hedef sürümü yaz. Biçim örneği: <code>1.0.10</code>; bu örnek, o sürümün yayımlandığı anlamına gelmez. <code>v</code> öneki veya <code>latest</code> yazma.</p>
+<p>Betik paket ve dosya özetlerini doğrular, sabitlenmiş imajları indirir, zorunlu şifreli yedek alır ve güncellemeyi uygular. Mevcut veritabanı, ayarlar, lisans ve makine kimliği korunur; <code>.env</code> içinde yalnız <code>VERSION</code> güncellenir.</p>
+<h3>Başarıyı kontrol et</h3>
+<p><code>Update complete</code> mesajını ve servis sağlığı sonucunu gör. Uygulamayı <a href="http://localhost:8170">http://localhost:8170</a> adresinde aç; müşteri verileri ve kullanılan entegrasyonları kontrol et. Özel port kullanılıyorsa kendi adresini aç. Ekranda belirtilen <code>.isbackup</code> yedeğini VM dışındaki güvenli depoya kopyala; parolayı ayrı sakla.</p>
+<p>Gerekirse servisleri şu komutla kontrol et:</p>
+<div class="codebox"><div class="codehead"><span>İsteğe bağlı · servis kontrolü</span><button type="button" data-copy="health">Kopyala</button></div><pre><code id="health">docker compose -f docker-compose.yml -f release-images.yml ps</code></pre></div>
+<p>Hata olursa başka sürüme geçme. Nedeni giderip aynı hedef sürüm ve parola dosyasıyla aynı güncelleme komutunu yeniden çalıştır. <code>.update-state.json</code> dosyasını silme; migration sonrasında sürümü elle düşürme. <code>.env</code>, <code>data</code> veya Docker volume’lerini silme. Geri yükleme gerekiyorsa kurulumdaki <code>BACKUP_OPERATIONS.md</code> adımlarını izle.</p>
+
+<h2>2. Yeni sürümü yayımlama</h2>
+<p>Bu bölüm geliştirme bilgisayarında uygulanır.</p>
+<ol>
+<li>Değişiklikleri gözden geçirip commit et ve <code>main</code> dalına birleştir. Genel regresyon, TypeScript, lint, güvenlik ve üretim derlemesi kontrollerinin hedef commit için geçtiğini doğrula.</li>
+<li>Güncel ve temiz <code>main</code> üzerinde, <code>origin/main</code> ile aynı commit’te olduğundan emin ol. Yeni ve kullanılmamış bir sürüm numarası seç. Aşağıdaki bloğu yalnız yayın hazır olduğunda çalıştır; etiketin push edilmesi yayını başlatır.</li>
+</ol>
+<div class="codebox"><div class="codehead"><span>Geliştirme bilgisayarı · depo klasöründe PowerShell</span><button type="button" data-copy="publisher">Yayın komutlarını kopyala</button></div><pre><code id="publisher">$Surum = Read-Host 'Yeni sürüm numarası (başında v olmadan)'
+if ($Surum -cnotmatch '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$') { throw 'Geçerli bir X.Y.Z sürümü girin.' }
+git tag -a "v$Surum" -m "InfraScope $Surum"
+if ($LASTEXITCODE -ne 0) { throw 'Etiket oluşturulamadı; yayına devam etmeyin.' }
+git push origin "v$Surum"
+if ($LASTEXITCODE -ne 0) { throw 'Etiket gönderilemedi; GitHub durumunu kontrol edin.' }</code></pre></div>
+<ol start="3">
+<li><a href="https://github.com/celebigilfatih/infrascope/actions/workflows/publish-image.yml">Publish InfraScope Image</a> iş akışını izle. İş akışı kalite ve regresyon kapılarından sonra app/NMS imajlarını yeniden derleyip GHCR’ye gönderir; kurulum ZIP’ini, HTML/PDF kılavuzlarını ve SHA-256 dosyalarını hazırlar.</li>
+<li>İş akışının tamamının başarılı olduğunu ve <a href="https://github.com/celebigilfatih/infrascope/releases">Release sayfasında</a> hedef sürümün altı dosyasının bulunduğunu doğrula. İmaj derlemesinin bitmesi tek başına yayın tamamlandı demek değildir. Mevcut herkese açık dağıtımda müşterinin GitHub tokenı kullanması gerekmez.</li>
+<li>Yayımlanan sürümü önce test kurulumunda güncelle. Ardından bir pilot müşteride uygula ve doğrula; kalan müşterilerde aynı iki komutu bakım zamanlarında çalıştır.</li>
+</ol>
+<div class="note"><strong>Her değişiklik için yeni sürüm:</strong> Yayımlanmış etiketi veya dosyaları değiştirme. Yeni kod için yeni sürüm yayımla; mevcut iş akışı aynı Release’in üzerine yazmayı reddeder.</div>
+<p>Birden fazla müşteri için basit bir kayıt tut: müşteri adı, önceki/hedef sürüm, güncelleme tarihi, sonuç ve yedeğin saklandığı yer. Aynı Release tüm müşterilerde kullanılabilir.</p>
+<div class="copy-status" id="copy-status" role="status" aria-live="polite"></div>
+<footer class="small">27 Ekim 2026 · Mevcut 1.0.9 güncelleme betiği ve depodaki yayın iş akışına göre hazırlanmıştır. Bu kılavuzun hazırlanması bir sürüm yayımlamaz veya müşteride güncelleme başlatmaz. Ayrıntılar: <a href="https://github.com/celebigilfatih/infrascope/blob/v1.0.9/deploy/INSTALL_WINDOWS.md">Windows işletim kılavuzu</a> · <a href="https://github.com/celebigilfatih/infrascope/blob/v1.0.9/docs/30-runbooks/customer-online-releases.md">Yayın işletim kılavuzu</a></footer>
+</main>
+<script>
+document.querySelectorAll('[data-copy]').forEach(button=>button.addEventListener('click',async()=>{
+  const block=document.getElementById(button.dataset.copy), status=document.getElementById('copy-status');
+  try{await navigator.clipboard.writeText(block.textContent);status.textContent='Komutlar kopyalandı.';}
+  catch{const selection=window.getSelection(),range=document.createRange();range.selectNodeContents(block);selection.removeAllRanges();selection.addRange(range);status.textContent='Komutlar seçildi. Kopyalamak için Ctrl+C kullanın.';}
+}));
+</script>
+</body>
+</html>

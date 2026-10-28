@@ -1,3 +1,5 @@
+import { BACKUP_PROFILES, isBackupPlatform } from '@/lib/nms/backup-platform';
+
 export type SnmpVersion = 'v1' | 'v2c' | 'v3';
 export type SnmpV3SecurityLevel = 'authNoPriv' | 'authPriv';
 
@@ -6,6 +8,8 @@ export interface EditableNmsDevice {
   name: string;
   type: string | null;
   vendor: string | null;
+  operatingSystem: string | null;
+  backupPlatform: string | null;
   managementIp: string | null;
   snmpVersion: string | null;
   snmpPort: number | null;
@@ -27,6 +31,8 @@ export interface EditableNmsDevice {
 
 export function createEditForm(device?: EditableNmsDevice | null) {
   return {
+    operatingSystem: device?.operatingSystem || '',
+    backupPlatform: device?.backupPlatform || '',
     managementIp: device?.managementIp || '',
     snmpPort: device?.snmpPort ?? 161,
     snmpVersion: (device?.snmpVersion === '3' || device?.snmpVersion === 'v3' ? 'v3' : device?.snmpVersion === '1' || device?.snmpVersion === 'v1' ? 'v1' : 'v2c') as SnmpVersion,
@@ -48,6 +54,7 @@ export type NmsEditForm = ReturnType<typeof createEditForm>;
 
 export function validateEditForm(form: NmsEditForm, device: EditableNmsDevice) {
   const errors: Record<string, string> = {};
+  if (form.operatingSystem.trim().length > 255) errors['operating-system'] = 'En fazla 255 karakter girin.';
   if (!form.managementIp.trim()) errors['management-ip'] = 'Yönetim IP adresini girin.';
   if (!Number.isInteger(form.snmpPort) || form.snmpPort < 1 || form.snmpPort > 65535) errors['snmp-port'] = '1–65535 arasında bir port girin.';
   if (!Number.isInteger(form.pollingInterval) || form.pollingInterval < 10 || form.pollingInterval > 86400) errors['polling-interval'] = '10–86400 arasında bir saniye değeri girin.';
@@ -62,11 +69,14 @@ export function validateEditForm(form: NmsEditForm, device: EditableNmsDevice) {
   }
   if (!Number.isInteger(form.sshPort) || form.sshPort < 1 || form.sshPort > 65535) errors['ssh-port'] = '1–65535 arasında bir port girin.';
   if (form.sshPassword && !form.sshUsername.trim()) errors['ssh-username'] = 'SSH parolası için kullanıcı adını girin.';
+  if ((form.sshUsername.trim() || form.backupPlatform) && !isBackupPlatform(form.backupPlatform)) errors['backup-platform'] = 'SSH yedekleme için cihazın işletim sistemini seçin.';
   return errors;
 }
 
 export function buildEditPayload(form: NmsEditForm): Record<string, unknown> {
   const payload: Record<string, unknown> = {
+    operatingSystem: form.operatingSystem.trim() || null,
+    backupPlatform: form.backupPlatform || null,
     managementIp: form.managementIp.trim(), snmpPort: form.snmpPort, snmpVersion: form.snmpVersion,
     pollingEnabled: form.pollingEnabled, pollingInterval: form.pollingInterval,
     sshUsername: form.sshUsername.trim(), sshPort: form.sshPort,
@@ -95,6 +105,8 @@ export function getEditChanges(form: NmsEditForm, device: EditableNmsDevice) {
     const after = typeof form[key] === 'string' ? (form[key] as string).trim() : form[key];
     if (before !== after) changes.push({ label, before: format(before) || 'Girilmedi', after: format(after) || 'Girilmedi' });
   }
+  add('operatingSystem', 'İşletim sistemi');
+  add('backupPlatform', 'Yedekleme işletim sistemi', value => isBackupPlatform(value) ? BACKUP_PROFILES[value].label : 'Seçilmedi');
   add('managementIp', 'Yönetim IP'); add('snmpPort', 'SNMP portu');
   add('snmpVersion', 'SNMP sürümü', value => `SNMP${value}`);
   add('pollingEnabled', 'Veri toplama', value => value ? 'Etkin' : 'Kapalı');

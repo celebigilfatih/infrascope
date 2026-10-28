@@ -18,7 +18,6 @@ import {
   ArrowLeft,
   CheckCircle,
   Clock,
-  Server,
   Cpu,
   Network,
   Activity,
@@ -50,6 +49,7 @@ import { apiGet, apiPost } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import type { BackupReadiness } from '@/lib/nms/backup-platform';
 import styles from './page.module.css';
+import { dataFreshness, formatRelative as relativeTime, measuredPercent } from '@/lib/nms/device-monitoring-view';
 
 interface DbNmsBackup {
   id: string;
@@ -112,20 +112,17 @@ interface DbDevice {
   lastPolledAt: string | null;
 }
 
-function getConnectionStatus(device: DbDevice): 'online' | 'offline' | 'disabled' | 'unknown' {
+function getConnectionStatus(device: DbDevice, now: number): 'online' | 'offline' | 'disabled' | 'unknown' {
   if (!device.pollingEnabled) return 'disabled';
-  if (!device.lastPolledAt || !Number.isFinite(Date.parse(device.lastPolledAt))) return 'unknown';
-  const diffMs = Date.now() - new Date(device.lastPolledAt).getTime();
-  // Allow 2.5x the polling interval as grace period (default 5 min → 12.5 min threshold)
-  const intervalMs = (device.pollingInterval ?? 300) * 1000;
-  return diffMs < intervalMs * 2.5 ? 'online' : 'offline';
+  const freshness = dataFreshness(device.lastPolledAt, device.pollingInterval, now);
+  return freshness === 'fresh' ? 'online' : freshness === 'delayed' ? 'offline' : 'unknown';
 }
 
 function StatCard({ icon: Icon, label, value, color }: { icon: LucideIcon; label: string; value: string; color: string }) {
   return (
     <div className={styles.stat}>
-      <div className="flex items-center justify-between gap-2"><p className="text-sm font-medium">{label}</p><span className={cn(styles.statIcon, color)}><Icon aria-hidden="true" className="h-4 w-4" /></span></div>
-      <p className="mt-3 wrap-break-word text-2xl font-semibold tabular-nums">{value}</p>
+      <div className="flex items-center justify-between gap-2"><p className="text-xs font-medium">{label}</p><span className={cn(styles.statIcon, color)}><Icon aria-hidden="true" className="h-4 w-4" /></span></div>
+      <p className="mt-1 wrap-break-word text-xl font-semibold tabular-nums">{value}</p>
     </div>
   );
 }
@@ -133,8 +130,8 @@ function StatCard({ icon: Icon, label, value, color }: { icon: LucideIcon; label
 function InfoRow({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
   return (
     <div className={styles.infoRow}>
-      <span className="text-sm text-muted-foreground">{label}</span>
-      <span className={`min-w-0 wrap-break-word text-right text-sm font-medium ${mono ? 'font-mono' : ''}`}>{value || 'Belirtilmedi'}</span>
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className={`min-w-0 wrap-break-word text-right text-xs font-medium ${mono ? 'font-mono' : ''}`}>{value || 'Belirtilmedi'}</dd>
     </div>
   );
 }
@@ -170,7 +167,6 @@ export default function ViewNmsDevicePage() {
   const [portPage, setPortPage] = useState(1);
   const [portMessage, setPortMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [now, setNow] = useState(() => Date.now());
-  const [loadedAt, setLoadedAt] = useState<number | null>(null);
   const [backupsLoaded, setBackupsLoaded] = useState(false);
   const draftRef = useRef(false);
   const deviceRequest = useRef<AbortController | null>(null);
@@ -295,7 +291,7 @@ export default function ViewNmsDevicePage() {
           setMonitoredIds(new Set((data.interfaces || []).filter((i: DbNmsInterface) => i.monitored).map((i: DbNmsInterface) => i.id)));
           setMonitoredDirty(false);
         }
-        setNow(Date.now()); setLoadedAt(Date.now());
+        setNow(Date.now());
         setHealthMetrics(data.healthMetrics || []);
         setTopologyLinks(data.topologyLinks || []);
       }
@@ -320,20 +316,11 @@ export default function ViewNmsDevicePage() {
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 30000); return () => window.clearInterval(timer); }, []);
 
   const formatDate = (ts: string | null) => {
-    if (!ts) return '—';
+    if (!ts || !Number.isFinite(Date.parse(ts))) return '—';
     return new Date(ts).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
 
-  const formatRelative = (ts: string | null) => {
-    if (!ts || !Number.isFinite(Date.parse(ts))) return 'Henüz veri yok';
-    const diff = now - new Date(ts).getTime();
-    const mins = Math.max(0, Math.floor(diff / 60000));
-    if (mins < 1) return 'Az önce';
-    if (mins < 60) return `${mins} dk önce`;
-    const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return `${hrs} saat önce`;
-    return `${Math.floor(hrs / 24)} gün önce`;
-  };
+  const formatRelative = (ts: string | null) => relativeTime(ts, now);
 
   const formatBytes = (val: string | number | null): string => {
     if (val == null) return '—';
@@ -391,13 +378,16 @@ export default function ViewNmsDevicePage() {
     )}</PageStateFrame>;
   }
 
-  const status = getConnectionStatus(device);
+  const status = getConnectionStatus(device, now);
   const isOnline = status === 'online';
   const statusLabel = { online: 'Güncel veri', offline: 'Veri gecikmiş', disabled: 'İzleme kapalı', unknown: 'Veri bekleniyor' }[status];
   const StatusIcon = isOnline ? CheckCircle : status === 'disabled' ? PauseCircle : status === 'unknown' ? Clock : AlertTriangle;
   const statusTone = isOnline ? styles.online : status === 'offline' ? styles.warning : styles.muted;
   const latestHealth = healthMetrics[0] ?? null;
-  const healthStale = !!latestHealth && (!isOnline || now - Date.parse(latestHealth.collectedAt) >= (device.pollingInterval ?? 300) * 2500);
+  const healthFreshness = dataFreshness(latestHealth?.collectedAt, device.pollingInterval, now);
+  const healthState = !latestHealth ? 'Kaynak ölçümü yok' : !device.pollingEnabled ? 'İzleme kapalı · son ölçüm' : healthFreshness === 'fresh' ? '' : healthFreshness === 'delayed' ? 'Ölçüm eski' : 'Ölçüm tarihi belirsiz';
+  const cpuUsage = measuredPercent(latestHealth?.cpuUsage);
+  const memoryUsage = measuredPercent(latestHealth?.memoryUsage);
 
   const activeInterfaces = interfaces.filter(i => i.operStatus === 'up').length;
   const downInterfaces = interfaces.filter(i => i.adminStatus === 'up' && i.operStatus === 'down').length;
@@ -464,24 +454,27 @@ export default function ViewNmsDevicePage() {
   };
 
   return (
-    <div className={cn(styles.page, 'mx-auto w-full max-w-[1600px] p-4 sm:p-6 lg:p-8')}>
+    <div className={styles.page}>
       <header className={styles.header}>
-        <div className="flex min-w-0 items-start gap-3">
-          <Button variant="outline" size="icon" asChild className="shrink-0" aria-label="İzlenen cihazlara dön"><Link href="/integrations/nms/devices"><ArrowLeft className="h-4 w-4" /></Link></Button>
-          <div className="min-w-0"><div className="mb-1 flex items-center gap-2 text-xs font-medium uppercase tracking-widest text-primary"><Activity aria-hidden="true" className="h-4 w-4" />NMS İzleme</div><PageHeading section="nms" showIcon={false} className="text-2xl! font-semibold!">{device.name}</PageHeading><div className={styles.identity}><span className="font-mono text-xs">{device.managementIp || 'IP girilmedi'}</span><span className="text-xs text-muted-foreground">{[device.vendor, device.type === 'SWITCH' ? 'Ağ anahtarı' : device.type === 'ROUTER' ? 'Yönlendirici' : device.type === 'FIREWALL' ? 'Güvenlik duvarı' : device.type?.replace(/_/g, ' ')].filter(Boolean).join(' · ')}</span><span className={cn(styles.statusBadge, statusTone)}><StatusIcon aria-hidden="true" className="h-3.5 w-3.5" />{statusLabel}</span></div></div>
+        <div className={styles.heading}>
+          <Button variant="outline" size="icon" asChild className="h-8 w-8 shrink-0" aria-label="İzlenen cihazlara dön"><Link href="/integrations/nms/devices"><ArrowLeft className="h-4 w-4" /></Link></Button>
+          <div className="min-w-0">
+            <PageHeading section="nms" compact showIcon={false} className="text-base sm:text-lg">{device.name}</PageHeading>
+            <div className={styles.identity}><span className="font-mono">{device.managementIp || 'IP girilmedi'}</span><span>{[device.vendor, device.type === 'SWITCH' ? 'Switch' : device.type === 'ROUTER' ? 'Router' : device.type === 'FIREWALL' ? 'Güvenlik duvarı' : device.type?.replace(/_/g, ' ')].filter(Boolean).join(' · ')}</span><span className={cn(styles.statusBadge, statusTone)}><StatusIcon aria-hidden="true" className="h-3.5 w-3.5" />{statusLabel}</span><span>Son veri: <time dateTime={device.lastPolledAt || undefined} title={formatDate(device.lastPolledAt)}>{formatRelative(device.lastPolledAt)}</time></span></div>
+          </div>
         </div>
-        <div className={styles.headerActions}><Button variant="outline" className="gap-2" onClick={() => void loadDevice(true)} disabled={refreshing || savingMonitored}><RefreshCw className={cn('h-4 w-4', refreshing && 'animate-spin')} />{refreshing ? 'Yenileniyor…' : 'Yenile'}</Button><Button variant="outline" className="gap-2" onClick={() => setActiveTab('backups')}><HardDrive className="h-4 w-4" />Yedekler</Button><Button asChild className="gap-2"><Link href={`/integrations/nms/devices/${device.id}/edit`}><Pencil className="h-4 w-4" />İzleme ayarları</Link></Button></div>
+        <div className={styles.headerActions}><Button variant="outline" size="sm" onClick={() => void loadDevice(true)} disabled={refreshing || savingMonitored}><RefreshCw className={cn('h-3.5 w-3.5', refreshing && 'animate-spin')} />{refreshing ? 'Yenileniyor…' : 'Yenile'}</Button><Button asChild size="sm"><Link href={`/integrations/nms/devices/${device.id}/edit`}><Pencil className="h-3.5 w-3.5" />İzleme ayarları</Link></Button></div>
       </header>
-      <div className={styles.updateLine}><p className="flex items-center gap-1.5"><Clock aria-hidden="true" className="h-3.5 w-3.5" />Son veri: <time dateTime={device.lastPolledAt || undefined} title={formatDate(device.lastPolledAt)}>{formatRelative(device.lastPolledAt)}</time></p><span>{monitoredDirty || savingMonitored ? 'Port düzenlenirken otomatik yenileme bekletiliyor' : '30 saniyede bir otomatik yenilenir'}</span></div>
       {error && <div role="alert" className={styles.feedback}><AlertTriangle className="h-4 w-4 shrink-0" /><p>{uiError(error)} Son yüklenen bilgiler gösteriliyor.</p></div>}
-      {(status !== 'online' || healthStale) && <div role="status" className={styles.feedback}><StatusIcon className="mt-0.5 h-4 w-4 shrink-0" /><p>{status === 'disabled' ? 'Bu cihaz için veri toplama kapalı. Görünen değerler son kayıtlardır.' : status === 'unknown' ? 'İlk başarılı veri toplama bekleniyor. SNMP erişimini izleme ayarlarından kontrol edebilirsiniz.' : healthStale && isOnline ? 'Kaynak ölçümleri güncel değil. Son kaydedilen değerler gösteriliyor.' : 'Beklenen sürede yeni veri alınamadı. Son kayıtlar gösteriliyor; SNMP ve ağ erişimini kontrol edin.'}</p></div>}
-      <div className={styles.stats}>
-        <StatCard icon={Cpu} label="CPU kullanımı" value={latestHealth?.cpuUsage != null ? `%${latestHealth.cpuUsage.toFixed(1)}` : '—'} color="bg-primary/10 text-primary" />
-        <StatCard icon={MemoryStick} label="Bellek kullanımı" value={latestHealth?.memoryUsage != null ? `%${latestHealth.memoryUsage.toFixed(1)}` : '—'} color="bg-primary/10 text-primary" />
-        <StatCard icon={Thermometer} label="Sıcaklık" value={latestHealth?.temperature != null ? `${latestHealth.temperature.toFixed(0)} °C` : '—'} color="bg-primary/10 text-primary" />
-        <StatCard icon={Clock} label="Çalışma süresi" value={latestHealth?.uptimeSeconds != null ? formatUptime(latestHealth.uptimeSeconds) : '—'} color="bg-primary/10 text-primary" />
-      </div>
-      <p className="-mt-2 mb-5 text-xs text-muted-foreground">{latestHealth ? `${healthStale ? 'Son kayıt · ' : 'Ölçüm zamanı · '}${formatDate(latestHealth.collectedAt)}` : 'Henüz kaynak ölçümü toplanmadı.'}</p>
+      <section aria-label="Kaynak ölçümleri" className={styles.measurements}>
+        <div className={styles.measurementMeta}><h2>Son ölçümler</h2><div role="status" className={styles.measurementState}>{healthState && <span className={cn(styles.statusBadge, latestHealth && healthFreshness !== 'fresh' ? styles.warning : styles.muted)}>{healthState}</span>}{latestHealth && (healthFreshness === 'fresh' || healthFreshness === 'delayed') && <time dateTime={latestHealth.collectedAt} title={formatDate(latestHealth.collectedAt)}>{formatRelative(latestHealth.collectedAt)}</time>}</div></div>
+        <div className={styles.stats}>
+          <StatCard icon={Cpu} label="CPU kullanımı" value={cpuUsage !== null ? `%${cpuUsage.toFixed(1)}` : '—'} color="bg-primary/10 text-primary" />
+          <StatCard icon={MemoryStick} label="Bellek kullanımı" value={memoryUsage !== null ? `%${memoryUsage.toFixed(1)}` : '—'} color="bg-primary/10 text-primary" />
+          <StatCard icon={Thermometer} label="Sıcaklık" value={latestHealth?.temperature != null ? `${latestHealth.temperature.toFixed(0)} °C` : '—'} color="bg-primary/10 text-primary" />
+          <StatCard icon={Clock} label="Çalışma süresi" value={latestHealth?.uptimeSeconds != null ? formatUptime(latestHealth.uptimeSeconds) : '—'} color="bg-primary/10 text-primary" />
+        </div>
+      </section>
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className={styles.tabs}>
         <TabsList aria-label="Cihaz detay bölümleri" className={styles.tabList}>
@@ -492,9 +485,6 @@ export default function ViewNmsDevicePage() {
           <TabsTrigger value="ports" className="gap-2">
             <Plug className="h-4 w-4" />
             Portlar
-            {interfaces.length > 0 && (
-              <span className="ml-1 text-[10px] bg-muted rounded px-1">{interfaces.length}</span>
-            )}
           </TabsTrigger>
           <TabsTrigger value="snmp" className="gap-2">
             <Network className="h-4 w-4" />
@@ -503,149 +493,63 @@ export default function ViewNmsDevicePage() {
           <TabsTrigger value="topology" className="gap-2">
             <Link2 className="h-4 w-4" />
             Topoloji
-            {topologyLinks.length > 0 && (
-              <span className="ml-1 text-[10px] bg-muted rounded px-1">{topologyLinks.length}</span>
-            )}
           </TabsTrigger>
           <TabsTrigger value="backups" className="gap-2" onClick={() => backups.length === 0 && loadBackups()}>
             <HardDrive className="h-4 w-4" />
             Yedekler
-            {backups.length > 0 && (
-              <span className="ml-1 text-[10px] bg-muted rounded px-1">{backups.length}</span>
-            )}
           </TabsTrigger>
         </TabsList>
 
         {/* Overview Tab */}
-        <TabsContent value="overview" className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Identity */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                  <Server className="h-4 w-4 text-muted-foreground" />
-                  Cihaz kimliği
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="px-5">
-                <InfoRow label="NMS ID" value={`#${device.nmsDeviceId}`} />
-                <InfoRow label="Üretici" value={device.vendor || '—'} />
-                <InfoRow label="Cihaz türü" value={device.type === 'SWITCH' ? 'Ağ anahtarı' : device.type === 'ROUTER' ? 'Yönlendirici' : device.type === 'FIREWALL' ? 'Güvenlik duvarı' : device.type?.replace(/_/g, ' ') || 'Belirtilmedi'} />
-                <InfoRow label="Yönetim IP" value={device.managementIp || '—'} mono />
-              </CardContent>
-            </Card>
-
-            {/* İzleme durumu */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                  <Activity className="h-4 w-4 text-muted-foreground" />
-                  İzleme durumu
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="px-5">
-                <div className="flex items-center justify-between py-2.5 border-b border-border/60">
-                  <span className="text-sm text-muted-foreground">Veri durumu</span>
-                  <Badge variant="outline" className={cn(styles.statusBadge, statusTone)}>
-                    <StatusIcon className="h-3 w-3" />
-                    {statusLabel}
-                  </Badge>
-                </div>
-                <InfoRow label="Son başarılı veri" value={formatDate(device.lastPolledAt)} />
-                <div className="flex items-center justify-between py-2.5 border-b border-border/60">
-                  <span className="text-sm text-muted-foreground">Veri toplama</span>
-                  <Badge variant={device.pollingEnabled ? 'success' : 'secondary'} className="text-xs">
-                    {device.pollingEnabled ? 'Etkin' : 'Kapalı'}
-                  </Badge>
-                </div>
-                <InfoRow label="Toplama aralığı" value={`${device.pollingInterval ?? 300} saniye`} />
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Port durumu */}
-          {interfaces.length > 0 && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                  <Plug className="h-4 w-4 text-muted-foreground" />
-                  Port durumu
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="px-5">
+        <TabsContent value="overview">
+          {interfaces.length > 0 ? <Card>
+            <CardHeader className={styles.compactCardHeader}><CardTitle className="flex items-center gap-2 text-sm"><Plug size={15} className="text-primary" />Port durumu</CardTitle></CardHeader>
+            <CardContent className={styles.compactCardContent}>
                 <div className={styles.portSummary}>{[
                   { label: 'Bağlı port', count: activeInterfaces, filter: 'up', icon: CheckCircle, tone: styles.online },
                   { label: 'Bağlantı uyarısı', count: downInterfaces, filter: 'issues', icon: AlertTriangle, tone: styles.warning },
                   { label: 'Yönetimsel kapalı', count: interfaces.filter(iface => iface.adminStatus === 'down').length, filter: 'disabled', icon: PauseCircle, tone: styles.muted },
                   { label: 'Alarm izlenen', count: interfaces.filter(iface => iface.monitored).length, filter: 'monitored', icon: ShieldCheck, tone: styles.online },
                 ].map(({ label, count, filter, icon: Icon, tone }) => <button key={label} className={styles.portStat} onClick={() => { setPortFilter(filter); setPortPage(1); setActiveTab('ports'); }}><span className={cn(styles.statIcon, tone)}><Icon aria-hidden="true" className="h-4 w-4" /></span><span><strong className="block text-xl font-semibold tabular-nums">{count}</strong><span className="text-xs text-muted-foreground">{label}</span></span><ChevronRight aria-hidden="true" className="ml-auto h-4 w-4 text-muted-foreground" /></button>)}</div>
-                <p className="mt-4 text-xs leading-5 text-muted-foreground">Bağlantı uyarısı, yönetimsel olarak açık olduğu halde bağlantısı kapalı portları gösterir. Alarm izlemesi port bazında ayrıca seçilir.</p>
-              </CardContent>
-            </Card>
-          )}
+            </CardContent>
+          </Card> : <div className={styles.empty}><Plug size={24} className="mb-2 text-muted-foreground" /><p className="text-sm text-muted-foreground">Henüz port verisi yok</p></div>}
         </TabsContent>
 
-        {/* Ports Tab */}
-        <TabsContent value="ports" className="space-y-4">
+        <TabsContent value="ports" className="space-y-3">
           <Card className={styles.portSection}>
-            <CardHeader className={styles.sectionHeader}><CardTitle className="flex items-center gap-2 text-sm font-semibold"><Plug className="h-4 w-4 text-primary" />Portlar ve alarm izlemesi</CardTitle><p className="text-xs text-muted-foreground">{interfaces.length} port · {interfaces.filter(iface => iface.monitored).length} kayıtlı alarm izlemesi</p></CardHeader>
             <CardContent className="p-0">
               <div className={styles.toolbar}><div className="relative min-w-0 flex-1"><Search aria-hidden="true" className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input aria-label="Port ara" placeholder="Port adı veya açıklama ara…" value={portSearch} onChange={event => { setPortSearch(event.target.value); setPortPage(1); }} className="pl-9" /></div><select aria-label="Port durumu" className={styles.select} value={portFilter} onChange={event => { setPortFilter(event.target.value); setPortPage(1); }}><option value="">Tüm portlar</option><option value="up">Bağlı</option><option value="issues">Bağlantı uyarısı</option><option value="disabled">Yönetimsel kapalı</option><option value="monitored">Alarm izlenen</option></select></div>
-              <div className={styles.selectionBar}><label className="flex items-center gap-2 text-xs"><input type="checkbox" aria-label="Bu sayfadaki portları seç" className={styles.checkbox} checked={shownInterfaces.length > 0 && shownInterfaces.every(iface => monitoredIds.has(iface.id))} ref={element => { if (element) element.indeterminate = shownInterfaces.some(iface => monitoredIds.has(iface.id)) && !shownInterfaces.every(iface => monitoredIds.has(iface.id)); }} disabled={!shownInterfaces.length || savingMonitored} onChange={event => { const next = new Set(monitoredIds); shownInterfaces.forEach(iface => event.target.checked ? next.add(iface.id) : next.delete(iface.id)); updateMonitored(next); }} />Bu sayfadaki portları seç</label><span className="text-xs text-muted-foreground">{monitoredIds.size} port alarm izlemesinde</span><span className="ml-auto text-xs text-muted-foreground">{filteredInterfaces.length} / {interfaces.length} port</span></div>
+              <div className={styles.selectionBar}><label className="flex items-center gap-2 text-xs"><input type="checkbox" aria-label="Bu sayfadaki portları seç" className={styles.checkbox} checked={shownInterfaces.length > 0 && shownInterfaces.every(iface => monitoredIds.has(iface.id))} ref={element => { if (element) element.indeterminate = shownInterfaces.some(iface => monitoredIds.has(iface.id)) && !shownInterfaces.every(iface => monitoredIds.has(iface.id)); }} disabled={!shownInterfaces.length || savingMonitored} onChange={event => { const next = new Set(monitoredIds); shownInterfaces.forEach(iface => event.target.checked ? next.add(iface.id) : next.delete(iface.id)); updateMonitored(next); }} />Bu sayfadaki portları seç</label><span className="text-xs text-muted-foreground">{monitoredIds.size} port alarm izlemesinde</span></div>
               {monitoredDirty && <div className={styles.draftBar} role="status"><p className="text-sm">Kaydedilmemiş port seçimleri var.</p><div className="flex flex-wrap gap-2"><Button variant="outline" size="sm" onClick={discardMonitored} disabled={savingMonitored}>Vazgeç</Button><Button size="sm" className="gap-2" onClick={() => void saveMonitored()} disabled={savingMonitored}>{savingMonitored ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}Değişiklikleri kaydet</Button></div></div>}
               {portMessage && <div role={portMessage.ok ? 'status' : 'alert'} className={styles.feedback}><span>{portMessage.text}</span></div>}
               {!shownInterfaces.length ? <div className={styles.empty}><span className={styles.emptyIcon}><Search className="h-6 w-6" /></span><h3 className="text-sm font-semibold">{interfaces.length ? 'Filtreye uygun port bulunamadı' : 'Henüz port verisi yok'}</h3><p className="mt-2 text-xs leading-6 text-muted-foreground">{interfaces.length ? 'Aramayı veya durum filtresini değiştirin.' : 'Cihazdan port bilgileri toplandığında burada listelenir.'}</p>{interfaces.length > 0 && <Button variant="outline" size="sm" className="mt-4" onClick={() => { setPortSearch(''); setPortFilter(''); setPortPage(1); }}>Filtreleri temizle</Button>}</div> : <>
                 <div className={styles.portTable}><table className={styles.table}><caption className="sr-only">Port durumları, veri sayaçları ve alarm izleme seçimleri</caption><thead><tr>{['İzle', 'Port / açıklama', 'Bağlantı', 'Hız', 'Gelen / giden', 'Hata sayacı', 'Son veri'].map(label => <th key={label} scope="col">{label}</th>)}</tr></thead><tbody>{shownInterfaces.map(iface => {
                   const up = iface.operStatus === 'up', adminDown = iface.adminStatus === 'down';
-                  return <tr key={iface.id} className={monitoredIds.has(iface.id) ? styles.selectedRow : undefined}><td><input type="checkbox" aria-label={`${iface.interfaceName}: alarm izlemesi`} className={styles.checkbox} checked={monitoredIds.has(iface.id)} onChange={() => toggleMonitored(iface.id)} disabled={savingMonitored} /></td><td><p className="font-mono text-xs font-medium">{iface.interfaceName}</p><p className="mt-1 max-w-64 wrap-break-word text-xs text-muted-foreground">{iface.description || 'Açıklama yok'}</p></td><td><span className={cn(styles.statusBadge, up ? styles.online : adminDown ? styles.muted : styles.warning)}>{up ? 'Bağlı' : adminDown ? 'Yönetimsel kapalı' : iface.operStatus === 'down' ? 'Bağlantı yok' : iface.operStatus}</span><p className="mt-1 text-xs text-muted-foreground">Yönetim: {iface.adminStatus === 'up' ? 'açık' : iface.adminStatus === 'down' ? 'kapalı' : iface.adminStatus}</p></td><td className="whitespace-nowrap text-xs">{formatSpeed(iface.speed)}</td><td><p className="flex items-center gap-1 text-xs"><ArrowDown aria-hidden="true" className="h-3 w-3 text-muted-foreground" />{formatBytes(iface.inOctets)}</p><p className="mt-1 flex items-center gap-1 text-xs"><ArrowUp aria-hidden="true" className="h-3 w-3 text-muted-foreground" />{formatBytes(iface.outOctets)}</p></td><td className="text-xs tabular-nums">{(iface.inErrors || 0) + (iface.outErrors || 0)}</td><td className="whitespace-nowrap text-xs text-muted-foreground" title={formatDate(iface.lastPolledAt)}>{formatRelative(iface.lastPolledAt)}</td></tr>;
+                  return <tr key={iface.id} className={monitoredIds.has(iface.id) ? styles.selectedRow : undefined}><td><input type="checkbox" aria-label={`${iface.interfaceName}: alarm izlemesi`} className={styles.checkbox} checked={monitoredIds.has(iface.id)} onChange={() => toggleMonitored(iface.id)} disabled={savingMonitored} /></td><td><p className="font-mono text-xs font-medium">{iface.interfaceName}</p>{iface.description && <p className="mt-1 max-w-64 wrap-break-word text-xs text-muted-foreground">{iface.description}</p>}</td><td><span className={cn(styles.statusBadge, up ? styles.online : adminDown ? styles.muted : styles.warning)}>{up ? 'Bağlı' : adminDown ? 'Yönetimsel kapalı' : iface.operStatus === 'down' ? 'Bağlantı yok' : iface.operStatus}</span><p className="mt-1 text-xs text-muted-foreground">Yönetim: {iface.adminStatus === 'up' ? 'açık' : iface.adminStatus === 'down' ? 'kapalı' : iface.adminStatus}</p></td><td className="whitespace-nowrap text-xs">{formatSpeed(iface.speed)}</td><td><p className="flex items-center gap-1 text-xs"><ArrowDown aria-hidden="true" className="h-3 w-3 text-muted-foreground" />{formatBytes(iface.inOctets)}</p><p className="mt-1 flex items-center gap-1 text-xs"><ArrowUp aria-hidden="true" className="h-3 w-3 text-muted-foreground" />{formatBytes(iface.outOctets)}</p></td><td className="text-xs tabular-nums">{(iface.inErrors || 0) + (iface.outErrors || 0)}</td><td className="whitespace-nowrap text-xs text-muted-foreground" title={formatDate(iface.lastPolledAt)}>{formatRelative(iface.lastPolledAt)}</td></tr>;
                 })}</tbody></table></div>
-                <div className={styles.portCards}>{shownInterfaces.map(iface => <article className={cn(styles.portCard, monitoredIds.has(iface.id) && styles.selectedRow)} key={iface.id}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="wrap-break-word font-mono text-xs font-semibold">{iface.interfaceName}</p><p className="mt-1 wrap-break-word text-xs text-muted-foreground">{iface.description || 'Açıklama yok'}</p></div><label className="flex shrink-0 items-center gap-2 text-xs">İzle<input type="checkbox" aria-label={`${iface.interfaceName}: alarm izlemesi`} className={styles.checkbox} checked={monitoredIds.has(iface.id)} onChange={() => toggleMonitored(iface.id)} disabled={savingMonitored} /></label></div><div className="mt-3 flex flex-wrap items-center justify-between gap-2"><span className={cn(styles.statusBadge, iface.operStatus === 'up' ? styles.online : iface.adminStatus === 'down' ? styles.muted : styles.warning)}>{iface.operStatus === 'up' ? 'Bağlı' : iface.adminStatus === 'down' ? 'Yönetimsel kapalı' : iface.operStatus === 'down' ? 'Bağlantı yok' : iface.operStatus}</span><span className="text-xs text-muted-foreground">{formatSpeed(iface.speed)}</span></div><dl className="mt-3 grid grid-cols-2 gap-2 text-xs"><div><dt className="text-muted-foreground">Gelen / giden</dt><dd className="mt-1">{formatBytes(iface.inOctets)} / {formatBytes(iface.outOctets)}</dd></div><div><dt className="text-muted-foreground">Hata sayacı</dt><dd className="mt-1">{(iface.inErrors || 0) + (iface.outErrors || 0)}</dd></div></dl><p className="mt-3 border-t border-border pt-2 text-xs text-muted-foreground">Son veri: {formatRelative(iface.lastPolledAt)}</p></article>)}</div>
+                <div className={styles.portCards}>{shownInterfaces.map(iface => <article className={cn(styles.portCard, monitoredIds.has(iface.id) && styles.selectedRow)} key={iface.id}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="wrap-break-word font-mono text-xs font-semibold">{iface.interfaceName}</p>{iface.description && <p className="mt-1 wrap-break-word text-xs text-muted-foreground">{iface.description}</p>}</div><label className="flex shrink-0 items-center gap-2 text-xs">İzle<input type="checkbox" aria-label={`${iface.interfaceName}: alarm izlemesi`} className={styles.checkbox} checked={monitoredIds.has(iface.id)} onChange={() => toggleMonitored(iface.id)} disabled={savingMonitored} /></label></div><div className="mt-3 flex flex-wrap items-center justify-between gap-2"><span className={cn(styles.statusBadge, iface.operStatus === 'up' ? styles.online : iface.adminStatus === 'down' ? styles.muted : styles.warning)}>{iface.operStatus === 'up' ? 'Bağlı' : iface.adminStatus === 'down' ? 'Yönetimsel kapalı' : iface.operStatus === 'down' ? 'Bağlantı yok' : iface.operStatus}</span><span className="text-xs text-muted-foreground">{formatSpeed(iface.speed)}</span></div><dl className="mt-3 grid grid-cols-2 gap-2 text-xs"><div><dt className="text-muted-foreground">Gelen / giden</dt><dd className="mt-1">{formatBytes(iface.inOctets)} / {formatBytes(iface.outOctets)}</dd></div><div><dt className="text-muted-foreground">Hata sayacı</dt><dd className="mt-1">{(iface.inErrors || 0) + (iface.outErrors || 0)}</dd></div></dl><p className="mt-3 border-t border-border pt-2 text-xs text-muted-foreground">Son veri: {formatRelative(iface.lastPolledAt)}</p></article>)}</div>
               </>}
-              <footer className={styles.pagination}><p className="text-xs text-muted-foreground">Gelen ve giden değerler hız değil, biriken veri sayaçlarıdır.</p><nav aria-label="Port sayfaları" className="flex items-center gap-2"><Button variant="outline" size="icon" className="h-8 w-8" aria-label="Önceki port sayfası" disabled={currentPortPage === 1} onClick={() => setPortPage(currentPortPage - 1)}><ChevronLeft className="h-4 w-4" /></Button><span className="text-xs tabular-nums">{currentPortPage} / {portPages}</span><Button variant="outline" size="icon" className="h-8 w-8" aria-label="Sonraki port sayfası" disabled={currentPortPage === portPages} onClick={() => setPortPage(currentPortPage + 1)}><ChevronRight className="h-4 w-4" /></Button></nav></footer>
+              <footer className={styles.pagination}><p className="text-xs text-muted-foreground">{filteredInterfaces.length} / {interfaces.length} port</p><nav aria-label="Port sayfaları" className="flex items-center gap-2"><Button variant="outline" size="icon" className="h-8 w-8" aria-label="Önceki port sayfası" disabled={currentPortPage === 1} onClick={() => setPortPage(currentPortPage - 1)}><ChevronLeft className="h-4 w-4" /></Button><span className="text-xs tabular-nums">{currentPortPage} / {portPages}</span><Button variant="outline" size="icon" className="h-8 w-8" aria-label="Sonraki port sayfası" disabled={currentPortPage === portPages} onClick={() => setPortPage(currentPortPage + 1)}><ChevronRight className="h-4 w-4" /></Button></nav></footer>
             </CardContent>
           </Card>
         </TabsContent>
         {/* SNMP Tab */}
-        <TabsContent value="snmp" className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                  <Network className="h-4 w-4 text-muted-foreground" />
-                  SNMP yapılandırması
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="px-5">
-                <InfoRow label="SNMP sürümü" value={device.snmpVersion ? `SNMPv${device.snmpVersion.replace(/^v/i, '')}` : 'Belirtilmedi'} />
-                <InfoRow label="SNMP portu" value={`${device.snmpPort ?? 161}`} />
-                <div className="flex items-center justify-between py-2.5">
-                  <span className="text-sm text-muted-foreground">Kimlik bilgileri</span>
-                  <span className="font-mono text-sm font-semibold">Gizli tutulur</span>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                  <Cpu className="h-4 w-4 text-muted-foreground" />
-                  Veri toplama
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="px-5">
-                <InfoRow label="Toplama aralığı" value={`${device.pollingInterval ?? 300} saniye`} />
-                <InfoRow label="Veri toplama durumu" value={device.pollingEnabled ? 'Etkin' : 'Kapalı'} />
-                <InfoRow label="Son başarılı veri" value={formatDate(device.lastPolledAt)} />
-                <InfoRow label="Son verinin yaşı" value={formatRelative(device.lastPolledAt)} />
-                <InfoRow label="Sayfanın son yenilenmesi" value={loadedAt ? formatDate(new Date(loadedAt).toISOString()) : '—'} />
-              </CardContent>
-            </Card>
-          </div>
+        <TabsContent value="snmp" className="space-y-3">
+          <Card>
+            <CardHeader className={styles.compactCardHeader}><CardTitle className="flex items-center gap-2 text-sm"><Network size={15} className="text-primary" />SNMP yapılandırması</CardTitle></CardHeader>
+            <CardContent className={styles.compactCardContent}><dl className={styles.configGrid}>
+              <InfoRow label="NMS ID" value={`#${device.nmsDeviceId}`} />
+              <InfoRow label="SNMP sürümü" value={device.snmpVersion ? `SNMPv${device.snmpVersion.replace(/^v/i, '')}` : 'Belirtilmedi'} />
+              <InfoRow label="SNMP portu" value={`${device.snmpPort ?? 161}`} />
+              <InfoRow label="Veri toplama" value={device.pollingEnabled ? 'Etkin' : 'Kapalı'} />
+              <InfoRow label="Toplama aralığı" value={`${device.pollingInterval ?? 300} saniye`} />
+            </dl></CardContent>
+          </Card>
 
           {/* Health History */}
           {healthMetrics.length > 0 && (
             <Card>
-              <CardHeader className="pb-3">
+              <CardHeader className={styles.compactCardHeader}>
                 <CardTitle className="text-sm font-semibold flex items-center gap-2">
                   <Activity className="h-4 w-4 text-muted-foreground" />
                   Kaynak ölçüm geçmişi · {healthMetrics.length} kayıt
@@ -682,9 +586,8 @@ export default function ViewNmsDevicePage() {
         </TabsContent>
 
         {/* Backups Tab */}
-        <TabsContent value="backups" className="space-y-4">
+        <TabsContent value="backups" className="space-y-3">
           {/* Trigger buttons */}
-          <p className="text-sm leading-6 text-muted-foreground">Çalışan veya başlangıç yapılandırmasını yedekleyin; önceki yedekleri görüntüleyin ve indirin.</p>
           <div className="flex flex-wrap items-center gap-3">
             <Button size="sm" className="gap-2 bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => triggerBackup('Running Config')} aria-describedby="backup-readiness" disabled={triggering || !!activeBackupJob || backupsLoading || !backupReadiness?.ready || !backupsLoaded || !backupAccess.create || !backupAccess.running}>
               {triggering ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
@@ -736,12 +639,11 @@ export default function ViewNmsDevicePage() {
               <CardContent className="flex flex-col items-center justify-center py-12 text-muted-foreground">
                 <HardDrive className="h-10 w-10 opacity-30 mb-3" />
                 <p className="text-sm">Henüz yapılandırma yedeği yok</p>
-                <p className="text-xs mt-1 opacity-60">İlk yedekleme tamamlandığında kayıt burada görünür.</p>
               </CardContent>
             </Card>
           ) : (
             <Card>
-              <CardHeader className="pb-3">
+              <CardHeader className={styles.compactCardHeader}>
                 <CardTitle className="text-sm font-semibold flex items-center gap-2">
                   <HardDrive className="h-4 w-4 text-muted-foreground" />
                   Yedek geçmişi
@@ -760,7 +662,7 @@ export default function ViewNmsDevicePage() {
         </TabsContent>
 
         {/* Topology Tab */}
-        <TabsContent value="topology" className="space-y-4">
+        <TabsContent value="topology" className="space-y-3">
           {topologyLinks.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-12 text-muted-foreground">
@@ -770,7 +672,7 @@ export default function ViewNmsDevicePage() {
             </Card>
           ) : (
             <Card>
-              <CardHeader className="pb-3">
+              <CardHeader className={styles.compactCardHeader}>
                 <CardTitle className="text-sm font-semibold flex items-center gap-2">
                   <Link2 className="h-4 w-4 text-muted-foreground" />
                   LLDP / CDP komşuları

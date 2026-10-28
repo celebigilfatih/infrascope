@@ -3,7 +3,8 @@
 const assert = require('node:assert/strict');
 const { NextRequest, NextResponse } = require('next/server');
 const { moduleLoader } = require('./check-alarm-occurrences.cjs');
-const load = moduleLoader({});
+const profileDependency = { '@/nms_service/ssh/backup_profiles.json': require('../nms_service/ssh/backup_profiles.json') };
+const load = moduleLoader(profileDependency);
 const form = load('lib/nms/add-device-form.ts');
 const initial = { deviceId: 'fixture-device', managementIp: '192.0.2.10', snmpPort: 161, snmpVersion: 'v2c', snmpCommunity: 'fixture-community',
   snmpV3Username: '', snmpV3SecurityLevel: 'authPriv', snmpV3AuthProtocol: 'SHA', snmpV3AuthPassword: '', snmpV3PrivacyProtocol: 'AES', snmpV3PrivacyPassword: '',
@@ -29,6 +30,7 @@ for (const changes of [{ reachable: 'true' }, { outcome: 'no_response' }, { chec
 async function main() {
   let authorized = true, device = { id: initial.deviceId, nmsDeviceId: null }, finds = 0, upstreamCalls = [], upstreamStatus = 200, upstreamData = result, upstreamThrows = false;
   const route = moduleLoader({
+    ...profileDependency,
     'node:net': require('node:net'), 'next/server': { NextRequest, NextResponse },
     '@/lib/auth/api-permission': { authorizeApiRequest: async (_request, resource, action) => { assert.equal(resource, 'devices'); assert.equal(action, 'write'); return authorized ? { allowed: true } : { allowed: false, response: NextResponse.json({ error: 'Denied' }, { status: 403 }) }; } },
     '@/lib/prisma': { prisma: { device: { findUnique: async args => { finds++; assert.deepEqual(plain(args.select), { id: true, nmsDeviceId: true }); return device; } } } },

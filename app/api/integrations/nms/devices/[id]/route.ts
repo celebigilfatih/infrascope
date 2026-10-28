@@ -12,6 +12,7 @@ import {
   validateSnmpV3Secret,
 } from '@/lib/nms/snmp-config';
 import { protectNmsCredential } from '@/lib/security/integration-credentials';
+import { isBackupPlatform, supportsBackupType } from '@/lib/nms/backup-platform';
 
 interface Params { params: Promise<{ id: string }> }
 
@@ -46,6 +47,8 @@ export async function GET(_req: NextRequest, props: Params) {
         name: true,
         type: true,
         vendor: true,
+        operatingSystem: true,
+        backupPlatform: true,
         nmsDeviceId: true,
         managementIp: true,
         snmpVersion: true,
@@ -155,6 +158,8 @@ export async function PUT(req: NextRequest, props: Params) {
   try {
     const body = await req.json();
     const {
+      operatingSystem,
+      backupPlatform,
       managementIp,
       snmpCommunity,
       snmpVersion,
@@ -178,6 +183,8 @@ export async function PUT(req: NextRequest, props: Params) {
         id: true,
         name: true,
         nmsDeviceId: true,
+        backupPlatform: true,
+        sshUsername: true,
         snmpVersion: true,
         snmpCommunity: true,
         snmpV3Username: true,
@@ -241,6 +248,31 @@ export async function PUT(req: NextRequest, props: Params) {
     }
 
     const updateData: Record<string, unknown> = {};
+    if (backupPlatform !== undefined && backupPlatform !== null && !isBackupPlatform(backupPlatform)) {
+      return NextResponse.json({ error: 'Desteklenen bir yedekleme işletim sistemi seçin.' }, { status: 400 });
+    }
+    const effectiveSshUsername = sshUsername === undefined ? existing.sshUsername : typeof sshUsername === 'string' ? sshUsername.trim() : null;
+    const effectivePlatform = backupPlatform === undefined ? existing.backupPlatform : backupPlatform;
+    if ([sshUsername, sshPassword, backupPlatform].some(value => value !== undefined) && effectiveSshUsername && !isBackupPlatform(effectivePlatform)) {
+      return NextResponse.json({ error: 'SSH yedekleme için cihazın işletim sistemini seçin.' }, { status: 400 });
+    }
+    if (backupPlatform !== undefined && backupPlatform !== existing.backupPlatform) {
+      const policy = await prisma.nmsBackupPolicy.findUnique({ where: { nmsDeviceId: existing.nmsDeviceId } });
+      if (policy?.enabled && !supportsBackupType(isBackupPlatform(effectivePlatform) ? effectivePlatform : null, policy.backupType)) {
+        return NextResponse.json({ error: 'Seçilen işletim sistemi mevcut zamanlamanın yedek türünü desteklemiyor. Önce yedekleme zamanlamasını güncelleyin.' }, { status: 422 });
+      }
+    }
+    if (backupPlatform !== undefined) updateData.backupPlatform = backupPlatform;
+    if (operatingSystem !== undefined) {
+      if (operatingSystem !== null && typeof operatingSystem !== 'string') {
+        return NextResponse.json({ error: 'İşletim sistemi metin olmalıdır.' }, { status: 400 });
+      }
+      const normalizedOperatingSystem = operatingSystem?.trim() || null;
+      if (normalizedOperatingSystem && normalizedOperatingSystem.length > 255) {
+        return NextResponse.json({ error: 'İşletim sistemi en fazla 255 karakter olabilir.' }, { status: 400 });
+      }
+      updateData.operatingSystem = normalizedOperatingSystem;
+    }
     if (managementIp !== undefined) updateData.managementIp = managementIp.trim();
     const snmpConfigTouched = [
       snmpCommunity,
@@ -337,6 +369,8 @@ export async function PUT(req: NextRequest, props: Params) {
       select: {
         id: true,
         name: true,
+        operatingSystem: true,
+        backupPlatform: true,
         nmsDeviceId: true,
         managementIp: true,
         snmpVersion: true,

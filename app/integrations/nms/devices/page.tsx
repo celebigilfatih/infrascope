@@ -34,7 +34,7 @@ const tableColumns: { label: string; icon: LucideIcon }[] = [
 ];
 
 function deviceType(type: string | null) {
-  const labels: Record<string, string> = { SWITCH: 'Ağ anahtarı', ROUTER: 'Yönlendirici', FIREWALL: 'Güvenlik duvarı', SERVER: 'Sunucu', PHYSICAL_SERVER: 'Sunucu', VIRTUAL_HOST: 'Sanal sunucu', VIRTUAL_MACHINE: 'Sanal makine', STORAGE: 'Depolama', OTHER: 'Diğer' };
+  const labels: Record<string, string> = { SWITCH: 'Switch', ROUTER: 'Router', FIREWALL: 'Güvenlik duvarı', SERVER: 'Sunucu', PHYSICAL_SERVER: 'Sunucu', VIRTUAL_HOST: 'Sanal sunucu', VIRTUAL_MACHINE: 'Sanal makine', STORAGE: 'Depolama', OTHER: 'Diğer' };
   return type ? labels[type] || type.replace(/_/g, ' ') : 'Cihaz';
 }
 
@@ -139,7 +139,7 @@ export default function NmsDevicesPage() {
   function openRemoval(device: NmsDevice) { setRemoveError(null); setRemoveTarget(device); }
   const stats = [
     { label: 'Toplam cihaz', value: devices.length, status: '' },
-    { label: 'Yanıt kaydı güncel', value: counts.online, status: 'online' },
+    { label: 'Güncel', value: counts.online, status: 'online' },
     { label: 'Veri gecikmesi', value: counts.offline, status: 'offline' },
     { label: 'İzleme kapalı', value: counts.disabled, status: 'disabled' },
   ];

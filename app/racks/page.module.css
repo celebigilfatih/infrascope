@@ -78,3 +78,18 @@
   .rackListOpen { display: grid; }
 }
 @media (max-width: 380px) { .formGrid { grid-template-columns: minmax(0, 1fr); } }
+
+/* Compact creation and editing share the same fields and validation. */
+.editorDialog { max-width:28rem; padding:16px; gap:14px; }
+.editorTitle { font-size:16px; line-height:1.5; }
+.form { gap:12px; }
+.form label > input,.form label > select { height:36px; min-height:36px; margin-top:4px; font-size:13px; }
+.formGrid { gap:12px; }
+.editorActions { flex-direction:row; justify-content:flex-end; gap:8px; padding-top:12px; border-top:1px solid oklch(var(--border)); }
+.editorActions > button { height:36px; margin:0; }
+@media(max-width:639px) {
+ .editorDialog { padding:14px; }
+ .form label > input,.form label > select { height:44px; min-height:44px; font-size:16px; }
+ .editorActions > button { height:44px; }
+ .editorActions > button:last-child { flex:1; }
+}

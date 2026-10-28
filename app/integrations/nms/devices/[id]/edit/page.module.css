@@ -1,19 +1,14 @@
-/* Keep the existing shell's scroll container bounded on this route. */
-:global(html):has(.page) { overflow: hidden; }
-:global(main):has(> div > .page) { height: 100dvh; }
-:global(main):has(> div > .page) > div { min-height: 0; }
-
-.page { min-width: 0; }
-.form { display: grid; align-items: start; gap: 1.5rem; }
-.fields { min-width: 0; display: grid; gap: 1rem; border: 0; padding: 0; margin: 0; }
-.section { min-width: 0; border-radius: .75rem; box-shadow: none; scroll-margin-top: 1rem; }
-.summary { min-width: 0; display: grid; gap: .875rem; }
-.changeList { display: grid; gap: .875rem; }
-.fields input[aria-invalid="true"] { border-color: oklch(var(--destructive)); }
-.fields:disabled { opacity: .65; }
-
-@media (min-width: 1280px) {
-  .form { grid-template-columns: minmax(0, 1fr) 320px; }
-  .summary { position: sticky; top: 1.5rem; }
-  .changeList { max-height: 36dvh; overflow-y: auto; padding-right: .25rem; }
-}
+/* Form geometry is shared with the compact onboarding page. */
+.headingText { min-width:0; }
+.deviceName { margin-top:.15rem; color:oklch(var(--muted-foreground)); font-size:.8125rem; overflow-wrap:anywhere; }
+.credentialNote { margin-top:.75rem; color:oklch(var(--muted-foreground)); font-size:.75rem; line-height:1.5; }
+.warning { margin-top:.75rem; padding:.5rem .75rem; border:1px solid #f59e0b4d; border-radius:.375rem; color:oklch(var(--foreground)); background:oklch(var(--muted) / .5); font-size:.75rem; line-height:1.6; }
+.sshSection { border-bottom:1px solid oklch(var(--border)); }
+.sshContent { padding:0 1.25rem 1rem; }
+.sshContent > div:first-child { margin-top:0; }
+.hostKey { display:grid; gap:.75rem; margin-top:1rem; padding-top:.875rem; border-top:1px solid oklch(var(--border)); }
+.hostKeyHeader { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:.625rem; }
+.hostKeyHeader h3 { display:flex; align-items:center; gap:.4rem; font-size:.8125rem; font-weight:500; }
+.hostKeyHeader h3 svg { color:oklch(var(--primary)); }
+.fullWidth { grid-column:1/-1; }
+@media(max-width:639px) { .sshContent { padding:0 .875rem .875rem; } }

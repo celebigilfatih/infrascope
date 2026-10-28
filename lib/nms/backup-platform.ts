@@ -4,6 +4,10 @@ export const BACKUP_PROFILES = profileData;
 export type BackupPlatform = keyof typeof BACKUP_PROFILES;
 export type BackupType = 'Running Config' | 'Startup Config';
 
+export function isBackupPlatform(value: unknown): value is BackupPlatform {
+  return typeof value === 'string' && Object.prototype.hasOwnProperty.call(BACKUP_PROFILES, value);
+}
+
 export function resolveBackupPlatform(device: {
   backupPlatform?: string | null; vendor?: string | null; model?: string | null; operatingSystem?: string | null;
 }): BackupPlatform | null {

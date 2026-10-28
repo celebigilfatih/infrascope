@@ -2,6 +2,8 @@
 
 Hedef: Windows 11 + Docker Desktop Linux amd64. Müşteri verileri GitHub'a gönderilmez. `deploy/install-infrascope.ps1` ilk kurulumu; kurulan `update.ps1` zorunlu şifreli yedek ve devam kaydıyla güncellemeyi yürütür. Müşteri adımları: [INSTALL_WINDOWS.md](../../deploy/INSTALL_WINDOWS.md).
 
+Mevcut 1.0.9 kurulumunda iki komutla ajansız güncelleme ve yeni sürüm yayımlama için kısa, kopyalanabilir kılavuz: [InfraScope ajansız güncelleme](../../Kurulum/InfraScope-Ajansiz-Guncelleme-Kilavuzu.html).
+
 Müşteriye açık imajlar `ghcr.io/celebigilfatih/infrascope-customer` ve `ghcr.io/celebigilfatih/infrascope-customer-nms` paketleridir. Bunlar eski özel `infrascope` paketinden ayrıdır; eski paketlerin görünürlüğü değiştirilmez. İlk push'tan sonra yalnız yeni iki paketin görünürlüğünü Public yapın ve boş Docker kimlik yapılandırmasıyla digest üzerinden pull kontrolü gerçekleştirin.
 
 ## Yayıncı akışı

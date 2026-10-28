@@ -14,4 +14,12 @@
 .time { font-size: .6875rem; }
 .footer { display: flex; align-items: flex-start; gap: .375rem; border-top: 1px solid oklch(var(--border)); margin-top: 1rem; padding-top: .875rem; font-size: .6875rem; }
 .footer svg { flex-shrink: 0; margin-top: .125rem; }
+.compact { padding:.875rem 1.25rem; min-width:0; }
+.compactRow { display:flex; align-items:center; flex-wrap:wrap; gap:.625rem .875rem; }
+.compactRow > button { min-height:2.5rem; font-size:.8125rem; }
+.compactStatus { min-width:0; }
+.compactDetails { margin-top:.625rem; font-size:.75rem; color:oklch(var(--muted-foreground)); line-height:1.6; }
+.compactDetails summary { cursor:pointer; width:fit-content; }
+.compactDetails p { margin-top:.375rem; overflow-wrap:anywhere; }
+@media(max-width:639px) { .compact { padding:.875rem; } .compactRow > button { min-height:2.75rem; } }
 @media(max-width:639px) { .panel { padding: 1.25rem; } .action > button { width: 100%; } }

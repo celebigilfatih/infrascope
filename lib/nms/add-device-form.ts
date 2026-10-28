@@ -1,8 +1,10 @@
+import { isBackupPlatform } from '@/lib/nms/backup-platform';
+
 export interface AddNmsForm {
   deviceId: string; managementIp: string; snmpPort: number; snmpVersion: 'v2c' | 'v3';
   snmpCommunity: string; snmpV3Username: string; snmpV3SecurityLevel: 'authNoPriv' | 'authPriv';
   snmpV3AuthProtocol: string; snmpV3AuthPassword: string; snmpV3PrivacyProtocol: string; snmpV3PrivacyPassword: string;
-  pollingInterval: number; pollingEnabled: boolean; sshUsername: string; sshPassword: string; sshPort: number;
+  pollingInterval: number; pollingEnabled: boolean; sshUsername: string; sshPassword: string; sshPort: number; backupPlatform: string;
 }
 export function validManagementIp(value: string) {
   const ip = value.trim();
@@ -27,6 +29,7 @@ export function validateAddNmsForm(form: AddNmsForm, sshEnabled: boolean) {
     if (form.snmpV3SecurityLevel === 'authPriv' && (form.snmpV3PrivacyPassword.length < 8 || form.snmpV3PrivacyPassword.length > 255)) errors.snmpV3PrivacyPassword = '8–255 karakterlik şifreleme parolası girin.';
   }
   if (sshEnabled) {
+    if (!isBackupPlatform(form.backupPlatform)) errors.backupPlatform = 'SSH yedekleme için cihazın işletim sistemini seçin.';
     if (!form.sshUsername.trim()) errors.sshUsername = 'SSH kullanıcı adını girin.';
     if (!Number.isInteger(form.sshPort) || form.sshPort < 1 || form.sshPort > 65535) errors.sshPort = '1–65535 arasında bir port girin.';
   }
@@ -44,6 +47,7 @@ export function snmpTestPayload(form: AddNmsForm) {
 }
 export function addNmsPayload(form: AddNmsForm, sshEnabled: boolean) {
   return { ...snmpTestPayload(form), pollingInterval: form.pollingInterval, pollingEnabled: form.pollingEnabled,
+    ...(sshEnabled ? { backupPlatform: form.backupPlatform } : {}),
     sshUsername: sshEnabled ? form.sshUsername.trim() || null : null,
     sshPassword: sshEnabled ? form.sshPassword || null : null, sshPort: sshEnabled ? form.sshPort : 22 };
 }

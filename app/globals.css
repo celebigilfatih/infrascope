@@ -337,6 +337,14 @@
     @apply transition-all duration-200;
   }
 
+  :is(button, [role="button"], select, input[type="checkbox"], input[type="radio"]):not(:disabled):not([aria-disabled="true"]):not([data-disabled]) {
+    cursor: pointer;
+  }
+
+  :is(button, [role="button"], select, input[type="checkbox"], input[type="radio"]):is(:disabled, [aria-disabled="true"], [data-disabled]) {
+    cursor: default;
+  }
+
   * { @apply border-border; }
 
   @media (prefers-reduced-motion: reduce) {

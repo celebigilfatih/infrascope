@@ -9,11 +9,19 @@ const overrides={
  '@/lib/prisma':{prisma:{device:{findUnique:async()=>exists?{id:'fixture',nmsDeviceId:configured?123:null}:null}}},
  '@/lib/nms/internal-client':{nmsInternalFetch:async(url,init)=>{calls.push({url,init});if(upstream==='throw')throw new Error('fixture-secret-must-not-escape');return {ok:upstream!=='error',status:upstream==='error'?503:200,json:async()=>upstream==='malformed'?{reachable:true}:{...result,snmpCommunity:'must-not-escape'}}}},
 };
-function load(relative){if(cache.has(relative))return cache.get(relative).exports;const module={exports:{}};cache.set(relative,module);const code=ts.transpileModule(fs.readFileSync(path.join(root,relative),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText;
- const local=name=>overrides[name]||(name.startsWith('@/')?load(name.slice(2)+'.ts'):require(name));vm.runInThisContext(`(function(require,module,exports){${code}\n})`,{filename:relative})(local,module,module.exports);return module.exports;}
+function load(relative){if(cache.has(relative))return cache.get(relative).exports;const module={exports:{}};cache.set(relative,module);const code=ts.transpileModule(fs.readFileSync(path.join(root,relative),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020,esModuleInterop:true}}).outputText;
+ const local=name=>overrides[name]||(name.startsWith('@/')?(name.endsWith('.json')?require(path.join(root,name.slice(2))):load(name.slice(2)+'.ts')):require(name));vm.runInThisContext(`(function(require,module,exports){${code}\n})`,{filename:relative})(local,module,module.exports);return module.exports;}
 const view=load('lib/nms/add-device-form.ts');
 const form={deviceId:'fixture',managementIp:'192.0.2.10',snmpPort:161,snmpVersion:'v2c',snmpCommunity:'fixture-only-community',snmpV3Username:'test-user',snmpV3SecurityLevel:'authPriv',snmpV3AuthProtocol:'SHA',snmpV3AuthPassword:'fixture-auth-only',snmpV3PrivacyProtocol:'AES',snmpV3PrivacyPassword:'fixture-privacy-only',pollingInterval:300,pollingEnabled:true,sshUsername:'test-ssh',sshPassword:'fixture-ssh-only',sshPort:22};
 assert.deepEqual(view.validateAddNmsForm(form,false),{});
+assert.ok(view.validateAddNmsForm(form,true).backupPlatform, 'SSH must require an explicit backup platform');
+for(const backupPlatform of ['cisco_nxos','comware','fortios']) {
+ assert.deepEqual(view.validateAddNmsForm({...form,backupPlatform},true),{});
+ assert.equal(view.addNmsPayload({...form,backupPlatform},true).backupPlatform,backupPlatform);
+}
+for(const backupPlatform of ['automatic','__proto__','toString']) assert.ok(view.validateAddNmsForm({...form,backupPlatform},true).backupPlatform);
+assert.equal(view.addNmsPayload({...form,backupPlatform:'cisco_nxos'},false).backupPlatform,undefined);
+assert.equal(view.snmpTestPayload({...form,backupPlatform:'cisco_nxos'}).backupPlatform,undefined);
 for(const ip of ['192.0.2.10','2001:db8::10','::1'])assert.equal(view.validManagementIp(ip),true);
 for(const ip of ['','localhost','https://example.test','999.1.1.1','1.2.3','01.2.3.4','224.0.0.1','0.0.0.0','255.255.255.255','::','ff02::1'])assert.equal(view.validManagementIp(ip),false);
 assert.ok(view.validateAddNmsForm({...form,pollingInterval:86401},false).pollingInterval);
