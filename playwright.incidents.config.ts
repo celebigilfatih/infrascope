@@ -5,6 +5,9 @@ const database = process.env.DATABASE_URL ? new URL(process.env.DATABASE_URL) : 
 if (process.env.INFRASCOPE_INCIDENT_E2E !== '1' || database?.pathname !== '/infrascope_incident_e2e') {
   throw new Error('Run npm run test:incidents:regression; browser tests require the isolated infrascope_incident_e2e database.');
 }
+const batchId = process.env.INFRASCOPE_E2E_BATCH_ID;
+if (batchId && !/^[a-zA-Z0-9-]+$/.test(batchId)) throw new Error('Invalid regression batch id.');
+const artifactRoot = `output/incident-regression${batchId ? `/batches/${batchId}` : ''}`;
 
 export default defineConfig({
   testDir: './tests/incident-e2e',
@@ -14,8 +17,8 @@ export default defineConfig({
   forbidOnly: Boolean(process.env.CI),
   timeout: 180_000,
   expect: { timeout: 30_000 },
-  outputDir: 'output/incident-regression/results',
-  reporter: [['list'], ['html', { outputFolder: 'output/incident-regression/report', open: 'never' }]],
+  outputDir: `${artifactRoot}/results`,
+  reporter: [['list'], ['html', { outputFolder: `${artifactRoot}/report`, open: 'never' }], ['json', { outputFile: `${artifactRoot}/result.json` }]],
   use: {
     baseURL: 'http://127.0.0.1:3180',
     trace: 'retain-on-failure',

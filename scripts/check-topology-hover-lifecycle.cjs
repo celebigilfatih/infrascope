@@ -57,6 +57,7 @@ function mount(callback) {
     flush,
     update(callback) { onChange = callback; dirty = true; return flush(); },
     emit(name, event) { for (const listener of listeners.get(name) || []) listener(event); return flush(); },
+    popupTarget() { return Object.assign(new sandbox.Element(), { closest: selector => selector === '[role="tooltip"]' ? null : {} }); },
     unmount() { for (const slot of slots) slot?.cleanup?.(); },
   };
 }
@@ -98,5 +99,10 @@ const inner = mount(active => { device = nextHoveredConnection(device, 'same-id'
 main.act(hook => hook.enter(pointer)); inner.act(hook => hook.enter(pointer)); main.unmount();
 assert.equal(building, null); assert.equal(device, 'same-id', 'Main and building workspaces own independent hover state');
 inner.unmount(); assert.equal(device, null);
+let popupHover=false, consumed=false;
+const popup=mount(active=>{popupHover=active;});popup.act(hook=>hook.enter(pointer));assert.equal(popupHover,true);
+popup.emit('keydown',{key:'Escape',target:popup.popupTarget(),preventDefault(){consumed=true;},stopPropagation(){consumed=true;}});
+assert.equal(consumed,false,'A tooltip cannot consume Escape addressed to a popup/menu above the map');
+assert.equal(popupHover,false,'The background preview is also dismissed');popup.unmount();
 assert.equal(timers.size, 0, 'Unmount cancels pending leave timers');
 console.log('Tooltip hover lifecycle passed: rapid A/B/A transitions, delayed leave, tooltip transfer, keyboard focus, Escape, viewport gestures, callback replacement, filtering/unmount and workspace isolation. Actual hook; no live data changed.');

@@ -1,5 +1,7 @@
 'use client';
 
+import { topologyMenuAnchorMoved } from '@/lib/topology/menu-anchor';
+
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { MoreHorizontal, X } from 'lucide-react';
@@ -58,7 +60,12 @@ export function TopologyObjectMenu({ menu, name, actions }: { menu: ReturnType<t
     content.current.querySelector<HTMLButtonElement>('[role="menuitem"]:not(:disabled)')?.focus({ preventScroll: true });
     const outside = (event: PointerEvent) => { if (event.target instanceof Node && !content.current?.contains(event.target)) { restoreFocus.current = false; menu.close(); } };
     const escape = (event: globalThis.KeyboardEvent) => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); menu.close(); } };
-    const scroll = (event: Event) => { if (!(event.target instanceof Node) || !content.current?.contains(event.target)) menu.close(); };
+    const anchorBounds = state.origin?.getBoundingClientRect() || null;
+    const scroll = (event: Event) => {
+      if (event.target instanceof Node && content.current?.contains(event.target)) return;
+      const current = state.origin?.isConnected ? state.origin.getBoundingClientRect() : null;
+      if (topologyMenuAnchorMoved(anchorBounds, current)) menu.close();
+    };
     document.addEventListener('pointerdown', outside, true); document.addEventListener('keydown', escape, true); window.addEventListener('scroll', scroll, true);
     return () => {
       document.removeEventListener('pointerdown', outside, true); document.removeEventListener('keydown', escape, true); window.removeEventListener('scroll', scroll, true);

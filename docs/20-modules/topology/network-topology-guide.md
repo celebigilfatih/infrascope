@@ -2,15 +2,25 @@
 
 Bu belge, infraScope projesindeki modern ağ topolojisi görselleştirme sisteminin özelliklerini ve kullanımını açıklar.
 
+## Geniş harita ve sade araçlar
+
+- Ana görünüm bina ikonları ve gerçek mantıksal ağ gruplarıdır. Sürekli açık yan paneller veya görsel bölüm kartları yoktur.
+- Küçük aramadan bina/cihaz seçerek odaklanın. **Filtreler** açılır panelindedir; aktif filtre sayısı düğmede görünür.
+- Harita sağ üstündeki **Harita rehberi**, fiziksel/mantıksal çizgilerin ve bilinmeyen durumun anlamını, bağlantı türü filtrelerini ve etiket görünürlüğünü içerir. Bilinmeyen durum arıza anlamına gelmez.
+- **Diğer seçenekler** bina/ağ grubu listesi, bağlantı yönetimi, konumsuz cihazlar ve gelişmiş görünümü açar. Düzenlerken **Otomatik düzenle** önizleme sunar; uygulamadan kayıt yapılmaz. Sabitlenen binalar korunur; uygulamadan sonra **Geri al** kullanılabilir.
+- İlk açılış en az %65 ölçekte olur; tüm ağ daha küçük bir ölçek gerektirirse en fazla bağlantısı olan bina merkezlenir. Tüm ağı görmek için **Ekrana sığdır** seçin. Bilinçli kamera tercihiniz bu oturumda korunur.
+- Önce yeni düz görünümün kayıtlı konumları, yoksa eski bina konumları, yoksa otomatik konumlar kullanılır. Eski bölüm belgeleri ve yerleşimler silinmez. Açma, arama ve filtreleme ortak kayıt oluşturmaz.
+- Hata veya bağlantı kaybında taslak görünür kalır; **Yeniden dene** aynı isteği tekrarlar. Eşzamanlı düzenlemede **Güncel görünümü incele** ve **Sunucu görünümüne geç** kullanılır; önceki taslak ayrıntıları bu sayfa açıkken korunur.
+
 ## Doğrudan düzenleme ve tam ekran
 
 - Ana harita kayıtlı bina ve ağ grubu konumlarını açılışta gösterir. Kayıtsız nesneler otomatik yerleştirilir; Görüntüleme/Düzenleme geçişi konumları değiştirmez.
-- Üst çubuktaki **Düzenleme** ile ikonları taşıyın. Yerleşim otomatik kaydedilir ve mevcut ortak kayıt kapsamını korur. Kayıt durumu görünür; hatada konumlar bu sayfada kalır, **Yeniden dene** ile kaydedilir.
+- Üst çubuktaki **Haritayı düzenle** ile ikonları taşıyın. Yerleşim otomatik kaydedilir ve mevcut ortak kayıt kapsamını korur. Kayıt durumu görünür; hatada konumlar bu sayfada kalır, **Yeniden dene** ile kaydedilir.
 - **Bağlantı ekle**, ana haritada iki bina; bina içi görünümde iki cihaz ve gerçek portlarını seçtirir. Noktadan sürükleme de aynı formu açar. Boş port bulunamazsa envanterde portları tamamlayın veya NMS portlarını eşitleyin. Formdaki hata seçimleri silmez. Bağlantı oluşturma cihazın ağ yapılandırmasını değiştirmez; envantere bağlantı kaydı ekler.
 - Yeni bağlantının varsayılan durumu **Bilinmiyor** olur. Aynı içeriğin tekrar gönderilmesi mevcut kaydı döndürür; farklı içerik veya port çakışması yeni bir kayıt oluşturmaz.
 - **Ekrana sığdır** çerçeve ikonu taşır ve yalnız kamerayı değiştirir. **Okunabilir ölçek**, isimleri incelemek için daha yakın bir görünüm sağlar; tüm nesnelerin aynı anda görünmesi gerekmez.
 - **Tam ekran** dört yöne açılma ikonu ile gerçek tarayıcı tam ekranını açar. **Tam ekrandan çık** veya Esc ile çıkılır; tarayıcı desteklemiyorsa/izin vermezse açıklamayla sayfa içi büyütme kullanılır. Bağlantı formları ve menüler tam ekranda da kullanılabilir.
-- İnceleme modunda bina tek tıklamayla açılır. Düzenleme modunda tek tıklama kaynak binayı seçer; binayı açmak için çift tıklayın veya nesne menüsünü kullanın. **Harita seçenekleri → Ayrıntılı görünüm**, mevcut gelişmiş filtre/komşuluk araçlarını korur.
+- Görüntülemede bina tıklaması bina içini açar. Düzenlemede tıklama küçük işlem kutusunu açar: **Cihazları aç**, **Buradan bağlantı ekle**, **Konumu sabitle**. **Düzenlemeyi bitir** inceleme moduna döner. **Diğer seçenekler → Ayrıntılı görünüm**, mevcut gelişmiş filtre/komşuluk araçlarını ve eski yerleşimi korur.
 
 Regresyon: `test:topology-building` içine oluşturma/tekrar deneme ve tam ekran yaşam döngüsü kontrolleri dahildir. `tests/incident-e2e/topology-editing.spec.ts`, izole incident test veritabanında aynı haritada taşıma, hata/401/403, yanıt kaybı, arama odağı, tam ekran ve formları kontrol eder. Gerçek müşteri kayıtlarına test yazılmaz.
 

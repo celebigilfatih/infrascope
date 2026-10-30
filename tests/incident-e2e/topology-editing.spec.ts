@@ -1,6 +1,7 @@
 import { expect, type Page } from '@playwright/test';
 import { test, signIn } from './fixtures';
 import fixture from '../../scripts/fixtures/topology-workspace.cjs';
+import type { TopologyPresentation } from '../../lib/topology/presentation';
 
 const buildings = [{ id: 'edit-hub', name: 'TEST · Merkez bina', organizationId: 'test-org', floors: [] }, { id: 'edit-peer', name: 'TEST · Uzak bina', organizationId: 'test-org', floors: [] }];
 const devices = ['one', 'two'].map((id, index) => ({ ...fixture.devices[0], id: `edit-${id}`, name: `TEST · Cihaz ${index + 1}`, rack: null, buildingId: buildings[0].id, managementIp: `192.0.2.${index + 1}` }));
@@ -9,11 +10,17 @@ async function mockEditing(page: Page, failure: Failure = null, deviceLink = fal
   const positions: Record<string, { x: number; y: number }> = { 'building-edit-hub': { x: 100, y: 100 }, 'building-edit-peer': { x: 400, y: 200 } };
   const writes: string[] = [], records: Record<string, unknown>[] = [];
   let attempts = 0, layoutFailure = false;
+  let presentation: TopologyPresentation | null = null, revision = 0;
   await page.route('**/api/**', async route => {
     const request = route.request(), url = new URL(request.url()), pathname = url.pathname;
     if (pathname.startsWith('/api/auth/')) return route.continue();
     if (request.method() !== 'GET') {
       const body = request.postDataJSON(); writes.push(`${request.method()} ${pathname}`);
+      if (pathname === '/api/network/topology-presentation') {
+        if (layoutFailure) { layoutFailure=false;return route.fulfill({status:503,json:{success:false,error:'Görünüm kaydedilemedi.'}}); }
+        presentation=body.document;revision++;
+        return route.fulfill({json:{success:true,data:{document:presentation,revision,canEdit:true}}});
+      }
       if (pathname === '/api/network/building-layout') {
         if (layoutFailure) { layoutFailure = false; return route.fulfill({ status: 503, json: { success: false, error: 'Yerleşim kaydedilemedi.' } }); }
         positions[body.nodeId] = body.position;
@@ -33,6 +40,7 @@ async function mockEditing(page: Page, failure: Failure = null, deviceLink = fal
       '/api/services': [], '/api/network-connections': [], '/api/building-connections': { items: deviceLink ? [] : records },
       '/api/network/topology-status': { devices: [] }, '/api/network/groups': { canManage: true, items: [] },
       '/api/network/building-layout': { positions, canEdit: true },
+      '/api/network/topology-presentation': { document:presentation, revision, canEdit:true },
       '/api/network/building-devices': { devices, connections: deviceLink ? records : [], canManage: true },
       '/api/network/building-device-layout': { positions: {}, canEdit: true },
       '/api/network/building-device-connections': { ports: {
@@ -55,7 +63,7 @@ test('topology editing: same canvas, autosave failure/retry and reload retain po
   const node = map.locator('[data-id="building-edit-hub"]');
   await expect(node).toBeVisible(); await expect(page.getByRole('button', { name: 'Bağlantı ekle', exact: true })).toHaveCount(0);
   expect(state.writes).toEqual([]);
-  await page.getByRole('button', { name: 'Düzenleme', exact: true }).click();
+  await page.getByRole('button', { name: 'Haritayı düzenle', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Bağlantı ekle', exact: true })).toBeVisible();
   state.failLayout();
   const box = (await node.boundingBox())!;
@@ -65,21 +73,22 @@ test('topology editing: same canvas, autosave failure/retry and reload retain po
   await expect(page.getByRole('dialog')).toHaveCount(0);
   const moved = await node.getAttribute('style');
   await page.getByRole('button', { name: 'Yeniden dene', exact: true }).click();
-  await expect(page.getByText('Yerleşim kaydedildi', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Görüntüleme', exact: true }).click();
+  await expect(page.getByText('Görünüm kaydedildi', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Düzenlemeyi bitir', exact: true }).click();
   await expect(node).toHaveAttribute('style', moved!);
   await page.reload(); await expect(node).toHaveAttribute('style', moved!);
-  await expect(page.getByRole('button', { name: 'Düzenleme', exact: true })).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.getByRole('button', { name: 'Haritayı düzenle', exact: true })).toHaveAttribute('aria-pressed', 'false');
 });
 
 for (const failure of [503, 401, 403, 'lost'] as const) {
   test(`topology editing: building create ${failure} keeps draft and retries safely`, async ({ page, fixtures }) => {
     const state = await mockEditing(page, failure); await signIn(page, fixtures); await page.goto('/network');
-    await page.getByRole('button', { name: 'Düzenleme', exact: true }).click();
+    await page.getByRole('button', { name: 'Haritayı düzenle', exact: true }).click();
     await page.getByRole('button', { name: 'Bağlantı ekle', exact: true }).click();
     const form = page.getByRole('dialog', { name: 'Bina Bağlantısı Ekle' });
     await form.locator('#sourceBuilding').click(); await page.getByRole('option', { name: buildings[0].name, exact: true }).click();
     await form.locator('#destBuilding').click(); await page.getByRole('option', { name: buildings[1].name, exact: true }).click();
+    await form.getByText('Ek ayrıntılar',{exact:true}).click();
     await form.locator('#notes').fill('TEST · bağlantı taslağı');
     const save = form.getByRole('button', { name: 'Bağlantı Oluştur', exact: true });
     await save.click(); await expect(save).toBeEnabled();
@@ -94,7 +103,7 @@ for (const failure of [503, 401, 403, 'lost'] as const) {
     const state = await mockEditing(page, failure, true); await signIn(page, fixtures); await page.goto('/network');
     await page.getByRole('region', { name: 'Topoloji haritası', exact: true }).locator('[data-id="building-edit-hub"]').click();
     const workspace = page.getByRole('dialog', { name: 'TEST · Merkez bina' });
-    await workspace.getByRole('button', { name: 'Düzenleme', exact: true }).click();
+    await workspace.getByRole('button', { name: 'Haritayı düzenle', exact: true }).click();
     await workspace.getByRole('button', { name: 'Bağlantı ekle', exact: true }).click();
     const form = page.getByRole('dialog', { name: 'Cihazları bağla' });
     await form.locator('#device-link-source').selectOption(devices[0].id); await form.locator('#device-link-target').selectOption(devices[1].id);
@@ -112,7 +121,7 @@ test('topology editing: fresh camera retains search focus after viewport capture
   const state = await mockEditing(page); state.positions['building-edit-peer'] = { x: 4000, y: 200 };
   await signIn(page, fixtures); await page.goto('/network');
   const camera = page.getByRole('region', { name: 'Topoloji haritası', exact: true }).locator('.react-flow__viewport');
-  await expect.poll(() => camera.evaluate(element => new DOMMatrix(getComputedStyle(element).transform).a)).toBeLessThan(.5);
+  await expect.poll(() => camera.evaluate(element => new DOMMatrix(getComputedStyle(element).transform).a)).toBeGreaterThanOrEqual(.6);
   await page.getByRole('combobox', { name: 'Topolojide bina veya cihaz ara' }).fill(buildings[0].name);
   await page.getByRole('option', { name: `${buildings[0].name} Bina`, exact: true }).click();
   await expect.poll(() => camera.evaluate(element => new DOMMatrix(getComputedStyle(element).transform).a)).toBeGreaterThan(.85);
@@ -125,7 +134,7 @@ test('topology editing: real fullscreen and portalled forms, denied fallback and
   await mockEditing(page); await signIn(page, fixtures); await page.goto('/network');
   await page.getByRole('button', { name: 'Haritayı tam ekran yap', exact: true }).click();
   await expect.poll(() => page.evaluate(() => document.fullscreenElement === document.documentElement)).toBe(true);
-  await page.getByRole('button', { name: 'Düzenleme', exact: true }).click(); await page.getByRole('button', { name: 'Bağlantı ekle', exact: true }).click();
+  await page.getByRole('button', { name: 'Haritayı düzenle', exact: true }).click(); await page.getByRole('button', { name: 'Bağlantı ekle', exact: true }).click();
   const form = page.getByRole('dialog', { name: 'Bina Bağlantısı Ekle' }); await expect(form).toBeVisible();
   await form.getByRole('button', { name: 'Pencereyi kapat', exact: true }).click();
   await page.getByRole('button', { name: 'Tam ekrandan çık', exact: true }).click();

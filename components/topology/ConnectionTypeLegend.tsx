@@ -41,7 +41,7 @@ export function ConnectionTypeLegend({ label, options, hidden, onToggle, onReset
       </label>
     </div>
     <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
-      <span role="status" aria-live="polite">{visibleCount} / {totalCount} bağlantı gösteriliyor{totalCount > 0 && visibleCount === 0 ? '. Seçili türlere uygun bağlantı yok.' : '.'}</span>
+      <span role="status" aria-live="polite">{visibleCount} / {totalCount} bağlantı filtre kapsamında{totalCount > 0 && visibleCount === 0 ? '. Seçili türlere uygun bağlantı yok.' : '.'}</span>
       <span>Türlere tıklayarak gösterin veya gizleyin. Düz: açık · Kesikli: diğer durumlar.</span>
     </div>
   </div>;

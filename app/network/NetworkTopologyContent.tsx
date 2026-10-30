@@ -25,6 +25,7 @@ import { toPng } from 'html-to-image';
 import { BuildingNode, buildingNodeStatus } from '../../components/topology/BuildingNode';
 import { BuildingDeviceWorkspace } from '@/components/topology/BuildingDeviceWorkspace';
 import { BuildingMapOverview } from '@/components/topology/BuildingMapOverview';
+import { useTopologyPresentation } from '@/components/topology/useTopologyPresentation';
 import { NetworkGroupNode } from '@/components/topology/NetworkGroupNode';
 import { NetworkGroupFocus } from '@/components/topology/NetworkGroupFocus';
 import { NetworkGroupWorkspace } from '@/components/topology/NetworkGroupWorkspace';
@@ -268,6 +269,8 @@ const connectionStyles: Record<string, { color: string; width: number; label: st
 
 const NetworkTopologyPage = () => {
   const router = useRouter();
+  // Keep shared drafts and the serialized queue alive across group/detail map navigation.
+  const topologyPresentation = useTopologyPresentation();
   const networkGroups = useNetworkGroups();
   const toggleGroup = networkGroups.toggle;
   const collapsedGroupBuildingIds = useMemo(() => new Set(networkGroups.groups.filter(group => !networkGroups.expanded.has(group.id)).flatMap(group => group.members.map(member => member.buildingId))), [networkGroups.groups, networkGroups.expanded]);
@@ -2577,13 +2580,20 @@ const NetworkTopologyPage = () => {
                   captureRef={networkGroupCaptureRef}
                   expandedMap={expandedMap} onExpand={() => toggleMapFullscreen()}
                 /> : balancedBuildingMap ? <BuildingMapOverview
+                  presentation={topologyPresentation}
+                  onEditingChange={setEditingTopology} legacyLayoutError={!buildingLayoutReady&&layoutStatus==='error'?layoutError:undefined} retryLegacyLayout={()=>void loadBuildingLayout()}
                   onOpenNode={handleNodeClick}
+                  onAddConnection={node => {
+                    setBuildingConnectionToEdit(null);
+                    setBuildingConnectionEndpoints({ sourceBuildingId: node.data.buildingId, destBuildingId: '' });
+                    setShowBuildingConnectionModal(true);
+                  }}
                   onDetailed={() => { setBuildingMapStyle('saved'); releaseViewport(); setLayoutRevision(value => value + 1); }}
                   nodes={networkMap.nodes} edges={networkMap.edges} buildings={buildings} links={buildingConnections} groups={networkGroups.groups}
                   unassignedId={UNASSIGNED_BUILDING_ID} unassignedCount={devices.filter(isUnassignedDevice).length}
                   searchItems={topologySearchItems} onSearch={focusSearchResult} focusNodeId={searchFocusNodeId} focusRevision={searchFocusRevision}
                   returnGroupId={returnToGroupRef.current} captureRef={balancedMapCaptureRef}
-                  onNodeClick={node => { if (editingTopology && viewMode === 'building') { setSelectedBuildingNodeId(node.id); return; } handleNodeClick(node); }} onEdgeClick={handleEdgeClick}
+                  onNodeClick={node => { if (node.type === 'building') { setSelectedBuildingNodeId(node.id); return; } handleNodeClick(node); }} onEdgeClick={handleEdgeClick}
                   onNodeMenu={(event, node) => { const target = resolveMenuObject('node', node.id); if (target) openObjectMenu(target, event); }}
                   onEdgeMenu={(event, edge) => { const target = resolveMenuObject('edge', edge.id); if (target) openObjectMenu(target, event); }}
                   interaction={<TopologyInteractionMode editing={editingTopology} onChange={setEditingTopology} canEdit={buildingLayoutReady && canEditBuildingLayout} disabled={loading || layoutResetting || layoutStatus === 'saving'} label="Topoloji etkileşim modu" />}
@@ -2598,7 +2608,7 @@ const NetworkTopologyPage = () => {
                     {layoutStatus === 'error' && <Button size="sm" variant="outline" onClick={() => { if (!buildingLayoutReady) void loadBuildingLayout(); else if (layoutErrorAction === 'reset') void resetBuildingLayout(); else pendingLayoutPositions.current.forEach((position, id) => saveBuildingPosition(id, position)); }}>Yeniden dene</Button>}
                     {editingTopology && <Button size="sm" variant="ghost" className="ml-auto text-xs" disabled={!canMoveNodes || layoutStatus === 'saving'} onClick={() => void resetBuildingLayout()}>Yerleşimi sıfırla</Button>}
                   </div>}
-                  ready={buildingLayoutReady && navigationReady} editing={editingTopology} canMove={canMoveNodes} canConnect={canConnectBuildings}
+                  totalDevices={devices.length} ready={buildingLayoutReady && navigationReady} editing={editingTopology} canMove={canMoveNodes} canConnect={canConnectBuildings}
                   savedPositions={Object.fromEntries(networkMap.nodes.flatMap(node => { const position = nodePositionOverrides[`building:${node.id}`] || (node.type === 'networkGroup' ? node.data.group.positions.building : undefined); return position ? [[node.id, position]] : []; }))}
                   onNodesChange={handleNodesChange}
                   onDragStop={node => { if (!canMoveNodes) return; if (node.type === 'networkGroup') networkGroups.savePosition(node.data.group.id, viewMode, node.position); else if (node.type === 'building') saveBuildingPosition(node.id, node.position); }}
@@ -3200,6 +3210,7 @@ const BuildingConnectionModal: React.FC<BuildingConnectionModalProps> = ({
               </div>
             </div>
 
+            <details className="md:col-span-2 rounded-lg border p-4"><summary className="cursor-pointer text-sm font-medium">Ek ayrıntılar</summary><div className="mt-4 grid grid-cols-1 gap-6 md:grid-cols-2">
             {/* Bandwidth & Distance */}
             <div className="space-y-2">
               <Label htmlFor="bandwidth" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
@@ -3324,6 +3335,7 @@ const BuildingConnectionModal: React.FC<BuildingConnectionModalProps> = ({
                 className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
               />
             </div>
+          </div></details>
           </div>
 
           {duplicate && <p role="alert" className="mt-4 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">Bu iki bina arasında seçilen türde bir bağlantı zaten var. Mevcut kaydı “Bağlantıları yönet” üzerinden düzenleyebilirsiniz.</p>}

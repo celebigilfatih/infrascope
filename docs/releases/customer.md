@@ -1,6 +1,8 @@
 ## Windows + Docker Desktop müşteri sürümü
 
-Ağ topolojisinde Görüntüle/Düzenle kontrolleri, otomatik yerleşim kaydı, doğrudan bina/cihaz bağlantısı ekleme ve gerçek tam ekran akışı geliştirildi. NMS, cihaz envanteri ve oda ekranındaki tamamlanan iyileştirmeler aynı ana sürümde birleştirildi.
+Ağ topolojisi, eski bina ikonları ve geniş harita alanı korunarak sadeleştirildi. Küçük arama, açılır filtreler ve harita içindeki Harita rehberi ile bağlantılar daha kolay incelenir. Haritayı düzenle, Bağlantı ekle ve Düzenlemeyi bitir işlemleri doğrudan erişilebilir; seçili binadan bağlantı eklenebilir ve konum sabitlenebilir.
+
+Otomatik yerleşim önizlemesi, geri alma, okunabilir ilk kamera ve otomatik kayıt/hata durumları geliştirildi. Mevcut bina, cihaz, port, bağlantı, kayıtlı konum ve görsel bölüm belgeleri korunur. Cihaz menüsünün gecikmiş kaydırmada kapanması ve rehberin Escape tuşuyla kapanmasını engelleyen arka plan balonu düzeltildi. Uzun regresyon koşuları, senaryo kaybetmeden sunucuyu yenileyen gruplarla çalıştırılır.
 
 Windows çevrimiçi kurulumuna IP üzerinden HTTPS, public CA doğrulama ve eski HTTP adresinden sabit hedefe otomatik yönlendirme eklendi. Güncelleme mevcut harici HTTPS kurulumunu ve CA kimliğini korur; şifreli kurtarma yedeği yönetilen CA/proxy durumunu da içerir. Kesilen güncelleme aynı özgün yedekle devam eder.
 

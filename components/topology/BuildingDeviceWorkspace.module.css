@@ -13,6 +13,10 @@
 .graph :global(.react-flow) { overflow: clip !important; }
 .mapOverlays { position: absolute; left: .875rem; right: .875rem; top: .875rem; z-index: 5; display: flex; flex-direction: column; gap: .5rem; pointer-events: none; }
 .mapToolbar { display: flex; flex-wrap: wrap; align-items: center; gap: .375rem .625rem; padding: .5rem; border: 1px solid oklch(var(--border)); border-radius: .875rem; background: oklch(var(--card) / .96); box-shadow: 0 3px 14px #00000008; backdrop-filter: blur(8px); pointer-events: auto; }
+.compactSearch { flex: 0 1 16rem; min-width: 10rem; }
+.compactSearch input { height: 2.25rem; font-size: .75rem; }
+.toolbarSpacer { flex: 1; }
+.guideSlot { align-self: flex-end; pointer-events: auto; }
 .mapFeedback { display: flex; flex-direction: column; align-items: flex-start; gap: .5rem; pointer-events: none; }
 .mapControls { display: flex; flex-wrap: wrap; align-items: center; max-width: 100%; overflow: hidden; border: 1px solid oklch(var(--border)); border-radius: .5rem; background: oklch(var(--card)); box-shadow: 0 2px 8px #00000008; }
 .graph :global(.react-flow__panel.bottom.left) { max-width: calc(100% - 1.5rem); }

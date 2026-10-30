@@ -60,6 +60,10 @@ export function useConnectionTooltip(onOpenChange?: (open: boolean) => void) {
     const hideOnScroll = (event: Event) => { if (!(event.target instanceof Element && event.target.closest('[role="tooltip"]'))) hide(); };
     const escape = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
+      // A preview behind an open menu/popover must not steal that layer's Escape.
+      if (event.target instanceof Element && event.target.closest('[data-radix-popper-content-wrapper], [role="menu"]') && !event.target.closest('[role="tooltip"]')) {
+        dismissed.current = true; hide(); return;
+      }
       event.preventDefault(); event.stopPropagation(); dismissed.current = true; hide();
     };
     window.addEventListener('keydown', escape, true);

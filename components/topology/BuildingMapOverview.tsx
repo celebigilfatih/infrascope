@@ -19,12 +19,16 @@ import { NodeTooltip } from './NodeTooltip';
 import { useConnectionTooltip } from './ConnectionTooltip';
 import styles from './BuildingMapOverview.module.css';
 import { MapViewActions } from './MapViewActions';
+import { BuildingPresentationWorkspace } from './BuildingPresentationWorkspace';
+import type { useTopologyPresentation } from './useTopologyPresentation';
 
-interface Props {
+export interface BuildingMapOverviewProps {
+  presentation: ReturnType<typeof useTopologyPresentation>;
   nodes: Node[]; edges: Edge[]; buildings: { id: string; name: string }[]; links: BuildingEndpoints[]; groups: NetworkGroup[];
   unassignedId: string; unassignedCount: number; searchItems: TopologySearchItem[];
   onSearch: (item: TopologySearchItem) => void; onNodeClick: (node: Node) => void; onEdgeClick: (event: React.MouseEvent, edge: Edge) => void;
   onOpenNode: (node: Node) => void;
+  onAddConnection?: (node: Node) => void;
   onDetailed: () => void;
   onNodeMenu: (event: React.MouseEvent, node: Node) => void; onEdgeMenu: (event: React.MouseEvent, edge: Edge) => void;
   onUnassigned: () => void; onExpand: () => void; expanded: boolean; onClearFocus: () => void;
@@ -35,12 +39,17 @@ interface Props {
   viewport: Viewport | null; onViewport: (viewport: Viewport) => void;
   filters: ReactNode; actions: ReactNode; connectionFilters: ReactNode; error?: string;
   focusNodeId: string | null; focusRevision: number; returnGroupId: string | null;
-  captureRef: MutableRefObject<HTMLDivElement | null>;
+  captureRef: MutableRefObject<HTMLDivElement | null>; totalDevices?: number;
+  onEditingChange?: (editing:boolean)=>void; legacyLayoutError?: string; retryLegacyLayout?:()=>void;
 }
+type Props = BuildingMapOverviewProps;
 const nodeTypes = { building: BuildingNode, networkGroup: NetworkGroupNode };
 const edgeTypes = { buildingOverview: BuildingOverviewEdge };
 
 export function BuildingMapOverview(props: Props) {
+  return <BuildingPresentationWorkspace {...props} />;
+}
+export function LegacyBuildingMapOverview(props: Props) {
   return <ReactFlowProvider><Overview {...props} /></ReactFlowProvider>;
 }
 function Overview(props: Props) {

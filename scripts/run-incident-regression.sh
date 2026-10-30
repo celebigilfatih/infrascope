@@ -93,6 +93,8 @@ npx eslint app/network/NetworkTopologyContent.tsx components/topology/TopologyOb
 npm run test:topology-workspace
 npx eslint tests/incident-e2e/topology-overview.spec.ts tests/incident-e2e/topology-navigation.ts components/topology/BuildingMapOverview.tsx components/topology/BuildingOverviewEdge.tsx lib/topology/building-overview.ts --max-warnings=0
 npm run test:topology-contracts
+npx eslint lib/topology/menu-anchor.ts scripts/check-topology-menu-anchor.cjs components/topology/TopologyMapGuide.tsx components/topology/TopologyInteractionMode.tsx lib/topology/flat-overview.ts scripts/check-topology-flat-overview.cjs components/topology/BuildingPresentationWorkspace.tsx components/topology/useTopologyPresentation.ts lib/topology/presentation.ts lib/topology/presentation-navigation.ts app/api/network/topology-presentation/route.ts scripts/check-topology-presentation.cjs scripts/check-topology-presentation-api.cjs scripts/check-topology-presentation-navigation.cjs tests/incident-e2e/topology-presentation.spec.ts tests/incident-e2e/topology-presentation-api.spec.ts --max-warnings=0
+npm run test:topology-presentation
 npx eslint components/topology/MapViewActions.tsx components/topology/useMapFullscreen.ts components/topology/BuildingDeviceConnectionForm.tsx components/topology/DeviceMapOverview.tsx components/topology/NetworkGroupFocus.tsx lib/topology/fullscreen.ts app/api/building-connections/route.ts app/api/network/building-device-connections/route.ts scripts/check-topology-create.cjs scripts/check-topology-fullscreen.cjs tests/incident-e2e/topology-editing.spec.ts --max-warnings=0
 npm run test:topology-building
 INFRASCOPE_BUILDING_DB_TEST=1 npm run test:building-devices:db
@@ -102,8 +104,10 @@ npm run test:snapshot-workspace-collector
 npm run test:incident-detail
 npm run test:incident-center
 npm run test:incident-collaboration
+npx eslint scripts/run-incident-browser-batches.cjs scripts/check-incident-browser-batches.cjs playwright.incidents.config.ts --max-warnings=0
+node scripts/check-incident-browser-batches.cjs
 if [ -n "${INFRASCOPE_E2E_SHARD:-}" ]; then
-  npm run test:incidents:e2e -- --shard="$INFRASCOPE_E2E_SHARD"
+  node scripts/run-incident-browser-batches.cjs --shard="$INFRASCOPE_E2E_SHARD"
 else
-  npm run test:incidents:e2e
+  node scripts/run-incident-browser-batches.cjs
 fi

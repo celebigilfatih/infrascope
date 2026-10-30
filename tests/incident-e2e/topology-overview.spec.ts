@@ -22,7 +22,6 @@ const physicalLinks = [
   connectionType: 'FIBER_SINGLE_MODE', status: 'UP', bandwidth: '10 Gbps', recordingMethod: 'MANUAL',
 }));
 const visiblePhysicalIds = physicalLinks.filter(link => link.id !== 'hub-remote').map(link => `building-conn-${link.id}`);
-const crossLinkId = 'building-conn-north-south';
 
 async function mockOverview(page: Page) {
   const writes: string[] = [], errors: string[] = [], edgeWarnings: string[] = [];
@@ -39,6 +38,7 @@ async function mockOverview(page: Page) {
     '/api/building-connections': { items: physicalLinks },
     '/api/network/topology-status': { devices: [] },
     '/api/network/building-layout': { positions: {}, canEdit: false },
+    '/api/network/topology-presentation': { document:null, revision:0, canEdit:false },
     '/api/network/groups': { canManage: false, items: [{
       id: 'overview-vpn', name: 'TEST · VPN grubu', kind: 'VPN', organizationId: 'test-org',
       sourceDeviceId: devices[0].id, sourcePortId: null,
@@ -127,20 +127,20 @@ for (const viewport of [{ name: 'desktop', width: 1440, height: 1000 }, { name: 
   });
 }
 
-test('building overview: physical/cross/parallel links render by default, visibility survives fullscreen and reload restores all', async ({ page, fixtures }, info) => {
+test('building overview: flat map preserves cross/parallel links, fullscreen and reload', async ({ page, fixtures }, info) => {
   const source = await mockOverview(page); await signIn(page, fixtures); await page.goto('/network');
-  const hide = () => page.getByRole('button', { name: 'Çapraz bağlantıları gizle', exact: true });
-  const show = () => page.getByRole('button', { name: '1 çapraz bağlantı gizli · Göster', exact: true });
-  await expect(hide()).toBeVisible(); await expectPhysicalPaths(map(page), visiblePhysicalIds);
-  await hide().click(); await expect(show()).toBeVisible();
-  const withoutCross = visiblePhysicalIds.filter(id => id !== crossLinkId);
-  await expectPhysicalPaths(map(page), withoutCross);
-  await expand(page).click(); await expect(restore(page)).toBeVisible(); await expect(show()).toBeVisible();
-  await expectPhysicalPaths(map(page), withoutCross);
-  await show().click(); await expect(hide()).toBeVisible(); await expectPhysicalPaths(map(page), visiblePhysicalIds);
+  await expectPhysicalPaths(map(page), visiblePhysicalIds);
+  await expand(page).click(); await expect(restore(page)).toBeVisible();
+  await expectPhysicalPaths(map(page), visiblePhysicalIds);
   await restore(page).click(); await expect(expand(page)).toBeVisible(); await expectPhysicalPaths(map(page), visiblePhysicalIds);
-  await hide().click(); await expectPhysicalPaths(map(page), withoutCross);
-  await page.reload(); await expect(hide()).toBeVisible(); await expect(expand(page)).toBeVisible();
+  await page.reload(); await expect(expand(page)).toBeVisible();
   await expectPhysicalPaths(map(page), visiblePhysicalIds); await capture(page, info, 'all-connections-after-reload');
   expect(source.writes).toEqual([]); expect(source.errors).toEqual([]); expect(source.edgeWarnings).toEqual([]);
+});
+
+test('building overview: returning from a real group restores keyboard focus', async ({page,fixtures}) => {
+  const state=await mockOverview(page);await signIn(page,fixtures);await page.goto('/network');
+  const open=page.getByRole('button',{name:'TEST · VPN grubu: Grubu aç',exact:true});
+  await open.press('Enter');await expect(page.getByRole('region',{name:'TEST · VPN grubu grup topolojisi'})).toBeVisible();
+  await page.getByRole('button',{name:'Tüm ağa dön',exact:true}).click();await expect(open).toBeFocused();expect(state.writes).toEqual([]);
 });

@@ -92,6 +92,7 @@
     "test:alarm-occurrences:db": "node scripts/check-alarm-occurrences-db.cjs",
     "test:dashboard": "node scripts/check-dashboard.cjs",
     "test:topology-contracts": "node scripts/check-topology-contracts.mjs",
+    "test:topology-presentation": "node scripts/check-topology-presentation.cjs && node scripts/check-topology-presentation-api.cjs && node scripts/check-topology-presentation-navigation.cjs && node scripts/check-topology-flat-overview.cjs",
     "test:topology-workspace": "node scripts/check-topology-workspace.cjs",
     "test:device-overview": "node scripts/check-device-overview.cjs && node scripts/check-device-overview-viewport.cjs",
     "test:network-groups": "node scripts/check-network-groups.cjs",
@@ -130,7 +131,7 @@
     "test:nms-device-ids:db": "node scripts/check-nms-device-ids-db.cjs",
     "test:nms-backup-worker": "python3 -m nms_service.tests.run_backups",
     "test:nms-connection-test": "node scripts/check-nms-connection-test.cjs",
-    "test:topology-building": "node scripts/check-topology-create.cjs && node scripts/check-topology-fullscreen.cjs && node scripts/check-building-connections.cjs && node scripts/check-building-device-auto-layout.cjs && node scripts/check-building-device-connections.cjs && node scripts/check-building-device-layout-queue.cjs && node scripts/check-building-device-layout.cjs && node scripts/check-building-device-routing.cjs && node scripts/check-building-devices.cjs && node scripts/check-building-graph.cjs && node scripts/check-building-layout.cjs && node scripts/check-building-routing.cjs && node scripts/check-topology-connection-emphasis.cjs && node scripts/check-topology-filter-persistence.cjs && node scripts/check-topology-hover-lifecycle.cjs && node scripts/check-topology-navigation-persistence.cjs && node scripts/check-topology-search.cjs && node scripts/check-building-overview.cjs",
+    "test:topology-building": "node scripts/check-topology-create.cjs && node scripts/check-topology-fullscreen.cjs && node scripts/check-building-connections.cjs && node scripts/check-building-device-auto-layout.cjs && node scripts/check-building-device-connections.cjs && node scripts/check-building-device-layout-queue.cjs && node scripts/check-building-device-layout.cjs && node scripts/check-building-device-routing.cjs && node scripts/check-building-devices.cjs && node scripts/check-building-graph.cjs && node scripts/check-building-layout.cjs && node scripts/check-building-routing.cjs && node scripts/check-topology-connection-emphasis.cjs && node scripts/check-topology-filter-persistence.cjs && node scripts/check-topology-hover-lifecycle.cjs && node scripts/check-topology-navigation-persistence.cjs && node scripts/check-topology-search.cjs && node scripts/check-building-overview.cjs && node scripts/check-topology-menu-anchor.cjs",
     "test:building-devices:db": "node scripts/check-building-devices-db.cjs",
     "test:navigation-progress": "node scripts/check-navigation-progress.cjs",
     "test:services-workspace": "node scripts/check-services-workspace.cjs"

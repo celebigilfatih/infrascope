@@ -1,0 +1,22 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- Test pure map policy without a database. */
+const assert = require('node:assert/strict'), fs = require('node:fs'), path = require('node:path'), ts = require('typescript'), Module = require('node:module');
+const filename = path.resolve('lib/topology/flat-overview.ts');
+assert.ok(fs.existsSync(filename), 'The flat map needs an explicit non-destructive layout/camera policy');
+const loaded = new Module(filename, module);
+loaded._compile(ts.transpileModule(fs.readFileSync(filename, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, filename);
+const { flatPresentation, flatPositions, readableMapViewport } = loaded.exports;
+const doc = { version: 1, sections: [{ id: 'saved', name: 'Keep me', buildingIds: ['one'] }], backboneIds: [], positions: { summary: { 'building-one': { x: 99, y: 99 } }, all: { 'building-two': { x: 200, y: 200 } } }, pinned: { summary: ['building-one'] } };
+const before = JSON.stringify(doc);
+assert.equal(flatPresentation(doc), doc, 'Existing sections/scopes are preserved verbatim');
+assert.deepEqual(flatPresentation(null), { version: 1, sections: [], backboneIds: [], positions: {}, pinned: {} });
+const nodes = [{ id: 'building-one', position: { x: 0, y: 0 }, type: 'building' }, { id: 'building-two', position: { x: 1000, y: 1000 }, type: 'building' }];
+assert.deepEqual(flatPositions(nodes, { 'building-one': { x: 20, y: 30 }, 'building-two': { x: 50, y: 50 } }, doc), { 'building-one': { x: 20, y: 30 }, 'building-two': { x: 200, y: 200 } });
+const graph = [...nodes, { id: 'building-hub', position: { x: 10000, y: -10000 }, type: 'building' }];
+const edges = [{ source: 'building-hub', target: 'building-one' }, { source: 'building-hub', target: 'building-two' }];
+const camera = readableMapViewport(graph, edges, 900, 500);
+assert.equal(camera.zoom, .65);
+assert.equal(camera.x + (10000 + 80) * camera.zoom, 450, 'Hub is centered at readable scale');
+assert.equal(camera.y + (-10000 + 65) * camera.zoom, 250);
+assert.ok(readableMapViewport(graph, edges, 900, 500, true).zoom < .65, 'Only explicit fit may zoom below readable scale');
+assert.equal(JSON.stringify(doc), before, 'View policies never mutate stored data');
+console.log('Flat overview passed: saved scope preservation, position precedence, readable hub camera and explicit fit.');
