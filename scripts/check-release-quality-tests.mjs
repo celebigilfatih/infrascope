@@ -103,8 +103,9 @@ test('incident CI runs all eight isolated shards and retains a distinct report f
   const compose = yaml.load(fs.readFileSync(path.join(root, 'compose.incident-tests.yml'), 'utf8'));
   assert.equal(compose.services.tests.environment.INFRASCOPE_E2E_SHARD, '${INFRASCOPE_E2E_SHARD:-}');
   const runner = fs.readFileSync(path.join(root, 'scripts/run-incident-regression.sh'), 'utf8');
-  assert.match(runner, /npm run test:incidents:e2e -- --shard="\$INFRASCOPE_E2E_SHARD"/);
-  assert.match(runner, /else\s+ npm run test:incidents:e2e/);
+  assert.match(runner, /node scripts\/run-incident-browser-batches\.cjs --shard="\$INFRASCOPE_E2E_SHARD"/);
+  assert.match(runner, /else\s+ node scripts\/run-incident-browser-batches\.cjs\s+fi/);
+  assert.match(runner, /node scripts\/check-incident-browser-batches\.cjs/);
 });
 
 test('preverified customer images are promoted without rebuilding and every asset uses the selected digests',()=>{
