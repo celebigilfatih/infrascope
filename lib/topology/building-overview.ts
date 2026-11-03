@@ -1,5 +1,6 @@
 import type { Edge, Node } from 'reactflow';
 import { routeBuildingOverview } from './building-routing';
+import { connectionState } from './workspace';
 import { compactBuildingPositions } from './building-overview-layout';
 
 interface Building { id: string; name: string }
@@ -22,27 +23,25 @@ export function balancedBuildingOverview(nodes: Node[], edges: Edge[], buildings
   const centerId = hub ? `building-${hub.id}` : undefined;
   const positions: Record<string, { x: number; y: number }> = {};
   if (hub) positions[centerId!] = { x: 340, y: 270 };
-  const otherLinkPeers = new Set(links.filter(link => link.connectionType === 'OTHER' && (link.sourceBuildingId === hub?.id || link.destBuildingId === hub?.id)).map(link => link.sourceBuildingId === hub?.id ? link.destBuildingId : link.sourceBuildingId));
-  const regularPeers = catalog.filter(building => building.id !== hub?.id && !otherLinkPeers.has(building.id));
-  const otherPeers = catalog.filter(building => building.id !== hub?.id && otherLinkPeers.has(building.id));
-  // Leave an east-facing corridor for the logical network group relation.
-  const peers = [...regularPeers.slice(0, 3), ...otherPeers, ...regularPeers.slice(3)];
-  for (let start = 0, ring = 1; start < peers.length; start += 10, ring++) {
-    const slice = peers.slice(start, start + 10);
-    const members = slice.length === 9 ? [...slice.slice(0, 6), slice[8], ...slice.slice(6, 8)] : slice;
+  const peers = catalog.filter(building => building.id !== hub?.id);
+  const direct = hub ? neighbors.get(hub.id)! : new Set<string>();
+  const rows = [peers.filter(building => direct.has(building.id)), peers.filter(building => !direct.has(building.id))];
+  let row = 0;
+  for (const tier of rows) for (let start = 0; start < tier.length; start += 5) {
+    const members = tier.slice(start, start + 5);
+    row += 1;
     members.forEach((building, index) => {
-      const angle = members.length === 9 ? [-90, -50, -20, 35, 70, 105, 145, 185, 225][index] * Math.PI / 180 : -Math.PI / 2 + index * 2 * Math.PI / members.length;
-      positions[`building-${building.id}`] = { x: Math.round(340 + Math.cos(angle) * 310 * ring), y: Math.round(270 + Math.sin(angle) * 270 * ring) };
+      positions[`building-${building.id}`] = { x: 340 + (index - (members.length - 1) / 2) * 216, y: 270 + row * 192 };
     });
   }
   if (catalog.length > 12) Object.assign(positions, compactBuildingPositions(catalog.map(building => `building-${building.id}`), links.map(link => ({ source: `building-${link.sourceBuildingId}`, target: `building-${link.destBuildingId}` })), centerId));
   const physicalRight = Math.max(500, ...Object.values(positions).map(position => position.x + 160));
   const groupNodes = nodes.filter(node => node.type === 'networkGroup');
-  groupNodes.forEach((node, index) => { positions[node.id] = { x: physicalRight + 105, y: 195 + index * 280 }; });
+  groupNodes.forEach((node, index) => { positions[node.id] = { x: physicalRight + 105, y: 270 + index * 170 }; });
   for (const node of nodes) { const saved = savedPositions[node.id]; if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)) positions[node.id] = { x: saved.x, y: saved.y }; }
   const result = nodes.filter(node => node.data?.buildingId !== unassignedId).map(node => ({
     ...node, position: positions[node.id] || node.position, draggable: false, connectable: false,
-    data: { ...node.data, overview: true, roundOverview: node.type === 'networkGroup', overviewCenter: node.id === centerId },
+    data: { ...node.data, overview: true, backboneOverview: node.type === 'networkGroup', overviewCenter: node.id === centerId },
   }));
   const byId = new Map(result.map(node => [node.id, node]));
   const hubNeighbors = new Set([...(hub ? neighbors.get(hub.id)! : [])].map(id => `building-${id}`));
@@ -60,11 +59,15 @@ export function balancedBuildingOverview(nodes: Node[], edges: Edge[], buildings
     const from = horizontal ? dx >= 0 ? 'right' : 'left' : dy >= 0 ? 'bottom' : 'top';
     const to = horizontal ? dx >= 0 ? 'left' : 'right' : dy >= 0 ? 'top' : 'bottom';
     const logical = !!edge.data?.isNetworkGroupRelation;
+    const state = connectionState(edge.data?.buildingConnection?.status);
+    const color = state.key === 'up' ? edge.data?.strokeColor || state.color : state.color;
     return { ...edge, type: logical ? 'smoothstep' : 'buildingOverview', animated: false, label: logical ? undefined : edge.label,
       sourceHandle: a.type === 'networkGroup' ? null : `${from}-source`, targetHandle: b.type === 'networkGroup' ? null : `${to}-source`,
       data: { ...edge.data, routeBlocked: blocked.has(edge.id), buildingRoute: routing.routes[edge.id], labelBlocked: false, autoHideLabel: true, overviewCrossLink: crossIds.has(edge.id),
-        strokeWidth: 2, strokeColor: edge.data?.strokeColor || '#64748b' },
-      style: logical ? { ...edge.style, strokeWidth: 1.8 } : edge.style,
+        strokeWidth: 2,
+        strokeDasharray: logical ? '6 5' : '0',
+        strokeColor: color, textColor: color },
+      style: logical ? { ...edge.style, strokeWidth: 1.8, strokeDasharray: '6 5' } : edge.style,
     };
   });
   return { nodes: result, edges: displayed, centerId, hiddenCrossLinks, crossLinks, positions, blockedIds: routing.blockedIds };

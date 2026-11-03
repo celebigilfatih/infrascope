@@ -14,9 +14,11 @@ assert.deepEqual(flatPositions(nodes, { 'building-one': { x: 20, y: 30 }, 'build
 const graph = [...nodes, { id: 'building-hub', position: { x: 10000, y: -10000 }, type: 'building' }];
 const edges = [{ source: 'building-hub', target: 'building-one' }, { source: 'building-hub', target: 'building-two' }];
 const camera = readableMapViewport(graph, edges, 900, 500);
-assert.equal(camera.zoom, .65);
+assert.equal(camera.zoom, .75);
 assert.equal(camera.x + (10000 + 80) * camera.zoom, 450, 'Hub is centered at readable scale');
 assert.equal(camera.y + (-10000 + 65) * camera.zoom, 250);
-assert.ok(readableMapViewport(graph, edges, 900, 500, true).zoom < .65, 'Only explicit fit may zoom below readable scale');
+const backboneCamera = readableMapViewport(graph, edges, 600, 500, false, 'building-hub');
+assert.equal(backboneCamera.y + (-10000 + 65) * backboneCamera.zoom, 170, 'Small maps leave room below the backbone for access rows');
+assert.ok(readableMapViewport(graph, edges, 900, 500, true).zoom < .75, 'Only explicit fit may zoom below readable scale');
 assert.equal(JSON.stringify(doc), before, 'View policies never mutate stored data');
 console.log('Flat overview passed: saved scope preservation, position precedence, readable hub camera and explicit fit.');

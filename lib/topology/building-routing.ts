@@ -6,7 +6,8 @@ export const BUILDING_ROUTING_GEOMETRY: RoutingGeometry = { width: 128, height: 
 // Overview keeps the same icons but has a wider two-line name and larger hub.
 export const BUILDING_OVERVIEW_GEOMETRY: RoutingGeometry = { width: 160, height: 132, iconLeft: 52, iconRight: 108, iconCenterX: 80, iconCenterY: 28 };
 export const BUILDING_OVERVIEW_HUB_GEOMETRY: RoutingGeometry = { width: 160, height: 148, iconLeft: 44, iconRight: 116, iconCenterX: 80, iconCenterY: 36 };
-const GROUP_GEOMETRY: RoutingGeometry = { width: 232, height: 232, iconLeft: 0, iconRight: 232, iconCenterX: 116, iconCenterY: 116 };
+const GROUP_OVERVIEW_HEIGHT = 132;
+const GROUP_GEOMETRY: RoutingGeometry = { width: 232, height: GROUP_OVERVIEW_HEIGHT, iconLeft: 0, iconRight: 232, iconCenterX: 116, iconCenterY: GROUP_OVERVIEW_HEIGHT / 2 };
 
 export function routeBuildingOverview(nodes: { id: string; type?: string; position: BuildingPosition }[], connections: { id: string; source: string; target: string }[], centerId?: string) {
   const positions = Object.fromEntries(nodes.map(node => [node.id, node.position]));

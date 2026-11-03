@@ -18,9 +18,10 @@ edges.push({id:'logical',source:'building-hub',target:'network-group-g',data:{is
 const original=JSON.stringify({nodes,edges,links,groups});
 const graph=project(nodes,edges,buildings,links,groups,false,'none');
 assert.equal(graph.centerId,'building-hub');assert.equal(graph.nodes.length,11);assert.equal(graph.crossLinks.length,2);assert.equal(graph.hiddenCrossLinks.length,2);assert.equal(graph.edges.length,10);
-assert.ok(!graph.nodes.some(n=>n.id==='building-none'));assert.equal(graph.nodes.find(n=>n.type==='networkGroup').data.roundOverview,true);
+assert.ok(!graph.nodes.some(n=>n.id==='building-none'));assert.equal(graph.nodes.find(n=>n.type==='networkGroup').data.backboneOverview,true);
 assert.ok(graph.edges.every(e=>e.data.routeBlocked===false));assert.ok(graph.nodes.every(n=>!n.connectable&&!n.draggable));
 assert.equal(JSON.stringify({nodes,edges,links,groups}),original,'A display preset cannot mutate saved positions or physical links');
+assert.ok(graph.nodes.filter(n=>n.type==='building' && n.id!==graph.centerId).every(n=>n.position.y>graph.positions[graph.centerId].y),'Spoke rows sit below the backbone');
 const all=project(nodes,edges,buildings,links,groups,true,'none');assert.equal(all.edges.length,edges.length);assert.equal(all.hiddenCrossLinks.length,0);assert.deepEqual(all.nodes.map(n=>n.position),graph.nodes.map(n=>n.position));
 const focused=project(nodes,edges,buildings,links,groups,false,'none','building-b0');assert.equal(focused.hiddenCrossLinks.length,1);assert.ok(focused.edges.some(e=>e.id==='e9'));
 const filtered=project(nodes.filter(n=>n.id!=='building-b1'),edges.filter(e=>e.target!=='building-b1'),buildings,links,groups,false,'none');
@@ -38,4 +39,4 @@ const custom=project(nodes,edges,buildings,links,groups,true,'none',null,saved);
 assert.equal(custom.nodes.find(n=>n.id==='building-hub').position.x,987,'Overview must honor persisted manual layout on initial load');
 assert.equal(custom.nodes.find(n=>n.id==='building-hub').position.y,654);
 assert.deepEqual(project(nodes,edges,buildings,links,groups,true,'none',null,saved).nodes.map(n=>n.position),custom.nodes.map(n=>n.position),'Mode changes never change node positions');
-console.log('Building overview passed: balanced hub, saved positions, real endpoints, explicit cross-link visibility, filtered position stability, disconnected/parallel paths, circular groups and immutable inventory/layout. Synthetic records only.');
+console.log('Building overview passed: balanced hub, saved positions, real endpoints, explicit cross-link visibility, filtered position stability, disconnected/parallel paths, compact group cards and immutable inventory/layout. Synthetic records only.');

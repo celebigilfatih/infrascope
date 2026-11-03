@@ -75,9 +75,10 @@ test('flat map: 32 buildings/33 real paths, readable opening, compact tools and 
   expect(state.writes).toEqual([]);expect(state.document).toBeNull();
 });
 
-test('flat map: view click opens the building, edit selection offers direct connection actions',async({page,fixtures})=>{
+test('flat map: view selection opens devices on demand, edit selection offers direct connection actions',async({page,fixtures})=>{
   const state=await visualFixture(page,true);const before=structuredClone(state.document);await signIn(page,fixtures);await page.goto('/network');
   const node=await focusFirst(page);await node.click({position:{x:80,y:28}});
+  await page.getByRole('group',{name:'Seçili bina işlemleri'}).getByRole('button',{name:'Cihazları aç',exact:true}).click();
   const dialog=page.getByRole('dialog',{name:'TEST · Bina 00',exact:true});await expect(dialog).toBeVisible();
   await expect(dialog.getByText('Bu binada henüz cihaz bağlantısı kaydı yok.',{exact:true})).toBeVisible();
   await dialog.getByRole('button',{name:'Bina harita rehberi',exact:true}).click();
@@ -105,7 +106,7 @@ for(const failure of [503,401,403,'lost'] as const){
     if(failure!=='lost')expect(state.document!.positions.all).toBeUndefined();
     await page.getByRole('button',{name:'Yeniden dene',exact:true}).click();await expect(page.getByText('Görünüm kaydedildi',{exact:true})).toBeVisible();
     expect(state.revision).toBe(2);expect(state.document!.sections).toEqual(oldSections);
-    await page.reload();await expect(map(page).locator('[data-id="building-visual-0"]')).toHaveAttribute('style',position!);
+    await page.reload();await editFirst(page);await expect(map(page).locator('[data-id="building-visual-0"]')).toHaveAttribute('style',position!);
     expect(state.writes).toEqual(['/api/network/topology-presentation','/api/network/topology-presentation']);
   });
 }
@@ -133,7 +134,7 @@ test('flat map: stale revision preserves the draft and requires explicit server 
 test('flat map: deliberate zoom survives reload and ignores the old summary camera',async({page,fixtures})=>{
   await visualFixture(page,true);await signIn(page,fixtures);await page.goto('/network');await expect(map(page)).toHaveAttribute('aria-busy','false');await focusFirst(page);
   await page.getByRole('button',{name:'Haritayı uzaklaştır',exact:true}).click();await page.getByRole('button',{name:'Haritayı uzaklaştır',exact:true}).click();
-  await expect.poll(()=>page.evaluate(()=>JSON.parse(sessionStorage.getItem('infrascope:topology:flat-camera:v1')||'null')?.zoom)).toBeCloseTo(.7638889,5);
+  await expect.poll(()=>page.evaluate(()=>JSON.parse(sessionStorage.getItem('infrascope:topology:backbone-camera:v1')||'null')?.zoom)).toBeCloseTo(.7638889,5);
   const camera=await map(page).locator('.react-flow__viewport').getAttribute('style');await page.reload();await expect(map(page).locator('[data-id="building-visual-0"]')).toHaveClass(/selected/);await expect(map(page).locator('.react-flow__viewport')).toHaveAttribute('style',camera!);
 });
 
@@ -156,7 +157,7 @@ test('flat map: legacy layout outage does not block presentation editing',async(
 test('flat map: failed draft survives detailed view navigation',async({page,fixtures})=>{
   const state=await visualFixture(page,true,503);await signIn(page,fixtures);await page.goto('/network');await editFirst(page);await page.getByRole('button',{name:'Konumu sabitle',exact:true}).click();
   await expect(page.getByRole('region',{name:'Dengeli bina topolojisi'}).getByRole('alert')).toContainText('korunuyor');
-  await options(page);await page.getByRole('button',{name:'Ayrıntılı görünüm',exact:true}).click();await page.getByRole('button',{name:'Dengeli görünüme dön',exact:true}).click();
+  await options(page);await page.getByRole('button',{name:'Kayıtlı yerleşim',exact:true}).click();await page.getByRole('button',{name:'Dengeli görünüme dön',exact:true}).click();
   await expect(page.getByRole('region',{name:'Dengeli bina topolojisi'}).getByRole('alert')).toContainText('korunuyor');
   await page.getByRole('button',{name:'Yeniden dene',exact:true}).click();await expect(page.getByText('Görünüm kaydedildi',{exact:true})).toBeVisible();expect(state.document!.pinned.all).toContain('building-visual-0');expect(state.revision).toBe(2);
 });
@@ -165,7 +166,7 @@ test('flat map: queued drags finish across detailed map navigation',async({page,
   const state=await visualFixture(page,true);await signIn(page,fixtures);await page.goto('/network');const node=await editFirst(page);state.hold();
   const drag=async()=>{const b=(await node.boundingBox())!;await page.mouse.move(b.x+b.width/2,b.y+26);await page.mouse.down();await page.mouse.move(b.x+b.width/2+55,b.y+61,{steps:6});await page.mouse.up();};
   try { await drag();await expect.poll(()=>state.writes.length).toBe(1);await drag();
-    await options(page);await page.getByRole('button',{name:'Ayrıntılı görünüm',exact:true}).click();state.release();await expect.poll(()=>state.revision).toBe(3);
+    await options(page);await page.getByRole('button',{name:'Kayıtlı yerleşim',exact:true}).click();state.release();await expect.poll(()=>state.revision).toBe(3);
     await page.getByRole('button',{name:'Dengeli görünüme dön',exact:true}).click();await expect(page.getByText('Görünüm kaydedildi',{exact:true})).toBeVisible();expect(state.writes).toHaveLength(2);
   } finally { state.release(); }
 });

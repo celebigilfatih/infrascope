@@ -1,11 +1,14 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import ReactFlow, { Background, ConnectionMode, Panel, ReactFlowProvider, useNodesInitialized, useReactFlow, useViewport, type Node, type Viewport } from 'reactflow';
+import ReactFlow, { Background, ConnectionMode, Panel, ReactFlowProvider, useNodesInitialized, useReactFlow, useViewport, type Edge, type Node, type Viewport } from 'reactflow';
 import { Building2, Ellipsis, Eye, List, Minus, Pin, Plus, Undo2, WandSparkles, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { connectionState } from '@/lib/topology/workspace';
+import { BUILDING_CONNECTION_TYPES } from '@/lib/topology/building-connection-options';
+import type { BuildingConnection } from '@/types';
 import type { PresentationPoint } from '@/lib/topology/presentation';
 import { arrangeBuildingOverview } from '@/lib/topology/building-overview-layout';
 import { flatPositions, flatPresentation, readableMapViewport } from '@/lib/topology/flat-overview';
@@ -24,12 +27,12 @@ import styles from './BuildingPresentationWorkspace.module.css';
 const nodeTypes = { building: BuildingNode, networkGroup: NetworkGroupNode };
 const edgeTypes = { buildingOverview: BuildingOverviewEdge, smoothstep: BuildingOverviewEdge };
 // Do not import the former summary camera or the legacy all-network camera.
-const cameraKey = 'infrascope:topology:flat-camera:v1';
-function storedCamera(): Viewport | null {
-  try { const v = JSON.parse(sessionStorage.getItem(cameraKey) || 'null'); return v && Number.isFinite(v.x) && Number.isFinite(v.y) && Number.isFinite(v.zoom) && v.zoom >= .05 && v.zoom <= 2 ? v : null; } catch { return null; }
+const cameraKey = 'infrascope:topology:backbone-camera:v1';
+function storedCamera(editing: boolean): Viewport | null {
+  try { const v = JSON.parse(sessionStorage.getItem(editing ? cameraKey + ":saved" : cameraKey) || 'null'); return v && Number.isFinite(v.x) && Number.isFinite(v.y) && Number.isFinite(v.zoom) && v.zoom >= .05 && v.zoom <= 2 ? v : null; } catch { return null; }
 }
-function rememberCamera(viewport: Viewport) {
-  try { sessionStorage.setItem(cameraKey, JSON.stringify(viewport)); } catch { /* The current camera remains usable if storage is blocked. */ }
+function rememberCamera(viewport: Viewport, editing: boolean) {
+  try { sessionStorage.setItem(editing ? cameraKey + ":saved" : cameraKey, JSON.stringify(viewport)); } catch { /* The current camera remains usable if storage is blocked. */ }
 }
 export function BuildingPresentationWorkspace(props: BuildingMapOverviewProps) {
   return <ReactFlowProvider><Workspace {...props} /></ReactFlowProvider>;
@@ -42,9 +45,10 @@ function Workspace(props: BuildingMapOverviewProps) {
   const { x: cameraX, y: cameraY, zoom: cameraZoom } = useViewport();
   const initialized = useNodesInitialized(), canvas = useRef<HTMLDivElement>(null);
   const [flowReady, setFlowReady] = useState(false), [cameraReady, setCameraReady] = useState(false);
-  const cameraApplied = useRef(false), dimensions = useRef<Record<string, { width: number; height: number }>>({});
+  const cameraMode = useRef<boolean | null>(null), dimensions = useRef<Record<string, { width: number; height: number }>>({});
   const returnedGroup = useRef<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null), [hoverId, setHoverId] = useState<string | null>(null);
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [optionsOpen, setOptionsOpen] = useState(false), [listOpen, setListOpen] = useState(false);
   const [showCross, setShowCross] = useState(true), [guideOpen, setGuideOpen] = useState(false);
   const [dragPositions, setDragPositions] = useState<Record<string, PresentationPoint>>({});
@@ -53,37 +57,39 @@ function Workspace(props: BuildingMapOverviewProps) {
   const canEdit = props.editing && persistence.ready && persistence.canEdit && !persistence.error;
   const base = useMemo(() => balancedBuildingOverview(props.nodes, props.edges, props.buildings, props.links, props.groups, true, props.unassignedId, null, {}, false), [props.nodes, props.edges, props.buildings, props.links, props.groups, props.unassignedId]);
   const saved = useMemo(() => flatPositions(base.nodes, props.savedPositions, document), [base.nodes, props.savedPositions, document]);
-  const points = useMemo(() => ({ ...saved, ...dragPositions, ...preview }), [saved, dragPositions, preview]);
+  const points = useMemo(() => props.editing ? { ...saved, ...dragPositions, ...preview } : {}, [props.editing, saved, dragPositions, preview]);
   // Arbitrary saved coordinates can make a full obstacle search expensive. Keep
   // dragging immediate and calculate one validated set of routes on release.
   const graph = useMemo(() => balancedBuildingOverview(props.nodes, props.edges, props.buildings, props.links, props.groups, showCross, props.unassignedId, props.focusNodeId, points, !dragging), [props.nodes, props.edges, props.buildings, props.links, props.groups, showCross, props.unassignedId, props.focusNodeId, points, dragging]);
+  const selectedEdge = graph.edges.find(edge => edge.id === selectedEdgeId);
+  const link: BuildingConnection | undefined = selectedEdge?.data?.buildingConnection;
   const selected = graph.nodes.find(node => node.id === selectedId);
   const selectedBuilding = selected?.type === 'building' ? selected : undefined;
-  const adjacent = directlyConnectedNodeIds(graph.edges, hoverId || selectedId);
+  const adjacent = directlyConnectedNodeIds(graph.edges, selectedId || hoverId);
   const pinned = document.pinned.all || [], isPinned = !!selectedId && pinned.includes(selectedId);
-  const nodes = graph.nodes.map(node => ({ ...node, ...dimensions.current[node.id], selected: node.id === selectedId, draggable: canEdit && !preview && !pinned.includes(node.id), connectable: canEdit && props.canConnect && node.type === 'building', data: { ...node.data, hoverActive: !!hoverId, nodeEmphasis: nodeInteractionEmphasis(node.id, hoverId || selectedId, adjacent) } }));
-  const edges = graph.edges.map(edge => ({ ...edge, data: { ...edge.data, connectionEmphasis: connectionInteractionEmphasis(edge, hoverId || selectedId) } }));
+  const nodes = graph.nodes.map(node => ({ ...node, ...dimensions.current[node.id], selected: node.id === selectedId, draggable: canEdit && !preview && !pinned.includes(node.id), connectable: canEdit && props.canConnect && node.type === 'building', data: { ...node.data, hoverActive: !!hoverId, nodeEmphasis: nodeInteractionEmphasis(node.id, selectedId || hoverId, adjacent, selectedEdge) } }));
+  const edges = graph.edges.map(edge => ({ ...edge, selected: edge.id === selectedEdgeId, data: { ...edge.data, onEdit: () => chooseEdge(edge), connectionEmphasis: connectionInteractionEmphasis(edge, selectedId || hoverId, selectedEdge) } }));
   const graphRef = useRef(graph); graphRef.current = graph;
   const fit = (whole = false) => {
     if (!canvas.current) return;
-    const next = readableMapViewport(graph.nodes, graph.edges, canvas.current.clientWidth, canvas.current.clientHeight, whole);
-    setViewport(next, { duration: 0 }); rememberCamera(next);
+    const next = readableMapViewport(graph.nodes, graph.edges, canvas.current.clientWidth, canvas.current.clientHeight, whole, !props.editing && graph.nodes.length <= 12 ? graph.centerId : undefined);
+    setViewport(next, { duration: 0 }); rememberCamera(next, props.editing);
   };
   const fitRef = useRef(fit); fitRef.current = fit;
   const ready = flowReady && initialized && (persistence.ready || !!persistence.error) && (props.ready || !!props.legacyLayoutError);
   useEffect(() => {
-    if (!ready || cameraApplied.current) return;
-    const camera = storedCamera();
+    if (!ready || cameraMode.current === props.editing) return;
+    const camera = storedCamera(props.editing);
+    cameraMode.current = props.editing;
     if (camera) void setViewport(camera, { duration: 0 }); else fitRef.current();
-    cameraApplied.current = true;
     const frame = requestAnimationFrame(() => setCameraReady(true));
     return () => cancelAnimationFrame(frame);
-  }, [ready, setViewport]);
+  }, [ready, props.editing, setViewport]);
   // Observe the committed transform: v11 programmatic zoom helpers do not emit
   // onMoveEnd, and getViewport immediately after zoom still returns the old frame.
   useEffect(() => {
-    if (cameraReady) rememberCamera({ x: cameraX, y: cameraY, zoom: cameraZoom });
-  }, [cameraReady, cameraX, cameraY, cameraZoom]);
+    if (cameraReady) rememberCamera({ x: cameraX, y: cameraY, zoom: cameraZoom }, props.editing);
+  }, [cameraReady, cameraX, cameraY, cameraZoom, props.editing]);
   useEffect(() => {
     if (!ready || !cameraReady || !props.focusNodeId || !graphRef.current.nodes.some(node => node.id === props.focusNodeId)) return;
     setSelectedId(props.focusNodeId);
@@ -107,14 +113,26 @@ function Workspace(props: BuildingMapOverviewProps) {
     setDragPositions({});
   };
   const pin = () => { if (selected && canEdit && !preview) persistence.change({ ...document, positions: { ...document.positions, all: { ...document.positions.all, [selected.id]: selected.position } }, pinned: { ...document.pinned, all: isPinned ? pinned.filter(id => id !== selected.id) : [...pinned, selected.id] } }); };
-  const closeSelection = () => { setSelectedId(null); props.onClearFocus(); };
+  const closeSelection = () => { setSelectedId(null); setSelectedEdgeId(null); props.onClearFocus(); };
   const applyLayout = () => {
     if (!preview || !canEdit) return;
     setUndo(saved);
     persistence.change({ ...document, positions: { ...document.positions, all: { ...document.positions.all, ...preview } } });
     setPreview(null);
   };
-  const openNode = (node: Node) => { setHoverId(null); setSelectedId(node.id); if (props.editing && node.type === 'building') props.onNodeClick(node); else props.onOpenNode(node); };
+  const openNode = (node: Node) => {
+    setHoverId(null);
+    setSelectedEdgeId(null);
+    setSelectedId(node.id);
+    if (node.type !== 'building') props.onOpenNode(node);
+    else if (props.editing) props.onNodeClick(node);
+  };
+  function chooseEdge(edge: Edge) {
+    setHoverId(null);
+    props.onClearFocus();
+    setSelectedId(null);
+    setSelectedEdgeId(edge.id);
+  }
   const count = graph.nodes.filter(node => node.type === 'building').length;
   return <section className={styles.workspace} ref={props.captureRef} aria-label="Dengeli bina topolojisi">
     <div className={styles.toolbar} data-topology-toolbar>
@@ -125,7 +143,7 @@ function Workspace(props: BuildingMapOverviewProps) {
       <MapViewActions onFit={() => fit(true)} expanded={props.expanded} onExpand={props.onExpand} />
       <Popover open={optionsOpen} onOpenChange={setOptionsOpen}><PopoverTrigger asChild><Button variant="outline" size="sm" aria-label="Bina haritası seçenekleri"><Ellipsis size={16} />Diğer seçenekler</Button></PopoverTrigger><PopoverContent align="end" className="max-h-[75dvh] w-80 overflow-y-auto"><div className={styles.options}>
         <Button variant="ghost" onClick={() => { setOptionsOpen(false); setListOpen(true); }}><List size={15} />Bina ve ağ grubu listesi</Button>
-        <Button variant="ghost" onClick={() => { setOptionsOpen(false); props.onDetailed(); }}>Ayrıntılı görünüm</Button>
+        <Button variant="ghost" onClick={() => { setOptionsOpen(false); props.onDetailed(); }}>Kayıtlı yerleşim</Button>
         {props.editing && <Button variant="ghost" disabled={!canEdit} onClick={() => { setOptionsOpen(false); setPreview(arrangeBuildingOverview(nodes, edges, points, pinned, graph.centerId)); }}><WandSparkles size={15} />Otomatik düzenle</Button>}
         {!!graph.crossLinks.length && <Button variant="ghost" aria-pressed={showCross} onClick={() => setShowCross(value => !value)}><Eye size={15} />{showCross ? 'Çapraz bağlantıları gizle' : `${graph.hiddenCrossLinks.length} çapraz bağlantı gizli · Göster`}</Button>}
         <Button variant="ghost" onClick={() => { setOptionsOpen(false); props.onUnassigned(); }}>Konumsuz cihazlar · {props.unassignedCount}</Button>
@@ -143,21 +161,41 @@ function Workspace(props: BuildingMapOverviewProps) {
     {persistence.serverCopy && <div className={styles.banner}><p>Sunucudaki görünüm revizyonu: {persistence.serverCopy.revision}. Sunucuya geçerseniz taslağınız karşılaştırma için korunur.</p><Button variant="outline" onClick={persistence.adoptServer}>Sunucu görünümüne geç</Button></div>}
     {persistence.localDraft && <details className={styles.banner}><summary>Önceki taslak ayrıntıları</summary><pre>{JSON.stringify(persistence.localDraft, null, 2)}</pre></details>}
     {preview && <div className={styles.banner}><strong>Yerleşim önizlemesi</strong><span>Sabitlenen konumlar korunur. Henüz kaydedilmedi.</span><Button size="sm" disabled={!canEdit} onClick={applyLayout}>Yerleşimi uygula</Button><Button variant="ghost" size="sm" onClick={() => setPreview(null)}>Vazgeç</Button></div>}
-    {!!graph.blockedIds.length && <details className={styles.banner}><summary role="status">{graph.blockedIds.length} bağlantı için kayıtlı konumlarda uygun çizgi yolu bulunamadı. Kayıtlar korunuyor; ayrıntıları açın.</summary><div className={styles.list}>{graph.edges.filter(edge => graph.blockedIds.includes(edge.id)).map(edge => <Button key={edge.id} variant="ghost" onClick={event => props.onEdgeClick(event, edge)}>{graph.nodes.find(node => node.id === edge.source)?.data.name || edge.source} – {graph.nodes.find(node => node.id === edge.target)?.data.name || edge.target}</Button>)}</div></details>}
-    <div className={styles.canvas} ref={canvas} role="region" aria-label="Topoloji haritası" aria-busy={nodes.length > 0 && !cameraReady}>
+    {!!graph.blockedIds.length && <details className={styles.banner}><summary role="status">{graph.blockedIds.length} bağlantı için kayıtlı konumlarda uygun çizgi yolu bulunamadı. Kayıtlar korunuyor; ayrıntıları açın.</summary><div className={styles.list}>{graph.edges.filter(edge => graph.blockedIds.includes(edge.id)).map(edge => <Button key={edge.id} variant="ghost" onClick={event => edge.data?.isNetworkGroupRelation ? props.onEdgeClick(event, edge) : chooseEdge(edge)}>{graph.nodes.find(node => node.id === edge.source)?.data.name || edge.source} – {graph.nodes.find(node => node.id === edge.target)?.data.name || edge.target}</Button>)}</div></details>}
+    <div className={styles.canvas} ref={canvas} role="region" aria-label="Topoloji haritası" onKeyDown={event => {
+      if (event.key === 'Escape' && !guideOpen && (selectedId || selectedEdgeId)) closeSelection();
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      const target = event.target as HTMLElement;
+      if (target.classList.contains('react-flow__node-building')) {
+        const node = graph.nodes.find(item => item.id === target.dataset.id);
+        if (node) { event.preventDefault(); openNode(node); }
+      } else if (target.classList.contains('react-flow__edge-buildingOverview')) {
+        const edge = graph.edges.find(item => `rf__edge-${item.id}` === target.dataset.testid);
+        if (edge) { event.preventDefault(); chooseEdge(edge); }
+      }
+    }} aria-busy={nodes.length > 0 && !cameraReady}>
       {!nodes.length ? <p className={styles.empty}>Filtrelere uygun bina bulunamadı. Filtreleri değiştirerek tekrar deneyin.</p> : <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} onInit={() => setFlowReady(true)}
         onNodesChange={changes => { for (const change of changes) { if (change.type === 'dimensions' && change.dimensions) dimensions.current[change.id] = change.dimensions; if (change.type === 'position' && change.position && canEdit && !preview) setDragPositions(prev => ({ ...prev, [change.id]: change.position! })); } }}
         onNodeDragStart={() => { setHoverId(null); setDragging(true); }} onNodeDragStop={(_, node) => { move(node); setDragging(false); }} onNodeClick={(_, node) => openNode(node)}
-        onNodeContextMenu={props.onNodeMenu} onEdgeContextMenu={props.onEdgeMenu} onEdgeClick={props.onEdgeClick}
+        onNodeContextMenu={props.onNodeMenu} onEdgeContextMenu={props.onEdgeMenu} onEdgeClick={(event, edge) => edge.data?.isNetworkGroupRelation ? props.onEdgeClick(event, edge) : chooseEdge(edge)}
         onNodeMouseEnter={(_, node) => setHoverId(node.id)} onNodeMouseLeave={() => setHoverId(null)} onPaneClick={closeSelection}
-        onMoveEnd={(_, viewport) => { if (cameraApplied.current) rememberCamera(viewport); }}
+        onMoveEnd={(_, viewport) => { if (cameraMode.current === props.editing) rememberCamera(viewport, props.editing); }}
         onConnect={props.onConnect} isValidConnection={c => canEdit && props.canConnect && !!c.source && !!c.target && c.source !== c.target && graph.nodes.some(n => n.id === c.source && n.type === 'building') && graph.nodes.some(n => n.id === c.target && n.type === 'building')}
         nodesDraggable={canEdit && !preview} nodeDragThreshold={4} nodesConnectable={canEdit && props.canConnect} connectionMode={ConnectionMode.Loose} deleteKeyCode={null} minZoom={.05} maxZoom={2} aria-label="Etkileşimli bina topolojisi">
         <Background gap={26} size={.7} color="rgba(100,116,139,.08)" />
         <Panel position="bottom-left"><div className={styles.controls}><Button variant="ghost" size="sm" aria-label="Haritayı yakınlaştır" onClick={() => zoomIn({ duration: 0 })}><Plus size={14} />Yakınlaştır</Button><span>{Math.round(cameraZoom * 100)}%</span><Button variant="ghost" size="sm" aria-label="Haritayı uzaklaştır" onClick={() => zoomOut({ duration: 0 })}><Minus size={14} />Uzaklaştır</Button><Button variant="ghost" size="sm" onClick={() => fit()}>Okunabilir ölçek</Button></div></Panel>
       </ReactFlow>}
       <div className={styles.guide}><TopologyMapGuide open={guideOpen} onOpenChange={setGuideOpen}>{props.connectionFilters}</TopologyMapGuide></div>
-      {props.editing && selectedBuilding && <div className={styles.selection} role="group" aria-label="Seçili bina işlemleri"><div><strong>{selectedBuilding.data.name}</strong><Button variant="ghost" size="sm" onClick={closeSelection} aria-label="Seçimi kapat"><X size={15} /></Button></div><span>{selectedBuilding.data.deviceCount} cihaz</span><div className={styles.selectionActions}><Button size="sm" variant="outline" onClick={() => props.onOpenNode(selectedBuilding)}><Building2 size={14} />Cihazları aç</Button><Button size="sm" disabled={!canEdit || !props.canConnect} onClick={() => props.onAddConnection?.(selectedBuilding)}><Plus size={14} />Buradan bağlantı ekle</Button><Button size="sm" variant="outline" disabled={!canEdit} onClick={pin}><Pin size={14} />{isPinned ? 'Sabitlemeyi kaldır' : 'Konumu sabitle'}</Button></div></div>}
+      {selectedBuilding && <div className={styles.selection} role="group" aria-label="Seçili bina işlemleri"><div><strong>{selectedBuilding.data.name}</strong><Button variant="ghost" size="sm" onClick={closeSelection} aria-label="Seçimi kapat"><X size={15} /></Button></div><span>{selectedBuilding.data.deviceCount} cihaz</span><div className={styles.selectionActions}><Button size="sm" variant="outline" onClick={() => props.onOpenNode(selectedBuilding)}><Building2 size={14} />Cihazları aç</Button>{props.editing && <><Button size="sm" disabled={!canEdit || !props.canConnect} onClick={() => props.onAddConnection?.(selectedBuilding)}><Plus size={14} />Buradan bağlantı ekle</Button><Button size="sm" variant="outline" disabled={!canEdit} onClick={pin}><Pin size={14} />{isPinned ? 'Sabitlemeyi kaldır' : 'Konumu sabitle'}</Button></>}</div></div>}
+      {link && <div className={styles.selection} role="group" aria-label="Seçili bağlantı ayrıntıları">
+        <div><strong>Binalar arası bağlantı</strong><Button variant="ghost" size="sm" onClick={closeSelection} aria-label="Seçimi kapat"><X size={15} /></Button></div>
+        <span>{connectionState(link.status).label} · {BUILDING_CONNECTION_TYPES.find(type => type.value === link.connectionType)?.label || 'Tür belirtilmemiş'} · {link.bandwidth || 'Hız belirtilmemiş'}</span>
+        {[link.sourceBuilding, link.destBuilding].map((building, index) => <p key={index} className="mb-2">
+          <strong>{building?.name || graph.nodes.find(node => node.id === (index === 0 ? selectedEdge?.source : selectedEdge?.target))?.data.name || 'Bina belirtilmemiş'}</strong>
+          <span className="block text-muted-foreground">{(index === 0 ? link.deviceLink?.sourceDevice?.name : link.deviceLink?.targetDevice?.name) || 'Cihaz atanmamış'} · {link.deviceLink?.endpoints.find(endpoint => endpoint.side === index)?.portName || 'Port atanmamış'}</span>
+        </p>)}
+        {props.editing && selectedEdge && <Button size="sm" variant="outline" onClick={event => props.onEdgeClick(event, selectedEdge)}>Bağlantıyı düzenle</Button>}
+      </div>}
       <span className={styles.count}>{count} bina{props.groups.length ? ` · ${props.groups.length} mantıksal ağ grubu` : ''}</span>
       {nodes.length > 0 && !cameraReady && <div className={styles.loadingOverlay} role="status">Harita hazırlanıyor…</div>}
     </div>

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { SemanticBadge } from '@/components/ui/semantic-badge';
 import { balancedBuildingOverview } from '@/lib/topology/building-overview';
+import { readableMapViewport } from '@/lib/topology/flat-overview';
 import type { BuildingEndpoints } from '@/lib/topology/building-graph';
 import type { NetworkGroup } from '@/lib/topology/network-groups';
 import type { TopologySearchItem } from '@/lib/topology/search';
@@ -74,14 +75,9 @@ function Overview(props: Props) {
   const fit = useCallback((showWholeMap = false) => {
     const element = canvas.current;
     if (!element || !visibleNodes.length) return;
-    const minX = Math.min(...visibleNodes.map(node => node.position.x)), minY = Math.min(...visibleNodes.map(node => node.position.y));
-    const width = Math.max(...visibleNodes.map(node => node.position.x + (node.type === 'networkGroup' ? 232 : 160))) - minX;
-    const height = Math.max(...visibleNodes.map(node => node.position.y + (node.type === 'networkGroup' ? 232 : 130))) - minY;
-    const scale = Math.min(1.1, (element.clientWidth - 48) / Math.max(1, width), (element.clientHeight - 70) / Math.max(1, height));
-    // On narrow screens, keep names readable and let the user pan or use search/list.
-    const readable = Math.max(!showWholeMap && element.clientWidth < 700 ? .7 : .05, scale);
-    void setViewport({ x: (element.clientWidth - width * readable) / 2 - minX * readable, y: (element.clientHeight - height * readable) / 2 - minY * readable, zoom: readable }, { duration: 0 });
-  }, [visibleNodes, setViewport]);
+    const viewport = readableMapViewport(visibleNodes, graph.edges, element.clientWidth, element.clientHeight, showWholeMap);
+    void setViewport(viewport, { duration: 0 });
+  }, [visibleNodes, graph.edges, setViewport]);
   const fitRef = useRef(fit); fitRef.current = fit;
   useEffect(() => {
     if (!ready || !initialized || !props.ready) return;
