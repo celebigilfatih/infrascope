@@ -57,6 +57,12 @@ async function mockEditing(page: Page, failure: Failure = null, deviceLink = fal
   return { positions, writes, records, failLayout: () => { layoutFailure = true; } };
 }
 
+async function openBuildingFromOverview(page: Page) {
+  const map = page.getByRole('region', { name: 'Topoloji haritası', exact: true });
+  await map.locator('[data-id="building-edit-hub"]').click();
+  await map.getByRole('group', { name: 'Seçili bina işlemleri' }).getByRole('button', { name: 'Cihazları aç', exact: true }).click();
+}
+
 test('topology editing: same canvas, autosave failure/retry and reload retain positions', async ({ page, fixtures }) => {
   const state = await mockEditing(page); await signIn(page, fixtures); await page.goto('/network');
   const map = page.getByRole('region', { name: 'Topoloji haritası', exact: true });
@@ -75,9 +81,11 @@ test('topology editing: same canvas, autosave failure/retry and reload retain po
   await page.getByRole('button', { name: 'Yeniden dene', exact: true }).click();
   await expect(page.getByText('Görünüm kaydedildi', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Düzenlemeyi bitir', exact: true }).click();
+  await page.reload();
+  const edit = page.getByRole('button', { name: 'Haritayı düzenle', exact: true });
+  await expect(edit).toHaveAttribute('aria-pressed', 'false');
+  await edit.click();
   await expect(node).toHaveAttribute('style', moved!);
-  await page.reload(); await expect(node).toHaveAttribute('style', moved!);
-  await expect(page.getByRole('button', { name: 'Haritayı düzenle', exact: true })).toHaveAttribute('aria-pressed', 'false');
 });
 
 for (const failure of [503, 401, 403, 'lost'] as const) {
@@ -101,7 +109,7 @@ for (const failure of [503, 401, 403, 'lost'] as const) {
   });
   test(`topology editing: device create ${failure} keeps selections and retries safely`, async ({ page, fixtures }) => {
     const state = await mockEditing(page, failure, true); await signIn(page, fixtures); await page.goto('/network');
-    await page.getByRole('region', { name: 'Topoloji haritası', exact: true }).locator('[data-id="building-edit-hub"]').click();
+    await openBuildingFromOverview(page);
     const workspace = page.getByRole('dialog', { name: 'TEST · Merkez bina' });
     await workspace.getByRole('button', { name: 'Haritayı düzenle', exact: true }).click();
     await workspace.getByRole('button', { name: 'Bağlantı ekle', exact: true }).click();
@@ -148,7 +156,7 @@ test('topology editing: real fullscreen and portalled forms, denied fallback and
 
 test('topology editing: device fallback explains unavailable native fullscreen in active dialog', async ({ page, fixtures }) => {
   await mockEditing(page); await signIn(page, fixtures); await page.goto('/network');
-  await page.getByRole('region', { name: 'Topoloji haritası', exact: true }).locator('[data-id="building-edit-hub"]').click();
+  await openBuildingFromOverview(page);
   const workspace = page.getByRole('dialog', { name: 'TEST · Merkez bina' });
   await page.evaluate(() => { document.documentElement.requestFullscreen = () => Promise.reject(new Error('Denied fixture')); });
   await workspace.getByRole('button', { name: 'Haritayı tam ekran yap', exact: true }).click();
@@ -179,7 +187,7 @@ for (const viewport of [
         await overview.getByRole('button', { name: 'Haritayı tam ekran yap', exact: true }).click();
         await expect.poll(() => page.evaluate(() => document.fullscreenElement === document.documentElement)).toBe(true);
       }
-      await map.locator('[data-id="building-edit-hub"]').click();
+      await openBuildingFromOverview(page);
       const workspace = page.getByRole('dialog', { name: buildings[0].name, exact: true });
       await expect(workspace.getByRole('button', { name: 'Cihaz ata', exact: true })).toBeEnabled();
       if (mode === 'denied') {
@@ -222,7 +230,7 @@ for (const viewport of [
     await page.emulateMedia({ reducedMotion: 'reduce' });
     const state = await mockEditing(page);
     await signIn(page, fixtures); await page.goto('/network');
-    await page.getByRole('region', { name: 'Topoloji haritası', exact: true }).locator('[data-id="building-edit-hub"]').click();
+    await openBuildingFromOverview(page);
     const workspace = page.getByRole('dialog', { name: buildings[0].name, exact: true });
     const close = workspace.getByRole('button', { name: 'Bina görünümünü kapat', exact: true });
     const assign = workspace.getByRole('button', { name: 'Cihaz ata', exact: true });
