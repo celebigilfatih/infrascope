@@ -2,7 +2,7 @@ import { DEVICE_NODE_HEIGHT, DEVICE_NODE_WIDTH, type DevicePositions } from './b
 import type { TopologyConnection } from './workspace';
 
 export interface RoutePoint { x: number; y: number }
-interface Obstacle extends RoutePoint { id: string; right: number; bottom: number }
+interface Obstacle extends RoutePoint { id: string; right: number; bottom: number; geometry: RoutingGeometry }
 interface Segment { a: RoutePoint; b: RoutePoint }
 interface Port { anchor: RoutePoint; exit: RoutePoint }
 export interface TopologyRoute {
@@ -87,17 +87,20 @@ class MinHeap {
   get size() { return this.items.length; }
 }
 
-function ports(rect: Obstacle, obstacles: Obstacle[], geometry: RoutingGeometry): Port[] {
+function ports(rect: Obstacle, obstacles: Obstacle[], fraction = 0): Port[] {
+  const geometry = rect.geometry;
+  const radius = (geometry.iconRight - geometry.iconLeft) / 2;
+  const offset = radius * fraction, arc = radius - Math.sqrt(radius * radius - offset * offset);
   // Side exits use the empty space beside the icon. A bottom exit would run
   // through its name and supporting text, so it is deliberately excluded.
   return [
-    { anchor: { x: rect.x + geometry.iconLeft, y: rect.y + geometry.iconCenterY }, exit: { x: rect.x - CLEARANCE, y: rect.y + geometry.iconCenterY } },
-    { anchor: { x: rect.x + geometry.iconRight, y: rect.y + geometry.iconCenterY }, exit: { x: rect.right + CLEARANCE, y: rect.y + geometry.iconCenterY } },
-    { anchor: { x: rect.x + geometry.iconCenterX, y: rect.y }, exit: { x: rect.x + geometry.iconCenterX, y: rect.y - CLEARANCE } },
+    { anchor: { x: rect.x + geometry.iconLeft + arc, y: rect.y + geometry.iconCenterY + offset }, exit: { x: rect.x - CLEARANCE, y: rect.y + geometry.iconCenterY + offset } },
+    { anchor: { x: rect.x + geometry.iconRight - arc, y: rect.y + geometry.iconCenterY + offset }, exit: { x: rect.right + CLEARANCE, y: rect.y + geometry.iconCenterY + offset } },
+    { anchor: { x: rect.x + geometry.iconCenterX + offset, y: rect.y + arc }, exit: { x: rect.x + geometry.iconCenterX + offset, y: rect.y - CLEARANCE } },
   ].filter(port => !obstacles.some(other => other.id !== rect.id && segmentCrossesDevice(port.anchor, port.exit, other)));
 }
 
-function routingGrid(obstacles: Obstacle[], endpoints: Obstacle[], geometry: RoutingGeometry) {
+function routingGrid(obstacles: Obstacle[], endpoints: Obstacle[], exits: RoutePoint[] = []) {
   const xs = new Set<number>(), ys = new Set<number>();
   const minX = Math.min(...endpoints.map(p => p.x)) - 100, maxX = Math.max(...endpoints.map(p => p.right)) + 100;
   const minY = Math.min(...endpoints.map(p => p.y)) - 100, maxY = Math.max(...endpoints.map(p => p.bottom)) + 100;
@@ -107,8 +110,9 @@ function routingGrid(obstacles: Obstacle[], endpoints: Obstacle[], geometry: Rou
   xs.add(minX); xs.add(maxX); ys.add(minY); ys.add(maxY);
   for (const p of relevant) {
     for (const gap of [CLEARANCE, CLEARANCE + 14]) { addX(p.x - gap); addX(p.right + gap); addY(p.y - gap); addY(p.bottom + gap); }
-    addX(p.x + geometry.iconCenterX); addY(p.y + geometry.iconCenterY);
+    addX(p.x + p.geometry.iconCenterX); addY(p.y + p.geometry.iconCenterY);
   }
+  for (const exit of exits) { addX(exit.x); addY(exit.y); }
   const x = [...xs].sort((a, b) => a - b), y = [...ys].sort((a, b) => a - b), columns = x.length;
   const expanded = relevant.map(p => ({ ...p, x: p.x - CLEARANCE, y: p.y - CLEARANCE, right: p.right + CLEARANCE, bottom: p.bottom + CLEARANCE }));
   const clear = (a: RoutePoint, b: RoutePoint) => !expanded.some(rect => segmentCrossesDevice(a, b, rect));
@@ -189,19 +193,30 @@ export function routeBuildingDeviceConnections(positions: DevicePositions, conne
   return routeTopologyConnections(positions, connections, DEVICE_GEOMETRY, optimize);
 }
 
-export function routeTopologyConnections(positions: DevicePositions, connections: Pick<TopologyConnection, 'id' | 'sourceDeviceId' | 'targetDeviceId'>[], geometry: RoutingGeometry, optimize = true): DeviceRoutes {
-  const obstacles = Object.entries(positions).sort(([a], [b]) => compareIds(a, b)).map(([id, p]) => ({ id, ...p, right: p.x + geometry.width, bottom: p.y + geometry.height }));
+export function routeTopologyConnections(positions: DevicePositions, connections: Pick<TopologyConnection, 'id' | 'sourceDeviceId' | 'targetDeviceId'>[], geometry: RoutingGeometry, optimize = true, nodeGeometries: Record<string, RoutingGeometry> = {}, separateParallelPorts = false): DeviceRoutes {
+  const obstacles = Object.entries(positions).sort(([a], [b]) => compareIds(a, b)).map(([id, p]) => {
+    const shape = nodeGeometries[id] || geometry;
+    return { id, ...p, right: p.x + shape.width, bottom: p.y + shape.height, geometry: shape };
+  });
   const byId = new Map(obstacles.map(p => [p.id, p]));
   const links = connections.filter(link => link.sourceDeviceId !== link.targetDeviceId && byId.has(link.sourceDeviceId) && byId.has(link.targetDeviceId)).sort((a, b) => distance(byId.get(a.sourceDeviceId)!, byId.get(a.targetDeviceId)!) - distance(byId.get(b.sourceDeviceId)!, byId.get(b.targetDeviceId)!) || compareIds(a.id, b.id));
   if (!links.length) return { routes: {}, blockedIds: [] };
   const endpointIds = new Set(links.flatMap(link => [link.sourceDeviceId, link.targetDeviceId]));
-  const grid = routingGrid(obstacles, obstacles.filter(p => endpointIds.has(p.id)), geometry);
-  const allPorts = new Map([...endpointIds].map(id => [id, ports(byId.get(id)!, obstacles, geometry)]));
+  const pairs = new Map<string, typeof links>();
+  for (const link of links) {
+    const key = JSON.stringify([link.sourceDeviceId, link.targetDeviceId].sort(compareIds));
+    const group = pairs.get(key) || []; group.push(link); pairs.set(key, group);
+  }
+  const fractions = new Map<string, number>();
+  if (separateParallelPorts) for (const group of pairs.values()) group.sort((a, b) => compareIds(a.id, b.id)).forEach((link, i) => { fractions.set(link.id, group.length > 1 ? i / (group.length - 1) - .5 : 0); });
+  const endpointPorts = new Map(links.map(link => [link.id, { source: ports(byId.get(link.sourceDeviceId)!, obstacles, fractions.get(link.id)), target: ports(byId.get(link.targetDeviceId)!, obstacles, fractions.get(link.id)) }]));
+  const grid = routingGrid(obstacles, obstacles.filter(p => endpointIds.has(p.id)), [...endpointPorts.values()].flatMap(p => [...p.source, ...p.target].map(port => port.exit)));
   const run = (order: typeof links) => {
     const routes: Record<string, DeviceRoute> = Object.create(null);
     const occupied: Segment[] = [], blockedIds: string[] = [];
     for (const link of order) {
-      const route = findRoute(grid, allPorts.get(link.sourceDeviceId)!, allPorts.get(link.targetDeviceId)!, occupied);
+      const endpoints = endpointPorts.get(link.id)!;
+      const route = findRoute(grid, endpoints.source, endpoints.target, occupied);
       if (route) { routes[link.id] = route; occupied.push(...segments(route.points)); }
       else blockedIds.push(link.id);
     }
@@ -217,7 +232,8 @@ export function routeTopologyConnections(positions: DevicePositions, connections
   // several elsewhere. Skip this extra pass during a drag and on large graphs.
   for (const link of [...links].reverse()) {
     const occupied = Object.entries(best.routes).filter(([id]) => id !== link.id).flatMap(([, route]) => segments(route.points));
-    const route = findRoute(grid, allPorts.get(link.sourceDeviceId)!, allPorts.get(link.targetDeviceId)!, occupied);
+    const endpoints = endpointPorts.get(link.id)!;
+    const route = findRoute(grid, endpoints.source, endpoints.target, occupied);
     if (!route) continue;
     const candidate = { ...best, routes: { ...best.routes, [link.id]: route } };
     if (score(candidate) < score(best)) best = candidate;

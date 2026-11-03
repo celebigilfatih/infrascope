@@ -1,12 +1,14 @@
 import type { Edge, Node } from 'reactflow';
+import { routeBuildingOverview } from './building-routing';
+import { compactBuildingPositions } from './building-overview-layout';
 
 interface Building { id: string; name: string }
 interface Link { sourceBuildingId: string; destBuildingId: string; connectionType?: string }
 interface Group { id: string; members: { buildingId: string }[]; sourceDevice: { buildingId: string | null } }
-interface OverviewGraph { nodes: Node[]; edges: Edge[]; centerId: string | undefined; hiddenCrossLinks: Edge[]; crossLinks: Edge[]; positions: Record<string, { x: number; y: number }> }
+interface OverviewGraph { nodes: Node[]; edges: Edge[]; centerId: string | undefined; hiddenCrossLinks: Edge[]; crossLinks: Edge[]; positions: Record<string, { x: number; y: number }>; blockedIds: string[] }
 
 // Stable automatic defaults under filters; saved positions take precedence. Callers control editing.
-export function balancedBuildingOverview(nodes: Node[], edges: Edge[], buildings: Building[], links: Link[], groups: Group[], showCrossLinks: boolean, unassignedId: string, focusId?: string | null, savedPositions: Record<string, { x: number; y: number }> = {}): OverviewGraph {
+export function balancedBuildingOverview(nodes: Node[], edges: Edge[], buildings: Building[], links: Link[], groups: Group[], showCrossLinks: boolean, unassignedId: string, focusId?: string | null, savedPositions: Record<string, { x: number; y: number }> = {}, computeRoutes = true): OverviewGraph {
   const grouped = new Set(groups.flatMap(group => group.members.map(member => member.buildingId)));
   const catalog = buildings.filter(building => !grouped.has(building.id)).sort((a, b) => a.name.localeCompare(b.name, 'tr-TR') || a.id.localeCompare(b.id));
   const neighbors = new Map(catalog.map(building => [building.id, new Set<string>()]));
@@ -33,6 +35,7 @@ export function balancedBuildingOverview(nodes: Node[], edges: Edge[], buildings
       positions[`building-${building.id}`] = { x: Math.round(340 + Math.cos(angle) * 310 * ring), y: Math.round(270 + Math.sin(angle) * 270 * ring) };
     });
   }
+  if (catalog.length > 12) Object.assign(positions, compactBuildingPositions(catalog.map(building => `building-${building.id}`), links.map(link => ({ source: `building-${link.sourceBuildingId}`, target: `building-${link.destBuildingId}` })), centerId));
   const physicalRight = Math.max(500, ...Object.values(positions).map(position => position.x + 160));
   const groupNodes = nodes.filter(node => node.type === 'networkGroup');
   groupNodes.forEach((node, index) => { positions[node.id] = { x: physicalRight + 105, y: 195 + index * 280 }; });
@@ -47,7 +50,10 @@ export function balancedBuildingOverview(nodes: Node[], edges: Edge[], buildings
   const crossIds = new Set(crossLinks.map(edge => edge.id));
   const hiddenCrossLinks = crossLinks.filter(edge => !showCrossLinks && edge.source !== focusId && edge.target !== focusId);
   const hiddenIds = new Set(hiddenCrossLinks.map(edge => edge.id));
-  const displayed = edges.filter(edge => byId.has(edge.source) && byId.has(edge.target) && !hiddenIds.has(edge.id)).map(edge => {
+  const visibleEdges = edges.filter(edge => byId.has(edge.source) && byId.has(edge.target) && !hiddenIds.has(edge.id));
+  const routing = computeRoutes ? routeBuildingOverview(result, visibleEdges, centerId) : { routes: {}, blockedIds: [] };
+  const blocked = new Set(routing.blockedIds);
+  const displayed = visibleEdges.map(edge => {
     const a = byId.get(edge.source)!, b = byId.get(edge.target)!;
     const dx = b.position.x - a.position.x, dy = b.position.y - a.position.y;
     const horizontal = Math.abs(dx) >= Math.abs(dy);
@@ -56,10 +62,10 @@ export function balancedBuildingOverview(nodes: Node[], edges: Edge[], buildings
     const logical = !!edge.data?.isNetworkGroupRelation;
     return { ...edge, type: logical ? 'smoothstep' : 'buildingOverview', animated: false, label: logical ? undefined : edge.label,
       sourceHandle: a.type === 'networkGroup' ? null : `${from}-source`, targetHandle: b.type === 'networkGroup' ? null : `${to}-source`,
-      data: { ...edge.data, routeBlocked: false, buildingRoute: undefined, labelBlocked: false, autoHideLabel: true, overviewCrossLink: crossIds.has(edge.id),
+      data: { ...edge.data, routeBlocked: blocked.has(edge.id), buildingRoute: routing.routes[edge.id], labelBlocked: false, autoHideLabel: true, overviewCrossLink: crossIds.has(edge.id),
         strokeWidth: 2, strokeColor: edge.data?.strokeColor || '#64748b' },
       style: logical ? { ...edge.style, strokeWidth: 1.8 } : edge.style,
     };
   });
-  return { nodes: result, edges: displayed, centerId, hiddenCrossLinks, crossLinks, positions };
+  return { nodes: result, edges: displayed, centerId, hiddenCrossLinks, crossLinks, positions, blockedIds: routing.blockedIds };
 }

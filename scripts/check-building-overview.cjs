@@ -1,9 +1,13 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 const assert = require('node:assert/strict'), fs = require('node:fs'), vm = require('node:vm'), ts = require('typescript');
-const loaded = { exports: {} };
-const code = ts.transpileModule(fs.readFileSync('lib/topology/building-overview.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText;
-vm.runInNewContext('(function(exports){' + code + '\n})', {})(loaded.exports);
-const { balancedBuildingOverview: project } = loaded.exports;
+const path = require('node:path');
+function load(file) {
+  const loaded = { exports: {} };
+  const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText;
+  vm.runInThisContext(`(function(require,module,exports){${code}\n})`, { filename: file })(name => load(path.resolve(path.dirname(file), `${name}.ts`)), loaded, loaded.exports);
+  return loaded.exports;
+}
+const { balancedBuildingOverview: project } = load('lib/topology/building-overview.ts');
 const buildings = [{ id:'hub', name:'Merkez' }, ...Array.from({length:9}, (_, i) => ({id:'b'+i,name:'Bina '+i})),{id:'remote',name:'Uzak konum'}];
 const links = buildings.slice(1,10).map(b => ({sourceBuildingId:'hub',destBuildingId:b.id}));
 links.push({sourceBuildingId:'b0',destBuildingId:'b1'},{sourceBuildingId:'b2',destBuildingId:'b3'},{sourceBuildingId:'hub',destBuildingId:'remote'});

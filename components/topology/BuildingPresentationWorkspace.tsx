@@ -6,7 +6,8 @@ import { Building2, Ellipsis, Eye, List, Minus, Pin, Plus, Undo2, WandSparkles, 
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { arrangePresentation, type PresentationPoint } from '@/lib/topology/presentation';
+import type { PresentationPoint } from '@/lib/topology/presentation';
+import { arrangeBuildingOverview } from '@/lib/topology/building-overview-layout';
 import { flatPositions, flatPresentation, readableMapViewport } from '@/lib/topology/flat-overview';
 import { directlyConnectedNodeIds, nodeInteractionEmphasis, connectionInteractionEmphasis } from '@/lib/topology/connection-emphasis';
 import { balancedBuildingOverview } from '@/lib/topology/building-overview';
@@ -21,7 +22,7 @@ import type { BuildingMapOverviewProps } from './BuildingMapOverview';
 import styles from './BuildingPresentationWorkspace.module.css';
 
 const nodeTypes = { building: BuildingNode, networkGroup: NetworkGroupNode };
-const edgeTypes = { buildingOverview: BuildingOverviewEdge };
+const edgeTypes = { buildingOverview: BuildingOverviewEdge, smoothstep: BuildingOverviewEdge };
 // Do not import the former summary camera or the legacy all-network camera.
 const cameraKey = 'infrascope:topology:flat-camera:v1';
 function storedCamera(): Viewport | null {
@@ -35,7 +36,7 @@ export function BuildingPresentationWorkspace(props: BuildingMapOverviewProps) {
 }
 function Workspace(props: BuildingMapOverviewProps) {
   const persistence = props.presentation;
-  const document = flatPresentation(persistence.document);
+  const document = useMemo(() => flatPresentation(persistence.document), [persistence.document]);
   const documentRef = useRef(document); documentRef.current = document;
   const { setViewport, fitView, zoomIn, zoomOut } = useReactFlow();
   const { x: cameraX, y: cameraY, zoom: cameraZoom } = useViewport();
@@ -47,12 +48,15 @@ function Workspace(props: BuildingMapOverviewProps) {
   const [optionsOpen, setOptionsOpen] = useState(false), [listOpen, setListOpen] = useState(false);
   const [showCross, setShowCross] = useState(true), [guideOpen, setGuideOpen] = useState(false);
   const [dragPositions, setDragPositions] = useState<Record<string, PresentationPoint>>({});
+  const [dragging, setDragging] = useState(false);
   const [preview, setPreview] = useState<Record<string, PresentationPoint> | null>(null), [undo, setUndo] = useState<Record<string, PresentationPoint> | null>(null);
   const canEdit = props.editing && persistence.ready && persistence.canEdit && !persistence.error;
-  const base = useMemo(() => balancedBuildingOverview(props.nodes, props.edges, props.buildings, props.links, props.groups, true, props.unassignedId), [props.nodes, props.edges, props.buildings, props.links, props.groups, props.unassignedId]);
-  const saved = flatPositions(base.nodes, props.savedPositions, document);
-  const points = { ...saved, ...dragPositions, ...preview };
-  const graph = balancedBuildingOverview(props.nodes, props.edges, props.buildings, props.links, props.groups, showCross, props.unassignedId, props.focusNodeId, points);
+  const base = useMemo(() => balancedBuildingOverview(props.nodes, props.edges, props.buildings, props.links, props.groups, true, props.unassignedId, null, {}, false), [props.nodes, props.edges, props.buildings, props.links, props.groups, props.unassignedId]);
+  const saved = useMemo(() => flatPositions(base.nodes, props.savedPositions, document), [base.nodes, props.savedPositions, document]);
+  const points = useMemo(() => ({ ...saved, ...dragPositions, ...preview }), [saved, dragPositions, preview]);
+  // Arbitrary saved coordinates can make a full obstacle search expensive. Keep
+  // dragging immediate and calculate one validated set of routes on release.
+  const graph = useMemo(() => balancedBuildingOverview(props.nodes, props.edges, props.buildings, props.links, props.groups, showCross, props.unassignedId, props.focusNodeId, points, !dragging), [props.nodes, props.edges, props.buildings, props.links, props.groups, showCross, props.unassignedId, props.focusNodeId, points, dragging]);
   const selected = graph.nodes.find(node => node.id === selectedId);
   const selectedBuilding = selected?.type === 'building' ? selected : undefined;
   const adjacent = directlyConnectedNodeIds(graph.edges, hoverId || selectedId);
@@ -122,14 +126,14 @@ function Workspace(props: BuildingMapOverviewProps) {
       <Popover open={optionsOpen} onOpenChange={setOptionsOpen}><PopoverTrigger asChild><Button variant="outline" size="sm" aria-label="Bina haritası seçenekleri"><Ellipsis size={16} />Diğer seçenekler</Button></PopoverTrigger><PopoverContent align="end" className="max-h-[75dvh] w-80 overflow-y-auto"><div className={styles.options}>
         <Button variant="ghost" onClick={() => { setOptionsOpen(false); setListOpen(true); }}><List size={15} />Bina ve ağ grubu listesi</Button>
         <Button variant="ghost" onClick={() => { setOptionsOpen(false); props.onDetailed(); }}>Ayrıntılı görünüm</Button>
-        {props.editing && <Button variant="ghost" disabled={!canEdit} onClick={() => { setOptionsOpen(false); setPreview(arrangePresentation(nodes.map(n => n.id), edges, points, pinned)); }}><WandSparkles size={15} />Otomatik düzenle</Button>}
+        {props.editing && <Button variant="ghost" disabled={!canEdit} onClick={() => { setOptionsOpen(false); setPreview(arrangeBuildingOverview(nodes, edges, points, pinned, graph.centerId)); }}><WandSparkles size={15} />Otomatik düzenle</Button>}
         {!!graph.crossLinks.length && <Button variant="ghost" aria-pressed={showCross} onClick={() => setShowCross(value => !value)}><Eye size={15} />{showCross ? 'Çapraz bağlantıları gizle' : `${graph.hiddenCrossLinks.length} çapraz bağlantı gizli · Göster`}</Button>}
         <Button variant="ghost" onClick={() => { setOptionsOpen(false); props.onUnassigned(); }}>Konumsuz cihazlar · {props.unassignedCount}</Button>
         {props.actions}
       </div></PopoverContent></Popover>
     </div>
     {(props.editing || persistence.error || persistence.status === 'saving' || persistence.status === 'saved' || props.error || props.legacyLayoutError) && <div className={styles.statusbar}>
-      <span role={persistence.error ? 'alert' : 'status'} aria-live="polite">{persistence.error || (persistence.status === 'saving' ? 'Görünüm kaydediliyor…' : persistence.status === 'saved' ? 'Görünüm kaydedildi' : 'İkonları sürükleyin · Konumlar otomatik kaydedilir.')}</span>
+      <span role={persistence.error ? 'alert' : 'status'} aria-live="polite">{persistence.error || (dragging ? 'Taşıma sırasında bağlantılar geçici olarak gizlenir; bıraktığınızda yeniden çizilir.' : persistence.status === 'saving' ? 'Görünüm kaydediliyor…' : persistence.status === 'saved' ? 'Görünüm kaydedildi' : 'İkonları sürükleyin · Konumlar otomatik kaydedilir.')}</span>
       {persistence.error && !persistence.conflict && <Button variant="outline" size="sm" onClick={persistence.retry}>Yeniden dene</Button>}
       {persistence.conflict && <Button variant="outline" size="sm" onClick={() => void persistence.inspectServer()}>Güncel görünümü incele</Button>}
       {props.editing && undo && <Button variant="ghost" size="sm" disabled={!canEdit} onClick={() => { persistence.change({ ...document, positions: { ...document.positions, all: undo } }); setUndo(null); }}><Undo2 size={15} />Geri al</Button>}
@@ -139,10 +143,11 @@ function Workspace(props: BuildingMapOverviewProps) {
     {persistence.serverCopy && <div className={styles.banner}><p>Sunucudaki görünüm revizyonu: {persistence.serverCopy.revision}. Sunucuya geçerseniz taslağınız karşılaştırma için korunur.</p><Button variant="outline" onClick={persistence.adoptServer}>Sunucu görünümüne geç</Button></div>}
     {persistence.localDraft && <details className={styles.banner}><summary>Önceki taslak ayrıntıları</summary><pre>{JSON.stringify(persistence.localDraft, null, 2)}</pre></details>}
     {preview && <div className={styles.banner}><strong>Yerleşim önizlemesi</strong><span>Sabitlenen konumlar korunur. Henüz kaydedilmedi.</span><Button size="sm" disabled={!canEdit} onClick={applyLayout}>Yerleşimi uygula</Button><Button variant="ghost" size="sm" onClick={() => setPreview(null)}>Vazgeç</Button></div>}
+    {!!graph.blockedIds.length && <details className={styles.banner}><summary role="status">{graph.blockedIds.length} bağlantı için kayıtlı konumlarda uygun çizgi yolu bulunamadı. Kayıtlar korunuyor; ayrıntıları açın.</summary><div className={styles.list}>{graph.edges.filter(edge => graph.blockedIds.includes(edge.id)).map(edge => <Button key={edge.id} variant="ghost" onClick={event => props.onEdgeClick(event, edge)}>{graph.nodes.find(node => node.id === edge.source)?.data.name || edge.source} – {graph.nodes.find(node => node.id === edge.target)?.data.name || edge.target}</Button>)}</div></details>}
     <div className={styles.canvas} ref={canvas} role="region" aria-label="Topoloji haritası" aria-busy={nodes.length > 0 && !cameraReady}>
       {!nodes.length ? <p className={styles.empty}>Filtrelere uygun bina bulunamadı. Filtreleri değiştirerek tekrar deneyin.</p> : <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} onInit={() => setFlowReady(true)}
         onNodesChange={changes => { for (const change of changes) { if (change.type === 'dimensions' && change.dimensions) dimensions.current[change.id] = change.dimensions; if (change.type === 'position' && change.position && canEdit && !preview) setDragPositions(prev => ({ ...prev, [change.id]: change.position! })); } }}
-        onNodeDragStart={() => setHoverId(null)} onNodeDragStop={(_, node) => move(node)} onNodeClick={(_, node) => openNode(node)}
+        onNodeDragStart={() => { setHoverId(null); setDragging(true); }} onNodeDragStop={(_, node) => { move(node); setDragging(false); }} onNodeClick={(_, node) => openNode(node)}
         onNodeContextMenu={props.onNodeMenu} onEdgeContextMenu={props.onEdgeMenu} onEdgeClick={props.onEdgeClick}
         onNodeMouseEnter={(_, node) => setHoverId(node.id)} onNodeMouseLeave={() => setHoverId(null)} onPaneClick={closeSelection}
         onMoveEnd={(_, viewport) => { if (cameraApplied.current) rememberCamera(viewport); }}
